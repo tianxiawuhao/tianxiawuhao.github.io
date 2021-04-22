@@ -1,0 +1,1732 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=0">
+    <meta name="description" content="Flink 中的时间语义
+在 Flink 的流式处理中， 会涉及到时间的不同概念， 如下图所示：
+
+图 Flink 时间概念
+Event Time： 是事件创建的时间。 它通常由事件中的时间戳描述， 例如采集的
+日志数据中， 每一条日志都会..." />
+    <meta name="keywords" content="flink" />
+    <link rel="stylesheet" href="http://localhost:4001/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost:4001/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    <title>blog</title>
+    
+    <style>
+        .markdownIt-TOC {
+            margin-left: 28%;
+            padding-left: 2px;
+            width: 80%;
+        }
+
+        .markdownIt-TOC li {
+            padding-left: 8%;
+        }
+    </style>
+    
+</head>
+
+<body>
+    <div id="landlord">
+        <div class="message" style="opacity:0"></div>
+        <canvas id="live2d" width="240" height="250" class="live2d"></canvas>
+    </div>
+    <div id="domainname" style="display:none">http://localhost:4001</div>
+    <!-- 响应式布局，针对PC端内容显示 -->
+    <div id="content">
+        <div>
+            <div id="bar">
+                <head>
+  <!-- 引入Bootstrap核心样式文件 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/bootstrap.min.css">
+</head>
+<style>
+  .navmobile {
+    z-index: 15;
+    max-height: 40vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+  }
+
+  @media screen and (max-width: 1200px) {
+    .navbar {
+      max-width: 100vw;
+    }
+  }
+
+  @media screen and (max-width:1200px) and (min-width: 768px) {
+    @media (min-width: 768px) {
+      .navbar-nav {
+        float: right;
+        margin: 0;
+      }
+    }
+  }
+
+  @media screen and (max-width:768px) {
+    .mbapspan {
+      padding: 0;
+    }
+  }
+</style>
+<div class="pjaxloading"  onclick="pjaxloadingClose()">
+  <div class="loadingbackground"></div>
+  <div id="loading">
+    <div class="loading">
+    </div>
+  </div>
+</div>
+<nav class="navbar navbar-inverse navbar-fixed-top navmobile">
+  <div class="container-fluid">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#barmenu"
+        aria-expanded="false" id="barbutton">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a data-pjax class="navbar-brand" href="http://localhost:4001">blog&nbsp;&nbsp;|</a>
+      <span class="navbar-brand mbapspan"><i id="mbaplayer" class="fa fa-play-circle-o" aria-hidden="true"
+          style="font-size: 28px;top: 12px;position: absolute;" onclick="aplayerPlay();"></i></span>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="barmenu">
+      <ul class="nav navbar-nav">
+        
+        
+        <li>
+          <a data-pjax href="/">
+            首页
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/archives">
+            归档
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/tags">
+            标签
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/post/about">
+            关于
+          </a>
+        </li>
+        
+        
+        
+          
+        <li><a data-pjax href="http://localhost:4001/friends">友链</a></li>
+
+        
+        </ul>
+      </div><!-- /.navbar-collapse -->
+    </div><!-- /.container-fluid -->
+  </nav>
+
+
+  <!-- 引入jQuery核心js文件 -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+  <script>
+    let btstate = false;
+    var bt = $("#barbutton");
+    var bm = $("#barmenu");
+    bt.click(function () {
+      dropdown();
+    })
+    function dropdown() {
+      console.log(btstate);
+      //下拉
+      if (btstate == false) {
+        bt.removeClass("collapsed");
+        bt.attr("aria-expanded", "true");
+        bm.attr("aria-expanded", "true")
+        bm.fadeIn(700);
+        btstate = true;
+      }
+      else {
+        bt.addClass("collapsed");
+        bt.attr("aria-expanded", "false");
+        bm.removeClass("in");
+        bm.hide();
+        bm.attr("aria-expanded", "false");
+        btstate = false;
+      }
+    }
+  </script> 
+            </div>
+            <div class="row">
+                <div class="side"><head>
+    <link rel="stylesheet" href="http://localhost:4001/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost:4001/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    
+</head>
+<style>
+    body{
+    cursor: url("http://localhost:4001/media/images/mouse_cursor.png"),auto
+    }
+    </style>
+
+<body>
+    
+    <script>
+        let menupos = 'left'
+    </script>
+    
+    
+    <script>
+        let shareChoice = true
+    </script>
+    
+    
+    <script>
+        let donateChoice = true
+    </script>
+    
+    
+    <script>
+        let searchChoice = true
+    </script>
+    
+    <script>let postsnum = 0;</script>
+    <div id="side-posttitle" style="display: none;">
+        
+    
+    附录 Flink常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Table API 与 SQL
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 状态编程和容错机制
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 ProcessFunction API（底层 API）
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 时间语义与 Wartermark
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 的Window 操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 中的 Window
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Flink 流处理 API
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Flink 运行架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Flink 部署
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 快速上手
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Flink 简介
+    <script>postsnum += 1</script>
+    
+    
+    
+    Flink 零基础实战教程：如何计算实时热门商品
+    <script>postsnum += 1</script>
+    
+    
+    
+    从零构建第一个 Flink 应用
+    <script>postsnum += 1</script>
+    
+    
+    
+    
+    </div>
+    <div class="pjaxloading" onclick="pjaxloadingClose()">
+        <div class="loadingbackground"></div>
+        <div id="loading">
+            <div class="loading">
+            </div>
+        </div>
+    </div>
+    
+    <div id=side>
+        <a onclick="showAaplayer()"><i style="font-size: 20px;"><img
+                    src='http://localhost:4001/media/images/music.png' alt="音乐播放器" class="musicbtn"></i></a>
+        <div class="avatar-border">
+            <img src="http://localhost:4001/images/avatar.png?v=1619079493959" class="avatar">
+        </div>
+        <div class="sitename">blog</div>
+        <span class="describtion" data-text='["风起于青萍之末,浪成于微澜之间.友交于微末之时,妄终于菩提之巅"]'>&nbsp;</span>
+        
+        <div class="search">
+            <!-- <input type="text" class="search-input" placeholder="标题搜索(●'◡'●)" /> -->
+            <input type="text" class="search-input" placeholder="请输入">
+            <div class="search-results"></div>
+        </div>
+        
+    <div class="share-button">
+        <span>社交按钮</span>
+        
+        
+        
+        
+        
+        
+    </div>
+    <div id="qq" style="display:none"></div>
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/" class="menubutton">
+            首页
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/archives" class="menubutton">
+            归档
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/tags" class="menubutton">
+            标签
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/post/about" class="menubutton">
+            关于
+        </a>
+    </div>
+    
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="http://localhost:4001/friends" class="menubutton">友人帐</a>
+    </div>
+    
+    <hr>
+    <style>
+    .copyright {
+        font-size: 15px;
+        color: #d9d9d9;
+    }
+
+
+    @media screen and (min-width: 1200px) {
+        .foot {
+            width: 100%;
+            height: 130px;
+        }
+    }
+
+    @media screen and (max-width: 1200px) {
+        .foot {
+            display: none;
+        }
+    }
+</style>
+
+<body>
+    <div class="foot">
+        <div id="footinfo">Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | Theme: <a
+                href="https://github.com/850552586/gridea-theme-fog">Fog</a>
+            <div>
+                
+                <div id="sitegotimeDate">载入天数...</div>
+                <div id="sitegotimes">载入时分秒...</div>
+                <div id="cussitetime" style="display:none">04/02/2021</div>
+                
+            </div>
+            <div>
+                
+            </div>
+            <div class="copyright" style="color:white;text-align: center;">
+            </div>
+        </div>
+
+
+
+    </div>
+</body>
+
+<script>
+    //----------------------站点运行时间
+    var now = new Date();
+
+    function createtime() {
+        var sitegotime = document.getElementById("cussitetime").innerHTML + " 00:00:00";
+        var grt = new Date(sitegotime); //此处修改你的建站时间或者网站上线时间 
+        now.setTime(now.getTime() + 250);
+        days = (now - grt) / 1000 / 60 / 60 / 24;
+        dnum = Math.floor(days);
+        hours = (now - grt) / 1000 / 60 / 60 - (24 * dnum);
+        hnum = Math.floor(hours);
+        if (String(hnum).length == 1) {
+            hnum = "0" + hnum;
+        }
+        minutes = (now - grt) / 1000 / 60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes);
+        if (String(mnum).length == 1) {
+            mnum = "0" + mnum;
+        }
+        seconds = (now - grt) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds);
+        if (String(snum).length == 1) {
+            snum = "0" + snum;
+        }
+        document.getElementById("sitegotimeDate").innerHTML = "本站已安全运行 " + dnum + " 天 ";
+        document.getElementById("sitegotimes").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+    }
+
+    let intervalId = setInterval("createtime()", 250);
+</script>
+
+    </div>
+
+
+    <script src="http://localhost:4001/media/js/wordshow.js"></script>
+    
+    
+</body>
+<script>
+    function showqq() {
+        var qq = document.getElementById("qq").innerHTML;
+        if (qq != '')
+            window.location.href = "tencent://message/?uin=" + qq + "&Site=&Menu=yes";
+        else
+            alert("博主暂未设置QQ联系方式");
+    }
+
+    //音乐播放器的显示
+    function showAaplayer() {
+        var aplayer = $(".aplayer-body");
+        if (aplayer.css("display") == 'block')
+            aplayer.fadeOut(200)
+        else
+            aplayer.fadeIn(200)
+    }
+</script>
+<script>
+    function getHotnum() {
+        //文章阅读热度（重构，利用leancloud原生api）
+        var pl = window.location.pathname;
+        if (pl.search("post") == -1)
+            return false;
+        if (pl[pl.length - 1] != '/')
+            pl += '/'
+        var ptitle = $("#ptitle").html();
+        var rootaddr = $("#rootaddr").html();
+        pl = pl.replace(rootaddr, "");
+        var appid = '';
+        var appkey = '';
+        console.log(appid, appkey)
+        if (AV == undefined)
+            AV.init({
+                appId: appid,
+                appKey: appkey
+            });
+        const query = new AV.Query('Counter');
+        query.equalTo('url', pl);
+        var time = 'Loading...';
+        query.find().then(function (results) {
+            console.log(results)
+            if (results.length == 0) {
+                console.log("0")
+                var NewCounter = AV.Object.extend('Counter');
+                var nc = new NewCounter();
+                nc.save({
+                    time: 1,
+                    title: ptitle,
+                    url: pl,
+                    xid: pl,
+                }).then(function (object) {
+                    $(".hotnum").eq(0).html(1);
+                    $(".hotnum").eq(1).html(1);
+                });
+            } else {
+                id = results[0].id;
+                var todo = AV.Object.createWithoutData('Counter', id);
+                time = results[0].attributes.time + 1;
+                todo.set("time", time);
+                todo.save();
+                console.log(todo);
+                $(".hotnum").eq(0).html(time);
+                $(".hotnum").eq(1).html(time);
+            }
+
+        }, function (error) {
+            console.log(error)
+        });
+    }
+</script>
+    <script src="http://localhost:4001/media/share/dist/Share.js"></script>
+    <!-- 页面pjax测试 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery.pjax/2.0.1/jquery.pjax.js"></script>
+    <!--确保jQuery已经在此之前加载-->
+    <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+    <script src="http://localhost:4001/media/js/all-pjax.js"></script>
+    <script>
+        //loading加载关闭
+        function pjaxloadingClose() {
+            var pjaxloading = $(".pjaxloading");
+            pjaxloading.hide();
+        }
+
+
+
+        function imglazyloadinit() {
+            var img = $("img");
+            for (var i = 0; i < img.length; i++) {
+                if (img.eq(i).attr("class") == undefined) {
+                    img.eq(i).attr("class", "lazyload");
+                    var imgsrc = img.eq(i).attr("src");
+                    img.eq(i).attr("data-original", imgsrc);
+                    img.eq(i).attr("src", "");
+                    img.eq(i).hide();
+                }
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function codebtncolorinit(e) {
+            await sleep(2000);
+            e.trigger.innerHTML = "复制代码"
+            e.trigger.style.background = "cornflowerblue"
+        }
+
+        function codeinit() {
+            //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+            var codes = document.getElementsByTagName('code');
+            if (codes.length) {
+                for (var i = 0; i < codes.length; i++) {
+                    //高度/行高=文本行数
+                    // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+                    // console.log("当前有"+rowNum+"行");
+                    var code_id = "code_id_" + i;
+                    codes[i].setAttribute("id", code_id);
+                    var ci = "#" + code_id;
+                    var codedot = $(ci);
+                    var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+                    if (rowNum <= 1) continue;
+                    var btn = document.createElement("button");
+                    btn.setAttribute("class", "copybt");
+                    btn.setAttribute("data-clipboard-target", "#" + code_id);
+                    btn.innerHTML = '复制代码';
+                    codes[i].parentNode.insertBefore(btn, codes[i]);
+                }
+            };
+            var cop = new ClipboardJS('.copybt');
+            cop.on('success', function (e) {
+                e.trigger.innerHTML = "复制成功~"
+                e.trigger.style.background = "#894e54"
+                codebtncolorinit(e)
+                e.clearSelection();
+            });
+            cop.on('error', function (e) {
+                alert("矮油，复制失败了...手动复制吧勇士！");
+                e.clearSelection();
+            });
+        }
+
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+
+        let talksall = [];
+        let talks = [];
+        let talkindex = 0;
+        get();
+        function get() {
+            var t = JSON.parse('[{"author":"","img":"","text":"","time":""}]');
+            talkindex = t.length - 1;
+            for (var i = 0; i <= t.length - 1; i++) {
+                var d = {};
+                d["time"] = t[i].time;
+                d["author"] = t[i].author;
+                d["text"] = t[i].text;
+                d["img"] = t[i].img;
+                talksall.push(d);
+            }
+        }
+
+        function add() {
+            for (var i = talkindex; i >= 0 && i > talkindex - 3; i--) {
+                talks.push(talksall[i]);
+            }
+            talkindex = (talkindex - 3) >= 0 ? (talkindex - 3) : -1;
+            if (talkindex < 0) $("#getmorebt").hide();
+            show();
+            refreshImg("talkimg");
+        }
+
+        function show() {
+            var talkT = document.getElementById("talkContainer");
+            talkT.innerHTML = "";
+            for (var i = 0; i < talks.length; i++) {
+                if (talks[i].img != '') {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <img src="' + talks[i].img + '" class="talkimg"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="http://localhost:4001/images/avatar.png?v=1619079493959">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                } else {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="http://localhost:4001/images/avatar.png?v=1619079493959">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                }
+            }
+        }
+
+        function refreshImg(imgclass) {
+            // 获取弹窗
+            var modal = document.getElementById('myModal');
+
+            // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+            var img = document.getElementsByClassName(imgclass);
+            var modalImg = document.getElementById("img01");
+            var captionText = document.getElementById("caption");
+            for (var i in img) {
+                img[i].onclick = function () {
+                    modal.style.display = "block";
+                    modalImg.src = this.src;
+                }
+            }
+
+            // 图片关闭
+            var modalImg = document.getElementById('img01');
+            // 鼠标点击模型外区域关闭登录框
+            window.onclick = function (event) {
+                console.log(event.target);
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+                if (menupos == 'left')
+                    return true;
+                if (event.target == social) {
+                    social.style.display = "none";
+                }
+            }
+        }
+
+        function shareInit() {
+            var title = document.getElementById("texttitle").getElementsByTagName("h2");
+            if (menupos == 'top') {
+                var avatarSrc = $(".menutopavatar").attr("src");
+                var dp = document.getElementsByClassName("navbar-brand")[1].innerHTML;
+            }
+            else {
+                var avatarSrc = $(".avatar").attr("src");
+                var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+            }
+            var share = new Share('.share', {
+                title: title[0].innerHTML,
+                initialized: true,
+                //默认获取网站描述
+                description: dp,
+                //网站图片默认获取的是设置的用户头像
+                image: avatarSrc,
+                //激活的分享网站
+                sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+                //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+                wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+                wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+                //关闭的网站分享
+                disabled: ['google', 'linkedin'],
+                wechatQrcodePosition: 'bottom'
+            });
+            //点击分享按钮展现出分享icons
+            var sharebtnTag = false;
+            $(".sharebtn").click(function () {
+                if (!sharebtnTag) {
+                    $(".share").show();
+                    sharebtnTag = true;
+                }
+                else {
+                    $(".share").hide();
+                    sharebtnTag = false;
+                }
+            })
+        }
+
+        function donateInit() {
+            var donatebtnTag = false;
+            $(".donateImg").click(function () {
+                if (!donatebtnTag) {
+                    $(".donate").show();
+                    donatebtnTag = true;
+                }
+                else {
+                    $(".donate").hide();
+                    donatebtnTag = false;
+                }
+            })
+        }
+
+
+        let talkinit = false;
+        $(document).pjax('a[data-pjax]', '#main', {
+            fragment: '#main',
+            timeout: 8000
+        }).on('pjax:complete', function () {
+            //hljs.initHighlightingOnLoad();
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+            //文章热度
+            getHotnum();
+            //文章索引
+            toginit();
+            //清空搜索栏
+            if (searchChoice) {
+                searchInit();
+                searchInput.value = "";
+            }
+            var pl = window.location.pathname;
+            //说说更新
+            if (pl.search("talk") != -1 && !talkinit) {
+                add();
+                talkinit = true;
+            }
+            else if (pl.search("talk") != -1) {
+                show();
+                refreshImg("talkimg");
+            }
+            //分享按钮更新
+            if (pl.search("post") != -1) {
+                if (shareChoice)
+                    shareInit();
+                if (donateChoice)
+                    donateInit();
+                imglazyloadinit();
+                lazyload();
+                refreshImg("lazyload");
+                codeinit();
+            }
+            if (btstate == true)
+                dropdown();
+        }).on('pjax:start', function () {
+            $(".pjaxloading").fadeIn(50);
+        }).on('pjax:end', function () {
+            $(".pjaxloading").fadeOut(50);
+        });
+    </script>
+
+    <script>
+        /**
+         * https://github.com/tangkaichuan/gridea-search
+         */
+        (function () {
+            var CACHES = checkCache()
+            if (!CACHES) {
+                var NOW = Date.now()
+                var API_CONTENT = '../api-content/index.html' + '?_=' + NOW
+                preload(API_CONTENT);
+                getContents(show_getContentresult);
+            }
+
+            function show_getContentresult(data) {
+                console.log("获取成功");
+                var postslen = data["posts"].length;
+                localStorage.setItem('postsnum', postslen);
+                var poststitlelen = 0;
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "");
+                localStorage.setItem('poststitlelen', pt.length);
+            }
+
+
+
+            // preload
+            function preload(url) {
+                var preloadLink = document.createElement('link')
+                preloadLink.href = url
+                preloadLink.rel = 'preload'
+                preloadLink.as = 'fetch'
+                preloadLink.crossOrigin = 'anonymous'
+                document.head.appendChild(preloadLink)
+            }
+
+            // 异步 GET 请求
+            function get(obj) {
+                var xhr = new XMLHttpRequest()
+                xhr.open('get', obj.url, true)
+                xhr.send(null)
+                xhr.onreadystatechange = function () {
+                    // 异步请求：响应状态为4，数据加载完毕
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            obj.success(xhr.responseText)
+                        } else {
+                            obj.error(xhr.status)
+                        }
+                    }
+                }
+            }
+
+
+            // 检查缓存是否最新
+            function checkCache() {
+                var caches_postsnum = localStorage.getItem("postsnum");
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "")
+                var ptlen = pt.length;
+                var ptlen_storage = localStorage.getItem("poststitlelen");
+                console.log(parseInt(postsnum));
+                if (caches_postsnum != postsnum || ptlen != ptlen_storage) {
+                    console.log("更新缓存");
+                    return false
+                }
+                return true;
+            }
+
+            // 获取博客全文 api
+            function getContents(callback) {
+                if (CACHES) {
+                    callback(CACHES.contents)
+                } else {
+                    get({
+                        url: API_CONTENT,
+                        success: function (data) {
+                            callback(JSON.parse(data));
+                            localStorage.setItem('ContentsCache', data);
+                        }
+                    })
+                }
+            }
+        })()
+
+        //-------------------------------------------------搜索
+        // 获取搜索框、搜索按钮、清空搜索、结果输出对应的元素
+        if (searchChoice) {
+            var searchInput = document.querySelector('.search-input');
+            var searchResults = document.querySelector('.search-results');
+        }
+        // 申明保存文章的标题、链接、内容的数组变量
+        var searchValue = '',
+            arrItems = [],
+            arrLinks = [],
+            arrTitles = [],
+            arrContents = [],
+            arrResults = [],
+            indexItem = [],
+            itemLength = 0;
+        var tmpDiv = document.createElement('div');
+        tmpDiv.className = 'result-item';
+
+
+        function getStorageContent() {
+            var data = localStorage.getItem('ContentsCache');
+            data = JSON.parse(data);
+            posts = data["posts"];
+            for (var i = 0; i < posts.length; i++) {
+                arrLinks[i] = posts[i].link;
+                arrTitles[i] = posts[i].title;
+                arrContents[i] = posts[i].content;
+                itemLength++;
+            }
+        }
+        getStorageContent();
+        // 输入框内容变化后就开始匹配，可以不用点按钮
+        // 经测试，onkeydown, onchange 等方法效果不太理想，
+        // 存在输入延迟等问题，最后发现触发 input 事件最理想，
+        // 并且可以处理中文输入法拼写的变化
+        searchInput.oninput = function () {
+            setTimeout(searchConfirm, 0);
+        }
+        searchInput.onfocus = function () {
+            searchResults.style.display = 'block';
+        }
+
+        function searchConfirm() {
+            if (searchInput.value == '') {
+                searchResults.style.display = 'none';
+            } else if (searchInput.value.search(/^\s+$/) >= 0) {
+                // 检测输入值全是空白的情况
+                searchInit();
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '请输入有效内容...';
+                searchResults.appendChild(itemDiv);
+            } else {
+                // 合法输入值的情况
+                searchInit();
+                searchValue = searchInput.value;
+                // 在标题、内容中查找
+                searchMatching(arrTitles, arrContents, searchValue);
+            }
+        }
+
+        // 每次搜索完成后的初始化
+        function searchInit() {
+            arrResults = [];
+            indexItem = [];
+            searchResults.innerHTML = '';
+            searchResults.style.display = 'block';
+        }
+
+        function searchMatching(arr1, arr2, input) {
+            // 忽略输入大小写
+            input = new RegExp(input, 'i');
+            var step = 10;
+            // 在所有文章标题、内容中匹配查询值
+            for (i = 0; i < itemLength; i++) {
+                var indexContent = arr2[i].search(input);
+                //标题匹配
+                if (arr1[i].search(input) != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+                    if (indexContent != -1) {
+                        startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                        var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                        arrResults.push("....." + searchcontent + ".....");
+                    }
+                    else
+                        arrResults.push("");
+                }
+                //内容匹配
+                else if (indexContent != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+
+                    startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                    var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                    arrResults.push("....." + searchcontent + ".....");
+                }
+            }
+
+            // 输出总共匹配到的数目
+            var totalDiv = tmpDiv.cloneNode(true);
+            totalDiv.innerHTML = '<b>总匹配：' + indexItem.length + ' 项<hr></b>';
+            searchResults.appendChild(totalDiv);
+
+            // 未匹配到内容的情况
+            if (indexItem.length == 0) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '未匹配到内容...';
+                searchResults.appendChild(itemDiv);
+            }
+
+            // 将所有匹配内容进行组合
+            for (i = 0; i < arrResults.length; i++) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerHTML = '<a data-pjax class="searchresults" href="' + arrLinks[indexItem[i]] + '"><b>[' + arrTitles[indexItem[i]] +
+                    ']</b><p>' + arrResults[i] + '</p></a><hr />';
+                searchResults.appendChild(itemDiv);
+            }
+        }
+    </script>
+    </div>
+                
+                <div id="tab1" class="tab">
+                    <div class="bars">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <div class="close"></div>
+                </div>
+                <div class="col-md-1 col-lg-3"></div>
+                <div id="main" class="col-xs-12 col-sm-12 col-md-12 col-lg-7">
+                    <link rel="stylesheet" href="http://localhost:4001/media/css/font-awesome.css">
+
+<body>
+    <div class="allcontent" id="postdetail">
+        <div class="postshow postpadding" style="padding-bottom: 0;">
+            
+            <div class="postdetailimg">
+                <img src="http://localhost:4001/post-images/GzZxLdaVh.png" class="postimage" style="cursor:auto">
+            </div>
+            <div class="postinfo-detail">
+                <div class="postdate"><i class="fa fa-calendar"></i>2021-04-13</div>
+                <div class="poststatus postdate"><i class="fa fa-clock-o"></i> 13 min read</div>
+                <div class="posttag">
+                    
+                    <a data-pjax href="http://localhost:4001/tag/1WJzfk7Hi/" class="postlink">
+                        <i class="fa fa-tag"></i> flink
+                    </a>
+                    
+                </div>
+            </div>
+            
+        <div id="articlecontent">
+            <div id="texttitle" style="text-align: center">
+                <h2 id="ptitle">第七章 时间语义与 Wartermark</h2>
+                <!-- id 将作为查询条件 -->
+                <div id="pl" style="display:none">http://localhost:4001/post/GzZxLdaVh/</div>
+                <div id="rootaddr" style="display:none">http://localhost:4001</div>
+                <span id="hotnum">
+                    <h4><i class="fa fa-eye" aria-hidden="true" style="color: #FF8C00;"></i>&nbsp;&nbsp;热度</i>: <i
+                            class="hotnum">loading...</i></h4>
+                </span>
+            </div>
+            <div class="text ">
+                <h2 id="flink-中的时间语义">Flink 中的时间语义</h2>
+<p>在 Flink 的流式处理中， 会涉及到时间的不同概念， 如下图所示：<br>
+<img src="http://localhost:4001/post-images/1618472695574.png" alt="" loading="lazy"><br>
+图 Flink 时间概念<br>
+<code>Event Time</code>： 是事件创建的时间。 它通常由事件中的时间戳描述， 例如采集的<br>
+日志数据中， 每一条日志都会记录自己的生成时间， Flink 通过时间戳分配器访问事<br>
+件时间戳。<br>
+<code>Ingestion Time</code>： 是数据进入 Flink 的时间。<br>
+<code>Processing Time</code>： 是每一个执行基于时间操作的算子的本地系统时间， 与机器<br>
+相关， 默认的时间属性就是 Processing Time。<br>
+一个例子——电影《 星球大战》 ：<br>
+<img src="http://localhost:4001/post-images/1618472731095.png" alt="" loading="lazy"><br>
+例如， 一条日志进入 Flink 的时间为 2020-11-12 10:00:00.123， 到达 Window 的<br>
+系统时间为 2020-11-12 10:00:01.234， 日志的内容如下：</p>
+<pre><code class="language-sh">2020-11-02 18:37:15.624 INFO Fail over to rm2
+</code></pre>
+<p>对于业务来说， 要统计 1min 内的故障日志个数， 哪个时间是最有意义的？ ——<br>
+eventTime， 因为我们要根据日志的生成时间进行统计。</p>
+<h2 id="eventtime-的引入">EventTime 的引入</h2>
+<p style="text-indent:2em">在 Flink 的流式处理中， 绝大部分的业务都会使用 eventTime， 一般只在eventTime 无法使用时， 才会被迫使用 ProcessingTime 或者 IngestionTime。
+如果要使用 EventTime， 那么需要引入 EventTime 的时间属性， 引入方式如下所
+示：</p>
+<pre><code class="language-java">// 创建 execution environment
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        // 告诉系统按照 EventTime 处理
+env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+</code></pre>
+<h2 id="watermark">Watermark</h2>
+<h3 id="基本概念">基本概念</h3>
+<p style="text-indent:2em">我们知道， 流处理从事件产生， 到流经 source， 再到 operator， 中间是有一个过程和时间的， 虽然大部分情况下， 流到 operator 的数据都是按照事件产生的时间顺序来的， 但是也不排除由于网络、 分布式等原因， 导致乱序的产生， 所谓乱序， 就
+是指 Flink 接收到的事件的先后顺序不是严格按照事件的 Event Time 顺序排列的。</p>
+<p><img src="http://localhost:4001/post-images/1618472852122.png" alt="" loading="lazy"><br>
+图 数据的乱序</p>
+<p style="text-indent:2em">那么此时出现一个问题， 一旦出现乱序， 如果只根据 eventTime 决定 window 的运行， 我们不能明确数据是否全部到位， 但又不能无限期的等下去， 此时必须要有
+个机制来保证一个特定的时间后， 必须触发 window 去进行计算了， 这个特别的机
+制， 就是 Watermark。</p>
+<ol>
+<li>Watermark 是一种衡量 Event Time 进展的机制。</li>
+<li>Watermark 是用于处理乱序事件的， 而正确的处理乱序事件， 通常用<br>
+Watermark 机制结合 window 来实现。</li>
+<li>数据流中的 Watermark 用于表示 timestamp 小于 Watermark 的数据， 都已经<br>
+到达了， 因此， window 的执行也是由 Watermark 触发的。</li>
+<li>Watermark 可以理解成一个延迟触发机制， 我们可以设置 Watermark 的延时<br>
+时长 t， 每次系统会校验已经到达的数据中最大的 maxEventTime， 然后认定 eventTime<br>
+小于 maxEventTime - t 的所有数据都已经到达， 如果有窗口的停止时间等于<br>
+maxEventTime – t， 那么这个窗口被触发执行。<br>
+有序流的 Watermarker 如下图所示： （ Watermark 设置为 0）<br>
+<img src="http://localhost:4001/post-images/1618472893459.png" alt="" loading="lazy"><br>
+图 有序数据的 Watermark<br>
+乱序流的 Watermarker 如下图所示： （ Watermark 设置为 2）<br>
+<img src="http://localhost:4001/post-images/1618472899867.png" alt="" loading="lazy"><br>
+图 无序数据的 Watermark</li>
+</ol>
+<p style="text-indent:2em">当 Flink 接收到数据时， 会按照一定的规则去生成 Watermark， 这条 Watermark
+就等于当前所有到达数据中的 maxEventTime - 延迟时长， 也就是说， Watermark 是
+基于数据携带的时间戳生成的， 一旦 Watermark 比当前未触发的窗口的停止时间要
+晚， 那么就会触发相应窗口的执行。 由于 event time 是由数据携带的， 因此， 如果
+运行过程中无法获取新的数据， 那么没有被触发的窗口将永远都不被触发。</p>
+<p style="text-indent:2em">上图中， 我们设置的允许最大延迟到达时间为 2s， 所以时间戳为 7s 的事件对应
+的 Watermark 是 5s， 时间戳为 12s 的事件的 Watermark 是 10s， 如果我们的窗口 1
+是 1s~5s， 窗口 2 是 6s~10s， 那么时间戳为 7s 的事件到达时的 Watermarker 恰好触
+发窗口 1， 时间戳为 12s 的事件到达时的 Watermark 恰好触发窗口 2。Watermark 就是触发前一窗口的“ 关窗时间” ， 一旦触发关门那么以当前时刻为准在窗口范围内的所有所有数据都会收入窗中。
+只要没有达到水位那么不管现实中的时间推进了多久都不会触发关窗。</p>
+<h3 id="watermark-的引入">Watermark 的引入</h3>
+<p>watermark 的引入很简单， 对于乱序数据， 最常见的引用方式如下：</p>
+<pre><code class="language-java">// 抽取出时间和生成 watermark
+dataStream.assignTimestampsAndWatermarks(new AscendingTimestampExtractor&lt;UserBehavior&gt;() {
+    @Override
+    public long extractAscendingTimestamp(UserBehavior userBehavior) {
+        // 原始数据单位秒，将其转成毫秒
+        return userBehavior.timestamp * 1000;
+    }
+})
+</code></pre>
+<p style="text-indent:2em">Event Time 的使用一定要指定数据源中的时间戳。 否则程序无法知道事件的事
+件时间是什么(数据源里的数据没有时间戳的话， 就只能使用 Processing Time 了)。
+我们看到上面的例子中创建了一个看起来有点复杂的类， 这个类实现的其实就
+是分配时间戳的接口。 Flink 暴露了 TimestampAssigner 接口供我们实现， 使我们可
+以自定义如何从事件数据中抽取时间戳。</p>
+<pre><code class="language-java">// 创建 execution environment
+final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+// 通过连接 socket 获取输入数据，这里连接到本地9000端口，如果9000端口已被占用，请换一个端口
+DataStream&lt;String&gt; text = env.socketTextStream(&quot;localhost&quot;, 9000, &quot;\n&quot;);
+text.assignTimestampsAndWatermarks(new MyAssigner())
+</code></pre>
+<p>MyAssigner 有两种类型</p>
+<ol>
+<li>AssignerWithPeriodicWatermarks</li>
+<li>AssignerWithPunctuatedWatermarks<br>
+以上两个接口都继承自 TimestampAssigner。</li>
+</ol>
+<h3 id="assigner-with-periodic-watermarks">Assigner with periodic watermarks</h3>
+<p>周期性的生成 watermark： 系统会周期性的将 watermark 插入到流中(水位线也<br>
+是一种特殊的事件!)。 默认周期是 200 毫秒。 可以使用<br>
+ExecutionConfig.setAutoWatermarkInterval()方法进行设置。</p>
+<pre><code class="language-java">StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+// 每隔 5 秒产生一个 watermark
+env.getConfig.setAutoWatermarkInterval(5000)
+</code></pre>
+<p style="text-indent:2em">产生 watermark 的逻辑： 每隔 5 秒钟， Flink 会调用
+AssignerWithPeriodicWatermarks 的 getCurrentWatermark()方法。 如果方法返回一个
+时间戳大于之前水位的时间戳， 新的 watermark 会被插入到流中。 这个检查保证了
+水位线是单调递增的。 如果方法返回的时间戳小于等于之前水位的时间戳， 则不会
+产生新的 watermark。</p>
+<p>例子， 自定义一个周期性的时间戳抽取：</p>
+<pre><code class="language-java">public class PeriodicAssigner extends
+AssignerWithPeriodicWatermarks&lt;SensorReading&gt; {
+    Long bound= 60 * 1000 // 延时为 1 分钟
+    Long maxTs = Long.MinValue // 观察到的最大时间戳
+    public Watermark  getCurrentWatermark() {
+        new Watermark(maxTs - bound)
+    } 
+    public void extractTimestamp(SensorReading r,Long previousTS) = {
+        maxTs = maxTs.max(r.timestamp)
+        r.timestamp
+    }
+}
+</code></pre>
+<p style="text-indent:2em">一种简单的特殊情况是， 如果我们事先得知数据流的时间戳是单调递增的， 也就是说没有乱序， 那我们可以使用 assignAscendingTimestamps， 这个方法会直接使
+用数据的时间戳生成 watermark。</p>
+<pre><code class="language-java">DataStream&lt;SensorReading&gt; stream:  = ...
+DataStream&lt;SensorReading&gt; withTimestampsAndWatermarks = stream
+.assignAscendingTimestamps(e =&gt; e.timestamp)
+&gt;&gt; result: E(1), W(1), E(2), W(2), ...
+</code></pre>
+<p>而对于乱序数据流， 如果我们能大致估算出数据流中的事件的最大延迟时间，<br>
+就可以使用如下代码：</p>
+<pre><code class="language-java">DataStream&lt;SensorReading&gt; stream:  = ...
+DataStream&lt;SensorReading&gt; withTimestampsAndWatermarks = stream.assignTimestampsAndWatermarks(
+    new SensorTimeAssigner()
+) 
+public class SensorTimeAssigner extends
+BoundedOutOfOrdernessTimestampExtractor&lt;SensorReading&gt;(Time.seconds(5)) {
+    // 抽取时间戳
+    public Long  extractTimestamp(SensorReading r){
+        return r.timestamp
+    }
+}
+&gt;&gt; relust: E(10), W(0), E(8), E(7), E(11), W(1), ...
+</code></pre>
+<h3 id="assigner-with-punctuated-watermarks">Assigner with punctuated watermarks</h3>
+<p style="text-indent:2em">间断式地生成 watermark。 和周期性生成的方式不同， 这种方式不是固定时间的，而是可以根据需要对每条数据进行筛选和处理。 直接上代码来举个例子， 我们只给
+sensor_1 的传感器的数据流插入 watermark：</p>
+<pre><code class="language-java">public class PunctuatedAssigner extends
+    AssignerWithPunctuatedWatermarks&lt;SensorReading&gt; {
+    Long bound=60 * 1000
+    public  Watermark checkAndGetNextWatermark(SensorReading r , Long extractedTS) {
+        if (r.id == &quot;sensor_1&quot;) {
+            new Watermark(extractedTS - bound)
+        } else {
+            null
+         }
+    } 
+    public  Long extractTimestamp(SensorReading r, Long previousTS){
+        return  r.timestamp
+    }
+}
+</code></pre>
+<h2 id="evnettime-在-window-中的使用">EvnetTime 在 window 中的使用</h2>
+<h3 id="滚动窗口tumblingeventtimewindows">滚动窗口（TumblingEventTimeWindows）</h3>
+<pre><code class="language-java">public class EventTimeTumblingWindowAllDemo {
+    public static void main(String[] args) throws Exception {
+        //  2021-03-06 21:00:00,1
+        //  2021-03-06 21:00:05,2
+        // 结果 ： 2&gt; 1
+        //        3&gt; 2
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
+        // 老版本必须要设置时间标准 （1.20 之前的）
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        DataStreamSource&lt;String&gt; lines = env.socketTextStream(&quot;linux01&quot;, 8888);
+       // flink里面的时间都精确到毫秒
+       //  时间提取器 BoundedOutOfOrdernessTimestampExtractor : 允许时间乱序，并且可以指定窗口延时
+       // WaterMark （水位线，可以让窗口延迟触发的一种机制）
+       // 一个窗口中的一个分区的水位线 = 当前窗口当前分区最大的 EventTime - 延迟时间     Time.seconds(0)
+        SingleOutputStreamOperator&lt;String&gt; linesWithWaterMark = lines.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor&lt;String&gt;(Time.seconds(0)) {
+
+            private SimpleDateFormat dateFormat = new SimpleDateFormat(&quot;yyyy-MM-dd HH:mm:ss&quot;) ;
+            @Override
+            public long extractTimestamp(String s) {
+                String strings = s.split(&quot;,&quot;)[0];
+                long timestamp = 0;
+                try {
+                    Date date = dateFormat.parse(strings);
+                    timestamp = date.getTime();
+                } catch (ParseException e) {
+                    e.printStackTrace();
+                    timestamp = System.currentTimeMillis();
+                }
+                return timestamp;
+            }
+        });
+
+        SingleOutputStreamOperator&lt;Integer&gt; nums = linesWithWaterMark.map(new MapFunction&lt;String, Integer&gt;() {
+            @Override
+            public Integer map(String s) throws Exception {
+                int i = Integer.parseInt(s.split(&quot;,&quot;)[1]);
+                return i;
+            }
+        });
+        //  划分窗口
+        AllWindowedStream&lt;Integer, TimeWindow&gt; window = nums.windowAll(TumblingProcessingTimeWindows.of(Time.seconds(5)));
+        // 对 window 中的数据 进行聚合
+        SingleOutputStreamOperator&lt;Integer&gt; sum = window.sum(0);
+
+        sum.print();
+        env.execute() ;
+
+
+    }
+}
+</code></pre>
+<p>结果是按照 Event Time 的时间窗口计算得出的， 而无关系统的时间（ 包括输入的快慢） 。</p>
+<h3 id="滑动窗口slidingeventtimewindows">滑动窗口（SlidingEventTimeWindows）</h3>
+<pre><code class="language-java">public class EventTimeSlidingWindowDemo {
+    public static void main(String[] args) throws Exception {
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
+         //  两秒 调一次方法
+        env.getConfig().setAutoWatermarkInterval(1000);
+        // 老版本必须要设置时间标准 （1.20 之前的）
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        DataStreamSource&lt;String&gt; lines = env.socketTextStream(&quot;linux01&quot;, 8888);
+       // flink里面的时间都精确到毫秒
+       //  时间提取器 BoundedOutOfOrdernessTimestampExtractor : 允许时间乱序，并且可以指定窗口延时
+       // WaterMark （水位线，可以让窗口延迟触发的一种机制）
+       // 一个窗口中的一个分区的水位线 = 当前窗口当前分区最大的 EventTime - 延迟时间     Time.seconds(0)
+        SingleOutputStreamOperator&lt;String&gt; linesWithWaterMark = lines.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor&lt;String&gt;(Time.seconds(0)) {
+
+
+            @Override
+            public long extractTimestamp(String s) {
+                return Long.parseLong(s.split(&quot;,&quot;)[0]); // EventTime
+            }
+        });
+       //   提取完 EventTime 后生成 WaterMark ，但数据还是原来的老样子
+       // 1000,spark,1 --&gt; spark,1
+        SingleOutputStreamOperator &lt;Tuple2&lt;String,Integer&gt;&gt; WordAndCount = linesWithWaterMark.map(new MapFunction&lt;String, Tuple2&lt;String,Integer&gt;&gt;() {
+
+            @Override
+            public Tuple2&lt;String,Integer&gt; map(String s) throws Exception {
+                String[] split = s.split(&quot;,&quot;);
+                return Tuple2.of(split[1],Integer.parseInt(split[2]));
+            }
+        });
+
+        //  先 keyBy，再划分窗口
+        KeyedStream&lt;Tuple2&lt;String, Integer&gt;, String&gt; keyed = WordAndCount.keyBy(t -&gt; t.f0);
+
+        //   划分窗口
+        WindowedStream&lt;Tuple2&lt;String, Integer&gt;, String, TimeWindow&gt; window = keyed.window(SlidingEventTimeWindows.of(Time.seconds(10), Time.seconds(5)));
+         //  对窗口里面的数据进行 sum
+        SingleOutputStreamOperator&lt;Tuple2&lt;String, Integer&gt;&gt; sum = window.sum(1);
+        sum.print();
+        env.execute() ;
+    }
+}
+</code></pre>
+<h3 id="会话窗口eventtimesessionwindows">会话窗口（EventTimeSessionWindows）</h3>
+<p style="text-indent:2em">相邻两次数据的 EventTime 的时间差超过指定的时间间隔就会触发执行。 如果加入 Watermark， 会在符合窗口触发的情况下进行延迟。 到达延迟水位再进行窗口
+触发。</p>
+<pre><code class="language-java">public class EventTimeSessionWindowDemo {
+    public static void main(String[] args) throws Exception {
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
+         //  两秒 调一次方法
+        env.getConfig().setAutoWatermarkInterval(1000);
+        // 老版本必须要设置时间标准 （1.20 之前的）
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        DataStreamSource&lt;String&gt; lines = env.socketTextStream(&quot;linux01&quot;, 8888);
+       // flink里面的时间都精确到毫秒
+       //  时间提取器 BoundedOutOfOrdernessTimestampExtractor : 允许时间乱序，并且可以指定窗口延时
+       // WaterMark （水位线，可以让窗口延迟触发的一种机制）
+       // 一个窗口中的一个分区的水位线 = 当前窗口当前分区最大的 EventTime - 延迟时间     Time.seconds(0)
+        SingleOutputStreamOperator&lt;String&gt; linesWithWaterMark = lines.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor&lt;String&gt;(Time.seconds(0)) {
+
+
+            @Override
+            public long extractTimestamp(String s) {
+                return Long.parseLong(s.split(&quot;,&quot;)[0]); // EventTime
+            }
+        });
+       //   提取完 EventTime 后生成 WaterMark ，但数据还是原来的老样子
+       // 1000,spark,1 --&gt; spark,1
+        SingleOutputStreamOperator &lt;Tuple2&lt;String,Integer&gt;&gt; WordAndCount = linesWithWaterMark.map(new MapFunction&lt;String, Tuple2&lt;String,Integer&gt;&gt;() {
+
+            @Override
+            public Tuple2&lt;String,Integer&gt; map(String s) throws Exception {
+                String[] split = s.split(&quot;,&quot;);
+                return Tuple2.of(split[1],Integer.parseInt(split[2]));
+            }
+        });
+
+        //  先 keyBy，再划分窗口
+        KeyedStream&lt;Tuple2&lt;String, Integer&gt;, String&gt; keyed = WordAndCount.keyBy(t -&gt; t.f0);
+
+        //   划分窗口
+        WindowedStream&lt;Tuple2&lt;String, Integer&gt;, String, TimeWindow&gt; window = keyed.window(EventTimeSessionWindows.withGap(Time.seconds(5)));
+         //  对窗口里面的数据进行 sum
+        SingleOutputStreamOperator&lt;Tuple2&lt;String, Integer&gt;&gt; sum = window.sum(1);
+
+        sum.print();
+        env.execute() ;
+
+
+    }
+}
+</code></pre>
+
+            </div>
+            <hr style="width: 80%;">
+            
+            <div class="sharebtnContainer">
+                <button type="button" class="sharebtn">转载分享</button>
+            </div>
+            <div class="shareContainer">
+                <div class="share" style="height:30px;background: white;">
+                    <a class="qq" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/QQ.png" alt=""></i></a>
+                    <a class="wechat" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/wechat.png" alt=""></i></a>
+                    <a class="weibo" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/weibo.png" alt=""></i></a>
+                    <a class="qzone" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/qzone.png" alt=""></i></a>
+                    <a class="douban" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/douban.png" alt=""></i></a>
+                    <a class="facebook" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/facebook.png" alt=""></i></a>
+                    <a class="twitter" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/twitter.png" alt=""></i></a>
+                </div>
+            </div>
+            
+            
+            <div class="donateContainer">
+                <img src="http://localhost:4001/media/images/donate.png" alt="" class="donateImg">
+            </div>
+            <div class="donateContainer">
+                <img src="" alt="" class="donate">
+            </div>
+            
+            <div class="postfooter">
+                <ul class="post-copyright">
+                    <li><strong>文章作者：</strong>tianxiawuhao</li>
+            <li><strong>原文链接：</strong>http://localhost:4001/post/GzZxLdaVh/</li>
+            <li><strong>版权声明：</strong>本博客所有文章除特别声明外，均采用<i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA
+                许可协议。转载请注明出处！</li>
+            </ul>
+        </div>
+        <div id="otherpost">
+            
+            <a  data-pjax class="prev-post-pc" href="http://localhost:4001/post/cctea1w9G/"  style="color: black;">
+                <div id="ppcontainer">
+                    
+                    <img src="http://localhost:4001/post-images/cctea1w9G.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第八章 ProcessFunction API（底层 API）</h4>
+                </div>
+            </a>
+            <div class="prev-post">
+                上一篇 <a  data-pjax href="http://localhost:4001/post/cctea1w9G/">第八章 ProcessFunction API（底层 API）</a>
+            </div>
+            
+            
+            <a data-pjax class="next-post-pc" href="http://localhost:4001/post/5uA_yv-aO/"  style="color: black;">
+                <div id="npcontainer">
+                    
+                    <img src="http://localhost:4001/post-images/5uA_yv-aO.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第六章 Flink 的Window 操作</h4>
+                </div>
+            </a>
+            <div class="next-post">
+                下一篇 <a  data-pjax href="http://localhost:4001/post/5uA_yv-aO/">第六章 Flink 的Window 操作</a>
+            </div>
+            
+        </div>
+    </div>
+    </div>
+    </div>
+    <!-- 弹窗 -->
+    <div id="myModal" class="modal">
+        <img class="modal-content" id="img01">
+    </div>
+</body>
+<script>
+    //文章阅读热度
+    var pl = $("#pl").html();
+    var rootaddr = $("#rootaddr").html();
+    pl = pl.replace(rootaddr, "");
+    $("#hotnum").attr('id', pl);
+</script>
+                    <div class="toc-container">
+                        <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#flink-%E4%B8%AD%E7%9A%84%E6%97%B6%E9%97%B4%E8%AF%AD%E4%B9%89">Flink 中的时间语义</a></li>
+<li><a href="#eventtime-%E7%9A%84%E5%BC%95%E5%85%A5">EventTime 的引入</a></li>
+<li><a href="#watermark">Watermark</a>
+<ul>
+<li><a href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5">基本概念</a></li>
+<li><a href="#watermark-%E7%9A%84%E5%BC%95%E5%85%A5">Watermark 的引入</a></li>
+<li><a href="#assigner-with-periodic-watermarks">Assigner with periodic watermarks</a></li>
+<li><a href="#assigner-with-punctuated-watermarks">Assigner with punctuated watermarks</a></li>
+</ul>
+</li>
+<li><a href="#evnettime-%E5%9C%A8-window-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8">EvnetTime 在 window 中的使用</a>
+<ul>
+<li><a href="#%E6%BB%9A%E5%8A%A8%E7%AA%97%E5%8F%A3tumblingeventtimewindows">滚动窗口（TumblingEventTimeWindows）</a></li>
+<li><a href="#%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3slidingeventtimewindows">滑动窗口（SlidingEventTimeWindows）</a></li>
+<li><a href="#%E4%BC%9A%E8%AF%9D%E7%AA%97%E5%8F%A3eventtimesessionwindows">会话窗口（EventTimeSessionWindows）</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+                    </div>
+                    <div class="tog">
+                        <div class="toggleContainer">
+                            <div class="toggle">
+                                <i class="fas fa-angle-double-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="comment" class="comment" style="background: white">
+                        <div class="commentcontainer">
+                            
+                            <p>请到客户端“主题--自定义配置--valine”中填入ID和KEY</p>
+                            
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1 col-lg-2"></div>
+                <div id="bg">
+                </div>
+            </div>
+            
+        
+    </div>
+    
+    <div id="bgchoice" style="display: none">link
+    </div>
+    
+    <div id="bgurl" style="display:none">https://img.imgdb.cn/item/608121be563420b64787c1d5.jpg</div>
+    
+</body>
+<script>
+    var img = $("img");
+    for (var i = 0; i < img.length; i++) {
+        if (img.eq(i).attr("class") == undefined) {
+            img.eq(i).attr("class", "lazyload");
+            var imgsrc = img.eq(i).attr("src");
+            img.eq(i).attr("data-original", imgsrc);
+            img.eq(i).attr("src", "");
+            img.eq(i).hide();
+        }
+    }
+
+    function refreshImg(imgclass) {
+        // 获取弹窗
+        var modal = document.getElementById('myModal');
+
+        // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+        var img = document.getElementsByClassName(imgclass);
+        var modalImg = document.getElementById("img01");
+        var captionText = document.getElementById("caption");
+        for (var i in img) {
+            img[i].onclick = function () {
+                modal.style.display = "block";
+                modalImg.src = this.src;
+            }
+        }
+
+        // 图片关闭
+        var modalImg = document.getElementById('img01');
+        // 鼠标点击模型外区域关闭登录框
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+            if (menupos == 'left')
+                return true;
+            if (event.target == social) {
+                social.style.display = "none";
+            }
+        }
+    }
+
+</script>
+<script>
+    hljs.initHighlightingOnLoad();
+</script>
+<script>
+    //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+    var codes = document.getElementsByTagName('code');
+    if (codes.length) {
+        for (var i = 0; i < codes.length; i++) {
+            //高度/行高=文本行数
+            // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+            // console.log("当前有"+rowNum+"行");
+            var code_id = "code_id_" + i;
+            codes[i].setAttribute("id", code_id);
+            var ci = "#" + code_id;
+            var codedot = $(ci);
+            var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+            if (rowNum <= 1) continue;
+            var btn = document.createElement("button");
+            btn.setAttribute("class", "copybt");
+            btn.setAttribute("data-clipboard-target", "#" + code_id);
+            btn.innerHTML = '复制代码';
+            codes[i].parentNode.insertBefore(btn, codes[i]);
+        }
+    };
+    var cop = new ClipboardJS('.copybt');
+    cop.on('success', function (e) {
+        e.trigger.innerHTML = "复制成功~"
+        e.trigger.style.background = "#894e54"
+        e.clearSelection();
+    });
+    cop.on('error', function (e) {
+        e.clearSelection();
+    });
+</script>
+
+<script type="text/javascript">
+    var message_Path = '/live2d/'
+    var home_Path = document.getElementById("domainname").innerHTML + "/"; //此处修改为你的域名，必须带斜杠
+</script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/live2d.js"></script>
+<script type="text/javascript" src="http://localhost:4001/media/live2d/js/message.js"></script>
+<script type="text/javascript">
+    loadlive2d("live2d", "http://localhost:4001/media/live2d/assets/tororo.model.json");
+</script>
+
+<script>
+    $(function () {
+        $('.toggleContainer').click(function () {
+            $('html,body').animate({
+                scrollTop: '0px'
+            }, 800);
+        });
+        $(window).scroll(function () {
+            var st = $(window).scrollTop();
+            if (st > 30) {
+                $(".toggleContainer").fadeIn(400);
+            } else {
+                $(".toggleContainer").fadeOut(100);
+            }
+        });
+    });
+</script>
+
+<script>
+    var bgchoice = $('#bgchoice').html();
+    var bg = $('#bg');
+    var bgurl = document.getElementById("bgurl").innerHTML;
+    if (bgchoice == 'default')
+        for (var i = 0; i < 3; i++)
+            bgurl = bgurl.replace("\\", "/");
+    bg.css("background", "url('" + bgurl + "')");
+</script>
+
+
+<script src="http://localhost:4001/media/js/index.js"></script>
+
+
+
+<!-- 动态更改上(下)一篇博客图片框长宽 -->
+<script>
+    npcontainer = document.querySelector('#npcontainer');
+    npstyle = window.getComputedStyle(npcontainer, null);
+    npwidth = npstyle.width;
+    npheight = 0.6 * Number(npwidth.replace("px", ""));
+    npheight = npheight.toString() + "px";
+    var op = $(".opimg");
+    op.css("height", npheight);
+</script>
+
+<script src="http://localhost:4001/media/share/dist/Share.js"></script>
+
+<script>
+    var avatarSrc = $(".avatar").attr("src");
+    var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+</script>
+
+
+<script>
+    var title = document.getElementById("texttitle").getElementsByTagName("h2");
+
+    var share = new Share('.share', {
+        title: title[0].innerHTML,
+        initialized: true,
+        //默认获取网站描述
+        description: dp,
+        //网站图片默认获取的是设置的用户头像
+        image: avatarSrc,
+        //激活的分享网站
+        sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+        //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+        wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+        wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+        //关闭的网站分享
+        disabled: ['google', 'linkedin'],
+        wechatQrcodePosition: 'bottom'
+    });
+
+    //点击分享按钮展现出分享icons
+    var sharebtnTag = false;
+    $(".sharebtn").click(function () {
+        if (!sharebtnTag) {
+            $(".share").show();
+            sharebtnTag = true;
+        }
+        else {
+            $(".share").hide();
+            sharebtnTag = false;
+        }
+    })
+
+    var donatebtnTag = false;
+    $(".donateImg").click(function () {
+        if (!donatebtnTag) {
+            $(".donate").show();
+            donatebtnTag = true;
+        }
+        else {
+            $(".donate").hide();
+            donatebtnTag = false;
+        }
+    })
+
+    //加载后的事件同步（阅读量、移动端评论等
+    window.onload = function () {
+        getHotnum();
+        var sharepc = $(".share").eq(0).html();
+        $(".share").eq(1).html(sharepc);
+        document.getElementById("veditor").setAttribute("placeholder", jrsc);
+        aplayerbtnInit();
+    }
+</script>
+
+
+<script>
+    jQuery(document).ready(function ($) {
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+        lazyload();
+        refreshImg("lazyload");
+    });
+</script>
+
+<!-- <script src="http://localhost:4001/media/js/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@3.13.0/dist/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.6.1/dist/av-live-query-min.js"></script> -->
+

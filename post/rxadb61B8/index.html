@@ -1,0 +1,1729 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=0">
+    <meta name="description" content="流式计算分为无状态和有状态两种情况。 无状态的计算观察每个独立事件， 并根据最后一个事件输出结果。 例如， 流处理应用程序从传感器接收温度读数， 并在
+温度超过 90 度时发出警告。 有状态的计算则会基于多个事件输出结果。 以下是一些
+例子..." />
+    <meta name="keywords" content="flink" />
+    <link rel="stylesheet" href="http://localhost:4001/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost:4001/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    <title>blog</title>
+    
+    <style>
+        .markdownIt-TOC {
+            margin-left: 28%;
+            padding-left: 2px;
+            width: 80%;
+        }
+
+        .markdownIt-TOC li {
+            padding-left: 8%;
+        }
+    </style>
+    
+</head>
+
+<body>
+    <div id="landlord">
+        <div class="message" style="opacity:0"></div>
+        <canvas id="live2d" width="240" height="250" class="live2d"></canvas>
+    </div>
+    <div id="domainname" style="display:none">http://localhost:4001</div>
+    <!-- 响应式布局，针对PC端内容显示 -->
+    <div id="content">
+        <div>
+            <div id="bar">
+                <head>
+  <!-- 引入Bootstrap核心样式文件 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/bootstrap.min.css">
+</head>
+<style>
+  .navmobile {
+    z-index: 15;
+    max-height: 40vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+  }
+
+  @media screen and (max-width: 1200px) {
+    .navbar {
+      max-width: 100vw;
+    }
+  }
+
+  @media screen and (max-width:1200px) and (min-width: 768px) {
+    @media (min-width: 768px) {
+      .navbar-nav {
+        float: right;
+        margin: 0;
+      }
+    }
+  }
+
+  @media screen and (max-width:768px) {
+    .mbapspan {
+      padding: 0;
+    }
+  }
+</style>
+<div class="pjaxloading"  onclick="pjaxloadingClose()">
+  <div class="loadingbackground"></div>
+  <div id="loading">
+    <div class="loading">
+    </div>
+  </div>
+</div>
+<nav class="navbar navbar-inverse navbar-fixed-top navmobile">
+  <div class="container-fluid">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#barmenu"
+        aria-expanded="false" id="barbutton">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a data-pjax class="navbar-brand" href="http://localhost:4001">blog&nbsp;&nbsp;|</a>
+      <span class="navbar-brand mbapspan"><i id="mbaplayer" class="fa fa-play-circle-o" aria-hidden="true"
+          style="font-size: 28px;top: 12px;position: absolute;" onclick="aplayerPlay();"></i></span>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="barmenu">
+      <ul class="nav navbar-nav">
+        
+        
+        <li>
+          <a data-pjax href="/">
+            首页
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/archives">
+            归档
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/tags">
+            标签
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/post/about">
+            关于
+          </a>
+        </li>
+        
+        
+        
+          
+        <li><a data-pjax href="http://localhost:4001/friends">友链</a></li>
+
+        
+        </ul>
+      </div><!-- /.navbar-collapse -->
+    </div><!-- /.container-fluid -->
+  </nav>
+
+
+  <!-- 引入jQuery核心js文件 -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+  <script>
+    let btstate = false;
+    var bt = $("#barbutton");
+    var bm = $("#barmenu");
+    bt.click(function () {
+      dropdown();
+    })
+    function dropdown() {
+      console.log(btstate);
+      //下拉
+      if (btstate == false) {
+        bt.removeClass("collapsed");
+        bt.attr("aria-expanded", "true");
+        bm.attr("aria-expanded", "true")
+        bm.fadeIn(700);
+        btstate = true;
+      }
+      else {
+        bt.addClass("collapsed");
+        bt.attr("aria-expanded", "false");
+        bm.removeClass("in");
+        bm.hide();
+        bm.attr("aria-expanded", "false");
+        btstate = false;
+      }
+    }
+  </script> 
+            </div>
+            <div class="row">
+                <div class="side"><head>
+    <link rel="stylesheet" href="http://localhost:4001/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost:4001/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    
+</head>
+<style>
+    body{
+    cursor: url("http://localhost:4001/media/images/mouse_cursor.png"),auto
+    }
+    </style>
+
+<body>
+    
+    <script>
+        let menupos = 'left'
+    </script>
+    
+    
+    <script>
+        let shareChoice = true
+    </script>
+    
+    
+    <script>
+        let donateChoice = true
+    </script>
+    
+    
+    <script>
+        let searchChoice = true
+    </script>
+    
+    <script>let postsnum = 0;</script>
+    <div id="side-posttitle" style="display: none;">
+        
+    
+    附录 Flink常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Table API 与 SQL
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 状态编程和容错机制
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 ProcessFunction API（底层 API）
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 时间语义与 Wartermark
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 的Window 操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 中的 Window
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Flink 流处理 API
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Flink 运行架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Flink 部署
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 快速上手
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Flink 简介
+    <script>postsnum += 1</script>
+    
+    
+    
+    Flink 零基础实战教程：如何计算实时热门商品
+    <script>postsnum += 1</script>
+    
+    
+    
+    从零构建第一个 Flink 应用
+    <script>postsnum += 1</script>
+    
+    
+    
+    
+    </div>
+    <div class="pjaxloading" onclick="pjaxloadingClose()">
+        <div class="loadingbackground"></div>
+        <div id="loading">
+            <div class="loading">
+            </div>
+        </div>
+    </div>
+    
+    <div id=side>
+        <a onclick="showAaplayer()"><i style="font-size: 20px;"><img
+                    src='http://localhost:4001/media/images/music.png' alt="音乐播放器" class="musicbtn"></i></a>
+        <div class="avatar-border">
+            <img src="http://localhost:4001/images/avatar.png?v=1619079493959" class="avatar">
+        </div>
+        <div class="sitename">blog</div>
+        <span class="describtion" data-text='["风起于青萍之末,浪成于微澜之间.友交于微末之时,妄终于菩提之巅"]'>&nbsp;</span>
+        
+        <div class="search">
+            <!-- <input type="text" class="search-input" placeholder="标题搜索(●'◡'●)" /> -->
+            <input type="text" class="search-input" placeholder="请输入">
+            <div class="search-results"></div>
+        </div>
+        
+    <div class="share-button">
+        <span>社交按钮</span>
+        
+        
+        
+        
+        
+        
+    </div>
+    <div id="qq" style="display:none"></div>
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/" class="menubutton">
+            首页
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/archives" class="menubutton">
+            归档
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/tags" class="menubutton">
+            标签
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/post/about" class="menubutton">
+            关于
+        </a>
+    </div>
+    
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="http://localhost:4001/friends" class="menubutton">友人帐</a>
+    </div>
+    
+    <hr>
+    <style>
+    .copyright {
+        font-size: 15px;
+        color: #d9d9d9;
+    }
+
+
+    @media screen and (min-width: 1200px) {
+        .foot {
+            width: 100%;
+            height: 130px;
+        }
+    }
+
+    @media screen and (max-width: 1200px) {
+        .foot {
+            display: none;
+        }
+    }
+</style>
+
+<body>
+    <div class="foot">
+        <div id="footinfo">Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | Theme: <a
+                href="https://github.com/850552586/gridea-theme-fog">Fog</a>
+            <div>
+                
+                <div id="sitegotimeDate">载入天数...</div>
+                <div id="sitegotimes">载入时分秒...</div>
+                <div id="cussitetime" style="display:none">04/02/2021</div>
+                
+            </div>
+            <div>
+                
+            </div>
+            <div class="copyright" style="color:white;text-align: center;">
+            </div>
+        </div>
+
+
+
+    </div>
+</body>
+
+<script>
+    //----------------------站点运行时间
+    var now = new Date();
+
+    function createtime() {
+        var sitegotime = document.getElementById("cussitetime").innerHTML + " 00:00:00";
+        var grt = new Date(sitegotime); //此处修改你的建站时间或者网站上线时间 
+        now.setTime(now.getTime() + 250);
+        days = (now - grt) / 1000 / 60 / 60 / 24;
+        dnum = Math.floor(days);
+        hours = (now - grt) / 1000 / 60 / 60 - (24 * dnum);
+        hnum = Math.floor(hours);
+        if (String(hnum).length == 1) {
+            hnum = "0" + hnum;
+        }
+        minutes = (now - grt) / 1000 / 60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes);
+        if (String(mnum).length == 1) {
+            mnum = "0" + mnum;
+        }
+        seconds = (now - grt) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds);
+        if (String(snum).length == 1) {
+            snum = "0" + snum;
+        }
+        document.getElementById("sitegotimeDate").innerHTML = "本站已安全运行 " + dnum + " 天 ";
+        document.getElementById("sitegotimes").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+    }
+
+    let intervalId = setInterval("createtime()", 250);
+</script>
+
+    </div>
+
+
+    <script src="http://localhost:4001/media/js/wordshow.js"></script>
+    
+    
+</body>
+<script>
+    function showqq() {
+        var qq = document.getElementById("qq").innerHTML;
+        if (qq != '')
+            window.location.href = "tencent://message/?uin=" + qq + "&Site=&Menu=yes";
+        else
+            alert("博主暂未设置QQ联系方式");
+    }
+
+    //音乐播放器的显示
+    function showAaplayer() {
+        var aplayer = $(".aplayer-body");
+        if (aplayer.css("display") == 'block')
+            aplayer.fadeOut(200)
+        else
+            aplayer.fadeIn(200)
+    }
+</script>
+<script>
+    function getHotnum() {
+        //文章阅读热度（重构，利用leancloud原生api）
+        var pl = window.location.pathname;
+        if (pl.search("post") == -1)
+            return false;
+        if (pl[pl.length - 1] != '/')
+            pl += '/'
+        var ptitle = $("#ptitle").html();
+        var rootaddr = $("#rootaddr").html();
+        pl = pl.replace(rootaddr, "");
+        var appid = '';
+        var appkey = '';
+        console.log(appid, appkey)
+        if (AV == undefined)
+            AV.init({
+                appId: appid,
+                appKey: appkey
+            });
+        const query = new AV.Query('Counter');
+        query.equalTo('url', pl);
+        var time = 'Loading...';
+        query.find().then(function (results) {
+            console.log(results)
+            if (results.length == 0) {
+                console.log("0")
+                var NewCounter = AV.Object.extend('Counter');
+                var nc = new NewCounter();
+                nc.save({
+                    time: 1,
+                    title: ptitle,
+                    url: pl,
+                    xid: pl,
+                }).then(function (object) {
+                    $(".hotnum").eq(0).html(1);
+                    $(".hotnum").eq(1).html(1);
+                });
+            } else {
+                id = results[0].id;
+                var todo = AV.Object.createWithoutData('Counter', id);
+                time = results[0].attributes.time + 1;
+                todo.set("time", time);
+                todo.save();
+                console.log(todo);
+                $(".hotnum").eq(0).html(time);
+                $(".hotnum").eq(1).html(time);
+            }
+
+        }, function (error) {
+            console.log(error)
+        });
+    }
+</script>
+    <script src="http://localhost:4001/media/share/dist/Share.js"></script>
+    <!-- 页面pjax测试 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery.pjax/2.0.1/jquery.pjax.js"></script>
+    <!--确保jQuery已经在此之前加载-->
+    <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+    <script src="http://localhost:4001/media/js/all-pjax.js"></script>
+    <script>
+        //loading加载关闭
+        function pjaxloadingClose() {
+            var pjaxloading = $(".pjaxloading");
+            pjaxloading.hide();
+        }
+
+
+
+        function imglazyloadinit() {
+            var img = $("img");
+            for (var i = 0; i < img.length; i++) {
+                if (img.eq(i).attr("class") == undefined) {
+                    img.eq(i).attr("class", "lazyload");
+                    var imgsrc = img.eq(i).attr("src");
+                    img.eq(i).attr("data-original", imgsrc);
+                    img.eq(i).attr("src", "");
+                    img.eq(i).hide();
+                }
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function codebtncolorinit(e) {
+            await sleep(2000);
+            e.trigger.innerHTML = "复制代码"
+            e.trigger.style.background = "cornflowerblue"
+        }
+
+        function codeinit() {
+            //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+            var codes = document.getElementsByTagName('code');
+            if (codes.length) {
+                for (var i = 0; i < codes.length; i++) {
+                    //高度/行高=文本行数
+                    // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+                    // console.log("当前有"+rowNum+"行");
+                    var code_id = "code_id_" + i;
+                    codes[i].setAttribute("id", code_id);
+                    var ci = "#" + code_id;
+                    var codedot = $(ci);
+                    var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+                    if (rowNum <= 1) continue;
+                    var btn = document.createElement("button");
+                    btn.setAttribute("class", "copybt");
+                    btn.setAttribute("data-clipboard-target", "#" + code_id);
+                    btn.innerHTML = '复制代码';
+                    codes[i].parentNode.insertBefore(btn, codes[i]);
+                }
+            };
+            var cop = new ClipboardJS('.copybt');
+            cop.on('success', function (e) {
+                e.trigger.innerHTML = "复制成功~"
+                e.trigger.style.background = "#894e54"
+                codebtncolorinit(e)
+                e.clearSelection();
+            });
+            cop.on('error', function (e) {
+                alert("矮油，复制失败了...手动复制吧勇士！");
+                e.clearSelection();
+            });
+        }
+
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+
+        let talksall = [];
+        let talks = [];
+        let talkindex = 0;
+        get();
+        function get() {
+            var t = JSON.parse('[{"author":"","img":"","text":"","time":""}]');
+            talkindex = t.length - 1;
+            for (var i = 0; i <= t.length - 1; i++) {
+                var d = {};
+                d["time"] = t[i].time;
+                d["author"] = t[i].author;
+                d["text"] = t[i].text;
+                d["img"] = t[i].img;
+                talksall.push(d);
+            }
+        }
+
+        function add() {
+            for (var i = talkindex; i >= 0 && i > talkindex - 3; i--) {
+                talks.push(talksall[i]);
+            }
+            talkindex = (talkindex - 3) >= 0 ? (talkindex - 3) : -1;
+            if (talkindex < 0) $("#getmorebt").hide();
+            show();
+            refreshImg("talkimg");
+        }
+
+        function show() {
+            var talkT = document.getElementById("talkContainer");
+            talkT.innerHTML = "";
+            for (var i = 0; i < talks.length; i++) {
+                if (talks[i].img != '') {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <img src="' + talks[i].img + '" class="talkimg"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="http://localhost:4001/images/avatar.png?v=1619079493959">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                } else {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="http://localhost:4001/images/avatar.png?v=1619079493959">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                }
+            }
+        }
+
+        function refreshImg(imgclass) {
+            // 获取弹窗
+            var modal = document.getElementById('myModal');
+
+            // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+            var img = document.getElementsByClassName(imgclass);
+            var modalImg = document.getElementById("img01");
+            var captionText = document.getElementById("caption");
+            for (var i in img) {
+                img[i].onclick = function () {
+                    modal.style.display = "block";
+                    modalImg.src = this.src;
+                }
+            }
+
+            // 图片关闭
+            var modalImg = document.getElementById('img01');
+            // 鼠标点击模型外区域关闭登录框
+            window.onclick = function (event) {
+                console.log(event.target);
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+                if (menupos == 'left')
+                    return true;
+                if (event.target == social) {
+                    social.style.display = "none";
+                }
+            }
+        }
+
+        function shareInit() {
+            var title = document.getElementById("texttitle").getElementsByTagName("h2");
+            if (menupos == 'top') {
+                var avatarSrc = $(".menutopavatar").attr("src");
+                var dp = document.getElementsByClassName("navbar-brand")[1].innerHTML;
+            }
+            else {
+                var avatarSrc = $(".avatar").attr("src");
+                var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+            }
+            var share = new Share('.share', {
+                title: title[0].innerHTML,
+                initialized: true,
+                //默认获取网站描述
+                description: dp,
+                //网站图片默认获取的是设置的用户头像
+                image: avatarSrc,
+                //激活的分享网站
+                sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+                //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+                wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+                wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+                //关闭的网站分享
+                disabled: ['google', 'linkedin'],
+                wechatQrcodePosition: 'bottom'
+            });
+            //点击分享按钮展现出分享icons
+            var sharebtnTag = false;
+            $(".sharebtn").click(function () {
+                if (!sharebtnTag) {
+                    $(".share").show();
+                    sharebtnTag = true;
+                }
+                else {
+                    $(".share").hide();
+                    sharebtnTag = false;
+                }
+            })
+        }
+
+        function donateInit() {
+            var donatebtnTag = false;
+            $(".donateImg").click(function () {
+                if (!donatebtnTag) {
+                    $(".donate").show();
+                    donatebtnTag = true;
+                }
+                else {
+                    $(".donate").hide();
+                    donatebtnTag = false;
+                }
+            })
+        }
+
+
+        let talkinit = false;
+        $(document).pjax('a[data-pjax]', '#main', {
+            fragment: '#main',
+            timeout: 8000
+        }).on('pjax:complete', function () {
+            //hljs.initHighlightingOnLoad();
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+            //文章热度
+            getHotnum();
+            //文章索引
+            toginit();
+            //清空搜索栏
+            if (searchChoice) {
+                searchInit();
+                searchInput.value = "";
+            }
+            var pl = window.location.pathname;
+            //说说更新
+            if (pl.search("talk") != -1 && !talkinit) {
+                add();
+                talkinit = true;
+            }
+            else if (pl.search("talk") != -1) {
+                show();
+                refreshImg("talkimg");
+            }
+            //分享按钮更新
+            if (pl.search("post") != -1) {
+                if (shareChoice)
+                    shareInit();
+                if (donateChoice)
+                    donateInit();
+                imglazyloadinit();
+                lazyload();
+                refreshImg("lazyload");
+                codeinit();
+            }
+            if (btstate == true)
+                dropdown();
+        }).on('pjax:start', function () {
+            $(".pjaxloading").fadeIn(50);
+        }).on('pjax:end', function () {
+            $(".pjaxloading").fadeOut(50);
+        });
+    </script>
+
+    <script>
+        /**
+         * https://github.com/tangkaichuan/gridea-search
+         */
+        (function () {
+            var CACHES = checkCache()
+            if (!CACHES) {
+                var NOW = Date.now()
+                var API_CONTENT = '../api-content/index.html' + '?_=' + NOW
+                preload(API_CONTENT);
+                getContents(show_getContentresult);
+            }
+
+            function show_getContentresult(data) {
+                console.log("获取成功");
+                var postslen = data["posts"].length;
+                localStorage.setItem('postsnum', postslen);
+                var poststitlelen = 0;
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "");
+                localStorage.setItem('poststitlelen', pt.length);
+            }
+
+
+
+            // preload
+            function preload(url) {
+                var preloadLink = document.createElement('link')
+                preloadLink.href = url
+                preloadLink.rel = 'preload'
+                preloadLink.as = 'fetch'
+                preloadLink.crossOrigin = 'anonymous'
+                document.head.appendChild(preloadLink)
+            }
+
+            // 异步 GET 请求
+            function get(obj) {
+                var xhr = new XMLHttpRequest()
+                xhr.open('get', obj.url, true)
+                xhr.send(null)
+                xhr.onreadystatechange = function () {
+                    // 异步请求：响应状态为4，数据加载完毕
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            obj.success(xhr.responseText)
+                        } else {
+                            obj.error(xhr.status)
+                        }
+                    }
+                }
+            }
+
+
+            // 检查缓存是否最新
+            function checkCache() {
+                var caches_postsnum = localStorage.getItem("postsnum");
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "")
+                var ptlen = pt.length;
+                var ptlen_storage = localStorage.getItem("poststitlelen");
+                console.log(parseInt(postsnum));
+                if (caches_postsnum != postsnum || ptlen != ptlen_storage) {
+                    console.log("更新缓存");
+                    return false
+                }
+                return true;
+            }
+
+            // 获取博客全文 api
+            function getContents(callback) {
+                if (CACHES) {
+                    callback(CACHES.contents)
+                } else {
+                    get({
+                        url: API_CONTENT,
+                        success: function (data) {
+                            callback(JSON.parse(data));
+                            localStorage.setItem('ContentsCache', data);
+                        }
+                    })
+                }
+            }
+        })()
+
+        //-------------------------------------------------搜索
+        // 获取搜索框、搜索按钮、清空搜索、结果输出对应的元素
+        if (searchChoice) {
+            var searchInput = document.querySelector('.search-input');
+            var searchResults = document.querySelector('.search-results');
+        }
+        // 申明保存文章的标题、链接、内容的数组变量
+        var searchValue = '',
+            arrItems = [],
+            arrLinks = [],
+            arrTitles = [],
+            arrContents = [],
+            arrResults = [],
+            indexItem = [],
+            itemLength = 0;
+        var tmpDiv = document.createElement('div');
+        tmpDiv.className = 'result-item';
+
+
+        function getStorageContent() {
+            var data = localStorage.getItem('ContentsCache');
+            data = JSON.parse(data);
+            posts = data["posts"];
+            for (var i = 0; i < posts.length; i++) {
+                arrLinks[i] = posts[i].link;
+                arrTitles[i] = posts[i].title;
+                arrContents[i] = posts[i].content;
+                itemLength++;
+            }
+        }
+        getStorageContent();
+        // 输入框内容变化后就开始匹配，可以不用点按钮
+        // 经测试，onkeydown, onchange 等方法效果不太理想，
+        // 存在输入延迟等问题，最后发现触发 input 事件最理想，
+        // 并且可以处理中文输入法拼写的变化
+        searchInput.oninput = function () {
+            setTimeout(searchConfirm, 0);
+        }
+        searchInput.onfocus = function () {
+            searchResults.style.display = 'block';
+        }
+
+        function searchConfirm() {
+            if (searchInput.value == '') {
+                searchResults.style.display = 'none';
+            } else if (searchInput.value.search(/^\s+$/) >= 0) {
+                // 检测输入值全是空白的情况
+                searchInit();
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '请输入有效内容...';
+                searchResults.appendChild(itemDiv);
+            } else {
+                // 合法输入值的情况
+                searchInit();
+                searchValue = searchInput.value;
+                // 在标题、内容中查找
+                searchMatching(arrTitles, arrContents, searchValue);
+            }
+        }
+
+        // 每次搜索完成后的初始化
+        function searchInit() {
+            arrResults = [];
+            indexItem = [];
+            searchResults.innerHTML = '';
+            searchResults.style.display = 'block';
+        }
+
+        function searchMatching(arr1, arr2, input) {
+            // 忽略输入大小写
+            input = new RegExp(input, 'i');
+            var step = 10;
+            // 在所有文章标题、内容中匹配查询值
+            for (i = 0; i < itemLength; i++) {
+                var indexContent = arr2[i].search(input);
+                //标题匹配
+                if (arr1[i].search(input) != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+                    if (indexContent != -1) {
+                        startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                        var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                        arrResults.push("....." + searchcontent + ".....");
+                    }
+                    else
+                        arrResults.push("");
+                }
+                //内容匹配
+                else if (indexContent != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+
+                    startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                    var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                    arrResults.push("....." + searchcontent + ".....");
+                }
+            }
+
+            // 输出总共匹配到的数目
+            var totalDiv = tmpDiv.cloneNode(true);
+            totalDiv.innerHTML = '<b>总匹配：' + indexItem.length + ' 项<hr></b>';
+            searchResults.appendChild(totalDiv);
+
+            // 未匹配到内容的情况
+            if (indexItem.length == 0) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '未匹配到内容...';
+                searchResults.appendChild(itemDiv);
+            }
+
+            // 将所有匹配内容进行组合
+            for (i = 0; i < arrResults.length; i++) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerHTML = '<a data-pjax class="searchresults" href="' + arrLinks[indexItem[i]] + '"><b>[' + arrTitles[indexItem[i]] +
+                    ']</b><p>' + arrResults[i] + '</p></a><hr />';
+                searchResults.appendChild(itemDiv);
+            }
+        }
+    </script>
+    </div>
+                
+                <div id="tab1" class="tab">
+                    <div class="bars">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <div class="close"></div>
+                </div>
+                <div class="col-md-1 col-lg-3"></div>
+                <div id="main" class="col-xs-12 col-sm-12 col-md-12 col-lg-7">
+                    <link rel="stylesheet" href="http://localhost:4001/media/css/font-awesome.css">
+
+<body>
+    <div class="allcontent" id="postdetail">
+        <div class="postshow postpadding" style="padding-bottom: 0;">
+            
+            <div class="postdetailimg">
+                <img src="http://localhost:4001/post-images/rxadb61B8.png" class="postimage" style="cursor:auto">
+            </div>
+            <div class="postinfo-detail">
+                <div class="postdate"><i class="fa fa-calendar"></i>2021-04-15</div>
+                <div class="poststatus postdate"><i class="fa fa-clock-o"></i> 22 min read</div>
+                <div class="posttag">
+                    
+                    <a data-pjax href="http://localhost:4001/tag/1WJzfk7Hi/" class="postlink">
+                        <i class="fa fa-tag"></i> flink
+                    </a>
+                    
+                </div>
+            </div>
+            
+        <div id="articlecontent">
+            <div id="texttitle" style="text-align: center">
+                <h2 id="ptitle">第九章 状态编程和容错机制</h2>
+                <!-- id 将作为查询条件 -->
+                <div id="pl" style="display:none">http://localhost:4001/post/rxadb61B8/</div>
+                <div id="rootaddr" style="display:none">http://localhost:4001</div>
+                <span id="hotnum">
+                    <h4><i class="fa fa-eye" aria-hidden="true" style="color: #FF8C00;"></i>&nbsp;&nbsp;热度</i>: <i
+                            class="hotnum">loading...</i></h4>
+                </span>
+            </div>
+            <div class="text ">
+                <p style="text-indent:2em">流式计算分为无状态和有状态两种情况。 无状态的计算观察每个独立事件， 并根据最后一个事件输出结果。 例如， 流处理应用程序从传感器接收温度读数， 并在
+温度超过 90 度时发出警告。 有状态的计算则会基于多个事件输出结果。 以下是一些
+例子。</p>
+<ul>
+<li>所有类型的窗口。 例如， 计算过去一小时的平均温度， 就是有状态的计算。</li>
+<li>所有用于复杂事件处理的状态机。 例如， 若在一分钟内收到两个相差 20 度<br>
+以上的温度读数， 则发出警告， 这是有状态的计算。</li>
+<li>流与流之间的所有关联操作， 以及流与静态表或动态表之间的关联操作，<br>
+都是有状态的计算。</li>
+</ul>
+<p style="text-indent:2em">下图展示了无状态流处理和有状态流处理的主要区别。 无状态流处理分别接收每条数据记录(图中的黑条)， 然后根据最新输入的数据生成输出数据(白条)。 有状态
+流处理会维护状态(根据每条输入记录进行更新)， 并基于最新输入的记录和当前的
+状态值生成输出记录(灰条)。</p>
+<p><img src="http://localhost:4001/post-images/1618478116508.png" alt="" loading="lazy"><br>
+图 无状态和有状态的流处理</p>
+<p style="text-indent:2em">上图中输入数据由黑条表示。 无状态流处理每次只转换一条输入记录， 并且仅根据最新的输入记录输出结果(白条)。 有状态 流处理维护所有已处理记录的状态
+值， 并根据每条新输入的记录更新状态， 因此输出记录(灰条)反映的是综合考虑多
+个事件之后的结果。</p>
+<p style="text-indent:2em">尽管无状态的计算很重要， 但是流处理对有状态的计算更感兴趣。 事实上， 正确地实现有状态的计算比实现无状态的计算难得多。 旧的流处理系统并不支持有状
+态的计算， 而新一代的流处理系统则将状态及其正确性视为重中之重。</p>
+<h2 id="有状态的算子和应用程序">有状态的算子和应用程序</h2>
+<p style="text-indent:2em">Flink 内置的很多算子， 数据源 source， 数据存储 sink 都是有状态的， 流中的数据都是 buffer records， 会保存一定的元素或者元数据。 例如: ProcessWindowFunction会缓存输入流的数据， ProcessFunction 会保存设置的定时器信息等等。
+在 Flink 中， 状态始终与特定算子相关联。 总的来说， 有两种类型的状态：</p>
+<ul>
+<li>算子状态（ operator state）</li>
+<li>键控状态（ keyed state）</li>
+</ul>
+<h3 id="算子状态operator-state">算子状态（operator state）</h3>
+<p style="text-indent:2em">算子状态的作用范围限定为算子任务。 这意味着由同一并行任务所处理的所有数据都可以访问到相同的状态， 状态对于同一任务而言是共享的。 算子状态不能由
+相同或不同算子的另一个任务访问。</p>
+<p><img src="http://localhost:4001/post-images/1618478177511.png" alt="" loading="lazy"><br>
+图 具有算子状态的任务<br>
+Flink 为算子状态提供三种基本数据结构：</p>
+<ol>
+<li>列表状态（List state）<br>
+将状态表示为一组数据的列表。</li>
+<li>联合列表状态（Union list state）<br>
+也将状态表示为数据的列表。 它与常规列表状态的区别在于， 在发生故障时， 或者从保<br>
+存点（savepoint） 启动应用程序时如何恢复。</li>
+<li>广播状态（Broadcast state）<br>
+如果一个算子有多项任务， 而它的每项任务状态又都相同， 那么这种特殊情况最适合应<br>
+用广播状态。</li>
+</ol>
+<h3 id="键控状态keyed-state">键控状态（keyed state）</h3>
+<p style="text-indent:2em">键控状态是根据输入数据流中定义的键（key） 来维护和访问的。 Flink 为每个键值维护一个状态实例， 并将具有相同键的所有数据， 都分区到同一个算子任务中， 这个任务会维护和处理这个 key 对应的状态。 当任务处理一条数据时， 它会自动将状态的访问范围限定为当
+前数据的 key。 因此， 具有相同 key 的所有数据都会访问相同的状态。 Keyed State 很类似于
+一个分布式的 key-value map 数据结构， 只能用于 KeyedStream（ keyBy 算子处理之后） 。</p>
+<p><img src="http://localhost:4001/post-images/1618478247650.png" alt="" loading="lazy"><br>
+图 具有键控状态的任务<br>
+Flink 的 Keyed State 支持以下数据类型：</p>
+<ol>
+<li>ValueState[T]保存单个的值， 值的类型为 T。<br>
+1.1 get 操作: ValueState.value()<br>
+1.2 set 操作: ValueState.update(value: T)</li>
+<li>ListState[T]保存一个列表， 列表里的元素的数据类型为 T。 基本操作如下：<br>
+2.1 ListState.add(value: T)<br>
+2.2 ListState.addAll(values: java.util.List[T])<br>
+2.3 ListState.get()返回 Iterable[T]<br>
+2.4 ListState.update(values: java.util.List[T])</li>
+<li>MapState[K, V]保存 Key-Value 对。<br>
+3.1 MapState.get(key: K)<br>
+3.2 MapState.put(key: K, value: V)<br>
+3.3 MapState.contains(key: K)<br>
+3.4 MapState.remove(key: K)</li>
+<li>ReducingState[T]</li>
+<li>AggregatingState[I, O]<br>
+State.clear()是清空操作。</li>
+</ol>
+<pre><code class="language-java">val sensorData: DataStream[SensorReading] = ...
+val keyedData: KeyedStream[SensorReading, String] = sensorData.keyBy(_.id)
+val alerts: DataStream[(String, Double, Double)] = keyedData
+    .flatMap(new TemperatureAlertFunction(1.7))
+class TemperatureAlertFunction(val threshold: Double) extends
+RichFlatMapFunction[SensorReading, (String, Double, Double)] {
+    private var lastTempState: ValueState[Double] = _
+    override def open(parameters: Configuration): Unit = {
+        val lastTempDescriptor = new ValueStateDescriptor[Double](&quot;lastTemp&quot;,
+        classOf[Double])
+        lastTempState = getRuntimeContext.getState[Double](lastTempDescriptor)
+    } 
+    override def flatMap(reading: SensorReading,
+    out: Collector[(String, Double, Double)]): Unit = {
+        val lastTemp = lastTempState.value()
+        val tempDiff = (reading.temperature - lastTemp).abs
+        if (tempDiff &gt; threshold) {
+            out.collect((reading.id, reading.temperature, tempDiff))
+        }
+        this.lastTempState.update(reading.temperature)
+    }
+} 
+</code></pre>
+<p style="text-indent:2em">通过 RuntimeContext 注册 StateDescriptor。 StateDescriptor 以状态 state 的名字和存储的数据类型为参数。</p>
+<p style="text-indent:2em">在 open()方法中创建 state 变量。 注意复习之前的 RichFunction 相关知识。接下来我们使用了 FlatMap with keyed ValueState 的快捷方式 flatMapWithState
+实现以上需求。</p>
+<pre><code class="language-java">val alerts: DataStream[(String, Double, Double)] = keyedSensorData
+.flatMapWithState[(String, Double, Double), Double] {
+    case (in: SensorReading, None) =&gt;
+         (List.empty, Some(in.temperature))
+    case (r: SensorReading, lastTemp: Some[Double]) =&gt;
+        val tempDiff = (r.temperature - lastTemp.get).abs
+        if (tempDiff &gt; 1.7) {
+            (List((r.id, r.temperature, tempDiff)), Some(r.temperature))
+        } else {
+            (List.empty, Some(r.temperature))
+        }
+}
+</code></pre>
+<h2 id="状态一致性">状态一致性</h2>
+<p style="text-indent:2em">当在分布式系统中引入状态时， 自然也引入了一致性问题。 一致性实际上是"正确性级别"的另一种说法， 也就是说在成功处理故障并恢复之后得到的结果， 与没
+有发生任何故障时得到的结果相比， 前者到底有多正确？ 举例来说， 假设要对最近
+一小时登录的用户计数。 在系统经历故障之后， 计数结果是多少？ 如果有偏差， 是
+有漏掉的计数还是重复计数？</p>
+<h3 id="一致性级别">一致性级别</h3>
+<p>在流处理中， 一致性可以分为 3 个级别：</p>
+<ul>
+<li>at-most-once: 这其实是没有正确性保障的委婉说法——故障发生之后， 计<br>
+数结果可能丢失。 同样的还有 udp。</li>
+<li>at-least-once: 这表示计数结果可能大于正确值， 但绝不会小于正确值。 也<br>
+就是说， 计数程序在发生故障后可能多算， 但是绝不会少算。</li>
+<li>exactly-once: 这指的是系统保证在发生故障后得到的计数结果与正确值一<br>
+致。</li>
+</ul>
+<p style="text-indent:2em">曾经， at-least-once 非常流行。 第一代流处理器(如 Storm 和 Samza)刚问世时只保证 at-least-once， 原因有二。</p>
+<ol>
+<li>保证 exactly-once 的系统实现起来更复杂。 这在基础架构层(决定什么代表<br>
+正确， 以及 exactly-once 的范围是什么)和实现层都很有挑战性。</li>
+<li>流处理系统的早期用户愿意接受框架的局限性， 并在应用层想办法弥补(例<br>
+如使应用程序具有幂等性， 或者用批量计算层再做一遍计算)。<br>
+最先保证 exactly-once 的系统(Storm Trident 和 Spark Streaming)在性能和表现力<br>
+这两个方面付出了很大的代价。 为了保证 exactly-once， 这些系统无法单独地对每条<br>
+记录运用应用逻辑， 而是同时处理多条(一批)记录， 保证对每一批的处理要么全部<br>
+成功， 要么全部失败。 这就导致在得到结果前， 必须等待一批记录处理结束。 因此，<br>
+用户经常不得不使用两个流处理框架(一个用来保证 exactly-once， 另一个用来对每<br>
+个元素做低延迟处理)， 结果使基础设施更加复杂。 曾经， 用户不得不在保证<br>
+exactly-once 与获得低延迟和效率之间权衡利弊。 Flink 避免了这种权衡。<br>
+Flink 的一个重大价值在于， 它既保证了 exactly-once， 也具有低延迟和高吞吐<br>
+的处理能力。<br>
+从根本上说， Flink 通过使自身满足所有需求来避免权衡， 它是业界的一次意义<br>
+重大的技术飞跃。 尽管这在外行看来很神奇， 但是一旦了解， 就会恍然大悟。</li>
+</ol>
+<h3 id="端到端end-to-end-状态一致性">端到端（end-to-end） 状态一致性</h3>
+<p style="text-indent:2em">目前我们看到的一致性保证都是由流处理器实现的， 也就是说都是在 Flink 流处理器内部保证的； 而在真实应用中， 流处理应用除了流处理器以外还包含了数据
+源（ 例如 Kafka） 和输出到持久化系统。</p>
+<p style="text-indent:2em">端到端的一致性保证， 意味着结果的正确性贯穿了整个流处理应用的始终； 每一个组件都保证了它自己的一致性， 整个端到端的一致性级别取决于所有组件中一
+致性最弱的组件。 具体可以划分如下：</p>
+<ul>
+<li>内部保证 —— 依赖 checkpoint</li>
+<li>source 端 —— 需要外部源可重设数据的读取位置</li>
+<li>sink 端 —— 需要保证从故障恢复时， 数据不会重复写入外部系统<br>
+而对于 sink 端， 又有两种具体的实现方式： 幂等（ Idempotent） 写入和事务性<br>
+（ Transactional） 写入。</li>
+<li>幂等写入<br>
+所谓幂等操作， 是说一个操作， 可以重复执行很多次， 但只导致一次结果更改，<br>
+也就是说， 后面再重复执行就不起作用了。</li>
+<li>事务写入<br>
+需要构建事务来写入外部系统， 构建的事务对应着 checkpoint， 等到 checkpoint<br>
+真正完成的时候， 才把所有对应的结果写入 sink 系统中。</li>
+</ul>
+<p style="text-indent:2em">对于事务性写入， 具体又有两种实现方式： 预写日志（ WAL） 和两阶段提交（ 2PC） 。 DataStream API 提供了 GenericWriteAheadSink 模板类和
+TwoPhaseCommitSinkFunction 接口， 可以方便地实现这两种方式的事务性写入。
+不同 Source 和 Sink 的一致性保证可以用下表说明：</p>
+<figure data-type="image" tabindex="1"><img src="http://localhost:4001/post-images/1618538597897.png" alt="" loading="lazy"></figure>
+<h2 id="检查点checkpoint">检查点（checkpoint）</h2>
+<p style="text-indent:2em">Flink 具体如何保证 exactly-once 呢? 它使用一种被称为"检查点"（ checkpoint）的特性， 在出现故障时将系统重置回正确状态。 下面通过简单的类比来解释检查点
+的作用。</p>
+<p style="text-indent:2em">假设你和两位朋友正在数项链上有多少颗珠子， 如下图所示。 你捏住珠子， 边数边拨， 每拨过一颗珠子就给总数加一。 你的朋友也这样数他们手中的珠子。 当你
+分神忘记数到哪里时， 怎么办呢? 如果项链上有很多珠子， 你显然不想从头再数一
+遍， 尤其是当三人的速度不一样却又试图合作的时候， 更是如此(比如想记录前一分
+钟三人一共数了多少颗珠子， 回想一下一分钟滚动窗口)。</p>
+<figure data-type="image" tabindex="2"><img src="http://localhost:4001/post-images/1618538624575.png" alt="" loading="lazy"></figure>
+<p style="text-indent:2em">于是， 你想了一个更好的办法: 在项链上每隔一段就松松地系上一根有色皮筋，
+将珠子分隔开; 当珠子被拨动的时候， 皮筋也可以被拨动; 然后， 你安排一个助手，
+让他在你和朋友拨到皮筋时记录总数。 用这种方法， 当有人数错时， 就不必从头开
+始数。 相反， 你向其他人发出错误警示， 然后你们都从上一根皮筋处开始重数， 助
+手则会告诉每个人重数时的起始数值， 例如在粉色皮筋处的数值是多少。</p>
+<p style="text-indent:2em">Flink 检查点的作用就类似于皮筋标记。 数珠子这个类比的关键点是: 对于指定的皮筋而言， 珠子的相对位置是确定的; 这让皮筋成为重新计数的参考点。 总状态
+(珠子的总数)在每颗珠子被拨动之后更新一次， 助手则会保存与每根皮筋对应的检
+查点状态， 如当遇到粉色皮筋时一共数了多少珠子， 当遇到橙色皮筋时又是多少。
+当问题出现时， 这种方法使得重新计数变得简单。</p>
+<h3 id="flink-的检查点算法">Flink 的检查点算法</h3>
+<p style="text-indent:2em">Flink 检查点的核心作用是确保状态正确， 即使遇到程序中断， 也要正确。 记住这一基本点之后， 我们用一个例子来看检查点是如何运行的。 Flink 为用户提供了用
+来定义状态的工具。 例如， 以下这个 Scala 程序按照输入记录的第一个字段(一个字
+符串)进行分组并维护第二个字段的计数状态。</p>
+<pre><code class="language-java">val stream: DataStream[(String, Int)] = ...
+val counts: DataStream[(String, Int)] = stream
+    .keyBy(record =&gt; record._1)
+    .mapWithState( (in: (String, Int), state: Option[Int]) =&gt;
+    state match {
+        case Some(c) =&gt; ( (in._1, c + in._2), Some(c + in._2) )
+        case None =&gt; ( (in._1, in._2), Some(in._2) )
+    })
+</code></pre>
+<p style="text-indent:2em">该程序有两个算子: keyBy 算子用来将记录按照第一个元素(一个字符串)进行分组， 根据该 key 将数据进行重新分区， 然后将记录再发送给下一个算子: 有状态的
+map 算子(mapWithState)。 map 算子在接收到每个元素后， 将输入记录的第二个字段
+的数据加到现有总数中， 再将更新过的元素发射出去。 下图表示程序的初始状态: 输
+入流中的 6 条记录被检查点分割线(checkpoint barrier)隔开， 所有的 map 算子状态均
+为 0(计数还未开始)。 所有 key 为 a 的记录将被顶层的 map 算子处理， 所有 key 为 b
+的记录将被中间层的 map 算子处理， 所有 key 为 c 的记录则将被底层的 map 算子处
+理。</p>
+<p><img src="http://localhost:4001/post-images/1618538699318.png" alt="" loading="lazy"><br>
+图 按 key 累加计数程序初始状态</p>
+<p style="text-indent:2em">上图是程序的初始状态。 注意， a、 b、 c 三组的初始计数状态都是 0， 即三个圆柱上的值。 ckpt 表示检查点分割线（ checkpoint barriers） 。 每条记录在处理顺序上严格地遵守在检查点之前或之后的规定， 例如["b",2]在检查点之前被处理， ["a",2]
+则在检查点之后被处理。</p>
+<p style="text-indent:2em">当该程序处理输入流中的 6 条记录时， 涉及的操作遍布 3 个并行实例(节点、 CPU内核等)。 那么， 检查点该如何保证 exactly-once 呢?</p>
+<p style="text-indent:2em">检查点分割线和普通数据记录类似。 它们由算子处理， 但并不参与计算， 而是会触发与检查点相关的行为。 当读取输入流的数据源(在本例中与 keyBy 算子内联)
+遇到检查点屏障时， 它将其在输入流中的位置保存到持久化存储中。 如果输入流来
+自消息传输系统(Kafka)， 这个位置就是偏移量。 Flink 的存储机制是插件化的， 持久
+化存储可以是分布式文件系统， 如 HDFS。 下图展示了这个过程。</p>
+<p><img src="http://localhost:4001/post-images/1618538715815.png" alt="" loading="lazy"><br>
+图 遇到 checkpoint barrier 时， 保存其在输入流中的位置</p>
+<p style="text-indent:2em">当 Flink 数据源(在本例中与 keyBy 算子内联)遇到检查点分界线（ barrier） 时，它会将其在输入流中的位置保存到持久化存储中。 这让 Flink 可以根据该位置重启。检查点像普通数据记录一样在算子之间流动。 当 map 算子处理完前 3 条数据并
+收到检查点分界线时， 它们会将状态以异步的方式写入持久化存储， 如下图所示。</p>
+<p><img src="http://localhost:4001/post-images/1618538731125.png" alt="" loading="lazy"><br>
+图 保存 map 算子状态， 也就是当前各个 key 的计数值</p>
+<p style="text-indent:2em">位于检查点之前的所有记录(["b",2]、 ["b",3]和["c",1])被 map 算子处理之后的情况。 此时， 持久化存储已经备份了检查点分界线在输入流中的位置(备份操作发生在barrier 被输入算子处理的时候)。 map 算子接着开始处理检查点分界线， 并触发将状
+态异步备份到稳定存储中这个动作。</p>
+<p style="text-indent:2em">当 map 算子的状态备份和检查点分界线的位置备份被确认之后， 该检查点操作就可以被标记为完成， 如下图所示。 我们在无须停止或者阻断计算的条件下， 在一
+个逻辑时间点(对应检查点屏障在输入流中的位置)为计算状态拍了快照。 通过确保
+备份的状态和位置指向同一个逻辑时间点， 后文将解释如何基于备份恢复计算， 从
+而保证 exactly-once。 值得注意的是， 当没有出现故障时， Flink 检查点的开销极小，
+检查点操作的速度由持久化存储的可用带宽决定。 回顾数珠子的例子: 除了因为数
+错而需要用到皮筋之外， 皮筋会被很快地拨过。</p>
+<p><img src="http://localhost:4001/post-images/1618538743728.png" alt="" loading="lazy"><br>
+图 检查点操作完成， 继续处理数据</p>
+<p style="text-indent:2em">检查点操作完成， 状态和位置均已备份到稳定存储中。 输入流中的所有数据记录都已处理完成。 值得注意的是， 备份的状态值与实际的状态值是不同的。 备份反
+映的是检查点的状态。</p>
+<p style="text-indent:2em">如果检查点操作失败， Flink 可以丢弃该检查点并继续正常执行， 因为之后的某一个检查点可能会成功。 虽然恢复时间可能更长， 但是对于状态的保证依旧很有力。
+只有在一系列连续的检查点操作失败之后， Flink 才会抛出错误， 因为这通常预示着
+发生了严重且持久的错误。</p>
+<p>现在来看看下图所示的情况: 检查点操作已经完成， 但故障紧随其后。<br>
+<img src="http://localhost:4001/post-images/1618538750996.png" alt="" loading="lazy"><br>
+图 故障紧跟检查点， 导致最底部的实例丢失</p>
+<p style="text-indent:2em">在这种情况下， Flink 会重新拓扑(可能会获取新的执行资源)， 将输入流倒回到上一个检查点， 然后恢复状态值并从该处开始继续计算。 在本例中， ["a",2]、 ["a",2]和["c",2]这几条记录将被重播。</p>
+<p style="text-indent:2em">下图展示了这一重新处理过程。 从上一个检查点开始重新计算， 可以保证在剩下的记录被处理之后， 得到的 map 算子的状态值与没有发生故障时的状态值一致。</p>
+<p><img src="http://localhost:4001/post-images/1618538757680.png" alt="" loading="lazy"><br>
+图 故障时的状态恢复</p>
+<p style="text-indent:2em">Flink 将输入流倒回到上一个检查点屏障的位置， 同时恢复 map 算子的状态值。然后， Flink 从此处开始重新处理。 这样做保证了在记录被处理之后， map 算子的状
+态值与没有发生故障时的一致。</p>
+<p style="text-indent:2em">Flink 检查点算法的正式名称是异步分界线快照(asynchronous barrier snapshotting)。 该算法大致基于 Chandy-Lamport 分布式快照算法。
+检查点是 Flink 最有价值的创新之一， 因为它使 Flink 可以保证 exactly-once，
+并且不需要牺牲性能。</p>
+<h3 id="flinkkafka-如何实现端到端的-exactly-once-语义">Flink+Kafka 如何实现端到端的 exactly-once 语义</h3>
+<p style="text-indent:2em">我们知道， 端到端的状态一致性的实现， 需要每一个组件都实现， 对于 Flink +Kafka 的数据管道系统（ Kafka 进、 Kafka 出） 而言， 各组件怎样保证 exactly-once</p>
+<p>语义呢？</p>
+<ul>
+<li>内部 —— 利用 checkpoint 机制， 把状态存盘， 发生故障的时候可以恢复，<br>
+保证内部的状态一致性</li>
+<li>source —— kafka consumer 作为 source， 可以将偏移量保存下来， 如果后<br>
+续任务出现了故障， 恢复的时候可以由连接器重置偏移量， 重新消费数据，<br>
+保证一致性</li>
+<li>sink —— kafka producer 作为 sink， 采用两阶段提交 sink， 需要实现一个<br>
+TwoPhaseCommitSinkFunction</li>
+</ul>
+<p style="text-indent:2em">内部的 checkpoint 机制我们已经有了了解， 那 source 和 sink 具体又是怎样运行的呢？ 接下来我们逐步做一个分析。</p>
+<p style="text-indent:2em">我们知道 Flink 由 JobManager 协调各个 TaskManager 进行 checkpoint 存储，checkpoint 保存在 StateBackend 中， 默认 StateBackend 是内存级的， 也可以改为文件级的进行持久化保存。</p>
+<p style="text-indent:2em">当 checkpoint 启动时， JobManager 会将检查点分界线（ barrier） 注入数据流；barrier 会在算子间传递下去。</p>
+<p style="text-indent:2em">每个算子会对当前的状态做个快照， 保存到状态后端。 对于 source 任务而言，就会把当前的 offset 作为状态保存起来。 下次从 checkpoint 恢复时， source 任务可以重新提交偏移量， 从上次保存的位置开始重新消费数据。</p>
+<p style="text-indent:2em">每个内部的 transform 任务遇到 barrier 时， 都会把状态存到 checkpoint 里。sink 任务首先把数据写入外部 kafka， 这些数据都属于预提交的事务（ 还不能
+被消费） ； 当遇到 barrier 时， 把状态保存到状态后端， 并开启新的预提交事务。
+当所有算子任务的快照完成， 也就是这次的 checkpoint 完成时， JobManager 会
+向所有任务发通知， 确认这次 checkpoint 完成。</p>
+<p style="text-indent:2em">当 sink 任务收到确认通知， 就会正式提交之前的事务， kafka 中未确认的数据就改为“ 已确认” ， 数据就真正可以被消费了。</p>
+<p style="text-indent:2em">所以我们看到， 执行过程实际上是一个两段式提交， 每个算子执行完成， 会进行“ 预提交” ， 直到执行完 sink 操作， 会发起“ 确认提交” ， 如果执行失败， 预提
+交会放弃掉。</p>
+<p>具体的两阶段提交步骤总结如下：</p>
+<ol>
+<li>第一条数据来了之后， 开启一个 kafka 的事务（ transaction） ， 正常写入<br>
+kafka 分区日志但标记为未提交， 这就是“ 预提交”</li>
+<li>jobmanager 触发 checkpoint 操作， barrier 从 source 开始向下传递， 遇到<br>
+barrier 的算子将状态存入状态后端， 并通知 jobmanager</li>
+<li>sink 连接器收到 barrier， 保存当前状态， 存入 checkpoint， 通知<br>
+jobmanager， 并开启下一阶段的事务， 用于提交下个检查点的数据</li>
+<li>jobmanager 收到所有任务的通知， 发出确认信息， 表示 checkpoint 完成</li>
+<li>sink 任务收到 jobmanager 的确认信息， 正式提交这段时间的数据</li>
+<li>外部 kafka 关闭事务， 提交的数据可以正常消费了。</li>
+</ol>
+<p style="text-indent:2em">所以我们也可以看到， 如果宕机需要通过 StateBackend 进行恢复， 只能恢复所有确认提交的操作。</p>
+<h2 id="选择一个状态后端state-backend">选择一个状态后端(state backend)</h2>
+<ul>
+<li>MemoryStateBackend<br>
+内存级的状态后端， 会将键控状态作为内存中的对象进行管理， 将它们存储<br>
+在 TaskManager 的 JVM 堆上； 而将 checkpoint 存储在 JobManager 的内存中。</li>
+<li>FsStateBackend<br>
+将 checkpoint 存到远程的持久化文件系统（ FileSystem） 上。 而对于本地状态，<br>
+跟 MemoryStateBackend 一样， 也会存在 TaskManager 的 JVM 堆上。</li>
+<li>RocksDBStateBackend<br>
+将所有状态序列化后， 存入本地的 RocksDB 中存储。<br>
+注意： RocksDB 的支持并不直接包含在 flink 中， 需要引入依赖：</li>
+</ul>
+<pre><code class="language-java">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.flink&lt;/groupId&gt;
+    &lt;artifactId&gt;flink-statebackend-rocksdb_2.12&lt;/artifactId&gt;
+    &lt;version&gt;1.10.1&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>设置状态后端为 FsStateBackend：</p>
+<pre><code class="language-java">val env = StreamExecutionEnvironment.getExecutionEnvironment
+val checkpointPath: String = ???
+val backend = new RocksDBStateBackend(checkpointPath)
+env.setStateBackend(backend)
+env.setStateBackend(new FsStateBackend(&quot;file:///tmp/checkpoints&quot;))
+env.enableCheckpointing(1000)
+// 配置重启策略
+env.setRestartStrategy(RestartStrategies.fixedDelayRestart(60, Time.of(10,
+TimeUnit.SECONDS)))
+</code></pre>
+
+            </div>
+            <hr style="width: 80%;">
+            
+            <div class="sharebtnContainer">
+                <button type="button" class="sharebtn">转载分享</button>
+            </div>
+            <div class="shareContainer">
+                <div class="share" style="height:30px;background: white;">
+                    <a class="qq" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/QQ.png" alt=""></i></a>
+                    <a class="wechat" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/wechat.png" alt=""></i></a>
+                    <a class="weibo" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/weibo.png" alt=""></i></a>
+                    <a class="qzone" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/qzone.png" alt=""></i></a>
+                    <a class="douban" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/douban.png" alt=""></i></a>
+                    <a class="facebook" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/facebook.png" alt=""></i></a>
+                    <a class="twitter" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/twitter.png" alt=""></i></a>
+                </div>
+            </div>
+            
+            
+            <div class="donateContainer">
+                <img src="http://localhost:4001/media/images/donate.png" alt="" class="donateImg">
+            </div>
+            <div class="donateContainer">
+                <img src="" alt="" class="donate">
+            </div>
+            
+            <div class="postfooter">
+                <ul class="post-copyright">
+                    <li><strong>文章作者：</strong>tianxiawuhao</li>
+            <li><strong>原文链接：</strong>http://localhost:4001/post/rxadb61B8/</li>
+            <li><strong>版权声明：</strong>本博客所有文章除特别声明外，均采用<i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA
+                许可协议。转载请注明出处！</li>
+            </ul>
+        </div>
+        <div id="otherpost">
+            
+            <a  data-pjax class="prev-post-pc" href="http://localhost:4001/post/tloS_nSAM/"  style="color: black;">
+                <div id="ppcontainer">
+                    
+                    <img src="http://localhost:4001/post-images/tloS_nSAM.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第十章 Table API 与 SQL</h4>
+                </div>
+            </a>
+            <div class="prev-post">
+                上一篇 <a  data-pjax href="http://localhost:4001/post/tloS_nSAM/">第十章 Table API 与 SQL</a>
+            </div>
+            
+            
+            <a data-pjax class="next-post-pc" href="http://localhost:4001/post/cctea1w9G/"  style="color: black;">
+                <div id="npcontainer">
+                    
+                    <img src="http://localhost:4001/post-images/cctea1w9G.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第八章 ProcessFunction API（底层 API）</h4>
+                </div>
+            </a>
+            <div class="next-post">
+                下一篇 <a  data-pjax href="http://localhost:4001/post/cctea1w9G/">第八章 ProcessFunction API（底层 API）</a>
+            </div>
+            
+        </div>
+    </div>
+    </div>
+    </div>
+    <!-- 弹窗 -->
+    <div id="myModal" class="modal">
+        <img class="modal-content" id="img01">
+    </div>
+</body>
+<script>
+    //文章阅读热度
+    var pl = $("#pl").html();
+    var rootaddr = $("#rootaddr").html();
+    pl = pl.replace(rootaddr, "");
+    $("#hotnum").attr('id', pl);
+</script>
+                    <div class="toc-container">
+                        <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E6%9C%89%E7%8A%B6%E6%80%81%E7%9A%84%E7%AE%97%E5%AD%90%E5%92%8C%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F">有状态的算子和应用程序</a>
+<ul>
+<li><a href="#%E7%AE%97%E5%AD%90%E7%8A%B6%E6%80%81operator-state">算子状态（operator state）</a></li>
+<li><a href="#%E9%94%AE%E6%8E%A7%E7%8A%B6%E6%80%81keyed-state">键控状态（keyed state）</a></li>
+</ul>
+</li>
+<li><a href="#%E7%8A%B6%E6%80%81%E4%B8%80%E8%87%B4%E6%80%A7">状态一致性</a>
+<ul>
+<li><a href="#%E4%B8%80%E8%87%B4%E6%80%A7%E7%BA%A7%E5%88%AB">一致性级别</a></li>
+<li><a href="#%E7%AB%AF%E5%88%B0%E7%AB%AFend-to-end-%E7%8A%B6%E6%80%81%E4%B8%80%E8%87%B4%E6%80%A7">端到端（end-to-end） 状态一致性</a></li>
+</ul>
+</li>
+<li><a href="#%E6%A3%80%E6%9F%A5%E7%82%B9checkpoint">检查点（checkpoint）</a>
+<ul>
+<li><a href="#flink-%E7%9A%84%E6%A3%80%E6%9F%A5%E7%82%B9%E7%AE%97%E6%B3%95">Flink 的检查点算法</a></li>
+<li><a href="#flinkkafka-%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%AB%AF%E5%88%B0%E7%AB%AF%E7%9A%84-exactly-once-%E8%AF%AD%E4%B9%89">Flink+Kafka 如何实现端到端的 exactly-once 语义</a></li>
+</ul>
+</li>
+<li><a href="#%E9%80%89%E6%8B%A9%E4%B8%80%E4%B8%AA%E7%8A%B6%E6%80%81%E5%90%8E%E7%AB%AFstate-backend">选择一个状态后端(state backend)</a></li>
+</ul>
+</li>
+</ul>
+
+                    </div>
+                    <div class="tog">
+                        <div class="toggleContainer">
+                            <div class="toggle">
+                                <i class="fas fa-angle-double-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="comment" class="comment" style="background: white">
+                        <div class="commentcontainer">
+                            
+                            <p>请到客户端“主题--自定义配置--valine”中填入ID和KEY</p>
+                            
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1 col-lg-2"></div>
+                <div id="bg">
+                </div>
+            </div>
+            
+        
+    </div>
+    
+    <div id="bgchoice" style="display: none">link
+    </div>
+    
+    <div id="bgurl" style="display:none">https://img.imgdb.cn/item/608121be563420b64787c1d5.jpg</div>
+    
+</body>
+<script>
+    var img = $("img");
+    for (var i = 0; i < img.length; i++) {
+        if (img.eq(i).attr("class") == undefined) {
+            img.eq(i).attr("class", "lazyload");
+            var imgsrc = img.eq(i).attr("src");
+            img.eq(i).attr("data-original", imgsrc);
+            img.eq(i).attr("src", "");
+            img.eq(i).hide();
+        }
+    }
+
+    function refreshImg(imgclass) {
+        // 获取弹窗
+        var modal = document.getElementById('myModal');
+
+        // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+        var img = document.getElementsByClassName(imgclass);
+        var modalImg = document.getElementById("img01");
+        var captionText = document.getElementById("caption");
+        for (var i in img) {
+            img[i].onclick = function () {
+                modal.style.display = "block";
+                modalImg.src = this.src;
+            }
+        }
+
+        // 图片关闭
+        var modalImg = document.getElementById('img01');
+        // 鼠标点击模型外区域关闭登录框
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+            if (menupos == 'left')
+                return true;
+            if (event.target == social) {
+                social.style.display = "none";
+            }
+        }
+    }
+
+</script>
+<script>
+    hljs.initHighlightingOnLoad();
+</script>
+<script>
+    //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+    var codes = document.getElementsByTagName('code');
+    if (codes.length) {
+        for (var i = 0; i < codes.length; i++) {
+            //高度/行高=文本行数
+            // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+            // console.log("当前有"+rowNum+"行");
+            var code_id = "code_id_" + i;
+            codes[i].setAttribute("id", code_id);
+            var ci = "#" + code_id;
+            var codedot = $(ci);
+            var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+            if (rowNum <= 1) continue;
+            var btn = document.createElement("button");
+            btn.setAttribute("class", "copybt");
+            btn.setAttribute("data-clipboard-target", "#" + code_id);
+            btn.innerHTML = '复制代码';
+            codes[i].parentNode.insertBefore(btn, codes[i]);
+        }
+    };
+    var cop = new ClipboardJS('.copybt');
+    cop.on('success', function (e) {
+        e.trigger.innerHTML = "复制成功~"
+        e.trigger.style.background = "#894e54"
+        e.clearSelection();
+    });
+    cop.on('error', function (e) {
+        e.clearSelection();
+    });
+</script>
+
+<script type="text/javascript">
+    var message_Path = '/live2d/'
+    var home_Path = document.getElementById("domainname").innerHTML + "/"; //此处修改为你的域名，必须带斜杠
+</script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/live2d.js"></script>
+<script type="text/javascript" src="http://localhost:4001/media/live2d/js/message.js"></script>
+<script type="text/javascript">
+    loadlive2d("live2d", "http://localhost:4001/media/live2d/assets/tororo.model.json");
+</script>
+
+<script>
+    $(function () {
+        $('.toggleContainer').click(function () {
+            $('html,body').animate({
+                scrollTop: '0px'
+            }, 800);
+        });
+        $(window).scroll(function () {
+            var st = $(window).scrollTop();
+            if (st > 30) {
+                $(".toggleContainer").fadeIn(400);
+            } else {
+                $(".toggleContainer").fadeOut(100);
+            }
+        });
+    });
+</script>
+
+<script>
+    var bgchoice = $('#bgchoice').html();
+    var bg = $('#bg');
+    var bgurl = document.getElementById("bgurl").innerHTML;
+    if (bgchoice == 'default')
+        for (var i = 0; i < 3; i++)
+            bgurl = bgurl.replace("\\", "/");
+    bg.css("background", "url('" + bgurl + "')");
+</script>
+
+
+<script src="http://localhost:4001/media/js/index.js"></script>
+
+
+
+<!-- 动态更改上(下)一篇博客图片框长宽 -->
+<script>
+    npcontainer = document.querySelector('#npcontainer');
+    npstyle = window.getComputedStyle(npcontainer, null);
+    npwidth = npstyle.width;
+    npheight = 0.6 * Number(npwidth.replace("px", ""));
+    npheight = npheight.toString() + "px";
+    var op = $(".opimg");
+    op.css("height", npheight);
+</script>
+
+<script src="http://localhost:4001/media/share/dist/Share.js"></script>
+
+<script>
+    var avatarSrc = $(".avatar").attr("src");
+    var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+</script>
+
+
+<script>
+    var title = document.getElementById("texttitle").getElementsByTagName("h2");
+
+    var share = new Share('.share', {
+        title: title[0].innerHTML,
+        initialized: true,
+        //默认获取网站描述
+        description: dp,
+        //网站图片默认获取的是设置的用户头像
+        image: avatarSrc,
+        //激活的分享网站
+        sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+        //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+        wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+        wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+        //关闭的网站分享
+        disabled: ['google', 'linkedin'],
+        wechatQrcodePosition: 'bottom'
+    });
+
+    //点击分享按钮展现出分享icons
+    var sharebtnTag = false;
+    $(".sharebtn").click(function () {
+        if (!sharebtnTag) {
+            $(".share").show();
+            sharebtnTag = true;
+        }
+        else {
+            $(".share").hide();
+            sharebtnTag = false;
+        }
+    })
+
+    var donatebtnTag = false;
+    $(".donateImg").click(function () {
+        if (!donatebtnTag) {
+            $(".donate").show();
+            donatebtnTag = true;
+        }
+        else {
+            $(".donate").hide();
+            donatebtnTag = false;
+        }
+    })
+
+    //加载后的事件同步（阅读量、移动端评论等
+    window.onload = function () {
+        getHotnum();
+        var sharepc = $(".share").eq(0).html();
+        $(".share").eq(1).html(sharepc);
+        document.getElementById("veditor").setAttribute("placeholder", jrsc);
+        aplayerbtnInit();
+    }
+</script>
+
+
+<script>
+    jQuery(document).ready(function ($) {
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+        lazyload();
+        refreshImg("lazyload");
+    });
+</script>
+
+<!-- <script src="http://localhost:4001/media/js/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@3.13.0/dist/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.6.1/dist/av-live-query-min.js"></script> -->
+

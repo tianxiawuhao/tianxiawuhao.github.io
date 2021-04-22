@@ -1,0 +1,2013 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=0">
+    <meta name="description" content="Window是无限数据流处理的核心，Window将一个无限的stream拆分成有限大小的”buckets”桶，我们可以在这些桶上做计算操作。本文主要聚焦于在Flink中如何进行窗口操作，以及程序员如何从window提供的功能中获得最大的收益..." />
+    <meta name="keywords" content="flink" />
+    <link rel="stylesheet" href="http://localhost:4001/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost:4001/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    <title>blog</title>
+    
+    <style>
+        .markdownIt-TOC {
+            margin-left: 28%;
+            padding-left: 2px;
+            width: 80%;
+        }
+
+        .markdownIt-TOC li {
+            padding-left: 8%;
+        }
+    </style>
+    
+</head>
+
+<body>
+    <div id="landlord">
+        <div class="message" style="opacity:0"></div>
+        <canvas id="live2d" width="240" height="250" class="live2d"></canvas>
+    </div>
+    <div id="domainname" style="display:none">http://localhost:4001</div>
+    <!-- 响应式布局，针对PC端内容显示 -->
+    <div id="content">
+        <div>
+            <div id="bar">
+                <head>
+  <!-- 引入Bootstrap核心样式文件 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/bootstrap.min.css">
+</head>
+<style>
+  .navmobile {
+    z-index: 15;
+    max-height: 40vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+  }
+
+  @media screen and (max-width: 1200px) {
+    .navbar {
+      max-width: 100vw;
+    }
+  }
+
+  @media screen and (max-width:1200px) and (min-width: 768px) {
+    @media (min-width: 768px) {
+      .navbar-nav {
+        float: right;
+        margin: 0;
+      }
+    }
+  }
+
+  @media screen and (max-width:768px) {
+    .mbapspan {
+      padding: 0;
+    }
+  }
+</style>
+<div class="pjaxloading"  onclick="pjaxloadingClose()">
+  <div class="loadingbackground"></div>
+  <div id="loading">
+    <div class="loading">
+    </div>
+  </div>
+</div>
+<nav class="navbar navbar-inverse navbar-fixed-top navmobile">
+  <div class="container-fluid">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#barmenu"
+        aria-expanded="false" id="barbutton">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a data-pjax class="navbar-brand" href="http://localhost:4001">blog&nbsp;&nbsp;|</a>
+      <span class="navbar-brand mbapspan"><i id="mbaplayer" class="fa fa-play-circle-o" aria-hidden="true"
+          style="font-size: 28px;top: 12px;position: absolute;" onclick="aplayerPlay();"></i></span>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="barmenu">
+      <ul class="nav navbar-nav">
+        
+        
+        <li>
+          <a data-pjax href="/">
+            首页
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/archives">
+            归档
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/tags">
+            标签
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/post/about">
+            关于
+          </a>
+        </li>
+        
+        
+        
+          
+        <li><a data-pjax href="http://localhost:4001/friends">友链</a></li>
+
+        
+        </ul>
+      </div><!-- /.navbar-collapse -->
+    </div><!-- /.container-fluid -->
+  </nav>
+
+
+  <!-- 引入jQuery核心js文件 -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+  <script>
+    let btstate = false;
+    var bt = $("#barbutton");
+    var bm = $("#barmenu");
+    bt.click(function () {
+      dropdown();
+    })
+    function dropdown() {
+      console.log(btstate);
+      //下拉
+      if (btstate == false) {
+        bt.removeClass("collapsed");
+        bt.attr("aria-expanded", "true");
+        bm.attr("aria-expanded", "true")
+        bm.fadeIn(700);
+        btstate = true;
+      }
+      else {
+        bt.addClass("collapsed");
+        bt.attr("aria-expanded", "false");
+        bm.removeClass("in");
+        bm.hide();
+        bm.attr("aria-expanded", "false");
+        btstate = false;
+      }
+    }
+  </script> 
+            </div>
+            <div class="row">
+                <div class="side"><head>
+    <link rel="stylesheet" href="http://localhost:4001/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://localhost:4001/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    
+</head>
+<style>
+    body{
+    cursor: url("http://localhost:4001/media/images/mouse_cursor.png"),auto
+    }
+    </style>
+
+<body>
+    
+    <script>
+        let menupos = 'left'
+    </script>
+    
+    
+    <script>
+        let shareChoice = true
+    </script>
+    
+    
+    <script>
+        let donateChoice = true
+    </script>
+    
+    
+    <script>
+        let searchChoice = true
+    </script>
+    
+    <script>let postsnum = 0;</script>
+    <div id="side-posttitle" style="display: none;">
+        
+    
+    附录 Flink常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Table API 与 SQL
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 状态编程和容错机制
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 ProcessFunction API（底层 API）
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 时间语义与 Wartermark
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 的Window 操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 中的 Window
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Flink 流处理 API
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Flink 运行架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Flink 部署
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 快速上手
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Flink 简介
+    <script>postsnum += 1</script>
+    
+    
+    
+    Flink 零基础实战教程：如何计算实时热门商品
+    <script>postsnum += 1</script>
+    
+    
+    
+    从零构建第一个 Flink 应用
+    <script>postsnum += 1</script>
+    
+    
+    
+    
+    </div>
+    <div class="pjaxloading" onclick="pjaxloadingClose()">
+        <div class="loadingbackground"></div>
+        <div id="loading">
+            <div class="loading">
+            </div>
+        </div>
+    </div>
+    
+    <div id=side>
+        <a onclick="showAaplayer()"><i style="font-size: 20px;"><img
+                    src='http://localhost:4001/media/images/music.png' alt="音乐播放器" class="musicbtn"></i></a>
+        <div class="avatar-border">
+            <img src="http://localhost:4001/images/avatar.png?v=1619079493959" class="avatar">
+        </div>
+        <div class="sitename">blog</div>
+        <span class="describtion" data-text='["风起于青萍之末,浪成于微澜之间.友交于微末之时,妄终于菩提之巅"]'>&nbsp;</span>
+        
+        <div class="search">
+            <!-- <input type="text" class="search-input" placeholder="标题搜索(●'◡'●)" /> -->
+            <input type="text" class="search-input" placeholder="请输入">
+            <div class="search-results"></div>
+        </div>
+        
+    <div class="share-button">
+        <span>社交按钮</span>
+        
+        
+        
+        
+        
+        
+    </div>
+    <div id="qq" style="display:none"></div>
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/" class="menubutton">
+            首页
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/archives" class="menubutton">
+            归档
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/tags" class="menubutton">
+            标签
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/post/about" class="menubutton">
+            关于
+        </a>
+    </div>
+    
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="http://localhost:4001/friends" class="menubutton">友人帐</a>
+    </div>
+    
+    <hr>
+    <style>
+    .copyright {
+        font-size: 15px;
+        color: #d9d9d9;
+    }
+
+
+    @media screen and (min-width: 1200px) {
+        .foot {
+            width: 100%;
+            height: 130px;
+        }
+    }
+
+    @media screen and (max-width: 1200px) {
+        .foot {
+            display: none;
+        }
+    }
+</style>
+
+<body>
+    <div class="foot">
+        <div id="footinfo">Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | Theme: <a
+                href="https://github.com/850552586/gridea-theme-fog">Fog</a>
+            <div>
+                
+                <div id="sitegotimeDate">载入天数...</div>
+                <div id="sitegotimes">载入时分秒...</div>
+                <div id="cussitetime" style="display:none">04/02/2021</div>
+                
+            </div>
+            <div>
+                
+            </div>
+            <div class="copyright" style="color:white;text-align: center;">
+            </div>
+        </div>
+
+
+
+    </div>
+</body>
+
+<script>
+    //----------------------站点运行时间
+    var now = new Date();
+
+    function createtime() {
+        var sitegotime = document.getElementById("cussitetime").innerHTML + " 00:00:00";
+        var grt = new Date(sitegotime); //此处修改你的建站时间或者网站上线时间 
+        now.setTime(now.getTime() + 250);
+        days = (now - grt) / 1000 / 60 / 60 / 24;
+        dnum = Math.floor(days);
+        hours = (now - grt) / 1000 / 60 / 60 - (24 * dnum);
+        hnum = Math.floor(hours);
+        if (String(hnum).length == 1) {
+            hnum = "0" + hnum;
+        }
+        minutes = (now - grt) / 1000 / 60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes);
+        if (String(mnum).length == 1) {
+            mnum = "0" + mnum;
+        }
+        seconds = (now - grt) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds);
+        if (String(snum).length == 1) {
+            snum = "0" + snum;
+        }
+        document.getElementById("sitegotimeDate").innerHTML = "本站已安全运行 " + dnum + " 天 ";
+        document.getElementById("sitegotimes").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+    }
+
+    let intervalId = setInterval("createtime()", 250);
+</script>
+
+    </div>
+
+
+    <script src="http://localhost:4001/media/js/wordshow.js"></script>
+    
+    
+</body>
+<script>
+    function showqq() {
+        var qq = document.getElementById("qq").innerHTML;
+        if (qq != '')
+            window.location.href = "tencent://message/?uin=" + qq + "&Site=&Menu=yes";
+        else
+            alert("博主暂未设置QQ联系方式");
+    }
+
+    //音乐播放器的显示
+    function showAaplayer() {
+        var aplayer = $(".aplayer-body");
+        if (aplayer.css("display") == 'block')
+            aplayer.fadeOut(200)
+        else
+            aplayer.fadeIn(200)
+    }
+</script>
+<script>
+    function getHotnum() {
+        //文章阅读热度（重构，利用leancloud原生api）
+        var pl = window.location.pathname;
+        if (pl.search("post") == -1)
+            return false;
+        if (pl[pl.length - 1] != '/')
+            pl += '/'
+        var ptitle = $("#ptitle").html();
+        var rootaddr = $("#rootaddr").html();
+        pl = pl.replace(rootaddr, "");
+        var appid = '';
+        var appkey = '';
+        console.log(appid, appkey)
+        if (AV == undefined)
+            AV.init({
+                appId: appid,
+                appKey: appkey
+            });
+        const query = new AV.Query('Counter');
+        query.equalTo('url', pl);
+        var time = 'Loading...';
+        query.find().then(function (results) {
+            console.log(results)
+            if (results.length == 0) {
+                console.log("0")
+                var NewCounter = AV.Object.extend('Counter');
+                var nc = new NewCounter();
+                nc.save({
+                    time: 1,
+                    title: ptitle,
+                    url: pl,
+                    xid: pl,
+                }).then(function (object) {
+                    $(".hotnum").eq(0).html(1);
+                    $(".hotnum").eq(1).html(1);
+                });
+            } else {
+                id = results[0].id;
+                var todo = AV.Object.createWithoutData('Counter', id);
+                time = results[0].attributes.time + 1;
+                todo.set("time", time);
+                todo.save();
+                console.log(todo);
+                $(".hotnum").eq(0).html(time);
+                $(".hotnum").eq(1).html(time);
+            }
+
+        }, function (error) {
+            console.log(error)
+        });
+    }
+</script>
+    <script src="http://localhost:4001/media/share/dist/Share.js"></script>
+    <!-- 页面pjax测试 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery.pjax/2.0.1/jquery.pjax.js"></script>
+    <!--确保jQuery已经在此之前加载-->
+    <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+    <script src="http://localhost:4001/media/js/all-pjax.js"></script>
+    <script>
+        //loading加载关闭
+        function pjaxloadingClose() {
+            var pjaxloading = $(".pjaxloading");
+            pjaxloading.hide();
+        }
+
+
+
+        function imglazyloadinit() {
+            var img = $("img");
+            for (var i = 0; i < img.length; i++) {
+                if (img.eq(i).attr("class") == undefined) {
+                    img.eq(i).attr("class", "lazyload");
+                    var imgsrc = img.eq(i).attr("src");
+                    img.eq(i).attr("data-original", imgsrc);
+                    img.eq(i).attr("src", "");
+                    img.eq(i).hide();
+                }
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function codebtncolorinit(e) {
+            await sleep(2000);
+            e.trigger.innerHTML = "复制代码"
+            e.trigger.style.background = "cornflowerblue"
+        }
+
+        function codeinit() {
+            //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+            var codes = document.getElementsByTagName('code');
+            if (codes.length) {
+                for (var i = 0; i < codes.length; i++) {
+                    //高度/行高=文本行数
+                    // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+                    // console.log("当前有"+rowNum+"行");
+                    var code_id = "code_id_" + i;
+                    codes[i].setAttribute("id", code_id);
+                    var ci = "#" + code_id;
+                    var codedot = $(ci);
+                    var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+                    if (rowNum <= 1) continue;
+                    var btn = document.createElement("button");
+                    btn.setAttribute("class", "copybt");
+                    btn.setAttribute("data-clipboard-target", "#" + code_id);
+                    btn.innerHTML = '复制代码';
+                    codes[i].parentNode.insertBefore(btn, codes[i]);
+                }
+            };
+            var cop = new ClipboardJS('.copybt');
+            cop.on('success', function (e) {
+                e.trigger.innerHTML = "复制成功~"
+                e.trigger.style.background = "#894e54"
+                codebtncolorinit(e)
+                e.clearSelection();
+            });
+            cop.on('error', function (e) {
+                alert("矮油，复制失败了...手动复制吧勇士！");
+                e.clearSelection();
+            });
+        }
+
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+
+        let talksall = [];
+        let talks = [];
+        let talkindex = 0;
+        get();
+        function get() {
+            var t = JSON.parse('[{"author":"","img":"","text":"","time":""}]');
+            talkindex = t.length - 1;
+            for (var i = 0; i <= t.length - 1; i++) {
+                var d = {};
+                d["time"] = t[i].time;
+                d["author"] = t[i].author;
+                d["text"] = t[i].text;
+                d["img"] = t[i].img;
+                talksall.push(d);
+            }
+        }
+
+        function add() {
+            for (var i = talkindex; i >= 0 && i > talkindex - 3; i--) {
+                talks.push(talksall[i]);
+            }
+            talkindex = (talkindex - 3) >= 0 ? (talkindex - 3) : -1;
+            if (talkindex < 0) $("#getmorebt").hide();
+            show();
+            refreshImg("talkimg");
+        }
+
+        function show() {
+            var talkT = document.getElementById("talkContainer");
+            talkT.innerHTML = "";
+            for (var i = 0; i < talks.length; i++) {
+                if (talks[i].img != '') {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <img src="' + talks[i].img + '" class="talkimg"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="http://localhost:4001/images/avatar.png?v=1619079493959">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                } else {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="http://localhost:4001/images/avatar.png?v=1619079493959">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                }
+            }
+        }
+
+        function refreshImg(imgclass) {
+            // 获取弹窗
+            var modal = document.getElementById('myModal');
+
+            // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+            var img = document.getElementsByClassName(imgclass);
+            var modalImg = document.getElementById("img01");
+            var captionText = document.getElementById("caption");
+            for (var i in img) {
+                img[i].onclick = function () {
+                    modal.style.display = "block";
+                    modalImg.src = this.src;
+                }
+            }
+
+            // 图片关闭
+            var modalImg = document.getElementById('img01');
+            // 鼠标点击模型外区域关闭登录框
+            window.onclick = function (event) {
+                console.log(event.target);
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+                if (menupos == 'left')
+                    return true;
+                if (event.target == social) {
+                    social.style.display = "none";
+                }
+            }
+        }
+
+        function shareInit() {
+            var title = document.getElementById("texttitle").getElementsByTagName("h2");
+            if (menupos == 'top') {
+                var avatarSrc = $(".menutopavatar").attr("src");
+                var dp = document.getElementsByClassName("navbar-brand")[1].innerHTML;
+            }
+            else {
+                var avatarSrc = $(".avatar").attr("src");
+                var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+            }
+            var share = new Share('.share', {
+                title: title[0].innerHTML,
+                initialized: true,
+                //默认获取网站描述
+                description: dp,
+                //网站图片默认获取的是设置的用户头像
+                image: avatarSrc,
+                //激活的分享网站
+                sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+                //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+                wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+                wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+                //关闭的网站分享
+                disabled: ['google', 'linkedin'],
+                wechatQrcodePosition: 'bottom'
+            });
+            //点击分享按钮展现出分享icons
+            var sharebtnTag = false;
+            $(".sharebtn").click(function () {
+                if (!sharebtnTag) {
+                    $(".share").show();
+                    sharebtnTag = true;
+                }
+                else {
+                    $(".share").hide();
+                    sharebtnTag = false;
+                }
+            })
+        }
+
+        function donateInit() {
+            var donatebtnTag = false;
+            $(".donateImg").click(function () {
+                if (!donatebtnTag) {
+                    $(".donate").show();
+                    donatebtnTag = true;
+                }
+                else {
+                    $(".donate").hide();
+                    donatebtnTag = false;
+                }
+            })
+        }
+
+
+        let talkinit = false;
+        $(document).pjax('a[data-pjax]', '#main', {
+            fragment: '#main',
+            timeout: 8000
+        }).on('pjax:complete', function () {
+            //hljs.initHighlightingOnLoad();
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+            //文章热度
+            getHotnum();
+            //文章索引
+            toginit();
+            //清空搜索栏
+            if (searchChoice) {
+                searchInit();
+                searchInput.value = "";
+            }
+            var pl = window.location.pathname;
+            //说说更新
+            if (pl.search("talk") != -1 && !talkinit) {
+                add();
+                talkinit = true;
+            }
+            else if (pl.search("talk") != -1) {
+                show();
+                refreshImg("talkimg");
+            }
+            //分享按钮更新
+            if (pl.search("post") != -1) {
+                if (shareChoice)
+                    shareInit();
+                if (donateChoice)
+                    donateInit();
+                imglazyloadinit();
+                lazyload();
+                refreshImg("lazyload");
+                codeinit();
+            }
+            if (btstate == true)
+                dropdown();
+        }).on('pjax:start', function () {
+            $(".pjaxloading").fadeIn(50);
+        }).on('pjax:end', function () {
+            $(".pjaxloading").fadeOut(50);
+        });
+    </script>
+
+    <script>
+        /**
+         * https://github.com/tangkaichuan/gridea-search
+         */
+        (function () {
+            var CACHES = checkCache()
+            if (!CACHES) {
+                var NOW = Date.now()
+                var API_CONTENT = '../api-content/index.html' + '?_=' + NOW
+                preload(API_CONTENT);
+                getContents(show_getContentresult);
+            }
+
+            function show_getContentresult(data) {
+                console.log("获取成功");
+                var postslen = data["posts"].length;
+                localStorage.setItem('postsnum', postslen);
+                var poststitlelen = 0;
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "");
+                localStorage.setItem('poststitlelen', pt.length);
+            }
+
+
+
+            // preload
+            function preload(url) {
+                var preloadLink = document.createElement('link')
+                preloadLink.href = url
+                preloadLink.rel = 'preload'
+                preloadLink.as = 'fetch'
+                preloadLink.crossOrigin = 'anonymous'
+                document.head.appendChild(preloadLink)
+            }
+
+            // 异步 GET 请求
+            function get(obj) {
+                var xhr = new XMLHttpRequest()
+                xhr.open('get', obj.url, true)
+                xhr.send(null)
+                xhr.onreadystatechange = function () {
+                    // 异步请求：响应状态为4，数据加载完毕
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            obj.success(xhr.responseText)
+                        } else {
+                            obj.error(xhr.status)
+                        }
+                    }
+                }
+            }
+
+
+            // 检查缓存是否最新
+            function checkCache() {
+                var caches_postsnum = localStorage.getItem("postsnum");
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "")
+                var ptlen = pt.length;
+                var ptlen_storage = localStorage.getItem("poststitlelen");
+                console.log(parseInt(postsnum));
+                if (caches_postsnum != postsnum || ptlen != ptlen_storage) {
+                    console.log("更新缓存");
+                    return false
+                }
+                return true;
+            }
+
+            // 获取博客全文 api
+            function getContents(callback) {
+                if (CACHES) {
+                    callback(CACHES.contents)
+                } else {
+                    get({
+                        url: API_CONTENT,
+                        success: function (data) {
+                            callback(JSON.parse(data));
+                            localStorage.setItem('ContentsCache', data);
+                        }
+                    })
+                }
+            }
+        })()
+
+        //-------------------------------------------------搜索
+        // 获取搜索框、搜索按钮、清空搜索、结果输出对应的元素
+        if (searchChoice) {
+            var searchInput = document.querySelector('.search-input');
+            var searchResults = document.querySelector('.search-results');
+        }
+        // 申明保存文章的标题、链接、内容的数组变量
+        var searchValue = '',
+            arrItems = [],
+            arrLinks = [],
+            arrTitles = [],
+            arrContents = [],
+            arrResults = [],
+            indexItem = [],
+            itemLength = 0;
+        var tmpDiv = document.createElement('div');
+        tmpDiv.className = 'result-item';
+
+
+        function getStorageContent() {
+            var data = localStorage.getItem('ContentsCache');
+            data = JSON.parse(data);
+            posts = data["posts"];
+            for (var i = 0; i < posts.length; i++) {
+                arrLinks[i] = posts[i].link;
+                arrTitles[i] = posts[i].title;
+                arrContents[i] = posts[i].content;
+                itemLength++;
+            }
+        }
+        getStorageContent();
+        // 输入框内容变化后就开始匹配，可以不用点按钮
+        // 经测试，onkeydown, onchange 等方法效果不太理想，
+        // 存在输入延迟等问题，最后发现触发 input 事件最理想，
+        // 并且可以处理中文输入法拼写的变化
+        searchInput.oninput = function () {
+            setTimeout(searchConfirm, 0);
+        }
+        searchInput.onfocus = function () {
+            searchResults.style.display = 'block';
+        }
+
+        function searchConfirm() {
+            if (searchInput.value == '') {
+                searchResults.style.display = 'none';
+            } else if (searchInput.value.search(/^\s+$/) >= 0) {
+                // 检测输入值全是空白的情况
+                searchInit();
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '请输入有效内容...';
+                searchResults.appendChild(itemDiv);
+            } else {
+                // 合法输入值的情况
+                searchInit();
+                searchValue = searchInput.value;
+                // 在标题、内容中查找
+                searchMatching(arrTitles, arrContents, searchValue);
+            }
+        }
+
+        // 每次搜索完成后的初始化
+        function searchInit() {
+            arrResults = [];
+            indexItem = [];
+            searchResults.innerHTML = '';
+            searchResults.style.display = 'block';
+        }
+
+        function searchMatching(arr1, arr2, input) {
+            // 忽略输入大小写
+            input = new RegExp(input, 'i');
+            var step = 10;
+            // 在所有文章标题、内容中匹配查询值
+            for (i = 0; i < itemLength; i++) {
+                var indexContent = arr2[i].search(input);
+                //标题匹配
+                if (arr1[i].search(input) != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+                    if (indexContent != -1) {
+                        startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                        var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                        arrResults.push("....." + searchcontent + ".....");
+                    }
+                    else
+                        arrResults.push("");
+                }
+                //内容匹配
+                else if (indexContent != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+
+                    startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                    var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                    arrResults.push("....." + searchcontent + ".....");
+                }
+            }
+
+            // 输出总共匹配到的数目
+            var totalDiv = tmpDiv.cloneNode(true);
+            totalDiv.innerHTML = '<b>总匹配：' + indexItem.length + ' 项<hr></b>';
+            searchResults.appendChild(totalDiv);
+
+            // 未匹配到内容的情况
+            if (indexItem.length == 0) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '未匹配到内容...';
+                searchResults.appendChild(itemDiv);
+            }
+
+            // 将所有匹配内容进行组合
+            for (i = 0; i < arrResults.length; i++) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerHTML = '<a data-pjax class="searchresults" href="' + arrLinks[indexItem[i]] + '"><b>[' + arrTitles[indexItem[i]] +
+                    ']</b><p>' + arrResults[i] + '</p></a><hr />';
+                searchResults.appendChild(itemDiv);
+            }
+        }
+    </script>
+    </div>
+                
+                <div id="tab1" class="tab">
+                    <div class="bars">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <div class="close"></div>
+                </div>
+                <div class="col-md-1 col-lg-3"></div>
+                <div id="main" class="col-xs-12 col-sm-12 col-md-12 col-lg-7">
+                    <link rel="stylesheet" href="http://localhost:4001/media/css/font-awesome.css">
+
+<body>
+    <div class="allcontent" id="postdetail">
+        <div class="postshow postpadding" style="padding-bottom: 0;">
+            
+            <div class="postdetailimg">
+                <img src="http://localhost:4001/post-images/5uA_yv-aO.png" class="postimage" style="cursor:auto">
+            </div>
+            <div class="postinfo-detail">
+                <div class="postdate"><i class="fa fa-calendar"></i>2021-04-13</div>
+                <div class="poststatus postdate"><i class="fa fa-clock-o"></i> 35 min read</div>
+                <div class="posttag">
+                    
+                    <a data-pjax href="http://localhost:4001/tag/1WJzfk7Hi/" class="postlink">
+                        <i class="fa fa-tag"></i> flink
+                    </a>
+                    
+                </div>
+            </div>
+            
+        <div id="articlecontent">
+            <div id="texttitle" style="text-align: center">
+                <h2 id="ptitle">第六章 Flink 的Window 操作</h2>
+                <!-- id 将作为查询条件 -->
+                <div id="pl" style="display:none">http://localhost:4001/post/5uA_yv-aO/</div>
+                <div id="rootaddr" style="display:none">http://localhost:4001</div>
+                <span id="hotnum">
+                    <h4><i class="fa fa-eye" aria-hidden="true" style="color: #FF8C00;"></i>&nbsp;&nbsp;热度</i>: <i
+                            class="hotnum">loading...</i></h4>
+                </span>
+            </div>
+            <div class="text ">
+                <p>Window是无限数据流处理的核心，Window将一个无限的stream拆分成有限大小的”buckets”桶，我们可以在这些桶上做计算操作。本文主要聚焦于在Flink中如何进行窗口操作，以及程序员如何从window提供的功能中获得最大的收益。<br>
+　　窗口化的Flink程序的一般结构如下，第一个代码段中是分组的流，而第二段是非分组的流。正如我们所见，唯一的区别是分组的stream调用<code>keyBy(…)</code>和<code>window(…)</code>，而非分组的stream中<code>window()</code>换成了<code>windowAll(…)</code>，这些也将贯穿都这一页的其他部分中。</p>
+<h2 id="keyed-windows">Keyed Windows</h2>
+<pre><code class="language-java">stream.keyBy(...)           &lt;-  keyed versus non-keyed windows
+       .window(...)         &lt;-  required: &quot;assigner&quot;
+      [.trigger(...)]       &lt;-  optional: &quot;trigger&quot; (else default trigger)
+      [.evictor(...)]       &lt;-  optional: &quot;evictor&quot; (else no evictor)
+      [.allowedLateness()]  &lt;-  optional, else zero
+       .reduce/fold/apply() &lt;-  required: &quot;function&quot;
+</code></pre>
+<h2 id="non-keyed-windows">Non-Keyed Windows</h2>
+<pre><code class="language-java">stream.windowAll(...)       &lt;-  required: &quot;assigner&quot;
+      [.trigger(...)]       &lt;-  optional: &quot;trigger&quot; (else default trigger)
+      [.evictor(...)]       &lt;-  optional: &quot;evictor&quot; (else no evictor)
+      [.allowedLateness()]  &lt;-  optional, else zero
+       .reduce/fold/apply() &lt;-  required: &quot;function&quot;
+</code></pre>
+<p>在上面的例子中，方括号[]内的命令是可选的，这表明Flink允许你根据最符合你的要求来定义自己的window逻辑。</p>
+<h2 id="window-的生命周期">Window 的生命周期</h2>
+<p>简单地说,当一个属于<code>window</code>的元素到达之后这个<code>window</code>就创建了,而当当前时间(事件或者处理时间)为<code>window</code>的创建时间跟用户指定的延迟时间相加时,窗口将被彻底清除。Flink 确保了只清除基于时间的<code>window</code>,其他类型的<code>window</code>不清除,例如:全局<code>window</code>。例如:对于一个每5分钟创建无覆盖的(即 翻滚窗口)窗口,允许一个1分钟的时延的窗口策略，Flink将会在12:00到12:05这段时间内第一个元素到达时创建窗口,当水印通过12:06时,移除这个窗口。<br>
+　　此外,每个 <code>Window</code>都有一个<code>Trigger</code>和一个附属于 Window 的函数(例如: <code>WindowFunction</code>, <code>ReduceFunction</code> 及 <code>FoldFunction</code>)，函数里包含了应用于<code>窗口(Window)</code>内容的计算，而<code>Trigger(触发器)</code>则指定了函数在什么条件下可被应用(函数何时被触发),一个触发策略可以是 &quot;当窗口中的元素个数超过4个时&quot; 或者 &quot;当水印达到窗口的边界时&quot;。触发器还可以决定在窗口创建和删除之间的任意时刻清除窗口的内容,本例中的清除仅指清除窗口的内容而不是窗口的元数据,也就是说新的数据还是可以被添加到当前的<code>window</code>中。<br>
+　　除了上面的提到之外，你还可以指定一个<code>驱逐者</code>, <code>Evictor</code>将在触发器触发之后或者在函数被应用之前或者之后，清楚窗口中的元素。<br>
+　　接下来我们将更深入的去了解上述的部件，我们从上述片段的主要部分开始(如:<code>Keyed vs Non-Keyed Windows</code>, <code>Window Assigner</code>, 及 <code>Window Function</code>),然后是可选部分。</p>
+<h2 id="分组和非分组windows-keyed-vs-non-keyed-windows">分组和非分组Windows (Keyed vs Non-Keyed Windows)</h2>
+<p>首先，第一件事是指定你的数据流是分组的还是未分组的，这个必须在定义<code>window</code> 之前指定好。使用 <code>keyBy(...)</code>会将你的无限数据流拆分成逻辑分组的数据流，如果 <code>keyBy(...)</code> 函数不被调用的话，你的数据流将不是分组的。<br>
+　　在分组数据流中,任何正在传入的事件的属性都可以被当做key,分组数据流将你的window计算通过多任务并发执行，以为每一个逻辑分组流在执行中与其他的逻辑分组流是独立地进行的。<br>
+　　在非分组数据流中，你的原始数据流并不会拆分成多个逻辑流并且所有的window逻辑将在一个任务中执行，并发度为1。</p>
+<h2 id="窗口分配器window-assingers">窗口分配器(Window Assingers)</h2>
+<p>指定完你的数据流是分组的还是非分组的之后，接下来你需要定义一个<code>窗口分配器(window assigner)</code>，窗口分配器定义了元素如何分配到窗口中，这是通过在分组数据流中调用window(...)或者非分组数据流中调用<code>windowAll(...)</code>时你选择的窗口分配器<code>(WindowAssigner)</code>来指定的。<code>WindowAssigner</code>是负责将每一个到来的元素分配给一个或者多个<code>窗口(window)</code>,Flink 提供了一些常用的预定义窗口分配器，即:<code>滚动窗口</code>、<code>滑动窗口</code>、<code>会话窗口</code>和<code>全局窗口</code>。你也可以通过继承<code>WindowAssigner</code>类来自定义自己的窗口。所有的内置窗口分配器(除了全局窗口 <code>global window</code>)都是通过时间来分配元素到窗口中的，这个时间要么是处理的时间，要么是事件发生的时间。请看一下我们的 <code>event time (https://ci.apache.org/projects/flink/flink-docs-release-1.3/dev/event_time.html )</code>部分来了解更多处理时间和事件时间的区别及<code>时间戳(timestamp)</code>和<code>水印(watermark)</code>是如何产生的。<br>
+　　接下来我们将展示Flink的预定义窗口分配器是如何工作的，以及它们在<code>DataStream</code>程序中是如何使用的。接下来我们将展示Flink的预定义窗口分配器是如何工作的，以及它们在<code>DataStream</code>程序中是如何使用的。下图中展示了每个分配器是如何工作的，紫色圆圈代表着数据流中的一个元素，这些元素是通过一些key进行分区(在本例中是 user1,user2,user3), X轴显示的是时间进度。</p>
+<h3 id="滚动窗口">滚动窗口</h3>
+<p>滚动窗口分配器将每个元素分配的一个指定窗口大小的窗口中，滚动窗口有一个固定的大小，并且不会出现重叠。例如:如果你指定了一个5分钟大小的滚动窗口，当前窗口将被评估并将按下图说明每5分钟创建一个新的窗口。<br>
+<img src="http://localhost:4001/post-images/1618886583930.png" alt="" loading="lazy"><br>
+下面的代码片段展示了如何使用滚动窗口。</p>
+<p>Java 代码</p>
+<pre><code class="language-java">DataStream&lt;T&gt; input = ...;
+</code></pre>
+<p>滚动事件时间窗口( tumbling event-time windows )</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(TumblingEventTimeWindows.of(Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;); 
+</code></pre>
+<p>滚动处理时间窗口(tumbling processing-time windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(TumblingProcessingTimeWindows.of(Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>每日偏移8小时的滚动事件时间窗口(daily tumbling event-time windows offset by -8 hours. )</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(TumblingEventTimeWindows.of(Time.days(1), Time.hours(-8)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">val input:DataStream[T] =  
+</code></pre>
+<p>滚动事件时间窗口(tumbling event-time windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(TumblingEventTimeWindows.of(Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>滚动处理时间窗口(tumbling processing-time windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(TumblingProcessingTimeWindows.of(Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>每日偏移8小时的滚动事件时间窗口(daily tumbling event-time windows offset by -8 hours. )</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(TumblingEventTimeWindows.of(Time.days(1), Time.hours(-8)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>时间间隔可以通过<code>Time.milliseconds(x)</code>，<code>Time.seconds(x)</code>，<code>Time.minutes(x)</code>等其中的一个来指定。<br>
+在上面最后的例子中，滚动窗口分配器还接受了一个可选的偏移参数，可以用来改变窗口的排列。例如，没有偏移的话按小时的滚动窗口将按时间纪元来对齐，也就是说你将一个如: 1:00:00.000-1:59:59.999,2:00:00.000-2:59:59.999等，如果你想改变一下，你可以指定一个偏移，如果你指定了一个15分钟的偏移，你将得到1:15:00.000-2:14:59.999,2:15:00.000-3:14:59.999等。时间偏移一个很大的用处是用来调准非0时区的窗口，例如:在中国你需要指定一个8小时的时间偏移。</p>
+<h3 id="滑动窗口sliding-windows">滑动窗口(Sliding Windows)</h3>
+<p>滑动窗口分配器将元素分配到固定长度的窗口中，与滚动窗口类似，窗口的大小由窗口大小参数来配置，另一个窗口滑动参数控制滑动窗口开始的频率。因此，滑动窗口如果滑动参数小于滚动参数的话，窗口是可以重叠的，在这种情况下元素会被分配到多个窗口中。<br>
+　　例如，你有10分钟的窗口和5分钟的滑动，那么每个窗口中5分钟的窗口里包含着上个10分钟产生的数据，如下图所示:<br>
+<img src="http://localhost:4001/post-images/1618886623719.png" alt="" loading="lazy"><br>
+下面的代码片段中展示了如何使用滑动窗口:</p>
+<p>Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;T&gt; input = ...;
+</code></pre>
+<p>滑动事件时间窗口</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(SlidingEventTimeWindows.of(Time.seconds(10), Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>滑动处理时间窗口</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(SlidingProcessingTimeWindows.of(Time.seconds(10), Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>偏移8小时的滑动处理时间窗口(sliding processing-time windows offset by -8 hours)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(SlidingProcessingTimeWindows.of(Time.hours(12), Time.hours(1), Time.hours(-8)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">val input: DataStream[T] = ...
+</code></pre>
+<p>滑动事件时间窗口(sliding event-time windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(SlidingEventTimeWindows.of(Time.seconds(10), Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>滑动处理时间窗口(sliding processing-time windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(SlidingProcessingTimeWindows.of(Time.seconds(10), Time.seconds(5)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>偏移8小时的滑动处理时间窗口(sliding processing-time windows offset by -8 hours)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(SlidingProcessingTimeWindows.of(Time.hours(12), Time.hours(1), Time.hours(-8)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>时间间隔可以通过Time.milliseconds(x),Time.seconds(x),Time.minutes(x)等来指定。<br>
+　　正如上述例子所示，滑动窗口分配器也有一个可选的偏移参数来改变窗口的对齐。例如，没有偏移参数，按小时的窗口，有30分钟的滑动，将根据时间纪元来对齐，也就是说你将得到如下的窗口1:00:00.000-1:59:59.999,1:30:00.000-2:29:59.999等。而如果你想改变窗口的对齐，你可以给定一个偏移，如果给定一个15分钟的偏移，你将得到如下的窗口:1:15:00.000-2:14.59.999,　1:45:00.000-2:44:59.999等。时间偏移一个很大的用处是用来调准非0时区的窗口，例如:在中国你需要指定一个8小时的时间偏移。</p>
+<h3 id="会话窗口session-windows">会话窗口(Session Windows)</h3>
+<p>session窗口分配器通过session活动来对元素进行分组，session窗口跟滚动窗口和滑动窗口相比，不会有重叠和固定的开始时间和结束时间的情况。相反，当它在一个固定的时间周期内不再收到元素，即非活动间隔产生，那个这个窗口就会关闭。一个session窗口通过一个session间隔来配置，这个session间隔定义了非活跃周期的长度。当这个非活跃周期产生，那么当前的session将关闭并且后续的元素将被分配到新的session窗口中去。</p>
+<figure data-type="image" tabindex="1"><img src="http://localhost:4001/post-images/1618886669102.png" alt="" loading="lazy"></figure>
+<p>下面的代码片段中展示了如何使用session窗口<br>
+Java代码:</p>
+<pre><code class="language-java">DataStream&lt;T&gt; input = ...;
+</code></pre>
+<p>事件时间会话窗口(event-time session windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(EventTimeSessionWindows.withGap(Time.minutes(10)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>处理时间会话窗口(processing-time session windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(ProcessingTimeSessionWindows.withGap(Time.minutes(10)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>Scala代码:</p>
+<pre><code class="language-java">val input: DataStream[T] = ...
+</code></pre>
+<p>事件时间会话窗口(event-time session windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(EventTimeSessionWindows.withGap(Time.minutes(10)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>处理时间会话窗口(processing-time session windows)</p>
+<pre><code class="language-java">input
+    .keyBy(&lt;key selector&gt;)
+    .window(ProcessingTimeSessionWindows.withGap(Time.minutes(10)))
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>时间间隔可以通过<code>Time.milliseconds(x),Time.seconds(x),Time.minutes(x)</code>等来指定。<br>
+注意: 因为session看窗口没有一个固定的开始和结束，他们的评估与滑动窗口和滚动窗口不同。在内部，session操作为每一个到达的元素创建一个新的窗口，并合并间隔时间小于指定非活动间隔的窗口。为了进行合并，session窗口的操作需要指定一个<code>合并触发器(Trigger)</code>和一个<code>合并窗口函数(Window Function)</code>,如:<code>ReduceFunction</code>或者<code>WindowFunction</code>(FoldFunction不能合并)。</p>
+<p>###全局窗口(Global Windows)<br>
+全局窗口分配器将所有具有相同key的元素分配到同一个全局窗口中，这个窗口模式仅适用于用户还需自定义触发器的情况。否则，由于全局窗口没有一个自然的结尾，无法执行元素的聚合，将不会有计算被执行。<br>
+<img src="http://localhost:4001/post-images/1618886845541.png" alt="" loading="lazy"><br>
+下面的代码片段展示了如何使用全局窗口:<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;T&gt; input = ...;
+input
+    .keyBy(&lt;key selector&gt;)
+    .window(GlobalWindows.create())
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>Scala代码:</p>
+<pre><code class="language-java">val input: DataStream[T] = ...
+input
+    .keyBy(&lt;key selector&gt;)
+    .window(GlobalWindows.create())
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<h2 id="窗口函数window-functions">窗口函数(Window Functions)</h2>
+<p>定义完窗口分配器后，我们还需要为每一个窗口指定我们需要执行的计算，这是窗口的责任，当系统决定一个窗口已经准备好执行之后，这个窗口函数将被用来处理窗口中的每一个元素(可能是分组的)。请参考:<code>https://ci.apache.org/projects/flink/flink-docs-release-1.3/dev/windows.html#triggers</code> 来了解当一个窗口准备好之后，Flink是如何决定的。<br>
+　　window函数可以是<code>ReduceFunction</code>, <code>FoldFunction</code> 或者 <code>WindowFunction</code> 中的一个。前面两个更高效一些(),因为在每个窗口中增量地对每一个到达的元素执行聚合操作。一个 <code>WindowFunction</code> 可以获取一个窗口中的所有元素的一个迭代以及哪个元素属于哪个窗口的额外元信息。<br>
+　　有<code>WindowFunction</code>的窗口化操作会比其他的操作效率要差一些，因为Flink内部在调用函数之前会将窗口中的所有元素都缓存起来。这个可以通过<code>WindowFunction</code>和<code>ReduceFunction</code>或者<code>FoldFunction</code>结合使用来获取窗口中所有元素的增量聚合和<code>WindowFunction</code>接收的额外的窗口元数据，接下来我们将看一看每一种变体的示例。</p>
+<h3 id="reducefunction">ReduceFunction</h3>
+<p><code>ReduceFunction</code>指定了如何通过两个输入的参数进行合并输出一个同类型的参数的过程，Flink使用<code>ReduceFunction</code>来对窗口中的元素进行增量聚合。<br>
+　　一个<code>ReduceFunction</code> 可以通过如下的方式来定义和使用:<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;Tuple2&lt;String, Long&gt;&gt; input = ...;
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .reduce(new ReduceFunction&lt;Tuple2&lt;String, Long&gt;&gt; {
+      public Tuple2&lt;String, Long&gt; reduce(Tuple2&lt;String, Long&gt; v1, Tuple2&lt;String, Long&gt; v2) {
+        return new Tuple2&lt;&gt;(v1.f0, v1.f1 + v2.f1);
+      }
+    });
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">val input: DataStream[(String, Long)] = ...
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .reduce { (v1, v2) =&gt; (v1._1, v1._2 + v2._2) }
+</code></pre>
+<p>上面的例子是将窗口所有元素中元组的第二个属性进行累加操作。</p>
+<h3 id="foldfunction">FoldFunction</h3>
+<p><code>FoldFunction</code> 指定了一个输入元素如何与一个输出类型的元素合并的过程，这个<code>FoldFunction</code> 会被每一个加入到窗口中的元素和当前的输出值增量地调用，第一个元素是与一个预定义的类型为输出类型的初始值合并。<br>
+　　一个<code>FoldFunction</code>可以通过如下的方式定义和调用:<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;Tuple2&lt;String, Long&gt;&gt; input = ...;
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .fold(&quot;&quot;, new FoldFunction&lt;Tuple2&lt;String, Long&gt;, String&gt;&gt; {
+       public String fold(String acc, Tuple2&lt;String, Long&gt; value) {
+         return acc + value.f1;
+       }
+    });
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java"> val input: DataStream[(String, Long)] = ...
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .fold(&quot;&quot;) { (acc, v) =&gt; acc + v._2 }
+</code></pre>
+<p>上面例子追加所有输入的长整型到一个空的字符串中。<br>
+注意 fold()不能应用于回话窗口或者其他可合并的窗口中。</p>
+<h2 id="窗口函数-一般用法windowfunction-the-generic-case">窗口函数 —— 一般用法(WindowFunction - The Generic Case)</h2>
+<p>一个<code>WindowFunction</code>将获得一个包含了<code>window</code>中的所有<code>元素迭代(Iterable)</code>，并且提供所有窗口函数的最大灵活性。这些带来了性能的成本和资源的消耗，因为<code>window</code>中的元素无法进行增量迭代，而是缓存起来直到<code>window</code>被认为是可以处理时为止。<br>
+<code>WindowFunction</code>的使用说明如下:<br>
+Java 代码:</p>
+<pre><code class="language-java">public interface WindowFunction&lt;IN, OUT, KEY, W extends Window&gt; extends Function, Serializable {
+  /**
+   // Evaluates the window and outputs none or several elements.
+   // @param key The key for which this window is evaluated.
+  // @param window The window that is being evaluated.
+   // @param input The elements in the window being evaluated.
+   // @param out A collector for emitting elements.
+  // @throws Exception The function may throw exceptions to fail the program and trigger recovery.
+  */
+  void apply(KEY key, W window, Iterable&lt;IN&gt; input, Collector&lt;OUT&gt; out) throws Exception;
+}
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">trait WindowFunction[IN, OUT, KEY, W &lt;: Window] extends Function with Serializable {
+  /**
+    // Evaluates the window and outputs none or several elements.
+    //
+    // @param key    The key for which this window is evaluated.
+    // @param window The window that is being evaluated.
+    // @param input  The elements in the window being evaluated.
+    // @param out    A collector for emitting elements.
+    // @throws Exception The function may throw exceptions to fail the program and trigger recovery.
+    */
+  def apply(key: KEY, window: W, input: Iterable[IN], out: Collector[OUT])
+}
+</code></pre>
+<p>一个<code>WindowFunction</code>可以按如下方式来定义和使用:<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;Tuple2&lt;String, Long&gt;&gt; input = ...;
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .apply(new MyWindowFunction());
+/* ... */
+public class MyWindowFunction implements WindowFunction&lt;Tuple&lt;String, Long&gt;, String, String, TimeWindow&gt; {
+  void apply(String key, TimeWindow window, Iterable&lt;Tuple&lt;String, Long&gt;&gt; input, Collector&lt;String&gt; out) {
+    long count = 0;
+    for (Tuple&lt;String, Long&gt; in: input) {
+      count++;
+    }
+    out.collect(&quot;Window: &quot; + window + &quot;count: &quot; + count);
+  }
+}
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">val input: DataStream[(String, Long)] = ...
+input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .apply(new MyWindowFunction())
+/* ... */
+class MyWindowFunction extends WindowFunction[(String, Long), String, String, TimeWindow] {
+  def apply(key: String, window: TimeWindow, input: Iterable[(String, Long)], out: Collector[String]): () = {
+    var count = 0L
+    for (in &lt;- input) {
+      count = count + 1
+    }
+    out.collect(s&quot;Window $window count: $count&quot;)
+  }
+}
+</code></pre>
+<p>上面的例子展示了统计一个<code>window</code>中元素个数的<code>WindowFunction</code>，此外，还将<code>window</code>的信息添加到输出中。<br>
+注意:使用<code>WindowFunction</code>来做简单的聚合操作如计数操作，性能是相当差的。下一章节我们将展示如何将<code>ReduceFunction</code>跟<code>WindowFunction</code>结合起来，来获取增量聚合和添加到<code>WindowFunction</code>中的信息。</p>
+<h3 id="processwindowfunction">ProcessWindowFunction</h3>
+<p>在使用<code>WindowFunction</code>的地方你也可以用<code>ProcessWindowFunction</code>，这跟<code>WindowFunction</code>很类似，除了接口允许查询跟多关于<code>context</code>的信息，<code>context</code>是<code>window</code>评估发生的地方。<br>
+下面是<code>ProcessWindowFunction</code>的接口:<br>
+Java 代码:</p>
+<pre><code class="language-java">public abstract class ProcessWindowFunction&lt;IN, OUT, KEY, W extends Window&gt; implements Function {
+    /**
+     // Evaluates the window and outputs none or several elements.
+     //
+     // @param key The key for which this window is evaluated.
+     // @param context The context in which the window is being evaluated.
+     // @param elements The elements in the window being evaluated.
+     // @param out A collector for emitting elements.
+     //
+     // @throws Exception The function may throw exceptions to fail the program and trigger recovery.
+     */
+    public abstract void process(
+            KEY key,
+            Context context,
+            Iterable&lt;IN&gt; elements,
+            Collector&lt;OUT&gt; out) throws Exception;
+    /**
+     // The context holding window metadata
+     */
+    public abstract class Context {
+        /**
+         // @return The window that is being evaluated.
+         */
+        public abstract W window();
+    }
+}
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">abstract class ProcessWindowFunction[IN, OUT, KEY, W &lt;: Window] extends Function {
+  /**
+    // Evaluates the window and outputs none or several elements.
+    //
+    // @param key      The key for which this window is evaluated.
+    // @param context  The context in which the window is being evaluated.
+    // @param elements The elements in the window being evaluated.
+    // @param out      A collector for emitting elements.
+    // @throws Exception The function may throw exceptions to fail the program and trigger recovery.
+    */
+  @throws[Exception]
+  def process(
+      key: KEY,
+      context: Context,
+      elements: Iterable[IN],
+      out: Collector[OUT])
+  /**
+    // The context holding window metadata
+    */
+  abstract class Context {
+    /**
+      // @return The window that is being evaluated.
+      */
+    def window: W
+  }
+}
+</code></pre>
+<p><code>ProcessWindowFunction</code>可以通过如下方式调用:<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;Tuple2&lt;String, Long&gt;&gt; input = ...;
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .process(new MyProcessWindowFunction());`
+Scala 代码:
+`val input: DataStream[(String, Long)] = ...
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .process(new MyProcessWindowFunction())
+</code></pre>
+<p>有增量聚合功能的<code>WindowFunction (WindowFunction with Incremental Aggregation)</code><br>
+<code>WindowFunction</code>可以跟<code>ReduceFunction</code>或者<code>FoldFunction</code>结合来增量地对到达<code>window</code>中的元素进行聚合，当<code>window</code>关闭之后，<code>WindowFunction</code>就能提供聚合结果。当获取到<code>WindowFunction</code>额外的<code>window</code>元信息后就可以进行增量计算窗口了。<br>
+标注:你也可以使用<code>ProcessWindowFunction</code>替换<code>WindowFunction</code>来进行增量窗口聚合。</p>
+<p>使用<code>FoldFunction</code> 进行<code>增量窗口聚合(Incremental Window Aggregation with FoldFunction)</code><br>
+下面的例子展示了一个增量的<code>FoldFunction</code>如何跟一个<code>WindowFunction</code>结合，来获取窗口的事件数，并同时返回窗口的key和窗口的最后时间。<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;SensorReading&gt; input = ...;
+input
+  .keyBy(&lt;key selector&gt;)
+  .timeWindow(&lt;window assigner&gt;)
+  .fold(new Tuple3&lt;String, Long, Integer&gt;(&quot;&quot;,0L, 0), new MyFoldFunction(), new MyWindowFunction())
+// Function definitions
+private static class MyFoldFunction
+    implements FoldFunction&lt;SensorReading, Tuple3&lt;String, Long, Integer&gt; &gt; {
+  public Tuple3&lt;String, Long, Integer&gt; fold(Tuple3&lt;String, Long, Integer&gt; acc, SensorReading s) {
+      Integer cur = acc.getField(2);
+      acc.setField(2, cur + 1);
+      return acc;
+  }
+}
+private static class MyWindowFunction
+    implements WindowFunction&lt;Tuple3&lt;String, Long, Integer&gt;, Tuple3&lt;String, Long, Integer&gt;, String, TimeWindow&gt; {
+  public void apply(String key,
+                    TimeWindow window,
+                    Iterable&lt;Tuple3&lt;String, Long, Integer&gt;&gt; counts,
+                    Collector&lt;Tuple3&lt;String, Long, Integer&gt;&gt; out) {
+    Integer count = counts.iterator().next().getField(2);
+    out.collect(new Tuple3&lt;String, Long, Integer&gt;(key, window.getEnd(),count));
+  }
+}
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">val input: DataStream[SensorReading] = ...
+ input
+ .keyBy(&lt;key selector&gt;)
+ .timeWindow(&lt;window assigner&gt;)
+ .fold (
+    (&quot;&quot;, 0L, 0),
+    (acc: (String, Long, Int), r: SensorReading) =&gt; { (&quot;&quot;, 0L, acc._3 + 1) },
+    ( key: String,
+      window: TimeWindow,
+      counts: Iterable[(String, Long, Int)],
+      out: Collector[(String, Long, Int)] ) =&gt;
+      {
+        val count = counts.iterator.next()
+        out.collect((key, window.getEnd, count._3))
+      }
+  )
+</code></pre>
+<p>使用<code>ReduceFunction</code>进行<code>增量窗口聚合(Incremental Window Aggregation with ReduceFunction)</code><br>
+下面例子展示了一个增量额<code>ReduceFunction</code>如何跟一个<code>WindowFunction</code>结合，来获取窗口中最小的事件和窗口的开始时间。<br>
+Java 代码:</p>
+<pre><code class="language-java">DataStream&lt;SensorReading&gt; input = ...;
+input
+  .keyBy(&lt;key selector&gt;)
+  .timeWindow(&lt;window assigner&gt;)
+  .reduce(new MyReduceFunction(), new MyWindowFunction());
+// Function definitions
+private static class MyReduceFunction implements ReduceFunction&lt;SensorReading&gt; {
+  public SensorReading reduce(SensorReading r1, SensorReading r2) {
+      return r1.value() &gt; r2.value() ? r2 : r1;
+  }
+}
+private static class MyWindowFunction
+    implements WindowFunction&lt;SensorReading, Tuple2&lt;Long, SensorReading&gt;, String, TimeWindow&gt; {
+  public void apply(String key,
+                    TimeWindow window,
+                    Iterable&lt;SensorReading&gt; minReadings,
+                    Collector&lt;Tuple2&lt;Long, SensorReading&gt;&gt; out) {
+      SensorReading min = minReadings.iterator().next();
+      out.collect(new Tuple2&lt;Long, SensorReading&gt;(window.getStart(), min));
+  }
+}
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java">val input: DataStream[SensorReading] = ...
+ input
+  .keyBy(&lt;key selector&gt;)
+  .timeWindow(&lt;window assigner&gt;)
+  .reduce(
+    (r1: SensorReading, r2: SensorReading) =&gt; { if (r1.value &gt; r2.value) r2 else r1 },
+    ( key: String,
+      window: TimeWindow,
+      minReadings: Iterable[SensorReading],
+      out: Collector[(Long, SensorReading)] ) =&gt;
+      {
+        val min = minReadings.iterator.next()
+        out.collect((window.getStart, min))
+      }
+  )
+</code></pre>
+<h2 id="触发器triggers">触发器(Triggers)</h2>
+<p>触发器决定了一个窗口何时可以被窗口函数处理，每一个窗口分配器都有一个默认的触发器，如果默认的触发器不能满足你的需要，你可以通过调用<code>trigger(...)</code>来指定一个自定义的触发器。触发器的接口有5个方法来允许触发器处理不同的事件:<br>
+　　* <code>onElement()</code>方法,每个元素被添加到窗口时调用<br>
+　　* <code>onEventTime()</code>方法,当一个已注册的事件时间计时器启动时调用<br>
+　　* <code>onProcessingTime()</code>方法,当一个已注册的处理时间计时器启动时调用<br>
+　　* <code>onMerge()</code>方法，与状态性触发器相关，当使用会话窗口时，两个触发器对应的窗口合并时，合并两个触发器的状态。<br>
+　　* 最后一个<code>clear()</code>方法执行任何需要清除的相应窗口<br>
+上面的方法中有两个需要注意的地方:<br>
+1)第一、三通过返回一个TriggerResult来决定如何操作调用他们的事件，这些操作可以是下面操作中的一个；<br>
+<code>CONTINUE</code>:什么也不做<br>
+<code>FIRE</code>:触发计算<br>
+<code>PURGE</code>:清除窗口中的数据<br>
+<code>FIRE_AND_PURGE</code>:触发计算并清除窗口中的数据<br>
+2)这些函数可以被用来为后续的操作注册处理时间定时器或者事件时间计时器</p>
+<h3 id="触发和清除fire-and-purge">触发和清除(Fire and Purge)</h3>
+<p>一旦一个触发器决定一个窗口已经准备好进行处理，它将触发并返回<code>FIRE</code>或者<code>FIRE_AND_PURGE</code>。这是窗口操作发送当前窗口结果的信号，给定一个拥有一个<code>WindowFunction</code>的窗口那么所有的元素都将发送到<code>WindowFunction</code>中(可能之后还会发送到驱逐器(Evitor)中)。有<code>ReduceFunction</code>或者<code>FoldFunction</code>的<code>Window</code>仅仅发送他们的急切聚合结果。<br>
+　　当一个触发器触发时，它可以是FIRE或者FIRE_AND_PURGE，如果是FIRE的话，将保持window中的内容，FIRE_AND_PURGE的话，会清除window的内容。默认情况下，预实现的触发器仅仅是FIRE，不会清除window的状态。<br>
+注意:清除操作仅清除window的内容，并留下潜在的窗口元信息和完整的触发器状态。</p>
+<h3 id="窗口分配器默认的触发器default-triggers-of-windowassigners">窗口分配器默认的触发器(Default Triggers of WindowAssigners)</h3>
+<p>默认的触发器适用于许多种情况，例如:所有的事件时间分配器都有一个<code>EventTimeTrigger</code>作为默认的触发器，这个触发器仅在当水印通过窗口的最后时间时触发。<br>
+注意:<code>GlobalWindow</code>默认的触发器是<code>NeverTrigger</code>，是永远不会触发的，因此，如果你使用的是<code>GlobalWindow</code>的话，你需要定义一个自定义触发器。<br>
+注意:通过调用<code>trigger(...)</code>来指定一个触发器你就重写了<code>WindowAssigner</code>的默认触发器。例如:如果你为<code>TumblingEventTimeWindows</code>指定了一个<code>CountTrigger</code>，你就不会再通过时间来获取触发了，而是通过计数。现在，如果你想通过时间和计数来触发的话，你需要写你自己自定义的触发器。</p>
+<h3 id="内置的和自定义的触发器build-in-and-custom-triggers">内置的和自定义的触发器(Build-in and Custom Triggers)</h3>
+<p>Flink有一些内置的触发器:<br>
+　　*EventTimeTrigger(前面提到过)触发是根据由水印衡量的事件时间的进度来的<br>
+　　*ProcessingTimeTrigger 根据处理时间来触发<br>
+　　*CountTrigger 一旦窗口中的元素个数超出了给定的限制就会触发<br>
+　　*PurgingTrigger 作为另一个触发器的参数并将它转换成一个清除类型<br>
+如果你想实现一个自定义的触发器，你需要查看一下这个抽象类Trigger(https://github.com/apache/flink/blob/master//flink-streaming-java/src/main/java/org/apache/flink/streaming/api/windowing/triggers/Trigger.java ),请注意，这个API还在优化中，后续的Flink版本可能会改变。</p>
+<h2 id="驱逐器evictors">驱逐器(Evictors)</h2>
+<p>Flink的窗口模型允许指定一个除了<code>WindowAssigner</code>和<code>Trigger</code>之外的可选参数<code>Evitor</code>，这个可以通过调用<code>evitor(...)</code>方法(在这篇文档的开头展示过)来实现。这个驱逐器(evitor)可以在触发器触发之前或者之后，或者窗口函数被应用之前清理窗口中的元素。为了达到这个目的，Evitor接口有两个方法:</p>
+<pre><code class="language-java">/**
+ // Optionally evicts elements. Called before windowing function.
+ //
+ // @param elements The elements currently in the pane.
+ // @param size The current number of elements in the pane.
+ // @param window The {@link Window}
+ // @param evictorContext The context for the Evictor
+ ///
+void evictBefore(Iterable&lt;TimestampedValue&lt;T&gt;&gt; elements, int size, W window, EvictorContext evictorContext);
+/**
+ // Optionally evicts elements. Called after windowing function.
+ //
+ // @param elements The elements currently in the pane.
+ // @param size The current number of elements in the pane.
+ // @param window The {@link Window}
+ // @param evictorContext The context for the Evictor
+ */
+void evictAfter(Iterable&lt;TimestampedValue&lt;T&gt;&gt; elements, int size, W window, EvictorContext evictorContext);
+</code></pre>
+<p><code>evitorBefore()</code>方法包含了在<code>window function</code>之前被应用的驱逐逻辑，而<code>evitorAfter()</code>方法包含了在<code>window function</code>之后被应用的驱逐逻辑。在<code>window function</code>应用之前被驱逐的元素将不会再被<code>window function</code>处理。<br>
+Flink有三个预实现的驱逐器，他们是:<br>
+　　<code>CountEvitor</code>：在窗口中保持一个用户指定数量的元素，并在窗口的开始处丢弃剩余的其他元素<br>
+　　<code>DeltaEvitor</code>: 通过一个<code>DeltaFunction</code>和一个阈值，计算窗口缓存中最近的一个元素和剩余的所有元素的<code>delta</code>值，并清除<code>delta</code>值大于或者等于阈值的元素<br>
+　　<code>TimeEvitor</code>:使用一个<code>interval</code>的毫秒数作为参数，对于一个给定的窗口，它会找出元素中的最大时间戳<code>max_ts</code>，并清除时间戳小于<code>max_tx - interval</code>的元素。<br>
+默认情况下:所有预实现的<code>evitor</code>都是在<code>window function</code>前应用它们的逻辑<br>
+注意:指定一个<code>Evitor</code>要防止预聚合，因为窗口中的所有元素必须得在计算之前传递到驱逐器中<br>
+注意:Flink 并不保证窗口中的元素是有序的，所以驱逐器可能从窗口的开始处清除，元素到达的先后不是那么必要。</p>
+<h3 id="允许延迟allowed-lateness">允许延迟(Allowed Lateness)</h3>
+<p>当处理事件时间的<code>window</code>时，可能会出现元素到达晚了，Flink用来与事件时间联系的水印已经过了元素所属的窗口的最后时间。可以查看事件时间(event time https://ci.apache.org/projects/flink/flink-docs-release-1.3/dev/event_time.html )尤其是晚到元素(late elements https://ci.apache.org/projects/flink/flink-docs-release-1.3/dev/event_time.html#late-elements )来了解Flink如何处理事件时间的讨论。<br>
+　　默认情况下，当水印已经过了窗口的最后时间时晚到的元素会被丢弃。然而，Flink允许为窗口操作指定一个最大允许时延，允许时延指定了元素可以晚到多长时间，默认情况下是0。水印已经过了窗口最后时间后才来的元素，如果还未到窗口最后时间加时延时间，那么元素任然添加到窗口中。如果依赖触发器的使用的话，晚到但是未丢弃的元素可能会导致窗口再次被触发。<br>
+　　为了达到这个目的，Flink将保持窗口的状态直到允许时延的发生，一旦发生，Flink将清除<code>Window</code>，删除<code>window</code>的状态，如<code>Window</code> 生命周期章节中所描述的那样。<br>
+默认情况下，允许时延为0，也就是说水印之后到达的元素将被丢弃。<br>
+你可以按如下方式来指定一个允许时延：<br>
+Java 代码:</p>
+<pre><code class="language-java"> DataStream&lt;T&gt; input = ...;
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .allowedLateness(&lt;time&gt;)
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+</code></pre>
+<p>Scala 代码:</p>
+<pre><code class="language-java"> val input: DataStream[T] = ...
+ input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .allowedLateness(&lt;time&gt;)
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+</code></pre>
+<p>注意:当使用<code>GlobalWindows</code>分配器时，没有数据会被认为是延迟的，因为<code>Global Window</code>的最后时间是<code>Long.MAX_VALUE</code>。</p>
+<p>###以侧输出来获取延迟数据(Getting Late Data as a Site Output)<br>
+使用Flink的侧输出(https://ci.apache.org/projects/flink/flink-docs-release-1.3/dev/stream/side_output.html )特性，你可以获得一个已经被丢弃的延迟数据流。<br>
+　　首先你需要在窗口化的数据流中调用<code>sideOutputLateData(OutputTag)</code>指定你需要获取延迟数据，然后，你就可以在<code>window</code> 操作的结果中获取到侧输出流了。<br>
+代码如下：<br>
+Java 代码：</p>
+<pre><code class="language-java">final OutputTag&lt;T&gt; lateOutputTag = new OutputTag&lt;T&gt;(&quot;late-data&quot;){};
+DataStream&lt;T&gt; input = ...;
+DataStream&lt;T&gt; result = input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .allowedLateness(&lt;time&gt;)
+    .sideOutputLateData(lateOutputTag)
+    .&lt;windowed transformation&gt;(&lt;window function&gt;);
+DataStream&lt;T&gt; lateStream = result.getSideOutput(lateOutputTag);
+</code></pre>
+<p>Scala代码：</p>
+<pre><code class="language-java">val lateOutputTag = OutputTag[T](&quot;late-data&quot;)
+val input: DataStream[T] = ...
+val result = input
+    .keyBy(&lt;key selector&gt;)
+    .window(&lt;window assigner&gt;)
+    .allowedLateness(&lt;time&gt;)
+    .sideOutputLateData(lateOutputTag)
+    .&lt;windowed transformation&gt;(&lt;window function&gt;)
+val lateStream = result.getSideOutput(lateOutputTag)
+</code></pre>
+<h3 id="延迟元素考虑late-elements-considerations">延迟元素考虑(Late elements considerations)</h3>
+<p>当指定一个允许延迟大于0时，<code>window</code>以及<code>window</code>中的内容将会继续保持即使水印已经达到了<code>window</code>的最后时间。在这种情况下，当一个延迟事件到来而未丢弃时，它可能会触发<code>window</code>中的其他触发器。这些触发叫做<code>late firings</code>，因为它们是由延迟事件触发的，并相对于<code>window</code>中第一个触发即主触发而言。对于<code>session window</code>而言，<code>late firing</code>还会进一步导致<code>window</code>的合并，因为它们桥接了两个之前存在差距，而未合并的<code>window</code>。</p>
+<h3 id="有用状态大小的考虑useful-state-size-considerations">有用状态大小的考虑(Useful state size considerations)</h3>
+<p><code>window</code> 可以定义一个很长的周期(例如：一天、一周或者一月)，因此积累了相当大的状态。这里有些规则，当估计你的窗口计算的存储要求时，需要记住。<br>
+　　1. Flink会在每个窗口中为每个属于它的元素创建一份备份，鉴于此，滚动窗口保存了每个元素的一个备份，与此相反，滑动窗口会为每个元素创建几个备份，如<code>Window Assigner</code>章节所述。因此，一个窗口大小为1天，滑动大小为1秒的滑动窗口可能就不是个好的策略了。<br>
+　　2. <code>FoldFunction</code>和<code>ReduceFunction</code>可以制定reduce的存储需求，因为它们预聚合元素并且每个窗口只保存一个值。相反，只有<code>WindowFunction</code>需要累积所有的元素。<br>
+　　3. 使用<code>Evitor</code>需要避免任何预聚合操作，因为窗口中的所有元素都需要在应用于计算之前传递到<code>evitor</code>中</p>
+
+            </div>
+            <hr style="width: 80%;">
+            
+            <div class="sharebtnContainer">
+                <button type="button" class="sharebtn">转载分享</button>
+            </div>
+            <div class="shareContainer">
+                <div class="share" style="height:30px;background: white;">
+                    <a class="qq" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/QQ.png" alt=""></i></a>
+                    <a class="wechat" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/wechat.png" alt=""></i></a>
+                    <a class="weibo" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/weibo.png" alt=""></i></a>
+                    <a class="qzone" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/qzone.png" alt=""></i></a>
+                    <a class="douban" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/douban.png" alt=""></i></a>
+                    <a class="facebook" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/facebook.png" alt=""></i></a>
+                    <a class="twitter" href=""><i><img class="shareicon"
+                                src="http://localhost:4001/media/images/twitter.png" alt=""></i></a>
+                </div>
+            </div>
+            
+            
+            <div class="donateContainer">
+                <img src="http://localhost:4001/media/images/donate.png" alt="" class="donateImg">
+            </div>
+            <div class="donateContainer">
+                <img src="" alt="" class="donate">
+            </div>
+            
+            <div class="postfooter">
+                <ul class="post-copyright">
+                    <li><strong>文章作者：</strong>tianxiawuhao</li>
+            <li><strong>原文链接：</strong>http://localhost:4001/post/5uA_yv-aO/</li>
+            <li><strong>版权声明：</strong>本博客所有文章除特别声明外，均采用<i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA
+                许可协议。转载请注明出处！</li>
+            </ul>
+        </div>
+        <div id="otherpost">
+            
+            <a  data-pjax class="prev-post-pc" href="http://localhost:4001/post/GzZxLdaVh/"  style="color: black;">
+                <div id="ppcontainer">
+                    
+                    <img src="http://localhost:4001/post-images/GzZxLdaVh.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第七章 时间语义与 Wartermark</h4>
+                </div>
+            </a>
+            <div class="prev-post">
+                上一篇 <a  data-pjax href="http://localhost:4001/post/GzZxLdaVh/">第七章 时间语义与 Wartermark</a>
+            </div>
+            
+            
+            <a data-pjax class="next-post-pc" href="http://localhost:4001/post/FnbZ5kiHQ/"  style="color: black;">
+                <div id="npcontainer">
+                    
+                    <img src="http://localhost:4001/post-images/FnbZ5kiHQ.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第六章 Flink 中的 Window</h4>
+                </div>
+            </a>
+            <div class="next-post">
+                下一篇 <a  data-pjax href="http://localhost:4001/post/FnbZ5kiHQ/">第六章 Flink 中的 Window</a>
+            </div>
+            
+        </div>
+    </div>
+    </div>
+    </div>
+    <!-- 弹窗 -->
+    <div id="myModal" class="modal">
+        <img class="modal-content" id="img01">
+    </div>
+</body>
+<script>
+    //文章阅读热度
+    var pl = $("#pl").html();
+    var rootaddr = $("#rootaddr").html();
+    pl = pl.replace(rootaddr, "");
+    $("#hotnum").attr('id', pl);
+</script>
+                    <div class="toc-container">
+                        <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#keyed-windows">Keyed Windows</a></li>
+<li><a href="#non-keyed-windows">Non-Keyed Windows</a></li>
+<li><a href="#window-%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F">Window 的生命周期</a></li>
+<li><a href="#%E5%88%86%E7%BB%84%E5%92%8C%E9%9D%9E%E5%88%86%E7%BB%84windows-keyed-vs-non-keyed-windows">分组和非分组Windows (Keyed vs Non-Keyed Windows)</a></li>
+<li><a href="#%E7%AA%97%E5%8F%A3%E5%88%86%E9%85%8D%E5%99%A8window-assingers">窗口分配器(Window Assingers)</a>
+<ul>
+<li><a href="#%E6%BB%9A%E5%8A%A8%E7%AA%97%E5%8F%A3">滚动窗口</a></li>
+<li><a href="#%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3sliding-windows">滑动窗口(Sliding Windows)</a></li>
+<li><a href="#%E4%BC%9A%E8%AF%9D%E7%AA%97%E5%8F%A3session-windows">会话窗口(Session Windows)</a></li>
+</ul>
+</li>
+<li><a href="#%E7%AA%97%E5%8F%A3%E5%87%BD%E6%95%B0window-functions">窗口函数(Window Functions)</a>
+<ul>
+<li><a href="#reducefunction">ReduceFunction</a></li>
+<li><a href="#foldfunction">FoldFunction</a></li>
+</ul>
+</li>
+<li><a href="#%E7%AA%97%E5%8F%A3%E5%87%BD%E6%95%B0-%E4%B8%80%E8%88%AC%E7%94%A8%E6%B3%95windowfunction-the-generic-case">窗口函数 —— 一般用法(WindowFunction - The Generic Case)</a>
+<ul>
+<li><a href="#processwindowfunction">ProcessWindowFunction</a></li>
+</ul>
+</li>
+<li><a href="#%E8%A7%A6%E5%8F%91%E5%99%A8triggers">触发器(Triggers)</a>
+<ul>
+<li><a href="#%E8%A7%A6%E5%8F%91%E5%92%8C%E6%B8%85%E9%99%A4fire-and-purge">触发和清除(Fire and Purge)</a></li>
+<li><a href="#%E7%AA%97%E5%8F%A3%E5%88%86%E9%85%8D%E5%99%A8%E9%BB%98%E8%AE%A4%E7%9A%84%E8%A7%A6%E5%8F%91%E5%99%A8default-triggers-of-windowassigners">窗口分配器默认的触发器(Default Triggers of WindowAssigners)</a></li>
+<li><a href="#%E5%86%85%E7%BD%AE%E7%9A%84%E5%92%8C%E8%87%AA%E5%AE%9A%E4%B9%89%E7%9A%84%E8%A7%A6%E5%8F%91%E5%99%A8build-in-and-custom-triggers">内置的和自定义的触发器(Build-in and Custom Triggers)</a></li>
+</ul>
+</li>
+<li><a href="#%E9%A9%B1%E9%80%90%E5%99%A8evictors">驱逐器(Evictors)</a>
+<ul>
+<li><a href="#%E5%85%81%E8%AE%B8%E5%BB%B6%E8%BF%9Fallowed-lateness">允许延迟(Allowed Lateness)</a></li>
+<li><a href="#%E5%BB%B6%E8%BF%9F%E5%85%83%E7%B4%A0%E8%80%83%E8%99%91late-elements-considerations">延迟元素考虑(Late elements considerations)</a></li>
+<li><a href="#%E6%9C%89%E7%94%A8%E7%8A%B6%E6%80%81%E5%A4%A7%E5%B0%8F%E7%9A%84%E8%80%83%E8%99%91useful-state-size-considerations">有用状态大小的考虑(Useful state size considerations)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+                    </div>
+                    <div class="tog">
+                        <div class="toggleContainer">
+                            <div class="toggle">
+                                <i class="fas fa-angle-double-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="comment" class="comment" style="background: white">
+                        <div class="commentcontainer">
+                            
+                            <p>请到客户端“主题--自定义配置--valine”中填入ID和KEY</p>
+                            
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1 col-lg-2"></div>
+                <div id="bg">
+                </div>
+            </div>
+            
+        
+    </div>
+    
+    <div id="bgchoice" style="display: none">link
+    </div>
+    
+    <div id="bgurl" style="display:none">https://img.imgdb.cn/item/608121be563420b64787c1d5.jpg</div>
+    
+</body>
+<script>
+    var img = $("img");
+    for (var i = 0; i < img.length; i++) {
+        if (img.eq(i).attr("class") == undefined) {
+            img.eq(i).attr("class", "lazyload");
+            var imgsrc = img.eq(i).attr("src");
+            img.eq(i).attr("data-original", imgsrc);
+            img.eq(i).attr("src", "");
+            img.eq(i).hide();
+        }
+    }
+
+    function refreshImg(imgclass) {
+        // 获取弹窗
+        var modal = document.getElementById('myModal');
+
+        // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+        var img = document.getElementsByClassName(imgclass);
+        var modalImg = document.getElementById("img01");
+        var captionText = document.getElementById("caption");
+        for (var i in img) {
+            img[i].onclick = function () {
+                modal.style.display = "block";
+                modalImg.src = this.src;
+            }
+        }
+
+        // 图片关闭
+        var modalImg = document.getElementById('img01');
+        // 鼠标点击模型外区域关闭登录框
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+            if (menupos == 'left')
+                return true;
+            if (event.target == social) {
+                social.style.display = "none";
+            }
+        }
+    }
+
+</script>
+<script>
+    hljs.initHighlightingOnLoad();
+</script>
+<script>
+    //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+    var codes = document.getElementsByTagName('code');
+    if (codes.length) {
+        for (var i = 0; i < codes.length; i++) {
+            //高度/行高=文本行数
+            // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+            // console.log("当前有"+rowNum+"行");
+            var code_id = "code_id_" + i;
+            codes[i].setAttribute("id", code_id);
+            var ci = "#" + code_id;
+            var codedot = $(ci);
+            var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+            if (rowNum <= 1) continue;
+            var btn = document.createElement("button");
+            btn.setAttribute("class", "copybt");
+            btn.setAttribute("data-clipboard-target", "#" + code_id);
+            btn.innerHTML = '复制代码';
+            codes[i].parentNode.insertBefore(btn, codes[i]);
+        }
+    };
+    var cop = new ClipboardJS('.copybt');
+    cop.on('success', function (e) {
+        e.trigger.innerHTML = "复制成功~"
+        e.trigger.style.background = "#894e54"
+        e.clearSelection();
+    });
+    cop.on('error', function (e) {
+        e.clearSelection();
+    });
+</script>
+
+<script type="text/javascript">
+    var message_Path = '/live2d/'
+    var home_Path = document.getElementById("domainname").innerHTML + "/"; //此处修改为你的域名，必须带斜杠
+</script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/live2d.js"></script>
+<script type="text/javascript" src="http://localhost:4001/media/live2d/js/message.js"></script>
+<script type="text/javascript">
+    loadlive2d("live2d", "http://localhost:4001/media/live2d/assets/tororo.model.json");
+</script>
+
+<script>
+    $(function () {
+        $('.toggleContainer').click(function () {
+            $('html,body').animate({
+                scrollTop: '0px'
+            }, 800);
+        });
+        $(window).scroll(function () {
+            var st = $(window).scrollTop();
+            if (st > 30) {
+                $(".toggleContainer").fadeIn(400);
+            } else {
+                $(".toggleContainer").fadeOut(100);
+            }
+        });
+    });
+</script>
+
+<script>
+    var bgchoice = $('#bgchoice').html();
+    var bg = $('#bg');
+    var bgurl = document.getElementById("bgurl").innerHTML;
+    if (bgchoice == 'default')
+        for (var i = 0; i < 3; i++)
+            bgurl = bgurl.replace("\\", "/");
+    bg.css("background", "url('" + bgurl + "')");
+</script>
+
+
+<script src="http://localhost:4001/media/js/index.js"></script>
+
+
+
+<!-- 动态更改上(下)一篇博客图片框长宽 -->
+<script>
+    npcontainer = document.querySelector('#npcontainer');
+    npstyle = window.getComputedStyle(npcontainer, null);
+    npwidth = npstyle.width;
+    npheight = 0.6 * Number(npwidth.replace("px", ""));
+    npheight = npheight.toString() + "px";
+    var op = $(".opimg");
+    op.css("height", npheight);
+</script>
+
+<script src="http://localhost:4001/media/share/dist/Share.js"></script>
+
+<script>
+    var avatarSrc = $(".avatar").attr("src");
+    var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+</script>
+
+
+<script>
+    var title = document.getElementById("texttitle").getElementsByTagName("h2");
+
+    var share = new Share('.share', {
+        title: title[0].innerHTML,
+        initialized: true,
+        //默认获取网站描述
+        description: dp,
+        //网站图片默认获取的是设置的用户头像
+        image: avatarSrc,
+        //激活的分享网站
+        sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+        //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+        wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+        wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+        //关闭的网站分享
+        disabled: ['google', 'linkedin'],
+        wechatQrcodePosition: 'bottom'
+    });
+
+    //点击分享按钮展现出分享icons
+    var sharebtnTag = false;
+    $(".sharebtn").click(function () {
+        if (!sharebtnTag) {
+            $(".share").show();
+            sharebtnTag = true;
+        }
+        else {
+            $(".share").hide();
+            sharebtnTag = false;
+        }
+    })
+
+    var donatebtnTag = false;
+    $(".donateImg").click(function () {
+        if (!donatebtnTag) {
+            $(".donate").show();
+            donatebtnTag = true;
+        }
+        else {
+            $(".donate").hide();
+            donatebtnTag = false;
+        }
+    })
+
+    //加载后的事件同步（阅读量、移动端评论等
+    window.onload = function () {
+        getHotnum();
+        var sharepc = $(".share").eq(0).html();
+        $(".share").eq(1).html(sharepc);
+        document.getElementById("veditor").setAttribute("placeholder", jrsc);
+        aplayerbtnInit();
+    }
+</script>
+
+
+<script>
+    jQuery(document).ready(function ($) {
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+        lazyload();
+        refreshImg("lazyload");
+    });
+</script>
+
+<!-- <script src="http://localhost:4001/media/js/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@3.13.0/dist/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.6.1/dist/av-live-query-min.js"></script> -->
+
