@@ -1,0 +1,1966 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=0">
+    <meta name="description" content="让我们使用Java客户端创建一个用于发布和使用消息的应用程序。 Kafka生产者客户端包括以下API。
+KafkaProducer API
+让我们了解本节中最重要的一组Kafka生产者API。 KafkaProducer API的中心部分是..." />
+    <meta name="keywords" content="kafka" />
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    <title>tianxiawuhao</title>
+    
+    <style>
+        .markdownIt-TOC {
+            margin-left: 28%;
+            padding-left: 2px;
+            width: 80%;
+        }
+
+        .markdownIt-TOC li {
+            padding-left: 8%;
+        }
+    </style>
+    
+</head>
+
+<body>
+    <div id="landlord">
+        <div class="message" style="opacity:0"></div>
+        <canvas id="live2d" width="240" height="250" class="live2d"></canvas>
+    </div>
+    <div id="domainname" style="display:none">http://localhost:4001</div>
+    <!-- 响应式布局，针对PC端内容显示 -->
+    <div id="content">
+        <div>
+            <div id="bar">
+                <head>
+  <!-- 引入Bootstrap核心样式文件 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/bootstrap.min.css">
+</head>
+<style>
+  .navmobile {
+    z-index: 15;
+    max-height: 40vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+  }
+
+  @media screen and (max-width: 1200px) {
+    .navbar {
+      max-width: 100vw;
+    }
+  }
+
+  @media screen and (max-width:1200px) and (min-width: 768px) {
+    @media (min-width: 768px) {
+      .navbar-nav {
+        float: right;
+        margin: 0;
+      }
+    }
+  }
+
+  @media screen and (max-width:768px) {
+    .mbapspan {
+      padding: 0;
+    }
+  }
+</style>
+<div class="pjaxloading"  onclick="pjaxloadingClose()">
+  <div class="loadingbackground"></div>
+  <div id="loading">
+    <div class="loading">
+    </div>
+  </div>
+</div>
+<nav class="navbar navbar-inverse navbar-fixed-top navmobile">
+  <div class="container-fluid">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#barmenu"
+        aria-expanded="false" id="barbutton">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a data-pjax class="navbar-brand" href="http://localhost:4001">tianxiawuhao&nbsp;&nbsp;|</a>
+      <span class="navbar-brand mbapspan"><i id="mbaplayer" class="fa fa-play-circle-o" aria-hidden="true"
+          style="font-size: 28px;top: 12px;position: absolute;" onclick="aplayerPlay();"></i></span>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="barmenu">
+      <ul class="nav navbar-nav">
+        
+        
+        <li>
+          <a data-pjax href="/">
+            首页
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/archives">
+            归档
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/tags">
+            标签
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/post/about">
+            关于
+          </a>
+        </li>
+        
+        
+        
+          
+        <li><a data-pjax href="https://tianxiawuhao.github.io/friends">友链</a></li>
+
+        
+        </ul>
+      </div><!-- /.navbar-collapse -->
+    </div><!-- /.container-fluid -->
+  </nav>
+
+
+  <!-- 引入jQuery核心js文件 -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+  <script>
+    let btstate = false;
+    var bt = $("#barbutton");
+    var bm = $("#barmenu");
+    bt.click(function () {
+      dropdown();
+    })
+    function dropdown() {
+      console.log(btstate);
+      //下拉
+      if (btstate == false) {
+        bt.removeClass("collapsed");
+        bt.attr("aria-expanded", "true");
+        bm.attr("aria-expanded", "true")
+        bm.fadeIn(700);
+        btstate = true;
+      }
+      else {
+        bt.addClass("collapsed");
+        bt.attr("aria-expanded", "false");
+        bm.removeClass("in");
+        bm.hide();
+        bm.attr("aria-expanded", "false");
+        btstate = false;
+      }
+    }
+  </script> 
+            </div>
+            <div class="row">
+                <div class="side"><head>
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    
+</head>
+<style>
+    body{
+    cursor: url("https://tianxiawuhao.github.io/media/images/mouse_cursor.png"),auto
+    }
+    </style>
+
+<body>
+    
+    <script>
+        let menupos = 'left'
+    </script>
+    
+    
+    <script>
+        let shareChoice = false
+    </script>
+    
+    
+    <script>
+        let donateChoice = false
+    </script>
+    
+    
+    <script>
+        let searchChoice = true
+    </script>
+    
+    <script>let postsnum = 0;</script>
+    <div id="side-posttitle" style="display: none;">
+        
+    
+    附录 kafka常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Apache Kafka 与Spark的集成
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 Apache Kafka 整合 Storm
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 Apache Kafka 消费者组示例
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 Apache Kafka 简单生产者示例
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Apache Kafka 基本操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Apache Kafka 安装步骤
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Apache Kafka 工作流程
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Apache Kafka 集群架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 Apache Kafka 概述
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Kafka的安装与使用
+    <script>postsnum += 1</script>
+    
+    
+    
+    附录 Flink常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Table API 与 SQL
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 状态编程和容错机制
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 ProcessFunction API（底层 API）
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 时间语义与 Wartermark
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 的Window 操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 中的 Window
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Flink 流处理 API
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Flink 运行架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Flink 部署
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 快速上手
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Flink 简介
+    <script>postsnum += 1</script>
+    
+    
+    
+    Flink 零基础实战教程：如何计算实时热门商品
+    <script>postsnum += 1</script>
+    
+    
+    
+    从零构建第一个 Flink 应用
+    <script>postsnum += 1</script>
+    
+    
+    
+    
+    </div>
+    <div class="pjaxloading" onclick="pjaxloadingClose()">
+        <div class="loadingbackground"></div>
+        <div id="loading">
+            <div class="loading">
+            </div>
+        </div>
+    </div>
+    
+    <div id=side>
+        <a onclick="showAaplayer()"><i style="font-size: 20px;"><img
+                    src='https://tianxiawuhao.github.io/media/images/music.png' alt="音乐播放器" class="musicbtn"></i></a>
+        <div class="avatar-border">
+            <img src="https://tianxiawuhao.github.io/images/avatar.png?v=1619156954885" class="avatar">
+        </div>
+        <div class="sitename">tianxiawuhao</div>
+        <span class="describtion" data-text='["风起于青萍之末,浪成于微澜之间.友交于微末之时,妄终于菩提之巅"]'>&nbsp;</span>
+        
+        <div class="search">
+            <!-- <input type="text" class="search-input" placeholder="标题搜索(●'◡'●)" /> -->
+            <input type="text" class="search-input" placeholder="请输入">
+            <div class="search-results"></div>
+        </div>
+        
+    <div class="share-button">
+        <span>社交按钮</span>
+        
+        <a href="https://github.com/tianxiawuhao" target="_blank"><i style="font-size: 20px;"><img class="icon"
+                    src="https://tianxiawuhao.github.io/media/images/github.png" alt=""></i></a>
+        
+        
+        
+        
+        
+        
+    </div>
+    <div id="qq" style="display:none"></div>
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/" class="menubutton">
+            首页
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/archives" class="menubutton">
+            归档
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/tags" class="menubutton">
+            标签
+        </a>
+    </div>
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="/post/about" class="menubutton">
+            关于
+        </a>
+    </div>
+    
+    
+    
+    
+    <div class="mchocie describtion">
+        <a data-pjax href="https://tianxiawuhao.github.io/friends" class="menubutton">友人帐</a>
+    </div>
+    
+    <hr>
+    <style>
+    .copyright {
+        font-size: 15px;
+        color: #d9d9d9;
+    }
+
+
+    @media screen and (min-width: 1200px) {
+        .foot {
+            width: 100%;
+            height: 130px;
+        }
+    }
+
+    @media screen and (max-width: 1200px) {
+        .foot {
+            display: none;
+        }
+    }
+</style>
+
+<body>
+    <div class="foot">
+        <div id="footinfo">Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | Theme: <a
+                href="https://github.com/850552586/gridea-theme-fog">Fog</a>
+            <div>
+                
+                <div id="sitegotimeDate">载入天数...</div>
+                <div id="sitegotimes">载入时分秒...</div>
+                <div id="cussitetime" style="display:none">04/02/2021</div>
+                
+            </div>
+            <div>
+                
+            </div>
+            <div class="copyright" style="color:white;text-align: center;">Copyright © 2020  备案号: 鄂ICP备...号
+            </div>
+        </div>
+
+
+
+    </div>
+</body>
+
+<script>
+    //----------------------站点运行时间
+    var now = new Date();
+
+    function createtime() {
+        var sitegotime = document.getElementById("cussitetime").innerHTML + " 00:00:00";
+        var grt = new Date(sitegotime); //此处修改你的建站时间或者网站上线时间 
+        now.setTime(now.getTime() + 250);
+        days = (now - grt) / 1000 / 60 / 60 / 24;
+        dnum = Math.floor(days);
+        hours = (now - grt) / 1000 / 60 / 60 - (24 * dnum);
+        hnum = Math.floor(hours);
+        if (String(hnum).length == 1) {
+            hnum = "0" + hnum;
+        }
+        minutes = (now - grt) / 1000 / 60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes);
+        if (String(mnum).length == 1) {
+            mnum = "0" + mnum;
+        }
+        seconds = (now - grt) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds);
+        if (String(snum).length == 1) {
+            snum = "0" + snum;
+        }
+        document.getElementById("sitegotimeDate").innerHTML = "本站已安全运行 " + dnum + " 天 ";
+        document.getElementById("sitegotimes").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+    }
+
+    let intervalId = setInterval("createtime()", 250);
+</script>
+
+    </div>
+
+
+    <script src="https://tianxiawuhao.github.io/media/js/wordshow.js"></script>
+    
+    
+</body>
+<script>
+    function showqq() {
+        var qq = document.getElementById("qq").innerHTML;
+        if (qq != '')
+            window.location.href = "tencent://message/?uin=" + qq + "&Site=&Menu=yes";
+        else
+            alert("博主暂未设置QQ联系方式");
+    }
+
+    //音乐播放器的显示
+    function showAaplayer() {
+        var aplayer = $(".aplayer-body");
+        if (aplayer.css("display") == 'block')
+            aplayer.fadeOut(200)
+        else
+            aplayer.fadeIn(200)
+    }
+</script>
+<script>
+    function getHotnum() {
+        //文章阅读热度（重构，利用leancloud原生api）
+        var pl = window.location.pathname;
+        if (pl.search("post") == -1)
+            return false;
+        if (pl[pl.length - 1] != '/')
+            pl += '/'
+        var ptitle = $("#ptitle").html();
+        var rootaddr = $("#rootaddr").html();
+        pl = pl.replace(rootaddr, "");
+        var appid = '';
+        var appkey = '';
+        console.log(appid, appkey)
+        if (AV == undefined)
+            AV.init({
+                appId: appid,
+                appKey: appkey
+            });
+        const query = new AV.Query('Counter');
+        query.equalTo('url', pl);
+        var time = 'Loading...';
+        query.find().then(function (results) {
+            console.log(results)
+            if (results.length == 0) {
+                console.log("0")
+                var NewCounter = AV.Object.extend('Counter');
+                var nc = new NewCounter();
+                nc.save({
+                    time: 1,
+                    title: ptitle,
+                    url: pl,
+                    xid: pl,
+                }).then(function (object) {
+                    $(".hotnum").eq(0).html(1);
+                    $(".hotnum").eq(1).html(1);
+                });
+            } else {
+                id = results[0].id;
+                var todo = AV.Object.createWithoutData('Counter', id);
+                time = results[0].attributes.time + 1;
+                todo.set("time", time);
+                todo.save();
+                console.log(todo);
+                $(".hotnum").eq(0).html(time);
+                $(".hotnum").eq(1).html(time);
+            }
+
+        }, function (error) {
+            console.log(error)
+        });
+    }
+</script>
+    <script src="https://tianxiawuhao.github.io/media/share/dist/Share.js"></script>
+    <!-- 页面pjax测试 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery.pjax/2.0.1/jquery.pjax.js"></script>
+    <!--确保jQuery已经在此之前加载-->
+    <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+    <script src="https://tianxiawuhao.github.io/media/js/all-pjax.js"></script>
+    <script>
+        //loading加载关闭
+        function pjaxloadingClose() {
+            var pjaxloading = $(".pjaxloading");
+            pjaxloading.hide();
+        }
+
+
+
+        function imglazyloadinit() {
+            var img = $("img");
+            for (var i = 0; i < img.length; i++) {
+                if (img.eq(i).attr("class") == undefined) {
+                    img.eq(i).attr("class", "lazyload");
+                    var imgsrc = img.eq(i).attr("src");
+                    img.eq(i).attr("data-original", imgsrc);
+                    img.eq(i).attr("src", "");
+                    img.eq(i).hide();
+                }
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function codebtncolorinit(e) {
+            await sleep(2000);
+            e.trigger.innerHTML = "复制代码"
+            e.trigger.style.background = "cornflowerblue"
+        }
+
+        function codeinit() {
+            //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+            var codes = document.getElementsByTagName('code');
+            if (codes.length) {
+                for (var i = 0; i < codes.length; i++) {
+                    //高度/行高=文本行数
+                    // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+                    // console.log("当前有"+rowNum+"行");
+                    var code_id = "code_id_" + i;
+                    codes[i].setAttribute("id", code_id);
+                    var ci = "#" + code_id;
+                    var codedot = $(ci);
+                    var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+                    if (rowNum <= 1) continue;
+                    var btn = document.createElement("button");
+                    btn.setAttribute("class", "copybt");
+                    btn.setAttribute("data-clipboard-target", "#" + code_id);
+                    btn.innerHTML = '复制代码';
+                    codes[i].parentNode.insertBefore(btn, codes[i]);
+                }
+            };
+            var cop = new ClipboardJS('.copybt');
+            cop.on('success', function (e) {
+                e.trigger.innerHTML = "复制成功~"
+                e.trigger.style.background = "#894e54"
+                codebtncolorinit(e)
+                e.clearSelection();
+            });
+            cop.on('error', function (e) {
+                alert("矮油，复制失败了...手动复制吧勇士！");
+                e.clearSelection();
+            });
+        }
+
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+
+        let talksall = [];
+        let talks = [];
+        let talkindex = 0;
+        get();
+        function get() {
+            var t = JSON.parse('[{"author":"","img":"","text":"","time":""}]');
+            talkindex = t.length - 1;
+            for (var i = 0; i <= t.length - 1; i++) {
+                var d = {};
+                d["time"] = t[i].time;
+                d["author"] = t[i].author;
+                d["text"] = t[i].text;
+                d["img"] = t[i].img;
+                talksall.push(d);
+            }
+        }
+
+        function add() {
+            for (var i = talkindex; i >= 0 && i > talkindex - 3; i--) {
+                talks.push(talksall[i]);
+            }
+            talkindex = (talkindex - 3) >= 0 ? (talkindex - 3) : -1;
+            if (talkindex < 0) $("#getmorebt").hide();
+            show();
+            refreshImg("talkimg");
+        }
+
+        function show() {
+            var talkT = document.getElementById("talkContainer");
+            talkT.innerHTML = "";
+            for (var i = 0; i < talks.length; i++) {
+                if (talks[i].img != '') {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <img src="' + talks[i].img + '" class="talkimg"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="https://tianxiawuhao.github.io/images/avatar.png?v=1619156954885">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                } else {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="https://tianxiawuhao.github.io/images/avatar.png?v=1619156954885">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                }
+            }
+        }
+
+        function refreshImg(imgclass) {
+            // 获取弹窗
+            var modal = document.getElementById('myModal');
+
+            // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+            var img = document.getElementsByClassName(imgclass);
+            var modalImg = document.getElementById("img01");
+            var captionText = document.getElementById("caption");
+            for (var i in img) {
+                img[i].onclick = function () {
+                    modal.style.display = "block";
+                    modalImg.src = this.src;
+                }
+            }
+
+            // 图片关闭
+            var modalImg = document.getElementById('img01');
+            // 鼠标点击模型外区域关闭登录框
+            window.onclick = function (event) {
+                console.log(event.target);
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+                if (menupos == 'left')
+                    return true;
+                if (event.target == social) {
+                    social.style.display = "none";
+                }
+            }
+        }
+
+        function shareInit() {
+            var title = document.getElementById("texttitle").getElementsByTagName("h2");
+            if (menupos == 'top') {
+                var avatarSrc = $(".menutopavatar").attr("src");
+                var dp = document.getElementsByClassName("navbar-brand")[1].innerHTML;
+            }
+            else {
+                var avatarSrc = $(".avatar").attr("src");
+                var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+            }
+            var share = new Share('.share', {
+                title: title[0].innerHTML,
+                initialized: true,
+                //默认获取网站描述
+                description: dp,
+                //网站图片默认获取的是设置的用户头像
+                image: avatarSrc,
+                //激活的分享网站
+                sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+                //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+                wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+                wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+                //关闭的网站分享
+                disabled: ['google', 'linkedin'],
+                wechatQrcodePosition: 'bottom'
+            });
+            //点击分享按钮展现出分享icons
+            var sharebtnTag = false;
+            $(".sharebtn").click(function () {
+                if (!sharebtnTag) {
+                    $(".share").show();
+                    sharebtnTag = true;
+                }
+                else {
+                    $(".share").hide();
+                    sharebtnTag = false;
+                }
+            })
+        }
+
+        function donateInit() {
+            var donatebtnTag = false;
+            $(".donateImg").click(function () {
+                if (!donatebtnTag) {
+                    $(".donate").show();
+                    donatebtnTag = true;
+                }
+                else {
+                    $(".donate").hide();
+                    donatebtnTag = false;
+                }
+            })
+        }
+
+
+        let talkinit = false;
+        $(document).pjax('a[data-pjax]', '#main', {
+            fragment: '#main',
+            timeout: 8000
+        }).on('pjax:complete', function () {
+            //hljs.initHighlightingOnLoad();
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+            //文章热度
+            getHotnum();
+            //文章索引
+            toginit();
+            //清空搜索栏
+            if (searchChoice) {
+                searchInit();
+                searchInput.value = "";
+            }
+            var pl = window.location.pathname;
+            //说说更新
+            if (pl.search("talk") != -1 && !talkinit) {
+                add();
+                talkinit = true;
+            }
+            else if (pl.search("talk") != -1) {
+                show();
+                refreshImg("talkimg");
+            }
+            //分享按钮更新
+            if (pl.search("post") != -1) {
+                if (shareChoice)
+                    shareInit();
+                if (donateChoice)
+                    donateInit();
+                imglazyloadinit();
+                lazyload();
+                refreshImg("lazyload");
+                codeinit();
+            }
+            if (btstate == true)
+                dropdown();
+        }).on('pjax:start', function () {
+            $(".pjaxloading").fadeIn(50);
+        }).on('pjax:end', function () {
+            $(".pjaxloading").fadeOut(50);
+        });
+    </script>
+
+    <script>
+        /**
+         * https://github.com/tangkaichuan/gridea-search
+         */
+        (function () {
+            var CACHES = checkCache()
+            if (!CACHES) {
+                var NOW = Date.now()
+                var API_CONTENT = '../api-content/index.html' + '?_=' + NOW
+                preload(API_CONTENT);
+                getContents(show_getContentresult);
+            }
+
+            function show_getContentresult(data) {
+                console.log("获取成功");
+                var postslen = data["posts"].length;
+                localStorage.setItem('postsnum', postslen);
+                var poststitlelen = 0;
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "");
+                localStorage.setItem('poststitlelen', pt.length);
+            }
+
+
+
+            // preload
+            function preload(url) {
+                var preloadLink = document.createElement('link')
+                preloadLink.href = url
+                preloadLink.rel = 'preload'
+                preloadLink.as = 'fetch'
+                preloadLink.crossOrigin = 'anonymous'
+                document.head.appendChild(preloadLink)
+            }
+
+            // 异步 GET 请求
+            function get(obj) {
+                var xhr = new XMLHttpRequest()
+                xhr.open('get', obj.url, true)
+                xhr.send(null)
+                xhr.onreadystatechange = function () {
+                    // 异步请求：响应状态为4，数据加载完毕
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            obj.success(xhr.responseText)
+                        } else {
+                            obj.error(xhr.status)
+                        }
+                    }
+                }
+            }
+
+
+            // 检查缓存是否最新
+            function checkCache() {
+                var caches_postsnum = localStorage.getItem("postsnum");
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "")
+                var ptlen = pt.length;
+                var ptlen_storage = localStorage.getItem("poststitlelen");
+                console.log(parseInt(postsnum));
+                if (caches_postsnum != postsnum || ptlen != ptlen_storage) {
+                    console.log("更新缓存");
+                    return false
+                }
+                return true;
+            }
+
+            // 获取博客全文 api
+            function getContents(callback) {
+                if (CACHES) {
+                    callback(CACHES.contents)
+                } else {
+                    get({
+                        url: API_CONTENT,
+                        success: function (data) {
+                            callback(JSON.parse(data));
+                            localStorage.setItem('ContentsCache', data);
+                        }
+                    })
+                }
+            }
+        })()
+
+        //-------------------------------------------------搜索
+        // 获取搜索框、搜索按钮、清空搜索、结果输出对应的元素
+        if (searchChoice) {
+            var searchInput = document.querySelector('.search-input');
+            var searchResults = document.querySelector('.search-results');
+        }
+        // 申明保存文章的标题、链接、内容的数组变量
+        var searchValue = '',
+            arrItems = [],
+            arrLinks = [],
+            arrTitles = [],
+            arrContents = [],
+            arrResults = [],
+            indexItem = [],
+            itemLength = 0;
+        var tmpDiv = document.createElement('div');
+        tmpDiv.className = 'result-item';
+
+
+        function getStorageContent() {
+            var data = localStorage.getItem('ContentsCache');
+            data = JSON.parse(data);
+            posts = data["posts"];
+            for (var i = 0; i < posts.length; i++) {
+                arrLinks[i] = posts[i].link;
+                arrTitles[i] = posts[i].title;
+                arrContents[i] = posts[i].content;
+                itemLength++;
+            }
+        }
+        getStorageContent();
+        // 输入框内容变化后就开始匹配，可以不用点按钮
+        // 经测试，onkeydown, onchange 等方法效果不太理想，
+        // 存在输入延迟等问题，最后发现触发 input 事件最理想，
+        // 并且可以处理中文输入法拼写的变化
+        searchInput.oninput = function () {
+            setTimeout(searchConfirm, 0);
+        }
+        searchInput.onfocus = function () {
+            searchResults.style.display = 'block';
+        }
+
+        function searchConfirm() {
+            if (searchInput.value == '') {
+                searchResults.style.display = 'none';
+            } else if (searchInput.value.search(/^\s+$/) >= 0) {
+                // 检测输入值全是空白的情况
+                searchInit();
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '请输入有效内容...';
+                searchResults.appendChild(itemDiv);
+            } else {
+                // 合法输入值的情况
+                searchInit();
+                searchValue = searchInput.value;
+                // 在标题、内容中查找
+                searchMatching(arrTitles, arrContents, searchValue);
+            }
+        }
+
+        // 每次搜索完成后的初始化
+        function searchInit() {
+            arrResults = [];
+            indexItem = [];
+            searchResults.innerHTML = '';
+            searchResults.style.display = 'block';
+        }
+
+        function searchMatching(arr1, arr2, input) {
+            // 忽略输入大小写
+            input = new RegExp(input, 'i');
+            var step = 10;
+            // 在所有文章标题、内容中匹配查询值
+            for (i = 0; i < itemLength; i++) {
+                var indexContent = arr2[i].search(input);
+                //标题匹配
+                if (arr1[i].search(input) != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+                    if (indexContent != -1) {
+                        startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                        var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                        arrResults.push("....." + searchcontent + ".....");
+                    }
+                    else
+                        arrResults.push("");
+                }
+                //内容匹配
+                else if (indexContent != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+
+                    startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                    var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                    arrResults.push("....." + searchcontent + ".....");
+                }
+            }
+
+            // 输出总共匹配到的数目
+            var totalDiv = tmpDiv.cloneNode(true);
+            totalDiv.innerHTML = '<b>总匹配：' + indexItem.length + ' 项<hr></b>';
+            searchResults.appendChild(totalDiv);
+
+            // 未匹配到内容的情况
+            if (indexItem.length == 0) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '未匹配到内容...';
+                searchResults.appendChild(itemDiv);
+            }
+
+            // 将所有匹配内容进行组合
+            for (i = 0; i < arrResults.length; i++) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerHTML = '<a data-pjax class="searchresults" href="' + arrLinks[indexItem[i]] + '"><b>[' + arrTitles[indexItem[i]] +
+                    ']</b><p>' + arrResults[i] + '</p></a><hr />';
+                searchResults.appendChild(itemDiv);
+            }
+        }
+    </script>
+    </div>
+                
+                <div id="tab1" class="tab">
+                    <div class="bars">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <div class="close"></div>
+                </div>
+                <div class="col-md-1 col-lg-3"></div>
+                <div id="main" class="col-xs-12 col-sm-12 col-md-12 col-lg-7">
+                    <link rel="stylesheet" href="https://tianxiawuhao.github.io/media/css/font-awesome.css">
+
+<body>
+    <div class="allcontent" id="postdetail">
+        <div class="postshow postpadding" style="padding-bottom: 0;">
+            
+            <div class="postdetailimg">
+                <img src="https://tianxiawuhao.github.io/post-images/Fn7BLTfU1.png" class="postimage" style="cursor:auto">
+            </div>
+            <div class="postinfo-detail">
+                <div class="postdate"><i class="fa fa-calendar"></i>2021-04-23</div>
+                <div class="poststatus postdate"><i class="fa fa-clock-o"></i> 13 min read</div>
+                <div class="posttag">
+                    
+                    <a data-pjax href="https://tianxiawuhao.github.io/tag/imdZqq48T/" class="postlink">
+                        <i class="fa fa-tag"></i> kafka
+                    </a>
+                    
+                </div>
+            </div>
+            
+        <div id="articlecontent">
+            <div id="texttitle" style="text-align: center">
+                <h2 id="ptitle">第七章 Apache Kafka 简单生产者示例</h2>
+                <!-- id 将作为查询条件 -->
+                <div id="pl" style="display:none">https://tianxiawuhao.github.io/post/Fn7BLTfU1/</div>
+                <div id="rootaddr" style="display:none">http://localhost:4001</div>
+                <span id="hotnum">
+                    <h4><i class="fa fa-eye" aria-hidden="true" style="color: #FF8C00;"></i>&nbsp;&nbsp;热度</i>: <i
+                            class="hotnum">loading...</i></h4>
+                </span>
+            </div>
+            <div class="text ">
+                <p>让我们使用Java客户端创建一个用于发布和使用消息的应用程序。 Kafka生产者客户端包括以下API。</p>
+<h2 id="kafkaproducer-api">KafkaProducer API</h2>
+<p>让我们了解本节中最重要的一组Kafka生产者API。 KafkaProducer API的中心部分是 KafkaProducer 类。 KafkaProducer类提供了一个选项，用于将其构造函数中的Kafka代理连接到以下方法。</p>
+<ul>
+<li>KafkaProducer类提供send方法以异步方式将消息发送到主题。 send()的签名如下</li>
+</ul>
+<pre><code class="language-java">producer.send(new ProducerRecord&lt;byte[],byte[]&gt;(topic, 
+partition, key1, value1) , callback);
+</code></pre>
+<ul>
+<li>
+<p><strong>ProducerRecord</strong> - 生产者管理等待发送的记录的缓冲区。</p>
+</li>
+<li>
+<p><strong>回调</strong> - 当服务器确认记录时执行的用户提供的回调(null表示无回调)。</p>
+</li>
+<li>
+<p>KafkaProducer类提供了一个flush方法，以确保所有先前发送的消息都已实际完成。 flush方法的语法如下 -</p>
+</li>
+</ul>
+<pre><code class="language-java">public void flush()
+</code></pre>
+<ul>
+<li>KafkaProducer类提供了partitionFor方法，这有助于获取给定主题的分区元数据。 这可以用于自定义分区。 这种方法的签名如下 -</li>
+</ul>
+<pre><code class="language-java">public Map metrics()
+</code></pre>
+<p>它返回由生产者维护的内部度量的映射。</p>
+<ul>
+<li>public void close() - KafkaProducer类提供关闭方法块，直到所有先前发送的请求完成。</li>
+</ul>
+<h2 id="生产者api">生产者API</h2>
+<p>生产者API的中心部分是生产者类。 生产者类提供了一个选项，通过以下方法在其构造函数中连接Kafka代理。</p>
+<h3 id="生产者类">生产者类</h3>
+<p>生产者类提供send方法以使用以下签名向单个或多个主题<strong>发送</strong>消息。</p>
+<hr>
+<pre><code class="language-java">public void send(KeyedMessaget&lt;k,v&gt; message) 
+- sends the data to a single topic,par-titioned by key using either sync or async producer.
+public void send(List&lt;KeyedMessage&lt;k,v&gt;&gt;messages)
+- sends data to multiple topics.
+Properties prop = new Properties();
+prop.put(producer.type,&quot;async&quot;)
+ProducerConfig config = new ProducerConfig(prop);
+</code></pre>
+<p>有两种类型的生产者 - <strong>同步</strong>和<strong>异步</strong>。</p>
+<p>相同的API配置也适用于同步生产者。 它们之间的区别是同步生成器直接发送消息，但在后台发送消息。 当您想要更高的吞吐量时，异步生产者是首选。 在以前的版本，如0.8，一个异步生产者没有回调send()注册错误处理程序。 这仅在当前版本0.9中可用。</p>
+<h3 id="public-void-close">public void close()</h3>
+<p>生产者类提供<strong>关闭</strong>方法以关闭与所有Kafka代理的生产者池连接。</p>
+<h2 id="配置设置">配置设置</h2>
+<p>下表列出了Producer API的主要配置设置，以便更好地理解 -</p>
+<table>
+<thead>
+<tr>
+<th>S.No</th>
+<th style="text-align:center">配置设置和说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:center"><strong>client.id</strong>标识生产者应用程序</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:center"><strong>producer.type</strong>同步或异步</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:center"><strong>acks</strong>acks配置控制生产者请求下的标准是完全的。</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:center"><strong>重试</strong>如果生产者请求失败，则使用特定值自动重试。</td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:center">bootstrapping代理列表。</td>
+</tr>
+<tr>
+<td>6</td>
+<td style="text-align:center"><strong>linger.ms</strong>如果你想减少请求的数量，你可以将linger.ms设置为大于某个值的东西。</td>
+</tr>
+<tr>
+<td>7</td>
+<td style="text-align:center"><strong>key.serializer</strong>序列化器接口的键。</td>
+</tr>
+<tr>
+<td>8</td>
+<td style="text-align:center"><strong>value.serializer</strong>值。</td>
+</tr>
+<tr>
+<td>9</td>
+<td style="text-align:center"><strong>batch.size</strong>缓冲区大小。</td>
+</tr>
+<tr>
+<td>10</td>
+<td style="text-align:center"><strong>buffer.memory</strong>控制生产者可用于缓冲的存储器的总量。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="producerrecord-api">ProducerRecord API</h3>
+<p>ProducerRecord是发送到Kafka cluster.ProducerRecord类构造函数的键/值对，用于使用以下签名创建具有分区，键和值对的记录。</p>
+<pre><code class="language-sh">public ProducerRecord (string topic, int partition, k key, v value)
+</code></pre>
+<ul>
+<li>
+<p><strong>主题</strong> - 将附加到记录的用户定义的主题名称。</p>
+</li>
+<li>
+<p><strong>分区</strong> - 分区计数。</p>
+</li>
+<li>
+<p><strong>键</strong> - 将包含在记录中的键。</p>
+</li>
+<li></li>
+<li>
+<p><em><strong>*值*</strong></em> - 记录内容。</p>
+</li>
+</ul>
+<pre><code class="language-sh">public ProducerRecord (string topic, k key, v value)
+</code></pre>
+<p>ProducerRecord类构造函数用于创建带有键，值对和无分区的记录。</p>
+<ul>
+<li><strong>主题</strong> - 创建主题以分配记录。</li>
+<li><strong>键</strong> - 记录的键。</li>
+<li><strong>值</strong> - 记录内容。</li>
+</ul>
+<pre><code class="language-sh">public ProducerRecord (string topic, v value)
+</code></pre>
+<p>ProducerRecord类创建一个没有分区和键的记录。</p>
+<ul>
+<li><strong>主题</strong> - 创建主题。</li>
+<li><strong>值</strong> - 记录内容。</li>
+</ul>
+<p>ProducerRecord类方法列在下表中 -</p>
+<table>
+<thead>
+<tr>
+<th>S.No</th>
+<th style="text-align:center">类方法和描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:center">**public string topic()**主题将附加到记录。</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:center">**public K key()**将包括在记录中的键。 如果没有这样的键，null将在这里重新打开。</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:center">**public V value()**记录内容。</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:center">**partition()**记录的分区计数</td>
+</tr>
+</tbody>
+</table>
+<h2 id="simpleproducer应用程序">SimpleProducer应用程序</h2>
+<p>在创建应用程序之前，首先启动ZooKeeper和Kafka代理，然后使用create topic命令在Kafka代理中创建自己的主题。 之后，创建一个名为 Sim-pleProducer.java 的java类，然后键入以下代码。</p>
+<pre><code class="language-java">//import util.properties packages
+import java.util.Properties;
+
+//import simple producer packages
+import org.apache.kafka.clients.producer.Producer;
+
+//import KafkaProducer packages
+import org.apache.kafka.clients.producer.KafkaProducer;
+
+//import ProducerRecord packages
+import org.apache.kafka.clients.producer.ProducerRecord;
+
+//Create java class named “SimpleProducer&quot;
+public class SimpleProducer {
+   
+   public static void main(String[] args) throws Exception{
+      
+      // Check arguments length value
+      if(args.length == 0){
+         System.out.println(&quot;Enter topic name&quot;);
+         return;
+      }
+      
+      //Assign topicName to string variable
+      String topicName = args[0].toString();
+      
+      // create instance for properties to access producer configs   
+      Properties props = new Properties();
+      
+      //Assign localhost id
+      props.put(&quot;bootstrap.servers&quot;, “localhost:9092&quot;);
+      
+      //Set acknowledgements for producer requests.      
+      props.put(&quot;acks&quot;, “all&quot;);
+      
+      //If the request fails, the producer can automatically retry,
+      props.put(&quot;retries&quot;, 0);
+      
+      //Specify buffer size in config
+      props.put(&quot;batch.size&quot;, 16384);
+      
+      //Reduce the no of requests less than 0   
+      props.put(&quot;linger.ms&quot;, 1);
+      
+      //The buffer.memory controls the total amount of memory available to the producer for buffering.   
+      props.put(&quot;buffer.memory&quot;, 33554432);
+      
+      props.put(&quot;key.serializer&quot;, 
+         &quot;org.apache.kafka.common.serializa-tion.StringSerializer&quot;);
+         
+      props.put(&quot;value.serializer&quot;, 
+         &quot;org.apache.kafka.common.serializa-tion.StringSerializer&quot;);
+      
+      Producer&lt;String, String&gt; producer = new KafkaProducer
+         &lt;String, String&gt;(props);
+            
+      for(int i = 0; i &lt; 10; i++)
+         producer.send(new ProducerRecord&lt;String, String&gt;(topicName, 
+            Integer.toString(i), Integer.toString(i)));
+               System.out.println(“Message sent successfully&quot;);
+               producer.close();
+   }
+}
+</code></pre>
+<p><strong>编译</strong> - 可以使用以下命令编译应用程序。</p>
+<pre><code class="language-sh">javac -cp “/path/to/kafka/kafka_2.11-0.9.0.0/lib/*&quot; *.java
+</code></pre>
+<p><strong>执行</strong> - 可以使用以下命令执行应用程序。</p>
+<pre><code class="language-sh">java -cp “/path/to/kafka/kafka_2.11-0.9.0.0/lib/*&quot;:. SimpleProducer &lt;topic-name&gt;
+</code></pre>
+<p><strong>输出</strong></p>
+<pre><code class="language-sh">Message sent successfully
+To check the above output open new terminal and type Consumer CLI command to receive messages.
+&gt;&gt; bin/kafka-console-consumer.sh --zookeeper localhost:2181 —topic &lt;topic-name&gt; —from-beginning
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</code></pre>
+<h2 id="简单消费者示例">简单消费者示例</h2>
+<p>到目前为止，我们已经创建了一个发送消息到Kafka集群的生产者。 现在让我们创建一个消费者来消费Kafka集群的消息。 KafkaConsumer API用于消费来自Kafka集群的消息。 KafkaConsumer类的构造函数定义如下。</p>
+<pre><code class="language-java">public KafkaConsumer(java.util.Map&lt;java.lang.String,java.lang.Object&gt; configs)
+</code></pre>
+<p><strong>configs</strong> - 返回消费者配置的地图。</p>
+<p>KafkaConsumer类具有下表中列出的以下重要方法。</p>
+<table>
+<thead>
+<tr>
+<th>S.No</th>
+<th style="text-align:center">方法和说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:center"><strong>public java.util.Set&lt; TopicPar- tition&gt;</strong> assignment()获取由用户当前分配的分区集。</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:center">**public string subscription()**订阅给定的主题列表以获取动态签名的分区。</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:center">**public void sub-scribe(java.util.List&lt; java.lang.String&gt; topics，ConsumerRe-balanceListener listener)**订阅给定的主题列表以获取动态签名的分区。</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:center">**public void unsubscribe()**从给定的分区列表中取消订阅主题。</td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:center">**public void sub-scribe(java.util.List&lt; java.lang.String&gt; topics)**订阅给定的主题列表以获取动态签名的分区。 如果给定的主题列表为空，则将其视为与unsubscribe()相同。</td>
+</tr>
+<tr>
+<td>6</td>
+<td style="text-align:center">**public void sub-scribe(java.util.regex.Pattern pattern，ConsumerRebalanceLis-tener listener)**参数模式以正则表达式的格式引用预订模式，而侦听器参数从预订模式获取通知。</td>
+</tr>
+<tr>
+<td>7</td>
+<td style="text-align:center">**public void as-sign(java.util.List&lt; TopicPartion&gt; partitions)**向客户手动分配分区列表。</td>
+</tr>
+<tr>
+<td>8</td>
+<td style="text-align:center">**poll()**使用预订/分配API之一获取指定的主题或分区的数据。 如果在轮询数据之前未预订主题，这将返回错误。</td>
+</tr>
+<tr>
+<td>9</td>
+<td style="text-align:center">**public void commitSync()**提交对主题和分区的所有子编制列表的最后一次poll()返回的提交偏移量。 相同的操作应用于commitAsyn()。</td>
+</tr>
+<tr>
+<td>10</td>
+<td style="text-align:center">**public void seek(TopicPartition partition，long offset)**获取消费者将在下一个poll()方法中使用的当前偏移值。</td>
+</tr>
+<tr>
+<td>11</td>
+<td style="text-align:center">**public void resume()**恢复暂停的分区。</td>
+</tr>
+<tr>
+<td>12</td>
+<td style="text-align:center">**public void wakeup()**唤醒消费者。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="consumerrecord-api">ConsumerRecord API</h2>
+<p>ConsumerRecord API用于从Kafka集群接收记录。 此API由主题名称，分区号(从中接收记录)和指向Kafka分区中的记录的偏移量组成。 ConsumerRecord类用于创建具有特定主题名称，分区计数和&lt; key，value&gt;的消费者记录。 对。 它有以下签名。</p>
+<pre><code class="language-java">public ConsumerRecord(string topic,int partition, long offset,K key, V value)
+</code></pre>
+<ul>
+<li><strong>主题</strong> - 从Kafka集群接收的使用者记录的主题名称。</li>
+<li><strong>分区</strong> - 主题的分区。</li>
+<li><strong>键</strong> - 记录的键，如果没有键存在null将被返回。</li>
+<li><strong>值</strong> - 记录内容。</li>
+</ul>
+<h2 id="consumerrecords-api">ConsumerRecords API</h2>
+<p>ConsumerRecords API充当ConsumerRecord的容器。 此API用于保存特定主题的每个分区的ConsumerRecord列表。 它的构造器定义如下。</p>
+<pre><code class="language-java">public ConsumerRecords(java.util.Map&lt;TopicPartition,java.util.List
+&lt;Consumer-Record&gt;K,V&gt;&gt;&gt; records)
+</code></pre>
+<ul>
+<li><strong>TopicPartition</strong> - 返回特定主题的分区地图。</li>
+<li><strong>记录</strong> - ConsumerRecord的返回列表。</li>
+</ul>
+<p>ConsumerRecords类定义了以下方法。</p>
+<table>
+<thead>
+<tr>
+<th>S.No</th>
+<th style="text-align:center">方法和描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:center">**public int count()**所有主题的记录数。</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:center">**public Set partitions()**在此记录集中具有数据的分区集(如果没有返回数据，则该集为空)。</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:center">**public Iterator iterator()**迭代器使您可以循环访问集合，获取或重新移动元素。</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:center">**public List records()**获取给定分区的记录列表。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="配置设置-2">配置设置</h2>
+<p>Consumer客户端API主配置设置的配置设置如下所示 -</p>
+<table>
+<thead>
+<tr>
+<th>S.No</th>
+<th style="text-align:center">设置和说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:center">引导代理列表。</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:center"><strong>group.id</strong>将单个消费者分配给组。</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:center"><strong>enable.auto.commit</strong>如果值为true，则为偏移启用自动落实，否则不提交。</td>
+</tr>
+<tr>
+<td>4</td>
+<td style="text-align:center"><strong>auto.commit.interval.ms</strong>返回更新的消耗偏移量写入ZooKeeper的频率。</td>
+</tr>
+<tr>
+<td>5</td>
+<td style="text-align:center"><strong>session.timeout.ms</strong>表示Kafka在放弃和继续消费消息之前等待ZooKeeper响应请求(读取或写入)多少毫秒。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="simpleconsumer应用程序">SimpleConsumer应用程序</h2>
+<p>生产者应用程序步骤在此保持不变。 首先，启动你的ZooKeeper和Kafka代理。 然后使用名为 SimpleCon-sumer.java 的Java类创建一个 SimpleConsumer 应用程序，并键入以下代码。</p>
+<pre><code class="language-java">import java.util.Properties;
+import java.util.Arrays;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
+public class SimpleConsumer {
+   public static void main(String[] args) throws Exception {
+      if(args.length == 0){
+         System.out.println(&quot;Enter topic name&quot;);
+         return;
+      }
+      //Kafka consumer configuration settings
+      String topicName = args[0].toString();
+      Properties props = new Properties();
+      
+      props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+      props.put(&quot;group.id&quot;, &quot;test&quot;);
+      props.put(&quot;enable.auto.commit&quot;, &quot;true&quot;);
+      props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
+      props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
+      props.put(&quot;key.deserializer&quot;, 
+         &quot;org.apache.kafka.common.serializa-tion.StringDeserializer&quot;);
+      props.put(&quot;value.deserializer&quot;, 
+         &quot;org.apache.kafka.common.serializa-tion.StringDeserializer&quot;);
+      KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer
+         &lt;String, String&gt;(props);
+      
+      //Kafka Consumer subscribes list of topics here.
+      consumer.subscribe(Arrays.asList(topicName))
+      
+      //print the topic name
+      System.out.println(&quot;Subscribed to topic &quot; &amp;plus; topicName);
+      int i = 0;
+      
+      while (true) {
+         ConsumerRecords&lt;String, String&gt; records = con-sumer.poll(100);
+         for (ConsumerRecord&lt;String, String&gt; record : records)
+         
+         // print the offset,key and value for the consumer records.
+         System.out.printf(&quot;offset = %d, key = %s, value = %s\n&quot;, 
+            record.offset(), record.key(), record.value());
+      }
+   }
+}
+</code></pre>
+<p><strong>编译</strong> - 可以使用以下命令编译应用程序。</p>
+<pre><code class="language-sh">javac -cp “/path/to/kafka/kafka_2.11-0.9.0.0/lib/*&quot; *.java
+</code></pre>
+<p><strong>执行 -</strong> 可以使用以下命令执行应用程序</p>
+<pre><code class="language-sh">java -cp “/path/to/kafka/kafka_2.11-0.9.0.0/lib/*&quot;:. SimpleConsumer &lt;topic-name&gt;
+</code></pre>
+<p><strong>输入</strong> - 打开生成器CLI并向主题发送一些消息。 你可以把smple输入为'Hello Consumer'。</p>
+<p><strong>输出</strong> - 以下是输出。</p>
+<pre><code class="language-sh">Subscribed to topic Hello-Kafka
+offset = 3, key = null, value = Hello Consumer
+</code></pre>
+<blockquote>
+<p>原文：https://www.w3cschool.cn/apache_kafka/apache_kafka_simple_producer_example.html</p>
+</blockquote>
+
+            </div>
+            <hr style="width: 80%;">
+            
+            
+            <div class="postfooter">
+                <ul class="post-copyright">
+                    <li><strong>文章作者：</strong>tianxiawuhao</li>
+            <li><strong>原文链接：</strong>https://tianxiawuhao.github.io/post/Fn7BLTfU1/</li>
+            <li><strong>版权声明：</strong>本博客所有文章除特别声明外，均采用<i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA
+                许可协议。转载请注明出处！</li>
+            </ul>
+        </div>
+        <div id="otherpost">
+            
+            <a  data-pjax class="prev-post-pc" href="https://tianxiawuhao.github.io/post/aR5eFRw1e/"  style="color: black;">
+                <div id="ppcontainer">
+                    
+                    <img src="https://tianxiawuhao.github.io/post-images/aR5eFRw1e.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第八章 Apache Kafka 消费者组示例</h4>
+                </div>
+            </a>
+            <div class="prev-post">
+                上一篇 <a  data-pjax href="https://tianxiawuhao.github.io/post/aR5eFRw1e/">第八章 Apache Kafka 消费者组示例</a>
+            </div>
+            
+            
+            <a data-pjax class="next-post-pc" href="https://tianxiawuhao.github.io/post/OuaBGS4Rb/"  style="color: black;">
+                <div id="npcontainer">
+                    
+                    <img src="https://tianxiawuhao.github.io/post-images/OuaBGS4Rb.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">第六章 Apache Kafka 基本操作</h4>
+                </div>
+            </a>
+            <div class="next-post">
+                下一篇 <a  data-pjax href="https://tianxiawuhao.github.io/post/OuaBGS4Rb/">第六章 Apache Kafka 基本操作</a>
+            </div>
+            
+        </div>
+    </div>
+    </div>
+    </div>
+    <!-- 弹窗 -->
+    <div id="myModal" class="modal">
+        <img class="modal-content" id="img01">
+    </div>
+</body>
+<script>
+    //文章阅读热度
+    var pl = $("#pl").html();
+    var rootaddr = $("#rootaddr").html();
+    pl = pl.replace(rootaddr, "");
+    $("#hotnum").attr('id', pl);
+</script>
+                    <div class="toc-container">
+                        <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#kafkaproducer-api">KafkaProducer API</a></li>
+<li><a href="#%E7%94%9F%E4%BA%A7%E8%80%85api">生产者API</a>
+<ul>
+<li><a href="#%E7%94%9F%E4%BA%A7%E8%80%85%E7%B1%BB">生产者类</a></li>
+<li><a href="#public-void-close">public void close()</a></li>
+</ul>
+</li>
+<li><a href="#%E9%85%8D%E7%BD%AE%E8%AE%BE%E7%BD%AE">配置设置</a>
+<ul>
+<li><a href="#producerrecord-api">ProducerRecord API</a></li>
+</ul>
+</li>
+<li><a href="#simpleproducer%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F">SimpleProducer应用程序</a></li>
+<li><a href="#%E7%AE%80%E5%8D%95%E6%B6%88%E8%B4%B9%E8%80%85%E7%A4%BA%E4%BE%8B">简单消费者示例</a></li>
+<li><a href="#consumerrecord-api">ConsumerRecord API</a></li>
+<li><a href="#consumerrecords-api">ConsumerRecords API</a></li>
+<li><a href="#%E9%85%8D%E7%BD%AE%E8%AE%BE%E7%BD%AE-2">配置设置</a></li>
+<li><a href="#simpleconsumer%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F">SimpleConsumer应用程序</a></li>
+</ul>
+</li>
+</ul>
+
+                    </div>
+                    <div class="tog">
+                        <div class="toggleContainer">
+                            <div class="toggle">
+                                <i class="fas fa-angle-double-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="comment" class="comment" style="background: white">
+                        <div class="commentcontainer">
+                            
+                            <p>请到客户端“主题--自定义配置--valine”中填入ID和KEY</p>
+                            
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1 col-lg-2"></div>
+                <div id="bg">
+                </div>
+            </div>
+            
+        
+        <head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.css">
+</head>
+
+<body>
+    <div class="miniMode">
+        <meting-js id="myaplayer" server="netease" type="playlist" fixed="true" order="default">
+        </meting-js>
+    </div>
+</body>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+<script>
+    function aplayerInit() {
+        var aplayerid = "";
+        var aplayerserver = "netease";
+        var aplayerorder = "default";
+        var aplayerautoplay = "false";
+        var aplayer = $("#myaplayer");
+        aplayer.attr("server", aplayerserver);
+        aplayer.attr("id", aplayerid);
+        aplayer.attr("order", aplayerorder);
+        if (aplayerautoplay == "true")
+            aplayer.attr("autoplay", "true");
+    }
+    aplayerInit();
+</script>
+
+<script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/Aplayer.min.js"></script>
+<!-- require MetingJS -->
+<script src="https://cdn.jsdelivr.net/npm/meting@2/dist/Meting.min.js"></script>
+
+<script>
+    function aplayerbtnInit() {
+        var player = document.querySelectorAll('meting-js')[0].aplayer;
+        if(player==undefined)return false;
+        player.lrc.hide();
+        var mbabtn = $("#mbaplayer");
+        if (player.paused == false) {
+            mbabtn.removeClass("fa-play-circle-o");
+            mbabtn.addClass("fa-pause-circle");
+        } else {
+            mbabtn.addClass("fa-play-circle-o");
+            mbabtn.removeClass("fa-pause-circle");
+        }
+    }
+
+    function aplayerPlay() {
+        var player = document.querySelectorAll('meting-js')[0].aplayer;
+        var mbabtn = $("#mbaplayer");
+        if (player.paused == true) {
+            player.play();
+            mbabtn.removeClass("fa-play-circle-o");
+            mbabtn.addClass("fa-pause-circle");
+        } else {
+            player.pause();
+            mbabtn.addClass("fa-play-circle-o");
+            mbabtn.removeClass("fa-pause-circle");
+        }
+    }
+</script>
+        
+    </div>
+    
+    <div id="bgchoice" style="display: none">link
+    </div>
+    
+    <div id="bgurl" style="display:none">https://img.imgdb.cn/item/608121be563420b64787c1d5.jpg</div>
+    
+</body>
+<script>
+    var img = $("img");
+    for (var i = 0; i < img.length; i++) {
+        if (img.eq(i).attr("class") == undefined) {
+            img.eq(i).attr("class", "lazyload");
+            var imgsrc = img.eq(i).attr("src");
+            img.eq(i).attr("data-original", imgsrc);
+            img.eq(i).attr("src", "");
+            img.eq(i).hide();
+        }
+    }
+
+    function refreshImg(imgclass) {
+        // 获取弹窗
+        var modal = document.getElementById('myModal');
+
+        // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+        var img = document.getElementsByClassName(imgclass);
+        var modalImg = document.getElementById("img01");
+        var captionText = document.getElementById("caption");
+        for (var i in img) {
+            img[i].onclick = function () {
+                modal.style.display = "block";
+                modalImg.src = this.src;
+            }
+        }
+
+        // 图片关闭
+        var modalImg = document.getElementById('img01');
+        // 鼠标点击模型外区域关闭登录框
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+            if (menupos == 'left')
+                return true;
+            if (event.target == social) {
+                social.style.display = "none";
+            }
+        }
+    }
+
+</script>
+<script>
+    hljs.initHighlightingOnLoad();
+</script>
+<script>
+    //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+    var codes = document.getElementsByTagName('code');
+    if (codes.length) {
+        for (var i = 0; i < codes.length; i++) {
+            //高度/行高=文本行数
+            // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+            // console.log("当前有"+rowNum+"行");
+            var code_id = "code_id_" + i;
+            codes[i].setAttribute("id", code_id);
+            var ci = "#" + code_id;
+            var codedot = $(ci);
+            var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+            if (rowNum <= 1) continue;
+            var btn = document.createElement("button");
+            btn.setAttribute("class", "copybt");
+            btn.setAttribute("data-clipboard-target", "#" + code_id);
+            btn.innerHTML = '复制代码';
+            codes[i].parentNode.insertBefore(btn, codes[i]);
+        }
+    };
+    var cop = new ClipboardJS('.copybt');
+    cop.on('success', function (e) {
+        e.trigger.innerHTML = "复制成功~"
+        e.trigger.style.background = "#894e54"
+        e.clearSelection();
+    });
+    cop.on('error', function (e) {
+        e.clearSelection();
+    });
+</script>
+
+<script type="text/javascript">
+    var message_Path = '/live2d/'
+    var home_Path = document.getElementById("domainname").innerHTML + "/"; //此处修改为你的域名，必须带斜杠
+</script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/live2d.js"></script>
+<script type="text/javascript" src="https://tianxiawuhao.github.io/media/live2d/js/message.js"></script>
+<script type="text/javascript">
+    loadlive2d("live2d", "https://tianxiawuhao.github.io/media/live2d/assets/tororo.model.json");
+</script>
+
+<script>
+    $(function () {
+        $('.toggleContainer').click(function () {
+            $('html,body').animate({
+                scrollTop: '0px'
+            }, 800);
+        });
+        $(window).scroll(function () {
+            var st = $(window).scrollTop();
+            if (st > 30) {
+                $(".toggleContainer").fadeIn(400);
+            } else {
+                $(".toggleContainer").fadeOut(100);
+            }
+        });
+    });
+</script>
+
+<script>
+    var bgchoice = $('#bgchoice').html();
+    var bg = $('#bg');
+    var bgurl = document.getElementById("bgurl").innerHTML;
+    if (bgchoice == 'default')
+        for (var i = 0; i < 3; i++)
+            bgurl = bgurl.replace("\\", "/");
+    bg.css("background", "url('" + bgurl + "')");
+</script>
+
+
+<script src="https://tianxiawuhao.github.io/media/js/index.js"></script>
+
+
+
+<!-- 动态更改上(下)一篇博客图片框长宽 -->
+<script>
+    npcontainer = document.querySelector('#npcontainer');
+    npstyle = window.getComputedStyle(npcontainer, null);
+    npwidth = npstyle.width;
+    npheight = 0.6 * Number(npwidth.replace("px", ""));
+    npheight = npheight.toString() + "px";
+    var op = $(".opimg");
+    op.css("height", npheight);
+</script>
+
+<script src="https://tianxiawuhao.github.io/media/share/dist/Share.js"></script>
+
+<script>
+    var avatarSrc = $(".avatar").attr("src");
+    var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+</script>
+
+
+<script>
+    var title = document.getElementById("texttitle").getElementsByTagName("h2");
+
+    var share = new Share('.share', {
+        title: title[0].innerHTML,
+        initialized: true,
+        //默认获取网站描述
+        description: dp,
+        //网站图片默认获取的是设置的用户头像
+        image: avatarSrc,
+        //激活的分享网站
+        sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+        //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+        wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+        wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+        //关闭的网站分享
+        disabled: ['google', 'linkedin'],
+        wechatQrcodePosition: 'bottom'
+    });
+
+    //点击分享按钮展现出分享icons
+    var sharebtnTag = false;
+    $(".sharebtn").click(function () {
+        if (!sharebtnTag) {
+            $(".share").show();
+            sharebtnTag = true;
+        }
+        else {
+            $(".share").hide();
+            sharebtnTag = false;
+        }
+    })
+
+    var donatebtnTag = false;
+    $(".donateImg").click(function () {
+        if (!donatebtnTag) {
+            $(".donate").show();
+            donatebtnTag = true;
+        }
+        else {
+            $(".donate").hide();
+            donatebtnTag = false;
+        }
+    })
+
+    //加载后的事件同步（阅读量、移动端评论等
+    window.onload = function () {
+        getHotnum();
+        var sharepc = $(".share").eq(0).html();
+        $(".share").eq(1).html(sharepc);
+        document.getElementById("veditor").setAttribute("placeholder", jrsc);
+        aplayerbtnInit();
+    }
+</script>
+
+
+<script>
+    jQuery(document).ready(function ($) {
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+        lazyload();
+        refreshImg("lazyload");
+    });
+</script>
+
+<!-- <script src="https://tianxiawuhao.github.io/media/js/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@3.13.0/dist/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.6.1/dist/av-live-query-min.js"></script> -->
+
