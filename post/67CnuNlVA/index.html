@@ -1,0 +1,1669 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=0">
+    <meta name="description" content="看Java内存模型(JMM, Java Memory Model)时，总有一个困惑。关于线程、主存(main memory)、工作内存(working memory)，我都能找到实际映射的硬件：线程可能对应着一个内核线程，主存对应着内存，而..." />
+    <meta name="keywords" content="java" />
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    <title>tianxia</title>
+    
+    <style>
+        .markdownIt-TOC {
+            padding-left: 2px;
+            width: 100%;
+        }
+
+        .markdownIt-TOC li {
+            padding-left: 2%;
+        }
+    </style>
+    
+</head>
+
+<body>
+    <div id="landlord">
+        <div class="message" style="opacity:0"></div>
+        <canvas id="live2d" width="240" height="250" class="live2d"></canvas>
+    </div>
+    <div id="domainname" style="display:none">http://localhost:4001</div>
+    <!-- 响应式布局，针对PC端内容显示 -->
+    <div id="content">
+        <div>
+            <div id="bar">
+                <head>
+  <!-- 引入Bootstrap核心样式文件 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/bootstrap.min.css">
+</head>
+<style>
+  .navmobile {
+    z-index: 15;
+    max-height: 40vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+  }
+
+  @media screen and (max-width: 1200px) {
+    .navbar {
+      max-width: 100vw;
+    }
+  }
+
+  @media screen and (max-width:1200px) and (min-width: 768px) {
+    @media (min-width: 768px) {
+      .navbar-nav {
+        float: right;
+        margin: 0;
+      }
+    }
+  }
+
+  @media screen and (max-width:768px) {
+    .mbapspan {
+      padding: 0;
+    }
+  }
+</style>
+<div class="pjaxloading"  onclick="pjaxloadingClose()">
+  <div class="loadingbackground"></div>
+  <div id="loading">
+    <div class="loading">
+    </div>
+  </div>
+</div>
+<nav class="navbar navbar-inverse navbar-fixed-top navmobile">
+  <div class="container-fluid">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#barmenu"
+        aria-expanded="false" id="barbutton">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a data-pjax class="navbar-brand" href="http://localhost:4001">tianxia&nbsp;&nbsp;|</a>
+      <span class="navbar-brand mbapspan"><i id="mbaplayer" class="fa fa-play-circle-o" aria-hidden="true"
+          style="font-size: 28px;top: 12px;position: absolute;" onclick="aplayerPlay();"></i></span>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="barmenu">
+      <ul class="nav navbar-nav">
+        
+        
+        <li>
+          <a data-pjax href="/">
+            首页
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/archives">
+            归档
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/tags">
+            标签
+          </a>
+        </li>
+        
+        
+        
+        <li>
+          <a data-pjax href="/post/about">
+            关于
+          </a>
+        </li>
+        
+        
+        
+          
+        <li><a data-pjax href="https://tianxiawuhao.github.io/friends">友链</a></li>
+
+        
+        </ul>
+      </div><!-- /.navbar-collapse -->
+    </div><!-- /.container-fluid -->
+  </nav>
+
+
+  <!-- 引入jQuery核心js文件 -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+  <script>
+    let btstate = false;
+    var bt = $("#barbutton");
+    var bm = $("#barmenu");
+    bt.click(function () {
+      dropdown();
+    })
+    function dropdown() {
+      console.log(btstate);
+      //下拉
+      if (btstate == false) {
+        bt.removeClass("collapsed");
+        bt.attr("aria-expanded", "true");
+        bm.attr("aria-expanded", "true")
+        bm.fadeIn(700);
+        btstate = true;
+      }
+      else {
+        bt.addClass("collapsed");
+        bt.attr("aria-expanded", "false");
+        bm.removeClass("in");
+        bm.hide();
+        bm.attr("aria-expanded", "false");
+        btstate = false;
+      }
+    }
+  </script> 
+            </div>
+            <div class="row">
+                <div class="side"><head>
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/media/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://tianxiawuhao.github.io/styles/main.css">
+    
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/rainbow.min.css">
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/clipboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/5.13.1/css/all.min.css" rel="stylesheet">
+    <!-- 数学公式 -->
+    
+    
+</head>
+<style>
+    body{
+    cursor: url("https://tianxiawuhao.github.io/media/images/mouse_cursor.png"),auto
+    }
+    </style>
+
+<body>
+    
+    <script>
+        let menupos = 'top'
+    </script>
+    
+    
+    <script>
+        let shareChoice = false
+    </script>
+    
+    
+    <script>
+        let donateChoice = false
+    </script>
+    
+    
+    <script>
+        let searchChoice = true
+    </script>
+    
+    <script>let postsnum = 0;</script>
+    <div id="side-posttitle" style="display: none;">
+        
+    
+     漫画：什么是B+树？
+    <script>postsnum += 1</script>
+    
+    
+    
+    漫画：什么是B-树？
+    <script>postsnum += 1</script>
+    
+    
+    
+    数据结构常见的八大排序算法
+    <script>postsnum += 1</script>
+    
+    
+    
+    指令重排序
+    <script>postsnum += 1</script>
+    
+    
+    
+    Java中Volatile关键字详解
+    <script>postsnum += 1</script>
+    
+    
+    
+    从happens-before原则说起
+    <script>postsnum += 1</script>
+    
+    
+    
+    Java内存模型
+    <script>postsnum += 1</script>
+    
+    
+    
+     JVM 的核心知识梳理
+    <script>postsnum += 1</script>
+    
+    
+    
+    Java内存结构JVM
+    <script>postsnum += 1</script>
+    
+    
+    
+    Linux文件操作高频使用命令
+    <script>postsnum += 1</script>
+    
+    
+    
+    JVM调优
+    <script>postsnum += 1</script>
+    
+    
+    
+    Java的值传递
+    <script>postsnum += 1</script>
+    
+    
+    
+    附录 kafka常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Apache Kafka 与Spark的集成
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 Apache Kafka 整合 Storm
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 Apache Kafka 消费者组示例
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 Apache Kafka 简单生产者示例
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Apache Kafka 基本操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Apache Kafka 安装步骤
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Apache Kafka 工作流程
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Apache Kafka 集群架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 Apache Kafka 概述
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Kafka的安装与使用
+    <script>postsnum += 1</script>
+    
+    
+    
+    附录 Flink常见面试问题汇总
+    <script>postsnum += 1</script>
+    
+    
+    
+    第十章 Table API 与 SQL
+    <script>postsnum += 1</script>
+    
+    
+    
+    第九章 状态编程和容错机制
+    <script>postsnum += 1</script>
+    
+    
+    
+    第八章 ProcessFunction API（底层 API）
+    <script>postsnum += 1</script>
+    
+    
+    
+    第七章 时间语义与 Wartermark
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 的Window 操作
+    <script>postsnum += 1</script>
+    
+    
+    
+    第六章 Flink 中的 Window
+    <script>postsnum += 1</script>
+    
+    
+    
+    第五章 Flink 流处理 API
+    <script>postsnum += 1</script>
+    
+    
+    
+    第四章 Flink 运行架构
+    <script>postsnum += 1</script>
+    
+    
+    
+    第三章 Flink 部署
+    <script>postsnum += 1</script>
+    
+    
+    
+    第二章 快速上手
+    <script>postsnum += 1</script>
+    
+    
+    
+    第一章 Flink 简介
+    <script>postsnum += 1</script>
+    
+    
+    
+    Flink 零基础实战教程：如何计算实时热门商品
+    <script>postsnum += 1</script>
+    
+    
+    
+    从零构建第一个 Flink 应用
+    <script>postsnum += 1</script>
+    
+    
+    
+    
+    </div>
+    <div class="pjaxloading" onclick="pjaxloadingClose()">
+        <div class="loadingbackground"></div>
+        <div id="loading">
+            <div class="loading">
+            </div>
+        </div>
+    </div>
+    
+    
+    <nav class="navbar navbar-inverse navbar-fixed-top navbartop">
+        <div class="container-fluid">
+            <!-- Brand and toggle get grouped for better mobile display -->
+            <div class="navbar-header">
+                <a data-pjax class="navbar-brand" href="http://localhost:4001"
+                    style="font-size:21px">tianxia&nbsp;&nbsp;|&nbsp;&nbsp;</a>
+                <a class="navbar-brand" href=""
+                    style="font-size:15px;font-family:kaiti">风起于青萍之末,浪成于微澜之间.友交于微末之时,妄终于菩提之巅</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div class="collapse navbar-collapse">
+                
+                <div class="search nav navbar-nav" style="margin-top:8px">
+                    <!-- <input type="text" class="search-input" placeholder="标题搜索(●'◡'●)" /> -->
+                    <input type="text" class="search-input" placeholder="请输入">
+                    <div class="search-results"></div>
+                </div>
+                
+                <div class="search nav navbar-nav searchtop">
+                <a title="text" onclick="document.getElementById('socialMenu').style.display='block'"><i><img class="social"
+                    src="https://tianxiawuhao.github.io/media/images/social.png" alt=""></i></a>
+                <a onclick="showAaplayer()"><i style="font-size: 20px;"><img
+                            src='https://tianxiawuhao.github.io/media/images/music.png' alt="音乐播放器"
+                            class="musicbtn musictop"></i></a>
+            </div>
+            <ul class="nav navbar-nav" style="float: right;margin-right:5%">
+                
+                
+                <li>
+                    <a data-pjax href="/" style="color:white">
+                        首页
+                    </a>
+                </li>
+                
+                
+                
+                <li>
+                    <a data-pjax href="/archives" style="color:white">
+                        归档
+                    </a>
+                </li>
+                
+                
+                
+                <li>
+                    <a data-pjax href="/tags" style="color:white">
+                        标签
+                    </a>
+                </li>
+                
+                
+                
+                <li>
+                    <a data-pjax href="/post/about" style="color:white">
+                        关于
+                    </a>
+                </li>
+                
+                
+                
+                
+                <li><a data-pjax href="https://tianxiawuhao.github.io/friends" style="color:white">友链</a></li>
+                
+                  <li><img src="https://tianxiawuhao.github.io/images/avatar.png?v=1619343261813" alt=""
+                class="menutopavatar"></li>
+            </ul>
+        </div><!-- /.navbar-collapse -->
+        </div><!-- /.container-fluid -->
+    </nav>
+    <div id="socialMenu">
+        <div class="animate">
+            <div class="socialContainer">
+                
+                <a href="https://github.com/tianxiawuhao" target="_blank"><i style="font-size: 40px;"><img
+                            class="icon " src="https://tianxiawuhao.github.io/media/images/github.png" alt=""></i></a>
+                
+                
+                
+                
+                
+                
+            </div>
+            <div id="qq" style="display:none"></div>
+        </div>
+    </div>
+    <!-- 引入jQuery核心js文件 -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+    <script>
+        var social = document.getElementById('socialMenu');
+        // 鼠标点击模型外区域关闭登录框
+        window.onclick = function (event) {
+            if (event.target == social) {
+                social.style.display = "none";
+            }
+        }
+    </script>
+    
+</body>
+<script>
+    function showqq() {
+        var qq = document.getElementById("qq").innerHTML;
+        if (qq != '')
+            window.location.href = "tencent://message/?uin=" + qq + "&Site=&Menu=yes";
+        else
+            alert("博主暂未设置QQ联系方式");
+    }
+
+    //音乐播放器的显示
+    function showAaplayer() {
+        var aplayer = $(".aplayer-body");
+        if (aplayer.css("display") == 'block')
+            aplayer.fadeOut(200)
+        else
+            aplayer.fadeIn(200)
+    }
+</script>
+<script>
+    function getHotnum() {
+        //文章阅读热度（重构，利用leancloud原生api）
+        var pl = window.location.pathname;
+        if (pl.search("post") == -1)
+            return false;
+        if (pl[pl.length - 1] != '/')
+            pl += '/'
+        var ptitle = $("#ptitle").html();
+        var rootaddr = $("#rootaddr").html();
+        pl = pl.replace(rootaddr, "");
+        var appid = '';
+        var appkey = '';
+        console.log(appid, appkey)
+        if (AV == undefined)
+            AV.init({
+                appId: appid,
+                appKey: appkey
+            });
+        const query = new AV.Query('Counter');
+        query.equalTo('url', pl);
+        var time = 'Loading...';
+        query.find().then(function (results) {
+            console.log(results)
+            if (results.length == 0) {
+                console.log("0")
+                var NewCounter = AV.Object.extend('Counter');
+                var nc = new NewCounter();
+                nc.save({
+                    time: 1,
+                    title: ptitle,
+                    url: pl,
+                    xid: pl,
+                }).then(function (object) {
+                    $(".hotnum").eq(0).html(1);
+                    $(".hotnum").eq(1).html(1);
+                });
+            } else {
+                id = results[0].id;
+                var todo = AV.Object.createWithoutData('Counter', id);
+                time = results[0].attributes.time + 1;
+                todo.set("time", time);
+                todo.save();
+                console.log(todo);
+                $(".hotnum").eq(0).html(time);
+                $(".hotnum").eq(1).html(time);
+            }
+
+        }, function (error) {
+            console.log(error)
+        });
+    }
+</script>
+    <script src="https://tianxiawuhao.github.io/media/share/dist/Share.js"></script>
+    <!-- 页面pjax测试 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery.pjax/2.0.1/jquery.pjax.js"></script>
+    <!--确保jQuery已经在此之前加载-->
+    <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+    <script src="https://tianxiawuhao.github.io/media/js/all-pjax.js"></script>
+    <script>
+        //loading加载关闭
+        function pjaxloadingClose() {
+            var pjaxloading = $(".pjaxloading");
+            pjaxloading.hide();
+        }
+
+
+
+        function imglazyloadinit() {
+            var img = $("img");
+            for (var i = 0; i < img.length; i++) {
+                if (img.eq(i).attr("class") == undefined) {
+                    img.eq(i).attr("class", "lazyload");
+                    var imgsrc = img.eq(i).attr("src");
+                    img.eq(i).attr("data-original", imgsrc);
+                    img.eq(i).attr("src", "");
+                    img.eq(i).hide();
+                }
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function codebtncolorinit(e) {
+            await sleep(2000);
+            e.trigger.innerHTML = "复制代码"
+            e.trigger.style.background = "cornflowerblue"
+        }
+
+        function codeinit() {
+            //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+            var codes = document.getElementsByTagName('code');
+            if (codes.length) {
+                for (var i = 0; i < codes.length; i++) {
+                    //高度/行高=文本行数
+                    // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+                    // console.log("当前有"+rowNum+"行");
+                    var code_id = "code_id_" + i;
+                    codes[i].setAttribute("id", code_id);
+                    var ci = "#" + code_id;
+                    var codedot = $(ci);
+                    var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+                    if (rowNum <= 1) continue;
+                    var btn = document.createElement("button");
+                    btn.setAttribute("class", "copybt");
+                    btn.setAttribute("data-clipboard-target", "#" + code_id);
+                    btn.innerHTML = '复制代码';
+                    codes[i].parentNode.insertBefore(btn, codes[i]);
+                }
+            };
+            var cop = new ClipboardJS('.copybt');
+            cop.on('success', function (e) {
+                e.trigger.innerHTML = "复制成功~"
+                e.trigger.style.background = "#894e54"
+                codebtncolorinit(e)
+                e.clearSelection();
+            });
+            cop.on('error', function (e) {
+                alert("矮油，复制失败了...手动复制吧勇士！");
+                e.clearSelection();
+            });
+        }
+
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+
+        let talksall = [];
+        let talks = [];
+        let talkindex = 0;
+        get();
+        function get() {
+            var t = JSON.parse('[{"author":"","img":"","text":"","time":""}]');
+            talkindex = t.length - 1;
+            for (var i = 0; i <= t.length - 1; i++) {
+                var d = {};
+                d["time"] = t[i].time;
+                d["author"] = t[i].author;
+                d["text"] = t[i].text;
+                d["img"] = t[i].img;
+                talksall.push(d);
+            }
+        }
+
+        function add() {
+            for (var i = talkindex; i >= 0 && i > talkindex - 3; i--) {
+                talks.push(talksall[i]);
+            }
+            talkindex = (talkindex - 3) >= 0 ? (talkindex - 3) : -1;
+            if (talkindex < 0) $("#getmorebt").hide();
+            show();
+            refreshImg("talkimg");
+        }
+
+        function show() {
+            var talkT = document.getElementById("talkContainer");
+            talkT.innerHTML = "";
+            for (var i = 0; i < talks.length; i++) {
+                if (talks[i].img != '') {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <img src="' + talks[i].img + '" class="talkimg"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="https://tianxiawuhao.github.io/images/avatar.png?v=1619343261813">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                } else {
+                    talkT.innerHTML += '\
+            <div class="talk" v-for="t in talks"> \
+                <div class="ainfo">\
+                    <div class="ainfo-intro">\
+                        <img class="intro1" src="https://tianxiawuhao.github.io/images/avatar.png?v=1619343261813">\
+                        <div class="author">' + talks[i].author + '</div>·\
+                        <div class="time">' + talks[i].time + '</div>\
+                    </div>\
+                </div>\
+                <div class="talkcontent">' + talks[i].text + '\
+                </div\>\
+            ';
+                }
+            }
+        }
+
+        function refreshImg(imgclass) {
+            // 获取弹窗
+            var modal = document.getElementById('myModal');
+
+            // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+            var img = document.getElementsByClassName(imgclass);
+            var modalImg = document.getElementById("img01");
+            var captionText = document.getElementById("caption");
+            for (var i in img) {
+                img[i].onclick = function () {
+                    modal.style.display = "block";
+                    modalImg.src = this.src;
+                }
+            }
+
+            // 图片关闭
+            var modalImg = document.getElementById('img01');
+            // 鼠标点击模型外区域关闭登录框
+            window.onclick = function (event) {
+                console.log(event.target);
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+                if (menupos == 'left')
+                    return true;
+                if (event.target == social) {
+                    social.style.display = "none";
+                }
+            }
+        }
+
+        function shareInit() {
+            var title = document.getElementById("texttitle").getElementsByTagName("h2");
+            if (menupos == 'top') {
+                var avatarSrc = $(".menutopavatar").attr("src");
+                var dp = document.getElementsByClassName("navbar-brand")[1].innerHTML;
+            }
+            else {
+                var avatarSrc = $(".avatar").attr("src");
+                var dp = document.getElementsByClassName("describtion")[0].innerHTML;
+            }
+            var share = new Share('.share', {
+                title: title[0].innerHTML,
+                initialized: true,
+                //默认获取网站描述
+                description: dp,
+                //网站图片默认获取的是设置的用户头像
+                image: avatarSrc,
+                //激活的分享网站
+                sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+                //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+                wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+                wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+                //关闭的网站分享
+                disabled: ['google', 'linkedin'],
+                wechatQrcodePosition: 'bottom'
+            });
+            //点击分享按钮展现出分享icons
+            var sharebtnTag = false;
+            $(".sharebtn").click(function () {
+                if (!sharebtnTag) {
+                    $(".share").show();
+                    sharebtnTag = true;
+                }
+                else {
+                    $(".share").hide();
+                    sharebtnTag = false;
+                }
+            })
+        }
+
+        function donateInit() {
+            var donatebtnTag = false;
+            $(".donateImg").click(function () {
+                if (!donatebtnTag) {
+                    $(".donate").show();
+                    donatebtnTag = true;
+                }
+                else {
+                    $(".donate").hide();
+                    donatebtnTag = false;
+                }
+            })
+        }
+
+
+        let talkinit = false;
+        $(document).pjax('a[data-pjax]', '#main', {
+            fragment: '#main',
+            timeout: 8000
+        }).on('pjax:complete', function () {
+            //hljs.initHighlightingOnLoad();
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+            //文章热度
+            getHotnum();
+            //文章索引
+            toginit();
+            //清空搜索栏
+            if (searchChoice) {
+                searchInit();
+                searchInput.value = "";
+            }
+            var pl = window.location.pathname;
+            //说说更新
+            if (pl.search("talk") != -1 && !talkinit) {
+                add();
+                talkinit = true;
+            }
+            else if (pl.search("talk") != -1) {
+                show();
+                refreshImg("talkimg");
+            }
+            //分享按钮更新
+            if (pl.search("post") != -1) {
+                if (shareChoice)
+                    shareInit();
+                if (donateChoice)
+                    donateInit();
+                imglazyloadinit();
+                lazyload();
+                refreshImg("lazyload");
+                codeinit();
+            }
+            if (btstate == true)
+                dropdown();
+        }).on('pjax:start', function () {
+            $(".pjaxloading").fadeIn(50);
+        }).on('pjax:end', function () {
+            $(".pjaxloading").fadeOut(50);
+        });
+    </script>
+
+    <script>
+        /**
+         * https://github.com/tangkaichuan/gridea-search
+         */
+        (function () {
+            var CACHES = checkCache()
+            if (!CACHES) {
+                var NOW = Date.now()
+                var API_CONTENT = '../api-content/index.html' + '?_=' + NOW
+                preload(API_CONTENT);
+                getContents(show_getContentresult);
+            }
+
+            function show_getContentresult(data) {
+                console.log("获取成功");
+                var postslen = data["posts"].length;
+                localStorage.setItem('postsnum', postslen);
+                var poststitlelen = 0;
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "");
+                localStorage.setItem('poststitlelen', pt.length);
+            }
+
+
+
+            // preload
+            function preload(url) {
+                var preloadLink = document.createElement('link')
+                preloadLink.href = url
+                preloadLink.rel = 'preload'
+                preloadLink.as = 'fetch'
+                preloadLink.crossOrigin = 'anonymous'
+                document.head.appendChild(preloadLink)
+            }
+
+            // 异步 GET 请求
+            function get(obj) {
+                var xhr = new XMLHttpRequest()
+                xhr.open('get', obj.url, true)
+                xhr.send(null)
+                xhr.onreadystatechange = function () {
+                    // 异步请求：响应状态为4，数据加载完毕
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            obj.success(xhr.responseText)
+                        } else {
+                            obj.error(xhr.status)
+                        }
+                    }
+                }
+            }
+
+
+            // 检查缓存是否最新
+            function checkCache() {
+                var caches_postsnum = localStorage.getItem("postsnum");
+                var pt = document.getElementById("side-posttitle").innerHTML;
+                pt = pt.replace(/\s+/g, '').replace(/<script>.*?<\/script>/gi, "")
+                var ptlen = pt.length;
+                var ptlen_storage = localStorage.getItem("poststitlelen");
+                console.log(parseInt(postsnum));
+                if (caches_postsnum != postsnum || ptlen != ptlen_storage) {
+                    console.log("更新缓存");
+                    return false
+                }
+                return true;
+            }
+
+            // 获取博客全文 api
+            function getContents(callback) {
+                if (CACHES) {
+                    callback(CACHES.contents)
+                } else {
+                    get({
+                        url: API_CONTENT,
+                        success: function (data) {
+                            callback(JSON.parse(data));
+                            localStorage.setItem('ContentsCache', data);
+                        }
+                    })
+                }
+            }
+        })()
+
+        //-------------------------------------------------搜索
+        // 获取搜索框、搜索按钮、清空搜索、结果输出对应的元素
+        if (searchChoice) {
+            var searchInput = document.querySelector('.search-input');
+            var searchResults = document.querySelector('.search-results');
+        }
+        // 申明保存文章的标题、链接、内容的数组变量
+        var searchValue = '',
+            arrItems = [],
+            arrLinks = [],
+            arrTitles = [],
+            arrContents = [],
+            arrResults = [],
+            indexItem = [],
+            itemLength = 0;
+        var tmpDiv = document.createElement('div');
+        tmpDiv.className = 'result-item';
+
+
+        function getStorageContent() {
+            var data = localStorage.getItem('ContentsCache');
+            data = JSON.parse(data);
+            posts = data["posts"];
+            for (var i = 0; i < posts.length; i++) {
+                arrLinks[i] = posts[i].link;
+                arrTitles[i] = posts[i].title;
+                arrContents[i] = posts[i].content;
+                itemLength++;
+            }
+        }
+        getStorageContent();
+        // 输入框内容变化后就开始匹配，可以不用点按钮
+        // 经测试，onkeydown, onchange 等方法效果不太理想，
+        // 存在输入延迟等问题，最后发现触发 input 事件最理想，
+        // 并且可以处理中文输入法拼写的变化
+        searchInput.oninput = function () {
+            setTimeout(searchConfirm, 0);
+        }
+        searchInput.onfocus = function () {
+            searchResults.style.display = 'block';
+        }
+
+        function searchConfirm() {
+            if (searchInput.value == '') {
+                searchResults.style.display = 'none';
+            } else if (searchInput.value.search(/^\s+$/) >= 0) {
+                // 检测输入值全是空白的情况
+                searchInit();
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '请输入有效内容...';
+                searchResults.appendChild(itemDiv);
+            } else {
+                // 合法输入值的情况
+                searchInit();
+                searchValue = searchInput.value;
+                // 在标题、内容中查找
+                searchMatching(arrTitles, arrContents, searchValue);
+            }
+        }
+
+        // 每次搜索完成后的初始化
+        function searchInit() {
+            arrResults = [];
+            indexItem = [];
+            searchResults.innerHTML = '';
+            searchResults.style.display = 'block';
+        }
+
+        function searchMatching(arr1, arr2, input) {
+            // 忽略输入大小写
+            input = new RegExp(input, 'i');
+            var step = 10;
+            // 在所有文章标题、内容中匹配查询值
+            for (i = 0; i < itemLength; i++) {
+                var indexContent = arr2[i].search(input);
+                //标题匹配
+                if (arr1[i].search(input) != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+                    if (indexContent != -1) {
+                        startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                        var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                        arrResults.push("....." + searchcontent + ".....");
+                    }
+                    else
+                        arrResults.push("");
+                }
+                //内容匹配
+                else if (indexContent != -1) {
+                    indexItem.push(i); // 保存匹配值的索引
+
+                    startindex = (indexContent - step) >= 0 ? (indexContent - step) : 0;
+                    var searchcontent = arr2[i].slice(indexContent - step, indexContent + 5)
+                    arrResults.push("....." + searchcontent + ".....");
+                }
+            }
+
+            // 输出总共匹配到的数目
+            var totalDiv = tmpDiv.cloneNode(true);
+            totalDiv.innerHTML = '<b>总匹配：' + indexItem.length + ' 项<hr></b>';
+            searchResults.appendChild(totalDiv);
+
+            // 未匹配到内容的情况
+            if (indexItem.length == 0) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerText = '未匹配到内容...';
+                searchResults.appendChild(itemDiv);
+            }
+
+            // 将所有匹配内容进行组合
+            for (i = 0; i < arrResults.length; i++) {
+                var itemDiv = tmpDiv.cloneNode(true);
+                itemDiv.innerHTML = '<a data-pjax class="searchresults" href="' + arrLinks[indexItem[i]] + '"><b>[' + arrTitles[indexItem[i]] +
+                    ']</b><p>' + arrResults[i] + '</p></a><hr />';
+                searchResults.appendChild(itemDiv);
+            }
+        }
+    </script>
+    </div>
+                
+            <div class="col-lg-3"></div>
+            <div id="main" class="col-xs-12 col-sm-12 col-md-12  col-lg-6 posttop">
+                <link rel="stylesheet" href="https://tianxiawuhao.github.io/media/css/font-awesome.css">
+
+<body>
+    <div class="allcontent" id="postdetail">
+        <div class="postshow postpadding" style="padding-bottom: 0;">
+            
+            <div class="postdetailimg">
+                <img src="https://tianxiawuhao.github.io/post-images/67CnuNlVA.png" class="postimage" style="cursor:auto">
+            </div>
+            <div class="postinfo-detail">
+                <div class="postdate"><i class="fa fa-calendar"></i>2021-04-25</div>
+                <div class="poststatus postdate"><i class="fa fa-clock-o"></i> 9 min read</div>
+                <div class="posttag">
+                    
+                    <a data-pjax href="https://tianxiawuhao.github.io/tag/gvtXj5hZZ/" class="postlink">
+                        <i class="fa fa-tag"></i> java
+                    </a>
+                    
+                </div>
+            </div>
+            
+        <div id="articlecontent">
+            <div id="texttitle" style="text-align: center">
+                <h2 id="ptitle">从happens-before原则说起</h2>
+                <!-- id 将作为查询条件 -->
+                <div id="pl" style="display:none">https://tianxiawuhao.github.io/post/67CnuNlVA/</div>
+                <div id="rootaddr" style="display:none">http://localhost:4001</div>
+                <span id="hotnum">
+                    <h4><i class="fa fa-eye" aria-hidden="true" style="color: #FF8C00;"></i>&nbsp;&nbsp;热度</i>: <i
+                            class="hotnum">loading...</i></h4>
+                </span>
+            </div>
+            <div class="text ">
+                <p>看<code>Java内存模型(JMM, Java Memory Model)</code>时，总有一个困惑。关于线程、主存(main memory)、工作内存(working memory)，我都能找到实际映射的硬件：线程可能对应着一个内核线程，主存对应着内存，而工作内存则涵盖了写缓冲区、缓存(cache)、寄存器等一系列为了提高数据存取效率的<strong>暂存区域</strong>。但是，一提到<strong>happens-before原则</strong>，就让人有点“丈二和尚摸不着头脑”。这个涵盖了整个<code>JMM</code>中可见性原则的规则，究竟如何理解，把我个人一些理解记录下来。</p>
+<p>两个操作间具有happens-before关系，并不意味着前一个操作必须要在后一个操作之前执行。happens-before仅仅要求前一个操作对后一个操作可见。</p>
+<p>这个说法我先后在好几本书中都看到过。也就是说，happens-before原则和一般意义上的<strong>时间先后</strong>是不同的。那究竟是什么呢？一步步来看。</p>
+<h3 id="顺序一致性内存模型">顺序一致性内存模型</h3>
+<p>我们先来看一个理想化的模型：顺序一致性(Sequentially Consistent)内存模型。在这个模型里，所有操作按程序的顺序来执行，并且每一个操作都是原子的，且立即对所有线程可见。</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1619329400922.png" alt="" loading="lazy"></figure>
+<p>这个系统中同一时间只有一个线程能读或写内存。也就是说，这个系统里的<strong>每两个指令之间，都严格按执行的先后，具有着happens-before关系</strong>。所有的线程，都能够看到一致的全局指令执行视图。如果将总线<a href="https://blog.csdn.net/zdxiq000/article/details/60874848#fn:1">1</a>看做是线程和内存之间的通道，那么顺序一致性模型就相当于在所有读/写内存的操作时，锁住总线。</p>
+<p>特别注意一点，顺序一致性模型，不代表多线程没有同步问题，只是每个操作之间不存在同步问题，如果你的操作是多个操作的集合体，照样不能安全工作。图中所示的是常见的自增操作，两个线程都有同样的执行视图：1-&gt;2-&gt;3-&gt;4-&gt;5-&gt;6。然而，线程A的写结果，依然被线程B所覆盖了。A线程读写固然对B线程立即可见，但是由于5/6的写操作对于内存的影响依赖于1/2的读操作，所以对于多线程仍然存在问题。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1619329407279.png" alt="" loading="lazy"></figure>
+<p>显然，顺序一致性模型是一种<strong>牺牲并行度、换取多线程对共享内存的可见性的一种理想模型</strong>。从JMM实现volatile以及synchronized的内存语义的方式，正是锁住总线或者说锁住线程自身存储(指working memory)。</p>
+<p><strong>Java内存模型</strong></p>
+<p>关于Java内存模型的书籍文章，汗牛充栋，想必大家也都有自己的理解。那就仅仅由上面的顺序一致性模型来引出JMM，看看具体区别在哪。<br>
+<img src="https://tianxiawuhao.github.io/post-images/1619329414528.png" alt="" loading="lazy"></p>
+<p>可以看出，工作内存是一个明显区别于顺序一致性内存模型的地方。事实上，造成可见性问题的根源之一，就在于这个工作内存（强调一下，包括缓存、写缓冲和寄存器等等）。工作内存使得每个线程都有了自己的私有存储，大部分时间对数据的存取工作都在这个区域完成。但是我们写一个数据，是直到数据写到主存中才算真正完成。实际上每个线程维护了一个<strong>副本</strong>，所有线程都在自己的工作内存中不断地读/写一个共享内存中的数据的副本。单线程情况下，这个副本不会造成任何问题；但一旦到多线程，有一个线程将变量写到主存，其他线程却不知道，其他线程的副本就都过期。比如，由于工作内存的存在，程序员写的一段代码，写一个普通的共享变量，其可能先被写到缓冲区，那指令完成的时间就被推迟了，实际表现也就是我们常说的“指令重排序”（这实际上是内存模型层面的重排序，重排序还可能是编译器、机器指令层级上的乱序）。</p>
+<p>因此，在Java内存模型中，每个线程不再像顺序一致性模型中那样有确定的指令执行视图，一个指令可能被重排了。从一个线程的角度看，其他线程（甚至是这个线程本身）执行的指令顺序有多种可能性，也就是说，一个线程的执行结果对其他线程的可见性无法保证。</p>
+<p>总结一下导致可见性问题的原因：</p>
+<ol>
+<li>数据的写无法及时通知到别的线程，如写缓冲区的引入</li>
+<li>线程不能及时读到其他线程对共享变量的修改，如缓存的使用</li>
+<li>各种层级上对指令的重排序，导致指令执行的顺序无法确定</li>
+</ol>
+<p>所以要解决可见性问题，本质是要让线程对共享变量的修改，及时同步到其他线程。我们所使用的硬件架构下，不具备顺序一致性内存模型的全局一致的指令执行顺序，<strong>讨论指令执行的时间先后并不存在意义或者说根本没办法确定时间上的先后</strong>。可以看看下面程序，每个线程中的flag副本会在多久后被更新呢？答案是：无法确定，看线程何时刷新自己的工作内存。</p>
+<pre><code class="language-java">public class testVisibility {
+    public static boolean flag = false;
+
+    public static void main(String[] args) {
+        List&lt;Thread&gt; thdList = new ArrayList&lt;Thread&gt;();
+        for(int i = 0; i &lt; 10; i++) {
+            Thread t = new Thread(new Runnable(){
+                public void run() {
+                    while (true) {
+                        if (flag) {
+                            // 多运行几次，可能并不会打印出来也可能会打印出来
+                            // 如果不打印，则表示Thread看到的仍然是工作内存中的flag
+                            // 可以尝试将flag变成volatile再运行几次看看
+                                  System.out.println(Thread.currentThread().getId() + &quot; is true now&quot;); 
+                        }
+                    }
+                }
+            });
+            t.start();
+            thdList.add(t);
+        }
+
+        flag = true;
+        System.out.println(&quot;set flag true&quot;);
+
+        // 等待线程执行完毕
+        try {
+            for (Thread t : thdList) {
+                t.join();
+            }
+        } catch (Exception e) {
+
+        }
+    }
+}
+</code></pre>
+<p>那么既然我们无法讨论指令执行的先后，也不需要讨论，我们实际只想知道某线程的操作对另一个线程是否可见，于是就规定了happens-before这个<strong>可见性原则</strong>，程序员可以基于这个原则进行可见性的判断。</p>
+<h3 id="volatile变量">volatile变量</h3>
+<p>volatile就是一个践行happens-before的关键字。看以下对volatile的描述，就不难知道，happens-before指的是线程<strong>接收其他线程修改共享变量的消息</strong>与该线程<strong>读取共享变量</strong>的<strong>先后关系</strong>。大家可以再细想一下，如果没有happens-before原则，岂不是相当于一个线程读取自己的共享变量副本时，其他线程修改这个变量的消息还没有同步过来？这就是可见性问题。</p>
+<p><strong>volatile变量规则</strong>：对一个volatile的写，happens-before于任意后续对这个volatile变量的读。</p>
+<p><strong>线程A写一个volatile变量</strong>，实质上是线程A向接下来要获取这个锁的某个线程发出了（线程A对共享变量修改的）消息。</p>
+<p><strong>线程B读一个volatile变量</strong>，实质上是线程B接收了之前某个线程发出的（对共享变量所做修改的）消息。</p>
+<p><strong>线程A写一个volatile变量，随后线程B读这个变量</strong>，这个过程实质上是线程A通过主内存向线程B发送消息。</p>
+<p>其实仔细看看volatile的实现方式，实际上就是限制了重排序的范围——加入内存屏障(Memory Barrier or Memory Fence)。也即是说，允许指令执行的时间先后顺序在一定范围内发生变化，而这个范围就是根据happens-before原则来规定。内存屏障概括起来有两个功能：</p>
+<ol>
+<li>使写缓冲区的内容刷新到内存，保证对其他线程/CPU可见</li>
+<li>禁止读写操作的越过内存屏障进行重排序</li>
+</ol>
+<p>每个volatile写操作的前面插入一个<code>StoreStore</code>屏障</p>
+<p>每个volatile写操作的后面插入一个<code>StoreLoad</code>屏障</p>
+<p>每个volatile读操作的后面插入一个<code>LoadLoad</code>屏障</p>
+<p>每个volatile读操作的后面插入一个<code>LoadStore</code>屏障</p>
+<p>关于内存屏障的种类，这里不是研究的重点。一直困扰我的是，在多处理器系统下，这个屏障如何能跨越处理器来阻止操作执行的顺序呢？比如下面的读写操作：</p>
+<pre><code class="language-java">public static volatile int race = 0;
+// Thread A
+public static void save(int src) {
+    race = src;
+}
+// Thread B
+public static int load() {
+    return race;
+}
+</code></pre>
+<p>这就要提到从操作系统到硬件层面的观念转换，可以参看总线事务（Bus transaction）的概念。当CPU要与内存进行数据交换的时候，实际上总线会同步数据交换操作，同一时刻只能有一个CPU进行读/写内存，所以我们所看到的多处理器并行，并行的是CPU的计算资源。在总线看来，对于存储的读写操作就是串行的，是按照一定顺序的。这也就是为什么一个内存屏障能够跨越处理器去限制读写、去完成通信。</p>
+<blockquote>
+<p>作者：<a href="https://blog.csdn.net/zdxiq000">zdxiq000</a></p>
+<p>原文地址：https://blog.csdn.net/zdxiq000/article/details/60874848</p>
+</blockquote>
+
+            </div>
+            <hr style="width: 80%;">
+            
+            
+            <div class="postfooter">
+                <ul class="post-copyright">
+                    <li><strong>文章作者：</strong>wuhao</li>
+            <li><strong>原文链接：</strong>https://tianxiawuhao.github.io/post/67CnuNlVA/</li>
+            <li><strong>版权声明：</strong>本博客所有文章除特别声明外，均采用<i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA
+                许可协议。转载请注明出处！</li>
+            </ul>
+        </div>
+        <div id="otherpost">
+            
+            <a  data-pjax class="prev-post-pc" href="https://tianxiawuhao.github.io/post/XX7ov4ybF/"  style="color: black;">
+                <div id="ppcontainer">
+                    
+                    <img src="https://tianxiawuhao.github.io/post-images/XX7ov4ybF.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">Java中Volatile关键字详解</h4>
+                </div>
+            </a>
+            <div class="prev-post">
+                上一篇 <a  data-pjax href="https://tianxiawuhao.github.io/post/XX7ov4ybF/">Java中Volatile关键字详解</a>
+            </div>
+            
+            
+            <a data-pjax class="next-post-pc" href="https://tianxiawuhao.github.io/post/rNVfAh0Yb/"  style="color: black;">
+                <div id="npcontainer">
+                    
+                    <img src="https://tianxiawuhao.github.io/post-images/rNVfAh0Yb.png" style="width: 100%;" class="opimg">
+                    
+                    <h4 class="optitle">Java内存模型</h4>
+                </div>
+            </a>
+            <div class="next-post">
+                下一篇 <a  data-pjax href="https://tianxiawuhao.github.io/post/rNVfAh0Yb/">Java内存模型</a>
+            </div>
+            
+        </div>
+    </div>
+    </div>
+    </div>
+    <!-- 弹窗 -->
+    <div id="myModal" class="modal">
+        <img class="modal-content" id="img01">
+    </div>
+</body>
+<script>
+    //文章阅读热度
+    var pl = $("#pl").html();
+    var rootaddr = $("#rootaddr").html();
+    pl = pl.replace(rootaddr, "");
+    $("#hotnum").attr('id', pl);
+</script>
+                <div class="toc-container">
+                    <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#%E9%A1%BA%E5%BA%8F%E4%B8%80%E8%87%B4%E6%80%A7%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B">顺序一致性内存模型</a></li>
+<li><a href="#volatile%E5%8F%98%E9%87%8F">volatile变量</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+                </div>
+                <div class="tog">
+                    <div class="toggleContainer">
+                        <div class="toggle">
+                            <i class="fas fa-angle-double-up"></i>
+                        </div>
+                    </div>
+                </div>
+                <div id="comment" class="comment" style="background: white">
+                    <div class="commentcontainer">
+                        
+                        <p>请到客户端“主题--自定义配置--valine”中填入ID和KEY</p>
+                        
+                    </div>
+                </div>
+                <div style="margin-top:5vh">
+                    
+                        <style>
+    .copyright {
+        font-size: 15px;
+        color: #d9d9d9;
+    }
+
+
+    @media screen and (min-width: 1200px) {
+        .foot {
+            width: 100%;
+            height: 130px;
+        }
+    }
+
+    @media screen and (max-width: 1200px) {
+        .foot {
+            display: none;
+        }
+    }
+</style>
+
+<body>
+    <div class="foot">
+        <div id="footinfo">Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | Theme: <a
+                href="https://github.com/850552586/gridea-theme-fog">Fog</a>
+            <div>
+                
+                <div id="sitegotimeDate">载入天数...</div>
+                <div id="sitegotimes">载入时分秒...</div>
+                <div id="cussitetime" style="display:none">04/02/2021</div>
+                
+            </div>
+            <div>
+                
+            </div>
+            <div class="copyright" style="color:white;text-align: center;">Copyright © 2021
+            </div>
+        </div>
+
+
+
+    </div>
+</body>
+
+<script>
+    //----------------------站点运行时间
+    var now = new Date();
+
+    function createtime() {
+        var sitegotime = document.getElementById("cussitetime").innerHTML + " 00:00:00";
+        var grt = new Date(sitegotime); //此处修改你的建站时间或者网站上线时间 
+        now.setTime(now.getTime() + 250);
+        days = (now - grt) / 1000 / 60 / 60 / 24;
+        dnum = Math.floor(days);
+        hours = (now - grt) / 1000 / 60 / 60 - (24 * dnum);
+        hnum = Math.floor(hours);
+        if (String(hnum).length == 1) {
+            hnum = "0" + hnum;
+        }
+        minutes = (now - grt) / 1000 / 60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes);
+        if (String(mnum).length == 1) {
+            mnum = "0" + mnum;
+        }
+        seconds = (now - grt) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds);
+        if (String(snum).length == 1) {
+            snum = "0" + snum;
+        }
+        document.getElementById("sitegotimeDate").innerHTML = "本站已安全运行 " + dnum + " 天 ";
+        document.getElementById("sitegotimes").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+    }
+
+    let intervalId = setInterval("createtime()", 250);
+</script>
+
+                        
+                </div>
+            </div>
+            <div class="col-md-2 col-lg-3">
+            </div>
+            <div id="bg">
+            </div>
+        </div>
+        
+        
+        <head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.css">
+</head>
+
+<body>
+    <div class="miniMode">
+        <meting-js id="myaplayer" server="netease" type="playlist" fixed="true" order="default">
+        </meting-js>
+    </div>
+</body>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.2.1/dist/jquery.min.js"></script>
+<script>
+    function aplayerInit() {
+        var aplayerid = "";
+        var aplayerserver = "netease";
+        var aplayerorder = "default";
+        var aplayerautoplay = "false";
+        var aplayer = $("#myaplayer");
+        aplayer.attr("server", aplayerserver);
+        aplayer.attr("id", aplayerid);
+        aplayer.attr("order", aplayerorder);
+        if (aplayerautoplay == "true")
+            aplayer.attr("autoplay", "true");
+    }
+    aplayerInit();
+</script>
+
+<script src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/Aplayer.min.js"></script>
+<!-- require MetingJS -->
+<script src="https://cdn.jsdelivr.net/npm/meting@2/dist/Meting.min.js"></script>
+
+<script>
+    function aplayerbtnInit() {
+        var player = document.querySelectorAll('meting-js')[0].aplayer;
+        if(player==undefined)return false;
+        player.lrc.hide();
+        var mbabtn = $("#mbaplayer");
+        if (player.paused == false) {
+            mbabtn.removeClass("fa-play-circle-o");
+            mbabtn.addClass("fa-pause-circle");
+        } else {
+            mbabtn.addClass("fa-play-circle-o");
+            mbabtn.removeClass("fa-pause-circle");
+        }
+    }
+
+    function aplayerPlay() {
+        var player = document.querySelectorAll('meting-js')[0].aplayer;
+        var mbabtn = $("#mbaplayer");
+        if (player.paused == true) {
+            player.play();
+            mbabtn.removeClass("fa-play-circle-o");
+            mbabtn.addClass("fa-pause-circle");
+        } else {
+            player.pause();
+            mbabtn.addClass("fa-play-circle-o");
+            mbabtn.removeClass("fa-pause-circle");
+        }
+    }
+</script>
+        
+    </div>
+    
+    <div id="bgchoice" style="display: none">link
+    </div>
+    
+    <div id="bgurl" style="display:none">https://img.imgdb.cn/item/608121be563420b64787c1d5.jpg</div>
+    
+</body>
+<script>
+    var img = $("img");
+    for (var i = 0; i < img.length; i++) {
+        if (img.eq(i).attr("class") == undefined) {
+            img.eq(i).attr("class", "lazyload");
+            var imgsrc = img.eq(i).attr("src");
+            img.eq(i).attr("data-original", imgsrc);
+            img.eq(i).attr("src", "");
+            img.eq(i).hide();
+        }
+    }
+
+    function refreshImg(imgclass) {
+        // 获取弹窗
+        var modal = document.getElementById('myModal');
+
+        // 获取图片插入到弹窗 - 使用 "alt" 属性作为文本部分的内容
+        var img = document.getElementsByClassName(imgclass);
+        var modalImg = document.getElementById("img01");
+        var captionText = document.getElementById("caption");
+        for (var i in img) {
+            img[i].onclick = function () {
+                modal.style.display = "block";
+                modalImg.src = this.src;
+            }
+        }
+
+        // 图片关闭
+        var modalImg = document.getElementById('img01');
+        // 鼠标点击模型外区域关闭登录框
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+            if (menupos == 'left')
+                return true;
+            if (event.target == social) {
+                social.style.display = "none";
+            }
+        }
+    }
+
+</script>
+<script>
+    hljs.initHighlightingOnLoad();
+</script>
+<script>
+    //寻找所有code标签，加复制按钮鸭！(行内代码除外)
+    var codes = document.getElementsByTagName('code');
+    if (codes.length) {
+        for (var i = 0; i < codes.length; i++) {
+            //高度/行高=文本行数
+            // var rowNum=Math.round(codes[i].height()/parseFloat(codes[i].css('line-height')));
+            // console.log("当前有"+rowNum+"行");
+            var code_id = "code_id_" + i;
+            codes[i].setAttribute("id", code_id);
+            var ci = "#" + code_id;
+            var codedot = $(ci);
+            var rowNum = Math.round(codedot.height() / parseFloat(codedot.css('line-height')));
+            if (rowNum <= 1) continue;
+            var btn = document.createElement("button");
+            btn.setAttribute("class", "copybt");
+            btn.setAttribute("data-clipboard-target", "#" + code_id);
+            btn.innerHTML = '复制代码';
+            codes[i].parentNode.insertBefore(btn, codes[i]);
+        }
+    };
+    var cop = new ClipboardJS('.copybt');
+    cop.on('success', function (e) {
+        e.trigger.innerHTML = "复制成功~"
+        e.trigger.style.background = "#894e54"
+        e.clearSelection();
+    });
+    cop.on('error', function (e) {
+        e.clearSelection();
+    });
+</script>
+
+<script type="text/javascript">
+    var message_Path = '/live2d/'
+    var home_Path = document.getElementById("domainname").innerHTML + "/"; //此处修改为你的域名，必须带斜杠
+</script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/js/live2d.js"></script>
+<script type="text/javascript" src="https://tianxiawuhao.github.io/media/live2d/js/message.js"></script>
+<script type="text/javascript">
+    loadlive2d("live2d", "https://tianxiawuhao.github.io/media/live2d/assets/tororo.model.json");
+</script>
+
+<script>
+    $(function () {
+        $('.toggleContainer').click(function () {
+            $('html,body').animate({
+                scrollTop: '0px'
+            }, 800);
+        });
+        $(window).scroll(function () {
+            var st = $(window).scrollTop();
+            if (st > 30) {
+                $(".toggleContainer").fadeIn(400);
+            } else {
+                $(".toggleContainer").fadeOut(100);
+            }
+        });
+    });
+</script>
+
+<script>
+    var bgchoice = $('#bgchoice').html();
+    var bg = $('#bg');
+    var bgurl = document.getElementById("bgurl").innerHTML;
+    if (bgchoice == 'default')
+        for (var i = 0; i < 3; i++)
+            bgurl = bgurl.replace("\\", "/");
+    bg.css("background", "url('" + bgurl + "')");
+</script>
+
+
+
+
+<!-- 动态更改上(下)一篇博客图片框长宽 -->
+<script>
+    npcontainer = document.querySelector('#npcontainer');
+    npstyle = window.getComputedStyle(npcontainer, null);
+    npwidth = npstyle.width;
+    npheight = 0.6 * Number(npwidth.replace("px", ""));
+    npheight = npheight.toString() + "px";
+    var op = $(".opimg");
+    op.css("height", npheight);
+</script>
+
+<script src="https://tianxiawuhao.github.io/media/share/dist/Share.js"></script>
+
+<script>
+    var avatarSrc = $(".menutopavatar").attr("src");
+    var dp = document.getElementsByClassName("navbar-brand")[1].innerHTML;
+</script>
+
+
+<script>
+    var title = document.getElementById("texttitle").getElementsByTagName("h2");
+
+    var share = new Share('.share', {
+        title: title[0].innerHTML,
+        initialized: true,
+        //默认获取网站描述
+        description: dp,
+        //网站图片默认获取的是设置的用户头像
+        image: avatarSrc,
+        //激活的分享网站
+        sites: ["weibo", "qq", "wechat", "douban", "qzone", "facebook", "twitter", "google"],
+        //微信分享PC端会生成二维码分享,移动端如果可以唤起微信最好
+        wechatQrcodeTitle: "微信扫一扫：分享", // 微信二维码提示文字
+        wechatQrcodeHelper: '<p>微信里扫一下二维码</p><p>便可将本文分享至朋友圈。</p>',
+        //关闭的网站分享
+        disabled: ['google', 'linkedin'],
+        wechatQrcodePosition: 'bottom'
+    });
+
+    //点击分享按钮展现出分享icons
+    var sharebtnTag = false;
+    $(".sharebtn").click(function () {
+        if (!sharebtnTag) {
+            $(".share").show();
+            sharebtnTag = true;
+        }
+        else {
+            $(".share").hide();
+            sharebtnTag = false;
+        }
+    })
+
+    var donatebtnTag = false;
+    $(".donateImg").click(function () {
+        if (!donatebtnTag) {
+            $(".donate").show();
+            donatebtnTag = true;
+        }
+        else {
+            $(".donate").hide();
+            donatebtnTag = false;
+        }
+    })
+
+    //加载后的事件同步（阅读量、移动端评论等
+    window.onload = function () {
+        getHotnum();
+        var sharepc = $(".share").eq(0).html();
+        $(".share").eq(1).html(sharepc);
+        document.getElementById("veditor").setAttribute("placeholder", jrsc);
+        aplayerbtnInit();
+    }
+</script>
+
+
+<script>
+    jQuery(document).ready(function ($) {
+        function lazyload() {
+            var oLazyload = $("img.lazyload"),
+                fLazyload = function (hLazyload) {
+                    var nLazyload = $(window).height() + $(document).scrollTop();
+                    oLazyload.each(function () {
+                        $(this).offset().top < nLazyload && ($(this).trigger("appear"), oLazyload =
+                            oLazyload.not(this));
+                    }), 0 == oLazyload.length && $(window).unbind("scroll", fLazyload);
+                };
+            oLazyload.each(function () {
+                $(this).one("appear", function () {
+                    $(this).attr("src", $(this).attr("data-original"));
+                    $(this).fadeIn(500);
+                });
+            }), $(window).bind("scroll", fLazyload), fLazyload();
+        }
+        lazyload();
+        refreshImg("lazyload");
+    });
+</script>
+
+<!-- <script src="https://tianxiawuhao.github.io/media/js/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@3.13.0/dist/av-min.js"></script> -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.6.1/dist/av-live-query-min.js"></script> -->
+
