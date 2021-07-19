@@ -74,7 +74,7 @@
         
         <li class="nav-item">
           <div class="gridea-search-container">
-            <form id="gridea-search-form" style="position: relative" data-update="1620870228287"
+            <form id="gridea-search-form" style="position: relative" data-update="1626662478703"
               action="/search/index.html">
               <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
               <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
@@ -124,7 +124,7 @@
         
         <li class="nav-item">
           <div class="gridea-search-container">
-            <form id="gridea-search-form" style="position: relative" data-update="1620870228287"
+            <form id="gridea-search-form" style="position: relative" data-update="1626662478703"
               action="/search/index.html">
               <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
               <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
@@ -153,7 +153,7 @@
               <h1>附录 kafka常见面试问题汇总</h1>
               <span class="meta">
                 Posted on
-                2021-04-23，21 min read
+                2021-04-22，29 min read
               </span>
             </div>
           
@@ -171,27 +171,67 @@
           <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/aFuh1RRNc.png" alt="封面图">
           </img>
           
-          <h1 id="基础题目">基础题目</h1>
-<h2 id="1-apache-kafka-是什么">1、Apache Kafka 是什么?</h2>
+          <h2 id="基础题目">基础题目</h2>
+<h3 id="1-apache-kafka-是什么">1、Apache Kafka 是什么?</h3>
 <p>Apach Kafka 是一款分布式流处理框架，用于实时构建流处理应用。它有一个核心 的功能广为人知，即作为企业级的消息引擎被广泛使用。</p>
 <p>你一定要先明确它的流处理框架地位，这样能给面试官留 下一个很专业的印象。</p>
-<h2 id="2-什么是消费者组">2、什么是消费者组?</h2>
+<h3 id="2-什么是消费者组">2、什么是消费者组?</h3>
 <p>消费者组是 Kafka 独有的概念，如果面试官问这 个，就说明他对此是有一定了解的。我先给出标准答案：<br>
 1、定义：即消费者组是 Kafka 提供的可扩展且具有容错性的消费者机制。<br>
 2、原理：在 Kafka 中，消费者组是一个由多个消费者实例 构成的组。多个实例共同订阅若干个主题，实现共同消费。同一个组下的每个实例都配置有 相同的组 ID，被分配不同的订阅分区。当某个实例挂掉的时候，其他实例会自动地承担起 它负责消费的分区。</p>
-<p>此时，又有一个小技巧给到你:消费者组的题目，能够帮你在某种程度上掌控下面的面试方<br>
-向。</p>
-<ul>
-<li>如果你擅长位移值原理，就不妨再提一下<strong>消费者组的位移提交机制</strong>;</li>
-<li>如果你擅长 Kafka Broker，可以提一下<strong>消费者组与 Broker 之间的交互</strong>;</li>
-<li>如果你擅长与消费者组完全不相关的 Producer，那么就可以这么说:“<strong>消费者组要消 费的数据完全来自于 Producer 端生产的消息，我对 Producer 还是比较熟悉的</strong>。”</li>
-</ul>
-<h2 id="3-在-kafka-中zookeeper-的作用是什么">3、在 Kafka 中，ZooKeeper 的作用是什么?</h2>
-<p>这是一道能够帮助你脱颖而出的题目。碰到这个题目，请在心中暗笑三声。</p>
+<p>此时，又有一个小技巧给到你:消费者组的题目，能够帮你在某种程度上掌控下面的面试方向。</p>
+<h4 id="21消费者组的位移提交机制">2.1消费者组的位移提交机制</h4>
+<p>broker维护消费者的消费位移信息，老的版本存储在zk上，新版本存储在内部的topic里。本质上，位移信息消费者自己维护也可以，但是如果消费者挂了或者重启，对于某一个分区的消费位移不就丢失了吗？所以，还是需要提交到broker端做持久化的。<br>
+<strong>提交方式分为自动和手动。</strong><br>
+自动是默认的行为，当然可以通过配置覆盖关掉自动提交。自动提交是consumer以一个时间间隔周期性地提交offset，比如每隔5s提交一次。提交发生的时机是poll调用时，会将上一次消费的位移信息提交到broker。自动提交的弊端在于有时间间隔，可能导致重复消费。比如5s提交一次，运行到第3s时，consumer断电挂了或者重平衡了，那么这3s内消费的消息可能没有提交上去，新的consumer再消费这个分区时，就会重复消费。<br>
+为了避免间隔导致的重复消费，我们可以每消费一条消息就提交一次，也就是手动调用commitSync提交。这样当然是最稳的，但是手动commitSync提交是同步阻塞式的，一次不成功，会导致重试，会在一定程度上影响性能。kafka还提供了一个异步版本commitAsync，这个方法是异步提交，性能问题基本忽略，但是如果提交失败并不会重试。（为啥？因为异步提交，如果重试的话，很可能已经有新的提交了，此时异步提交是一个老的位移，会导致重复消费）。那咋整呢？一般会推荐sync+async结合的方式。</p>
+<pre><code class="language-java">  while(true){
+      poll()
+      consume()
+      async commit()
+  }
+  sync commit()
+</code></pre>
+<p>也就是while循环里异步提交，即使有一次失败了，没关系，后面的异步提交总会成功的。但是如果是退出了，那么必须来一次同步提交，确保退出前的位移可以被提交。</p>
+<h4 id="22消费者组与-broker-之间的交互">2.2消费者组与 Broker 之间的交互</h4>
+<ol>
+<li>
+<p>Kafka中消费者的消费方式</p>
+<p>consumer采用pull(拉)模式从broker中读取数据。 拉取模式也有不足，如果kafka没有数据，消费者可能会陷入循环中，一直返回空数据。针对这一点，kafka消费者在消费数据时会传入一个时长参数timeout，如果当前没有数据可供消费，consumer会等待一段时间后再返回，这段时长即为timeout</p>
+</li>
+<li>
+<p>Kafka的分区分配策略</p>
+<p>一个消费者组中有多个消费者，一个broker有多个分区，所有必然会涉及到分区分配问题，即确定哪一个分区由哪一个consumer来消费。kafka有两种分区分配策略：RoundRobin和Range</p>
+<p><strong>Range（默认策略）</strong></p>
+<p>Range是<strong>对每个Topic而言</strong>的（即一个Topic一个Topic分），首先对同一个Topic里面的分区按照序号进行排序，并对消费者按照字母顺序进行排序。然后用Partitions分区的个数除以消费者线程的总数来决定每个消费者线程消费几个分区。如果除不尽，那么前面几个消费者线程将会多消费一个分区。</p>
+<p>假设n=分区数/消费者数量，m=分区数%消费者数量，那么前m个消费者每个分配n+1个分区，后面的（消费者数量-m）个消费者每个分配n个分区。</p>
+<p>假如有10个分区，3个消费者线程，把分区按照序号排列0，1，2，3，4，5，6，7，8，9；消费者线程为C1-0，C2-0，C2-1，那么用partition数除以消费者线程的总数来决定每个消费者线程消费几个partition，如果除不尽，前面几个消费者将会多消费一个分区。在我们的例子里面，我们有10个分区，3个消费者线程，10/3 = 3，而且除除不尽，那么消费者线程C1-0将会多消费一个分区，所以最后分区分配的结果看起来是这样的：</p>
+<pre><code>C1-0：0，1，2，3
+C2-0：4，5，6
+C2-1：7，8，9
+</code></pre>
+<p><strong>RoundRobin</strong></p>
+<p><code>RoundRobinAssignor</code>策略的原理是将消费组内所有消费者以及消费者所订阅的所有topic的partition按照字典序排序，然后通过轮询方式逐个将分区以此分配给每个消费者。<code>RoundRobinAssignor</code>策略对应的<code>partition.assignment.strategy</code>参数值为：<code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>。</p>
+<p>使用RoundRobin策略有两个前提条件必须满足：</p>
+<ol>
+<li>同一个消费者组里面的所有消费者的num.streams（消费者消费线程数）必须相等；</li>
+<li>每个消费者订阅的主题必须相同。</li>
+</ol>
+<p>所以这里假设前面提到的2个消费者的num.streams = 2。RoundRobin策略的工作原理：将所有主题的分区组成 TopicAndPartition 列表，然后对 TopicAndPartition 列表按照 hashCode 进行排序,在我们的例子里面，按照 hashCode 排序完的topic-partitions组依次为T1-5, T1-3, T1-0, T1-8, T1-2, T1-1, T1-4, T1-7, T1-6, T1-9，我们的消费者线程排序为C1-0, C1-1, C2-0, C2-1，最后分区分配的结果为：</p>
+<pre><code>C1-0 将消费 T1-5, T1-2, T1-6 分区；
+C1-1 将消费 T1-3, T1-1, T1-9 分区；
+C2-0 将消费 T1-0, T1-4 分区；
+C2-1 将消费 T1-8, T1-7 分区；
+</code></pre>
+<p><strong>offset的维护</strong></p>
+<p>由于kafka可能出现故障，故障之后要恢复到上一次消费的位置，往下继续进行消费。因此consumer需要实时记录自己消费到了哪一个offset，从0.9版本开始，consumer默认将offset保存在kafka的内置topic中，该topic为_consumer_offsets（0.9版本前放在zookeeper中）</p>
+</li>
+</ol>
+<h3 id="3-在-kafka-中zookeeper-的作用是什么">3、在 Kafka 中，ZooKeeper 的作用是什么?</h3>
 <p>目前，Kafka 使用 ZooKeeper 存放集群元数据、成员管理、Controller 选举，以及其他一些管理类任务。之后，等 KIP-500 提案完成后，Kafka 将完全不再依赖 于 ZooKeeper。</p>
 <p>记住，<strong>一定要突出“目前”</strong>，以彰显你非常了解社区的演进计划。“存放元数据”是指主题 分区的所有数据都保存在 ZooKeeper 中，且以它保存的数据为权威，其他“人”都要与它 保持对齐。“成员管理”是指 Broker 节点的注册、注销以及属性变更，等 等。“Controller 选举”是指选举集群 Controller，而其他管理类任务包括但不限于主题 删除、参数配置等。</p>
-<p>不过，抛出 KIP-500 也可能是个双刃剑。碰到非常资深的面试官，他可能会进一步追问你 KIP-500 是做的。一言以蔽之:<strong>KIP-500 思想，是使用社区自研的基于 Raft 的共识算法， 替代 ZooKeeper，实现 Controller 自选举</strong>。</p>
-<h2 id="4-解释下-kafka-中位移offset的作用">4、解释下 Kafka 中位移(offset)的作用</h2>
+<p>不过，抛出 KIP-500 也可能是个双刃剑。碰到非常资深的面试官，他可能会进一步追问你 KIP-500 是怎么做的。一言以蔽之:<strong>KIP-500 思想，是使用社区自研的基于 Raft 的共识算法， 替代 ZooKeeper，实现 Controller 自选举</strong>。</p>
+<h3 id="4-解释下-kafka-中位移offset的作用">4、解释下 Kafka 中位移(offset)的作用</h3>
 <p>在 Kafka 中，每个 主题分区下的每条消息都被赋予了一个唯一的 ID 数值，用于标识它在分区中的位置。这个 ID 数值，就被称为位移，或者叫偏移量。一旦消息被写入到分区日志，它的位移值将不能 被修改。</p>
 <p>答完这些之后，你还可以把整个面试方向转移到你希望的地方。常见方法有以下 3 种:</p>
 <ol>
@@ -199,7 +239,7 @@
 <li>如果你明白位移值一旦被确定不能修改，可以强调下“Log Cleaner 组件都不能影响位 移值”这件事情;</li>
 <li>如果你对消费者的概念还算熟悉，可以再详细说说位移值和消费者位移值之间的区别。</li>
 </ol>
-<h2 id="5-阐述下-kafka-中的领导者副本leader-replica和追随者副本-follower-replica的区别">5、阐述下 Kafka 中的领导者副本(Leader Replica)和追随者副本 (Follower Replica)的区别</h2>
+<h3 id="5-partition的leader-replica和follower-replica的区别">5、Partition的Leader Replica和Follower Replica的区别</h3>
 <p>这道题表面上是考核你对 Leader 和 Follower 区别的理解，但很容易引申到 Kafka 的同步 机制上。因此，我建议你主动出击，一次性地把隐含的考点也答出来，也许能够暂时把面试 官“唬住”，并体现你的专业性。</p>
 <p>你可以这么回答:<strong>Kafka 副本当前分为领导者副本和追随者副本。只有 Leader 副本才能 对外提供读写服务，响应 Clients 端的请求。Follower 副本只是采用拉(PULL)的方 式，被动地同步 Leader 副本中的数据，并且在 Leader 副本所在的 Broker 宕机后，随时 准备应聘 Leader 副本。</strong></p>
 <p>通常来说，回答到这个程度，其实才只说了 60%，因此，我建议你再回答两个额外的加分 项。</p>
@@ -207,39 +247,8 @@
 <li><strong>强调 Follower 副本也能对外提供读服务</strong>。自 Kafka 2.4 版本开始，社区通过引入新的 Broker 端参数，允许 Follower 副本有限度地提供读服务。</li>
 <li><strong>强调 Leader 和 Follower 的消息序列在实际场景中不一致</strong>。很多原因都可能造成 Leader 和 Follower 保存的消息序列不一致，比如程序 Bug、网络问题等。这是很严重 的错误，必须要完全规避。你可以补充下，之前确保一致性的主要手段是高水位机制， 但高水位值无法保证 Leader 连续变更场景下的数据一致性，因此，社区引入了 Leader Epoch 机制，来修复高水位值的弊端。关于“Leader Epoch 机制”，国内的资料不是 很多，它的普及度远不如高水位，不妨大胆地把这个概念秀出来，力求惊艳一把。</li>
 </ul>
-<h1 id="实操题目">实操题目</h1>
-<h2 id="6-如何设置-kafka-能接收的最大消息的大小">6、如何设置 Kafka 能接收的最大消息的大小?</h2>
-<p><strong>这道题除了要回答消费者端的参数设置之外，一定要加上 Broker 端的设置，这样才算完整</strong>。毕竟，如果 Producer 都不能向 Broker 端发送数据很大的消息，又何来消费一说呢? 因此，你需要同时设置 Broker 端参数和 Consumer 端参数。</p>
-<ul>
-<li>Broker 端参数:message.max.bytes、max.message.bytes(主题级别)和 replica.fetch.max.bytes。</li>
-<li>Consumer 端参数:fetch.message.max.bytes。</li>
-</ul>
-<p>Broker 端的最后一个参数比较容易遗漏。我们必须调整 Follower 副本能够接收的最大消 息的大小，否则，副本同步就会失败。因此，把这个答出来的话，就是一个加分项。</p>
-<h2 id="7-监控-kafka-的框架都有哪些">7、监控 Kafka 的框架都有哪些?</h2>
-<p>面试官其实是在 考察你对监控框架的了解广度，或者说，你是否知道很多能监控 Kafka 的框架或方法。下 面这些就是 Kafka 发展历程上比较有名气的监控系统。</p>
-<ol>
-<li><strong>Kafka Manager</strong>:应该算是最有名的专属 Kafka 监控框架了，是独立的监控系统。</li>
-<li><strong>Kafka Monitor</strong>:LinkedIn 开源的免费框架，支持对集群进行系统测试，并实时监控测<br>
-试结果。</li>
-<li><strong>CruiseControl</strong>:也是 LinkedIn 公司开源的监控框架，用于实时监测资源使用率，以及 提供常用运维操作等。无 UI 界面，只提供 REST API。</li>
-<li><strong>JMX 监控</strong>:由于 Kafka 提供的监控指标都是基于 JMX 的，因此，市面上任何能够集成 JMX 的框架都可以使用，比如 Zabbix 和 Prometheus。</li>
-<li><strong>已有大数据平台自己的监控体系</strong>:像 Cloudera 提供的 CDH 这类大数据平台，天然就提 供 Kafka 监控方案。</li>
-<li><strong>JMXTool</strong>:社区提供的命令行工具，能够实时监控 JMX 指标。答上这一条，属于绝对 的加分项，因为知道的人很少，而且会给人一种你对 Kafka 工具非常熟悉的感觉。如果 你暂时不了解它的用法，可以在命令行以无参数方式执行一下kafka-run-class.sh kafka.tools.JmxTool，学习下它的用法。</li>
-</ol>
-<h2 id="8-broker-的-heap-size-如何设置">8、Broker 的 Heap Size 如何设置?</h2>
-<p>如何设置 Heap Size 的问题，其实和 Kafka 关系不大，它是一类非常通用的面试题目。一 旦你应对不当，面试方向很有可能被引到 JVM 和 GC 上去，那样的话，你被问住的几率就 会增大。因此，我建议你简单地介绍一下 Heap Size 的设置方法，并把重点放在 Kafka Broker 堆大小设置的最佳实践上。</p>
-<p>比如，你可以这样回复:<strong>任何 Java 进程 JVM 堆大小的设置都需要仔细地进行考量和测 试。一个常见的做法是，以默认的初始 JVM 堆大小运行程序，当系统达到稳定状态后，手动触发一次 Full GC，然后通过 JVM 工具查看 GC 后的存活对象大小。之后，将堆大小设 置成存活对象总大小的 1.5~2 倍。对于 Kafka 而言，这个方法也是适用的。不过，业界有 个最佳实践，那就是将 Broker 的 Heap Size 固定为 6GB。经过很多公司的验证，这个大 小是足够且良好的。</strong></p>
-<h2 id="9-如何估算-kafka-集群的机器数量">9、如何估算 Kafka 集群的机器数量?</h2>
-<p>这道题目考查的是<strong>机器数量和所用资源之间的关联关系</strong>。所谓资源，也就是 CPU、内存、磁盘和带宽。</p>
-<p>通常来说，CPU 和内存资源的充足是比较容易保证的，因此，你需要从磁盘空间和带宽占用两个维度去评估机器数量。</p>
-<p>在预估磁盘的占用时，你一定不要忘记计算副本同步的开销。如果一条消息占用 1KB 的磁 盘空间，那么，在有 3 个副本的主题中，你就需要 3KB 的总空间来保存这条消息。显式地 将这些考虑因素答出来，能够彰显你考虑问题的全面性，是一个难得的加分项。</p>
-<p>对于评估带宽来说，常见的带宽有 1Gbps 和 10Gbps，但你要切记，<strong>这两个数字仅仅是最大值</strong>。因此，你最好和面试官确认一下给定的带宽是多少。然后，明确阐述出当带宽占用接 近总带宽的 90% 时，丢包情形就会发生。这样能显示出你的网络基本功。</p>
-<h2 id="10-leader-总是-1怎么破">10、Leader 总是 -1，怎么破?</h2>
-<p>在生产环境中，你一定碰到过“某个主题分区不能工作了”的情形。使用命令行查看状态的 话，会发现 Leader 是 -1，于是，你使用各种命令都无济于事，最后只能用“重启大 法”。</p>
-<p>但是，有没有什么办法，可以不重启集群，就能解决此事呢?这就是此题的由来。</p>
-<p>我直接给答案:<strong>删除 ZooKeeper 节点 /controller，触发 Controller 重选举。 Controller 重选举能够为所有主题分区重刷分区状态，可以有效解决因不一致导致的 Leader 不可用问题</strong>。我几乎可以断定，当面试官问出此题时，要么就是他真的不知道怎么 解决在向你寻求答案，要么他就是在等你说出这个答案。所以，千万别一上来就说“来个重 启”之类的话。</p>
-<h1 id="炫技式题目">炫技式题目</h1>
-<h2 id="11-leo-lso-ar-isr-hw-都表示什么含义">11、LEO、LSO、AR、ISR、HW 都表示什么含义?</h2>
+<h2 id="炫技式题目">炫技式题目</h2>
+<h3 id="10-leo-lso-ar-isr-hw-都表示什么含义">10、LEO、LSO、AR、ISR、HW 都表示什么含义?</h3>
 <ul>
 <li><strong>LEO</strong>:Log End Offset。日志末端位移值或末端偏移量，表示日志下一条待插入消息的 位移值。举个例子，如果日志有 10 条消息，位移值从 0 开始，那么，第 10 条消息的位 移值就是 9。此时，LEO = 10。</li>
 <li><strong>LSO</strong>:Log Stable Offset。这是 Kafka 事务的概念。如果你没有使用到事务，那么这个 值不存在(其实也不是不存在，只是设置成一个无意义的值)。该值控制了事务型消费 者能够看到的消息范围。它经常与 Log Start Offset，即日志起始位移值相混淆，因为 有些人将后者缩写成 LSO，这是不对的。在 Kafka 中，LSO 就是指代 Log Stable Offset。</li>
@@ -247,18 +256,29 @@
 <li><strong>ISR</strong>:In-Sync Replicas。Kafka 中特别重要的概念，指代的是 AR 中那些与 Leader 保 持同步的副本集合。在 AR 中的副本可能不在 ISR 中，但 Leader 副本天然就包含在 ISR 中。关于 ISR，<strong>还有一个常见的面试题目是如何判断副本是否应该属于 ISR</strong>。目前的判断 依据是:<strong>Follower 副本的 LEO 落后 Leader LEO 的时间，是否超过了 Broker 端参数 replica.lag.time.max.ms 值</strong>。如果超过了，副本就会被从 ISR 中移除。</li>
 <li><strong>HW</strong>:高水位值(High watermark)。这是控制消费者可读取消息范围的重要字段。一 个普通消费者只能“看到”Leader 副本上介于 Log Start Offset 和 HW(不含)之间的 所有消息。水位以上的消息是对消费者不可见的。关于 HW，问法有很多，我能想到的 最高级的问法，就是让你完整地梳理下 Follower 副本拉取 Leader 副本、执行同步机制 的详细步骤。这就是我们的第 20 道题的题目，一会儿我会给出答案和解析。</li>
 </ul>
-<p>12、Kafka 能手动删除消息吗?<br>
-其实，Kafka 不需要用户手动删除消息。它本身提供了留存策略，能够自动删除过期消息。 当然，它是支持手动删除消息的。因此，你最好从这两个维度去回答。</p>
+<h3 id="11kafka-的-isr-机制是什么">11，Kafka 的 ISR 机制是什么?</h3>
+<p>这个机制简单来说，就是会自动给每个 Partition 维护一个 ISR 列表，这个列表里一定会有 Leader，然后还会包含跟 Leader 保持同步的 Follower。</p>
+<p>也就是说，只要 Leader 的某个 Follower 一直跟他保持数据同步，那么就会存在于 ISR 列表里。</p>
+<p>但是如果 Follower 因为自身发生一些问题，导致不能及时的从 Leader 同步数据过去，那么这个 Follower 就会被认为是“out-of-sync”，被从 ISR 列表里踢出去。</p>
+<p>所以大家先得明白这个 ISR 是什么，说白了，就是 Kafka 自动维护和监控哪些 Follower 及时的跟上了 Leader 的数据同步。</p>
+<h3 id="12kafka-写入的数据如何保证不丢失">12，Kafka 写入的数据如何保证不丢失?</h3>
+<p>所以如果要让写入 Kafka 的数据不丢失，你需要保证如下几点：</p>
 <ul>
-<li>对于设置了 Key 且参数 cleanup.policy=compact 的主题而言，我们可以构造一条 &lt;Key，null&gt; 的消息发送给 Broker，依靠 Log Cleaner 组件提供的功能删除掉该 Key 的消息。</li>
-<li>对于普通主题而言，我们可以使用 kafka-delete-records 命令，或编写程序调用 Admin.deleteRecords 方法来删除消息。这两种方法殊途同归，底层都是调用 Admin 的 deleteRecords 方法，通过将分区 Log Start Offset 值抬高的方式间接删除消息。</li>
+<li>每个 Partition 都至少得有 1 个 Follower 在 ISR 列表里，跟上了 Leader 的数据同步。</li>
+<li>每次写入数据的时候，都要求至少写入 Partition Leader 成功，同时还有至少一个 ISR 里的 Follower 也写入成功，才算这个写入是成功了。</li>
+<li>如果不满足上述两个条件，那就一直写入失败，让生产系统不停的尝试重试，直到满足上述两个条件，然后才能认为写入成功。</li>
+<li>按照上述思路去配置相应的参数，才能保证写入 Kafka 的数据不会丢失。</li>
 </ul>
-<h2 id="13-__consumer_offsets-是做什么用的">13、__consumer_offsets 是做什么用的?</h2>
-<p>这是一个内部主题，公开的官网资料很少涉及到。因此，我认为，此题属于面试官炫技一类 的题目。你要小心这里的考点:该主题有 3 个重要的知识点，你一定要全部答出来，才会显得对这块知识非常熟悉。</p>
-<p>它是一个内部主题，无需手动干预，由 Kafka 自行管理。当然，我们可以创建该主题。</p>
-<p>它的主要作用是负责注册消费者以及保存位移值。可能你对保存位移值的功能很熟悉， 但其实<strong>该主题也是保存消费者元数据的地方。千万记得把这一点也回答上</strong>。另外，这里 的消费者泛指消费者组和独立消费者，而不仅仅是消费者组。</p>
-<p>Kafka 的 GroupCoordinator 组件提供对该主题完整的管理功能，包括该主题的创建、 写入、读取和 Leader 维护等。</p>
-<h2 id="14-分区-leader-选举策略有几种">14、分区 Leader 选举策略有几种?</h2>
+<p>好!现在咱们来分析一下上面几点要求。</p>
+<p>第一条，必须要求至少一个 Follower 在 ISR 列表里。</p>
+<p>那必须的啊，要是 Leader 没有 Follower 了，或者是 Follower 都没法及时同步 Leader 数据，那么这个事儿肯定就没法弄下去了。</p>
+<p>第二条，每次写入数据的时候，要求 Leader 写入成功以外，至少一个 ISR 里的 Follower 也写成功。</p>
+<p>大家看下面的图，这个要求就是保证说，每次写数据，必须是 Leader 和 Follower 都写成功了，才能算是写成功，保证一条数据必须有两个以上的副本。</p>
+<p>这个时候万一 Leader 宕机，就可以切换到那个 Follower 上去，那么 Follower 上是有刚写入的数据的，此时数据就不会丢失了。</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1622096799684.png" alt="" loading="lazy"></figure>
+<p>如上图所示，假如现在 Leader 没有 Follower 了，或者是刚写入 Leader，Leader 立马就宕机，还没来得及同步给 Follower。</p>
+<p>在这种情况下，写入就会失败，然后你就让生产者不停的重试，直到 Kafka 恢复正常满足上述条件，才能继续写入。这样就可以让写入 Kafka 的数据不丢失。</p>
+<h3 id="13-分区-leader-选举策略有几种">13、分区 Leader 选举策略有几种?</h3>
 <p>分区的 Leader 副本选举对用户是完全透明的，它是由 Controller 独立完成的。你需要回答的是，在哪些场景下，需要执行分区 Leader 选举。每一种场景对应于一种选举策略。当前，Kafka 有 4 种分区 Leader 选举策略。</p>
 <ul>
 <li><strong>OfflinePartition Leader 选举</strong>:每当有分区上线时，就需要执行 Leader 选举。所谓的分区上线，可能是创建了新分区，也可能是之前的下线分区重新上线。这是最常见的分区 Leader 选举场景。</li>
@@ -267,12 +287,98 @@
 <li><strong>ControlledShutdownPartition Leader 选举</strong>:当 Broker 正常关闭时，该 Broker 上 的所有 Leader 副本都会下线，因此，需要为受影响的分区执行相应的 Leader 选举。</li>
 </ul>
 <p>这 4 类选举策略的大致思想是类似的，即从 AR 中挑选首个在 ISR 中的副本，作为新 Leader。当然，个别策略有些微小差异。不过，回答到这种程度，应该足以应付面试官 了。毕竟，微小差别对选举 Leader 这件事的影响很小。</p>
-<h2 id="15-kafka-的哪些场景中使用了零拷贝zero-copy">15、Kafka 的哪些场景中使用了零拷贝(Zero Copy)?</h2>
-<p>Zero Copy 是特别容易被问到的高阶题目。在 Kafka 中，体现 Zero Copy 使用场景的地方有两处:<strong>基于 mmap 的索引和日志文件读写所用的 TransportLayer</strong>。</p>
-<p>先说第一个。索引都是基于 MappedByteBuffer 的，也就是让用户态和内核态共享内核态 的数据缓冲区，此时，数据不需要复制到用户态空间。不过，mmap 虽然避免了不必要的 拷贝，但不一定就能保证很高的性能。在不同的操作系统下，mmap 的创建和销毁成本可 能是不一样的。很高的创建和销毁开销会抵消 Zero Copy 带来的性能优势。由于这种不确 定性，在 Kafka 中，只有索引应用了 mmap，最核心的日志并未使用 mmap 机制。</p>
-<p>再说第二个。TransportLayer 是 Kafka 传输层的接口。它的某个实现类使用了 FileChannel 的 transferTo 方法。该方法底层使用 sendfile 实现了 Zero Copy。对 Kafka 而言，如果 I/O 通道使用普通的 PLAINTEXT，那么，Kafka 就可以利用 Zero Copy 特 性，直接将页缓存中的数据发送到网卡的 Buffer 中，避免中间的多次拷贝。相反，如果 I/O 通道启用了 SSL，那么，Kafka 便无法利用 Zero Copy 特性了。</p>
-<h1 id="深度思考题">深度思考题</h1>
-<h2 id="16-kafka-为什么不支持读写分离">16、Kafka 为什么不支持读写分离?</h2>
+<h3 id="14-高水位和epoch">14. 高水位和Epoch</h3>
+<p>在Kafka中，高水位的作用主要有两个</p>
+<ul>
+<li>定义消息可见性，即用来标识分区下的哪些消息是可以被消费者消费的。</li>
+<li>帮助Kafka完成副本同步</li>
+</ul>
+<p>下面这张图展示了多个与高水位相关的 Kafka 术语。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1622096512111.png" alt="" loading="lazy"></figure>
+<p>假设这是某个分区 Leader 副本的高水位图。首先，请注意图中的“已提交消息”和“未提交消息”。之前在讲到 Kafka 持久性保障的时候，特意对两者进行了区分。现在，再次强调一下。在分区高水位以下的消息被认为是已提交消息，反之就是未提交消息。</p>
+<p>消费者只能消费已提交消息，即图中位移小于 8 的所有消息。注意，这里我们不讨论 Kafka 事务，因为事务机制会影响消费者所能看到的消息的范围，它不只是简单依赖高水位来判断。它依靠一个名为 LSO（Log Stable Offset）的位移值来判断事务型消费者的可见性。</p>
+<p>另外，<strong>位移值等于高水位的消息也属于未提交消息。也就是说，高水位上的消息是不能被消费者消费的</strong>。</p>
+<h4 id="log-end-offsetleo">Log End Offset（LEO）</h4>
+<p>Log End Offset（LEO）表示副本写入下一条消息的位移值。注意，数字 15 所在的方框是虚线，这就说明，这个副本当前只有 15 条消息，位移值是从 0 到 14，下一条新消息的位移是 15。显然，介于高水位和 LEO 之间的消息就属于未提交消息。这也从侧面告诉了我们一个重要的事实，那就是：<strong>同一个副本对象，其高水位值不会大于 LEO 值</strong>。</p>
+<p><strong>高水位和 LEO 是副本对象的两个重要属性</strong>。Kafka 所有副本都有对应的高水位和 LEO 值，而不仅仅是 Leader 副本。只不过 Leader 副本比较特殊，Kafka 使用 Leader 副本的高水位来定义所在分区的高水位。换句话说，<strong>分区的高水位就是其 Leader 副本的高水位</strong>。</p>
+<h4 id="高水位和leo更新机制">高水位和LEO更新机制</h4>
+<p>现在，我们知道了每个副本对象都保存了一组高水位值和 LEO 值，但实际上，在 Leader 副本所在的 Broker 上，还保存了其他 Follower 副本的HW和LEO 值。</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1622096529006.png" alt="" loading="lazy"></figure>
+<p>如上图所示，Broker 0 上保存了某分区的 Leader 副本和所有 Follower 副本的 LEO 值，而 Broker 1 上仅仅保存了该分区的某个 Follower 副本。Kafka 把 Broker 0 上保存的这些 Follower 副本又称为远程副本（Remote Replica）。Kafka 副本机制在运行过程中，会更新 Broker 1 上 Follower 副本的高水位和 LEO 值，同时也会更新 Broker 0 上 Leader 副本的高水位和 LEO 以及所有远程副本的 LEO，但它不会更新远程副本的高水位值，也就是我在图中标记为灰色的部分。</p>
+<p>保存远程副本的作用主要是帮助 Leader 副本确定其高水位，也就是分区高水位。下图是副本同步机制：<br>
+<img src="https://tianxiawuhao.github.io/post-images/1622096536181.png" alt="" loading="lazy"></p>
+<h4 id="leader副本保持同步">Leader副本保持同步</h4>
+<p>与Leader副本保持同步的判断条件有两个：</p>
+<ol>
+<li>该远程Follower副本在ISR中。</li>
+<li>该远程Follower副本LEO值落后于Leader副本LEO值的时间，不超过Broker端参数replica.lag.time.max.ms的值（默认值10秒）</li>
+</ol>
+<h4 id="更新机制">更新机制</h4>
+<h5 id="leader副本">Leader副本</h5>
+<p><strong>处理生产者请求的逻辑如下：</strong></p>
+<ol>
+<li>
+<p>写入消息到本地磁盘。</p>
+</li>
+<li>
+<p>更新分区高水位值。</p>
+<p>i. 获取 Leader 副本所在 Broker 端保存的所有远程副本 LEO 值（LEO-1，LEO-2，……，LEO-n）。</p>
+<p>ii. 获取 Leader 副本高水位值：currentHW。</p>
+<p>iii. 更新 currentHW = max{currentHW, min（LEO-1, LEO-2, ……，LEO-n）}。</p>
+</li>
+</ol>
+<p><strong>处理 Follower 副本拉取消息的逻辑如下：</strong></p>
+<ol>
+<li>
+<p>读取磁盘（或页缓存）中的消息数据。</p>
+</li>
+<li>
+<p>使用 Follower 副本发送请求中的位移值更新远程副本 LEO 值。</p>
+</li>
+<li>
+<p>更新分区高水位值（具体步骤与处理生产者请求的步骤相同）。</p>
+</li>
+</ol>
+<h5 id="follower副本">Follower副本</h5>
+<p><strong>从 Leader 拉取消息的处理逻辑如下：</strong></p>
+<ol>
+<li>
+<p>写入消息到本地磁盘。</p>
+</li>
+<li>
+<p>更新 LEO 值。更新高水位值。</p>
+<p>i. 获取 Leader 发送的高水位值：currentHW。</p>
+<p>ii. 获取步骤 2 中更新过的 LEO 值：currentLEO。</p>
+<p>iii. 更新高水位为 min(currentHW, currentLEO)。</p>
+</li>
+</ol>
+<h4 id="副本同步全流程">副本同步全流程</h4>
+<p>当生产者发送一条消息时，Leader 和 Follower 副本对应的高水位是怎么被更新的呢？</p>
+<p>首先是初始状态。下面这张图中的 remote LEO 就是刚才的远程副本的 LEO 值。在初始状态时，所有值都是 0。</p>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1622096547680.png" alt="" loading="lazy"></figure>
+<p>当生产者给主题分区发送一条消息后，状态变更为：</p>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1622096554503.png" alt="" loading="lazy"></figure>
+<p>此时，Leader 副本成功将消息写入了本地磁盘，故 LEO 值被更新为 1。</p>
+<p>Follower 再次尝试从 Leader 拉取消息。和之前不同的是，这次有消息可以拉取了，因此状态进一步变更为：</p>
+<figure data-type="image" tabindex="6"><img src="https://tianxiawuhao.github.io/post-images/1622096561747.png" alt="" loading="lazy"></figure>
+<p>这时，Follower 副本也成功地更新 LEO 为 1。此时，Leader 和 Follower 副本的 LEO 都是 1，但各自的高水位依然是 0，还没有被更新。它们需要在下一轮的拉取中被更新，如下图所示：</p>
+<figure data-type="image" tabindex="7"><img src="https://tianxiawuhao.github.io/post-images/1622096573656.png" alt="" loading="lazy"></figure>
+<p>在新一轮的拉取请求中，由于位移值是 0 的消息已经拉取成功，因此 Follower 副本这次请求拉取的是位移值 =1 的消息。Leader 副本接收到此请求后，更新远程副本 LEO 为 1，然后更新 Leader 高水位为 1。做完这些之后，它会将当前已更新过的高水位值 1 发送给 Follower 副本。Follower 副本接收到以后，也将自己的高水位值更新成 1。至此，一次完整的消息同步周期就结束了。事实上，Kafka 就是利用这样的机制，实现了 Leader 和 Follower 副本之间的同步。</p>
+<h4 id="leader-epoch">Leader Epoch</h4>
+<p>从刚才的分析中，我们知道，Follower 副本的高水位更新需要一轮额外的拉取请求才能实现。如果把上面那个例子扩展到多个 Follower 副本，情况可能更糟，也许需要多轮拉取请求。也就是说，Leader 副本高水位更新和 Follower 副本高水位更新在时间上是存在错配的。这种错配是很多“数据丢失”或“数据不一致”问题的根源。基于此，社区在 0.11 版本正式引入了 Leader Epoch 概念，来规避因高水位更新错配导致的各种不一致问题。</p>
+<p>所谓 Leader Epoch，我们大致可以认为是 Leader 版本。它由两部分数据组成。</p>
+<ol>
+<li>Epoch。一个单调增加的版本号。每当副本领导权发生变更时，都会增加该版本号。小版本号的 Leader 被认为是过期 Leader，不能再行使 Leader 权力。</li>
+<li>起始位移（Start Offset）。Leader 副本在该 Epoch 值上写入的首条消息的位移。</li>
+</ol>
+<p>举个例子来说明一下 Leader Epoch。假设现在有两个 Leader Epoch&lt;0, 0&gt; 和 &lt;1, 120&gt;，那么，第一个 Leader Epoch 表示版本号是 0，这个版本的 Leader 从位移 0 开始保存消息，一共保存了 120 条消息。之后，Leader 发生了变更，版本号增加到 1，新版本的起始位移是 120。</p>
+<p>Kafka Broker 会在内存中为每个分区都缓存 Leader Epoch 数据，同时它还会定期地将这些信息持久化到一个 checkpoint 文件中。当 Leader 副本写入消息到磁盘时，Broker 会尝试更新这部分缓存。如果该 Leader 是首次写入消息，那么 Broker 会向缓存中增加一个 Leader Epoch 条目，否则就不做更新。这样，每次有 Leader 变更时，新的 Leader 副本会查询这部分缓存，取出对应的 Leader Epoch 的起始位移，以避免数据丢失和不一致的情况。</p>
+<p>接下来看一个实际的例子，它展示的是 Leader Epoch 是如何防止数据丢失的。</p>
+<figure data-type="image" tabindex="8"><img src="https://tianxiawuhao.github.io/post-images/1622096585706.png" alt="" loading="lazy"></figure>
+<p>引用 Leader Epoch 机制后，Follower 副本 B 重启回来后，需要向 A 发送一个特殊的请求去获取 Leader 的 LEO 值。在这个例子中，该值为 2。当获知到 Leader LEO=2 后，B 发现该 LEO 值不比它自己的 LEO 值小，而且缓存中也没有保存任何起始位移值 &gt; 2 的 Epoch 条目，因此 B 无需执行任何日志截断操作。这是对高水位机制的一个明显改进，即副本是否执行日志截断不再依赖于高水位进行判断。</p>
+<p>现在，副本 A 宕机了，B 成为 Leader。同样地，当 A 重启回来后，执行与 B 相同的逻辑判断，发现也不用执行日志截断，至此位移值为 1 的那条消息在两个副本中均得到保留。后面当生产者程序向 B 写入新消息时，副本 B 所在的 Broker 缓存中，会生成新的 Leader Epoch 条目：[Epoch=1, Offset=2]。之后，副本 B 会使用这个条目帮助判断后续是否执行日志截断操作。这样，通过 Leader Epoch 机制，Kafka 完美地规避了这种数据丢失场景。</p>
+<h2 id="深度思考题">深度思考题</h2>
+<h3 id="16-kafka-为什么不支持读写分离">16、Kafka 为什么不支持读写分离?</h3>
 <p>这道题目考察的是你对 Leader/Follower 模型的思考。</p>
 <p>Leader/Follower 模型并没有规定 Follower 副本不可以对外提供读服务。很多框架都是允 许这么做的，只是 Kafka 最初为了避免不一致性的问题，而采用了让 Leader 统一提供服 务的方式。</p>
 <p>不过，在开始回答这道题时，你可以率先亮出观点:<strong>自 Kafka 2.4 之后，Kafka 提供了有限度的读写分离，也就是说，Follower 副本能够对外提供读服务</strong>。</p>
@@ -281,50 +387,63 @@
 <li><strong>场景不适用</strong>。读写分离适用于那种读负载很大，而写操作相对不频繁的场景，可 Kafka 不属于这样的场景。</li>
 <li><strong>同步机制</strong>。Kafka 采用 PULL 方式实现 Follower 的同步，因此，Follower 与 Leader 存 在不一致性窗口。如果允许读 Follower 副本，就势必要处理消息滞后(Lagging)的问题。</li>
 </ul>
-<h2 id="17-如何调优-kafka">17、如何调优 Kafka?</h2>
-<p>回答任何调优问题的第一步，就是**确定优化目标，并且定量给出目标!**这点特别重要。对于 Kafka 而言，常见的优化目标是吞吐量、延时、持久性和可用性。每一个方向的优化思路都 是不同的，甚至是相反的。</p>
+<h3 id="17-如何调优-kafka">17、如何调优 Kafka?</h3>
+<p>回答任何调优问题的第一步，就是 <strong>确定优化目标，并且定量给出目标!</strong> 这点特别重要。对于 Kafka 而言，常见的优化目标是吞吐量、延时、持久性和可用性。每一个方向的优化思路都 是不同的，甚至是相反的。</p>
 <p>确定了目标之后，还要明确优化的维度。有些调优属于通用的优化思路，比如对操作系统、 JVM 等的优化;有些则是有针对性的，比如要优化 Kafka 的 TPS。我们需要从 3 个方向去考虑</p>
 <ul>
 <li><strong>Producer 端</strong>:增加 batch.size、linger.ms，启用压缩，关闭重试等。</li>
 <li><strong>Broker 端</strong>:增加 num.replica.fetchers，提升 Follower 同步 TPS，避免 Broker Full GC 等。</li>
 <li><strong>Consumer</strong>:增加 fetch.min.bytes 等</li>
 </ul>
-<h2 id="18-controller-发生网络分区network-partitioning时kafka-会怎-么样">18、Controller 发生网络分区(Network Partitioning)时，Kafka 会怎 么样?</h2>
+<h3 id="18-controller-发生网络分区network-partitioning时kafka-会怎-么样">18、Controller 发生网络分区(Network Partitioning)时，Kafka 会怎 么样?</h3>
 <p>这道题目能够诱发我们对分布式系统设计、CAP 理论、一致性等多方面的思考。不过，针 对故障定位和分析的这类问题，我建议你首先言明“实用至上”的观点，即不论怎么进行理论分析，永远都要以实际结果为准。一旦发生 Controller 网络分区，那么，第一要务就是 查看集群是否出现“脑裂”，即同时出现两个甚至是多个 Controller 组件。这可以根据 Broker 端监控指标 ActiveControllerCount 来判断。</p>
 <p>现在，我们分析下，一旦出现这种情况，Kafka 会怎么样。</p>
 <p>由于 Controller 会给 Broker 发送 3 类请求，即LeaderAndIsrRequest、 StopReplicaRequest 和 UpdateMetadataRequest，因此，一旦出现网络分区，这些请求将不能顺利到达 Broker 端。这将影响主题的创建、修改、删除操作的信息同步，表现为 集群仿佛僵住了一样，无法感知到后面的所有操作。因此，网络分区通常都是非常严重的问 题，要赶快修复。</p>
-<h2 id="19-java-consumer-为什么采用单线程来获取消息">19、Java Consumer 为什么采用单线程来获取消息?</h2>
+<h3 id="19-java-consumer-为什么采用单线程来获取消息">19、Java Consumer 为什么采用单线程来获取消息?</h3>
 <p>在回答之前，如果先把这句话说出来，一定会加分:<strong>Java Consumer 是双线程的设计。一 个线程是用户主线程，负责获取消息;另一个线程是心跳线程，负责向 Kafka 汇报消费者 存活情况。将心跳单独放入专属的线程，能够有效地规避因消息处理速度慢而被视为下线 的“假死”情况。</strong></p>
 <p>单线程获取消息的设计能够避免阻塞式的消息获取方式。单线程轮询方式容易实现异步非阻塞式，这样便于将消费者扩展成支持实时流处理的操作算子。因为很多实时流处理操作算子都不能是阻塞式的。另外一个可能的好处是，可以简化代码的开发。多线程交互的代码是非常容易出错的。</p>
-<h2 id="20-简述-follower-副本消息同步的完整流程">20、简述 Follower 副本消息同步的完整流程</h2>
+<h3 id="20-简述-follower-副本消息同步的完整流程">20、简述 Follower 副本消息同步的完整流程</h3>
 <p>首先，Follower 发送 FETCH 请求给 Leader。接着，Leader 会读取底层日志文件中的消 息数据，再更新它内存中的 Follower 副本的 LEO 值，更新为 FETCH 请求中的 fetchOffset 值。最后，尝试更新分区高水位值。Follower 接收到 FETCH 响应之后，会把 消息写入到底层日志，接着更新 LEO 和 HW 值。</p>
 <p>Leader 和 Follower 的 HW 值更新时机是不同的，Follower 的 HW 更新永远落后于 Leader 的 HW。这种时间上的错配是造成各种不一致的原因。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
 <li><a href="#%E5%9F%BA%E7%A1%80%E9%A2%98%E7%9B%AE">基础题目</a>
 <ul>
 <li><a href="#1-apache-kafka-%E6%98%AF%E4%BB%80%E4%B9%88">1、Apache Kafka 是什么?</a></li>
-<li><a href="#2-%E4%BB%80%E4%B9%88%E6%98%AF%E6%B6%88%E8%B4%B9%E8%80%85%E7%BB%84">2、什么是消费者组?</a></li>
-<li><a href="#3-%E5%9C%A8-kafka-%E4%B8%ADzookeeper-%E7%9A%84%E4%BD%9C%E7%94%A8%E6%98%AF%E4%BB%80%E4%B9%88">3、在 Kafka 中，ZooKeeper 的作用是什么?</a></li>
-<li><a href="#4-%E8%A7%A3%E9%87%8A%E4%B8%8B-kafka-%E4%B8%AD%E4%BD%8D%E7%A7%BBoffset%E7%9A%84%E4%BD%9C%E7%94%A8">4、解释下 Kafka 中位移(offset)的作用</a></li>
-<li><a href="#5-%E9%98%90%E8%BF%B0%E4%B8%8B-kafka-%E4%B8%AD%E7%9A%84%E9%A2%86%E5%AF%BC%E8%80%85%E5%89%AF%E6%9C%ACleader-replica%E5%92%8C%E8%BF%BD%E9%9A%8F%E8%80%85%E5%89%AF%E6%9C%AC-follower-replica%E7%9A%84%E5%8C%BA%E5%88%AB">5、阐述下 Kafka 中的领导者副本(Leader Replica)和追随者副本 (Follower Replica)的区别</a></li>
+<li><a href="#2-%E4%BB%80%E4%B9%88%E6%98%AF%E6%B6%88%E8%B4%B9%E8%80%85%E7%BB%84">2、什么是消费者组?</a>
+<ul>
+<li><a href="#21%E6%B6%88%E8%B4%B9%E8%80%85%E7%BB%84%E7%9A%84%E4%BD%8D%E7%A7%BB%E6%8F%90%E4%BA%A4%E6%9C%BA%E5%88%B6">2.1消费者组的位移提交机制</a></li>
+<li><a href="#22%E6%B6%88%E8%B4%B9%E8%80%85%E7%BB%84%E4%B8%8E-broker-%E4%B9%8B%E9%97%B4%E7%9A%84%E4%BA%A4%E4%BA%92">2.2消费者组与 Broker 之间的交互</a></li>
 </ul>
 </li>
-<li><a href="#%E5%AE%9E%E6%93%8D%E9%A2%98%E7%9B%AE">实操题目</a>
-<ul>
-<li><a href="#6-%E5%A6%82%E4%BD%95%E8%AE%BE%E7%BD%AE-kafka-%E8%83%BD%E6%8E%A5%E6%94%B6%E7%9A%84%E6%9C%80%E5%A4%A7%E6%B6%88%E6%81%AF%E7%9A%84%E5%A4%A7%E5%B0%8F">6、如何设置 Kafka 能接收的最大消息的大小?</a></li>
-<li><a href="#7-%E7%9B%91%E6%8E%A7-kafka-%E7%9A%84%E6%A1%86%E6%9E%B6%E9%83%BD%E6%9C%89%E5%93%AA%E4%BA%9B">7、监控 Kafka 的框架都有哪些?</a></li>
-<li><a href="#8-broker-%E7%9A%84-heap-size-%E5%A6%82%E4%BD%95%E8%AE%BE%E7%BD%AE">8、Broker 的 Heap Size 如何设置?</a></li>
-<li><a href="#9-%E5%A6%82%E4%BD%95%E4%BC%B0%E7%AE%97-kafka-%E9%9B%86%E7%BE%A4%E7%9A%84%E6%9C%BA%E5%99%A8%E6%95%B0%E9%87%8F">9、如何估算 Kafka 集群的机器数量?</a></li>
-<li><a href="#10-leader-%E6%80%BB%E6%98%AF-1%E6%80%8E%E4%B9%88%E7%A0%B4">10、Leader 总是 -1，怎么破?</a></li>
+<li><a href="#3-%E5%9C%A8-kafka-%E4%B8%ADzookeeper-%E7%9A%84%E4%BD%9C%E7%94%A8%E6%98%AF%E4%BB%80%E4%B9%88">3、在 Kafka 中，ZooKeeper 的作用是什么?</a></li>
+<li><a href="#4-%E8%A7%A3%E9%87%8A%E4%B8%8B-kafka-%E4%B8%AD%E4%BD%8D%E7%A7%BBoffset%E7%9A%84%E4%BD%9C%E7%94%A8">4、解释下 Kafka 中位移(offset)的作用</a></li>
+<li><a href="#5-partition%E7%9A%84leader-replica%E5%92%8Cfollower-replica%E7%9A%84%E5%8C%BA%E5%88%AB">5、Partition的Leader Replica和Follower Replica的区别</a></li>
 </ul>
 </li>
 <li><a href="#%E7%82%AB%E6%8A%80%E5%BC%8F%E9%A2%98%E7%9B%AE">炫技式题目</a>
 <ul>
-<li><a href="#11-leo-lso-ar-isr-hw-%E9%83%BD%E8%A1%A8%E7%A4%BA%E4%BB%80%E4%B9%88%E5%90%AB%E4%B9%89">11、LEO、LSO、AR、ISR、HW 都表示什么含义?</a></li>
-<li><a href="#13-__consumer_offsets-%E6%98%AF%E5%81%9A%E4%BB%80%E4%B9%88%E7%94%A8%E7%9A%84">13、__consumer_offsets 是做什么用的?</a></li>
-<li><a href="#14-%E5%88%86%E5%8C%BA-leader-%E9%80%89%E4%B8%BE%E7%AD%96%E7%95%A5%E6%9C%89%E5%87%A0%E7%A7%8D">14、分区 Leader 选举策略有几种?</a></li>
-<li><a href="#15-kafka-%E7%9A%84%E5%93%AA%E4%BA%9B%E5%9C%BA%E6%99%AF%E4%B8%AD%E4%BD%BF%E7%94%A8%E4%BA%86%E9%9B%B6%E6%8B%B7%E8%B4%9Dzero-copy">15、Kafka 的哪些场景中使用了零拷贝(Zero Copy)?</a></li>
+<li><a href="#10-leo-lso-ar-isr-hw-%E9%83%BD%E8%A1%A8%E7%A4%BA%E4%BB%80%E4%B9%88%E5%90%AB%E4%B9%89">10、LEO、LSO、AR、ISR、HW 都表示什么含义?</a></li>
+<li><a href="#11kafka-%E7%9A%84-isr-%E6%9C%BA%E5%88%B6%E6%98%AF%E4%BB%80%E4%B9%88">11，Kafka 的 ISR 机制是什么?</a></li>
+<li><a href="#12kafka-%E5%86%99%E5%85%A5%E7%9A%84%E6%95%B0%E6%8D%AE%E5%A6%82%E4%BD%95%E4%BF%9D%E8%AF%81%E4%B8%8D%E4%B8%A2%E5%A4%B1">12，Kafka 写入的数据如何保证不丢失?</a></li>
+<li><a href="#13-%E5%88%86%E5%8C%BA-leader-%E9%80%89%E4%B8%BE%E7%AD%96%E7%95%A5%E6%9C%89%E5%87%A0%E7%A7%8D">13、分区 Leader 选举策略有几种?</a></li>
+<li><a href="#14-%E9%AB%98%E6%B0%B4%E4%BD%8D%E5%92%8Cepoch">14. 高水位和Epoch</a>
+<ul>
+<li><a href="#log-end-offsetleo">Log End Offset（LEO）</a></li>
+<li><a href="#%E9%AB%98%E6%B0%B4%E4%BD%8D%E5%92%8Cleo%E6%9B%B4%E6%96%B0%E6%9C%BA%E5%88%B6">高水位和LEO更新机制</a></li>
+<li><a href="#leader%E5%89%AF%E6%9C%AC%E4%BF%9D%E6%8C%81%E5%90%8C%E6%AD%A5">Leader副本保持同步</a></li>
+<li><a href="#%E6%9B%B4%E6%96%B0%E6%9C%BA%E5%88%B6">更新机制</a>
+<ul>
+<li><a href="#leader%E5%89%AF%E6%9C%AC">Leader副本</a></li>
+<li><a href="#follower%E5%89%AF%E6%9C%AC">Follower副本</a></li>
+</ul>
+</li>
+<li><a href="#%E5%89%AF%E6%9C%AC%E5%90%8C%E6%AD%A5%E5%85%A8%E6%B5%81%E7%A8%8B">副本同步全流程</a></li>
+<li><a href="#leader-epoch">Leader Epoch</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li><a href="#%E6%B7%B1%E5%BA%A6%E6%80%9D%E8%80%83%E9%A2%98">深度思考题</a>
@@ -337,6 +456,8 @@
 </ul>
 </li>
 </ul>
+</li>
+</ul>
 </div>
           
               <hr />
@@ -346,7 +467,7 @@
             <p class="next-post">上一篇：
                 <a href="https://tianxiawuhao.github.io/post/2csXIfKdw/">
                   <span class="post-title">
-                    第十章 Apache Kafka 与Spark的集成&rarr;
+                    第三章 Apache Kafka 与Spark的集成&rarr;
                   </span>
                 </a>
               </p>
