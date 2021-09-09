@@ -74,7 +74,7 @@
         
         <li class="nav-item">
           <div class="gridea-search-container">
-            <form id="gridea-search-form" style="position: relative" data-update="1631088586184"
+            <form id="gridea-search-form" style="position: relative" data-update="1631153861376"
               action="/search/index.html">
               <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
               <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
@@ -124,7 +124,7 @@
         
         <li class="nav-item">
           <div class="gridea-search-container">
-            <form id="gridea-search-form" style="position: relative" data-update="1631088586184"
+            <form id="gridea-search-form" style="position: relative" data-update="1631153861376"
               action="/search/index.html">
               <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
               <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
@@ -153,7 +153,7 @@
               <h1>多线程基础概念四</h1>
               <span class="meta">
                 Posted on
-                2021-05-12，28 min read
+                2021-05-12，30 min read
               </span>
             </div>
           
@@ -250,9 +250,90 @@
 <p>2）使用编译指示，强制使每一个变量对齐。</p>
 <p>强制使对象按照缓存行的边界对齐。例如可以使数据按64位对齐，那么一个缓存行只有一个可操作对象，这样发生伪共享之后，也只是对应缓存行的数据变化，并不影响其他的对象。</p>
 <h4 id="无锁队列">无锁队列</h4>
+<pre><code class="language-java">import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReferenceArray;
+ 
+ 
+/**
+ * 用数组实现无锁有界队列
+ */
+ 
+public class LockFreeQueue {
+ 
+    private AtomicReferenceArray atomicReferenceArray;
+    //代表为空，没有元素
+    private static final  Integer EMPTY = null;
+    //头指针,尾指针
+    AtomicInteger head,tail;
+ 
+ 
+    public LockFreeQueue(int size){
+        atomicReferenceArray = new AtomicReferenceArray(new Integer[size + 1]);
+        head = new AtomicInteger(0);
+        tail = new AtomicInteger(0);
+    }
+ 
+    /**
+     * 入队
+     * @param element
+     * @return
+     */
+    public boolean add(Integer element){
+        int index = (tail.get() + 1) % atomicReferenceArray.length();
+        if( index == head.get() % atomicReferenceArray.length()){
+            System.out.println(&quot;当前队列已满,&quot;+ element+&quot;无法入队!&quot;);
+            return false;
+        }
+        while(!atomicReferenceArray.compareAndSet(index,EMPTY,element)){
+            return add(element);
+        }
+        tail.incrementAndGet(); //移动尾指针
+        System.out.println(&quot;入队成功!&quot; + element);
+        return true;
+    }
+ 
+    /**
+     * 出队
+     * @return
+     */
+    public Integer poll(){
+        if(head.get() == tail.get()){
+            System.out.println(&quot;当前队列为空&quot;);
+            return null;
+        }
+        int index = (head.get() + 1) % atomicReferenceArray.length();
+        Integer ele = (Integer) atomicReferenceArray.get(index);
+        if(ele == null){ //有可能其它线程也在出队
+            return poll();
+        }
+        while(!atomicReferenceArray.compareAndSet(index,ele,EMPTY)){
+            return poll();
+        }
+        head.incrementAndGet();
+        System.out.println(&quot;出队成功!&quot; + ele);
+        return ele;
+    }
+ 
+    public void print(){
+       StringBuffer buffer = new StringBuffer(&quot;[&quot;);
+       for(int i = 0; i &lt; atomicReferenceArray.length() ; i++){
+           if(i == head.get() || atomicReferenceArray.get(i) == null){
+               continue;
+           }
+           buffer.append(atomicReferenceArray.get(i) + &quot;,&quot;);
+       }
+       buffer.deleteCharAt(buffer.length() - 1);
+       buffer.append(&quot;]&quot;);
+       System.out.println(&quot;队列内容:&quot;    +buffer.toString());
+ 
+    }
+ 
+}
+</code></pre>
 <h4 id="死锁">死锁</h4>
 <p>当线程 A 持有独占锁a，并尝试去获取独占锁 b 的同时，线程 B 持有独占锁 b，并尝试获取独占锁 a 的情况下，就会发生 AB 两个线程由于互相持有对方需要的锁，而发生的阻塞现象，我们称为死锁。</p>
 <h5 id="1-产生死锁的条件和防止死锁">1. 产生死锁的条件和防止死锁</h5>
+<p>**互斥 请求与保持 不可剥夺 循环等待 **</p>
 <p>产生死锁的必要条件：</p>
 <ol>
 <li>
@@ -262,7 +343,7 @@
 <p>请求与保持条件：一个进程因请求资源而阻塞时，对已获得的资源保持不放。</p>
 </li>
 <li>
-<p>不剥夺条件：进程已获得资源，在末使用完之前，不能强行剥夺。</p>
+<p>不可剥夺条件：进程已获得资源，在末使用完之前，不能强行剥夺。</p>
 </li>
 <li>
 <p>循环等待条件：若干进程之间形成一种头尾相接的循环等待资源关系。</p>
@@ -277,6 +358,40 @@
 <li>尽量降低锁的使用粒度，尽量不要几个功能用同一把锁。</li>
 <li>尽量减少同步的代码块。</li>
 </ul>
+<pre><code class="language-java">import lombok.SneakyThrows;
+import java.util.concurrent.TimeUnit;
+
+class HoldLockThread implements Runnable{
+    private String lockOne;
+    private String lockTwo;
+
+    public HoldLockThread(String lockOne, String lockTwo) {
+        this.lockOne = lockOne;
+        this.lockTwo = lockTwo;
+    }
+
+    @Override
+    @SneakyThrows
+    public void run(){
+        synchronized (lockOne){
+            System.out.println(Thread.currentThread().getName()+&quot;自己获取&quot;+lockOne+&quot;尝试获取&quot;+lockTwo);
+            TimeUnit.SECONDS.sleep(2L);
+            synchronized (lockTwo){
+                System.out.println(Thread.currentThread().getName()+&quot;自己获取&quot;+lockTwo+&quot;尝试获取&quot;+lockOne);
+            }
+        }
+    }
+}
+public class DeadLockDemo {
+    public static void main(String[] args) {
+        String lockA=&quot;lockA&quot;;
+        String lockB=&quot;lockB&quot;;
+
+        new Thread(new HoldLockThread(lockA,lockB),&quot;ThreadAAA&quot;).start();
+        new Thread(new HoldLockThread(lockB,lockA),&quot;ThreadBBB&quot;).start();
+    }
+}
+</code></pre>
 <h5 id="2-死锁与活锁与饥饿的区别">2. 死锁与活锁与饥饿的区别</h5>
 <p>死锁：是指两个或两个以上的进程（或线程）在执行过程中，因争夺资源而造成的一种互相等待的现象，若无外力作用，它们都将无法推进下去。</p>
 <p>活锁：任务或者执行者没有被阻塞，由于某些条件没有满足，导致一直重复尝试，失败，尝试，失败。</p>
