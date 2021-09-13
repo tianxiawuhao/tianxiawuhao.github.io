@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>http://localhost:4001</id>
     <title>tianxia</title>
-    <updated>2021-09-09T09:32:38.852Z</updated>
+    <updated>2021-09-13T05:53:47.152Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="http://localhost:4001"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,480 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[CAS/ABA/AtomicReference]]></title>
+        <id>https://tianxiawuhao.github.io/post/2nzKhQbUe/</id>
+        <link href="https://tianxiawuhao.github.io/post/2nzKhQbUe/">
+        </link>
+        <updated>2021-09-13T03:27:29.000Z</updated>
+        <content type="html"><![CDATA[<p>锁是用来做并发最简单的方式，当然代价也是最高的。</p>
+<p>独占锁是一种悲观锁，synchronized就是一种独占锁；它假设最坏的情况，并且只有在确保其它线程不会造成干扰的情况下执行，会导致其它所有需要锁的线程挂起直到持有锁的线程释放锁。</p>
+<p>所谓乐观锁就是每次不加锁,假设没有冲突而去完成某项操作;如果发生冲突了那就去重试，直到成功为止。</p>
+<p>CAS(Compare And Swap)是一种有名的无锁算法。CAS算法是乐观锁的一种实现。CAS有3个操作数，内存值V，旧的预期值A，要修改的新值B。当且仅当预期值A和内存值V相同时，将内存值V修改为B并返回true，否则返回false。</p>
+<blockquote>
+<p>注:synchronized和ReentrantLock都是悲观锁。</p>
+</blockquote>
+<blockquote>
+<p>注:什么时候使用悲观锁效率更高、什么使用使用乐观锁效率更高，要根据实际情况来判断选择。</p>
+</blockquote>
+<p>提示:atomic中包下的类，采用的即为CAS乐观算法。</p>
+<p>以AtomicInteger的public final int getAndSet(int newValue)方法，进行简单说明，<br>
+该方法是这样的:</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1631512353549.png" alt="" loading="lazy"></figure>
+<p>其调用了Unsafe类的public final int getAndSetInt(Object var1, long var2, int var4)方法:</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1631512364454.png" alt="" loading="lazy"></figure>
+<p>而该方法又do{…}while(…)循环调用了本地方法public final native boolean compareAndSwapInt(Object var1, long var2, int var4, int var5);</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1631512374405.png" alt="" loading="lazy"></figure>
+<p>注:至于Windows/Linux下public final native boolean compareAndSwapInt(Object var1, long var2, int var4, int var5)本地方法是如何实现的，推荐阅读https://blog.csdn.net/v123411739/article/details/79561458。</p>
+<p><strong>CAS(Compare And Swap)原理简述：</strong></p>
+<pre><code>   某一线程执行一个CAS逻辑(如上图线程A),如果中途有其他线程修改了共享变量的值(如:上图中线程A执行到笑脸那一刻时),导致这个线程的CAS逻辑运算后得到的值与期望结果不一致，那么这个线程会再次执行CAS逻辑(这里是一个do while循环),直到成功为止。
+</code></pre>
+<p><strong>ABA问题：</strong></p>
+<pre><code>  就是说一个线程把数据A变为了B，然后又重新变成了A。此时另外一个线程读取的时候，发现A没有变化，就误以为是原来的那个A。这就是有名的ABA问题。
+</code></pre>
+<blockquote>
+<p>注:根据实际情况，判断是否处理ABA问题。如果ABA问题并不会影响我们的业务结果，可以选择性处理或不处理;如果<br>
+ABA会影响我们的业务结果的，这时就必须处理ABA问题了。<br>
+追注:对于AtomicInteger等,没有什么可修改的属性;且我们只在意其结果值，所以对于这些类来说，本身就算发生了ABA现象，也不会对原线程的结果造成什么影响。</p>
+</blockquote>
+<p>AtomicReference原子应用类，可以保证你在修改对象引用时的线程安全性，比较时可以按照偏移量进行<br>
+怎样使用AtomicReference：</p>
+<pre><code class="language-java">AtomicReference&lt;String&gt; ar = new AtomicReference&lt;String&gt;();
+ar.set(&quot;hello&quot;);
+//CAS操作更新
+ar.compareAndSet(&quot;hello&quot;, &quot;hello1&quot;);
+</code></pre>
+<p>AtomicReference的成员变量：</p>
+<pre><code class="language-java">private static final long serialVersionUID = -1848883965231344442L;
+//unsafe类,提供cas操作的功能
+private static final Unsafe unsafe = Unsafe.getUnsafe();
+//value变量的偏移地址,说的就是下面那个value,这个偏移地址在static块里初始化
+private static final long valueOffset;
+//实际传入需要原子操作的那个类实例
+private volatile V value;
+</code></pre>
+<p>类装载的时候初始化偏移地址：</p>
+<pre><code class="language-java">static {
+        try {
+            valueOffset = unsafe.objectFieldOffset
+                (AtomicReference.class.getDeclaredField(&quot;value&quot;));
+        } catch (Exception ex) { throw new Error(ex); }
+    }
+</code></pre>
+<p>compareAndSet方法：</p>
+<pre><code class="language-java">//就是调用Unsafe的cas操作,传入对象,expect值,偏移地址,需要更新的值,即可,如果更新成功,返回true,如果失败,返回false
+public final boolean compareAndSet(V expect, V update) {
+        return unsafe.compareAndSwapObject(this, valueOffset, expect, update);
+    }
+</code></pre>
+<p>对于String变量来说,必须是对象相同才视为相同,而不是字符串的内容相同就可以相同:</p>
+<pre><code class="language-java">AtomicReference&lt;String&gt; ar = new AtomicReference&lt;String&gt;();
+ar.set(&quot;hello&quot;);
+System.out.println(ar.compareAndSet(new String(&quot;hello&quot;), &quot;hello1&quot;));//false
+</code></pre>
+<p>AtomicReference可解决volatile不具有原子性i++操作<br>
+AtomicReference可以保证结果是正确的.</p>
+<pre><code class="language-java">private static volatile Integer num1 = 0;
+private static AtomicReference&lt;Integer&gt; ar=new AtomicReference&lt;Integer&gt;(num1);
+
+public void dfasd111() throws InterruptedException{
+    for (int i = 0; i &lt; 1000; i++) {
+        new Thread(new Runnable(){
+            @Override
+            public void run() {
+                for (int i = 0; i &lt; 10000; i++)
+                    while(true){
+                        Integer temp=ar.get();
+                        if(ar.compareAndSet(temp, temp+1))break;
+                    }
+            }       
+        }).start();
+    }
+    Thread.sleep(10000);
+    System.out.println(ar.get()); //10000000
+}
+</code></pre>
+<p>类似i++这样的&quot;读-改-写&quot;复合操作(在一个操作序列中, 后一个操作依赖前一次操作的结果), 在多线程并发处理的时候会出现问题, 因为可能一个线程修改了变量, 而另一个线程没有察觉到这样变化, 当使用原子变量之后, 则将一系列的复合操作合并为一个原子操作,从而避免这种问题, i++=&gt;i.incrementAndGet()</p>
+<p>这里的compareAndSet方法即cas操作本身是原子的，但是在某些场景下会出现异常场景</p>
+<p>此处说一下ABA问题：</p>
+<p>比如，我们只是简单得要做一个数值加法，即使在我取得期望值后，这个数字被不断的修改，只要它最终改回了我的期望值，我的加法计算就不会出错。也就是说，当你修改的对象没有过程的状态信息，所有的信息都只保存于对象的数值本身。</p>
+<p>但是，在现实中，还可能存在另外一种场景。就是我们是否能修改对象的值，不仅取决于当前值，还和对象的过程变化有关，这时，AtomicReference就无能为力了。</p>
+<p><strong>AtomicStampedReference与AtomicReference的区别：</strong><br>
+AtomicStampedReference它内部不仅维护了对象值，还维护了一个时间戳（我这里把它称为时间戳，实际上它可以使任何一个整数，它使用整数来表示状态值）。当AtomicStampedReference对应的数值被修改时，除了更新数据本身外，还必须要更新时间戳。当AtomicStampedReference设置对象值时，对象值以及时间戳都必须满足期望值，写入才会成功。因此，即使对象值被反复读写，写回原值，只要时间戳发生变化，就能防止不恰当的写入。</p>
+<p><strong>解决ABA问题</strong></p>
+<pre><code class="language-java">
+public static void main(String[] args) {
+ 
+        String str1 = &quot;aaa&quot;;
+        String str2 = &quot;bbb&quot;;
+        AtomicStampedReference&lt;String&gt; reference = new AtomicStampedReference&lt;String&gt;(str1,1);
+        reference.compareAndSet(str1,str2,reference.getStamp(),reference.getStamp()+1);
+        System.out.println(&quot;reference.getReference() = &quot; + reference.getReference());
+ 
+        boolean b = reference.attemptStamp(str2, reference.getStamp() + 1);
+        System.out.println(&quot;b: &quot;+b);
+        System.out.println(&quot;reference.getStamp() = &quot;+reference.getStamp());
+ 
+        boolean c = reference.weakCompareAndSet(str2,&quot;ccc&quot;,4, reference.getStamp()+1);
+        System.out.println(&quot;reference.getReference() = &quot;+reference.getReference());
+        System.out.println(&quot;c = &quot; + c);
+    }
+ 
+输出:
+reference.getReference() = bbb
+b: true
+reference.getStamp() = 3
+reference.getReference() = bbb
+c = false
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[动态代理]]></title>
+        <id>https://tianxiawuhao.github.io/post/CO5c8R39E/</id>
+        <link href="https://tianxiawuhao.github.io/post/CO5c8R39E/">
+        </link>
+        <updated>2021-09-13T03:18:02.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="jdk动态代理">JDK动态代理</h3>
+<pre><code class="language-java">package proxy;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import service.UserService;
+import service.UserServiceImpl;
+public class UserServiceProxyFactory implements InvocationHandler{
+     private UserService us;// 使用动态代理的目标对象
+     
+     public UserServiceProxyFactory(UserService us) {//传入使用代理的目标对象作为参数构造工厂类
+           super();
+           this.us=us;
+     }
+     
+     // 我们要创建一个动态代理对象
+     // Proxy类中有一个方法可以创建动态代理对象
+     public UserService getUserServiceProxy(){
+           UserService usProxy = (UserService) Proxy.newProxyInstance(UserServiceProxyFactory.class.getClassLoader(),
+                     UserServiceImpl.class.getInterfaces(), this);
+           //this代表UserServiceProxyFactory继承InvocationHandler的invoke方法(对原方法进行增强),等待被调用
+           return usProxy;//将增强后的代理类传回给调用者!
+     }
+     @Override
+     //method ：当前正在执行的方法
+     //args  :方法执行需要的参数
+     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+           System.out.println(&quot;打开事物!&quot;);//增强方法
+           Object invoke = method.invoke(us, args);//调用原方法,将生成的对象传回给上方的this作为参数创建代理对象(代理对象已经具备增强方法,调用时直接使用)
+           System.out.println(&quot;提交事物!&quot;);//增强方法
+           return invoke;
+     }
+     
+}
+</code></pre>
+<p><strong>1、代理对象是由谁产生的？</strong></p>
+<p>jvm产生的，不像静态代理，我们自己得new个代理对象出来。</p>
+<p><strong>2、代理对象实现了什么接口？</strong></p>
+<p>实现的接口是目标对象实现的接口。同静态代理模式中代理对象实现的接口。那个继承关系图还是相同的。代理对象和目标对象都实现一个共同的接口。就是这个接口。所以Proxy.newProxyInstance()方法返回的类型就是这个接口类型。</p>
+<p><strong>3、代理对象的方法体是什么？</strong></p>
+<p>代理对象的方法体中的内容就是拦截器中invoke方法中的内容。所有代理对象的处理逻辑，控制是否执行目标对象的目标方法。都是在这个方法里面处理的。</p>
+<p><strong>4、拦截器中的invoke方法中的method参数是在什么时候赋值的？</strong></p>
+<p>在客户端，代理对象调用目标方法的时候，此实例中为：proxyObj.business()；实际上进入的是拦截器中的invoke方法，这个时候，拦截器中的invoke方法中的method参数会被赋值。</p>
+<p><strong>最后，为啥这个方式叫做jdk动态代理呢？</strong></p>
+<p>因为这个动态代理对象时用jdk的相关代码生成的，所以这个叫<strong>jdk动态代理</strong>。</p>
+<p>后面的cglib动态代理，就是因为要用到cglib的jar包，所以才叫<strong>cglib动态代理</strong>。</p>
+<p>了解了一个，那么另一个也就差不多啦。就继续往下看吧。</p>
+<p>为什么要使用这个<strong>cglib来实现这个动态代理</strong>呢？因为spring框架要用。</p>
+<p>具体的代码实现如下：</p>
+<h3 id="cglib动态代理">Cglib动态代理</h3>
+<pre><code class="language-java">package proxy;
+import java.lang.reflect.Method;
+import org.springframework.cglib.proxy.Enhancer;
+import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
+import service.UserService;
+import service.UserServiceImpl;
+public class UserServiceProxyFactory2 implements MethodInterceptor{
+     
+     public UserService getUserServiceProxy(){
+            //得到封装好的增强类
+           Enhancer en=new Enhancer();
+           //传入父类,根据继承对子类进行增强
+           en.setSuperclass(UserServiceImpl.class);
+           //调用UserServiceProxyFactory2实现接口MethodInterceptor的下方的intercept方法
+           en.setCallback(this);
+           //根据以上条件创建新的增强后的动态代理类
+           UserService us=(UserService) en.create();
+           //返回给调用者
+           return us;
+           
+     }
+     
+     
+     @Override
+     public Object intercept(Object prxoyobj, Method arg1, Object[] arg, MethodProxy methodProxy) throws Throwable {
+           //打开事务
+           System.out.println(&quot;打开事务!&quot;);
+           //调用原有方法
+           Object returnValue = methodProxy.invokeSuper(prxoyobj, arg);
+           //提交事务
+           System.out.println(&quot;提交事务!&quot;);
+           
+           return returnValue;//传递给Enhancer,将增强的功能交给封装好的增强类Enhancer
+     }
+     
+}
+测试类
+package proxy;
+import org.junit.Test;
+import service.UserService;
+import service.UserServiceImpl;
+public class Demo {
+     @Test
+     public void fun1(){
+           UserService us=new UserServiceImpl();
+           
+           UserServiceProxyFactory factory=new UserServiceProxyFactory(us);
+                           
+           UserService proxy = factory.getUserServiceProxy();
+           
+           proxy.save();
+           proxy.delete();
+           proxy.update();
+           proxy.find();
+           
+           System.out.println(proxy instanceof UserServiceImpl);
+     }
+     @Test
+     public void fun2(){
+           UserService us=new UserServiceImpl();
+           
+           UserServiceProxyFactory2 factory=new UserServiceProxyFactory2();
+           
+           UserService proxy = factory.getUserServiceProxy();
+           
+           proxy.save();
+           
+           System.out.println(proxy instanceof UserServiceImpl);
+     }
+}
+package service;
+public class UserServiceImpl implements UserService {
+     @Override
+     public void save() {
+           System.out.println(&quot;保存用户&quot;);
+           
+     }
+     @Override
+     public void delete() {
+           System.out.println(&quot;删除用户&quot;);
+           
+     }
+     @Override
+     public void update() {
+           System.out.println(&quot;更新用户&quot;);
+           
+     }
+     @Override
+     public void find() {
+           System.out.println(&quot;查找用户&quot;);
+           
+     }
+}
+</code></pre>
+<p><strong>区别：</strong></p>
+<p>首先从文件数上来说，cglib比jdk实现的少了个接口类。因为cglib返回的代理对象是目标对象的子类。而jdk产生的代理对象和目标对象都实现了一个公共接口。</p>
+<p><strong>动态代理：</strong></p>
+<pre><code class="language-java">   动态代理分为两种：
+      *  jdk的动态代理
+         *  代理对象和目标对象实现了共同的接口
+         *  拦截器必须实现InvocationHanlder接口
+ 
+      *  cglib的动态代理
+         *  代理对象是目标对象的子类
+         *  拦截器必须实现MethodInterceptor接口
+         *  hibernate中session.load采用的是cglib实现的
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[OOM]]></title>
+        <id>https://tianxiawuhao.github.io/post/QvbaHSogu/</id>
+        <link href="https://tianxiawuhao.github.io/post/QvbaHSogu/">
+        </link>
+        <updated>2021-09-13T01:54:41.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="stack-overflow">Stack overflow</h3>
+<pre><code class="language-java">public class StackOverFlowErrorDemo {
+    public static void main(String[] args) {
+        StackOverFlowError();
+    }
+
+    private static void StackOverFlowError() {
+        StackOverFlowError();
+    }
+}
+</code></pre>
+<pre><code class="language-java">Exception in thread &quot;main&quot; java.lang.StackOverflowError
+	at com.example.interview.oom.StackOverFlowErrorDemo.StackOverFlowError(StackOverFlowErrorDemo.java:14)
+</code></pre>
+<p>递归调用自身方法，不断向栈内压入栈帧，直到撑破栈空间，重复次数不确定</p>
+<h3 id="outofmemoryerrorjava-heap-space">OutOfMemoryError：Java heap space</h3>
+<pre><code class="language-java">/**
+ * @author wuhao
+ * @desc -Xmx10m -Xms10m -XX:+PrintGCDetails
+ * 最大堆内存10M,初始堆内存10M,打印GC详细信息
+ * @date 2021-09-10 15:14:50
+ */
+public class JavaHeapSpaceDemo {
+    public static void main(String[] args) {
+//        String str= &quot;java&quot;;
+//        while (true){
+//            str+=str+new Random().nextInt(111111)+new Random().nextInt(121312);
+//            str.intern();
+//        }
+        //创建大对象
+        byte[] bytes=new byte[20*1024*1024];
+    }
+}
+</code></pre>
+<pre><code class="language-java">Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: Java heap space
+	at com.example.interview.oom.JavaHeapSpaceDemo.main(JavaHeapSpaceDemo.java:18)
+</code></pre>
+<p>常量池，对象空间地址位于堆空间中，循环生成String或者生成超大对象会导致堆空间被占满溢出</p>
+<h3 id="outofmemoryerrorgc-overhead-limit-exceeded">OutOfMemoryError：GC overhead limit exceeded</h3>
+<pre><code class="language-java">/**
+ * @author wuhao
+ * @desc -Xmx20m -Xms10m -XX:+PrintGCDetails
+ * 最大堆内存20M,初始堆内存10M,堆外内存(直接内存)5M,打印GC信息
+ * GC overhead limit exceeded:超出GC开销限制
+ * @date 2021-09-10 15:24:48
+ */
+public class GCOverHeadDemo {
+    public static void main(String[] args) {
+        int i=0;
+        List&lt;String&gt; list=new ArrayList&lt;&gt;();
+        while (true){
+            list.add(String.valueOf(++i).intern());
+        }
+    }
+}
+</code></pre>
+<pre><code class="language-java">[Full GC (Ergonomics) [PSYoungGen: 2560K-&gt;0K(4608K)] [ParOldGen: 13581K-&gt;818K(10752K)] 16141K-&gt;818K(15360K), [Metaspace: 3626K-&gt;3626K(1056768K)], 0.0078165 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] 
+Heap
+ PSYoungGen      total 4608K, used 219K [0x00000000ff980000, 0x0000000100000000, 0x0000000100000000)
+  eden space 2560K, 8% used [0x00000000ff980000,0x00000000ff9b6f28,0x00000000ffc00000)
+  from space 2048K, 0% used [0x00000000ffe00000,0x00000000ffe00000,0x0000000100000000)
+  to   space 2048K, 0% used [0x00000000ffc00000,0x00000000ffc00000,0x00000000ffe00000)
+ ParOldGen       total 10752K, used 818K [0x00000000fec00000, 0x00000000ff680000, 0x00000000ff980000)
+  object space 10752K, 7% used [0x00000000fec00000,0x00000000fecccac0,0x00000000ff680000)
+ Metaspace       used 3719K, capacity 4536K, committed 4864K, reserved 1056768K
+  class space    used 406K, capacity 428K, committed 512K, reserved 1048576K
+Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: GC overhead limit exceeded
+	at java.lang.Integer.toString(Integer.java:401)
+	at java.lang.String.valueOf(String.java:3099)
+	at com.example.interview.oom.GCOverHeadDemo.main(GCOverHeadDemo.java:17)
+</code></pre>
+<p>最大堆内存要大于初始堆内存给GC创造条件，如果两值相等就没有重新分配堆空间操作会直接爆出Java heap space异常</p>
+<h3 id="outofmemoryerrordirect-buffer-memory">OutOfMemoryError：Direct buffer memory</h3>
+<pre><code class="language-java">import java.nio.ByteBuffer;
+/**
+ * @author wuhao
+ * @desc -Xmx20m -Xms10m -XX:+PrintGCDetails -XX:MaxDirectMemorySize=5m
+ * 最大堆内存20M,初始堆内存10M,堆外内存(直接内存)5M,打印GC信息
+ * @date 2021-09-10 15:38:57
+ */
+public class DirectBufferMemoryDemo {
+    public static void main(String[] args) {
+        System.out.println(&quot;配置的DirectMemory&quot;+(sun.misc.VM.maxDirectMemory()/(double)1024/1024)+&quot;mb&quot;);
+        ByteBuffer bf=ByteBuffer.allocateDirect(6*1024*1024);
+    }
+}
+</code></pre>
+<pre><code class="language-java">[GC (Allocation Failure) [PSYoungGen: 2048K-&gt;504K(2560K)] 2048K-&gt;758K(9728K), 0.0008256 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+配置的DirectMemory5.0mb
+[GC (System.gc()) [PSYoungGen: 908K-&gt;504K(2560K)] 1162K-&gt;862K(9728K), 0.0009251 secs] [Times: user=0.06 sys=0.00, real=0.00 secs] 
+[Full GC (System.gc()) [PSYoungGen: 504K-&gt;0K(2560K)] [ParOldGen: 358K-&gt;801K(7168K)] 862K-&gt;801K(9728K), [Metaspace: 3500K-&gt;3500K(1056768K)], 0.0046698 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] 
+Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: Direct buffer memory
+	at java.nio.Bits.reserveMemory(Bits.java:694)
+	at java.nio.DirectByteBuffer.&lt;init&gt;(DirectByteBuffer.java:123)
+	at java.nio.ByteBuffer.allocateDirect(ByteBuffer.java:311)
+	at com.example.interview.oom.DirectBufferMemoryDemo.main(DirectBufferMemoryDemo.java:13)
+Heap
+ PSYoungGen      total 2560K, used 1068K [0x00000000ff980000, 0x00000000ffc80000, 0x0000000100000000)
+  eden space 2048K, 52% used [0x00000000ff980000,0x00000000ffa8b200,0x00000000ffb80000)
+  from space 512K, 0% used [0x00000000ffc00000,0x00000000ffc00000,0x00000000ffc80000)
+  to   space 512K, 0% used [0x00000000ffb80000,0x00000000ffb80000,0x00000000ffc00000)
+ ParOldGen       total 7168K, used 801K [0x00000000fec00000, 0x00000000ff300000, 0x00000000ff980000)
+  object space 7168K, 11% used [0x00000000fec00000,0x00000000fecc86d0,0x00000000ff300000)
+ Metaspace       used 4057K, capacity 4568K, committed 4864K, reserved 1056768K
+  class space    used 446K, capacity 460K, committed 512K, reserved 1048576K
+</code></pre>
+<p>allocateDirect分配的字节缓冲区用中文叫做直接缓冲区（DirectByteBuffer），用allocate分配的ByteBuffer叫做堆字节缓冲区(HeapByteBuffer)..</p>
+<p>其实根据类名就可以看出，HeapByteBuffer所创建的字节缓冲区就是在jvm堆中的，即内部所维护的java字节数组。而DirectByteBuffer是直接操作操作系统本地代码创建的内存缓冲数组（c、c++的数组）。</p>
+<p>HeapByteBuffer底层其实是java的字节数组，而java字节数组是一个java对象，对象的内存是由jvm的堆进行管理的，那么不可避免的是GC时年轻代的eden、suvivor到老年代的各种复制以及回收。。。当字节数组比较小的时候还好说，如果是大对象，那么对于jvm的GC来说是一个很大的负担。。而使用DirectByteBuffer，则是把字节数组交给操作系统管理（堆外内存）</p>
+<h3 id="outofmemoryerrorunable-to-create-to-native-thread">OutOfMemoryError：Unable to create to native thread</h3>
+<pre><code class="language-java">public class UnableToCreateToNativeThreadDemo {
+   
+    public static void main(String[] args) {
+        for (int i = 0; ; i++) {
+            System.out.println(&quot;================ i=&quot; + i);
+            new Thread(() -&gt; {
+                try {
+                    Thread.sleep(Integer.MAX_VALUE);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }, &quot;&quot; + i).start();
+        }
+    }
+}
+</code></pre>
+<p>linux一般用户可以最大创建1024个线程，不要在电脑上随意尝试</p>
+<h3 id="meta-space">meta space</h3>
+<pre><code class="language-java">/**
+ * @author wuhao
+ * @desc -XX:MetaspaceSize=8m -XX:MaxMetaspaceSize=8m -XX:+PrintGCDetails
+ * @date 2021-09-13 10:36:15
+ */
+public class MetaSpaceOOMDemo {
+    static class OOMTest{
+
+    }
+    public static void main(String[] args) {
+        int i=0;
+        try {
+            while (true){
+                i++;
+                Enhancer enhancer=new Enhancer();
+                enhancer.setSuperclass(OOMTest.class);
+                enhancer.setUseCache(false);
+                enhancer.setCallback(new MethodInterceptor() {
+                    @Override
+                    public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+                        return methodProxy.invokeSuper(o,args);
+                    }
+                });
+                enhancer.create();
+            }
+        }catch (Throwable e){
+            System.out.println(&quot;=========&quot;+i+&quot;次后发生了异常&quot;);
+        }
+
+    }
+}
+</code></pre>
+<pre><code class="language-java">[Full GC (Last ditch collection) [PSYoungGen: 0K-&gt;0K(116224K)] [ParOldGen: 2016K-&gt;2016K(225792K)] 2016K-&gt;2016K(342016K), [Metaspace: 9911K-&gt;9911K(1058816K)], 0.0093402 secs] [Times: user=0.02 sys=0.00, real=0.01 secs] 
+Heap
+ PSYoungGen      total 116224K, used 3425K [0x00000000d6400000, 0x00000000de400000, 0x0000000100000000)
+  eden space 115712K, 2% used [0x00000000d6400000,0x00000000d67584a0,0x00000000dd500000)
+  from space 512K, 0% used [0x00000000de380000,0x00000000de380000,0x00000000de400000)
+  to   space 5120K, 0% used [0x00000000dda00000,0x00000000dda00000,0x00000000ddf00000)
+ ParOldGen       total 225792K, used 2016K [0x0000000082c00000, 0x0000000090880000, 0x00000000d6400000)
+  object space 225792K, 0% used [0x0000000082c00000,0x0000000082df8128,0x0000000090880000)
+ Metaspace       used 9942K, capacity 10090K, committed 10240K, reserved 1058816K
+  class space    used 884K, capacity 913K, committed 1024K, reserved 1048576K
+Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: Metaspace
+</code></pre>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[类加载]]></title>
         <id>https://tianxiawuhao.github.io/post/DikSLfU_z/</id>
