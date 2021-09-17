@@ -10,10 +10,10 @@
 <meta name="keywords" content="">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>Java线程同步五种方法 | tianxia</title>
+<title>NIO-FileChannel | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
-<link rel="alternate" type="application/rss+xml" title="Java线程同步五种方法 | tianxia » Feed"
+<link rel="alternate" type="application/rss+xml" title="NIO-FileChannel | tianxia » Feed"
   href="https://tianxiawuhao.github.io/atom.xml">
 <link rel="stylesheet"
   href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
@@ -26,8 +26,8 @@
 
 <script>hljs.initHighlightingOnLoad();</script>
 
-  <meta property="og:description" content="Java线程同步五种方法" />
-  <meta property="og:url" content="https://tianxiawuhao.github.io/post/fE1AHZqDl/" />
+  <meta property="og:description" content="NIO-FileChannel" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/post/7Wmx9Q2PP/" />
   <meta property="og:locale" content="zh-CN" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
@@ -150,10 +150,10 @@
                 <a href="https://tianxiawuhao.github.io/tag/gvtXj5hZZ/" class="tag">java</a>
                 
               </span>
-              <h1>Java线程同步五种方法</h1>
+              <h1>NIO-FileChannel</h1>
               <span class="meta">
                 Posted on
-                2021-05-04，6 min read
+                2021-09-17，7 min read
               </span>
             </div>
           
@@ -168,201 +168,226 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/fE1AHZqDl.png" alt="封面图">
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/7Wmx9Q2PP.png" alt="封面图">
           </img>
           
-          <h2 id="线程同步">线程同步</h2>
-<p>即当有一个线程在对内存进行操作时，其他线程都不可以对这个内存地址进行操作，直到该线程完成操作， 其他线程才能对该内存地址进行操作，而其他线程又处于等待状态，实现线程同步的方法有很多，下面介绍java线程同步的五种方法。</p>
-<h3 id="同步方法">同步方法</h3>
-<p>使用synchronized关键字修饰的方法。由于java的每个对象都有一个内置锁，当用关键字修饰此方法时，内置锁会保护整个方法。在调用该方法前，需要获得内置锁，否则该线程就处于阻塞状态。</p>
-<pre><code class="language-java">public synchronized void method(){} 
-# synchronized关键字也可以修饰静态方法，此时如果调用该静态方法，将会锁住整个类。
-public static synchronized void method(){} 
-</code></pre>
-<h3 id="同步代码块">同步代码块</h3>
-<p>即有synchronized关键字修饰的语句块。被关键字修饰的的语句块会自动加上内置锁，从而实现同步。</p>
-<pre><code class="language-java">synchronized(object){ 
-	# 代码
-} 
-</code></pre>
-<p><strong>注：同步是一种高开销的操作，因此应该尽量减少同步的内容。通常没有必要去同步整个方法，使用关键字synchronized修饰关键代码即可。</strong></p>
-<h3 id="使用特殊域变量修饰符volatile实现线程同步">使用特殊域变量修饰符volatile实现线程同步</h3>
-<p>（1）volatile关键字是非锁，比synchronized稍弱的同步机制</p>
-<p>（2）保证此变量对所有的线程的可见性，当一个线程修改了这个变量的值，volatile 保证了新值能立即同步到主内存，以及每次使用前立即从主内存刷新。</p>
-<p>（3）volatile不会提供原子操作，并不能保证线程安全，也不能用来修饰final类型的变量。</p>
-<p>（4）禁止指令重排序优化。有volatile修饰的变量，赋值后多执行了一个添加<strong>内存屏障</strong>操作（指令重排序时不能把后面的指令重排序到内存屏障之前的位置）</p>
-<pre><code class="language-java">public class Test extends Thread  {
-    volatile int x = 0; //此处可以将volatile去除 或者 替换为 static，经过对比可看出volatile的作用
-    
-    private void write() {
-        x = 5;
-    }
-    
-    private void read() {
-        while (x != 5) {}
-        if(x == 5){
-            System.out.println(&quot;------stoped&quot;);
-        }
-    }
-    
-    public static void main(String[] args) throws Exception {
-        Test example = new Test();
-        
-        Thread writeThread = new Thread(new Runnable() {
-            public void run() {
-                example.write();
-            }
-        });
+          <h3 id="nio介绍">NIO介绍</h3>
+<p>在讲解Channel之前，首先了解一下NIO， Java NIO全称java non-blocking IO，是从Java 1.4版本开始引入的一个新的IO API（New IO），可以替代标准的Java IO API，NIO与原来的IO有同样的作用和目的，但是使用的方式完全不同。IO与 NIO区别：</p>
+<table>
+<thead>
+<tr>
+<th>IO</th>
+<th>NIO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>面向流（Stream Orientend）</td>
+<td>面向缓冲区（Buffer Orientend）</td>
+</tr>
+<tr>
+<td>阻塞IO（Blocking IO )</td>
+<td>非阻塞IO（Non Blocking IO）</td>
+</tr>
+<tr>
+<td></td>
+<td>选择器（Selector）</td>
+</tr>
+</tbody>
+</table>
+<p>NIO支持面向缓冲区的、基于通道的IO操作并以更加高效的方式进行文件的读写操作，其核心API为Channel(通道)，Buffer(缓冲区), Selector(选择器)。Channel负责传输，Buffer负责存储 。</p>
+<h3 id="缓冲区">缓冲区</h3>
+<pre><code class="language-java">public class BioTest {
+    @Test
+    public void test1() {
+        //1.初始化缓冲区数组
+        ByteBuffer bf = ByteBuffer.allocate(1024);
+        System.out.println(&quot;==========allocate============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
 
-        Thread readThread = new Thread(new Runnable() {
-            public void run() {
-                example.read();
-            }
-        });
+        //2.put插入数据
+        bf.put(&quot;asasas&quot;.getBytes());
+        System.out.println(&quot;==========put============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
 
-        readThread.start();
-        TimeUnit.SECONDS.sleep(5); //记住此处一定要暂停5秒，以保证writeThread一定会在readThread中执行
-        System.out.println(&quot;------&quot;);
-        writeThread.start();
+        //3.改为读状态
+        bf.flip();
+        System.out.println(&quot;==========flip============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //4.获取缓冲区数据
+        final byte[] bytes = new byte[bf.limit()];
+        bf.get(bytes);
+        System.out.println(&quot;==========get============&quot;);
+        System.out.println(new String(bytes,0,bytes.length));
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //5.重置读状态
+        bf.rewind();
+        System.out.println(&quot;==========rewind============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //6.清除数据标识
+        bf.clear();
+        System.out.println(&quot;==========clear============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
     }
 }
 </code></pre>
-<p>注：多线程中的非同步问题主要出现在对域的读写上，如果域自身避免这个问题，那么就不需要修改操作该域的方法。用final域，有锁保护的域可以避免非同步的问题。</p>
-<h3 id="使用重入锁reentrantlock实现线程同步">使用重入锁ReentrantLock实现线程同步</h3>
-<p>jdk1.5中java.util.concurrent包下ReentrantLock类是可重入、互斥、实现了Lock接口的锁。它与synchronized修饰的方法具有相同的基本行为与语义，并且扩展了其能力。</p>
-<p>ReentrantLock类的常用方法有：</p>
-<p>（1）ReentrantLock()：创建一个ReentrantLock实例。</p>
-<p>（2）lock():获得锁</p>
-<p>（3）unlock()：释放锁</p>
-<p>上述代码可以修改为：</p>
-<pre><code class="language-java">public class Test extends Thread  {
-    private int x = 0; 
-    
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1631867929854.png" alt="" loading="lazy"></figure>
+<h3 id="通道channel">通道（Channel ）</h3>
+<p>通道表示打开到 IO 设备(例如：文件、套接字)的连接。若需要使用 NIO 系统，需要获取用于连接 IO 设备的通道以及用于容纳数据的缓冲区。然后操作缓冲区，对数据进行处理。<br>
+　　Channel相比IO中的Stream更加高效，可以异步双向传输，但是必须和buffer一起使用。</p>
+<p>主要实现类</p>
+<pre><code class="language-java">FileChannel，读写文件中的数据。
+SocketChannel，通过TCP读写网络中的数据。
+ServerSockectChannel，监听新进来的TCP连接，像Web服务器那样。对每一个新进来的连接都会创建一个SocketChannel。
+DatagramChannel，通过UDP读写网络中的数据。
+</code></pre>
+<h3 id="channel聚集gather写入">Channel聚集(gather)写入</h3>
+<p>聚集写入（ Gathering Writes）是指将多个 Buffer 中的数据“聚集”到 Channel。 特别注意：按照缓冲区的顺序，写入 position 和 limit 之间的数据到 Channel 。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1631867939574.png" alt="" loading="lazy"></figure>
+<h3 id="channel分散scatter读取">Channel分散(scatter)读取</h3>
+<p>分散读取（ Scattering Reads）是指从 Channel 中读取的数据“分散” 到多个 Buffer 中。 特别注意：按照缓冲区的顺序，从 Channel 中读取的数据依次将 Buffer 填满。</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1631867947387.png" alt="" loading="lazy"></figure>
+<pre><code class="language-java">/**
+ * @author wuhao
+ * @desc 本地io:
+ * 　　 FileInputStreanm/FileOutputStream
+ * 　　RandomAccessFile
+ * 网络io:
+ * 　　Socket
+ * 　　ServerSocket
+ * 　　DatagramSocket
+ * @date 2021-09-17 15:22:26
+ */
+public class ChannelTest {
+
+    //利用通道完成文件的复制,非直接缓冲区
+    @Test
+    @SneakyThrows
+    public void test(){
+        FileInputStream fis = new FileInputStream(&quot;D:\\1.jpg&quot;);
+        FileOutputStream fos = new FileOutputStream(&quot;D:\\2.jpg&quot;);
+        //获取通道
+        FileChannel inChannel = fis.getChannel();
+        FileChannel outChannel = fos.getChannel();
+        //分配指定大小缓存区
+        ByteBuffer buff = ByteBuffer.allocate(1024);// position 0 ,limit 1024
+        //将通道的数据存入缓存区
+        while(inChannel.read(buff)!=-1){// position 1024 ,limit 1024 ,相当于put
+            //切换读模式
+            buff.flip();//position 0 ,limit 1024
+            //将缓存去的数据写入通道
+            outChannel.write(buff);//position 1024 ,limit 1024,相当于get
+            //清空缓冲区
+            buff.clear();//position 0 ,limit 1024
+        }
+        outChannel.close();
+        inChannel.close();
+        fis.close();
+        fos.close();
+    }
+
+    //利用通道完成文件的复制,直接缓冲区,利用物理内存映射文件
+    //会出现文件复制完了，但程序还没结束，原因是JVM资源还在用，当垃圾回收机制回收之后程序就会结束,不稳定
+    @Test
+    @SneakyThrows
+    public void test1(){
+        FileChannel inChannel = FileChannel.open(Paths.get(&quot;D:\\1.jpg&quot;), StandardOpenOption.READ);
+        FileChannel outChannel = FileChannel.open(Paths.get(&quot;D:\\4.jpg&quot;), StandardOpenOption.READ,StandardOpenOption.WRITE,StandardOpenOption.CREATE);
+        //内存映射文件
+        MappedByteBuffer inMapBuff = inChannel.map(FileChannel.MapMode.READ_ONLY, 0, inChannel.size());//==allocateDirect
+        MappedByteBuffer outMapBuff = outChannel.map(FileChannel.MapMode.READ_WRITE, 0, inChannel.size());
+        byte[] by = new byte[inMapBuff.limit()];
+        inMapBuff.get(by);
+        outMapBuff.put(by);
+        outChannel.close();
+        inChannel.close();
+    }
+
     /**
-      * 使用可重入锁
-      */
-    private Lock lock=new ReentrantLock();
-    
-    private void write() {
-     lock.lock();
-        try {
-            x = 5;
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }finally {
-            lock.unlock();//释放锁
-        }
-    }
-    
-    private void read() {
-     lock.lock();
-        try {
-            while (x != 5) {}
-            if(x == 5){
-                System.out.println(&quot;------stoped&quot;);
-            }
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }finally {
-            lock.unlock();//释放锁
-        }
-        
-    }
-    
-    public static void main(String[] args) throws Exception {
-        Test example = new Test();
-        
-        Thread writeThread = new Thread(new Runnable() {
-            public void run() {
-                example.write();
-            }
-        });
-
-        Thread readThread = new Thread(new Runnable() {
-            public void run() {
-                example.read();
-            }
-        });
-
-        readThread.start();
-        TimeUnit.SECONDS.sleep(5); //记住此处一定要暂停5秒，以保证writeThread一定会在readThread中执行
-        System.out.println(&quot;------&quot;);
-        writeThread.start();
+     * 从源信道读取字节到这个通道的文件中。如果源通道的剩余空间小于 count 个字节，则所传输的字节数要小于请求的字节数。这种方法可能比从源通道读取并写入此通道的简单循环更有效率。
+     * @param SRC 源通道
+     * @param position 调动开始的文件内的位置，必须是非负的
+     * @param count 要传输的最大字节数，必须是非负
+     * @return 传输文件的大小（单位字节），可能为零，
+     * public abstract long transferFrom(ReadableByteChannel src, long position, long count)　throws IOException;
+     */
+    //复制图片，利用直接缓存区
+    @Test
+    @SneakyThrows
+    public void test2(){
+        FileChannel inChannel = FileChannel.open(Paths.get(&quot;D:\\1.jpg&quot;), StandardOpenOption.READ);
+        FileChannel outChannel = FileChannel.open(Paths.get(&quot;D:\\2.jpg&quot;), StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        outChannel.transferFrom(inChannel, 0, inChannel.size());
+        inChannel.close();
+        outChannel.close();
     }
-}
-</code></pre>
-<p>注：</p>
-<ol>
-<li>
-<p>ReentrantLock()还可以通过public ReentrantLock(boolean fair)构造方法创建公平锁，即，优先运行等待时间最长的线程，这样大幅度降低程序运行效率。</p>
-</li>
-<li>
-<p>关于Lock对象和synchronized关键字的选择：</p>
-<p>（1）最好两个都不用，使用一种java.util.concurrent包提供的机制，能够帮助用户处理所有与锁相关的代码。</p>
-<p>（2）如果synchronized关键字能够满足用户的需求，就用synchronized，他能简化代码。</p>
-<p>（3）如果需要使用更高级的功能，就用ReentrantLock类，此时要注意及时释放锁，否则会出现死锁，通常在finally中释放锁。</p>
-</li>
-</ol>
-<h3 id="使用threadlocal管理局部变量实现线程同步">使用ThreadLocal管理局部变量实现线程同步</h3>
-<p>ThreadLocal管理变量，则每一个使用该变量的线程都获得一个该变量的副本，副本之间相互独立，这样每一个线程都可以随意修改自己的副本，而不会对其他线程产生影响。</p>
-<p>ThreadLocal类常用的方法：</p>
-<ol>
-<li>
-<p>get()：返回该线程局部变量的当前线程副本中的值。</p>
-</li>
-<li>
-<p>initialValue()：返回此线程局部变量的当前线程的”初始值“。</p>
-</li>
-<li>
-<p>remove()：移除此线程局部变量当前线程的值。</p>
-</li>
-<li>
-<p>set(T value)：将此线程局部变量的当前线程副本中的值设置为指定值value。</p>
-</li>
-</ol>
-<p>上述代码修改为：</p>
-<pre><code class="language-java"> 
-public class Test extends Thread  {
-    private static ThreadLocal&lt;Integer&gt; count=new ThreadLocal&lt;Integer&gt;(){
-            @Override
-            protected Integer initialValue() {
-                  // TODO Auto-generated method stub
-                  return 0;
+
+    /**
+     * 将字节从这个通道的文件传输到给定的可写字节通道。
+     * @param position 调动开始的文件内的位置，必须是非负的
+     * @param count 要传输的最大字节数，必须是非负
+     * @param target 目标通道
+     * @return 传输文件的大小（单位字节），可能为零，
+     * public abstract long transferTo(long position, long count, WritableByteChannel target) throws IOException;
+     */
+    //复制图片，利用直接缓存区
+    @Test
+    @SneakyThrows
+    public void test3(){
+        FileChannel inChannel = FileChannel.open(Paths.get(&quot;D:\\1.jpg&quot;), StandardOpenOption.READ);
+        FileChannel outChannel = FileChannel.open(Paths.get(&quot;D:\\3.jpg&quot;), StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        inChannel.transferTo(0, inChannel.size(), outChannel);
+        inChannel.close();
+        outChannel.close();
+    }
+
+    // 分散读取聚集写入实现文件复制
+
+    @Test
+    @SneakyThrows
+    public void test4(){
+        RandomAccessFile randomAccessFile = null;
+        RandomAccessFile randomAccessFile1 = null;
+        FileChannel inChannel = null;
+        FileChannel outChannel = null;
+        try {
+            randomAccessFile = new RandomAccessFile(new File(&quot;d:\\old.txt&quot;), &quot;rw&quot;);
+            randomAccessFile1 = new RandomAccessFile(new File(&quot;d:\\new.txt&quot;), &quot;rw&quot;);
+            inChannel = randomAccessFile.getChannel();
+            outChannel = randomAccessFile1.getChannel();
+            // 分散为三个bytebuffer读取,capcity要设置的足够大，不然如果文件太大，会导致复制的内容不完整
+            ByteBuffer byteBuffer1 = ByteBuffer.allocate(1024);
+            ByteBuffer byteBuffer2 = ByteBuffer.allocate(1024);
+            ByteBuffer byteBuffer3 = ByteBuffer.allocate(10240);
+            ByteBuffer[] bbs = new ByteBuffer[]{byteBuffer1,byteBuffer2,byteBuffer3};
+
+            inChannel.read(bbs);// 分散读取
+
+            // 切换为写入模式
+            for (int i = 0; i &lt; bbs.length; i++) {
+                bbs[i].flip();
             }
-      };
-    
-    private void write() {
-        count.set(count.get()+5);
-    }
-    
-    private void read() {
-        while (count.get() != 5) {}
-        if(count.get() == 5){
-            System.out.println(&quot;------stoped&quot;);
-        }
-    }
-    
-    public static void main(String[] args) throws Exception {
-        Test example = new Test();
-        
-        Thread writeThread = new Thread(new Runnable() {
-            public void run() {
-                example.write();
-            }
-        });
 
-        Thread readThread = new Thread(new Runnable() {
-            public void run() {
-                example.read();
-            }
-        });
+            outChannel.write(bbs);
 
-        readThread.start();
-        TimeUnit.SECONDS.sleep(5); //记住此处一定要暂停5秒，以保证writeThread一定会在readThread中执行
-        System.out.println(&quot;------&quot;);
-        writeThread.start();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 }
 </code></pre>
@@ -370,13 +395,13 @@ public class Test extends Thread  {
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
 <ul>
-<li><a href="#%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5">线程同步</a>
+<li>
 <ul>
-<li><a href="#%E5%90%8C%E6%AD%A5%E6%96%B9%E6%B3%95">同步方法</a></li>
-<li><a href="#%E5%90%8C%E6%AD%A5%E4%BB%A3%E7%A0%81%E5%9D%97">同步代码块</a></li>
-<li><a href="#%E4%BD%BF%E7%94%A8%E7%89%B9%E6%AE%8A%E5%9F%9F%E5%8F%98%E9%87%8F%E4%BF%AE%E9%A5%B0%E7%AC%A6volatile%E5%AE%9E%E7%8E%B0%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5">使用特殊域变量修饰符volatile实现线程同步</a></li>
-<li><a href="#%E4%BD%BF%E7%94%A8%E9%87%8D%E5%85%A5%E9%94%81reentrantlock%E5%AE%9E%E7%8E%B0%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5">使用重入锁ReentrantLock实现线程同步</a></li>
-<li><a href="#%E4%BD%BF%E7%94%A8threadlocal%E7%AE%A1%E7%90%86%E5%B1%80%E9%83%A8%E5%8F%98%E9%87%8F%E5%AE%9E%E7%8E%B0%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5">使用ThreadLocal管理局部变量实现线程同步</a></li>
+<li><a href="#nio%E4%BB%8B%E7%BB%8D">NIO介绍</a></li>
+<li><a href="#%E7%BC%93%E5%86%B2%E5%8C%BA">缓冲区</a></li>
+<li><a href="#%E9%80%9A%E9%81%93channel">通道（Channel ）</a></li>
+<li><a href="#channel%E8%81%9A%E9%9B%86gather%E5%86%99%E5%85%A5">Channel聚集(gather)写入</a></li>
+<li><a href="#channel%E5%88%86%E6%95%A3scatter%E8%AF%BB%E5%8F%96">Channel分散(scatter)读取</a></li>
 </ul>
 </li>
 </ul>
@@ -384,27 +409,18 @@ public class Test extends Thread  {
 </ul>
 </div>
           
-              <hr />
-            
           
             
+                <hr />
+              
             <p class="next-post">上一篇：
-                <a href="https://tianxiawuhao.github.io/post/cQAJ3QFSZ/">
+                <a href="https://tianxiawuhao.github.io/post/Um55sd5Z3/">
                   <span class="post-title">
-                    ThreadLocal是什么&rarr;
+                    服务器变慢诊断命令&rarr;
                   </span>
                 </a>
               </p>
             
-          
-            
-           <p class="prev-post">下一篇：
-                 <a href="https://tianxiawuhao.github.io/post/FRRzAbqMV/">
-                   <span class="post-title">
-                     java基础之一集合&rarr;
-                   </span>
-                 </a>
-               </p>
           
           <div class="comment" style="text-align: center;">
             

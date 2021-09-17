@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>http://localhost:4001</id>
     <title>tianxia</title>
-    <updated>2021-09-16T05:47:59.667Z</updated>
+    <updated>2021-09-17T09:01:51.387Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="http://localhost:4001"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,234 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[NIO-FileChannel]]></title>
+        <id>https://tianxiawuhao.github.io/post/7Wmx9Q2PP/</id>
+        <link href="https://tianxiawuhao.github.io/post/7Wmx9Q2PP/">
+        </link>
+        <updated>2021-09-17T08:28:44.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="nio介绍">NIO介绍</h3>
+<p>在讲解Channel之前，首先了解一下NIO， Java NIO全称java non-blocking IO，是从Java 1.4版本开始引入的一个新的IO API（New IO），可以替代标准的Java IO API，NIO与原来的IO有同样的作用和目的，但是使用的方式完全不同。IO与 NIO区别：</p>
+<table>
+<thead>
+<tr>
+<th>IO</th>
+<th>NIO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>面向流（Stream Orientend）</td>
+<td>面向缓冲区（Buffer Orientend）</td>
+</tr>
+<tr>
+<td>阻塞IO（Blocking IO )</td>
+<td>非阻塞IO（Non Blocking IO）</td>
+</tr>
+<tr>
+<td></td>
+<td>选择器（Selector）</td>
+</tr>
+</tbody>
+</table>
+<p>NIO支持面向缓冲区的、基于通道的IO操作并以更加高效的方式进行文件的读写操作，其核心API为Channel(通道)，Buffer(缓冲区), Selector(选择器)。Channel负责传输，Buffer负责存储 。</p>
+<h3 id="缓冲区">缓冲区</h3>
+<pre><code class="language-java">public class BioTest {
+    @Test
+    public void test1() {
+        //1.初始化缓冲区数组
+        ByteBuffer bf = ByteBuffer.allocate(1024);
+        System.out.println(&quot;==========allocate============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //2.put插入数据
+        bf.put(&quot;asasas&quot;.getBytes());
+        System.out.println(&quot;==========put============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //3.改为读状态
+        bf.flip();
+        System.out.println(&quot;==========flip============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //4.获取缓冲区数据
+        final byte[] bytes = new byte[bf.limit()];
+        bf.get(bytes);
+        System.out.println(&quot;==========get============&quot;);
+        System.out.println(new String(bytes,0,bytes.length));
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //5.重置读状态
+        bf.rewind();
+        System.out.println(&quot;==========rewind============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+
+        //6.清除数据标识
+        bf.clear();
+        System.out.println(&quot;==========clear============&quot;);
+        System.out.println(bf.position());
+        System.out.println(bf.limit());
+        System.out.println(bf.capacity());
+    }
+}
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1631867929854.png" alt="" loading="lazy"></figure>
+<h3 id="通道channel">通道（Channel ）</h3>
+<p>通道表示打开到 IO 设备(例如：文件、套接字)的连接。若需要使用 NIO 系统，需要获取用于连接 IO 设备的通道以及用于容纳数据的缓冲区。然后操作缓冲区，对数据进行处理。<br>
+　　Channel相比IO中的Stream更加高效，可以异步双向传输，但是必须和buffer一起使用。</p>
+<p>主要实现类</p>
+<pre><code class="language-java">FileChannel，读写文件中的数据。
+SocketChannel，通过TCP读写网络中的数据。
+ServerSockectChannel，监听新进来的TCP连接，像Web服务器那样。对每一个新进来的连接都会创建一个SocketChannel。
+DatagramChannel，通过UDP读写网络中的数据。
+</code></pre>
+<h3 id="channel聚集gather写入">Channel聚集(gather)写入</h3>
+<p>聚集写入（ Gathering Writes）是指将多个 Buffer 中的数据“聚集”到 Channel。 特别注意：按照缓冲区的顺序，写入 position 和 limit 之间的数据到 Channel 。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1631867939574.png" alt="" loading="lazy"></figure>
+<h3 id="channel分散scatter读取">Channel分散(scatter)读取</h3>
+<p>分散读取（ Scattering Reads）是指从 Channel 中读取的数据“分散” 到多个 Buffer 中。 特别注意：按照缓冲区的顺序，从 Channel 中读取的数据依次将 Buffer 填满。</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1631867947387.png" alt="" loading="lazy"></figure>
+<pre><code class="language-java">/**
+ * @author wuhao
+ * @desc 本地io:
+ * 　　 FileInputStreanm/FileOutputStream
+ * 　　RandomAccessFile
+ * 网络io:
+ * 　　Socket
+ * 　　ServerSocket
+ * 　　DatagramSocket
+ * @date 2021-09-17 15:22:26
+ */
+public class ChannelTest {
+
+    //利用通道完成文件的复制,非直接缓冲区
+    @Test
+    @SneakyThrows
+    public void test(){
+        FileInputStream fis = new FileInputStream(&quot;D:\\1.jpg&quot;);
+        FileOutputStream fos = new FileOutputStream(&quot;D:\\2.jpg&quot;);
+        //获取通道
+        FileChannel inChannel = fis.getChannel();
+        FileChannel outChannel = fos.getChannel();
+        //分配指定大小缓存区
+        ByteBuffer buff = ByteBuffer.allocate(1024);// position 0 ,limit 1024
+        //将通道的数据存入缓存区
+        while(inChannel.read(buff)!=-1){// position 1024 ,limit 1024 ,相当于put
+            //切换读模式
+            buff.flip();//position 0 ,limit 1024
+            //将缓存去的数据写入通道
+            outChannel.write(buff);//position 1024 ,limit 1024,相当于get
+            //清空缓冲区
+            buff.clear();//position 0 ,limit 1024
+        }
+        outChannel.close();
+        inChannel.close();
+        fis.close();
+        fos.close();
+    }
+
+    //利用通道完成文件的复制,直接缓冲区,利用物理内存映射文件
+    //会出现文件复制完了，但程序还没结束，原因是JVM资源还在用，当垃圾回收机制回收之后程序就会结束,不稳定
+    @Test
+    @SneakyThrows
+    public void test1(){
+        FileChannel inChannel = FileChannel.open(Paths.get(&quot;D:\\1.jpg&quot;), StandardOpenOption.READ);
+        FileChannel outChannel = FileChannel.open(Paths.get(&quot;D:\\4.jpg&quot;), StandardOpenOption.READ,StandardOpenOption.WRITE,StandardOpenOption.CREATE);
+        //内存映射文件
+        MappedByteBuffer inMapBuff = inChannel.map(FileChannel.MapMode.READ_ONLY, 0, inChannel.size());//==allocateDirect
+        MappedByteBuffer outMapBuff = outChannel.map(FileChannel.MapMode.READ_WRITE, 0, inChannel.size());
+        byte[] by = new byte[inMapBuff.limit()];
+        inMapBuff.get(by);
+        outMapBuff.put(by);
+        outChannel.close();
+        inChannel.close();
+    }
+
+    /**
+     * 从源信道读取字节到这个通道的文件中。如果源通道的剩余空间小于 count 个字节，则所传输的字节数要小于请求的字节数。这种方法可能比从源通道读取并写入此通道的简单循环更有效率。
+     * @param SRC 源通道
+     * @param position 调动开始的文件内的位置，必须是非负的
+     * @param count 要传输的最大字节数，必须是非负
+     * @return 传输文件的大小（单位字节），可能为零，
+     * public abstract long transferFrom(ReadableByteChannel src, long position, long count)　throws IOException;
+     */
+    //复制图片，利用直接缓存区
+    @Test
+    @SneakyThrows
+    public void test2(){
+        FileChannel inChannel = FileChannel.open(Paths.get(&quot;D:\\1.jpg&quot;), StandardOpenOption.READ);
+        FileChannel outChannel = FileChannel.open(Paths.get(&quot;D:\\2.jpg&quot;), StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        outChannel.transferFrom(inChannel, 0, inChannel.size());
+        inChannel.close();
+        outChannel.close();
+    }
+
+    /**
+     * 将字节从这个通道的文件传输到给定的可写字节通道。
+     * @param position 调动开始的文件内的位置，必须是非负的
+     * @param count 要传输的最大字节数，必须是非负
+     * @param target 目标通道
+     * @return 传输文件的大小（单位字节），可能为零，
+     * public abstract long transferTo(long position, long count, WritableByteChannel target) throws IOException;
+     */
+    //复制图片，利用直接缓存区
+    @Test
+    @SneakyThrows
+    public void test3(){
+        FileChannel inChannel = FileChannel.open(Paths.get(&quot;D:\\1.jpg&quot;), StandardOpenOption.READ);
+        FileChannel outChannel = FileChannel.open(Paths.get(&quot;D:\\3.jpg&quot;), StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        inChannel.transferTo(0, inChannel.size(), outChannel);
+        inChannel.close();
+        outChannel.close();
+    }
+
+    // 分散读取聚集写入实现文件复制
+
+    @Test
+    @SneakyThrows
+    public void test4(){
+        RandomAccessFile randomAccessFile = null;
+        RandomAccessFile randomAccessFile1 = null;
+        FileChannel inChannel = null;
+        FileChannel outChannel = null;
+        try {
+            randomAccessFile = new RandomAccessFile(new File(&quot;d:\\old.txt&quot;), &quot;rw&quot;);
+            randomAccessFile1 = new RandomAccessFile(new File(&quot;d:\\new.txt&quot;), &quot;rw&quot;);
+            inChannel = randomAccessFile.getChannel();
+            outChannel = randomAccessFile1.getChannel();
+            // 分散为三个bytebuffer读取,capcity要设置的足够大，不然如果文件太大，会导致复制的内容不完整
+            ByteBuffer byteBuffer1 = ByteBuffer.allocate(1024);
+            ByteBuffer byteBuffer2 = ByteBuffer.allocate(1024);
+            ByteBuffer byteBuffer3 = ByteBuffer.allocate(10240);
+            ByteBuffer[] bbs = new ByteBuffer[]{byteBuffer1,byteBuffer2,byteBuffer3};
+
+            inChannel.read(bbs);// 分散读取
+
+            // 切换为写入模式
+            for (int i = 0; i &lt; bbs.length; i++) {
+                bbs[i].flip();
+            }
+
+            outChannel.write(bbs);
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+}
+</code></pre>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[服务器变慢诊断命令]]></title>
         <id>https://tianxiawuhao.github.io/post/Um55sd5Z3/</id>
@@ -218,7 +446,7 @@ pidstat 默认显示了所有进程的cpu使用率。</p>
 <strong>available</strong> 列显示还可以被应用程序使用的物理内存大小。</p>
 <h3 id="df命令详解">df命令详解</h3>
 <p>Linux df（英文全拼：disk free） 命令用于显示目前在 Linux 系统上的文件系统磁盘使用情况统计。</p>
-<h3 id="语法">语法</h3>
+<p><strong>语法</strong></p>
 <pre><code>df [选项]... [FILE]...
 </code></pre>
 <ul>
@@ -240,7 +468,7 @@ pidstat 默认显示了所有进程的cpu使用率。</p>
 <li>文件--help 显示这个帮手并且离开</li>
 <li>文件--version 输出版本资讯并且离开</li>
 </ul>
-<h3 id="实例">实例</h3>
+<p><strong>实例</strong></p>
 <p>显示文件系统的磁盘使用情况统计：</p>
 <pre><code># df 
 Filesystem     1K-blocks    Used     Available Use% Mounted on 
