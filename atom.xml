@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>http://localhost:4001</id>
     <title>tianxia</title>
-    <updated>2021-09-27T02:39:12.715Z</updated>
+    <updated>2021-09-28T08:14:24.439Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="http://localhost:4001"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,706 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[saiku自动对接kylin]]></title>
+        <id>https://tianxiawuhao.github.io/post/0wQHSTDWt/</id>
+        <link href="https://tianxiawuhao.github.io/post/0wQHSTDWt/">
+        </link>
+        <updated>2021-09-28T06:56:08.000Z</updated>
+        <content type="html"><![CDATA[<p>saiku通过添加schema和datasource的形式管理对接入系统的数据源，然后提供界面作为直观的分析数据方式，界面产生mdx，由mondrian连接数据源，解析mdx和执行查询</p>
+<p>kylin提供大规模数据的olap能力，通过saiku与kylin的对接，利用saiku的友好界面来很方面的查询</p>
+<p>如上的整合，需要手动配置数据源，编写schema的操作，感觉比较繁琐，可以通过修改saiku的代码，到kylin中获取project和cube的各种信息，根据一定规则转换生成schema并作为数据源管理起来，这样就很直接将saiku与kylin无缝对接起来。</p>
+<h3 id="代码案例">代码案例</h3>
+<p><strong>saiku-wabapp</strong></p>
+<pre><code class="language-xml">#saiku-beans.properties
+sylin.user=ADMIN
+sylin.password=ADMIN
+sylin.cube.url=http://localhost:7070/kylin/api/cubes
+sylin.cubedesc.url=http://localhost:7070/kylin/api/cube_desc
+sylin.model.url=http://localhost:7070/kylin/api/model
+sylin.url=localhost:7070
+</code></pre>
+<pre><code class="language-java">//saiku-beans.xml
+ &lt;bean id=&quot;repositoryDsManager&quot; class=&quot;org.saiku.service.datasource.RepositoryDatasourceManager&quot; init-method=&quot;load&quot; destroy-method=&quot;unload&quot;&gt;
+     &lt;!--aop:scoped-proxy/--&gt;
+         ......
+         &lt;property name=&quot;sylinUser&quot; value=&quot;${sylin.user}&quot;/&gt;
+         &lt;property name=&quot;sylinPassWord&quot; value=&quot;${sylin.password}&quot;/&gt;
+         &lt;property name=&quot;sylinCubeUrl&quot; value=&quot;${sylin.cube.url}&quot;/&gt;
+         &lt;property name=&quot;sylinCubeDescUrl&quot; value=&quot;${sylin.cubedesc.url}&quot;/&gt;
+         &lt;property name=&quot;sylinModelUrl&quot; value=&quot;${sylin.model.url}&quot;/&gt;
+         &lt;property name=&quot;sylinUrl&quot; value=&quot;${sylin.url}&quot;/&gt;
+ &lt;/bean&gt;
+</code></pre>
+<p><strong>saiku-service</strong></p>
+<pre><code class="language-java">public class RepositoryDatasourceManager implements IDatasourceManager, ApplicationListener&lt;HttpSessionCreatedEvent&gt; {
+	private String sylinUser;
+    private String sylinPassWord;
+    private String sylinCubeUrl;
+    private String sylinCubeDescUrl;
+    private String sylinModelUrl;
+    private String sylinUrl;
+    //get.set省略
+    ......
+    private void loadDatasources(Properties ext) {
+        datasources.clear();
+
+        List&lt;DataSource&gt; exporteddatasources = null;
+
+        try {
+            String result = execute(sylinCubeUrl);
+            JSONArray ja = JSON.parseArray(result);
+            for (int i = 0; i &lt; ja.size(); i++) {
+                JSONObject js = JSONObject.parseObject(ja.getString(i));
+                String newCubeName = js.getString(&quot;project&quot;) + &quot;#&quot; + js.getString(&quot;name&quot;);
+                datasources.put(js.getString(&quot;name&quot;), getSaikuDatasource(newCubeName));
+            }
+        } catch (Exception e) {
+            log.error(&quot;Failed add sylin cube to datasource&quot;, e);
+            e.printStackTrace();
+        }
+
+       ......
+    }
+     private SaikuDatasource getSaikuDatasource(String datasourceName) throws Exception {
+        if (datasourceName.contains(&quot;#&quot;)) {
+            String cubeName = datasourceName.split(&quot;#&quot;)[1].trim();
+            String cubeDescString = execute(sylinCubeDescUrl + &quot;/&quot; + cubeName);
+            CubeDesc cubeDesc = OBJECT_MAPPER.readValue(JSON.parseArray(cubeDescString).getString(0), CubeDesc.class);
+            //CubeDesc cubeDesc = JSONObject.parseObject(JSON.parseArray(cubeDescString).getString(0), CubeDesc.class);
+            String modelName = cubeDesc.getModelName();
+            String cubeModelString = execute(sylinModelUrl + &quot;/&quot; + modelName);
+            DataModelDesc modelDesc = OBJECT_MAPPER.readValue(cubeModelString, DataModelDesc.class);
+            //DataModelDesc modelDesc = JSONObject.parseObject(cubeModelString, DataModelDesc.class);
+            if (cubeDesc != null &amp;&amp; modelDesc != null) {
+                addSchema(SchemaUtil.createSchema(datasourceName, cubeDesc, modelDesc), &quot;/datasources/&quot; + datasourceName.replace(&quot;#&quot;, &quot;.&quot;) + &quot;.xml&quot;, datasourceName);
+            }
+            String project = new String();
+            if (datasourceName.contains(&quot;#&quot;)) {
+                project = datasourceName.split(&quot;#&quot;)[0].trim();
+            } else {
+                project = datasourceName;
+            }
+
+            Properties properties = new Properties();
+            properties.put(&quot;location&quot;, &quot;jdbc:mondrian:Jdbc=jdbc:kylin://&quot; + sylinUrl + &quot;/&quot; + project + &quot;;JdbcDrivers=org.apache.kylin.jdbc.Driver&quot; + &quot;;Catalog=mondrian:///datasources/&quot; + datasourceName.replace(&quot;#&quot;, &quot;.&quot;) + &quot;.xml&quot;);
+            properties.put(&quot;driver&quot;, &quot;mondrian.olap4j.MondrianOlap4jDriver&quot;);
+            properties.put(&quot;username&quot;, sylinUser);
+            properties.put(&quot;password&quot;, sylinPassWord);
+            properties.put(&quot;security.enabled&quot;, false);
+            properties.put(&quot;advanced&quot;, false);
+            return new SaikuDatasource(cubeName, SaikuDatasource.Type.OLAP, properties);
+        }
+        return null;
+    }
+
+    private String execute(String url) throws URISyntaxException, IOException {
+        int httpConnectionTimeoutMs = 30000;
+        int httpSocketTimeoutMs = 120000;
+        final HttpParams httpParams = new BasicHttpParams();
+        final PoolingClientConnectionManager cm = new PoolingClientConnectionManager();
+        HttpConnectionParams.setSoTimeout(httpParams, httpSocketTimeoutMs);
+        HttpConnectionParams.setConnectionTimeout(httpParams, httpConnectionTimeoutMs);
+        cm.setDefaultMaxPerRoute(20);
+        cm.setMaxTotal(200);
+        HttpGet get = newGet(url);
+        get.setURI(new URI(url));
+        DefaultHttpClient client = new DefaultHttpClient(cm, httpParams);
+        if (sylinUser != null &amp;&amp; sylinPassWord != null) {
+            CredentialsProvider provider = new BasicCredentialsProvider();
+            UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(sylinUser, sylinPassWord);
+            provider.setCredentials(AuthScope.ANY, credentials);
+            client.setCredentialsProvider(provider);
+        }
+        HttpResponse response = client.execute(get);
+        if (response.getStatusLine().getStatusCode() != 200) {
+            throw new IOException(&quot;Invalid response &quot; + response.getStatusLine().getStatusCode());
+        }
+
+        String result = getContent(response);
+        return result;
+    }
+
+    private HttpGet newGet(String url) {
+        HttpGet get = new HttpGet();
+        addHttpHeaders(get);
+        return get;
+    }
+
+    private void addHttpHeaders(HttpRequestBase method) {
+        method.addHeader(&quot;Accept&quot;, &quot;application/json, text/plain, */*&quot;);
+        method.addHeader(&quot;Content-Type&quot;, &quot;application/json&quot;);
+        String basicAuth = DatatypeConverter
+                .printBase64Binary((sylinUser + &quot;:&quot; + sylinPassWord).getBytes(StandardCharsets.UTF_8));
+        method.addHeader(&quot;Authorization&quot;, &quot;Basic &quot; + basicAuth);
+    }
+
+    private String getContent(HttpResponse response) throws IOException {
+        InputStreamReader reader = null;
+        BufferedReader rd = null;
+        StringBuffer result = new StringBuffer();
+        try {
+            reader = new InputStreamReader(response.getEntity().getContent(), StandardCharsets.UTF_8);
+            rd = new BufferedReader(reader);
+            String line = null;
+            while ((line = rd.readLine()) != null) {
+                result.append(line);
+            }
+        } finally {
+            IOUtils.closeQuietly(reader);
+            IOUtils.closeQuietly(rd);
+        }
+        return result.toString();
+    }
+}
+</code></pre>
+<p><strong>mondrian3.0语法工具类</strong></p>
+<pre><code class="language-java">package org.saiku.service.util;
+
+import org.apache.kylin.cube.model.CubeDesc;
+import org.apache.kylin.cube.model.DimensionDesc;
+import org.apache.kylin.metadata.model.*;
+
+import java.util.*;
+
+public class SchemaUtil1 {
+    private static String newLine = &quot;\r\n&quot;;
+    private static Set&lt;String&gt; aggSet = new HashSet&lt;String&gt;(){
+        {
+            add(&quot;sum&quot;);
+            add(&quot;min&quot;);
+            add(&quot;max&quot;);
+            add(&quot;count&quot;);
+            add(&quot;count_distinct&quot;);
+        }
+
+    };
+
+
+    public static String createSchema(String dataSourceName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
+        StringBuffer sb = new StringBuffer();
+        sb = appendSchema(sb, dataSourceName, cubeDesc, modelDesc);
+        return sb.toString();
+    }
+
+    public static StringBuffer appendSchema(StringBuffer sb, String dataSourceName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
+        sb.append(&quot;&lt;?xml version='1.0'?&gt;&quot;).append(newLine)
+                .append(&quot;&lt;Schema name='&quot; + dataSourceName.split(&quot;#&quot;)[0].trim()+&quot;'&gt;&quot;)
+                .append(newLine);
+        sb = appendCube(sb, dataSourceName, cubeDesc, modelDesc);
+        sb.append(&quot;&lt;/Schema&gt;&quot;).append(newLine);
+        return sb;
+    }
+
+    public static StringBuffer appendCube(StringBuffer sb, String cubeName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
+        sb.append(&quot;&lt;Cube name='&quot; + cubeName.split(&quot;#&quot;)[1] + &quot;'&gt;&quot;).append(newLine);
+        sb.append(&quot;&lt;Table name='&quot;+dealTableName(modelDesc.getRootFactTableName())+&quot;'/&gt;&quot;).append(newLine);
+        HashMap&lt;String,String&gt; aliasTableMap = new HashMap&lt;String,String&gt;();
+        HashMap&lt;String,String&gt; aliasTableJoinMap = new HashMap&lt;String,String&gt;();
+        aliasTableMap.put(dealTableName(modelDesc.getRootFactTableName()),dealTableName(modelDesc.getRootFactTableName()));
+        for(JoinTableDesc joinTableDesc:modelDesc.getJoinTables()) {
+            aliasTableMap.put(joinTableDesc.getAlias(),dealTableName(joinTableDesc.getTable()));
+            if(joinTableDesc.getJoin().getPrimaryKey().length == 1){
+                aliasTableJoinMap.put(dealTableName(joinTableDesc.getAlias()),joinTableDesc.getJoin().getPrimaryKey()[0].concat(&quot;#&quot;).concat(joinTableDesc.getJoin().getForeignKey()[0]));
+            }
+        }
+
+        for(DimensionDesc dimensionDesc: cubeDesc.getDimensions()){
+            // tableSet.add(dealTableName(dimensionDesc.getTable()));
+            if(aliasTableMap.get(dealTableName(dimensionDesc.getTable())).equals(dealTableName(modelDesc.getRootFactTableName()))){
+                sb.append(&quot;&lt;Dimension name='&quot;+dimensionDesc.getName()+&quot;'&gt;&quot;).append(newLine);
+                sb.append(&quot;&lt;Hierarchy name='&quot;+dimensionDesc.getName()+&quot;' hasAll='true' allMemberName='All &quot;+dimensionDesc.getName()+&quot;'&gt;&quot;).append(newLine);
+
+            }else if(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable()))==null){
+                continue;
+            } else if(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable()))!=null &amp;&amp; aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0]
+                    .equals(dealTableName(modelDesc.getRootFactTableName()))){
+                sb.append(&quot;&lt;Dimension name='&quot;+dimensionDesc.getName()+&quot;' foreignKey='&quot;+aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable()))
+                        .split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[1]+&quot;'&gt;&quot;).append(newLine);
+
+                sb.append(&quot;&lt;Hierarchy name='&quot;+dimensionDesc.getName()+&quot;' hasAll='true' allMemberName='All &quot;+dimensionDesc.getName()+&quot;' primaryKey='&quot;+
+                        aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[0].split(&quot;\\.&quot;)[1]+&quot;'&gt;&quot;).append(newLine);
+
+                sb.append(&quot;&lt;Table name='&quot;+aliasTableMap.get(dealTableName(dimensionDesc.getTable()))+&quot;'/&gt;&quot;).append(newLine);
+
+            } else if(aliasTableJoinMap.get(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0])
+                    .split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0].equals(dealTableName(modelDesc.getRootFactTableName()))){
+                sb.append(&quot;&lt;Dimension name='&quot;+dimensionDesc.getName()+&quot;' foreignKey='&quot;+aliasTableJoinMap.get(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable()))
+                        .split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0]).split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[1]+&quot;'&gt;&quot;).append(newLine);
+
+                sb.append(&quot;&lt;Hierarchy name='&quot;+dimensionDesc.getName()+&quot;' hasAll='true' allMemberName='All &quot;+dimensionDesc.getName()+&quot;' primaryKey='&quot;+
+                        aliasTableJoinMap.get(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0])
+                                .split(&quot;#&quot;)[0].split(&quot;\\.&quot;)[1]+&quot;' primaryKeyTable='&quot;+aliasTableMap.get(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable()))
+                        .split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0])+&quot;'&gt;&quot;).append(newLine);
+
+                sb.append(&quot;&lt;Join leftKey='&quot;+aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[1]+&quot;' rightAlias='&quot;+aliasTableMap.get(dimensionDesc.getTable())+
+                        &quot;' rightKey='&quot;+aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[0].split(&quot;\\.&quot;)[1]+&quot;'&gt;&quot;).append(newLine);
+
+                sb.append(&quot;&lt;Table name='&quot;+aliasTableMap.get(aliasTableJoinMap.get(dealTableName(dimensionDesc.getTable())).split(&quot;#&quot;)[1].split(&quot;\\.&quot;)[0])+&quot;'/&gt;&quot;).append(newLine);
+                sb.append(&quot;&lt;Table name='&quot;+aliasTableMap.get(dimensionDesc.getTable())+&quot;'/&gt;&quot;).append(newLine);
+                sb.append(&quot;&lt;/Join&gt;&quot;).append(newLine);
+            } else {
+                continue;
+            }
+            Set&lt;String&gt; columns = getColumns(dimensionDesc);
+            for(String column:columns){
+                sb.append(&quot;&lt;Level name='&quot;+column+&quot;' column='&quot;+column+&quot;' table='&quot;+aliasTableMap.get(dimensionDesc.getTable())+&quot;'/&gt;&quot;).append(newLine);
+            }
+            sb.append(&quot;&lt;/Hierarchy&gt;&quot;).append(newLine);
+            sb.append(&quot;&lt;/Dimension&gt;&quot;).append(newLine);
+        }
+        for (MeasureDesc measureDesc : cubeDesc.getMeasures()) {
+            int i=0;
+            String table = measureDesc.getFunction().getParameter().getValue().split(&quot;\\.&quot;)[0];
+            final boolean flag = Arrays.stream(modelDesc.getJoinTables()).anyMatch(item -&gt; table.equals(dealTableName(item.getTable())));
+            if(table.equals(dealTableName(modelDesc.getRootFactTableName()))||flag||table.equals(&quot;1&quot;)){
+                addMeasure(sb,measureDesc,getColumn(cubeDesc,modelDesc,dealTableName(modelDesc.getRootFactTableName())));
+            }
+        }
+
+        sb.append(&quot;&lt;/Cube&gt;&quot;).append(newLine);
+        return sb;
+    }
+
+
+
+    public static String dealTableName(String tableName){
+        if(tableName.contains(&quot;.&quot;))
+            return tableName.split(&quot;\\.&quot;)[1];
+        else
+            return tableName;
+    }
+
+    public static StringBuffer addMeasure(StringBuffer sb, MeasureDesc measureDesc, String defaultColumn) {
+        FunctionDesc funtionDesc = measureDesc.getFunction();
+        String aggregator = funtionDesc.getExpression().trim().toLowerCase();
+        if(aggSet.contains(aggregator.toLowerCase())){
+            //mondrian only have distinct-count
+            if(aggregator.equals(&quot;count_distinct&quot;)){
+                aggregator = &quot;distinct-count&quot;;
+            }
+            if(funtionDesc.getParameter().getValue().equals(&quot;1&quot;)) {
+                sb.append(&quot;&lt;Measure aggregator='&quot; + aggregator + &quot;' column='&quot; + defaultColumn + &quot;' name='&quot; + measureDesc.getName() + &quot;' visible='true'/&gt;&quot;)
+                        .append(newLine);
+            }
+            else
+                sb.append(&quot;&lt;Measure aggregator='&quot; + aggregator + &quot;' column='&quot; + funtionDesc.getParameter().getValue().split(&quot;\\.&quot;)[1] + &quot;' name='&quot; + measureDesc.getName() + &quot;' visible='true'/&gt;&quot;)
+                        .append(newLine);
+            return sb;
+        }
+        return sb;
+    }
+
+    public static String getColumn(CubeDesc cubeDesc,DataModelDesc dataModelDesc,String tableName){
+        List&lt;MeasureDesc&gt; measureDescList = cubeDesc.getMeasures();
+        for(MeasureDesc measureDesc:measureDescList){
+            if(measureDesc.getFunction().getParameter().getValue().split(&quot;\\.&quot;)[0].equals(tableName)){
+                return measureDesc.getFunction().getParameter().getValue().split(&quot;\\.&quot;)[1];
+            }
+        }
+        if(dataModelDesc.getMetrics().length&gt;0){
+            return dataModelDesc.getMetrics()[0];
+        }
+
+        for(ModelDimensionDesc modelDimensionDesc:dataModelDesc.getDimensions()){
+            if(modelDimensionDesc.getTable().equals(tableName)){
+                return modelDimensionDesc.getColumns()[0];
+            }
+        }
+        return null;
+    }
+
+    public static Set&lt;String&gt; getColumns(DimensionDesc dimensionDesc){
+        Set&lt;String&gt; columns = new HashSet&lt;String&gt;();
+        if (dimensionDesc.getColumn() != null || dimensionDesc.getDerived() != null) {
+            if(dimensionDesc.getColumn() != null) {
+                columns.add(dimensionDesc.getColumn());
+            }
+            if (dimensionDesc.getDerived() != null) {
+                for (String derived : dimensionDesc.getDerived()) {
+                    columns.add(derived);
+                }
+            }
+        } else {
+            columns.add(dimensionDesc.getName());
+        }
+        return columns;
+    }
+}
+</code></pre>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;Schema name=&quot;Mondrian&quot;&gt;  &lt;!--模型定义--&gt;
+&lt;Cube name=&quot;Person&quot;&gt;     &lt;!--立方体 ，一个立方体有多个维度--&gt;
+    &lt;Table name=&quot;PERSON&quot; /&gt;  &lt;!--立方体对应的表 --&gt;
+     &lt;Dimension name=&quot;部门&quot; foreignKey=&quot;USERID&quot; &gt; &lt;!--定义维度 --&gt;
+        &lt;Hierarchy  hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有部门&quot; &gt; &lt;!--定义维度下面的层次，层次包含很多层 --&gt;
+          &lt;Table name=&quot;PERSON&quot; alias=&quot;a&quot;/&gt;                                   &lt;!--定义维度获取数据的来源-表 --&gt;
+        &lt;Level name=&quot;部门&quot; column=&quot;DEPARTMENT&quot; uniqueMembers=&quot;true&quot; /&gt; &lt;!--定义层次的层，每个层对应数据库中对应的字段 --&gt;
+        &lt;Level name=&quot;姓名&quot; column=&quot;USERNAME&quot; uniqueMembers=&quot;true&quot; /&gt;           
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;     
+    &lt;Dimension name=&quot;性别&quot;  foreignKey=&quot;USERID&quot; &gt;
+        &lt;Hierarchy hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有性别&quot;&gt;         
+            &lt;Table name=&quot;PERSON&quot; alias=&quot;b&quot; /&gt;
+        &lt;Level name=&quot;性别&quot; column=&quot;SEX&quot;   uniqueMembers=&quot;true&quot; /&gt;
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;
+    &lt;Dimension name=&quot;专业技术资格类别&quot;  foreignKey=&quot;USERID&quot; &gt;
+        &lt;Hierarchy hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有专业技术资格类别&quot;&gt;         
+            &lt;Table name=&quot;PERSON&quot; alias=&quot;c&quot; /&gt;
+        &lt;Level name=&quot;资格类别&quot; column=&quot;ZYJSLB&quot;   uniqueMembers=&quot;true&quot; /&gt;
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;
+    &lt;Dimension name=&quot;专业技术资格等级&quot;  foreignKey=&quot;USERID&quot; &gt;
+        &lt;Hierarchy hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有专业技术资格等级&quot;&gt;         
+            &lt;Table name=&quot;PERSON&quot; alias=&quot;d&quot; /&gt;
+        &lt;Level name=&quot;资格等级&quot; column=&quot;ZYJSDJ&quot;   uniqueMembers=&quot;true&quot; /&gt;
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;
+     &lt;Dimension name=&quot;职系&quot;  foreignKey=&quot;USERID&quot; &gt;
+        &lt;Hierarchy hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有职系&quot;&gt;         
+            &lt;Table name=&quot;PERSON&quot; alias=&quot;e&quot; /&gt;
+        &lt;Level name=&quot;职系&quot; column=&quot;ZHIXI&quot;   uniqueMembers=&quot;true&quot; /&gt;
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;
+    &lt;Dimension name=&quot;民族&quot;  foreignKey=&quot;USERID&quot; &gt;
+        &lt;Hierarchy hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有民族&quot;&gt;         
+            &lt;Table name=&quot;PERSON&quot; alias=&quot;f&quot; /&gt;
+        &lt;Level name=&quot;民族&quot; column=&quot;NATIONALITY&quot;   uniqueMembers=&quot;true&quot; /&gt;
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;
+    &lt;Dimension name=&quot;学历&quot;  foreignKey=&quot;USERID&quot; &gt;
+        &lt;Hierarchy hasAll=&quot;true&quot; primaryKey=&quot;USERID&quot; allMemberName=&quot;所有学历&quot;&gt;         
+            &lt;Table name=&quot;PERSON&quot; alias=&quot;g&quot; /&gt;
+        &lt;Level name=&quot;学历&quot; column=&quot;XUELI&quot;   uniqueMembers=&quot;true&quot; /&gt;
+        &lt;/Hierarchy&gt;
+    &lt;/Dimension&gt;       
+    &lt;Measure name=&quot;人数&quot; column=&quot;USERID&quot; aggregator=&quot;distinct count&quot; /&gt;       &lt;!--指标/度量，采用distinct count聚合 --&gt;
+    &lt;/Cube&gt;
+&lt;/Schema&gt;
+</code></pre>
+<p><strong>mondrian4.0语法工具类</strong></p>
+<pre><code class="language-java">package org.saiku.service.util;
+
+import org.apache.kylin.cube.model.CubeDesc;
+import org.apache.kylin.cube.model.DimensionDesc;
+import org.apache.kylin.cube.model.RowKeyDesc;
+import org.apache.kylin.metadata.model.*;
+
+import java.util.*;
+
+public class SchemaUtil {
+    private static final String newLine = &quot;\r\n&quot;;
+    private static Map&lt;String, String&gt; map ;
+
+    public static String createSchema(String dataSourceName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
+        StringBuffer sb = new StringBuffer();
+        sb = appendSchema(sb, dataSourceName, cubeDesc, modelDesc);
+//        System.out.println(&quot;********************************&quot; + sb.toString());
+        return sb.toString();
+    }
+
+    public static StringBuffer appendSchema(StringBuffer sb, String dataSourceName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
+        sb.append(&quot;&lt;?xml version='1.0'?&gt;&quot;).append(newLine)
+                .append(&quot;&lt;Schema name='&quot;).append(dataSourceName.split(&quot;#&quot;)[0].trim()).append(&quot;' metamodelVersion='4.0'&gt;&quot;)
+//                .append(&quot;&lt;Schema name='&quot; + dataSourceName + &quot;' metamodelVersion='4.0'&gt;&quot;)
+                .append(newLine);
+        appendTable(sb, modelDesc);
+        appendDimension(sb, modelDesc);
+        appendCube(sb, dataSourceName, cubeDesc, modelDesc);
+        sb.append(&quot;&lt;/Schema&gt;&quot;).append(newLine);
+        return sb;
+    }
+
+    public static StringBuffer appendTable(StringBuffer sb, DataModelDesc modelDesc) {
+        StringBuilder linkSb = new StringBuilder();
+        //获取所有关系表
+        final List&lt;ModelDimensionDesc&gt; tables = modelDesc.getDimensions();
+        sb.append(&quot;&lt;PhysicalSchema&gt;&quot;).append(newLine);
+        //添加表关联关系
+        final JoinTableDesc[] joinTables = modelDesc.getJoinTables();
+        for (JoinTableDesc joinTableDesc : joinTables) {
+            String factTablename = dealModelTableName(joinTableDesc.getJoin().getForeignKey()[0]);
+            String Column = dealTableName(joinTableDesc.getJoin().getForeignKey()[0]);
+            String joinTablename = dealModelTableName(joinTableDesc.getJoin().getPrimaryKey()[0]);
+            String joinColumn = dealTableName(joinTableDesc.getJoin().getPrimaryKey()[0]);
+            linkSb.append(&quot; &lt;Link source='&quot;).append(factTablename).append(&quot;' target='&quot;).append(joinTablename).append(&quot;'&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;ForeignKey&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;Column name='&quot;).append(Column).append(&quot;'/&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;/ForeignKey&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;/Link&gt;&quot;).append(newLine);
+            map = new HashMap&lt;&gt;();
+            tables.forEach(item -&gt; {
+                if (item.getTable().equals(factTablename)) {
+                    map.put(factTablename, Column);
+                }
+                if (item.getTable().equals(joinTablename)) {
+                    map.put(joinTablename, joinColumn);
+                }
+            });
+        }
+        //添加表
+        for (String tableName : map.keySet()) {
+            sb.append(&quot;&lt;Table name='&quot;).append(tableName).append(&quot;'&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;Key&gt;&quot;).append(newLine).append(&quot;&lt;Column name='&quot;).append(map.get(tableName)).append(&quot;'/&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;/Key&gt;&quot;).append(newLine)
+                    .append(&quot;&lt;/Table&gt;&quot;).append(newLine);
+        }
+
+        sb.append(linkSb);
+        linkSb.delete(0, linkSb.length());
+        sb.append(&quot;&lt;/PhysicalSchema&gt;&quot;).append(newLine);
+        return sb;
+    }
+
+    public static Map&lt;String, JoinDesc&gt; getJoinDesc(DataModelDesc modelDesc) {
+        Map&lt;String, JoinDesc&gt; joinDescMap = new HashMap&lt;String, JoinDesc&gt;();
+        for (JoinTableDesc lookupDesc : modelDesc.getJoinTables()) {
+            if (!joinDescMap.containsKey(dealTableName(lookupDesc.getTable())))
+                joinDescMap.put(dealTableName(lookupDesc.getTable()), lookupDesc.getJoin());
+        }
+        return joinDescMap;
+    }
+
+    public static void appendDimension(StringBuffer sb, DataModelDesc modelDesc) {
+        StringBuilder hierSb = new StringBuilder();
+        for (ModelDimensionDesc dimensionDesc : modelDesc.getDimensions()) {
+            sb.append(&quot;&lt;Dimension name='&quot;).append(dimensionDesc.getTable()).append(&quot;' key='&quot;).append(map.get(dimensionDesc.getTable())).append(&quot;' table='&quot;).append(dimensionDesc.getTable()).append(&quot;'&gt;&quot;).append(newLine);
+            sb.append(&quot;&lt;Attributes&gt;&quot;).append(newLine);
+            hierSb.append(&quot;&lt;Hierarchies&gt;&quot;).append(newLine);
+            hierSb.append(&quot;&lt;Hierarchy  name='&quot;).append(dimensionDesc.getTable()).append(&quot;' hasAll='true'&gt;&quot;).append(newLine);
+            for (String column : dimensionDesc.getColumns()) {
+                // add Attributes to stringbuffer
+                addAttribute(sb, column);
+                addHierarchy(hierSb, column);
+            }
+            sb.append(&quot;&lt;/Attributes&gt;&quot;).append(newLine);
+            hierSb.append(&quot;&lt;/Hierarchy&gt;&quot;).append(newLine);
+            hierSb.append(&quot;&lt;/Hierarchies&gt;&quot;).append(newLine);
+            sb.append(hierSb);
+            hierSb.delete(0, hierSb.length());
+            sb.append(&quot;&lt;/Dimension&gt;&quot;).append(newLine);
+        }
+    }
+
+    public static Set&lt;String&gt; getColumns(DimensionDesc dimensionDesc) {
+        Set&lt;String&gt; columns = new HashSet&lt;String&gt;();
+        if (dimensionDesc.getColumn() != null || dimensionDesc.getDerived() != null) {
+            if (dimensionDesc.getColumn() != null) {
+//                for (String column : dimensionDesc.getColumn()) {
+                columns.add(dimensionDesc.getColumn());
+//                }
+            }
+            if (dimensionDesc.getDerived() != null) {
+                columns.addAll(Arrays.asList(dimensionDesc.getDerived()));
+            }
+        } else {
+            columns.add(dimensionDesc.getName());
+        }
+        return columns;
+    }
+
+    public static StringBuffer addAttribute(StringBuffer sb, String attr) {
+        sb.append(&quot;&lt;Attribute name='&quot;).append(attr).append(&quot;' keyColumn='&quot;).append(attr).append(&quot;' hasHierarchy='false'/&gt;&quot;).append(newLine);
+        return sb;
+    }
+
+    public static void addHierarchy(StringBuilder sb, String attr) {
+        sb.append(&quot;&lt;Level attribute='&quot;).append(attr).append(&quot;'/&gt;&quot;).append(newLine);
+    }
+
+
+    public static String dealTableName(String tableName) {
+        if (tableName.contains(&quot;.&quot;))
+            return tableName.split(&quot;\\.&quot;)[1];
+        else
+            return tableName;
+    }
+
+    public static String dealModelTableName(String tableName) {
+        if (tableName.contains(&quot;.&quot;))
+            return tableName.split(&quot;\\.&quot;)[0];
+        else
+            return tableName;
+    }
+
+    public static StringBuffer appendCube(StringBuffer sb, String cubeName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
+        sb.append(&quot;&lt;Cube name='&quot;).append(cubeName.split(&quot;#&quot;)[1].trim()).append(&quot;'&gt;&quot;).append(newLine);
+        addCubeDimension(sb, modelDesc.getDimensions());
+        sb.append(&quot;&lt;MeasureGroups&gt;&quot;).append(newLine);
+
+        Map&lt;String, Map&lt;String, MeasureDesc&gt;&gt; allMap = new HashMap();
+
+        MeasureDesc one = new MeasureDesc();
+        for (MeasureDesc measureDesc : cubeDesc.getMeasures()) {
+            final String tableName = dealModelTableName(measureDesc.getFunction().getParameter().getValue());
+            final String columnName = dealTableName(measureDesc.getFunction().getParameter().getValue());
+            if (&quot;1&quot;.equals(tableName)) {
+                one = measureDesc;
+            } else {
+                if (Objects.isNull(allMap.get(tableName))) {
+                    Map&lt;String, MeasureDesc&gt; map = new HashMap();
+                    if (Objects.nonNull(one)) {
+                        map.put(columnName, one);
+                        one = null;
+                    }
+                    map.put(columnName, measureDesc);
+                    allMap.put(tableName, map);
+                } else {
+                    allMap.get(tableName).put(columnName, measureDesc);
+                }
+            }
+        }
+
+        allMap.forEach((tableName, value) -&gt; {
+            sb.append(&quot;&lt;MeasureGroup table='&quot;).append(dealTableName(tableName)).append(&quot;'&gt;&quot;).append(newLine);
+            addDimensionLink(sb, modelDesc);
+            sb.append(&quot;&lt;Measures&gt;&quot;).append(newLine);
+            value.forEach((columnName, measureDesc) -&gt; {
+                addMeasure(sb, measureDesc, getColumn(cubeDesc));
+            });
+            sb.append(&quot;&lt;/Measures&gt;&quot;).append(newLine);
+            sb.append(&quot;&lt;/MeasureGroup&gt;&quot;).append(newLine);
+        });
+        sb.append(&quot;&lt;/MeasureGroups&gt;&quot;).append(newLine);
+        sb.append(&quot;&lt;/Cube&gt;&quot;).append(newLine);
+        return sb;
+    }
+
+    public static void addCubeDimension(StringBuffer sb, List&lt;ModelDimensionDesc&gt; dimensionDescs) {
+        sb.append(&quot;&lt;Dimensions&gt;&quot;).append(newLine);
+        for (ModelDimensionDesc dimensionDesc : dimensionDescs) {
+            sb.append(&quot;&lt;Dimension source='&quot;).append(dimensionDesc.getTable()).append(&quot;' visible='true'/&gt;&quot;).append(newLine);
+        }
+        sb.append(&quot;&lt;/Dimensions&gt;&quot;).append(newLine);
+    }
+
+    public static void addDimensionLink(StringBuffer sb, DataModelDesc modelDesc) {
+        sb.append(&quot;&lt;DimensionLinks&gt;&quot;).append(newLine);
+        for (ModelDimensionDesc dimensionDesc : modelDesc.getDimensions()) {
+            sb.append(&quot;&lt;ForeignKeyLink dimension='&quot;).append(dimensionDesc.getTable()).append(&quot;' foreignKeyColumn='&quot;).append(map.get(dimensionDesc.getTable())).append(&quot;'/&gt;&quot;).append(newLine);
+        }
+        sb.append(&quot; &lt;/DimensionLinks&gt;&quot;).append(newLine);
+    }
+
+    public static StringBuffer addMeasure(StringBuffer sb, MeasureDesc measureDesc, String defaultColumn) {
+        FunctionDesc funtionDesc = measureDesc.getFunction();
+        String aggregator = funtionDesc.getExpression().trim().toLowerCase();
+        //mondrian only have distinct-count
+        if (aggregator.equals(&quot;count_distinct&quot;)) {
+            aggregator = &quot;distinct-count&quot;;
+        }
+        if (funtionDesc.getParameter().getValue().equals(&quot;1&quot;)) {
+            sb.append(&quot;&lt;Measure aggregator='&quot;).append(aggregator).append(&quot;' column='&quot;).append(dealTableName(defaultColumn)).append(&quot;' name='&quot;).append(measureDesc.getName()).append(&quot;' visible='true'/&gt;&quot;)
+                    .append(newLine);
+        } else
+            sb.append(&quot;&lt;Measure aggregator='&quot;).append(aggregator).append(&quot;' column='&quot;).append(dealTableName(funtionDesc.getParameter().getValue())).append(&quot;' name='&quot;).append(measureDesc.getName()).append(&quot;' visible='true'/&gt;&quot;)
+                    .append(newLine);
+        return sb;
+    }
+
+    public static Set&lt;String&gt; getTables(List&lt;DimensionDesc&gt; dimensionDescList) {
+        Set&lt;String&gt; tables = new HashSet&lt;String&gt;();
+        for (DimensionDesc dimensionDesc : dimensionDescList) {
+            String table = dealTableName(dimensionDesc.getTable());
+            tables.add(table);
+        }
+        return tables;
+    }
+
+    public static String getColumn(CubeDesc cubeDesc) {
+        RowKeyDesc rowKey = cubeDesc.getRowkey();
+        return rowKey.getRowKeyColumns()[0].getColumn();
+    }
+}
+</code></pre>
+<pre><code class="language-xml">&lt;?xml version='1.0'?&gt;
+&lt;Schema name='xiaowei' metamodelVersion='4.0'&gt;
+&lt;PhysicalSchema&gt;
+	&lt;Table name='TBL_FARM_INCOME_STATICS'&gt;
+		&lt;Key&gt;
+			&lt;Column name='COMPANY_ID'/&gt;
+		&lt;/Key&gt;
+	&lt;/Table&gt;
+	&lt;Table name='TBL_CUSTOMER'&gt;
+		&lt;Key&gt;
+			&lt;Column name='COMPANY_ID'/&gt;
+		&lt;/Key&gt;
+	&lt;/Table&gt;
+	&lt;Link source='TBL_FARM_INCOME_STATICS' target='TBL_CUSTOMER'&gt;
+		&lt;ForeignKey&gt;
+			&lt;Column name='COMPANY_ID'/&gt;
+		&lt;/ForeignKey&gt;
+	&lt;/Link&gt;
+&lt;/PhysicalSchema&gt;
+&lt;Dimension name='TBL_FARM_INCOME_STATICS' table='TBL_FARM_INCOME_STATICS' key='COMPANY_ID'&gt;
+	&lt;Attributes&gt;
+		&lt;Attribute name='COMPANY_ID' keyColumn='COMPANY_ID' hasHierarchy='false'/&gt;
+		&lt;Attribute name='INCOME_DATE' keyColumn='INCOME_DATE' hasHierarchy='false'/&gt;
+	&lt;/Attributes&gt;
+
+	&lt;Hierarchies&gt;
+		&lt;Hierarchy name='TBL_FARM_INCOME_STATICS' allMemberName='All Warehouses'&gt;
+			&lt;Level attribute='COMPANY_ID'/&gt;
+			&lt;Level attribute='INCOME_DATE'/&gt;
+		&lt;/Hierarchy&gt;
+	&lt;/Hierarchies&gt;
+&lt;/Dimension&gt;
+
+&lt;Dimension name='TBL_CUSTOMER' table='TBL_CUSTOMER' key='COMPANY_ID'&gt;
+	&lt;Attributes&gt;
+		&lt;Attribute name='COMPANY_ID' keyColumn='COMPANY_ID' hasHierarchy='false'/&gt;
+		&lt;Attribute name='CUSTOMER_TYPE' keyColumn='CUSTOMER_TYPE' hasHierarchy='false'/&gt;
+		&lt;Attribute name='PHONE' keyColumn='PHONE' hasHierarchy='false'/&gt;
+	&lt;/Attributes&gt;
+
+	&lt;Hierarchies&gt;
+		&lt;Hierarchy name='TBL_CUSTOMER' allMemberName='All Warehouses'&gt;
+			&lt;Level attribute='COMPANY_ID'/&gt;
+			&lt;Level attribute='CUSTOMER_TYPE'/&gt;
+			&lt;Level attribute='PHONE'/&gt;
+		&lt;/Hierarchy&gt;
+	&lt;/Hierarchies&gt;
+&lt;/Dimension&gt;
+
+&lt;Cube name='tbl_farm_income_statics'&gt;
+&lt;Dimensions&gt;
+&lt;Dimension source='TBL_FARM_INCOME_STATICS' visible='true'/&gt;
+&lt;Dimension source='TBL_CUSTOMER' visible='true'/&gt;
+&lt;/Dimensions&gt;
+&lt;MeasureGroups&gt;
+	&lt;MeasureGroup table='TBL_CUSTOMER'&gt;
+		&lt;Measures&gt;
+			&lt;Measure aggregator='sum' column='CONSUME_AMMOUT' name='CONSUME_AMMOUT_SUM' visible='true'/&gt;
+		&lt;/Measures&gt;
+		&lt;DimensionLinks&gt;
+			&lt;ForeignKeyLink dimension='TBL_FARM_INCOME_STATICS' foreignKeyColumn='COMPANY_ID'/&gt;
+			&lt;ForeignKeyLink dimension='TBL_CUSTOMER' foreignKeyColumn='COMPANY_ID'/&gt;
+		&lt;/DimensionLinks&gt;
+	&lt;/MeasureGroup&gt;
+
+	&lt;MeasureGroup table='TBL_FARM_INCOME_STATICS'&gt;
+		&lt;Measures&gt;
+			&lt;Measure aggregator='count' column='COMPANY_ID' name='_COUNT_' visible='true'/&gt;
+			&lt;Measure aggregator='sum' column='REFUND_AMOUNT' name='REFUND_AMOUNT_SUM' visible='true'/&gt;
+			&lt;Measure aggregator='sum' column='COMMON_REFUND_AMOUNT' name='COMMON_REFUND_AMOUNT_SUM' visible='true'/&gt;
+			&lt;Measure aggregator='sum' column='COMMON_INCOME' name='COMMON_INCOME_SUM' visible='true'/&gt;
+			&lt;Measure aggregator='sum' column='SALE_AMOUNT' name='SALE_AMOUNT_SUM' visible='true'/&gt;
+			&lt;Measure aggregator='sum' column='RENEW_AMOUNT' name='RENEW_AMOUNT_SUM' visible='true'/&gt;
+			&lt;Measure aggregator='sum' column='TOTAL_AMOUNT' name='TOTAL_AMOUNT_SUM' visible='true'/&gt;
+		&lt;/Measures&gt;
+		&lt;DimensionLinks&gt;
+			&lt;ForeignKeyLink dimension='TBL_FARM_INCOME_STATICS' foreignKeyColumn='COMPANY_ID'/&gt;
+			&lt;ForeignKeyLink dimension='TBL_CUSTOMER' foreignKeyColumn='COMPANY_ID'/&gt;
+		&lt;/DimensionLinks&gt;
+	&lt;/MeasureGroup&gt;
+&lt;/MeasureGroups&gt;
+&lt;/Cube&gt;
+&lt;/Schema&gt;
+
+</code></pre>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[同步 异步 阻塞 非阻塞]]></title>
         <id>https://tianxiawuhao.github.io/post/1SOcADwUR/</id>
@@ -205,6 +905,20 @@
 }
 </code></pre>
 <figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1631867929854.png" alt="" loading="lazy"></figure>
+<h3 id="直接缓冲区与非直接缓冲区">直接缓冲区与非直接缓冲区：</h3>
+<p>非直接缓冲区：通过 allocate() 方法分配缓冲区，将缓冲区建立在 JVM 的内存中<br>
+直接缓冲区：通过 allocateDirect() 方法分配直接缓冲区，将缓冲区建立在物理内存中。可以提高效率</p>
+<ol>
+<li>字节缓冲区要么是直接的，要么是非直接的。如果为直接字节缓冲区，则 Java 虚拟机会尽最大努力直接在机 此缓冲区上执行本机 I/O 操作。也就是说，在每次调用基础操作系统的一个本机 I/O 操作之前（或之后），</li>
+<li>虚拟机都会尽量避免将缓冲区的内容复制到中间缓冲区中（或从中间缓冲区中复制内容）。</li>
+<li>直接字节缓冲区可以通过调用此类的 allocateDirect() 工厂方法 来创建。此方法返回的 缓冲区进行分配和取消分配所需成本通常高于非直接缓冲区 。直接缓冲区的内容可以驻留在常规的垃圾回收堆之外，因此，它们对应用程序的内存需求量造成的影响可能并不明显。所以，建议将直接缓冲区主要分配给那些易受基础系统的本机 I/O 操作影响的大型、持久的缓冲区。一般情况下，最好仅在直接缓冲区能在程序性能方面带来明显好处时分配它们。</li>
+<li>直接字节缓冲区还可以过 通过FileChannel 的 map() 方法 将文件区域直接映射到内存中来创建 。该方法返回MappedByteBuffer 。Java 平台的实现有助于通过 JNI 从本机代码创建直接字节缓冲区。如果以上这些缓冲区中的某个缓冲区实例指的是不可访问的内存区域，则试图访问该区域不会更改该缓冲区的内容，并且将会在访问期间或稍后的某个时间导致抛出不确定的异常。</li>
+<li>字节缓冲区是直接缓冲区还是非直接缓冲区可通过调用其 isDirect() 方法来确定。提供此方法是为了能够在性能关键型代码中执行显式缓冲区管理。</li>
+</ol>
+<p>非直接缓冲区：</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1632797370169.png" alt="" loading="lazy"></figure>
+<p>直接缓冲区：</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1632797378679.png" alt="" loading="lazy"></figure>
 <h3 id="通道channel">通道（Channel ）</h3>
 <p>通道表示打开到 IO 设备(例如：文件、套接字)的连接。若需要使用 NIO 系统，需要获取用于连接 IO 设备的通道以及用于容纳数据的缓冲区。然后操作缓冲区，对数据进行处理。<br>
 　　Channel相比IO中的Stream更加高效，可以异步双向传输，但是必须和buffer一起使用。</p>
@@ -216,10 +930,15 @@ DatagramChannel，通过UDP读写网络中的数据。
 </code></pre>
 <h3 id="channel聚集gather写入">Channel聚集(gather)写入</h3>
 <p>聚集写入（ Gathering Writes）是指将多个 Buffer 中的数据“聚集”到 Channel。 特别注意：按照缓冲区的顺序，写入 position 和 limit 之间的数据到 Channel 。</p>
-<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1631867939574.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1631867939574.png" alt="" loading="lazy"></figure>
 <h3 id="channel分散scatter读取">Channel分散(scatter)读取</h3>
 <p>分散读取（ Scattering Reads）是指从 Channel 中读取的数据“分散” 到多个 Buffer 中。 特别注意：按照缓冲区的顺序，从 Channel 中读取的数据依次将 Buffer 填满。</p>
-<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1631867947387.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1631867947387.png" alt="" loading="lazy"></figure>
+<h3 id="零拷贝filechannel的transferto和transferfrom">“零拷贝”（FileChannel的transferTo和transferFrom）</h3>
+<blockquote>
+<p>Java NIO中提供的FileChannel拥有transferTo和transferFrom两个方法，可直接把FileChannel中的数据拷贝到另外一个Channel，或者直接把另外一个Channel中的数据拷贝到FileChannel。该接口常被用于高效的网络/文件的数据传输和大文件拷贝。在操作系统支持的情况下，通过该方法传输数据并不需要将源数据从内核态拷贝到用户态，再从用户态拷贝到目标通道的内核态，同时也避免了两次用户态和内核态间的上下文切换，也即使用了“零拷贝”，所以其性能一般高于Java IO中提供的方法。</p>
+</blockquote>
+<h3 id="代码案例">代码案例</h3>
 <pre><code class="language-java">/**
  * @author wuhao
  * @desc 本地io:
@@ -1512,7 +2231,7 @@ public class ExecutorConfig {
 }
 </code></pre>
 <p><code>@Value</code>是我配置在<code>application.properties</code>，可以参考配置，自由定义</p>
-<pre><code class="language-properties"># 异步线程配置
+<pre><code class="language-xml"># 异步线程配置
 # 配置核心线程数
 async.executor.thread.core_pool_size = 5
 # 配置最大线程数
