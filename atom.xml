@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>http://localhost:4001</id>
     <title>tianxia</title>
-    <updated>2021-09-28T08:14:24.439Z</updated>
+    <updated>2021-09-29T06:50:15.940Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="http://localhost:4001"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -400,7 +400,7 @@ import java.util.*;
 
 public class SchemaUtil {
     private static final String newLine = &quot;\r\n&quot;;
-    private static Map&lt;String, String&gt; map ;
+    private static Map&lt;String, String&gt; map;
 
     public static String createSchema(String dataSourceName, CubeDesc cubeDesc, DataModelDesc modelDesc) {
         StringBuffer sb = new StringBuffer();
@@ -433,11 +433,12 @@ public class SchemaUtil {
             String Column = dealTableName(joinTableDesc.getJoin().getForeignKey()[0]);
             String joinTablename = dealModelTableName(joinTableDesc.getJoin().getPrimaryKey()[0]);
             String joinColumn = dealTableName(joinTableDesc.getJoin().getPrimaryKey()[0]);
-            linkSb.append(&quot; &lt;Link source='&quot;).append(factTablename).append(&quot;' target='&quot;).append(joinTablename).append(&quot;'&gt;&quot;).append(newLine)
+            linkSb.append(&quot;&lt;Link source='&quot;).append(factTablename).append(&quot;' target='&quot;).append(joinTablename).append(&quot;'&gt;&quot;).append(newLine)
                     .append(&quot;&lt;ForeignKey&gt;&quot;).append(newLine)
                     .append(&quot;&lt;Column name='&quot;).append(Column).append(&quot;'/&gt;&quot;).append(newLine)
                     .append(&quot;&lt;/ForeignKey&gt;&quot;).append(newLine)
                     .append(&quot;&lt;/Link&gt;&quot;).append(newLine);
+            //清空map
             map = new HashMap&lt;&gt;();
             tables.forEach(item -&gt; {
                 if (item.getTable().equals(factTablename)) {
@@ -586,8 +587,12 @@ public class SchemaUtil {
 
     public static void addDimensionLink(StringBuffer sb, DataModelDesc modelDesc) {
         sb.append(&quot;&lt;DimensionLinks&gt;&quot;).append(newLine);
-        for (ModelDimensionDesc dimensionDesc : modelDesc.getDimensions()) {
-            sb.append(&quot;&lt;ForeignKeyLink dimension='&quot;).append(dimensionDesc.getTable()).append(&quot;' foreignKeyColumn='&quot;).append(map.get(dimensionDesc.getTable())).append(&quot;'/&gt;&quot;).append(newLine);
+        for(ModelDimensionDesc dimensionDesc : modelDesc.getDimensions()) {
+            if(dimensionDesc.getTable().contains(dealTableName(modelDesc.getRootFactTableName()))) {
+                sb.append(&quot;&lt;FactLink dimension='&quot;).append(dimensionDesc.getTable()).append(&quot;'/&gt;&quot;).append(newLine);
+            }else{
+                sb.append(&quot;&lt;ForeignKeyLink dimension='&quot;).append(dimensionDesc.getTable()).append(&quot;' foreignKeyColumn='&quot;).append(map.get(dimensionDesc.getTable())).append(&quot;'/&gt;&quot;).append(newLine);
+            }
         }
         sb.append(&quot; &lt;/DimensionLinks&gt;&quot;).append(newLine);
     }
@@ -683,7 +688,7 @@ public class SchemaUtil {
 			&lt;Measure aggregator='sum' column='CONSUME_AMMOUT' name='CONSUME_AMMOUT_SUM' visible='true'/&gt;
 		&lt;/Measures&gt;
 		&lt;DimensionLinks&gt;
-			&lt;ForeignKeyLink dimension='TBL_FARM_INCOME_STATICS' foreignKeyColumn='COMPANY_ID'/&gt;
+			&lt;FactLink dimension='TBL_FARM_INCOME_STATICS'/&gt;
 			&lt;ForeignKeyLink dimension='TBL_CUSTOMER' foreignKeyColumn='COMPANY_ID'/&gt;
 		&lt;/DimensionLinks&gt;
 	&lt;/MeasureGroup&gt;
@@ -699,7 +704,7 @@ public class SchemaUtil {
 			&lt;Measure aggregator='sum' column='TOTAL_AMOUNT' name='TOTAL_AMOUNT_SUM' visible='true'/&gt;
 		&lt;/Measures&gt;
 		&lt;DimensionLinks&gt;
-			&lt;ForeignKeyLink dimension='TBL_FARM_INCOME_STATICS' foreignKeyColumn='COMPANY_ID'/&gt;
+			&lt;FactLink dimension='TBL_FARM_INCOME_STATICS'/&gt;
 			&lt;ForeignKeyLink dimension='TBL_CUSTOMER' foreignKeyColumn='COMPANY_ID'/&gt;
 		&lt;/DimensionLinks&gt;
 	&lt;/MeasureGroup&gt;
