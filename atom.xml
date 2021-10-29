@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>http://localhost:4001</id>
     <title>tianxia</title>
-    <updated>2021-10-28T05:41:41.939Z</updated>
+    <updated>2021-10-29T07:21:17.700Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="http://localhost:4001"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,186 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[kafka常用命令]]></title>
+        <id>https://tianxiawuhao.github.io/post/cvzf4T4Wn/</id>
+        <link href="https://tianxiawuhao.github.io/post/cvzf4T4Wn/">
+        </link>
+        <updated>2021-10-29T07:15:38.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="管理">管理</h3>
+<pre><code class="language-shell">## 创建topic（4个分区，2个副本）
+bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 2 --partitions 4 --topic test
+
+### kafka版本 &gt;= 2.2
+bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic test
+
+## 分区扩容
+### kafka版本 &lt; 2.2
+bin/kafka-topics.sh --zookeeper localhost:2181 --alter --topic topic1 --partitions 2
+
+### kafka版本 &gt;= 2.2
+bin/kafka-topics.sh --bootstrap-server broker_host:port --alter --topic topic1 --partitions 2
+
+## 删除topic
+bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic test
+</code></pre>
+<h3 id="查询">查询</h3>
+<pre><code class="language-shell">## 查询集群描述
+bin/kafka-topics.sh --describe --zookeeper 127.0.0.1:2181
+
+## 查询集群描述（新）
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic foo --describe
+
+## topic列表查询
+bin/kafka-topics.sh --zookeeper 127.0.0.1:2181 --list
+
+## topic列表查询（支持0.9版本+）
+bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+
+## 消费者列表查询（存储在zk中的）
+bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
+
+## 消费者列表查询（支持0.9版本+）
+bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server localhost:9092 --list
+
+## 消费者列表查询（支持0.10版本+）
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+
+## 显示某个消费组的消费详情（仅支持offset存储在zookeeper上的）
+bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper localhost:2181 --group test
+
+## 显示某个消费组的消费详情（0.9版本 - 0.10.1.0 之前）
+bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server localhost:9092 --describe --group test-consumer-group
+
+## 显示某个消费组的消费详情（0.10.1.0版本+）
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
+</code></pre>
+<h3 id="发送和消费">发送和消费</h3>
+<pre><code class="language-shell">## 生产者
+bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test
+
+## 消费者
+bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic test
+
+## 生产者（支持0.9版本+）
+bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test --producer.config config/producer.properties
+
+## 消费者（支持0.9版本+）
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --new-consumer --from-beginning --consumer.config config/consumer.properties
+
+## 消费者（最新）
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning --consumer.config config/consumer.properties
+
+
+## kafka-verifiable-consumer.sh（消费者事件，例如：offset提交等）
+bin/kafka-verifiable-consumer.sh --broker-list localhost:9092 --topic test --group-id groupName
+
+## 高级点的用法
+bin/kafka-simple-consumer-shell.sh --brist localhost:9092 --topic test --partition 0 --offset 1234  --max-messages 10
+</code></pre>
+<h3 id="切换leader">切换leader</h3>
+<pre><code class="language-shell">## kafka版本 &lt;= 2.4
+bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
+
+## kafka新版本
+bin/kafka-preferred-replica-election.sh --bootstrap-server broker_host:port
+</code></pre>
+<h3 id="kafka自带压测命令">kafka自带压测命令</h3>
+<pre><code class="language-shell">bin/kafka-producer-perf-test.sh --topic test --num-records 100 --record-size 1 --throughput 100  --producer-props bootstrap.servers=localhost:9092
+</code></pre>
+<h3 id="kafka持续发送消息">kafka持续发送消息</h3>
+<p>持续发送消息到指定的topic中，且每条发送的消息都会有响应信息：</p>
+<pre><code class="language-shell">kafka-verifiable-producer.sh --broker-list $(hostname -i):9092 --topic test --max-messages 100000
+</code></pre>
+<h3 id="zookeeper-shellsh">zookeeper-shell.sh</h3>
+<p>如果kafka集群的zk配置了chroot路径，那么需要加上<code>/path</code>。</p>
+<pre><code class="language-shell">bin/zookeeper-shell.sh localhost:2181[/path]
+ls /brokers/ids
+get /brokers/ids/0
+</code></pre>
+<h3 id="迁移分区">迁移分区</h3>
+<ol>
+<li>
+<p>创建规则json</p>
+<pre><code class="language-shell">cat &gt; increase-replication-factor.json &lt;&lt;EOF
+{&quot;version&quot;:1, &quot;partitions&quot;:[
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:0,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:1,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:2,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:3,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:4,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:5,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:6,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:7,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:8,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:9,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:10,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:11,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:12,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:13,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:14,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:15,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:16,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:17,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:18,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:19,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:20,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:21,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:22,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:23,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:24,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:25,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:26,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:27,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:28,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:29,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:30,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:31,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:32,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:33,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:34,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:35,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:36,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:37,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:38,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:39,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:40,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:41,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:42,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:43,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:44,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:45,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:46,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:47,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:48,&quot;replicas&quot;:[0,1]},
+{&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:49,&quot;replicas&quot;:[0,1]}]
+}
+EOF
+</code></pre>
+</li>
+<li>
+<p>执行</p>
+<pre><code class="language-shell">bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --execute
+</code></pre>
+</li>
+<li>
+<p>验证</p>
+<pre><code class="language-shell">bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
+</code></pre>
+</li>
+</ol>
+<h3 id="删除消费者组">删除消费者组</h3>
+<p>查询消费者组列表：</p>
+<pre><code class="language-shell">kafka-consumer-groups.sh --bootstrap-server 172.31.1.245:9092 --list
+</code></pre>
+<p>查询消费者组明细：</p>
+<pre><code class="language-shell">kafka-consumer-groups.sh --bootstrap-server {Kafka instance connection address} --describe --group {consumer group name}
+</code></pre>
+<p>删除消费者组：</p>
+<pre><code class="language-shell">kafka-consumer-groups.sh --bootstrap-server {Kafka instance connection address} --delete --group {consumer group name}
+</code></pre>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[zookeeper选举过程]]></title>
         <id>https://tianxiawuhao.github.io/post/Rz0qPOGXr/</id>
