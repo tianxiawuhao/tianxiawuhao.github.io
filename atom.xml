@@ -1,15 +1,355 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-    <id>https://tianxiawuhao.github.io/</id>
+    <id>https://tianxiawuhao.github.io</id>
     <title>tianxia</title>
-    <updated>2021-11-05T03:20:49.694Z</updated>
+    <updated>2021-11-30T02:01:52.966Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
-    <link rel="alternate" href="https://tianxiawuhao.github.io/"/>
+    <link rel="alternate" href="https://tianxiawuhao.github.io"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
     <subtitle>In me the tiger sniffs the rose</subtitle>
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[clickhouse安装]]></title>
+        <id>https://tianxiawuhao.github.io/post/r2VmiGgor/</id>
+        <link href="https://tianxiawuhao.github.io/post/r2VmiGgor/">
+        </link>
+        <updated>2021-11-30T01:50:16.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="1clickhouse的安装">1.ClickHouse的安装</h1>
+<h2 id="11-准备工作">1.1    准备工作</h2>
+<p>下载RPM包:</p>
+<p><a href="https://repo.yandex.ru/clickhouse/rpm/stable/x86_64/">https://repo.yandex.ru/clickhouse/rpm/stable/x86_64/</a></p>
+<p>下载完毕如下:</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1638237245375.png" alt="" loading="lazy"></figure>
+<p>​</p>
+<h3 id="111-确定防火墙处于关闭状态">1.1.1 确定防火墙处于关闭状态</h3>
+<p>相关命令:</p>
+<pre><code class="language-shell">sudo systemctl status firewalld
+
+sudo systemctl start firewalld
+
+sudo systemctl stop firewalld
+
+sudo systemctl restart firewalld
+</code></pre>
+<h3 id="112-centos取消打开文件数限制">1.1.2 CentOS取消打开文件数限制</h3>
+<p>Ø 在 /etc/security/limits.conf文件的末尾加入以下内容</p>
+<pre><code class="language-shell">vim /etc/security/limits.conf
+
+* soft nofile 65536
+* hard nofile 65536
+* soft nproc 131072
+* hard nproc 131072
+</code></pre>
+<p>Ø 在/etc/security/limits.d/20-nproc.conf文件的末尾加入以下内容</p>
+<pre><code class="language-shell">vim /etc/security/limits.d/20-nproc.conf
+
+* soft nofile 65536
+* hard nofile 65536
+* soft nproc 131072
+* hard nproc 131072
+</code></pre>
+<p>Ø 执行同步操作(同步到集群其他机器)</p>
+<pre><code class="language-shell">xsync /etc/security/limits.conf
+xsync /etc/security/limits.d/20-nproc.conf
+</code></pre>
+<h3 id="113-安装依赖">1.1.3 安装依赖</h3>
+<pre><code class="language-shell">sudo yum install -y libtool
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1638237268510.png" alt="" loading="lazy"></figure>
+<pre><code class="language-shell">sudo yum install -y *unixODBC*
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1638237282605.png" alt="" loading="lazy"></figure>
+<p>同样在集群其他机器上执行以上操作</p>
+<h3 id="114-centos取消selinux">1.1.4 CentOS取消SELINUX</h3>
+<p>SELINUX(美国开源的linux安全增强功能)</p>
+<p>Ø 修改/etc/selinux/config中的SELINUX=disabled</p>
+<pre><code class="language-shell">sudo vim /etc/selinux/config
+
+SELINUX=disabled
+</code></pre>
+<p>Ø 执行同步操作</p>
+<pre><code class="language-shell">sudo /home/atguigu/bin/xsync /etc/selinux/config
+</code></pre>
+<p>Ø 重启三台服务器</p>
+<h3 id="115-将安装文件同步到其他两个服务器">1.1.5 将安装文件同步到其他两个服务器</h3>
+<h3 id="116-分别在三台机子上安装这4个rpm文件">1.1.6 分别在三台机子上安装这4个rpm文件</h3>
+<pre><code class="language-shell">sudo rpm -ivh *.rpm(提前把四个*.rpm放在一个目录下)
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1638237307245.png" alt="" loading="lazy"></figure>
+<pre><code class="language-shell">sudo rpm -qa|grep clickhouse查看安装情况
+</code></pre>
+<h3 id="117-修改配置文件">1.1.7 修改配置文件</h3>
+<pre><code class="language-shell">vim /etc/clickhouse-server/config.xml
+</code></pre>
+<p>把 <strong>&lt;listen_host&gt;::&lt;/listen_host&gt;</strong> 的注释打开，这样的话才能让ClickHouse被除本机以外的服务器访问</p>
+<pre><code class="language-shell">#分发配置文件
+
+xsync /etc/clickhouse-server/config.xml
+</code></pre>
+<h3 id="118-启动server">1.1.8 启动Server</h3>
+<pre><code class="language-shell">sudo systemctl start clickhouse-server
+</code></pre>
+<h3 id="119-三台机器上关闭开机自启">1.1.9 三台机器上关闭开机自启</h3>
+<pre><code class="language-shell">systemctl disable clickhouse-server
+</code></pre>
+<h3 id="1110-使用client连接server">1.1.10    使用client连接server</h3>
+<pre><code class="language-shell">clickhouse-client -m
+</code></pre>
+<p>Clickhouse常用端口号:</p>
+<p><img src="https://tianxiawuhao.github.io/post-images/1638237372637.png" alt="" loading="lazy"><br>
+<img src="https://tianxiawuhao.github.io/post-images/1638237379416.png" alt="" loading="lazy"><br>
+<img src="https://tianxiawuhao.github.io/post-images/1638237384947.png" alt="" loading="lazy"><br>
+<img src="https://tianxiawuhao.github.io/post-images/1638237390491.png" alt="" loading="lazy"></p>
+<h1 id="第2章-副本">第2章  副本</h1>
+<p>副本的目的主要是保障数据的高可用性，即使一台ClickHouse节点宕机，那么也可以从其他服务器获得相同的数据。</p>
+<h2 id="21-副本写入流程">2.1    副本写入流程</h2>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1638237403217.png" alt="" loading="lazy"></figure>
+<h2 id="22-配置步骤">2.2    配置步骤</h2>
+<p>Ø 启动zookeeper集群</p>
+<p>Ø 注意:服务器的hostname需要改成对应的ck101、ck102、ck103</p>
+<figure data-type="image" tabindex="6"><img src="https://tianxiawuhao.github.io/post-images/1638237417573.png" alt="" loading="lazy"></figure>
+<p>Ø 在/etc/clickhouse-server/config.d目录下创建一个名为metrika.xml的配置文件,内容如下：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;yandex&gt;
+	&lt;zookeeper-servers&gt;
+		&lt;node index=&quot;1&quot;&gt;
+			&lt;host&gt;ck101&lt;/host&gt;
+			&lt;port&gt;2181&lt;/port&gt;
+		&lt;/node&gt;
+		&lt;node index=&quot;2&quot;&gt;
+            &lt;host&gt;ck102&lt;/host&gt;
+            &lt;port&gt;2181&lt;/port&gt;
+        &lt;/node&gt;
+        &lt;node index=&quot;3&quot;&gt;
+            &lt;host&gt;ck103&lt;/host&gt;
+            &lt;port&gt;2181&lt;/port&gt;
+        &lt;/node&gt;
+	&lt;/zookeeper-servers&gt;
+&lt;/yandex&gt;
+</code></pre>
+<p>Ø 同步到另外两个机器上</p>
+<pre><code class="language-shell">xsync /etc/clickhouse-server/config.d/metrika.xml
+</code></pre>
+<p>Ø 在 /etc/clickhouse-server/config.xml中增加</p>
+<pre><code class="language-xml">&lt;zookeeper incl=&quot;zookeeper-servers&quot; optional=&quot;true&quot; /&gt;
+&lt;include_from&gt;/etc/clickhouse-server/config.d/metrika.xml&lt;/include_from&gt;
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://tianxiawuhao.github.io/post-images/1638237432131.png" alt="" loading="lazy"></figure>
+<p>Ø 同步到另外两个机器上</p>
+<pre><code class="language-shell">xsync /etc/clickhouse-server/config.xml
+</code></pre>
+<p>Ø 分别在另外两个机器上启动ClickHouse服务</p>
+<p>注意：因为修改了配置文件，如果以前启动了服务需要重启</p>
+<pre><code class="language-shell">systemctl start clickhouse-server
+</code></pre>
+<p>Ø 在另外两个机器上分别建表</p>
+<p><strong>副本只能同步数据，不能同步表结构，所以我们需要在每台机器上自己手动建表</strong></p>
+<p>Ck101</p>
+<pre><code class="language-sql">create table t_order_rep (
+  id UInt32,
+  sku_id String,
+  total_amount Decimal(16,2),
+  create_time Datetime
+ ) engine =ReplicatedMergeTree('/clickhouse/table/01/t_order_rep','rep_102')
+  partition by toYYYYMMDD(create_time)
+  primary key (id)
+  order by (id,sku_id);
+</code></pre>
+<p>Ck102</p>
+<pre><code class="language-sql">create table t_order_rep (
+  id UInt32,
+  sku_id String,
+  total_amount Decimal(16,2),
+  create_time Datetime
+ ) engine =ReplicatedMergeTree('/clickhouse/table/01/t_order_rep','rep_103')
+  partition by toYYYYMMDD(create_time)
+  primary key (id)
+  order by (id,sku_id);
+</code></pre>
+<p>参数解释</p>
+<p>ReplicatedMergeTree 中，</p>
+<p><strong>第一个参数是</strong>分片的zk_path一般按照： /clickhouse/table/{shard}/{table_name} 的格式写，如果只有一个分片就写01即可。</p>
+<p><strong>第二个参数是</strong>副本名称，相同的分片副本名称不能相同。</p>
+<p>Ø 在ck101上执行insert语句</p>
+<pre><code class="language-sql">insert into t_order_rep values
+(101,'sku_001',1000.00,'2020-06-01 12:00:00'),
+(102,'sku_002',2000.00,'2020-06-01 12:00:00'),
+(103,'sku_004',2500.00,'2020-06-01 12:00:00'),
+(104,'sku_002',2000.00,'2020-06-01 12:00:00'),
+(105,'sku_003',600.00,'2020-06-02 12:00:00');
+</code></pre>
+<p>Ø 在<strong>ck102</strong>上执行select，可以查询出结果，说明副本配置正确</p>
+<h1 id="第3章-分片集群">第3章  分片集群</h1>
+<p>副本虽然能够提高数据的可用性，降低丢失风险，但是每台服务器实际上必须容纳全量数据，对数据的横向扩容没有解决。</p>
+<p>要解决数据水平切分的问题，需要引入分片的概念。通过分片把一份完整的数据进行切分，不同的分片分布到不同的节点上，再通过Distributed表引擎把数据拼接起来一同使用。</p>
+<p>Distributed表引擎本身不存储数据，有点类似于MyCat之于MySql，成为一种中间件，通过分布式逻辑表来写入、分发、路由来操作多台节点不同分片的分布式数据。</p>
+<p>注意：ClickHouse的集群是表级别的，实际企业中，大部分做了高可用，但是没有用分片，避免降低查询性能以及操作集群的复杂性。</p>
+<h2 id="31-集群写入流程3分片2副本共6个节点">3.1    集群写入流程（3分片2副本共6个节点）</h2>
+<figure data-type="image" tabindex="8"><img src="https://tianxiawuhao.github.io/post-images/1638237448353.png" alt="" loading="lazy"></figure>
+<h2 id="32-集群读取流程3分片2副本共6个节点">3.2    集群读取流程（3分片2副本共6个节点）</h2>
+<figure data-type="image" tabindex="9"><img src="https://tianxiawuhao.github.io/post-images/1638237458923.png" alt="" loading="lazy"></figure>
+<h2 id="33-配置三节点版本集群及副本">3.3    配置三节点版本集群及副本</h2>
+<figure data-type="image" tabindex="10"><img src="https://tianxiawuhao.github.io/post-images/1638237469738.png" alt="" loading="lazy"></figure>
+<h3 id="331-集群及副本规划2个分片只有第一个分片有副本">3.3.1 集群及副本规划（2个分片，只有第一个分片有副本）</h3>
+<table>
+<thead>
+<tr>
+<th><strong>ck101</strong></th>
+<th><strong>ck102</strong></th>
+<th><strong>ck103</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><macros>  <shard>01</shard>    <replica>rep_1_1</replica>  </macros></td>
+<td><macros>  <shard>01</shard>    <replica>rep_1_2</replica>  </macros></td>
+<td><macros>  <shard>02</shard>    <replica>rep_2_1</replica>  </macros></td>
+</tr>
+</tbody>
+</table>
+<h3 id="332-配置步骤">3.3.2 配置步骤</h3>
+<h4 id="1-在ck101的etcclickhouse-serverconfigd目录下创建metrika-shardxml文件">(1) 在ck101的/etc/clickhouse-server/config.d目录下创建metrika-shard.xml文件</h4>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;yandex&gt;
+    &lt;remote_servers&gt;
+        &lt;my_cluster&gt; &lt;!-- 集群名称--&gt; 
+            &lt;shard&gt;     &lt;!--集群的第一个分片--&gt;
+                &lt;internal_replication&gt;true&lt;/internal_replication&gt;
+                &lt;replica&gt;  &lt;!--该分片的第一个副本--&gt;
+                &lt;host&gt;ck101&lt;/host&gt;
+                &lt;port&gt;9000&lt;/port&gt;
+                &lt;/replica&gt;
+                &lt;replica&gt;  &lt;!--该分片的第二个副本--&gt;
+                &lt;host&gt;ck102&lt;/host&gt;
+                &lt;port&gt;9000&lt;/port&gt;
+                &lt;/replica&gt;
+            &lt;/shard&gt;
+
+            &lt;shard&gt; &lt;!--集群的第二个分片--&gt;
+                &lt;internal_replication&gt;true&lt;/internal_replication&gt;
+                &lt;replica&gt;  &lt;!--该分片的第一个副本--&gt;
+                &lt;host&gt;ck103&lt;/host&gt;
+                &lt;port&gt;9000&lt;/port&gt;
+                &lt;/replica&gt;
+            &lt;/shard&gt;
+        &lt;/my_cluster&gt;
+    &lt;/remote_servers&gt;
+
+    &lt;zookeeper-servers&gt;
+        &lt;node index=&quot;1&quot;&gt;
+            &lt;host&gt; ck101&lt;/host&gt;
+            &lt;port&gt;2181&lt;/port&gt;
+        &lt;/node&gt;
+        &lt;node index=&quot;2&quot;&gt;
+            &lt;host&gt; ck102&lt;/host&gt;
+            &lt;port&gt;2181&lt;/port&gt;
+        &lt;/node&gt;
+        &lt;node index=&quot;3&quot;&gt;
+            &lt;host&gt; ck103&lt;/host&gt;
+            &lt;port&gt;2181&lt;/port&gt;
+        &lt;/node&gt;
+    &lt;/zookeeper-servers&gt;
+
+    &lt;macros&gt;
+        &lt;shard&gt;01&lt;/shard&gt;  &lt;!--不同机器放的分片数不一样--&gt;
+        &lt;replica&gt;rep_1_1&lt;/replica&gt; &lt;!--不同机器放的副本数不一样--&gt;
+    &lt;/macros&gt;
+&lt;/yandex&gt;
+</code></pre>
+<h4 id="2-将ck101的metrika-shardxml同步到102和103">(2) 将ck101的metrika-shard.xml同步到102和103</h4>
+<pre><code class="language-shell">xsync /etc/clickhouse-server/config.d/metrika-shard.xml
+</code></pre>
+<h4 id="3-修改102和103中metrika-shardxml宏的配置">(3) 修改102和103中metrika-shard.xml宏的配置</h4>
+<p>Ø <strong>102</strong></p>
+<pre><code class="language-shell">vim /etc/clickhouse-server/config.d/metrika-shard.xml
+</code></pre>
+<figure data-type="image" tabindex="11"><img src="https://tianxiawuhao.github.io/post-images/1638237484666.png" alt="" loading="lazy"></figure>
+<p>Ø <strong>103</strong></p>
+<pre><code class="language-shell">vim /etc/clickhouse-server/config.d/metrika-shard.xml
+</code></pre>
+<figure data-type="image" tabindex="12"><img src="https://tianxiawuhao.github.io/post-images/1638237492998.png" alt="" loading="lazy"></figure>
+<h4 id="4-在hadoop102上修改etcclickhouse-serverconfigxml">(4) 在hadoop102上修改/etc/clickhouse-server/config.xml</h4>
+<figure data-type="image" tabindex="13"><img src="https://tianxiawuhao.github.io/post-images/1638237502544.png" alt="" loading="lazy"></figure>
+<h4 id="5-同步etcclickhouse-serverconfigxml到103和104">(5) 同步/etc/clickhouse-server/config.xml到103和104</h4>
+<pre><code class="language-shell">sudo /home/atguigu/bin/xsync /etc/clickhouse-server/config.xml
+</code></pre>
+<h4 id="6-重启三台服务器上的clickhouse服务">(6) 重启三台服务器上的ClickHouse服务</h4>
+<pre><code class="language-shell">systemctl stop clickhouse-server
+systemctl start clickhouse-server
+systemctl status clickhouse-server
+</code></pre>
+<h4 id="7-在ck101上执行建表语句">(7) 在ck101上执行建表语句</h4>
+<p>Ø 会自动同步到ck102和ck103上</p>
+<p>Ø 集群名字要和配置文件中的一致</p>
+<p>Ø 分片和副本名称从配置文件的宏定义中获取</p>
+<pre><code class="language-sql">create table st_order_mt2 on cluster my_cluster (
+  id UInt32,
+  sku_id String,
+  total_amount Decimal(16,2),
+  create_time Datetime
+ ) engine =ReplicatedMergeTree('/clickhouse/tables/{shard}/st_order_mt2','{replica}')
+  partition by toYYYYMMDD(create_time)
+  primary key (id)
+  order by (id,sku_id);
+</code></pre>
+<p>可以到ck102和ck103上查看表是否创建成功</p>
+<h4 id="8-在ck101上创建distribute-分布式表">(8) 在ck101上创建Distribute 分布式表</h4>
+<pre><code class="language-sql">create table st_order_mt2_all on cluster my_cluster
+(
+  id UInt32,
+  sku_id String,
+  total_amount Decimal(16,2),
+  create_time Datetime
+)engine = Distributed(my_cluster,default, st_order_mt2,hiveHash(sku_id));
+</code></pre>
+<p><strong>参数含义</strong></p>
+<p>​    Distributed(集群名称，库名，本地表名，分片键)</p>
+<p>分片键必须是整型数字，所以用hiveHash函数转换，也可以rand()</p>
+<h4 id="9-在ck101上插入测试数据">(9) 在ck101上插入测试数据</h4>
+<pre><code class="language-sql">insert into st_order_mt2_all values
+(201,'sku_001',1000.00,'2020-06-01 12:00:00') ,
+(202,'sku_002',2000.00,'2020-06-01 12:00:00'),
+(203,'sku_004',2500.00,'2020-06-01 12:00:00'),
+(204,'sku_002',2000.00,'2020-06-01 12:00:00'),
+(205,'sku_003',600.00,'2020-06-02 12:00:00');
+</code></pre>
+<h4 id="10-通过查询分布式表和本地表观察输出结果">(10)   通过查询分布式表和本地表观察输出结果</h4>
+<p>Ø <strong>分布式表</strong></p>
+<pre><code class="language-sql">SELECT *  FROM st_order_mt2_all;
+</code></pre>
+<p>Ø <strong>本地表</strong></p>
+<pre><code class="language-sql">select * from st_order_mt2;
+</code></pre>
+<p>Ø 观察数据的分布</p>
+<table>
+<thead>
+<tr>
+<th>st_order_mt_all</th>
+<th><img src="https://tianxiawuhao.github.io/post-images/1638237523851.png" alt="" loading="lazy"></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ck101:  st_order_mt2</td>
+<td><img src="https://tianxiawuhao.github.io/post-images/1638237534695.png" alt="" loading="lazy"></td>
+</tr>
+<tr>
+<td>Ck102:  st_order_mt2</td>
+<td><img src="https://tianxiawuhao.github.io/post-images/1638237544313.png" alt="" loading="lazy"></td>
+</tr>
+<tr>
+<td>Ck103:  st_order_mt2</td>
+<td><img src="https://tianxiawuhao.github.io/post-images/1638237554783.png" alt="" loading="lazy"></td>
+</tr>
+</tbody>
+</table>
+<h1 id="第4章-版本信息">第4章  版本信息</h1>
+<p>Clickhouse: clickhouse-21.9.4.35</p>
+<p>Zookeeper: zookeeper-3.4.6</p>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Kafka 架构深入]]></title>
         <id>https://tianxiawuhao.github.io/post/KM-0yw6ab/</id>
