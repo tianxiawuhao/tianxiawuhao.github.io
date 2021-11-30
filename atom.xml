@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://tianxiawuhao.github.io</id>
     <title>tianxia</title>
-    <updated>2021-11-30T02:01:52.966Z</updated>
+    <updated>2021-11-30T05:51:26.921Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://tianxiawuhao.github.io"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,101 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[Docker安装clickhouse]]></title>
+        <id>https://tianxiawuhao.github.io/post/BBgY7nkHa/</id>
+        <link href="https://tianxiawuhao.github.io/post/BBgY7nkHa/">
+        </link>
+        <updated>2021-11-30T05:45:31.000Z</updated>
+        <content type="html"><![CDATA[<p>ClickHouse 很多大厂都在用，本篇主要使用Docker进行安装</p>
+<h3 id="安装配置">安装配置</h3>
+<p>创建目录并更改权限</p>
+<pre><code class="language-shell">mkdir -p /app/cloud/clickhouse/data
+mkdir -p /app/cloud/clickhouse/conf
+mkdir -p /app/cloud/clickhouse/log
+
+chmod -R 777 /app/cloud/clickhouse/data
+chmod -R 777 /app/cloud/clickhouse/conf
+chmod -R 777 /app/cloud/clickhouse/log
+</code></pre>
+<h3 id="拉取镜像">拉取镜像</h3>
+<pre><code class="language-shell">docker pull yandex/clickhouse-server:20.3.5.21
+docker pull yandex/clickhouse-client:20.3.5.21
+</code></pre>
+<p>查看 <a href="https://hub.docker.com/r/yandex/clickhouse-server/dockerfile">https://hub.docker.com/r/yandex/clickhouse-server/dockerfile</a> 文件，EXPOSE  9000  8123  9009 了三个端口</p>
+<h3 id="创建临时容器">创建临时容器</h3>
+<pre><code class="language-shell">docker run --rm -d --name=clickhouse-server --ulimit nofile=262144:262144 -p 8123:8123 -p 9009:9009 -p 9090:9090 yandex/clickhouse-server:20.3.5.21
+</code></pre>
+<h3 id="复制临时容器内配置文件到宿主机">复制临时容器内配置文件到宿主机</h3>
+<pre><code class="language-shell">docker cp clickhouse-server:/etc/clickhouse-server/config.xml /app/cloud/clickhouse/conf/config.xml
+docker cp clickhouse-server:/etc/clickhouse-server/users.xml /app/cloud/clickhouse/conf/users.xml
+</code></pre>
+<h3 id="停掉临时容器">停掉临时容器</h3>
+<pre><code class="language-shell">docker stop clickhouse-server
+</code></pre>
+<h3 id="创建default账号密码">创建default账号密码</h3>
+<pre><code class="language-shell">PASSWORD=$(base64 &lt; /dev/urandom | head -c8); echo &quot;$PASSWORD&quot;; echo -n &quot;$PASSWORD&quot; | sha256sum | tr -d '-'
+</code></pre>
+<pre><code class="language-shell">SEGByR98
+211371f5bc54970907173acf6facb35f0acbc17913e1b71b814117667c01d96d
+</code></pre>
+<p>会输出明码和SHA256密码</p>
+<h3 id="创建root账号密码">创建root账号密码</h3>
+<pre><code class="language-shell">PASSWORD=$(base64 &lt; /dev/urandom | head -c8); echo &quot;$PASSWORD&quot;; echo -n &quot;$PASSWORD&quot; | sha256sum | tr -d '-'
+</code></pre>
+<pre><code class="language-shell">092j3AnV
+35542ded44184b1b4b6cd621e052662578025b58b4187176a3ad2b9548c8356e
+</code></pre>
+<p>会输出明码和SHA256密码</p>
+<p>修改 /app/cloud/clickhouse/conf/users.xml<br>
+把default账号设为只读权限，并设置密码yandex--&gt;users--&gt;default--&gt;profile节点设为 <code>readonly</code> 注释掉 yandex--&gt;users--&gt;default--&gt;password 节点 新增  yandex--&gt;users--&gt;default--&gt;password_sha256_hex 节点，填入生成的密码</p>
+<p>修改default账号</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;yandex&gt;
+    &lt;users&gt;
+        &lt;default&gt;
+            &lt;password_sha256_hex&gt;211371f5bc54970907173acf6facb35f0acbc17913e1b71b814117667c01d96d&lt;/password_sha256_hex&gt;
+            &lt;networks incl=&quot;networks&quot; replace=&quot;replace&quot;&gt;
+                &lt;ip&gt;::/0&lt;/ip&gt;
+            &lt;/networks&gt;
+            &lt;profile&gt;readonly&lt;/profile&gt;
+            &lt;quota&gt;default&lt;/quota&gt;
+        &lt;/default&gt;
+	&lt;/users&gt;
+&lt;/yandex&gt;
+</code></pre>
+<p>新增root账号</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;yandex&gt;
+    &lt;users&gt;
+        &lt;root&gt;
+            &lt;password_sha256_hex&gt;35542ded44184b1b4b6cd621e052662578025b58b4187176a3ad2b9548c8356e&lt;/password_sha256_hex&gt;
+             &lt;networks incl=&quot;networks&quot; replace=&quot;replace&quot;&gt;
+                &lt;ip&gt;::/0&lt;/ip&gt;
+            &lt;/networks&gt;
+            &lt;profile&gt;default&lt;/profile&gt;
+            &lt;quota&gt;default&lt;/quota&gt;
+        &lt;/root&gt;
+	&lt;/users&gt;
+&lt;/yandex&gt;
+</code></pre>
+<h3 id="创建容器">创建容器</h3>
+<pre><code class="language-shell">docker run -d --name=clickhouse-server 
+-p 8123:8123 -p 9009:9009 -p 9090:9090 
+--ulimit nofile=262144:262144 
+-v /app/cloud/clickhouse/data:/var/lib/clickhouse:rw 
+-v /app/cloud/clickhouse/conf/config.xml:/etc/clickhouse-server/config.xml 
+-v /app/cloud/clickhouse/conf/users.xml:/etc/clickhouse-server/users.xml 
+-v /app/cloud/clickhouse/log:/var/log/clickhouse-server:rw 
+yandex/clickhouse-server:20.3.5.21
+</code></pre>
+<h3 id="操作">操作</h3>
+<ol>
+<li>docker exec -it docker-clickhouse /bin/bash 进入容器</li>
+<li>clickhouse-client 进入clickhouse命令行</li>
+</ol>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[clickhouse安装]]></title>
         <id>https://tianxiawuhao.github.io/post/r2VmiGgor/</id>
