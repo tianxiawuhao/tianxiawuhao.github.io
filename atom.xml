@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://tianxiawuhao.github.io</id>
     <title>tianxia</title>
-    <updated>2021-12-03T01:57:26.632Z</updated>
+    <updated>2021-12-15T07:18:26.754Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://tianxiawuhao.github.io"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,171 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[clickhouse数据分区]]></title>
+        <id>https://tianxiawuhao.github.io/post/hle1ZXFqv/</id>
+        <link href="https://tianxiawuhao.github.io/post/hle1ZXFqv/">
+        </link>
+        <updated>2021-12-15T07:16:43.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="mergetree-数据分区规则">MergeTree 数据分区规则</h2>
+<p>创建按照月份为分区条件的表 <strong>tab_partition</strong></p>
+<pre><code class="language-csharp">CREATE TABLE tab_partition(`dt` Date, `v` UInt8) 
+ENGINE = MergeTree PARTITION BY toYYYYMM(dt) ORDER BY v;
+insert into tab_partition(dt,v) values ('2020-02-11',1),('2020-02-13',2);
+insert into tab_partition(dt,v) values ('2020-04-11',3),('2020-04-13',4);
+insert into tab_partition(dt,v) values ('2020-09-11',5),('2020-09-10',6);
+insert into tab_partition(dt,v) values ('2020-10-12',7),('2020-10-09',8);
+insert into tab_partition(dt,v) values ('2020-02-14',9),('2020-02-15',10);
+insert into tab_partition(dt,v) values ('2020-02-11',23),('2020-02-13',45);
+</code></pre>
+<p>MergeTree 存储引擎在写入数据之后生成对应的分区文件为：</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1639552667308.webp" alt="" loading="lazy"></figure>
+<p>MergeTree 的分区目录是在写入数据的过程中被创建出来，每 insert 一次，就会创建一批次分区目录。也就是说如果仅创建表结构，是不会创建分区目录的，因为木有数据。</p>
+<p>MergeTree 数据分区目录命名规则其规则为：<strong>PartitionID_MinBlockNum_MaxBlockNum_Level</strong><br>
+比如 <strong>202002_4_4_0</strong> 其中 202002 是分区ID ，<strong>4_4</strong> 对应的是<br>
+最小的数据块编号和最大的数据块编号，最后的 _0 表示目前分区合并的层级。<br>
+各部分的含义及命名规则如下：<br>
+PartitionID：该值由 insert 数据时分区键的值来决定。分区键支持使用任何一个或者多个字段组合表达式，针对取值数据类型的不同，分区 ID 的生成逻辑目前有四种规则：</p>
+<blockquote>
+<p>不指定分区键：如果建表时未指定分区键，则分区 ID 默认使用 all，所有数据都被写入 all 分区中。</p>
+<p>整型字段：如果分区键取值是整型字段，并且无法转换为 YYYYMMDD 的格式，则会按照该整型字段的字符形式输出，作为分区 ID 取值。</p>
+<p>日期类型：如果分区键属于日期格式，或可以转换为 YYYYMMDD 格式的整型，则按照 YYYYMMDD 格式化后的字符形式输出，作为分区 ID 取值。</p>
+<p>其他类型：如果使用其他类似 Float、String 等类型作为分区键，会通过对其插入数据的 128 位 Hash 值作为分区 ID 的取值。</p>
+</blockquote>
+<p>MinBlockNum 和 MaxBlockNum：BlockNum 是一个整型的自增长型编号，该编号在单张 MergeTree 表中从 1 开始全局累加，当有新的分区目录创建后，该值就加 1，对新的分区目录来讲，MinBlockNum 和 MaxBlockNum 取值相同。例如上面示例数据为 202002_1_1_0  202002_1_5_1，但当分区目录进行合并后，取值规则会发生变化，MinBlockNum 取同一分区所欲目录中最新的 MinBlockNum 值。MaxBlockNum 取同一分区内所有目录中的最大值。<br>
+Level：表示合并的层级。相当于某个分区被合并的次数，它不是以表全局累加，而是以分区为单位，初始创建的分区，初始值为 0，相同分区 ID 发生合并动作时，在相应分区内累计加 1。</p>
+<h2 id="mergetree-数据分区合并规则">MergeTree 数据分区合并规则</h2>
+<p>随着数据的写入 MergeTree 存储引擎会很多分区目录。如果分区目录数太多怎么办？因为 Clickhouse 的 MergeTree 存储引擎是基于 LSM 实现的。MergeTree 可以通过分区合并将属于相同分区的多个目录合并为一个新的目录（官方描述在 10 到 15 分钟内会进行合并，也可直接执行 optimize 语句），已经存在的旧目录（也即 system.parts 表中 activie 为 0 的分区）在之后某个时刻通过后台任务删除（默认 8 分钟）。</p>
+<h4 id="分区合并">分区合并</h4>
+<p>我们回顾之前创建的表的分区目录</p>
+<pre><code class="language-bash"># ls 
+202002_1_1_0  202004_2_2_0  202009_3_3_0
+202002_4_4_0  202002_5_5_0
+</code></pre>
+<p>手工触发分区合并</p>
+<pre><code class="language-csharp">qabb-qa-ch00 :) optimize table tab_partition;
+OPTIMIZE TABLE tab_partition
+Ok.
+0 rows in set. Elapsed: 0.003 sec.
+
+qabb-qa-ch00 :) select partition,name,part_type, active from system.parts where  table ='tab_partition';
+┌─partition─┬─name─────────┬─part_type─┬─active─┐
+│ 202002    │ 202002_1_1_0 │ Wide      │      0 │
+│ 202002    │ 202002_1_5_1 │ Wide      │      1 │
+│ 202002    │ 202002_4_4_0 │ Wide      │      0 │
+│ 202002    │ 202002_5_5_0 │ Wide      │      0 │
+│ 202004    │ 202004_2_2_0 │ Wide      │      1 │
+│ 202009    │ 202009_3_3_0 │ Wide      │      1 │
+└───────────┴──────────────┴───────────┴────────┘
+
+6 rows in set. Elapsed: 0.003 sec.
+</code></pre>
+<p>其中 active 为 1 表示经过合并之后的最新分区，为 0 则表示旧分区，查询时会自动过滤 active=0 的分区。<br>
+我们通过分区 202002 最新的分区目录 <strong>202002_1_5_1</strong> 看到合并分区新目录的命名规则如下：</p>
+<blockquote>
+<p>PartitionID：分区 ID 保持不变<br>
+MinBlockNum：取同一个分区内所有目录中最小的 MinBlockNum 值<br>
+MaxBlockNUm：取同一个分区内所有目录中最大的 MaxBlockNum 值<br>
+Level：取同一个分区内最大 Level 值并加 1</p>
+</blockquote>
+<p>合并之后的目录结构如下：</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1639552681661.webp" alt="" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[mysql 简单导入 clickhouse]]></title>
+        <id>https://tianxiawuhao.github.io/post/BHjbgcFm-/</id>
+        <link href="https://tianxiawuhao.github.io/post/BHjbgcFm-/">
+        </link>
+        <updated>2021-12-15T07:12:02.000Z</updated>
+        <content type="html"><![CDATA[<p>数据迁移需要从 mysql 导入 clickhouse, clickhouse 自身支持的三种方式 。</p>
+<h2 id="create-table-engin-mysql">create table engin mysql</h2>
+<pre><code>CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
+(
+    name1 [type1] [DEFAULT|MATERIALIZED|ALIAS expr1] [TTL expr1],
+    name2 [type2] [DEFAULT|MATERIALIZED|ALIAS expr2] [TTL expr2],
+    ...
+    INDEX index_name1 expr1 TYPE type1(...) GRANULARITY value1,
+    INDEX index_name2 expr2 TYPE type2(...) GRANULARITY value2
+) ENGINE = MySQL('host:port', 'database', 'table', 'user', 'password'[, replace_query, 'on_duplicate_clause']);
+</code></pre>
+<blockquote>
+<p>官方文档: https://clickhouse.yandex/docs/en/operations/table_engines/mysql/</p>
+</blockquote>
+<p>注意，实际数据存储在远端 mysql 数据库中，可以理解成外表。<br>
+可以通过在 mysql 增删数据进行验证。</p>
+<h2 id="insert-into-select-from">insert into select from</h2>
+<pre><code>-- 先建表
+CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
+(
+    name1 [type1] [DEFAULT|MATERIALIZED|ALIAS expr1],
+    name2 [type2] [DEFAULT|MATERIALIZED|ALIAS expr2],
+    ...
+) ENGINE = engine
+-- 导入数据
+INSERT INTO [db.]table [(c1, c2, c3)] select 列或者* from mysql('host:port', 'db', 'table_name', 'user', 'password')
+</code></pre>
+<p>可以自定义列类型，列数，使用 clickhouse 函数对数据进行处理，比如 <code>select toDate(xx) from mysql(&quot;host:port&quot;,&quot;db&quot;,&quot;table_name&quot;,&quot;user_name&quot;,&quot;password&quot;)</code></p>
+<h2 id="create-table-as-select-from">create table as select from</h2>
+<pre><code>CREATE TABLE [IF NOT EXISTS] [db.]table_name
+ENGINE =Log
+AS
+SELECT *
+FROM mysql('host:port', 'db', 'article_clientuser_sum', 'user', 'password')
+</code></pre>
+<blockquote>
+<p>网友文章: http://jackpgao.github.io/2018/02/04/ClickHouse-Use-MySQL-Data/</p>
+</blockquote>
+<p>不支持自定义列，参考资料里的博主写的 <code>ENGIN=MergeTree</code> 测试失败。<br>
+可以理解成 create table 和 insert into select 的组合</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[ClickHouse初识]]></title>
+        <id>https://tianxiawuhao.github.io/post/GwxNFXsxh/</id>
+        <link href="https://tianxiawuhao.github.io/post/GwxNFXsxh/">
+        </link>
+        <updated>2021-12-15T03:00:13.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="一-简介">一、简介</h2>
+<h4 id="11-clickhouse-是什么">1.1 ClickHouse 是什么？</h4>
+<p>ClickHouse 是 Yandex（俄罗斯最大的搜索引擎）开源的一个用于实时数据分析的基于列存储的数据库，其处理数据的速度比传统方法快 100-1000 倍。ClickHouse 的性能超过了目前市场上可比的面向列的 DBMS，每秒钟每台服务器每秒处理数亿至十亿多行和数十千兆字节的数据。</p>
+<h4 id="12-clickhouse的一些特性">1.2 ClickHouse的一些特性：</h4>
+<ol>
+<li>快速：ClickHouse 会充分利用所有可用的硬件，以尽可能快地处理每个查询。单个查询的峰值处理性能超过每秒 2 TB（解压缩后，仅使用的列）。在分布式设置中，读取是在健康副本之间自动平衡的，以避免增加延迟。</li>
+<li>容错：ClickHouse 支持多主机异步复制，并且可以跨多个数据中心进行部署。所有节点都相等，这可以避免出现单点故障。单个节点或整个数据中心的停机时间不会影响系统的读写可用性。</li>
+<li>可伸缩：ClickHouse 可以在垂直和水平方向上很好地缩放。ClickHouse 易于调整以在具有数百或数千个节点的群集上或在单个服务器上，甚至在小型虚拟机上执行。当前，每个单节点安装的数据量超过数万亿行或数百兆兆字节。</li>
+<li>易用：ClickHouse 简单易用，开箱即用。它简化了所有数据处理：将所有结构化数据吸收到系统中，并且立即可用于构建报告。SQL 允许表达期望的结果，而无需涉及某些 DBMS 中可以找到的任何自定义非标准 API。</li>
+<li>充分利用硬件：ClickHouse 与具有相同的可用 I/O 吞吐量和 CPU 容量的传统的面向行的系统相比，其处理典型的分析查询要快两到三个数量级。列式存储格式允许在 RAM 中容纳更多热数据，从而缩短了响应时间。</li>
+<li>提高 CPU 效率：向量化查询执行涉及相关的 SIMD 处理器指令和运行时代码生成。处理列中的数据会提高 CPU 行缓存的命中率。</li>
+<li>优化磁盘访问：ClickHouse 可以最大程度地减少范围查询的次数，从而提高了使用旋转磁盘驱动器的效率，因为它可以保持连续存储数据。</li>
+<li>最小化数据传输：ClickHouse 使公司无需使用专门针对高性能计算的专用网络即可管理其数据。</li>
+</ol>
+<p><strong>何时使用 ClickHouse：</strong><br>
+用于分析结构良好且不可变的事件或日志流，建议将每个此类流放入具有预连接维度的单个宽表中。<br>
+<strong>何时不使用 ClickHouse：</strong><br>
+不适合事务性工作负载（OLTP）、高价值的键值请求、Blob 或文档存储。</p>
+<h4 id="13-为什么-clickhouse-速度这么快">1.3 为什么 ClickHouse 速度这么快？</h4>
+<p>首先我们了解一下 OLAP 场景的特点：</p>
+<ol>
+<li>读多于写。</li>
+<li>大宽表，读大量行但是少量列，结果集较小。</li>
+<li>数据批量写入，且数据不更新或少更新。</li>
+</ol>
+<p>针对分析类查询，通常只需要读取表的一小部分列。在列式数据库中你可以只读取你需要的数据。例如，如果只需要读取 100 列中的 5 列，这将帮助你最少减少 20 倍的 I/O 消耗。</p>
+<p>由于数据总是打包成批量读取的，所以压缩是非常容易的。同时数据按列分别存储这也更容易压缩。这进一步降低了 I/O 的体积。由于 I/O 的降低，这将帮助更多的数据被系统缓存。</p>
+<p>例如，查询《统计每个广告平台的记录数量》需要读取《广告平台 ID》这一列，它在未压缩的情况下需要 1 个字节进行存储。如果大部分流量不是来自广告平台，那么这一列至少可以以十倍的压缩率被压缩。当采用快速压缩算法，它的解压速度最少在十亿字节（未压缩数据）每秒。换句话说，这个查询可以在单个服务器上以每秒大约几十亿行的速度进行处理。这实际上是当前实现的速度。</p>
+<p>ClickHouse 从 OLAP 场景需求出发，定制开发了一套全新的高效列式存储引擎</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1639537283959.webp" alt="" loading="lazy"></figure>
+<p><code>column-oriented</code>  图片来源见水印相比于行式存储，列式存储在分析场景下有着许多优良的特性。</p>
+<ol>
+<li>如前所述，分析场景中往往需要读大量行但是少数几个列。在行存模式下，数据按行连续存储，所有列的数据都存储在一个 block 中，不参与计算的列在 IO 时也要全部读出，读取操作被严重放大。而列存模式下，只需要读取参与计算的列即可，极大的减低了 IO cost，加速了查询。</li>
+<li>同一列中的数据属于同一类型，压缩效果显著。列存往往有着高达十倍甚至更高的压缩比，节省了大量的存储空间，降低了存储成本。</li>
+<li>更高的压缩比意味着更小的 data size，从磁盘中读取相应数据耗时更短。</li>
+<li>自由的压缩算法选择。不同列的数据具有不同的数据类型，适用的压缩算法也就不尽相同。可以针对不同列类型，选择最合适的压缩算法。</li>
+<li>高压缩比，意味着同等大小的内存能够存放更多数据，系统 cache 效果更好。</li>
+</ol>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Thingsboard源码编译]]></title>
         <id>https://tianxiawuhao.github.io/post/DseKIIHw3/</id>
@@ -319,8 +484,8 @@ docker pull yandex/clickhouse-client:20.3.5.21
 <pre><code class="language-shell">docker run --rm -d --name=clickhouse-server --ulimit nofile=262144:262144 -p 8123:8123 -p 9009:9009 -p 9000:9000 yandex/clickhouse-server:20.3.5.21
 </code></pre>
 <h3 id="复制临时容器内配置文件到宿主机">复制临时容器内配置文件到宿主机</h3>
-<pre><code class="language-shell">docker cp clickhouse-server:/etc/clickhouse-server/config.xml /app/cloud/clickhouse/conf/config.xml
-docker cp clickhouse-server:/etc/clickhouse-server/users.xml /app/cloud/clickhouse/conf/users.xml
+<pre><code class="language-shell">docker cp clickhouse-server:/etc/clickhouse-server/config.xml D:/clickhouse/conf/config.xml
+docker cp clickhouse-server:/etc/clickhouse-server/users.xml D:/clickhouse/conf/users.xml
 </code></pre>
 <h3 id="停掉临时容器">停掉临时容器</h3>
 <pre><code class="language-shell">docker stop clickhouse-server
@@ -339,7 +504,7 @@ docker cp clickhouse-server:/etc/clickhouse-server/users.xml /app/cloud/clickhou
 35542ded44184b1b4b6cd621e052662578025b58b4187176a3ad2b9548c8356e
 </code></pre>
 <p>会输出明码和SHA256密码</p>
-<p>修改 /app/cloud/clickhouse/conf/users.xml<br>
+<p>修改 D:/clickhouse/conf/users.xml<br>
 把default账号设为只读权限，并设置密码yandex--&gt;users--&gt;default--&gt;profile节点设为 <code>readonly</code> 注释掉 yandex--&gt;users--&gt;default--&gt;password 节点 新增  yandex--&gt;users--&gt;default--&gt;password_sha256_hex 节点，填入生成的密码</p>
 <p>修改default账号</p>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt;
@@ -372,14 +537,7 @@ docker cp clickhouse-server:/etc/clickhouse-server/users.xml /app/cloud/clickhou
 &lt;/yandex&gt;
 </code></pre>
 <h3 id="创建容器">创建容器</h3>
-<pre><code class="language-shell">docker run -d --name=clickhouse-server 
--p 8123:8123 -p 9009:9009 -p 9000:9000 
---ulimit nofile=262144:262144 
--v /app/cloud/clickhouse/data:/var/lib/clickhouse:rw 
--v /app/cloud/clickhouse/conf/config.xml:/etc/clickhouse-server/config.xml 
--v /app/cloud/clickhouse/conf/users.xml:/etc/clickhouse-server/users.xml 
--v /app/cloud/clickhouse/log:/var/log/clickhouse-server:rw 
-yandex/clickhouse-server:20.3.5.21
+<pre><code class="language-shell">docker run -d --name=clickhouse-server -p 8123:8123 -p 9009:9009 -p 9000:9000 --ulimit nofile=262144:262144 -v D:/clickhouse/data:/var/lib/clickhouse:rw -v D:/clickhouse/conf/config.xml:/etc/clickhouse-server/config.xml -v D:/clickhouse/conf/users.xml:/etc/clickhouse-server/users.xml -v D:/clickhouse/log:/var/log/clickhouse-server:rw yandex/clickhouse-server
 </code></pre>
 <h3 id="操作">操作</h3>
 <ol>
