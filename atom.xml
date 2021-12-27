@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://tianxiawuhao.github.io</id>
     <title>tianxia</title>
-    <updated>2021-12-15T07:18:26.754Z</updated>
+    <updated>2021-12-27T03:33:41.054Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://tianxiawuhao.github.io"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -10,6 +10,150 @@
     <logo>https://tianxiawuhao.github.io/images/avatar.png</logo>
     <icon>https://tianxiawuhao.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, tianxia</rights>
+    <entry>
+        <title type="html"><![CDATA[mybatis级联查询]]></title>
+        <id>https://tianxiawuhao.github.io/post/hIydIZSN1/</id>
+        <link href="https://tianxiawuhao.github.io/post/hIydIZSN1/">
+        </link>
+        <updated>2021-12-27T03:17:49.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="modelmapperxml">ModelMapper.xml</h2>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE mapper PUBLIC &quot;-//mybatis.org//DTD Mapper 3.0//EN&quot; &quot;http://mybatis.org/dtd/mybatis-3-mapper.dtd&quot;&gt;
+&lt;mapper namespace=&quot;com.haier.biz.mapper.ModelMapper&quot;&gt;
+    &lt;resultMap id=&quot;BaseResultMap&quot; type=&quot;com.haier.biz.entity.Model&quot;&gt;
+        &lt;id column=&quot;model_id&quot; jdbcType=&quot;BIGINT&quot; property=&quot;modelId&quot;/&gt;
+        &lt;result column=&quot;equipment_model_mark&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;equipmentModelMark&quot;/&gt;
+        &lt;result column=&quot;equipment_name&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;equipmentName&quot;/&gt;
+        &lt;result column=&quot;specification_model&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;specificationModel&quot;/&gt;
+        &lt;result column=&quot;model_description&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;modelDescription&quot;/&gt;
+        &lt;result column=&quot;model_sort_key&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;modelSortKey&quot;/&gt;
+        &lt;result column=&quot;model_classification_label&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;modelClassificationLabel&quot;/&gt;
+        &lt;result column=&quot;tenant_product_id&quot; jdbcType=&quot;BIGINT&quot; property=&quot;tenantProductId&quot;/&gt;
+        &lt;result column=&quot;tenant_product_name&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;tenantProductName&quot;/&gt;
+        &lt;result column=&quot;manufacturer&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;manufacturer&quot;/&gt;
+        &lt;result column=&quot;create_by&quot; jdbcType=&quot;BIGINT&quot; property=&quot;createBy&quot;/&gt;
+        &lt;result column=&quot;create_time&quot; jdbcType=&quot;TIMESTAMP&quot; property=&quot;createTime&quot;/&gt;
+        &lt;result column=&quot;update_by&quot; jdbcType=&quot;BIGINT&quot; property=&quot;updateBy&quot;/&gt;
+        &lt;result column=&quot;update_time&quot; jdbcType=&quot;TIMESTAMP&quot; property=&quot;updateTime&quot;/&gt;
+    &lt;/resultMap&gt;
+    &lt;!--级联查询--&gt;
+    &lt;resultMap id=&quot;BaseResultInstanceMap&quot; type=&quot;com.haier.biz.entity.DTO.ModelDTO&quot; extends=&quot;BaseResultMap&quot;&gt;
+        &lt;result column=&quot;publishNumber&quot; jdbcType=&quot;BIGINT&quot; property=&quot;publishNumber&quot;/&gt;
+        &lt;result column=&quot;customer_id&quot; jdbcType=&quot;BIGINT&quot; property=&quot;customerId&quot;/&gt;
+        &lt;result column=&quot;topic&quot; jdbcType=&quot;VARCHAR&quot; property=&quot;topic&quot;/&gt;
+        &lt;!--property来源ModelDTO属性，column来源于selectInstancelList查询--&gt;
+        &lt;!--查询单条--&gt;
+        &lt;association property=&quot;equipmentPicture&quot; column=&quot;equipment_model_mark&quot;
+                     select=&quot;getEquipmentPicture&quot;&gt;&lt;/association&gt;
+        &lt;association property=&quot;instanceNumber&quot; column=&quot;{equipmentModelMark=equipment_model_mark,customerId=customer_id}&quot;
+                     select=&quot;getCustomerInstanceNumber&quot;&gt;&lt;/association&gt;
+        &lt;!--查询列表--&gt;
+        &lt;collection property=&quot;equipmentPictures&quot; column=&quot;equipment_model_mark&quot;
+                    select=&quot;getEquipmentPictures&quot;&gt;&lt;/collection&gt;
+    &lt;/resultMap&gt;
+    &lt;select id=&quot;selectInstancelList&quot; parameterType=&quot;com.haier.biz.entity.VO.InstanceSelectVo&quot;
+            resultMap=&quot;BaseResultInstanceMap&quot;&gt;
+        SELECT
+        distinct model.model_id,
+        equipment_model_mark,
+        equipment_name,
+        specification_model,
+        model_description,
+        model_sort_key,
+        model_classification_label,
+        tenant_product_id,
+        tenant_product_name,
+        manufacturer,
+        model.create_by,
+        model.create_time,
+        model.update_by,
+        model.update_time,
+        0 as publishNumber,
+        relation_model_customer.customer_id,
+        relation_model_customer.topic
+        FROM
+        model
+        LEFT JOIN relation_model_customer on relation_model_customer.model_id=model.model_id
+        &lt;where&gt;
+            &lt;if test=&quot;customerId != null&quot;&gt;
+                and relation_model_customer.customer_id = #{customerId}
+            &lt;/if&gt;
+            &lt;if test=&quot;modelSortKey != null and modelSortKey!=''&quot;&gt;
+                and `model`.model_sort_key = #{modelSortKey}
+            &lt;/if&gt;
+            &lt;if test=&quot;equipmentName != null and equipmentName!=''&quot;&gt;
+                and `model`.equipment_name like CONCAT('%', #{equipmentName,jdbcType=VARCHAR},'%')
+            &lt;/if&gt;
+        &lt;/where&gt;
+    &lt;/select&gt;
+    &lt;select id=&quot;getEquipmentPicture&quot; parameterType=&quot;java.lang.String&quot; resultType=&quot;java.lang.String&quot;&gt;
+        SELECT model_instance_file_associate.file_object_key as equipmentPicture
+        from model_instance_file_associate
+        where model_instance_file_associate.file_type=4
+            and model_instance_file_associate.type=0
+            and model_instance_file_associate.del_flag=0
+            and model_instance_file_associate.model_or_instance_mark = #{equipmentModelMark,jdbcType=VARCHAR}
+        limit 1
+    &lt;/select&gt;
+    &lt;select id=&quot;getCustomerInstanceNumber&quot; parameterType=&quot;java.util.Map&quot; resultType=&quot;java.lang.Long&quot;&gt;
+        SELECT count(*)
+        from model_instance_associate
+        left join `instance` on model_instance_associate.instance_mark=`instance`.instance_mark
+        where model_instance_associate.equipment_model_mark = #{equipmentModelMark,jdbcType=VARCHAR}
+            and `instance`.customer_id=#{customerId}
+    &lt;/select&gt;
+    &lt;select id=&quot;getEquipmentPictures&quot; parameterType=&quot;java.lang.String&quot; resultType=&quot;java.lang.String&quot;&gt;
+       SELECT model_instance_file_associate.file_object_key as equipmentPictures
+        from model_instance_file_associate
+        where model_instance_file_associate.file_type=4
+            and model_instance_file_associate.type=0
+            and model_instance_file_associate.del_flag=0
+            and model_instance_file_associate.model_or_instance_mark = #{equipmentModelMark,jdbcType=VARCHAR}
+    &lt;/select&gt;
+&lt;/mapper&gt;
+</code></pre>
+<h2 id="modelmapper">ModelMapper</h2>
+<pre><code class="language-java">@Repository
+public interface ModelMapper extends BaseMapper&lt;Model&gt; {
+
+    List&lt;ModelDTO&gt; selectInstancelList(InstanceSelectVo instanceSelectVo);
+
+    List&lt;String&gt; getEquipmentPictures(@Param(&quot;equipmentModelMark&quot;) String equipmentModelMark);
+
+}
+</code></pre>
+<h2 id="modeldto">ModelDTO</h2>
+<pre><code class="language-java">@Data
+@EqualsAndHashCode(callSuper = false)
+@Accessors(chain = true)
+@AllArgsConstructor
+@NoArgsConstructor
+public class ModelDTO extends Model {
+
+    @ApiModelProperty(value = &quot;产品(模型)图片(取第一张)&quot;)
+    private String equipmentPicture;
+
+    @ApiModelProperty(value = &quot;产品(模型)图片&quot;)
+    private List&lt;String&gt; equipmentPictures;
+
+    @ApiModelProperty(value = &quot;发布客户数&quot;)
+    private Long publishNumber;
+
+    @ApiModelProperty(value = &quot;实例设备数&quot;)
+    private Long instanceNumber;
+
+    @ApiModelProperty(value = &quot;使用方Id&quot;)
+    private Long customerId;
+
+    @ApiModelProperty(value = &quot;实例设备运行情况&quot;)
+    private List&lt;NumberDTO&gt; equipmentList;
+
+    @ApiModelProperty(value = &quot;kafka实时推送的topic&quot;)
+    private String topic;
+}
+</code></pre>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[clickhouse数据分区]]></title>
         <id>https://tianxiawuhao.github.io/post/hle1ZXFqv/</id>
@@ -45,7 +189,7 @@ PartitionID：该值由 insert 数据时分区键的值来决定。分区键支�
 Level：表示合并的层级。相当于某个分区被合并的次数，它不是以表全局累加，而是以分区为单位，初始创建的分区，初始值为 0，相同分区 ID 发生合并动作时，在相应分区内累计加 1。</p>
 <h2 id="mergetree-数据分区合并规则">MergeTree 数据分区合并规则</h2>
 <p>随着数据的写入 MergeTree 存储引擎会很多分区目录。如果分区目录数太多怎么办？因为 Clickhouse 的 MergeTree 存储引擎是基于 LSM 实现的。MergeTree 可以通过分区合并将属于相同分区的多个目录合并为一个新的目录（官方描述在 10 到 15 分钟内会进行合并，也可直接执行 optimize 语句），已经存在的旧目录（也即 system.parts 表中 activie 为 0 的分区）在之后某个时刻通过后台任务删除（默认 8 分钟）。</p>
-<h4 id="分区合并">分区合并</h4>
+<h3 id="分区合并">分区合并</h3>
 <p>我们回顾之前创建的表的分区目录</p>
 <pre><code class="language-bash"># ls 
 202002_1_1_0  202004_2_2_0  202009_3_3_0
