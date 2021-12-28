@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://tianxiawuhao.github.io</id>
     <title>tianxia</title>
-    <updated>2021-12-27T03:33:41.054Z</updated>
+    <updated>2021-12-28T07:27:34.486Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://tianxiawuhao.github.io"/>
     <link rel="self" href="https://tianxiawuhao.github.io/atom.xml"/>
@@ -5732,9 +5732,9 @@ public class IdWorker {
         <link href="https://tianxiawuhao.github.io/post/fFTlwaLS_/">
         </link>
         <updated>2021-06-07T05:34:32.000Z</updated>
-        <content type="html"><![CDATA[<h3 id="resttemplate">RestTemplate</h3>
+        <content type="html"><![CDATA[<h3 id="spring环境下">spring环境下</h3>
 <p>首先导入springboot 的 web 包</p>
-<pre><code class="language-java">&lt;dependency&gt;
+<pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
     &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
 &lt;/dependency&gt;
@@ -5778,6 +5778,38 @@ public class RestTempleConfig {
     }
 }
 </code></pre>
+<h3 id="非spring环境下">非spring环境下</h3>
+<p>导入相关依赖包(注意版本相适应)</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-web&lt;/artifactId&gt;
+    &lt;version&gt;5.2.16.RELEASE&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.httpcomponents&lt;/groupId&gt;
+    &lt;artifactId&gt;httpclient&lt;/artifactId&gt;
+    &lt;version&gt;4.5.2&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt;
+    &lt;artifactId&gt;jackson-core&lt;/artifactId&gt;
+    &lt;version&gt;2.12.1&lt;/version&gt;
+    &lt;scope&gt;compile&lt;/scope&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt;
+    &lt;artifactId&gt;jackson-databind&lt;/artifactId&gt;
+    &lt;version&gt;2.12.1&lt;/version&gt;
+    &lt;scope&gt;compile&lt;/scope&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt;
+    &lt;artifactId&gt;jackson-annotations&lt;/artifactId&gt;
+    &lt;version&gt;2.12.1&lt;/version&gt;
+    &lt;scope&gt;compile&lt;/scope&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h3 id="resttemplate">RestTemplate</h3>
 <p>RestTemplate定义了36个与REST资源交互的方法，大多数都对应于HTTP的方法。 其中只有11个独立的方法，其中有十个有三种重载形式，而第十一个则重载了六次，这样一共形成了36个方法。</p>
 <ol>
 <li>
@@ -5873,15 +5905,15 @@ public &lt;T&gt; T postForObject(URI url, @Nullable Object request, Class&lt;T&g
 </code></pre>
 <pre><code class="language-java">RestTemplate restTemplate = new RestTemplate();
 HttpHeaders headers = new HttpHeaders();
+//header参数
 MediaType type = MediaType.parseMediaType(&quot;application/json; charset=UTF-8&quot;);
 headers.setContentType(type);
 headers.add(&quot;Accept&quot;, MediaType.APPLICATION_JSON.toString());
-
+//body参数
 JSONObject param = new JSONObject();
 param.put(&quot;username&quot;, &quot;123&quot;);
-
-HttpEntity&lt;String&gt; formEntity = new HttpEntity&lt;String&gt;(param, headers);
-
+HttpEntity&lt;JSONObject&gt; formEntity = new HttpEntity&lt;&gt;(param, headers);
+//发送请求
 String result = restTemplate.postForObject(url, formEntity, String.class);
 </code></pre>
 <pre><code class="language-java">@RequestMapping(&quot;saveUser&quot;)
@@ -5911,12 +5943,19 @@ public void demo(Integer id, String name){
     content.put(&quot;userId&quot;, id);
     content.put(&quot;name&quot;, name);
 
+    //post发送
     HttpEntity&lt;JSONObject&gt; request = new HttpEntity&lt;&gt;(content,headers); //组装
     ResponseEntity&lt;String&gt; response = template.exchange(&quot;http://localhost:8080/demo&quot;,HttpMethod.POST,request,String.class);
-    
     //返回指定对象
     ParameterizedTypeReference&lt;User&gt; responseBodyType = new ParameterizedTypeReference&lt;RestBean&lt;String&gt;&gt;() {};
     User user = template.exchange(&quot;http://localhost:8080/demo&quot;,HttpMethod.POST,request,responseBodyType);
+    
+    
+    //get发送
+    HttpEntity&lt;String&gt; request = new HttpEntity&lt;&gt;(&quot;parameters&quot;,headers); //组装
+    ResponseEntity&lt;String&gt; response = template.exchange(&quot;http://localhost:8080/demo&quot;,HttpMethod.GET,request,String.class);
+    //返回指定对象
+    ResponseEntity&lt;User&gt; response = template.exchange(&quot;http://localhost:8080/demo&quot;,HttpMethod.GET,request,User.class);
 }
 </code></pre>
 <figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1623908192461.png" alt="" loading="lazy"></figure>
