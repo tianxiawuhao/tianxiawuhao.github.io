@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>王树森深度强化学习笔记4：Actor-Critic Method（AC Method） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="王树森深度强化学习笔记4：Actor-Critic Method（AC Method） | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="王树森深度强化学习笔记4：Actor-Critic Method（AC Method）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/UWk0iL6Ex/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/M9xPODHX8/" class="tag">强化学习</a>
+                
+              </span>
+              <h1>王树森深度强化学习笔记4：Actor-Critic Method（AC Method）</h1>
+              <span class="meta">
+                Posted on
+                2023-12-25，6 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/UWk0iL6Ex.png" alt="封面图">
+          </img>
+          
+          <p>Actor-Critic方法，是策略学习和价值学习结合的一种方法。</p>
+<p>Actor是策略网络，用来控制Agent运动，可以看做“运动员”。</p>
+<p>Critic是价值网络，用来给动作打分，可以看做“裁判”。</p>
+<figure data-type="image" tabindex="1"><img src="https://pic1.zhimg.com/80/v2-307ee4710d0b11ca06b020f7a40afc28_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="一-价值网络和策略网络value-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</h2>
+<p>首先回顾状态价值函数Vπ(s)，它是动作状态函数Qπ(s,a)的数学期望，如果动作是离散的，那么它是由策略函数π(a|s)作为权重系数，和动作价值函数Qπ(s,a)[可以评价动作的好坏程度]相乘并对a做求和得到。如果动作是连续的，那么就要对a求积分。</p>
+<p>**①Policy network（Actor）😗*控制Agent运动，即在某一状态s做出动作a</p>
+<p>我们利用策略网络π(a|s;θ)来近似策略函数π(a|s)，θ是一个可训练的神经网络参数。</p>
+<p>**②Value network（Critic）😗*不控制Agent运动，仅给Agent打分</p>
+<p>我们利用价值网络q(s,a;w)来近似价值函数Qπ(s,a)，w是一个可训练的神经网络参数</p>
+<figure data-type="image" tabindex="2"><img src="https://pic4.zhimg.com/80/v2-1d777e4ca0d687837a46bdfcc86f1663_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="1策略网络policy-networkactor">1）策略网络（Policy Network）（Actor）</h3>
+<p>以超级玛丽为例：</p>
+<p>该网络有一个输入：状态s</p>
+<p>将超级玛丽的一帧画面传输到策略网络中，即输入一个状态s。</p>
+<p>价值网络中包含：一个卷积层，将一帧画面变成特征向量；全连接层，将特征向量转变为相对于动作空间（Action Space）中元素个数对应的向量；再采用Softmax激活函数将其转换为求和为1的值，即一策略的概率密度。</p>
+<figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-8535085bc52a8a9500f72d711ced5220_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="2价值网络value-networkcritic">2）价值网络（Value Network）（Critic）</h3>
+<p>以超级玛丽为例：</p>
+<p>该网络有两个输入：状态s和动作a</p>
+<p>将超级玛丽的一帧画面传输到价值网络中，即输入一个状态s；以及策略网络（Actor）做出的一个动作a传入到价值网络中，即输入一个动作a。对于离散动作而言，这里可以采用独热编码（one-hot encoding），具体可以参考<a href="https://zhuanlan.zhihu.com/p/474234821">学习笔记 | 独热编码(One-Hot Encoding)</a>，这里不再对独热编码进行过多介绍。</p>
+<p>对于两个不同的输入，处理方法如下：</p>
+<p>针对于状态s，采用一个卷积层，从输入中提取特征，获得一个状态特征向量</p>
+<p>针对于动作a，采用一个全连接层，从输入中提取特征，获得一个动作特征向量</p>
+<p>然后将两个特征向量进行拼接，得到一个更高维的特征向量，再通过一个全连接层输出一个实数q(s,a;w)，即Critic对于Agent处于状态s下做出动作a的评价。</p>
+<figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-a5344bd46cff01b68e06314bb30d8bd1_720w.webp" alt="img" loading="lazy"></figure>
+<p>值得一提的是，价值网络和策略网络中的参数是可以共享的；当然，其中的参数也可以各自独立。</p>
+<p>同时训练价值网络和策略网络就是Actor-Critic Method（AC Method）</p>
+<h2 id="二-训练神经网络train-the-neural-network">二、训练神经网络（Train the Neural Network）</h2>
+<p>因此，我们可以用策略网络和价值网络来近似状态价值函数。</p>
+<p>针对于两个网络的参数θ和w，我们的更新方法是不一样的：</p>
+<p>对于θ，它是策略网络的参数。我们更新参数θ是为了让状态价值函数V(s;θ,w)的值增加，V(s;θ,w)是对策略π和状态s的评价。如果固定状态s，那么V(s;θ,w)越大，意味着策略π越好；同理，如果固定策略π，V(s;θ,w)越大，则状态s越好。</p>
+<p>对于w，它是价值网络的参数。我们更新参数w是为了让价值网络对于动作的打分更精准，从而更好地估计未来奖励的总和。它相当于是裁判，一开始并没有打分能力，因此在初始阶段，Critic的打分都是瞎猜的，它会通过环境给的奖励Reward来更新w，最后Critic的打分会越来越精准。</p>
+<figure data-type="image" tabindex="5"><img src="https://pic4.zhimg.com/80/v2-0e1df9491a20914809366f441fdd2b53_720w.webp" alt="img" loading="lazy"></figure>
+<p>利用如下五个步骤来对两个神经网络做一次更新：</p>
+<figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-a86048ee7d13168bdb37c84aec417945_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="1-使用时序差分算法更新价值网络qupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</h3>
+<p>解释一下，流程大概是这样的：</p>
+<p>当我们使用TD算法去更新价值网络q时，要首先获取到Actor给出的t时刻和t+1时刻的状态st、st+1以及动作at、a~t+1，此时Critic网络中的参数为wt。因此我们就能得到我们的TD target：yt，有了TD target和t时刻的观测值，即可写出Loss L(w)，且以L2范式形式表示，然后利用梯度下降（Gradient Descent）去更新Critic网络中的参数w，记为wt+1。需要注意的是，Agent并不会做出a~t+1这个动作，仅仅是用于Critic用于TD算法的参数更新</p>
+<p>直接附图：</p>
+<figure data-type="image" tabindex="7"><img src="https://pic2.zhimg.com/80/v2-3d0c7377e346ce2a56cff226fa4b912d_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="2使用策略梯度更新策略网络πupdate-policy-network-π-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</h3>
+<p>首先回顾一下策略梯度：</p>
+<p>策略梯度是对自定义函数g(A,θ)关于A求期望，由于一个g(A,θ)是对整体的g(A,θ)的一个无偏估计，因此这里用了蒙特卡洛近似。</p>
+<figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-f97f15bbc5b5c39a687d08fcd722b63c_720w.webp" alt="img" loading="lazy"></figure>
+<p>解释一下，流程大概是这样的：</p>
+<p>根据策略π对动作a进行一次随机抽样，然后针对该动作a进行一次随机梯度上升（Stochastic Gradient Ascent SGA），用于更新θ，记为θt+1。</p>
+<figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-5e17c6dfe8d7afe44950bd9bea8a32b8_720w.webp" alt="img" loading="lazy"></figure>
+<p>AC方法的整体流程和对应关系：</p>
+<figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-9c0bad295340d7057cbd037b7400c93a_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="3算法总结summary-of-algorithm">3）算法总结（Summary of Algorithm）</h3>
+<p>直接上图，非常清晰：</p>
+<figure data-type="image" tabindex="11"><img src="https://pic1.zhimg.com/80/v2-db8d172e038bf40ed57a750cc2d30d80_720w.webp" alt="img" loading="lazy"></figure>
+<p>值得注意的是，在论文和教科书中，最后一步往往不适用qt，而采用的是TD error δt。使用δt叫做基线策略梯度（Policy Gradient with Baseline），其效果更好。好的baseline可以降低方差，使算法收敛更快。</p>
+<p>Baseline：任何接近qt的数都可以是baseline，但它不能是at的函数，即不与at存在映射关系。</p>
+<h2 id="三-总结summary">三、总结（Summary）</h2>
+<figure data-type="image" tabindex="12"><img src="https://pic3.zhimg.com/80/v2-68d72b2c946eb65e90bb9d1a1ff46fda_720w.webp" alt="img" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="https://pic4.zhimg.com/80/v2-453074af0ddabd665db4f010a2b3a03b_720w.webp" alt="img" loading="lazy"></figure>
+<figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-b3f9b7c10dd7bc2af18fef010cd93170_720w.webp" alt="img" loading="lazy"></figure>
+<hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9C%E5%92%8C%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cvalue-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</a>
+<ul>
+<li><a href="#1%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cpolicy-networkactor">1）策略网络（Policy Network）（Actor）</a></li>
+<li><a href="#2%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9Cvalue-networkcritic">2）价值网络（Value Network）（Critic）</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%8C-%E8%AE%AD%E7%BB%83%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9Ctrain-the-neural-network">二、训练神经网络（Train the Neural Network）</a>
+<ul>
+<li><a href="#1-%E4%BD%BF%E7%94%A8%E6%97%B6%E5%BA%8F%E5%B7%AE%E5%88%86%E7%AE%97%E6%B3%95%E6%9B%B4%E6%96%B0%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9Cqupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</a></li>
+<li><a href="#2%E4%BD%BF%E7%94%A8%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6%E6%9B%B4%E6%96%B0%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9C%CF%80update-policy-network-%CF%80-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</a></li>
+<li><a href="#3%E7%AE%97%E6%B3%95%E6%80%BB%E7%BB%93summary-of-algorithm">3）算法总结（Summary of Algorithm）</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%89-%E6%80%BB%E7%BB%93summary">三、总结（Summary）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/syanmQ0CA/">
+                <span class="post-title">
+                  王树森深度强化学习笔记5：蒙特卡洛算法 Monte Carlo Algorithms&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/0gyURSJ-J/">
+              <span class="post-title">
+                王树森深度强化学习笔记3：策略学习 Policy-Based Learning&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

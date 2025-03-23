@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>王树森深度强化学习笔记9：经验回放 Experience Replay | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="王树森深度强化学习笔记9：经验回放 Experience Replay | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="王树森深度强化学习笔记9：经验回放 Experience Replay" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/BOSW3NMIw/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/M9xPODHX8/" class="tag">强化学习</a>
+                
+              </span>
+              <h1>王树森深度强化学习笔记9：经验回放 Experience Replay</h1>
+              <span class="meta">
+                Posted on
+                2024-01-12，6 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/BOSW3NMIw.png" alt="封面图">
+          </img>
+          
+          <h2 id="一-回顾深度q网络和时序差分算法revisiting-dqn-and-td-learning">一、回顾深度Q网络和时序差分算法（Revisiting DQN and TD Learning）</h2>
+<h3 id="1deep-q-networkdqn">1）Deep Q Network（DQN）</h3>
+<p>DQN采用价值网络Q(s,a;w)来近似最优动作价值函数Q*(s,a)</p>
+<figure data-type="image" tabindex="1"><img src="https://pic3.zhimg.com/80/v2-ab6d1d9179245919ee68cdc3dd64c566_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="2td-learning">2）TD Learning</h3>
+<p>我们通常使用TD算法来训练DQN，这里我们回顾一下TD算法的步骤：</p>
+<p>①Agent在t时刻观测到一个状态st并做出动作at</p>
+<p>②Agent与环境交互获得了一个新的状态st+1并且获得了一个奖励rt</p>
+<p>③此时，我们得到了TD Target yt</p>
+<p>④继而写出TD error δt</p>
+<p>我们的目标是让qt接近yt，即使TD error δt尽量的小</p>
+<figure data-type="image" tabindex="2"><img src="https://pic2.zhimg.com/80/v2-d0b2447748aabef6b0c7190ee5198075_720w.webp" alt="img" loading="lazy"></figure>
+<p>因此TD算法就是寻找一个神经网络参数w使损失函数（Loss Function）L(w)尽可能的小</p>
+<p>⑤采用梯度下降来使wt不断逼近w*</p>
+<figure data-type="image" tabindex="3"><img src="https://pic3.zhimg.com/80/v2-bcb050d92dadc5ab9ffe82ce419bc1be_720w.webp" alt="img" loading="lazy"></figure>
+<p>(st,at,rt,st+1)是一个四元组，这是一个transition，可以认为是一条训练数据，传统算法在使用完该训练数据后就把它丢掉，不再使用，这种对于DQN的训练效果并不好。</p>
+<h2 id="二-为什么要使用经验回放why-use-the-experience-replay">二、为什么要使用经验回放（Why use the Experience Replay）</h2>
+<p>其实，关于讨论为什么要使用经验回放，其实就是在讨论不使用经验回放会有什么缺点，以及使用了经验回放有什么有点。</p>
+<h3 id="1缺点一浪费经验shortcoming-1watse-of-experience">1）缺点一：浪费经验（Shortcoming 1：Watse of Experience）</h3>
+<p>传统的TD算法每次仅使用一个transition，使用完后就丢掉，不再使用，这会造成浪费</p>
+<figure data-type="image" tabindex="4"><img src="https://pic3.zhimg.com/80/v2-bcb050d92dadc5ab9ffe82ce419bc1be_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="2缺点二关联性更新shortcoming-2correlated-updates">2）缺点二：关联性更新（Shortcoming 2：Correlated Updates）</h3>
+<p>传统TD算法会按照顺序使用transition(st,at,rt,st+1)，前后两条transition之间有很强的关联性，即st和st+1非常接近，实验表明这并不利于把DQN训练的很好。</p>
+<figure data-type="image" tabindex="5"><img src="https://pic1.zhimg.com/80/v2-8bc0de0ad5ff80b79abf131e94967a04_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="三-经验回放experience-replay">三、经验回放（Experience Replay）</h2>
+<h3 id="1回放缓冲区replay-buffer">1）回放缓冲区（Replay Buffer）</h3>
+<p>我们在使用完一个transition时，会把一个transition放入一个队列里，这个队列被称之为回放缓冲区（Replay Buffer），它的容量是一个超参数（Hyper Parameter）n，Replay Buffer可以存储n条transitions。</p>
+<figure data-type="image" tabindex="6"><img src="https://pic3.zhimg.com/80/v2-861b7f0cbf6e5474c38eea3227e4a922_720w.webp" alt="img" loading="lazy"></figure>
+<p>如果Replay Buffer满了，那么新来的transition会替代老的transition</p>
+<figure data-type="image" tabindex="7"><img src="https://pic3.zhimg.com/80/v2-56b90fc27bfb9551be8f3444209c7e12_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="2td算法中经验回放td-with-experience-replay">2）TD算法中经验回放（TD with Experience Replay）</h2>
+<p>我们通过找到神经网络参数w来最小化损失函数Loss Function。</p>
+<p>我们是用随机梯度下降（Stochastic Gradient Descent SGD）来最小化损失函数Loss Function：从buffer中随机抽取一个transition（si,ai,ri,si+1）,然后计算TD error δi，再算出随机梯度（Stochastic Gradient）gi，使用随机梯度下降(SGD)来调整神经网络参数w。</p>
+<figure data-type="image" tabindex="8"><img src="https://pic4.zhimg.com/80/v2-d8d679c323d90c8d228f381764a0d61f_720w.webp" alt="img" loading="lazy"></figure>
+<p>值得一提的是，实践中，通常使用mini-batch SGD,即每次抽取多个transitions，算出多个随机梯度，利用这多个随机梯度的平均来更新神经网络参数w。</p>
+<h3 id="3经验回放的优势benefits-of-experience-replay">3）经验回放的优势（Benefits of Experience Replay）</h3>
+<p>①打破了经验的相关性</p>
+<p>②重复利用过去的经验</p>
+<figure data-type="image" tabindex="9"><img src="https://pic4.zhimg.com/80/v2-867b2418391e7c9e66c8260a7e880827_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="四-优先经验回放prioritized-experience-replay">四、优先经验回放（Prioritized Experience Replay）</h2>
+<h3 id="1基础思想basic-idea">1）基础思想（Basic Idea）</h3>
+<p>对于Agent而言，并不是所有的transition都是同等重要的。例如在超级玛丽游戏中，左侧的普通关卡和右侧的boss关卡，它们的重要性就不一样：普通关卡很常见，而boss关卡需要通过很多普通关卡后才能进行。因此，我们必须让Agent珍惜数量更少的boss关卡，即让Agent充分利用boss关卡的这一经验。</p>
+<figure data-type="image" tabindex="10"><img src="https://pic4.zhimg.com/80/v2-cdc6da6e44d00ff329c0581b512fba73_720w.webp" alt="img" loading="lazy"></figure>
+<p>实际训练中，我们怎么样让Agent知道哪个transition是重要的呢？</p>
+<p>可以使用TD error的L1范式，即|δt|来判断它的重要。|δt|越大，就说明transition就越重要，应该给这个transition更高的优先级。</p>
+<figure data-type="image" tabindex="11"><img src="https://pic1.zhimg.com/80/v2-23dce6fe89f9d4b27511549c5d87fb90_720w.webp" alt="img" loading="lazy"></figure>
+<p>解释一下：训练出的DQN对于数量较少的场景不熟悉，所以预测就会偏离TD Target，因此产生的TD error就比较大，即|δt|就大。正因为DQN不熟悉数量较少的场景，所以要让DQN给这些场景更高的优先级，让它更好的应对这样的场景。</p>
+<h3 id="2核心想法core-idea">2）核心想法（Core Idea）</h3>
+<p>优先经验回放（Prioritized Experience Replay）的核心在于：使用非均匀抽样代替均匀抽样。这里有两种抽样方式：</p>
+<p>①抽样概率pt正比于|δt|+ε</p>
+<p>其中，ε是一个很小的数，避免抽样概率pt等于0</p>
+<figure data-type="image" tabindex="12"><img src="https://pic2.zhimg.com/80/v2-892d4ca8fb94402fc3cee6b9e61bf961_720w.webp" alt="img" loading="lazy"></figure>
+<p>②对|δt|排序</p>
+<p>|δt|越大越靠前，|δt|越小越靠后</p>
+<figure data-type="image" tabindex="13"><img src="https://pic3.zhimg.com/80/v2-3818600f6de641fa9e2d89239237a3c6_720w.webp" alt="img" loading="lazy"></figure>
+<p>两种方法的原理都是一样的：|δt|越大，就抽样概率pt就越大。</p>
+<h3 id="3调整学习率scaling-learning-rate">3）调整学习率（Scaling Learning Rate）</h3>
+<p>TD算法采用SGD来更新神经网络参数w，α是学习率。</p>
+<p>如果做均匀抽样，那么所有的transitions的学习率α都相同；如果做非均匀抽样，那么就要根据每个transition的重要性来调整学习率。</p>
+<figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-efb63f6770e232d2b88064e9fcc76cd8_720w.webp" alt="img" loading="lazy"></figure>
+<p>如果一个transition有一个较大的抽样概率pt，那么对这个transition的学习率就应该调小，可以采用如下圈出的方法来自适应调整学习率的因子：如果pt很大，那么学习率就会变小</p>
+<figure data-type="image" tabindex="15"><img src="https://pic1.zhimg.com/80/v2-3e7b274a69d2157b01e74cab043465d4_720w.webp" alt="img" loading="lazy"></figure>
+<p>4）更新TD Error（Update TD Error）</p>
+<p>为了做优先经验回放（PER），我们要对每一个transition标记上TD error δt。δt决定了这条transition的重要性，决定了它被抽样的概率。</p>
+<p>如果一个transition刚刚被收集到，我们并不知道它的δt，那么我们就直接把它的δt设置为最大值，让它有最高的优先级。</p>
+<p>每次从buffer中抽取一个transition，都要对它的δt进行一次更新</p>
+<figure data-type="image" tabindex="16"><img src="https://pic3.zhimg.com/80/v2-e135e7c9b0c0cbbd3ded47874e924b3e_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="五-总结summary">五、总结（Summary）</h2>
+<p>相比于传统的经验回放（ER），优先经验回放（PER）在每个transition中标注了δt，并根据δt的不同来确定不同的抽样概率和学习率，从而达到非均匀抽样的效果。</p>
+<p>直接附图：</p>
+<figure data-type="image" tabindex="17"><img src="https://pic1.zhimg.com/80/v2-4e2764664f396f743a3d666e7bc0ffb4_720w.webp" alt="img" loading="lazy"></figure>
+<hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-%E5%9B%9E%E9%A1%BE%E6%B7%B1%E5%BA%A6q%E7%BD%91%E7%BB%9C%E5%92%8C%E6%97%B6%E5%BA%8F%E5%B7%AE%E5%88%86%E7%AE%97%E6%B3%95revisiting-dqn-and-td-learning">一、回顾深度Q网络和时序差分算法（Revisiting DQN and TD Learning）</a>
+<ul>
+<li><a href="#1deep-q-networkdqn">1）Deep Q Network（DQN）</a></li>
+<li><a href="#2td-learning">2）TD Learning</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%8C-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BD%BF%E7%94%A8%E7%BB%8F%E9%AA%8C%E5%9B%9E%E6%94%BEwhy-use-the-experience-replay">二、为什么要使用经验回放（Why use the Experience Replay）</a>
+<ul>
+<li><a href="#1%E7%BC%BA%E7%82%B9%E4%B8%80%E6%B5%AA%E8%B4%B9%E7%BB%8F%E9%AA%8Cshortcoming-1watse-of-experience">1）缺点一：浪费经验（Shortcoming 1：Watse of Experience）</a></li>
+<li><a href="#2%E7%BC%BA%E7%82%B9%E4%BA%8C%E5%85%B3%E8%81%94%E6%80%A7%E6%9B%B4%E6%96%B0shortcoming-2correlated-updates">2）缺点二：关联性更新（Shortcoming 2：Correlated Updates）</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%89-%E7%BB%8F%E9%AA%8C%E5%9B%9E%E6%94%BEexperience-replay">三、经验回放（Experience Replay）</a>
+<ul>
+<li><a href="#1%E5%9B%9E%E6%94%BE%E7%BC%93%E5%86%B2%E5%8C%BAreplay-buffer">1）回放缓冲区（Replay Buffer）</a></li>
+</ul>
+</li>
+<li><a href="#2td%E7%AE%97%E6%B3%95%E4%B8%AD%E7%BB%8F%E9%AA%8C%E5%9B%9E%E6%94%BEtd-with-experience-replay">2）TD算法中经验回放（TD with Experience Replay）</a>
+<ul>
+<li><a href="#3%E7%BB%8F%E9%AA%8C%E5%9B%9E%E6%94%BE%E7%9A%84%E4%BC%98%E5%8A%BFbenefits-of-experience-replay">3）经验回放的优势（Benefits of Experience Replay）</a></li>
+</ul>
+</li>
+<li><a href="#%E5%9B%9B-%E4%BC%98%E5%85%88%E7%BB%8F%E9%AA%8C%E5%9B%9E%E6%94%BEprioritized-experience-replay">四、优先经验回放（Prioritized Experience Replay）</a>
+<ul>
+<li><a href="#1%E5%9F%BA%E7%A1%80%E6%80%9D%E6%83%B3basic-idea">1）基础思想（Basic Idea）</a></li>
+<li><a href="#2%E6%A0%B8%E5%BF%83%E6%83%B3%E6%B3%95core-idea">2）核心想法（Core Idea）</a></li>
+<li><a href="#3%E8%B0%83%E6%95%B4%E5%AD%A6%E4%B9%A0%E7%8E%87scaling-learning-rate">3）调整学习率（Scaling Learning Rate）</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%94-%E6%80%BB%E7%BB%93summary">五、总结（Summary）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/FrqjohR4Q/">
+                <span class="post-title">
+                  王树森深度强化学习笔记10：高估问题、目标网络、DDQN（Overestimate、Target Network、Double DQN）&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/xWqlayf1I/">
+              <span class="post-title">
+                王树森深度强化学习笔记8：Multi-Step TD Target&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

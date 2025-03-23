@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>王树森深度强化学习笔记7：Q-Learning算法 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="王树森深度强化学习笔记7：Q-Learning算法 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="王树森深度强化学习笔记7：Q-Learning算法" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/Qnqlnnzkz/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/M9xPODHX8/" class="tag">强化学习</a>
+                
+              </span>
+              <h1>王树森深度强化学习笔记7：Q-Learning算法</h1>
+              <span class="meta">
+                Posted on
+                2024-01-05，3 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/Qnqlnnzkz.png" alt="封面图">
+          </img>
+          
+          <h2 id="一-sarsa算法与q-learning算法对比">一、Sarsa算法与Q-Learning算法对比</h2>
+<p>首先来对比一下Sarsa和Q-Learning</p>
+<h3 id="1sarsa算法">1）Sarsa算法</h3>
+<p>①Sarsa算法目的是为了训练动作价值函数Qπ(s,a)</p>
+<p>②TD Target记作yt，它是当前观测到的奖励rt和动作价值函数对于下一状态和下一动作的预测值乘以折扣因子γ之和</p>
+<p>③我们使用Sarsa算法来更新价值网络，即AC算法中的Critic网络。</p>
+<figure data-type="image" tabindex="1"><img src="https://pic3.zhimg.com/80/v2-b2b4c6b1697196d0dd5bfdc2814153d2_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="2q-learning算法">2）Q-Learning算法</h3>
+<p>①Q-Learning是用于学习最优动作价值函数Q*(s,a)</p>
+<p>②TD Target记作yt，是当前观测到的奖励rt与价值函数对于下一步状态下最优动作的预测值乘以折扣因子γ之和</p>
+<p>③我们用Q-Learning算法来更新DQN</p>
+<figure data-type="image" tabindex="2"><img src="https://pic1.zhimg.com/80/v2-aeb1169c215b4c5c7e43f954ee7ad180_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="二-推导td-targetderivetd-target">二、推导TD Target（DeriveTD Target）</h2>
+<p>我们已经知道对于所有的π，已经有了如下的等式：</p>
+<figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-61c4edb86c5603e8288b32553e27fd90_720w.webp" alt="img" loading="lazy"></figure>
+<p>如果这里的π是最优策略π*，那么就会有如下的等式:</p>
+<figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-0afccf74c529bd5b058b9e57eb81de01_720w.webp" alt="img" loading="lazy"></figure>
+<p>我们往往采用Q<em>去替换Q_π</em>，因此有了如下的等式：</p>
+<figure data-type="image" tabindex="5"><img src="https://pic1.zhimg.com/80/v2-5d87a3b08230b6a960af4fb7f2435d6c_720w.webp" alt="img" loading="lazy"></figure>
+<p>我们推导一下这个式子，由于Q*(St+1,At+1)是对下一步状态下最优动作的动作价值函数，因此，这里的At+1必然要选择使Q*(St+1,At+1)最大化的动作a*，因此有了如下的结论：</p>
+<figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-f878f5bf116841c4ebf1a9b9f0c5fe85_720w.webp" alt="img" loading="lazy"></figure>
+<p>代入上面的等式，就可以得到如下等式：</p>
+<figure data-type="image" tabindex="7"><img src="https://pic3.zhimg.com/80/v2-63a6389249be4a7dc69c4dbc622f01c2_720w.webp" alt="img" loading="lazy"></figure>
+<p>然而，直接求式子中的期望十分困难，因此这里采用蒙特卡洛近似：</p>
+<p>将Rt近似为观测到的rt，用观测到的下一状态st+1去近似St+1，因此蒙特卡洛近似后的式子如下：</p>
+<figure data-type="image" tabindex="8"><img src="https://pic3.zhimg.com/80/v2-754d2420d81b7e33fead06a3fd3d811a_720w.webp" alt="img" loading="lazy"></figure>
+<p>至此，我们得到了TD Target yt</p>
+<h2 id="三-表格形式的q-learningq-learningtabular-version">三、表格形式的Q-Learning（Q-Learning：Tabular Version）</h2>
+<p>具体步骤如下</p>
+<p>①观测到一个四元组(st,at,rt,st+1)，这里称之为一个transition</p>
+<figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-8e57ee317205a122028dfdaa1aac9e00_720w.webp" alt="img" loading="lazy"></figure>
+<p>②我们在上一节已经推导出TD Target。实际上，这里的Q是一张表格，我们要找到对应的状态st+1并找到最大的动作价值函数Q(st+1,a*),用于计算TD Target yt。</p>
+<figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-7d3025f8b19e4fee6a2f35c13e127dd2_720w.webp" alt="img" loading="lazy"></figure>
+<p>③接下来，我们计算TD error δt</p>
+<figure data-type="image" tabindex="11"><img src="https://pic4.zhimg.com/80/v2-7c70f89554c85728c4f322be4184fd87_720w.webp" alt="img" loading="lazy"></figure>
+<p>④最后，我们利用如下公式来更新表格中的Q*(st,at)</p>
+<figure data-type="image" tabindex="12"><img src="https://pic3.zhimg.com/80/v2-46d021cbf34edc4baea55e13b042750a_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="四-神经网络形式的q-learningq-learningdqn-version">四、神经网络形式的Q-Learning（Q-Learning：DQN Version）</h2>
+<p>我们采用DQN Q(s,a;w)来近似最优动作价值函数Q*(s,a)</p>
+<p>DQN采用如下公式来控制Agent，而我们就是帮助DQN来学习到更好的神经网络参数w</p>
+<figure data-type="image" tabindex="13"><img src="https://pic1.zhimg.com/80/v2-01ea7f19160ea476e15b51bcb267fc58_720w.webp" alt="img" loading="lazy"></figure>
+<p>具体步骤如下：</p>
+<p>①</p>
+<p>观测到一个四元组(st,at,rt,st+1)，这里称之为一个transition</p>
+<figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-8e57ee317205a122028dfdaa1aac9e00_720w.webp" alt="img" loading="lazy"></figure>
+<p>②TD Target yt，与上一小节类似，这里只是将表格中的Q(st+1,a)换成了Q(st+1,a*;w)</p>
+<figure data-type="image" tabindex="15"><img src="https://pic1.zhimg.com/80/v2-535de8d87b70c8ca53f2b0fe2f367098_720w.webp" alt="img" loading="lazy"></figure>
+<p>③TD error δt类似</p>
+<figure data-type="image" tabindex="16"><img src="https://pic4.zhimg.com/80/v2-236fa7370d88a5d61bd92cbfe676e137_720w.webp" alt="img" loading="lazy"></figure>
+<p>④最后，我们采用梯度下降来更新神经网络参数w</p>
+<figure data-type="image" tabindex="17"><img src="https://pic1.zhimg.com/80/v2-878d6c0500ef7f567cdbfdee2c8e3894_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="五-总结summary">五、总结（Summary）</h2>
+<p>这里要注意Q-Learning与Sarsa的区别：Sarsa算法是学习动作价值函数Qπ；而Q-Learning是学习最优动作价值函数Q*。但其目的都是让Agent获得到更高的分数。</p>
+<p>最后附图：</p>
+<figure data-type="image" tabindex="18"><img src="https://pic4.zhimg.com/80/v2-5c44930230eb979f236a2b3f7aed9e83_720w.webp" alt="img" loading="lazy"></figure>
+<hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-sarsa%E7%AE%97%E6%B3%95%E4%B8%8Eq-learning%E7%AE%97%E6%B3%95%E5%AF%B9%E6%AF%94">一、Sarsa算法与Q-Learning算法对比</a>
+<ul>
+<li><a href="#1sarsa%E7%AE%97%E6%B3%95">1）Sarsa算法</a></li>
+<li><a href="#2q-learning%E7%AE%97%E6%B3%95">2）Q-Learning算法</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%8C-%E6%8E%A8%E5%AF%BCtd-targetderivetd-target">二、推导TD Target（DeriveTD Target）</a></li>
+<li><a href="#%E4%B8%89-%E8%A1%A8%E6%A0%BC%E5%BD%A2%E5%BC%8F%E7%9A%84q-learningq-learningtabular-version">三、表格形式的Q-Learning（Q-Learning：Tabular Version）</a></li>
+<li><a href="#%E5%9B%9B-%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E5%BD%A2%E5%BC%8F%E7%9A%84q-learningq-learningdqn-version">四、神经网络形式的Q-Learning（Q-Learning：DQN Version）</a></li>
+<li><a href="#%E4%BA%94-%E6%80%BB%E7%BB%93summary">五、总结（Summary）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/xWqlayf1I/">
+                <span class="post-title">
+                  王树森深度强化学习笔记8：Multi-Step TD Target&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/02-wFwlBm/">
+              <span class="post-title">
+                王树森深度强化学习笔记6：SARSA算法&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>minio新版搭建和数据迁移 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="minio新版搭建和数据迁移 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="minio新版搭建和数据迁移" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/SznSzjoX7/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/vPr7GfFF3/" class="tag">对象存储</a>
+                
+              </span>
+              <h1>minio新版搭建和数据迁移</h1>
+              <span class="meta">
+                Posted on
+                2022-09-17，9 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/SznSzjoX7.png" alt="封面图">
+          </img>
+          
+          <p>MinIO 是一个基于Apache License v2.0开源协议的对象存储服务，是一个非常轻量级的服务，非常适合于存储大容量非结构化的数据，例如图片、视频、日志文件、备份数据和容器/虚拟机镜像等，而一个对象文件可以是任意大小，从几kb到最大5T不等</p>
+<h3 id="minio搭建">minio搭建</h3>
+<p>获取最新版本minio</p>
+<pre><code class="language-shell">docker pull minio/minio 
+</code></pre>
+<p>启动minio</p>
+<pre><code class="language-shell">docker run --name minio -p 9000:9000 -p 9090:9090 -d --restart=always -e &quot;MINIO_ROOT_USER=admin&quot; -e &quot;MINIO_ROOT_PASSWORD=admin123&quot; -v C:\installation\minio\data:/data  -v C:\installation\minio\config:/root/.minio minio/minio server /data --console-address &quot;:9000&quot; --address &quot;:9090&quot;
+</code></pre>
+<h3 id="数据迁移">数据迁移</h3>
+<h4 id="rclone">Rclone</h4>
+<p>Rclone 是一个命令行程序，用于管理云存储上的文件。它是云供应商 Web 存储接口的功能丰富的替代品。超过 40 种云存储产品支持 rclone，包括 S3 对象存储、商业和消费者文件存储服务以及标准传输协议。</p>
+<p>Rclone 广泛用于 Linux、Windows 和 Mac。第三方开发人员使用 rclone 命令行或 API 创建创新的备份、恢复、GUI 和业务流程解决方案。</p>
+<ul>
+<li>将文件备份（和加密）到云存储</li>
+<li>从云存储恢复（和解密）文件</li>
+<li>将云数据镜像到其他云服务或本地</li>
+<li>将数据迁移到云端，或在云存储供应商之间迁移</li>
+<li>将多个、加密、缓存或多样化的云存储挂载为磁盘</li>
+<li>使用lsf、ljson、size、ncdu分析和说明云存储中保存的数据</li>
+<li>将文件系统联合在一起以将多个本地和/或云文件系统呈现为一个</li>
+</ul>
+<h4 id="安装rclone">安装Rclone</h4>
+<pre><code class="language-shell">curl https://rclone.org/install.sh | sudo bash
+</code></pre>
+<p>如果网络不好建议先下载到本地，然后上传到服务器</p>
+<pre><code class="language-shell"># 下载文件
+wget https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+# 解压文件
+unzip rclone-v1.57.0-linux-amd64.zip
+# 给一下权限
+chmod 0755 ./rclone-v1.57.0-linux-amd64/rclone
+# 拷贝到 /usr/bin/ 可以直接使用 rclone命令
+cp ./rclone-v1.57.0-linux-amd64p/rclone /usr/bin/
+# 删除源文件
+rm -rf ./rclone-v1.56.0-linux-amd64.zip
+</code></pre>
+<p>windows下载</p>
+<pre><code class="language-shell">#官网下载：
+http://rclone.org/downloads/
+
+#GitHub下载：
+http://github.com/rclone/rclone
+</code></pre>
+<h4 id="配置">配置</h4>
+<pre><code class="language-shell">rclone config - 进入交互式配置选项，进行添加、删除、管理网盘等操作。
+rclone config file - 显示配置文件的路径，一般配置文件在 ~/.config/rclone/rclone.conf，更换服务器可直接copy该文件。
+rclone config show - 显示配置文件信息
+</code></pre>
+<pre><code class="language-shell">cat ~/.config/rclone/rclone.conf
+</code></pre>
+<pre><code># 备注：可以在一个配置文件中配置多份，使用[name]来区分
+[oldminio]
+type = s3
+provider = Minio
+env_auth = false
+access_key_id = minio
+secret_access_key = 123
+region = cn-east-1
+endpoint = http://IP:PORT
+location_constraint =
+server_side_encryption =
+
+[newminio]
+type = s3
+provider = Minio
+env_auth = false
+access_key_id = minio
+secret_access_key = 123
+region = cn-east-1
+endpoint = http://IP:PORT
+location_constraint =
+server_side_encryption =
+</code></pre>
+<pre><code>rclone sync checksum oldminio:model-file-bucket newminio:model-file-bucket
+</code></pre>
+<h4 id="常用功能">常用功能</h4>
+<pre><code class="language-shell"># 将阿里云minio的数据迁移到腾讯的cos上
+# aliyun 配置文件的名称
+# wechat-root-files 存储桶名称
+# files 要传输的文件
+# -P 显示实时传输进度
+# --transfers=N - 并行文件数，默认为 4。在比较小的内存的 VPS 上建议调小这个参数，比如 128M 的小鸡上使用建议设置为 1
+./rclone sync aliyun:wechat-root-files/files tencent:sj-data-testwechat-1307267266/files -P --transfers=200
+# 删除文件
+./rclone delete tencent:sj-data-testwechat-1307267266/wechat-root-files -P --transfers=100
+</code></pre>
+<h4 id="常用功能选项">常用功能选项</h4>
+<pre><code class="language-shell">rclone copy - 复制
+rclone move - 移动，如果要在移动后删除空源目录，请加上 --delete-empty-src-dirs 参数
+rclone sync - 同步：将源目录同步到目标目录，只更改目标目录。
+rclone delete - 删除路径下的文件内容。
+rclone purge - 删除路径及其所有文件内容。
+rclone mkdir - 创建目录。
+rclone rmdir - 删除目录。
+rclone rmdirs - 删除指定灵境下的空目录。如果加上 --leave-root 参数，则不会删除根目录。
+rclone check - 检查源和目的地址数据是否匹配。
+rclone ls - 列出指定路径下的所有的文件以及文件大小和路径。
+rclone lsl - 比上面多一个显示上传时间。
+rclone lsd 列出指定路径下的目录
+rclone lsf - 列出指定路径下的目录和文件
+
+# 日志
+# rclone 有 4 个级别的日志记录，ERROR，NOTICE，INFO 和 DEBUG。
+# 默认情况下，rclone 将生成 ERROR 和 NOTICE 级别消息。
+</code></pre>
+<h4 id="常用参数">常用参数</h4>
+<pre><code class="language-shell">-n = --dry-run - 测试运行，用来查看 rclone 在实际运行中会进行哪些操作。
+-P = --progress - 显示实时传输进度。
+--cache-chunk-size SizeSuffi - 块的大小，默认 5M，理论上是越大上传速度越快，同时占用内存也越多。如果设置得太大，可能会导致进程中断。
+--cache-chunk-total-size SizeSuffix - 块可以在本地磁盘上占用的总大小，默认 10G。
+--transfers=N - 并行文件数，默认为 4。在比较小的内存的 VPS 上建议调小这个参数，比如 128M 的小鸡上使用建议设置为 1。
+--config string - 指定配置文件路径，string 为配置文件路径。比如在使用宝塔面板输入命令操作时可能会遇到找不到配置文件的问题，这时就需要指定配置文件路径。
+--s3-provider Other --max-backlog #N # 在 sync/copy/move 时使用，占用 N 倍 KB 内存 
+--buffer-size=SIZE # 加速 sync/copy/move --bwlimit UP:DOWN # 上传下载限速，b|k|M|G 
+--size-only 使用sync功能配合此参数，表示只有文件大小有变化才会同步文件，可能存在文件大小未变但是文件已经发生变化，不推荐使用；
+--checksum 通过md5判断文件是否有变化，md5发生变化时才会同步文件；如果source是本地磁盘，这会带来较多的磁盘和CPU消耗；如果source和destination都是对象存储，则推荐使用这个参数； --update --use-server-modtime 通过mtime判断文件是否变化，只有当本地文件的mtime较新时，文件才会上传 --fast-list rclone默认的遍历方式是单独处理每个目录，每个目录调用1次API。使用这个参数将会将所有文件信息加入内存（1000个文件进行1次API调用），1个文件消耗1k内存。 --no-traverse 当destination中文件较多时，使用此参数将会直接查找这个文件，而不是通过文件列表
+--max-age 限制文件最大age，用来上传最近的文件 
+--s3-no-head 默认上传后会通过head检测文件是否已经上传，通过此参数可关闭。 --s3-upload-cutoff 文件大于这个值会使用分片上传，默认值是200M，最大值是5G https:、、rclone.org/s3/ #s3-upload-cutoff --s3-disable-checksum 不计算md5 
+--s3-upload-concurrency 默认值4，有多少chunck同时上传，如果传少量大文件，提高这个参数可以提升带宽。 
+--s3-chunk-size 默认值 5M --s3-max-upload-parts 默认值10000 --s3-force-path-style 默认值true --s3-v2-auth 默认值false --s3-list-chunk 默认值1000，每次list返回的key数量
+</code></pre>
+<h4 id="日志">日志</h4>
+<pre><code class="language-shell"># rclone 有 4 个级别的日志记录，ERROR，NOTICE，INFO 和 DEBUG。
+# 默认情况下，rclone 将生成 ERROR 和 NOTICE 级别消息。
+
+# -q rclone 将仅生成 ERROR 消息。
+# -v rclone 将生成 ERROR，NOTICE 和 INFO 消息，推荐此项。
+# -vv rclone 将生成 ERROR，NOTICE，INFO 和 DEBUG 消息。
+# --log-level LEVEL 标志控制日志级别。
+
+# 输出日志到文件
+# 使用 --log-file=FILE 选项，rclone 会将 Error，Info 和 Debug 消息以及标准错误重定向到 FILE，这里的 FILE 是你指定的日志文件路径。
+
+# 另一种方法是使用系统的指向命令，比如
+# rclone sync -v Onedrive:/DRIVEX Gdrive:/DRIVEX &gt; &quot;~/DRIVEX.log&quot; 2&gt;&amp;1
+
+# 文件过滤
+# --exclude 排除文件或目录。比如 --exclude *.bak，排除所有 bak 文件。
+# --include 包含文件或目录。比如 --include *.{png,jpg} ，包含所有 png 和 jpg 文件，排除其他文件。
+# --delete-excluded 删除排除的文件。需配合过滤参数使用，否则无效。
+
+# 目录过滤
+# --exclude .git/ 排除所有目录下的 .git 目录。
+# --exclude /.git/ 只排除根目录下的 .git 目录。
+</code></pre>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#minio%E6%90%AD%E5%BB%BA">minio搭建</a></li>
+<li><a href="#%E6%95%B0%E6%8D%AE%E8%BF%81%E7%A7%BB">数据迁移</a>
+<ul>
+<li><a href="#rclone">Rclone</a></li>
+<li><a href="#%E5%AE%89%E8%A3%85rclone">安装Rclone</a></li>
+<li><a href="#%E9%85%8D%E7%BD%AE">配置</a></li>
+<li><a href="#%E5%B8%B8%E7%94%A8%E5%8A%9F%E8%83%BD">常用功能</a></li>
+<li><a href="#%E5%B8%B8%E7%94%A8%E5%8A%9F%E8%83%BD%E9%80%89%E9%A1%B9">常用功能选项</a></li>
+<li><a href="#%E5%B8%B8%E7%94%A8%E5%8F%82%E6%95%B0">常用参数</a></li>
+<li><a href="#%E6%97%A5%E5%BF%97">日志</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/A4ZOEAhc9/">
+                <span class="post-title">
+                  序列化工具Protobuf&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/E_iSRsJL1/">
+              <span class="post-title">
+                spring启动流程&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

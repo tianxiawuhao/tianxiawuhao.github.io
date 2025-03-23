@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>王树森深度强化学习笔记3：策略学习 Policy-Based Learning | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="王树森深度强化学习笔记3：策略学习 Policy-Based Learning | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="王树森深度强化学习笔记3：策略学习 Policy-Based Learning" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/0gyURSJ-J/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/M9xPODHX8/" class="tag">强化学习</a>
+                
+              </span>
+              <h1>王树森深度强化学习笔记3：策略学习 Policy-Based Learning</h1>
+              <span class="meta">
+                Posted on
+                2023-12-19，5 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/0gyURSJ-J.png" alt="封面图">
+          </img>
+          
+          <h2 id="一-策略函数近似policy-function-approximation">一、策略函数近似（Policy Function Approximation）</h2>
+<h3 id="1策略函数policy-function">1）策略函数（Policy Function）</h3>
+<p>策略函数（Policy Function）π(a|s) 是一个概率密度函数，其输入是某个状态s，输出是在该状态下可能产生的动作a的概率值。假设在状态st下，Agent可能做出的动作at可能有n个，那么π(at|st)即输出一个n维向量，其元素对应每个可能做出动作at的概率值。有了这n个概率值，Agent就会在这个向量中做一次随机抽样（Random Sampling），并做出随机抽样所得的动作ai</p>
+<figure data-type="image" tabindex="1"><img src="https://pic2.zhimg.com/80/v2-90b4d201cacb15f737281809eb3e9179_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="2策略网络policy-network">2）策略网络（Policy Network）</h3>
+<p>策略网络（Policy Network）π(a|s;θ)则是使用了神经网络（Neural Network NN）去近似策略函数π(a|s)，其中θ是神经网络中的一个可训练参数</p>
+<figure data-type="image" tabindex="2"><img src="https://pic4.zhimg.com/80/v2-669af285465f39190f885e6147b42963_720w.webp" alt="img" loading="lazy"></figure>
+<p>策略网络（Policy Network）π(a|s;θ)有着如下性质：</p>
+<figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-b99e03c654320e5be7b909cd61c8a3dc_720w.webp" alt="img" loading="lazy"></figure>
+<p>由于策略网络对于在动作空间A中所有可能取到的a所对应的概率之和必须等于1，因此在策略网络的最后一层必须加上一个Sotmax这个Activation Function。</p>
+<h3 id="二-状态价值函数近似state-value-function-approximation">二、状态价值函数近似（State-Value Function Approximation）</h3>
+<h3 id="1状态价值函数action-value-function">1）状态价值函数（Action-Value Function）</h3>
+<p>首先回顾上一章的三类函数：</p>
+<figure data-type="image" tabindex="4"><img src="https://pic4.zhimg.com/80/v2-c803499da03039363898feadbd0023cf_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里注意：式3表示离散动作的期望求法；若为连续动作，则对动作空间中的所有a进行积分。</p>
+<p>类比State-Value Function和Approximation State-Value Function，区别在于：将策略π(a|st)换成了策略网络π(a|st;θ)</p>
+<figure data-type="image" tabindex="5"><img src="https://pic4.zhimg.com/80/v2-f72d37b9cd83e5b4b16fc5ca434c323b_720w.webp" alt="img" loading="lazy"></figure>
+<p>V可以评价状态s和策略网络π(a|st;θ)的好坏。若给定状态s，策略网络越好，那么V的值越大。因此，我们采用V关于θ的随机梯度上升的方法更新参数θ，则有以下定义：J(θ)</p>
+<figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-439921efa8192fad2dc6730cbd77f551_720w.webp" alt="img" loading="lazy"></figure>
+<p>这类方法即策略梯度上升的方法，这里我们定义策略梯度（Policy Gradient）是近似状态价值函数V(s;θ)关于θ的梯度。</p>
+<h3 id="2策略梯度policy-gradient">2）策略梯度（Policy Gradient）</h3>
+<p>这里放上策略梯度的推导：</p>
+<figure data-type="image" tabindex="7"><img src="https://pic3.zhimg.com/80/v2-e91f2864bfec2cbcc3b8cd3e54e90c26_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里假设Qπ不依赖于θ，因此能够相当于一个常数提出来。但在实际中，由于Qπ依赖于π，而π是由神经网络参数θ所决定的，因此往往Qπ不能被提出。</p>
+<p>因此，策略梯度的一种形式可以被写成如下形式：</p>
+<figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-7a8f3b536430a9abf58e85daaacdb108_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里，如果动作a是离散的，那么只需要对a进行连加就可以将策略梯度算出来。</p>
+<p>然而实际应用中往往不会用这个公式来计算策略梯度，而是使用蒙特卡洛近似的方法来近似。</p>
+<p>这里对蒙特卡洛近似推导：</p>
+<figure data-type="image" tabindex="9"><img src="https://pic3.zhimg.com/80/v2-29c0aea1389d16e727507367aa18307a_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里，有必要解释一下，这里利用了log函数的求导性质，有微积分基础的应该没什么问题，如果仅有高中水平的朋友可以自己上手求一下导，正着看或许有点问题，可以反过来推导，如上图紫色字体。</p>
+<figure data-type="image" tabindex="10"><img src="https://pic2.zhimg.com/80/v2-ae534820b79fc288e3269d2849f945cd_720w.webp" alt="img" loading="lazy"></figure>
+<p>至此，我们证明了这两项是相等的：</p>
+<figure data-type="image" tabindex="11"><img src="https://pic1.zhimg.com/80/v2-b19e28b0fc6ad6fdccf48de351b3d130_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里我们就可以使用蒙特卡洛近似，推导出如下等式：</p>
+<figure data-type="image" tabindex="12"><img src="https://pic2.zhimg.com/80/v2-394d9d8dec4606fbfe9e4b6637820f79_720w.webp" alt="img" loading="lazy"></figure>
+<p>上面提到了这个推导不严谨，原因是因为Qπ与策略π有关，因而与神经网络参数θ有关，但事实上，最后的Qπ对θ也求偏导，最后也能得到这个式子。</p>
+<p>至此，我们得到了策略梯度的两种等价形式：</p>
+<figure data-type="image" tabindex="13"><img src="https://pic1.zhimg.com/80/v2-2e0c822aa37270422a1c5b202cd72f04_720w.webp" alt="img" loading="lazy"></figure>
+<p>对于离散的动作，我们可以采用第一种形式：</p>
+<figure data-type="image" tabindex="14"><img src="https://pic4.zhimg.com/80/v2-377fdf4f00f9a7c91187543b9cf62afb_720w.webp" alt="img" loading="lazy"></figure>
+<p>由于第一种形式的使用对象的局限性，因而第二种形式比第一种形式更为常用，这里举了连续动作的一种策略梯度的例子：</p>
+<figure data-type="image" tabindex="15"><img src="https://pic2.zhimg.com/80/v2-1a12bc8a798780a7420e23c734e04685_720w.webp" alt="img" loading="lazy"></figure>
+<p>显然，这里对g(A,θ)关于A求期望就是策略梯度；且a<sup>是根据策略π中随机抽样得到的，故g(a</sup>,θ)是策略梯度的一个无偏估计。因此，我们就可以利用g(a^,θ)去近似策略梯度，即蒙特卡洛近似（Monte Carlo Approximation）。具体推导可以参考<a href="https://zhuanlan.zhihu.com/p/36033544">蒙特卡洛近似</a>。</p>
+<h2 id="三-使用策略梯度更新策略网络">三、使用策略梯度更新策略网络</h2>
+<figure data-type="image" tabindex="16"><img src="https://pic4.zhimg.com/80/v2-100c4b492bd100f33a94cfcd39433a63_720w.webp" alt="img" loading="lazy"></figure>
+<p>那么我们如何估计动作价值函数Qπ(st,at)？</p>
+<p>给出了这两种方法：</p>
+<p>REINFORCE：必须获取到一个完整的trajectory才能进行一次模型参数的更新，也就是蒙特卡罗方法（MC Method）来估计Q</p>
+<figure data-type="image" tabindex="17"><img src="https://pic3.zhimg.com/80/v2-63ff883c0cc84eb6e9abaa0edae1055a_720w.webp" alt="img" loading="lazy"></figure>
+<p>Actor-Critic（AC）：使用另一个神经网络来近似Qπ</p>
+<figure data-type="image" tabindex="18"><img src="https://pic2.zhimg.com/80/v2-410ab93c7cf4fa3d0979a8a347bf2da9_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="四-总结summary">四、总结（Summary）</h2>
+<p>直接附图</p>
+<figure data-type="image" tabindex="19"><img src="https://pic1.zhimg.com/80/v2-3cb26ac583e4b4e3e949e0349b26c50c_720w.webp" alt="img" loading="lazy"></figure>
+<p><strong>引出下文：将价值学习和策略学习结合起来就能得到非常重要的Actor-Critic方法（AC Method）</strong></p>
+<hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-%E7%AD%96%E7%95%A5%E5%87%BD%E6%95%B0%E8%BF%91%E4%BC%BCpolicy-function-approximation">一、策略函数近似（Policy Function Approximation）</a>
+<ul>
+<li><a href="#1%E7%AD%96%E7%95%A5%E5%87%BD%E6%95%B0policy-function">1）策略函数（Policy Function）</a></li>
+<li><a href="#2%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cpolicy-network">2）策略网络（Policy Network）</a></li>
+<li><a href="#%E4%BA%8C-%E7%8A%B6%E6%80%81%E4%BB%B7%E5%80%BC%E5%87%BD%E6%95%B0%E8%BF%91%E4%BC%BCstate-value-function-approximation">二、状态价值函数近似（State-Value Function Approximation）</a></li>
+<li><a href="#1%E7%8A%B6%E6%80%81%E4%BB%B7%E5%80%BC%E5%87%BD%E6%95%B0action-value-function">1）状态价值函数（Action-Value Function）</a></li>
+<li><a href="#2%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6policy-gradient">2）策略梯度（Policy Gradient）</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%89-%E4%BD%BF%E7%94%A8%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6%E6%9B%B4%E6%96%B0%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9C">三、使用策略梯度更新策略网络</a></li>
+<li><a href="#%E5%9B%9B-%E6%80%BB%E7%BB%93summary">四、总结（Summary）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/UWk0iL6Ex/">
+                <span class="post-title">
+                  王树森深度强化学习笔记4：Actor-Critic Method（AC Method）&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/IGO_-1Id1/">
+              <span class="post-title">
+                王树森深度强化学习笔记2：价值学习 Value-Based Learning&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

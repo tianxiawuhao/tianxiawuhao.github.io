@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Golang协程调度器和GMP模型 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="Golang协程调度器和GMP模型 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="Golang协程调度器和GMP模型" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/QplCLDgXh/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/eTYQhU7dF/" class="tag">go</a>
+                
+              </span>
+              <h1>Golang协程调度器和GMP模型</h1>
+              <span class="meta">
+                Posted on
+                2023-08-23，11 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/QplCLDgXh.png" alt="封面图">
+          </img>
+          
+          <blockquote>
+<p>先会过一个初级但是很重要的概念（在Java多线程中也不停地强调）：</p>
+<ul>
+<li>
+<p>并行：多个处理器同时处理多个任务，无论在宏观还是微观上，每一时候都是多个任务同时被执行；</p>
+</li>
+<li>
+<p>并发：由单个处理器同时处理多个任务，在宏观上仿佛多个任务在被同时执行，其实微观上，同一时刻只能有一个任务被执行，只是时间被划分为很多个小的时间片，处理器不停地交替执行多个任务；</p>
+</li>
+</ul>
+<p>并行和并发，都是为了充分利用和提高CPU的使用率！</p>
+</blockquote>
+<h2 id="一-golang协程调度器的由来">一、Golang协程调度器的由来</h2>
+<h3 id="1-单进程时代不需要调度器">1、单进程时代不需要调度器：</h3>
+<blockquote>
+<p>早期的操作系统每个程序就是一个进程，直到一个程序运行完，才能进行下一个进程，就是“单进程时代”；（性能极其低下）</p>
+<ul>
+<li>
+<p>单路的执行流程，计算机只能一个一个地处理任务；</p>
+</li>
+<li>
+<p>万一某个任务进程阻塞了，将带来大量的CPU时间浪费；</p>
+</li>
+</ul>
+</blockquote>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1694400211648228.png" alt="" loading="lazy"></figure>
+<p>那么能不能由多个进程（在宏观角度）一起来执行多个任务呢？—— 并发</p>
+<h3 id="2-多进程多线程时代有了调度器需求">2、多进程/多线程时代有了调度器需求：</h3>
+<p>Linux操作系统底层基础知识扫盲</p>
+<ul>
+<li>
+<p>进程调度的分类：</p>
+<ul>
+<li>非抢占式：除非主动让出，否则一直运行；</li>
+<li>抢占式：由“进程调度器”强制安排；</li>
+</ul>
+</li>
+<li>
+<p>进程调度的策略：</p>
+<ul>
+<li>经典Unix(0) 调度策略：（看似公平，其实有可能浪费）</li>
+<li><code>CFS</code>完全公平调度策略：（根据优先级，调整时间片比例）</li>
+</ul>
+</li>
+<li>
+<p>Linux中默认的调度策论策略（混合）：</p>
+<ul>
+<li>对于“普通进程”：完全公平调度策略（<code>CFS</code>）—— 普通门诊</li>
+<li>对于“实时进程”：急诊，但是急诊还分为：普通急诊 和 最急的急诊：
+<ul>
+<li>普通急诊：<code>SCHED_RR</code>：
+<ul>
+<li>同优先级的实时进程中，每个进程又是通过获得时间片来分时运行。</li>
+<li>不同优先级的实时进程，高优先级的实时进程能够抢占低优先级的实时进程。</li>
+</ul>
+</li>
+<li>最急的急诊：<code>SCHED_FIFO</code>：
+<ul>
+<li>同优先级的实时进程，后进入的进程要等前一个进程释放了CPU，才能够运行。（没有时间片）</li>
+<li>不同优先级的实时进程，高优先级的实时进程能够抢占低优先级的实时进程。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1694401084514128.png" alt="" loading="lazy"></figure>
+<p>而对于Linux操作系统来说，线程的本质就是一个轻量级的进程，所以，线程调度也就是进程调度；而对于Java来说，一个用户态线程也就是对应了一个内核态线程</p>
+<p>但新的问题就又出现了，进程拥有太多的资源，进程的创建、切换、销毁，都会占用很长的时间，CPU虽然利用起来了，但如果进程过多，CPU有很大的一部分都被用来进行进程调度和进程（线程）切换了。</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1694402124299030.png" alt="" loading="lazy"></figure>
+<h3 id="3-协程来再次提高cpu利用率减少进程切换">3、协程来再次提高CPU利用率（减少进程切换）：</h3>
+<blockquote>
+<p>多进程、多线程已经提高了系统的并发能力，但是在当今互联网高并发场景下，为每个任务都创建一个线程是很不现实的：</p>
+<ul>
+<li>
+<p>会消耗大量的内存：</p>
+</li>
+<li>
+<p>进程：进程虚拟内存（<code>4GB = 1GB内核空间 + 3GB用户空间</code>）</p>
+</li>
+<li>
+<p>线程：每个线程启动前后，会消耗<code>2MB</code>左右的内存；</p>
+</li>
+<li>
+<p>大量的进程/线程调度浪费CPU资源：</p>
+</li>
+</ul>
+</blockquote>
+<p><strong>最开始的协程模型和线程模型是一样的，线程:协程 = <code>1:N</code>，即一个用户态的线程/协程 对应一个内核态线程：</strong></p>
+<p><img src="C:\Users\admin\Desktop\md\1694402835194916.png" style="zoom:50%;" /><img src="C:\Users\admin\Desktop\md\1694402878556958.png" style="zoom:50%;" /></p>
+<p><strong>思考：既然一个协程(co-routine)可以绑定一个线程(thread)，那么能不能将多个协程(co-routine)同时绑定到一个线程(thread)上呢？</strong></p>
+<blockquote>
+<p>于是就有了 线程:协程 = <code>1:N</code> 模型：</p>
+<ul>
+<li>
+<p>优点：协程在用户态线程即完成切换，不会陷入到内核态，这种切换非常的轻量快速；</p>
+</li>
+<li>
+<p>缺点：1个进程的所有协程都绑定在1个线程上，某些程序用不了硬件的多核加速能力，一旦某协程阻塞，造成线程阻塞，本进程的其他协程都无法执行了，降级为单线程模型；</p>
+</li>
+</ul>
+</blockquote>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1694403114496699.png" alt="" loading="lazy"></figure>
+<p><strong>思考：我们可否让一个用户程序的多个协程，通过协程调度器，同时绑定到多个内核线程上呢？</strong></p>
+<blockquote>
+<p>于是，就有了我们最终的 线程:协程 = <code>M:N</code> 模型：</p>
+</blockquote>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1694403682792883.png" alt="" loading="lazy"></figure>
+<p><strong>此 <code>M:N</code> 模型克服了以上 <code>1:1</code>，<code>1:N</code> 两种模型的缺点，但是实现也变得更加的复杂，压力给到“协程调度器”！</strong></p>
+<h3 id="4-golang中的协程goroutine">4、Golang中的协程Goroutine：</h3>
+<p>Go中，协程被称为<code>goroutine</code>，它非常轻量，一个<code>goroutine</code>只占大概<code>4KB</code>，并且这<code>4KB</code>就足够<code>goroutine</code>运行完，这就能在有限的内存空间内支持大量<code>goroutine</code>，支持了更多的并发。</p>
+<p>虽然一个<code>goroutine</code>的栈只占几KB，但实际是可伸缩的，如果需要更多内容，runtime会自动为<code>goroutine</code>分配。</p>
+<blockquote>
+<p>Goroutine特点：</p>
+<ul>
+<li>
+<p>占用内存更小（大概4kb）；</p>
+</li>
+<li>
+<p>调度更灵活(runtime调度)；</p>
+</li>
+</ul>
+</blockquote>
+<h2 id="二-goroutine协程调度器">二、Goroutine协程调度器</h2>
+<blockquote>
+<p>Golang种出现过2种协程调度器模型，<code>GM</code> 和 <code>GMP</code>；</p>
+<p>在12年的go1.1版本之前用的都是GM模型，但是由于GM模型性能不好，饱受用户诟病。之后官方对调度器进行了改进，变成了我们现在用的GMP模型；</p>
+<p>网上关于GM 和GMP的对比介绍文章也很多，随便贴一个：GM到GMP，Golang经历了什么？</p>
+</blockquote>
+<h3 id="1-简单快速地认识下-gm-模型">1、简单快速地认识下 GM 模型：</h3>
+<p><strong>GM模型中的G全称为Goroutine协程，M全称为Machine内核级线程！</strong></p>
+<figure data-type="image" tabindex="6"><img src="https://tianxiawuhao.github.io/post-images/1694410174636362.png" alt="" loading="lazy"></figure>
+<p>根据上图。我们很容易知道，M线程 想要 执行/放回 G 都必须访问 全局G队列 ，并且M有多个，而我们知道，为了确保安全，多线程访问同一资源时需要加锁，所以全局G队列是有互斥锁进行保护的。</p>
+<p>显然，<strong>这种模型有很严重的缺点：</strong></p>
+<blockquote>
+<ul>
+<li>
+<p>激烈的锁竞争：线程M在 创建、销毁、调度G都需要先获取锁；</p>
+</li>
+<li>
+<p>很差的程序局部性：比如当G中包含创建新协程的时候，比如新协程叫G'，为了继续执行G，就需要将G'交给另一个线程M' 执行，这就造成了很差的程序局部性，因为G'和G是相关的，最好放在M上执行，而不是其他M'；</p>
+</li>
+<li>
+<p>系统调用线程切换开销大：CPU在M之间的切换，导致频繁的线程阻塞和取消阻塞操作增加了系统开销（我们知道线程切换是需要用户态/内核态转换的，开销是很大的）；</p>
+</li>
+</ul>
+</blockquote>
+<h3 id="2-重点学习下-gmp-模型">2、重点学习下 GMP 模型：</h3>
+<p><strong>G全称为Goroutine协程，M全称为Machine内核级线程，P全称为Processor协程运行所需的资源！</strong></p>
+<p>他在GM模型的基础上增加了一个P层，下面我们来看一下他是如何设计的：</p>
+<figure data-type="image" tabindex="7"><img src="https://tianxiawuhao.github.io/post-images/1694411337563637.png" alt="" loading="lazy"></figure>
+<ul>
+<li>
+<p>M列表：go程序启动时，会设置M的最大数量，默认10000。但是内核很难创建出如此多的线程，因此默认情况下M的最大数量取决于内核。也可以调用runtime/debug中的<code>SetMaxThreads</code>函数，手动设置M的最大数量；</p>
+</li>
+<li>
+<p>P列表：所有的P都在程序启动时创建，并保存在数组中，最多有<code>GOMAXPROCS</code>(可配置)个</p>
+</li>
+<li>
+<p>P的本地队列：P内置的G队列，存的数量有限，不超过256个；</p>
+</li>
+<li>
+<p>全局队列：当P中的本地队列中有协程G溢出时，会被放到全局队列中；<br>
+线程M想要运行协程G，都是找P索要，一个P一次只能提供一个G协程任务；整个程序最终的协程并行度，其实就是P的数量，即<code>GOMAXPROCS</code>设置的值！</p>
+</li>
+<li>
+<p>本地队列优先：当队列<code>P1</code>中的<code>G1</code>在运行过程中新建<code>G2</code>时，<code>G2</code>优先存放到<code>P1</code>的本地队列中，如果队列满了，则会把<code>P1</code>队列中一半的G移动到全局队列中；</p>
+</li>
+<li>
+<p>工作窃取机制：如果P的本地队列为空，那么他会先到全局队列中获取G，如果全局队列中也没有G，则会尝试从其他线程绑定的P中偷取一半的G；</p>
+</li>
+<li>
+<p>M通过P获得G的优先级顺序：本地队列（无锁）-&gt;全局队列（锁）-&gt;<code>netpoll</code>事件-&gt;去其他队列里偷（<code>CAS</code>，无锁）</p>
+</li>
+</ul>
+<h3 id="3-gmp调度器的设计策略详解">3、GMP调度器的设计策略详解：</h3>
+<ul>
+<li>
+<p>复用线程：</p>
+<ul>
+<li>
+<p>work stealing机制：工作窃取机制，上面已经讲解了；</p>
+<figure data-type="image" tabindex="8"><img src="https://tianxiawuhao.github.io/post-images/1694412904109844.png" alt="" loading="lazy"></figure>
+</li>
+<li>
+<p>hand off机制：分手机制，当本线程因为G进行系统调用阻塞时，如读写磁盘，线程释放绑定的P，把P转移给其他空闲的线程执行；</p>
+<figure data-type="image" tabindex="9"><img src="https://tianxiawuhao.github.io/post-images/1694412793594699.png" alt="" loading="lazy"></figure>
+</li>
+</ul>
+</li>
+<li>
+<p>利用并行：</p>
+<ul>
+<li>可以通过配置<code>GOMAXPROCS</code>限定P的个数</li>
+</ul>
+</li>
+<li>
+<p>抢占：</p>
+<ul>
+<li>现在的调度器几乎都是抢占式的，非抢占式的</li>
+</ul>
+</li>
+<li>
+<p>全局G队列：</p>
+<ul>
+<li>相当于是对work stealing机制的一个补充，当本地队列满了后，就将溢出的G放到全局队列中！</li>
+<li>因为全局队列是共享的，所以 放/取 都是要加锁的，性能相当于P的本地队列更慢，这也就是为什么“本地队列优先”！</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-通过go-func-启动一个goroutine的过程详解">4、通过go func() 启动一个goroutine的过程详解：</h3>
+<figure data-type="image" tabindex="10"><img src="https://tianxiawuhao.github.io/post-images/1694418639551655.png" alt="" loading="lazy"></figure>
+<blockquote>
+<p>在Golang中想创建一个goroutine协程非常容易，只需要在 func() 方法调用前，加上 go 关键字即可；</p>
+<p>新创建的goroutine会优先保存在P的本地队列中，如果本地队列满了，则会放在全局队列中；</p>
+<p>G(goroutine)只能运行在M(Machine)中，M:P = 1:1，当M需要运行G时，不会自己去取，而是找P(Processor)要；</p>
+<p>P获取G的优先级是：本地队列 —&gt; 全局队列 —&gt; 其他P的本地队列窃取；</p>
+<p>M执行G的过程是一个无限循环；</p>
+<p>如果M在执行G的过程中，遇到了阻塞操作，则会触发“hand off机制”，让P与当前M分手，新建或从休眠M队列中获取一个M线程，将刚刚的P与新得到的M线程进行绑定，继续后续G的处理工作！</p>
+<p>当刚刚由于阻塞操作，与P分手的M完成阻塞操作后，由于刚刚的G还没有被完全执行完成，所以它会去找一个空闲的P，将这个G放到空闲P的本地队列中；如果获取不到空闲P，那么M线程将变成休眠状态，添加到休眠M队列中，同时将G放入全局队列中！</p>
+</blockquote>
+<h3 id="5-p-和-m-的数量问题">5、P 和 M 的数量问题？</h3>
+<ul>
+<li>
+<p>P的数量：由启动时环境变量<code>$GOMAXPROCS</code>或者是由runtime的方法<code>GOMAXPROCS()</code>决定，这意味着在程序执行的任意时刻都只有<code>$GOMAXPROCS</code>个<code>goroutine</code>在同时运行；</p>
+</li>
+<li>
+<p>M的数量：</p>
+</li>
+<li>
+<p>go语言本身的限制，go程序启动时，会设置M的最大数量，默认10000，但是内核很难支持这么多的线程数，所以这个限制可以忽略；</p>
+</li>
+<li>
+<p>调用<code>runtime/debug</code>中的<code>SetMaxThreads()</code>，设置M的最大数量；</p>
+</li>
+<li>
+<p>一个M阻塞了，会创建新的M；</p>
+</li>
+</ul>
+<h3 id="6-p-和-m-何时被创建">6、P 和 M 何时被创建？</h3>
+<ul>
+<li>
+<p>P何时被创建（饿汉）：在确定了P的最大数量n后，运行时系统会根据这个数量创建n个P —— 程序启动时，即创建好</p>
+</li>
+<li>
+<p>M何时被创建（懒汉）：没有足够的M来关联P并运行其中的可运行的G；比如所有的M此时都阻塞住了，而P中还有很多就绪任务，就会去寻找空闲的M，而没有空闲的，就会去创建新的M。</p>
+</li>
+</ul>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-golang%E5%8D%8F%E7%A8%8B%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E7%94%B1%E6%9D%A5">一、Golang协程调度器的由来</a>
+<ul>
+<li><a href="#1-%E5%8D%95%E8%BF%9B%E7%A8%8B%E6%97%B6%E4%BB%A3%E4%B8%8D%E9%9C%80%E8%A6%81%E8%B0%83%E5%BA%A6%E5%99%A8">1、单进程时代不需要调度器：</a></li>
+<li><a href="#2-%E5%A4%9A%E8%BF%9B%E7%A8%8B%E5%A4%9A%E7%BA%BF%E7%A8%8B%E6%97%B6%E4%BB%A3%E6%9C%89%E4%BA%86%E8%B0%83%E5%BA%A6%E5%99%A8%E9%9C%80%E6%B1%82">2、多进程/多线程时代有了调度器需求：</a></li>
+<li><a href="#3-%E5%8D%8F%E7%A8%8B%E6%9D%A5%E5%86%8D%E6%AC%A1%E6%8F%90%E9%AB%98cpu%E5%88%A9%E7%94%A8%E7%8E%87%E5%87%8F%E5%B0%91%E8%BF%9B%E7%A8%8B%E5%88%87%E6%8D%A2">3、协程来再次提高CPU利用率（减少进程切换）：</a></li>
+<li><a href="#4-golang%E4%B8%AD%E7%9A%84%E5%8D%8F%E7%A8%8Bgoroutine">4、Golang中的协程Goroutine：</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%8C-goroutine%E5%8D%8F%E7%A8%8B%E8%B0%83%E5%BA%A6%E5%99%A8">二、Goroutine协程调度器</a>
+<ul>
+<li><a href="#1-%E7%AE%80%E5%8D%95%E5%BF%AB%E9%80%9F%E5%9C%B0%E8%AE%A4%E8%AF%86%E4%B8%8B-gm-%E6%A8%A1%E5%9E%8B">1、简单快速地认识下 GM 模型：</a></li>
+<li><a href="#2-%E9%87%8D%E7%82%B9%E5%AD%A6%E4%B9%A0%E4%B8%8B-gmp-%E6%A8%A1%E5%9E%8B">2、重点学习下 GMP 模型：</a></li>
+<li><a href="#3-gmp%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E8%AE%BE%E8%AE%A1%E7%AD%96%E7%95%A5%E8%AF%A6%E8%A7%A3">3、GMP调度器的设计策略详解：</a></li>
+<li><a href="#4-%E9%80%9A%E8%BF%87go-func-%E5%90%AF%E5%8A%A8%E4%B8%80%E4%B8%AAgoroutine%E7%9A%84%E8%BF%87%E7%A8%8B%E8%AF%A6%E8%A7%A3">4、通过go func() 启动一个goroutine的过程详解：</a></li>
+<li><a href="#5-p-%E5%92%8C-m-%E7%9A%84%E6%95%B0%E9%87%8F%E9%97%AE%E9%A2%98">5、P 和 M 的数量问题？</a></li>
+<li><a href="#6-p-%E5%92%8C-m-%E4%BD%95%E6%97%B6%E8%A2%AB%E5%88%9B%E5%BB%BA">6、P 和 M 何时被创建？</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/xWe8SRVUm/">
+                <span class="post-title">
+                  GraalVM&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/R-yFR9BFl/">
+              <span class="post-title">
+                使用java 实现mqtt两种方式&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

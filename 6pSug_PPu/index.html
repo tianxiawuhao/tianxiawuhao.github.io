@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>第七章 flink流合并 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="第七章 flink流合并 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="第七章 flink流合并" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/6pSug_PPu/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/seQXl0jPasu/" class="tag">flink</a>
+                
+              </span>
+              <h1>第七章 flink流合并</h1>
+              <span class="meta">
+                Posted on
+                2021-04-14，15 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/6pSug_PPu.png" alt="封面图">
+          </img>
+          
+          <h3 id="多流转换">多流转换</h3>
+<p>无论是基本的简单转换和聚合， 还是基于窗口的计算，都是针对一条流上的数据进行 处理的。在实际应用中， 可能需要将不同来源的数据连接合并在一起处理， 也有可能需要将 一条流拆分开， 所以经常会有对多条流进行处理的场景。简单划分，多流转换可以分为“分流”和“合流”两大类。目前分流的操作一般是通 过侧输出流(side output) 来实现，而合流的算子比较丰富，根据不同的需求可以调用 union、 connect、join 以及 coGroup 等接口进行连接合并操作。</p>
+<h3 id="侧输出流">侧输出流</h3>
+<p>简单来说，只需要调用上下文 ctx的output()方法，就可以输出任意类型的数据了。而侧输出流的标记和提取， 都离不开一个“输出标签”(OutputTag)，指定了侧输出流的 id 和类型。<br>
+代码示例：</p>
+<pre><code class="language-java">package com.company.flink.demo;
+
+import com.company.flink.data.ClickSource;
+import com.company.flink.entity.Event;
+import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
+
+
+public class SplitStreamDemo {
+    // 定义侧输出流
+    private static OutputTag&lt;Tuple3&lt;String, String, Long&gt;&gt; zhangsanTag = new OutputTag&lt;Tuple3&lt;String, String, Long&gt;&gt;(&quot;zhangsan-pv&quot;){};
+    private static OutputTag&lt;Tuple3&lt;String, String, Long&gt;&gt; lisiTag = new OutputTag&lt;Tuple3&lt;String, String, Long&gt;&gt;(&quot;lisi-pv&quot;){};
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env =
+                StreamExecutionEnvironment.getExecutionEnvironment();
+        SingleOutputStreamOperator&lt;Event&gt; stream = env
+                .addSource(new ClickSource());
+
+        SingleOutputStreamOperator&lt;Event&gt; outPutStream = stream.process(
+                new ProcessFunction&lt;Event, Event&gt;() {
+                           @Override
+                           public void processElement(Event value, Context ctx, Collector&lt;Event&gt; out) {
+                               if (value.user.equals(&quot;zhangsan&quot;)) {
+                                   ctx.output(zhangsanTag, new Tuple3&lt;&gt;(value.user, value.url, value.timestamp));
+                               } else if (value.user.equals(&quot;lisi&quot;)) {
+                                   ctx.output(lisiTag, new Tuple3&lt;&gt;(value.user, value.url, value.timestamp));
+                               } else {
+                                   out.collect(value);
+                               }
+                           }
+                       });
+        DataStream&lt;Tuple3&lt;String, String, Long&gt;&gt; zhangsanSideOutput = outPutStream.getSideOutput(zhangsanTag);
+        zhangsanSideOutput.print(&quot;zhangsan pv&quot;);
+        DataStream&lt;Tuple3&lt;String, String, Long&gt;&gt; lisiSideOutput = outPutStream.getSideOutput(lisiTag);
+        lisiSideOutput.print(&quot;lisi pv&quot;);
+        outPutStream.print(&quot;else&quot;);
+        env.execute();
+	}
+}
+</code></pre>
+<h2 id="合流操作">合流操作</h2>
+<p>Flink  中合流的操作会更加普遍，对应的 API 也更加丰富。</p>
+<h3 id="1联合union">1）联合(Union)</h3>
+<p>​     最简单的合流操作， 就是直接将多条流合在一起，叫作流“联合”(union)。联合操作要求必须流中的数据类型必须相同，合并之后的新流会包括所有流中的元素， 数据类型不变。</p>
+<figure data-type="image" tabindex="1"><img src=".%5Cf9a6ffa993f249c285c54995d56c6dbe.png" alt="" loading="lazy"></figure>
+<h3 id="2连接connect">2）连接（Connect）</h3>
+<p>​     流的联合虽然简单，不过受限于数据类型不能改变，灵活性不足，实践中较少使用。除了联合（union），Flink 还提供了另外一种合流操作就是连接（connect）。这种操作就是直接把两条流像接线一样对接起来。<br>
+​    为了处理更加灵活，连接操作允许流的数据类型不同。但一个 DataStream 中的数据类型是唯一的（所以需要（co-process）转换操作）</p>
+<figure data-type="image" tabindex="2"><img src=".%5C846048d37bc34d2b9f63117c4f1883c3.png" alt="" loading="lazy"></figure>
+<h4 id="基于时间的合流双流联结join">基于时间的合流——双流联结(Join)</h4>
+<p>对于两条流的合并，很多情况并不是简单地将所有数据放在一起，而是希望根据某个字段的值将它们联结起来“配对”做处理。 这种需求与关系型数据库中表的join 操作非常相似。Flink 中两条流 的 connect 操作，就可以通过 keyBy 指定键进行分组后合并，实现了类似于 SQL 中的 join 操作； 另外 connect 支持处理函数，可以使用自定义状态和 TimerService 灵活实现各种需求。</p>
+<h4 id="1窗口联结window-join">1）窗口联结(Window Join)</h4>
+<p>​     窗口联结首先需要调用 DataStream 的.join()方法来合并两条流， 得到一 个 、JoinedStreams ；接着通过 .where() 和.equalTo() 方法指定两条流中联结的 key ；然后通 过.window()开窗口， 并调用.apply()传入联结窗口函数进行处理计算。调用形式如下：</p>
+<pre><code class="language-java">SingleOutputStreamOperator&lt;Event&gt; eventStream = env.addSource(new ClickSource())
+                .join(DataStream otherStream)
+                .where(KeySelector keySelector)
+                .equalTo(KeySelector keySelector)
+                .window(WindowAssigner assigner)
+                .apply(JoinFunction function)
+</code></pre>
+<p>上面代码中.where()的参数是键选择器(KeySelector)， 用来指定第一条流中的 key ；而.equalTo()传入的 KeySelector 则指定了第二条流中的 key。两者相同的元素，如果在同一窗口中， 就可以匹配起来， 并通过一个“联结函数”(JoinFunction) 进行处理。这里需要注意， JoinFunciton 并不是真正的“窗口函数”，它只是定义了窗口函数在调用时 对匹配数据的具体处理逻辑。<br>
+两条流的数据到来之后， 首先会按照 key 分组、进入对应的窗口中存储；当到达窗口结束时间时，算子会先统计出窗口内两条流的数据的所有组合，也就是对两条流中的数据做一个笛卡尔积(相当于表的交叉连接， cross join)，然后进行遍历，把每一对匹配的数据， 作为参数 (first ，second)传入 JoinFunction 的.join()方法进行计算处理。所以窗口中每有一对数据成功联结匹配， JoinFunction 的.join()方法就会被调用一次， 并输 出一个结果。</p>
+<figure data-type="image" tabindex="3"><img src=".%5C29bc60a04fd34b57a7245878f8084fcf.png" alt="" loading="lazy"></figure>
+<p>窗口join的调用和SQL中表的join非常相似。SQL的 inner join ... on本身表示的是两张表基于 id 的“内连接”(inner join)。而 Flink 中的 window join，同样类似于 inner join。也就是说，最后 处理输出的，只有两条流中数据按 key 配对成功的那些；如果某个窗口中一条流的数据没有任 何另一条流的数据匹配， 那么就不会调用 JoinFunction 的.join()方法， 也就没有任何输出。<br>
+代码示列：</p>
+<pre><code class="language-java">package com.company.flink.demo;
+
+import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.JoinFunction;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+
+public class FlinkWindowJoinDemo {
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env =
+                StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+   		DataStream&lt;Tuple2&lt;String, Long&gt;&gt; stream1 = env
+            .fromElements(
+                    Tuple2.of(&quot;a&quot;, 1000L),
+                    Tuple2.of(&quot;a&quot;, 2000L),
+                    Tuple2.of(&quot;b&quot;, 1000L),
+                    Tuple2.of(&quot;b&quot;, 2000L),
+                    Tuple2.of(&quot;c&quot;, 5000L)
+            )
+            .assignTimestampsAndWatermarks(
+                    WatermarkStrategy
+                            .&lt;Tuple2&lt;String, Long&gt;&gt;forMonotonousTimestamps().withTimestampAssigner(
+                                    (SerializableTimestampAssigner&lt;Tuple2&lt;String, Long&gt;&gt;) (stringLongTuple2, l) -&gt; stringLongTuple2.f1
+                            )
+            );
+ 
+    	DataStream&lt;Tuple2&lt;String, Long&gt;&gt; stream2 = env
+            .fromElements(
+                    Tuple2.of(&quot;a&quot;, 3000L),
+                    Tuple2.of(&quot;a&quot;, 4000L),
+                    Tuple2.of(&quot;b&quot;, 3000L),
+                    Tuple2.of(&quot;b&quot;, 4000L)
+            )
+            .assignTimestampsAndWatermarks(
+                    WatermarkStrategy
+                            .&lt;Tuple2&lt;String, Long&gt;&gt;forMonotonousTimestamps().withTimestampAssigner(
+                                    (SerializableTimestampAssigner&lt;Tuple2&lt;String, Long&gt;&gt;) (stringLongTuple2, l) -&gt; stringLongTuple2.f1
+                            )
+            );
+ 
+    	stream1
+            .join(stream2)
+            .where(r -&gt; r.f0)
+            .equalTo(r -&gt; r.f0)
+            .window(TumblingEventTimeWindows.of(Time.seconds(5)))
+            .apply((JoinFunction&lt;Tuple2&lt;String, Long&gt;, Tuple2&lt;String, Long&gt;, String&gt;) (left, right) -&gt; left + &quot;=&gt;&quot; + right)
+            .print();
+ 
+    	env.execute();
+	}
+}
+</code></pre>
+<h4 id="2间隔联结interval-join">2）间隔联结(Interval Join)</h4>
+<p>在一些场景下， 处理的时间间隔可能并不是固定的。比如， 在交易系统中， 需要实时地对每一笔交易进行核验，保证两个账户转入转出数额相等，也就是所谓的“实时对账”。 两次转账的数据可能写入了不同的日志流，它们的时间戳相差不大，所以可以考虑只统计一段时间内是否有出账入账的数据匹配。这时显然不能用滚动窗口或滑动窗口来处理因为匹配的两个数据有可能刚好在窗口边缘两侧，这时窗口内就都没有匹配了；会话窗口虽然时间不固定，但也明显不适合这个场景。Flink 为这种场景提供了一种叫作“间隔联结”(interval join) 的合流操作，间隔联结的思路就是针对一条流的每条数据，开辟出其时间戳前后的一段时间间隔， 看这期间是否有来自另一条流的数据与之匹配。<br>
+间隔连接原理：<br>
+给定两个时间点，分别叫作间隔的“上界”(upperBound) 和“下界”(lowerBound)；对于一条流A 中的任意一个数据元素 a，就可以 开辟一段时间间隔： [a.timestamp + lowerBound, a.timestamp + upperBound）把这段时间作为可以匹配另一条流数据 的“窗口”范围。所以对于另一条流 B 中的数据元素 b，如果它的时间戳落在了这 个区间范围内， a 和 b 就可以成功配对，进而进行计算输出结果。所以匹配的条件为：a.timestamp + lowerBound &lt;= b.timestamp &lt;= a.timestamp + upperBound 这里需要注意， 做间隔联结的两条流 A 和 B，也必须基于相同的 key； 间隔联结目前只支持事件时间语义。如图所示：</p>
+<figure data-type="image" tabindex="4"><img src=".%5C9bac7747e88347709a56401ac8d450cd.png" alt="" loading="lazy"></figure>
+<p>可以看到，间隔联结同样是一种内连接(inner join)。与窗口联结不同的是，interval join 做匹配的时间段是基于流中数据的并不确定； 而且流 B 中的数据可以不只在一个区间内被匹配。<br>
+代码示列：</p>
+<pre><code class="language-java">package com.company.flink.demo;
+
+import com.company.flink.entity.Event;
+import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
+
+// 基于间隔的 join
+public class FlinkIntervalJoinDemo {
+
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env =
+                StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+
+ 
+
+
+        SingleOutputStreamOperator&lt;Tuple3&lt;String, String, Long&gt;&gt; orderStream =
+                env.fromElements(
+                        Tuple3.of(&quot;Mary&quot;, &quot;order-1&quot;, 5000L),
+                        Tuple3.of(&quot;Alice&quot;, &quot;order-2&quot;, 5000L),
+                        Tuple3.of(&quot;Bob&quot;, &quot;order-3&quot;, 20000L),
+                        Tuple3.of(&quot;Alice&quot;, &quot;order-4&quot;, 20000L),
+                        Tuple3.of(&quot;Cary&quot;, &quot;order-5&quot;, 51000L)
+                ).assignTimestampsAndWatermarks(WatermarkStrategy.&lt;Tuple3&lt;String, String, Long&gt;&gt;forMonotonousTimestamps()
+                        .withTimestampAssigner((SerializableTimestampAssigner&lt;Tuple3&lt;String, String, Long&gt;&gt;) (element, recordTimestamp) -&gt; element.f2)
+                );
+
+ 
+
+
+        SingleOutputStreamOperator&lt;Event&gt; clickStream = env.fromElements(
+                new Event(&quot;Bob&quot;, &quot;./cart&quot;, 2000L),
+                new Event(&quot;Alice&quot;, &quot;./prod?id=100&quot;, 3000L),
+                new Event(&quot;Alice&quot;, &quot;./prod?id=200&quot;, 3500L),
+                new Event(&quot;Bob&quot;, &quot;./prod?id=2&quot;, 2500L),
+                new Event(&quot;Alice&quot;, &quot;./prod?id=300&quot;, 36000L),
+                new Event(&quot;Bob&quot;, &quot;./home&quot;, 30000L),
+                new Event(&quot;Bob&quot;, &quot;./prod?id=1&quot;, 23000L),
+                new Event(&quot;Bob&quot;, &quot;./prod?id=3&quot;, 33000L)
+        ).assignTimestampsAndWatermarks(WatermarkStrategy.&lt;Event&gt;forMonotonousTimestamps()
+                .withTimestampAssigner((SerializableTimestampAssigner&lt;Event&gt;) (element, recordTimestamp) -&gt; element.timestamp)
+        );
+
+ 
+
+
+        orderStream.keyBy(data -&gt; data.f0)
+                .intervalJoin(clickStream.keyBy(data -&gt; data.user))
+                .between(Time.seconds(-5), Time.seconds(10))
+                .process(new ProcessJoinFunction&lt;Tuple3&lt;String, String, Long&gt;,
+                        Event, String&gt;() {
+                    @Override
+                    public void processElement(Tuple3&lt;String, String, Long&gt; left, Event right, Context ctx, Collector&lt;String&gt; out) throws Exception {
+                        out.collect(right + &quot; =&gt; &quot; + left);
+                    }
+                })
+                .print();
+
+ 
+
+
+        env.execute();
+    }
+
+}
+</code></pre>
+<h4 id="3窗口同组联结window-cogroup">3）窗口同组联结(Window CoGroup)</h4>
+<p>窗口同组联结(window coGroup)的用法跟 window join 非常类似， 也是将两条流合并之后开窗处理匹配的元素，调用时只需要将.join()换为.coGroup()就可以了。<br>
+与 window  join的区别在于，调用 .apply() 方法定义 具体操作 时，传入的是一个CoGroupFunction。它是一个函数类接口</p>
+<pre><code class="language-java">public interface CoGroupFunction&lt;IN1, IN2, O&gt; extends Function, Serializable { 
+    void coGroup(Iterable&lt;IN1&gt; first, Iterable&lt;IN2&gt; second, Collector&lt;O&gt; out) throws Exception;
+}
+</code></pre>
+<p>coGroup()方法，有些类似于 FlatJoinFunction中 join()的形式， 同样有三个参数， 分别代表两条流中的数据以及用于输出的收集器(Collector)。不同的是，这里的前两个参数 不再是单独的每一组“配对”数据了， 而是传入了可遍历的数据集合。也就是说不会再去计算窗口中两条流数据集的笛卡尔积，而是直接把收集到的所有数据一次性传入，至于要怎样配对完全是自定义。这样coGroup()方法只会被调用一次， 而且即使一条流的数据没有任何另一条流的数据匹配， 也可以出现在集合中、当然也可以定义输出结果了。能够看出 coGroup 操作比窗口的 join 更加通用，不仅可以实现类似 SQL 中的“内 连接”(inner join)，也可以实现左外连接(left outer join)、右外连接(right outer join) 和全外 连接(full outer join)。事实上， 窗口join 的底层，也是通过 coGroup 来实现的。<br>
+代码示例：</p>
+<pre><code class="language-java">package com.company.flink.demo;
+
+import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.CoGroupFunction;
+
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
+
+public class FlinkCoGroupDemo {
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+
+        DataStream&lt;Tuple2&lt;String, Long&gt;&gt; stream1 = env
+                .fromElements(
+                        Tuple2.of(&quot;a&quot;, 1000L),
+                        Tuple2.of(&quot;a&quot;, 2000L),
+                        Tuple2.of(&quot;b&quot;, 1000L),
+                        Tuple2.of(&quot;b&quot;, 2000L)
+                )
+                .assignTimestampsAndWatermarks(
+                        WatermarkStrategy
+                                .&lt;Tuple2&lt;String, Long&gt;&gt;forMonotonousTimestamps() .withTimestampAssigner(
+                                        (SerializableTimestampAssigner&lt;Tuple2&lt;String, Long&gt;&gt;) (stringLongTuple2, l) -&gt; stringLongTuple2.f1
+                                )
+                );
+     
+        DataStream&lt;Tuple2&lt;String, Long&gt;&gt; stream2 = env
+                .fromElements(
+                        Tuple2.of(&quot;a&quot;, 3000L),
+                        Tuple2.of(&quot;b&quot;, 3000L),
+                        Tuple2.of(&quot;b&quot;, 4000L),
+                        Tuple2.of(&quot;a&quot;, 4000L),
+                        Tuple2.of(&quot;c&quot;, 4000L)
+                )
+                .assignTimestampsAndWatermarks(
+                        WatermarkStrategy
+                                .&lt;Tuple2&lt;String, Long&gt;&gt;forMonotonousTimestamps() .withTimestampAssigner(
+                                        (SerializableTimestampAssigner&lt;Tuple2&lt;String, Long&gt;&gt;) (stringLongTuple2, l) -&gt; stringLongTuple2.f1
+                                )
+                );
+     
+        stream1
+                .coGroup(stream2)
+                .where(r -&gt; r.f0)
+                .equalTo(r -&gt; r.f0)
+                .window(TumblingEventTimeWindows.of(Time.seconds(5)))
+                .apply(new CoGroupFunction&lt;Tuple2&lt;String, Long&gt;, Tuple2&lt;String, Long&gt;, String&gt;() {
+                    @Override
+                    public  void  coGroup(Iterable&lt;Tuple2&lt;String,  Long&gt;&gt;  iter1,
+                                          Iterable&lt;Tuple2&lt;String,  Long&gt;&gt;  iter2,  Collector&lt;String&gt; collector) {
+                        collector.collect(iter1 + &quot;=&gt;&quot; + iter2);
+                    }
+                })
+                .print();
+     
+        env.execute();
+    }
+
+}
+</code></pre>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#%E5%A4%9A%E6%B5%81%E8%BD%AC%E6%8D%A2">多流转换</a></li>
+<li><a href="#%E4%BE%A7%E8%BE%93%E5%87%BA%E6%B5%81">侧输出流</a></li>
+</ul>
+</li>
+<li><a href="#%E5%90%88%E6%B5%81%E6%93%8D%E4%BD%9C">合流操作</a>
+<ul>
+<li><a href="#1%E8%81%94%E5%90%88union">1）联合(Union)</a></li>
+<li><a href="#2%E8%BF%9E%E6%8E%A5connect">2）连接（Connect）</a>
+<ul>
+<li><a href="#%E5%9F%BA%E4%BA%8E%E6%97%B6%E9%97%B4%E7%9A%84%E5%90%88%E6%B5%81%E5%8F%8C%E6%B5%81%E8%81%94%E7%BB%93join">基于时间的合流——双流联结(Join)</a></li>
+<li><a href="#1%E7%AA%97%E5%8F%A3%E8%81%94%E7%BB%93window-join">1）窗口联结(Window Join)</a></li>
+<li><a href="#2%E9%97%B4%E9%9A%94%E8%81%94%E7%BB%93interval-join">2）间隔联结(Interval Join)</a></li>
+<li><a href="#3%E7%AA%97%E5%8F%A3%E5%90%8C%E7%BB%84%E8%81%94%E7%BB%93window-cogroup">3）窗口同组联结(Window CoGroup)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/cctea1w9G/">
+                <span class="post-title">
+                  第八章 ProcessFunction API（底层 API）&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/GzZxLdaVh/">
+              <span class="post-title">
+                第七章 时间语义与 Wartermark&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

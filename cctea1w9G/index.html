@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>第八章 ProcessFunction API（底层 API） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="第八章 ProcessFunction API（底层 API） | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="第八章 ProcessFunction API（底层 API）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/cctea1w9G/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/seQXl0jPasu/" class="tag">flink</a>
+                
+              </span>
+              <h1>第八章 ProcessFunction API（底层 API）</h1>
+              <span class="meta">
+                Posted on
+                2021-04-15，44 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/cctea1w9G.png" alt="封面图">
+          </img>
+          
+          <p>之前所介绍的流处理 API，无论是基本的转换、聚合，还是更为复杂的窗口操作，其实都是基于 DataStream 进行转换的；所以可以统称为 DataStream API，这也是 Flink 编程的核心。而我们知道，为了让代码有更强大的表现力和易用性，Flink 本身提供了多层 API，DataStream API 只是中间的一环</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1681037421118.png" alt="" loading="lazy"></figure>
+<p>在更底层，我们可以不定义任何具体的算子（比如 map，filter，或者 window），而只是提炼出一个统一的“处理”（process）操作——它是所有转换算子的一个概括性的表达，可以自定义处理逻辑，所以这一层接口就被叫作“处理函数”（process function）。</p>
+<p>在处理函数中，我们直面的就是数据流中最基本的元素：数据事件（event）、状态（state）以及时间（time）。这就相当于对流有了完全的控制权。处理函数比较抽象，没有具体的操作，所以对于一些常见的简单应用（比如求和、开窗口）会显得有些麻烦；不过正是因为它不限定具体做什么，所以理论上我们可以做任何事情，实现所有需求。所以可以说，处理函数是我们进行 Flink 编程的“大招”，轻易不用，一旦放出来必然会扫平一切。</p>
+<h2 id="基本处理函数processfunction">基本处理函数（ProcessFunction）</h2>
+<p>处理函数主要是定义数据流的转换操作，所以也可以把它归到转换算子中。我们知道在Flink 中几乎所有转换算子都提供了对应的函数类接口，处理函数也不例外；它所对应的函数类，就叫作 ProcessFunction。</p>
+<h3 id="处理函数的功能和使用">处理函数的功能和使用</h3>
+<p>我们之前学习的转换算子，一般只是针对某种具体操作来定义的，能够拿到的信息比较有限。比如 map 算子，我们实现的 MapFunction 中，只能获取到当前的数据，定义它转换之后的形式；而像窗口聚合这样的复杂操作，AggregateFunction 中除数据外，还可以获取到当前的状态（以累加器 Accumulator 形式出现）。另外我们还介绍过富函数类，比如 RichMapFunction，它提供了获取运行时上下文的方法 getRuntimeContext()，可以拿到状态，还有并行度、任务名称之类的运行时信息。</p>
+<p>但是无论那种算子，如果我们想要访问事件的时间戳，或者当前的水位线信息，都是完全做不到的。在定义生成规则之后，水位线会源源不断地产生，像数据一样在任务间流动，可我们却不能像数据一样去处理它；跟时间相关的操作，目前我们只会用窗口来处理。而在很多应用需求中，要求我们对时间有更精细的控制，需要能够获取水位线，甚至要“把控时间”、定义什么时候做什么事，这就不是基本的时间窗口能够实现的了。</p>
+<p>于是必须祭出大招——处理函数（ProcessFunction）了。处理函数提供了一个“定时服务”（TimerService），我们可以通过它访问流中的事件（event）、时间戳（timestamp）、水位线（watermark），甚至可以注册“定时事件”。而且处理函数继承了 AbstractRichFunction 抽象类，所以拥有富函数类的所有特性，同样可以访问状态（state）和其他运行时信息。此外，处理函数还可以直接将数据输出到侧输出流（side output）中。所以，处理函数是最为灵活的处理方法，可以实现各种自定义的业务逻辑；同时也是整个 DataStream API 的底层基础。</p>
+<pre><code class="language-java">stream.process(new MyProcessFunction())
+</code></pre>
+<p>这里 ProcessFunction 不是接口，而是一个抽象类，继承了 AbstractRichFunction；MyProcessFunction 是它的一个具体实现。所以所有的处理函数，都是富函数（RichFunction），富函数可以调用的东西这里同样都可以调用。</p>
+<pre><code class="language-java">import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.util.Collector;
+
+public class ProcessFunctionExample {
+
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        env.addSource(new ClickSource())
+                .assignTimestampsAndWatermarks(
+                        WatermarkStrategy.&lt;Event&gt;forMonotonousTimestamps().withTimestampAssigner(new SerializableTimestampAssigner&lt;Event&gt;() {
+                                    @Override
+                                    public long extractTimestamp(Event event, long l) {
+                                        return event.timestamp;
+                                    }
+                                })
+                )
+                .process(new ProcessFunction&lt;Event, String&gt;() {
+                    @Override
+                    public void processElement(Event value, Context ctx, Collector&lt;String&gt; out) throws Exception {
+                        if (value.user.equals(&quot;Mary&quot;)) {
+                            out.collect(value.user);
+                        } else if (value.user.equals(&quot;Bob&quot;)) {
+                            out.collect(value.user);
+                            out.collect(value.user);
+                        }
+                        System.out.println(ctx.timerService().currentWatermark());
+                    }
+                })
+                .print();
+        env.execute();
+    }
+
+}
+</code></pre>
+<p>这里我们在 ProcessFunction 中重写了.processElement()方法，自定义了一种处理逻辑：当数据的 user 为“Mary”时，将其输出一次；而如果为“Bob”时，将 user 输出两次。这里的输 出 ， 是 通 过 调 用 out.collect() 来实现的。另外我们还可以调用ctx.timerService().currentWatermark() 来 获 取 当 前 的 水 位 线 打 印 输 出 。 所 以 可 以 看 到 ，ProcessFunction 函数有点像 FlatMapFunction 的升级版。可以实现 Map、Filter、FlatMap 的所有功能。很明显，处理函数非常强大，能够做很多之前做不到的事情。</p>
+<h3 id="processfunction-解析">ProcessFunction 解析</h3>
+<p>在源码中我们可以看到，抽象类 ProcessFunction 继承了 AbstractRichFunction，有两个泛型类型参数：I 表示 Input，也就是输入的数据类型；O 表示 Output，也就是处理完成之后输出的数据类型。</p>
+<p>内部单独定义了两个方法：一个是必须要实现的抽象方法.processElement()；另一个是非抽象方法.onTimer()。</p>
+<pre><code class="language-java">public abstract class ProcessFunction&lt;I, O&gt; extends AbstractRichFunction {
+...
+public abstract void processElement(I value, Context ctx, Collector&lt;O&gt; out)throws Exception;
+
+public void onTimer(long timestamp, OnTimerContext ctx, Collector&lt;O&gt; out) throws Exception {}
+...
+}
+</code></pre>
+<h4 id="抽象方法processelement">抽象方法.processElement()</h4>
+<p>用于“处理元素”，定义了处理的核心逻辑。这个方法对于流中的每个元素都会调用一次，参数包括三个：输入数据值 value，上下文 ctx，以及“收集器”（Collector）out。方法没有返回值，处理之后的输出数据是通过收集器 out 来定义的。</p>
+<p>value：当前流中的输入元素，也就是正在处理的数据，类型与流中数据类型一致。</p>
+<p>ctx：类型是 ProcessFunction 中定义的内部抽象类 Context，表示当前运行的上下文，可以获取到当前的时间戳，并提供了用于查询时间和注册定时器的“定时服务”(TimerService)，以及可以将数据发送到“侧输出流”（side output）的方法.output()。Context 抽象类定义如下：</p>
+<pre><code class="language-java">public abstract class Context {
+public abstract Long timestamp();
+public abstract TimerService timerService();
+public abstract &lt;X&gt; void output(OutputTag&lt;X&gt; outputTag, X value);
+}
+</code></pre>
+<p>out：“收集器”（类型为 Collector），用于返回输出数据。使用方式与 flatMap算子中的收集器完全一样，直接调用 out.collect()方法就可以向下游发出一个数据。这个方法可以多次调用，也可以不调用。</p>
+<p>通过几个参数的分析不难发现，ProcessFunction 可以轻松实现 flatMap 这样的基本转换功能（当然 map、filter 更不在话下）；而通过富函数提供的获取上下文方法.getRuntimeContext()，也可以自定义状态（state）进行处理，这也就能实现聚合操作的功能了。</p>
+<h4 id="非抽象方法ontimer">非抽象方法.onTimer()</h4>
+<p>用于定义定时触发的操作，这是一个非常强大、也非常有趣的功能。这个方法只有在注册好的定时器触发的时候才会调用，而定时器是通过“定时服务”TimerService 来注册的。打个比方，注册定时器（timer）就是设了一个闹钟，到了设定时间就会响；而.onTimer()中定义的，就是闹钟响的时候要做的事。所以它本质上是一个基于时间的“回调”（callback）方法，通过时间的进展来触发；在事件时间语义下就是由水位线（watermark）来触发了。</p>
+<p>与.processElement()类似，定时方法.onTimer()也有三个参数：时间戳（timestamp），上下文（ctx），以及收集器（out）。这里的 timestamp 是指设定好的触发时间，事件时间语义下当然就是水位线了。另外这里同样有上下文和收集器，所以也可以调用定时服务（TimerService），以及任意输出处理之后的数据。</p>
+<p>既然有.onTimer()方法做定时触发，我们用 ProcessFunction 也可以自定义数据按照时间分组、定时触发计算输出结果；这其实就实现了窗口（window）的功能。所以说 ProcessFunction是真正意义上的终极奥义，用它可以实现一切功能。</p>
+<p>我们也可以看到，处理函数都是基于事件触发的。水位线就如同插入流中的一条数据一样；只不过处理真正的数据事件调用的是.processElement()方法，而处理水位线事件调用的是.onTimer()。</p>
+<p>这里需要注意的是，上面的.onTimer()方法只是定时器触发时的操作，而定时器（timer）真正的设置需要用到上下文 ctx 中的定时服务。在 Flink 中，只有“按键分区流”KeyedStream才支持设置定时器的操作，所以之前的代码中我们并没有使用定时器。所以基于不同类型的流，可以使用不同的处理函数，它们之间还是有一些微小的区别的。接下来我们就介绍一下处理函数的分类。</p>
+<h3 id="处理函数的分类">处理函数的分类</h3>
+<p>Flink 中的处理函数其实是一个大家族，ProcessFunction 只是其中一员。</p>
+<p>我们知道，DataStream 在调用一些转换方法之后，有可能生成新的流类型；例如调用.keyBy()之后得到 KeyedStream，进而再调用.window()之后得到 WindowedStream。对于不同类型的流，其实都可以直接调用.process()方法进行自定义处理，这时传入的参数就都叫作处理函数。当然，它们尽管本质相同，都是可以访问状态和时间信息的底层 API，可彼此之间也会有所差异。</p>
+<p>Flink 提供了 8 个不同的处理函数：</p>
+<ul>
+<li>
+<p>（1）ProcessFunction<br>
+最基本的处理函数，基于 DataStream 直接调用.process()时作为参数传入。</p>
+</li>
+<li>
+<p>（2）KeyedProcessFunction<br>
+对流按键分区后的处理函数，基于 KeyedStream 调用.process()时作为参数传入。要想使用定时器，比如基于 KeyedStream。</p>
+</li>
+<li>
+<p>（3）ProcessWindowFunction<br>
+开窗之后的处理函数，也是全窗口函数的代表。基于 WindowedStream 调用.process()时作<br>
+为参数传入。</p>
+</li>
+<li>
+<p>（4）ProcessAllWindowFunction<br>
+同样是开窗之后的处理函数，基于 AllWindowedStream 调用.process()时作为参数传入。</p>
+</li>
+<li>
+<p>（5）CoProcessFunction<br>
+合并（connect）两条流之后的处理函数，基于 ConnectedStreams 调用.process()时作为参<br>
+数传入。关于流的连接合并操作</p>
+</li>
+<li>
+<p>（6）ProcessJoinFunction<br>
+间隔连接（interval join）两条流之后的处理函数，基于 IntervalJoined 调用.process()时作为<br>
+参数传入。</p>
+</li>
+<li>
+<p>（7）BroadcastProcessFunction<br>
+广播连接流处理函数，基于 BroadcastConnectedStream 调用.process()时作为参数传入。这里的“广播连接流”BroadcastConnectedStream，是一个未 keyBy 的普通 DataStream 与一个广播流（BroadcastStream）做连接（conncet）之后的产物。</p>
+</li>
+<li>
+<p>（8）KeyedBroadcastProcessFunction<br>
+按键分区的广播连接流处理函数，同样是基于 BroadcastConnectedStream 调用.process()时作为参数传入。与 BroadcastProcessFunction 不同的是，这时的广播连接流，是一个 KeyedStream与广播流（BroadcastStream）做连接之后的产物。</p>
+</li>
+</ul>
+<p>接下来，我们就对 KeyedProcessFunction 和 ProcessWindowFunction 的具体用法展开详细说明。</p>
+<h2 id="按键分区处理函数keyedprocessfunction">按键分区处理函数（KeyedProcessFunction）</h2>
+<p>在 Flink 程序中，为了实现数据的聚合统计，或者开窗计算之类的功能，我们一般都要先用 keyBy 算子对数据流进行“按键分区”，得到一个 KeyedStream。也就是指定一个键（key），按照它的哈希值（hash code）将数据分成不同的“组”，然后分配到不同的并行子任务上执行计算；这相当于做了一个逻辑分流的操作，从而可以充分利用并行计算的优势实时处理海量数据。</p>
+<p>另外我们在上节中也提到，只有在 KeyedStream 中才支持使用 TimerService 设置定时器的操作。所以一般情况下，我们都是先做了 keyBy 分区之后，再去定义处理操作；代码中更加常见的处理函数是 KeyedProcessFunction，最基本的 ProcessFunction 反而出镜率没那么高。</p>
+<h3 id="定时器timer和定时服务timerservice">定时器（Timer）和定时服务（TimerService）</h3>
+<p>KeyedProcessFunction 的一个特色，就是可以灵活地使用定时器。</p>
+<p>定时器（timers）是处理函数中进行时间相关操作的主要机制。在.onTimer()方法中可以实现定时处理的逻辑，而它能触发的前提，就是之前曾经注册过定时器、并且现在已经到了触发时间。注册定时器的功能，是通过上下文中提供的“定时服务”（TimerService）来实现的。</p>
+<p>定时服务与当前运行的环境有关。前面已经介绍过，ProcessFunction 的上下文（Context）中提供了.timerService()方法，可以直接返回一个 TimerService 对象：</p>
+<pre><code class="language-java">public abstract TimerService timerService();
+
+//TimerService 是 Flink 关于时间和定时器的基础服务接口，包含以下六个方法：
+
+// 获取当前的处理时间
+long currentProcessingTime();
+// 获取当前的水位线（事件时间）
+long currentWatermark();
+// 注册处理时间定时器，当处理时间超过 time 时触发
+void registerProcessingTimeTimer(long time);
+// 注册事件时间定时器，当水位线超过 time 时触发
+void registerEventTimeTimer(long time);
+// 删除触发时间为 time 的处理时间定时器
+void deleteProcessingTimeTimer(long time);
+// 删除触发时间为 time 的处理时间定时器
+void deleteEventTimeTimer(long time);
+</code></pre>
+<p>六个方法可以分成两大类：基于处理时间和基于事件时间。而对应的操作主要有三个：获取当前时间，注册定时器，以及删除定时器。需要注意，尽管处理函数中都可以直接访问TimerService，不过只有基于 KeyedStream 的处理函数，才能去调用注册和删除定时器的方法；未作按键分区的 DataStream 不支持定时器操作，只能获取当前时间。</p>
+<p>对于处理时间和事件时间这两种类型的定时器，TimerService 内部会用一个优先队列将它们的时间戳（timestamp）保存起来，排队等待执行。可以认为，定时器其实是 KeyedStream上处理算子的一个状态，它以时间戳作为区分。所以 TimerService 会以键（key）和时间戳为标准，对定时器进行去重；也就是说对于每个 key 和时间戳，最多只有一个定时器，如果注册了多次，onTimer()方法也将只被调用一次。这样一来，我们在代码中就方便了很多，可以肆无忌惮地对一个 key 注册定时器，而不用担心重复定义——因为一个时间戳上的定时器只会触发一次。</p>
+<p>基于 KeyedStream 注册定时器时，会传入一个定时器触发的时间戳，这个时间戳的定时器对于每个 key 都是有效的。这样，我们的代码并不需要做额外的处理，底层就可以直接对不同key 进行独立的处理操作了。</p>
+<p>利用这个特性，有时我们可以故意降低时间戳的精度，来减少定时器的数量，从而提高处理性能。比如我们可以在设置定时器时只保留整秒数，那么定时器的触发频率就是最多 1 秒一次。</p>
+<pre><code class="language-java">long coalescedTime = time / 1000 * 1000;
+ctx.timerService().registerProcessingTimeTimer(coalescedTime);
+</code></pre>
+<p>这里注意定时器的时间戳必须是毫秒数，所以我们得到整秒之后还要乘以 1000。定时器默认的区分精度是毫秒。</p>
+<p>另外 Flink 对.onTimer()和.processElement()方法是同步调用的（synchronous），所以也不会出现状态的并发修改。</p>
+<p>Flink 的定时器同样具有容错性，它和状态一起都会被保存到一致性检查点（checkpoint）中。当发生故障时，Flink 会重启并读取检查点中的状态，恢复定时器。如果是处理时间的定时器，有可能会出现已经“过期”的情况，这时它们会在重启时被立刻触发。</p>
+<h3 id="keyedprocessfunction-的使用">KeyedProcessFunction 的使用</h3>
+<p>KeyedProcessFunction 可以说是处理函数中的“嫡系部队”，可以认为是 ProcessFunction 的一个扩展。我们只要基于 keyBy 之后的 KeyedStream，直接调用.process()方法，这时需要传入的参数就是 KeyedProcessFunction 的实现类。</p>
+<pre><code class="language-java">stream.keyBy( t -&gt; t.f0 )
+	.process(new MyKeyedProcessFunction())
+</code></pre>
+<p>类似地，KeyedProcessFunction 也是继承自 AbstractRichFunction 的一个抽象类，源码中定义如下：</p>
+<pre><code class="language-java">public abstract class KeyedProcessFunction&lt;K, I, O&gt; extends AbstractRichFunction {
+	...
+	public abstract void processElement(I value, Context ctx, Collector&lt;O&gt; out) throws Exception;
+	public void onTimer(long timestamp, OnTimerContext ctx, Collector&lt;O&gt; out) throws Exception {}
+	public abstract class Context {...}
+	...
+}
+</code></pre>
+<p>可以看到与 ProcessFunction 的定义几乎完全一样，区别只是在于类型参数多了一个 K，这是当前按键分区的 key 的类型。同样地，我们必须实现一个.processElement()抽象方法，用来处理流中的每一个数据；另外还有一个非抽象方法.onTimer()，用来定义定时器触发时的回调操作。由于定时器只能在 KeyedStream 上使用，所以到了 KeyedProcessFunction 这里，我们才真正对时间有了精细的控制，定时方法.onTimer()才真正派上了用场。</p>
+<pre><code class="language-java">import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.util.Collector;
+
+import java.sql.Timestamp;
+
+public class ProcessingTimeTimerTest {
+
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        // 处理时间语义，不需要分配时间戳和 watermark
+        SingleOutputStreamOperator&lt;Event&gt; stream = env.addSource(new ClickSource());
+        // 要用定时器，必须基于 KeyedStream
+        stream.keyBy(data -&gt; true)
+                .process(new KeyedProcessFunction&lt;Boolean, Event, String&gt;() {
+                    @Override
+                    public void processElement(Event value, Context ctx, Collector&lt;String&gt; out) throws Exception {
+                        Long currTs = ctx.timerService().currentProcessingTime();
+                        out.collect(&quot;数据到达，到达时间：&quot; + new Timestamp(currTs));
+                        // 注册一个 10 秒后的定时器
+                        ctx.timerService().registerProcessingTimeTimer(currTs + 10 * 1000L);
+                    }
+    
+                    @Override
+                    public void onTimer(long timestamp, OnTimerContext ctx, Collector&lt;String&gt; out) throws Exception {
+                        out.collect(&quot;定时器触发，触发时间：&quot; + new Timestamp(timestamp));
+                    }
+                }).print();
+        env.execute();
+    }
+
+}
+</code></pre>
+<p>在上面的代码中，由于定时器只能在 KeyedStream 上使用，所以先要进行 keyBy；这里的.keyBy(data -&gt; true)是将所有数据的 key 都指定为了 true，其实就是所有数据拥有相同的 key，会分配到同一个分区。</p>
+<p>之后我们自定义了一个 KeyedProcessFunction，其中.processElement()方法是每来一个数据都会调用一次，主要是定义了一个 10 秒之后的定时器；而.onTimer()方法则会在定时器触发时调用。所以我们会看到，程序运行后先在控制台输出“数据到达”的信息，等待 10 秒之后，又会输出“定时器触发”的信息，打印出的时间间隔正是 10 秒。</p>
+<p>当然，上面的例子是处理时间的定时器，所以我们是真的需要等待 10 秒才会看到结果。事件时间语义下，又会有什么不同呢？我们可以对上面的代码略作修改，做一个测试：</p>
+<pre><code class="language-java">import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.util.Collector;
+
+public class EventTimeTimerTest {
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        SingleOutputStreamOperator&lt;Event&gt; stream = env.addSource(new CustomSource())
+                .assignTimestampsAndWatermarks(WatermarkStrategy.&lt;Event&gt;forMonotonousTimestamps()
+                        .withTimestampAssigner(new SerializableTimestampAssigner&lt;Event&gt;() {
+                            @Override
+                            public long extractTimestamp(Event element, long recordTimestamp) {
+                                return element.timestamp;
+                            }
+                        }));
+        // 基于 KeyedStream 定义事件时间定时器
+        stream.keyBy(data -&gt; true)
+                .process(new KeyedProcessFunction&lt;Boolean, Event, String&gt;() {
+                    @Override
+                    public void processElement(Event value, Context ctx, Collector&lt;String&gt; out) throws Exception {
+                        out.collect(&quot;数据到达，时间戳为：&quot; + ctx.timestamp());
+                        out.collect(&quot; 数据到达，水位线为： &quot; + ctx.timerService().currentWatermark() + &quot;\n -------分割线-------&quot;);
+                        // 注册一个 10 秒后的定时器
+                        ctx.timerService().registerEventTimeTimer(ctx.timestamp() + 10 * 1000L);
+                    }
+
+                    @Override
+                    public void onTimer(long timestamp, OnTimerContext ctx, Collector&lt;String&gt; out) throws Exception {
+                        out.collect(&quot;定时器触发，触发时间：&quot; + timestamp);
+                    }
+                })
+                .print();
+        env.execute();
+    }
+    
+    // 自定义测试数据源
+    public static class CustomSource implements SourceFunction&lt;Event&gt; {
+        @Override
+        public void run(SourceContext&lt;Event&gt; ctx) throws Exception {
+            // 直接发出测试数据
+            ctx.collect(new Event(&quot;Mary&quot;, &quot;./home&quot;, 1000L));
+            // 为了更加明显，中间停顿 5 秒钟
+            Thread.sleep(5000L);
+            // 发出 10 秒后的数据
+            ctx.collect(new Event(&quot;Mary&quot;, &quot;./home&quot;, 11000L));
+            Thread.sleep(5000L);
+            // 发出 10 秒+1ms 后的数据
+            ctx.collect(new Event(&quot;Alice&quot;, &quot;./cart&quot;, 11001L));
+            Thread.sleep(5000L);
+        }
+    
+        @Override
+        public void cancel() {
+        }
+    }
+
+}
+</code></pre>
+<p>由于是事件时间语义，所以我们必须从数据中提取出数据产生的时间戳。这里为了更清楚地看到程序行为，我们自定义了一个数据源，发出三条测试数据，时间戳分别为 1000、11000和 11001，并且发出数据后都会停顿 5 秒。</p>
+<p>在代码中，我们依然将所有数据分到同一分区，然后在自定义的 KeyedProcessFunction 中使用定时器。同样地，每来一条数据，我们就将当前的数据时间戳和水位线信息输出，并注册一个 10 秒后（以当前数据时间戳为基准）的事件时间定时器。执行程序结果如下：</p>
+<pre><code class="language-java">数据到达，时间戳为：1000
+数据到达，水位线为：-9223372036854775808
+-------分割线-------
+数据到达，时间戳为：11000
+数据到达，水位线为：999
+-------分割线-------
+数据到达，时间戳为：11001
+数据到达，水位线为：10999
+-------分割线-------
+定时器触发，触发时间：11000
+定时器触发，触发时间：21000
+定时器触发，触发时间：21001
+</code></pre>
+<p>每来一条数据，都会输出两行“数据到达”的信息，并以分割线隔开；两条数据到达的时间间隔为 5 秒。当第三条数据到达后，随后立即输出一条定时器触发的信息；再过 5 秒之后，剩余两条定时器信息输出，程序运行结束。</p>
+<p>我们可以发现，数据到来之后，当前的水位线与时间戳并不是一致的。当第一条数据到来，时间戳为 1000，可水位线的生成是周期性的（默认 200ms 一次），不会立即发生改变，所以依然是最小值 Long.MIN_VALUE；随后只要到了水位线生成的时间点（200ms 到了），就会依据当前的最大时间戳 1000 来生成水位线了。这里我们没有设置水位线延迟，默认需要减去 1 毫秒，所以水位线推进到了 999。而当时间戳为 11000 的第二条数据到来之后，水位线同样没有立即改变，仍然是 999，就好像总是“滞后”数据一样。</p>
+<p>这样程序的行为就可以得到合理解释了。事件时间语义下，定时器触发的条件就是水位线推进到设定的时间。第一条数据到来后，设定的定时器时间为 1000 + 10 * 1000 = 11000；而当时间戳为 11000 的第二条数据到来，水位线还处在 999 的位置，当然不会立即触发定时器；而之后水位线会推进到 10999，同样是无法触发定时器的。必须等到第三条数据到来，将水位线真正推进到 11000，就可以触发第一个定时器了。第三条数据发出后再过 5 秒，没有更多的数据生成了，整个程序运行结束将要退出，此时 Flink 会自动将水位线推进到长整型的最大值（Long.MAX_VALUE）。于是所有尚未触发的定时器这时就统一触发了，我们就在控制台看到了后两个定时器的触发信息。</p>
+<h2 id="窗口处理函数">窗口处理函数</h2>
+<p>除 了 KeyedProcessFunction ， 另 外 一 大 类 常 用 的 处 理 函 数 ， 就 是 基 于 窗 口 的ProcessWindowFunction 和 ProcessAllWindowFunction 了。</p>
+<h3 id="窗口处理函数的使用">窗口处理函数的使用</h3>
+<p>进行窗口计算，我们可以直接调用现成的简单聚合方法（sum/max/min）,也可以通过调用.reduce()或.aggregate()来自定义一般的增量聚合函数（ReduceFunction/AggregateFucntion）；而对于更加复杂、需要窗口信息和额外状态的一些场景，我们还可以直接使用全窗口函数、把数据全部收集保存在窗口内，等到触发窗口计算时再统一处理。窗口处理函数就是一种典型的全窗口函数。</p>
+<p>窗 口 处 理 函 数 ProcessWindowFunction 的 使 用 与 其 他 窗 口 函 数 类 似 ， 也 是 基 于WindowedStream 直接调用方法就可以，只不过这时调用的是.process()。</p>
+<pre><code class="language-java">stream.keyBy( t -&gt; t.f0 )
+	.window( TumblingEventTimeWindows.of(Time.seconds(10)) )
+	.process(new MyProcessWindowFunction())
+</code></pre>
+<h3 id="processwindowfunction-解析">ProcessWindowFunction 解析</h3>
+<p>ProcessWindowFunction 既是处理函数又是全窗口函数。从名字上也可以推测出，它的本质似乎更倾向于“窗口函数”一些。事实上它的用法也确实跟其他处理函数有很大不同。我们可以从源码中的定义看到这一点：</p>
+<pre><code class="language-java">public abstract class ProcessWindowFunction&lt;IN, OUT, KEY, W extends Window&gt; extends AbstractRichFunction {
+	...
+	public abstract void process(
+	KEY key, Context context, Iterable&lt;IN&gt; elements, Collector&lt;OUT&gt; out) throws Exception;
+	public void clear(Context context) throws Exception {}
+	public abstract class Context implements java.io.Serializable {...}
+}
+</code></pre>
+<p>ProcessWindowFunction 依然是一个继承了 AbstractRichFunction 的抽象类，它有四个类型参数：</p>
+<ul>
+<li>
+<p>IN：input，数据流中窗口任务的输入数据类型。</p>
+</li>
+<li>
+<p>OUT：output，窗口任务进行计算之后的输出数据类型。</p>
+</li>
+<li>
+<p>KEY：数据中键 key 的类型。</p>
+</li>
+<li>
+<p>W：窗口的类型，是 Window 的子类型。一般情况下我们定义时间窗口，W就是 TimeWindow。</p>
+</li>
+</ul>
+<p>而内部定义的方法，跟我们之前熟悉的处理函数就有所区别了。因为全窗口函数不是逐个处理元素的，所以处理数据的方法在这里并不是.processElement()，而是改成了.process()。方法包含四个参数。</p>
+<ul>
+<li>
+<p>key：窗口做统计计算基于的键，也就是之前 keyBy 用来分区的字段。</p>
+</li>
+<li>
+<p>context：当前窗口进行计算的上下文，它的类型就是 ProcessWindowFunction内部定义的抽象类 Context。</p>
+</li>
+<li>
+<p>elements：窗口收集到用来计算的所有数据，这是一个可迭代的集合类型。</p>
+</li>
+<li>
+<p>out：用来发送数据输出计算结果的收集器，类型为 Collector。</p>
+</li>
+</ul>
+<p>可以明显看出，这里的参数不再是一个输入数据，而是窗口中所有数据的集合。而上下文context 所包含的内容也跟其他处理函数有所差别：</p>
+<pre><code class="language-java">public abstract class Context implements java.io.Serializable {
+	public abstract W window();
+	public abstract long currentProcessingTime();
+	public abstract long currentWatermark();
+	public abstract KeyedStateStore windowState();
+	public abstract KeyedStateStore globalState();
+	public abstract &lt;X&gt; void output(OutputTag&lt;X&gt; outputTag, X value);
+}
+</code></pre>
+<p>除了可以通过.output()方法定义侧输出流不变外，其他部分都有所变化。这里不再持有TimerService 对象，只能通过 currentProcessingTime()和 currentWatermark()来获取当前时间，所以失去了设置定时器的功能；另外由于当前不是只处理一个数据，所以也不再提供.timestamp()方法。与此同时，也增加了一些获取其他信息的方法：比如可以通过.window()直接获取到当前的窗口对象，也可以通过.windowState()和.globalState()获取到当前自定义的窗口状态和全局状态。注意这里的“窗口状态”是自定义的，不包括窗口本身已经有的状态，针对当前 key、当前窗口有效；而“全局状态”同样是自定义的状态，针对当前 key 的所有窗口有效。</p>
+<p>所以我们会发现，ProcessWindowFunction 中除了.process()方法外，并没有.onTimer()方法，而是多出了一个.clear()方法。从名字就可以看出，这主要是方便我们进行窗口的清理工作。如果我们自定义了窗口状态，那么必须在.clear()方法中进行显式地清除，避免内存溢出。</p>
+<p>这里有一个问题：没有了定时器，那窗口处理函数就失去了一个最给力的武器，如果我们希望有一些定时操作又该怎么做呢？其实仔细思考会发现，对于窗口而言，它本身的定义就包含了一个触发计算的时间点，其实一般情况下是没有必要再去做定时操作的。如果非要这么干，Flink也提供了另外的途径——使用窗口触发器（Trigger）。在触发器中也有一个TriggerContext，它可以起到类似 TimerService 的作用：获取当前时间、注册和删除定时器，另外还可以获取当前的状态。这样设计无疑会让处理流程更加清晰——定时操作也是一种“触发”，所以我们就让所有的触发操作归触发器管，而所有处理数据的操作则归窗口函数管。</p>
+<p>至于另一种窗口处理函数 ProcessAllWindowFunction，它的用法非常类似。区别在于它基于的是 AllWindowedStream，相当于对没有 keyBy 的数据流直接开窗并调用.process()方法:</p>
+<pre><code class="language-java">stream.windowAll( TumblingEventTimeWindows.of(Time.seconds(10)) )
+	.process(new MyProcessAllWindowFunction())
+</code></pre>
+<h2 id="应用案例top-n">应用案例——Top N</h2>
+<p>窗口的计算处理，在实际应用中非常常见。对于一些比较复杂的需求，如果增量聚合函数无法满足，我们就需要考虑使用窗口处理函数这样的“大招”了。</p>
+<p>网站中一个非常经典的例子，就是实时统计一段时间内的热门 url。例如，需要统计最近10 秒钟内最热门的两个 url 链接，并且每 5 秒钟更新一次。我们知道，这可以用一个滑动窗口来实现，而“热门度”一般可以直接用访问量来表示。于是就需要开滑动窗口收集 url 的访问数据，按照不同的 url 进行统计，而后汇总排序并最终输出前两名。这其实就是著名的“Top N”问题。</p>
+<p>很显然，简单的增量聚合可以得到 url 链接的访问量，但是后续的排序输出 Top N 就很难实现了。所以接下来我们用窗口处理函数进行实现。</p>
+<h3 id="使用-processallwindowfunction">使用 ProcessAllWindowFunction</h3>
+<p>一种最简单的想法是，我们干脆不区分 url 链接，而是将所有访问数据都收集起来，统一进行统计计算。所以可以不做 keyBy，直接基于 DataStream 开窗，然后使用全窗口函数ProcessAllWindowFunction 来进行处理。</p>
+<p>在窗口中可以用一个 HashMap 来保存每个 url 的访问次数，只要遍历窗口中的所有数据，自然就能得到所有 url 的热门度。最后把 HashMap 转成一个列表 ArrayList，然后进行排序、取出前两名输出就可以了。</p>
+<pre><code class="language-java">import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
+import org.apache.flink.util.Collector;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+
+public class ProcessAllWindowTopN {
+
+
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        SingleOutputStreamOperator&lt;Event&gt; eventStream = env.addSource(new ClickSource())
+                .assignTimestampsAndWatermarks(WatermarkStrategy.&lt;Event&gt;forMonotonousTimestamps()
+                        .withTimestampAssigner(new SerializableTimestampAssigner&lt;Event&gt;() {
+                            @Override
+                            public long extractTimestamp(Event element, long
+                                    recordTimestamp) {
+                                return element.timestamp;
+                            }
+                        })
+                );
+        // 只需要 url 就可以统计数量，所以转换成 String 直接开窗统计
+        SingleOutputStreamOperator&lt;String&gt; result = eventStream
+                .map(new MapFunction&lt;Event, String&gt;() {
+                    @Override
+                    public String map(Event value) throws Exception {
+                        return value.url;
+                    }
+                })
+                .windowAll(SlidingEventTimeWindows.of(Time.seconds(10), Time.seconds(5))) // 开滑动窗口
+                .process(new ProcessAllWindowFunction&lt;String, String, TimeWindow&gt;() {
+                    @Override
+                    public void process(Context context, Iterable&lt;String&gt; elements, Collector&lt;String&gt; out) throws Exception {
+                        HashMap&lt;String, Long&gt; urlCountMap = new HashMap&lt;&gt;();
+                        // 遍历窗口中数据，将浏览量保存到一个 HashMap 中
+                        for (String url : elements) {
+                            if (urlCountMap.containsKey(url)) {
+                                long count = urlCountMap.get(url);
+                                urlCountMap.put(url, count + 1L);
+                            } else {
+                                urlCountMap.put(url, 1L);
+                            }
+                        }
+                        ArrayList&lt;Tuple2&lt;String, Long&gt;&gt; mapList = new ArrayList&lt;Tuple2&lt;String, Long&gt;&gt;();
+                        // 将浏览量数据放入 ArrayList，进行排序
+                        for (String key : urlCountMap.keySet()) {
+                            mapList.add(Tuple2.of(key, urlCountMap.get(key)));
+                        }
+                        mapList.sort(new Comparator&lt;Tuple2&lt;String, Long&gt;&gt;() {
+                            @Override
+                            public int compare(Tuple2&lt;String, Long&gt; o1, Tuple2&lt;String,
+                                    Long&gt; o2) {
+                                return o2.f1.intValue() - o1.f1.intValue();
+                            }
+                        });
+                        // 取排序后的前两名，构建输出结果
+                        StringBuilder result = new StringBuilder();
+                        result.append(&quot;========================================\n&quot;);
+                        for (int i = 0; i &lt; 2; i++) {
+                            Tuple2&lt;String, Long&gt; temp = mapList.get(i);
+                            String info = &quot;浏览量 No.&quot; + (i + 1) +
+                                    &quot; url：&quot; + temp.f0 +
+                                    &quot; 浏览量：&quot; + temp.f1 +
+                                    &quot; 窗 口 结 束 时 间 ： &quot; + new
+                                    Timestamp(context.window().getEnd()) + &quot;\n&quot;;
+                            result.append(info);
+                        }
+                        result.append(&quot;========================================\n&quot;);
+                        out.collect(result.toString());
+                    }
+                });
+        result.print();
+        env.execute();
+    }
+
+}
+</code></pre>
+<p>运行结果如下所示：</p>
+<pre><code class="language-java">========================================
+浏览量 No.1 url：./prod?id=1 浏览量：2 窗口结束时间：2021-07-01 15:24:25.0
+
+浏览量 No.2 url：./cart 浏览量：1 窗口结束时间：2021-07-01 15:24:25.0
+========================================
+</code></pre>
+<h3 id="使用-keyedprocessfunction">使用 KeyedProcessFunction</h3>
+<p>在上一小节的实现过程中，我们没有进行按键分区，直接将所有数据放在一个分区上进行了开窗操作。这相当于将并行度强行设置为 1，在实际应用中是要尽量避免的，所以 Flink 官方也并不推荐使用 AllWindowedStream 进行处理。另外，我们在全窗口函数中定义了 HashMap<br>
+来统计 url 链接的浏览量，计算过程是要先收集齐所有数据、然后再逐一遍历更新 HashMap，这显然不够高效。如果我们可以利用增量聚合函数的特性，每来一条数据就更新一次对应 url的浏览量，那么到窗口触发计算时只需要做排序输出就可以了。</p>
+<p>基于这样的想法，我们可以从两个方面去做优化：一是对数据进行按键分区，分别统计浏览量；二是进行增量聚合，得到结果最后再做排序输出。所以，我们可以使用增量聚合函数AggregateFunction 进行浏览量的统计，然后结合 ProcessWindowFunction 排序输出来实现 Top N的需求。</p>
+<p>具体实现思路就是，先按照 url 对数据进行 keyBy 分区，然后开窗进行增量聚合。这里就会发现一个问题：我们进行按键分区之后，窗口的计算就会只针对当前 key 有效了；也就是说，每个窗口的统计结果中，只会有一个 url 的浏览量，这是无法直接用 ProcessWindowFunction进行排序的。所以我们只能分成两步：先对每个 url 链接统计出浏览量，然后再将统计结果收集起来，排序输出最终结果。因为最后的排序还是基于每个时间窗口的，所以为了让输出的统计结果中包含窗口信息，我们可以借用第六章中定义的 POJO 类 UrlViewCount 来表示，它包含了 url、浏览量（count）以及窗口的起始结束时间。之后对 UrlViewCount 的处理，可以先按窗口分区，然后用 KeyedProcessFunction 来实现。</p>
+<p>总结处理流程如下：</p>
+<ul>
+<li>
+<p>读取数据源；</p>
+</li>
+<li>
+<p>筛选浏览行为（pv）；</p>
+</li>
+<li>
+<p>提取时间戳并生成水位线；</p>
+</li>
+<li>
+<p>按照 url 进行 keyBy 分区操作；</p>
+</li>
+<li>
+<p>开长度为 1 小时、步长为 5 分钟的事件时间滑动窗口；</p>
+</li>
+<li>
+<p>使用增量聚合函数 AggregateFunction，并结合全窗口函数 WindowFunction 进行窗口聚合，得到每个 url、在每个统计窗口内的浏览量，包装成 UrlViewCount；</p>
+</li>
+<li>
+<p>按照窗口进行 keyBy 分区操作；</p>
+</li>
+<li>
+<p>对同一窗口的统计结果数据，使用 KeyedProcessFunction 进行收集并排序输出。</p>
+</li>
+</ul>
+<p>糟糕的是，这里又会带来另一个问题。最后我们用 KeyedProcessFunction 来收集数据做排序，这时面对的就是窗口聚合之后的数据流，而窗口已经不存在了；那到底什么时候会收集齐所有数据呢？这问题听起来似乎有些没道理。我们统计浏览量的窗口已经关闭，就说明了当前已经到了要输出结果的时候，直接输出不就行了吗？</p>
+<p>没有这么简单。因为数据流中的元素是逐个到来的，所以即使理论上我们应该“同时”收到很多 url 的浏览量统计结果，实际也是有先后的、只能一条一条处理。下游任务（就是我们定义的 KeyedProcessFunction）看到一个 url 的统计结果，并不能保证这个时间段的统计数据不会再来了，所以也不能贸然进行排序输出。解决的办法，自然就是要等所有数据到齐了——这很容易让我们联想起水位线设置延迟时间的方法。这里我们也可以“多等一会儿”，等到水位线真正超过了窗口结束时间，要统计的数据就肯定到齐了。</p>
+<p>具体实现上，可以采用一个延迟触发的事件时间定时器。基于窗口的结束时间来设定延迟，其实并不需要等太久——因为我们是靠水位线的推进来触发定时器，而水位线的含义就是“之前的数据都到齐了”。所以我们只需要设置 1 毫秒的延迟，就一定可以保证这一点。</p>
+<p>而在等待过程中，之前已经到达的数据应该缓存起来，我们这里用一个自定义的“列表状态”（ListState）来进行存储，如图所示。这个状态需要使用富函数类的 getRuntimeContext()方法获取运行时上下文来定义，我们一般把它放在 open()生命周期方法中。之后每来一个UrlViewCount，就把它添加到当前的列表状态中，并注册一个触发时间为窗口结束时间加 1毫秒（windowEnd + 1）的定时器。待到水位线到达这个时间，定时器触发，我们可以保证当前窗口所有 url 的统计结果 UrlViewCount 都到齐了；于是从状态中取出进行排序输出。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1681037392627.png" alt="" loading="lazy"></figure>
+<pre><code class="language-java">import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.AggregateFunction;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
+import org.apache.flink.util.Collector;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Comparator;
+
+public class KeyedProcessTopN {
+
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        // 从自定义数据源读取数据
+        SingleOutputStreamOperator&lt;Event&gt; eventStream = env.addSource(new ClickSource())
+                .assignTimestampsAndWatermarks(WatermarkStrategy.&lt;Event&gt;forMonotonousTimestamps()
+                        .withTimestampAssigner(new SerializableTimestampAssigner&lt;Event&gt;() {
+                            @Override
+                            public long extractTimestamp(Event element, long
+                                    recordTimestamp) {
+                                return element.timestamp;
+                            }
+                        }));
+    
+        // 需要按照 url 分组，求出每个 url 的访问量
+        SingleOutputStreamOperator&lt;UrlViewCount&gt; urlCountStream = eventStream.keyBy(data -&gt; data.url)
+                .window(SlidingEventTimeWindows.of(Time.seconds(10), Time.seconds(5)))
+                .aggregate(new UrlViewCountAgg(), new UrlViewCountResult());
+        // 对结果中同一个窗口的统计数据，进行排序处理
+        SingleOutputStreamOperator&lt;String&gt; result = urlCountStream.keyBy(data -&gt; data.windowEnd)
+                .process(new TopN(2));
+        result.print(&quot;result&quot;);
+        env.execute();
+    }
+    
+    // 自定义增量聚合
+    public static class UrlViewCountAgg implements AggregateFunction&lt;Event, Long, Long&gt; {
+        @Override
+        public Long createAccumulator() {
+            return 0L;
+        }
+    
+        @Override
+        public Long add(Event value, Long accumulator) {
+            return accumulator + 1;
+        }
+    
+        @Override
+        public Long getResult(Long accumulator) {
+            return accumulator;
+        }
+    
+        @Override
+        public Long merge(Long a, Long b) {
+            return null;
+        }
+    }
+    
+    // 自定义全窗口函数，只需要包装窗口信息
+    public static class UrlViewCountResult extends ProcessWindowFunction&lt;Long, UrlViewCount, String, TimeWindow&gt; {
+        @Override
+        public void process(String url, Context context, Iterable&lt;Long&gt; elements, Collector&lt;UrlViewCount&gt; out) throws Exception {
+            // 结合窗口信息，包装输出内容
+            Long start = context.window().getStart();
+            Long end = context.window().getEnd();
+            out.collect(new UrlViewCount(url, elements.iterator().next(), start, end));
+        }
+    }
+    
+    // 自定义处理函数，排序取 top n
+    public static class TopN extends KeyedProcessFunction&lt;Long, UrlViewCount, String&gt; {
+        // 将 n 作为属性
+        private Integer n;
+        // 定义一个列表状态
+        private ListState&lt;UrlViewCount&gt; urlViewCountListState;
+    
+        public TopN(Integer n) {
+            this.n = n;
+        }
+    
+        @Override
+        public void open(Configuration parameters) throws Exception {
+            // 从环境中获取列表状态句柄
+            urlViewCountListState = getRuntimeContext().getListState(
+                    new ListStateDescriptor&lt;UrlViewCount&gt;(&quot;url-view-count-list&quot;, Types.POJO(UrlViewCount.class)));
+        }
+    
+        @Override
+        public void processElement(UrlViewCount value, Context ctx, Collector&lt;String&gt; out) throws Exception {
+            // 将 count 数据添加到列表状态中，保存起来
+            urlViewCountListState.add(value);
+            // 注册 window end + 1ms 后的定时器，等待所有数据到齐开始排序
+            ctx.timerService().registerEventTimeTimer(ctx.getCurrentKey() + 1);
+        }
+    
+        @Override
+        public void onTimer(long timestamp, OnTimerContext ctx, Collector&lt;String&gt; out) throws Exception {
+            // 将数据从列表状态变量中取出，放入 ArrayList，方便排序
+            ArrayList&lt;UrlViewCount&gt; urlViewCountArrayList = new ArrayList&lt;&gt;();
+            for (UrlViewCount urlViewCount : urlViewCountListState.get()) {
+                urlViewCountArrayList.add(urlViewCount);
+            }
+            // 清空状态，释放资源
+            urlViewCountListState.clear();
+            // 排序
+            urlViewCountArrayList.sort(new Comparator&lt;UrlViewCount&gt;() {
+                @Override
+                public int compare(UrlViewCount o1, UrlViewCount o2) {
+                    return o2.count.intValue() - o1.count.intValue();
+                }
+            });
+            // 取前两名，构建输出结果
+            StringBuilder result = new StringBuilder();
+            result.append(&quot;========================================\n&quot;);
+            result.append(&quot;窗口结束时间：&quot; + new Timestamp(timestamp - 1) + &quot;\n&quot;);
+            for (int i = 0; i &lt; this.n; i++) {
+                UrlViewCount UrlViewCount = urlViewCountArrayList.get(i);
+                String info = &quot;No.&quot; + (i + 1) + &quot; &quot;
+                        + &quot;url：&quot; + UrlViewCount.url + &quot; &quot;
+                        + &quot;浏览量：&quot; + UrlViewCount.count + &quot;\n&quot;;
+                result.append(info);
+            }
+            result.append(&quot;========================================\n&quot;);
+            out.collect(result.toString());
+        }
+    }
+
+}
+</code></pre>
+<p>代码中，我们还利用了定时器的特性：针对同一 key、同一时间戳会进行去重。所以对于同一个窗口而言，我们接到统计结果数据后设定的 windowEnd + 1 的定时器都是一样的，最终只会触发一次计算。而对于不同的 key（这里 key 是 windowEnd），定时器和状态都是独立的，所以我们也不用担心不同窗口间数据的干扰。</p>
+<p>我们在上面的代码中使用了后面要讲解的 ListState。这里可以先简单说明一下。我们先声明一个列表状态变量:</p>
+<pre><code class="language-java">private ListState&lt;Event&gt; UrlViewCountListState;
+</code></pre>
+<p>然后在 open 方法中初始化了列表状态变量，我们初始化的时候使用了 ListStateDescriptor描述符，这个描述符用来告诉 Flink 列表状态变量的名字和类型。列表状态变量是单例，也就是说只会被实例化一次。这个列表状态变量的作用域是当前 key 所对应的逻辑分区。我们使用add 方法向列表状态变量中添加数据，使用 get 方法读取列表状态变量中的所有元素。</p>
+<h2 id="侧输出流side-output">侧输出流（Side Output）</h2>
+<p>处理函数还有另外一个特有功能，就是将自定义的数据放入“侧输出流”（side output）输出。这个概念我们并不陌生，之前在讲到窗口处理迟到数据时，最后一招就是输出到侧输出流。而这种处理方式的本质，其实就是处理函数的侧输出流功能。</p>
+<p>我们之前讲到的绝大多数转换算子，输出的都是单一流，流里的数据类型只能有一种。而侧输出流可以认为是“主流”上分叉出的“支流”，所以可以由一条流产生出多条流，而且这些流中的数据类型还可以不一样。利用这个功能可以很容易地实现“分流”操作。</p>
+<p>具体应用时，只要在处理函数的.processElement()或者.onTimer()方法中，调用上下文的.output()方法就可以了。</p>
+<pre><code class="language-java">DataStream&lt;Integer&gt; stream = env.addSource(...);
+SingleOutputStreamOperator&lt;Long&gt; longStream = stream.process(new ProcessFunction&lt;Integer, Long&gt;() {
+	@Override
+	public void processElement( Integer value, Context ctx, Collector&lt;Integer&gt; 
+	out) throws Exception {
+	// 转换成 Long，输出到主流中
+	out.collect(Long.valueOf(value));
+	// 转换成 String，输出到侧输出流中
+	ctx.output(outputTag, &quot;side-output: &quot; + String.valueOf(value));
+	}
+});
+</code></pre>
+<p>这里 output()方法需要传入两个参数，第一个是一个“输出标签”OutputTag，用来标识侧输出流，一般会在外部统一声明；第二个就是要输出的数据。</p>
+<p>我们可以在外部先将 OutputTag 声明出来：</p>
+<pre><code class="language-java">OutputTag&lt;String&gt; outputTag = new OutputTag&lt;String&gt;(&quot;side-output&quot;) {};
+</code></pre>
+<p>如果想要获取这个侧输出流，可以基于处理之后的 DataStream 直接调用.getSideOutput()方法，传入对应的 OutputTag，这个方式与窗口 API 中获取侧输出流是完全一样的。</p>
+<pre><code class="language-java">DataStream&lt;String&gt; stringStream = longStream.getSideOutput(outputTag);
+</code></pre>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E5%9F%BA%E6%9C%AC%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0processfunction">基本处理函数（ProcessFunction）</a>
+<ul>
+<li><a href="#%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0%E7%9A%84%E5%8A%9F%E8%83%BD%E5%92%8C%E4%BD%BF%E7%94%A8">处理函数的功能和使用</a></li>
+<li><a href="#processfunction-%E8%A7%A3%E6%9E%90">ProcessFunction 解析</a>
+<ul>
+<li><a href="#%E6%8A%BD%E8%B1%A1%E6%96%B9%E6%B3%95processelement">抽象方法.processElement()</a></li>
+<li><a href="#%E9%9D%9E%E6%8A%BD%E8%B1%A1%E6%96%B9%E6%B3%95ontimer">非抽象方法.onTimer()</a></li>
+</ul>
+</li>
+<li><a href="#%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0%E7%9A%84%E5%88%86%E7%B1%BB">处理函数的分类</a></li>
+</ul>
+</li>
+<li><a href="#%E6%8C%89%E9%94%AE%E5%88%86%E5%8C%BA%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0keyedprocessfunction">按键分区处理函数（KeyedProcessFunction）</a>
+<ul>
+<li><a href="#%E5%AE%9A%E6%97%B6%E5%99%A8timer%E5%92%8C%E5%AE%9A%E6%97%B6%E6%9C%8D%E5%8A%A1timerservice">定时器（Timer）和定时服务（TimerService）</a></li>
+<li><a href="#keyedprocessfunction-%E7%9A%84%E4%BD%BF%E7%94%A8">KeyedProcessFunction 的使用</a></li>
+</ul>
+</li>
+<li><a href="#%E7%AA%97%E5%8F%A3%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0">窗口处理函数</a>
+<ul>
+<li><a href="#%E7%AA%97%E5%8F%A3%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0%E7%9A%84%E4%BD%BF%E7%94%A8">窗口处理函数的使用</a></li>
+<li><a href="#processwindowfunction-%E8%A7%A3%E6%9E%90">ProcessWindowFunction 解析</a></li>
+</ul>
+</li>
+<li><a href="#%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8Btop-n">应用案例——Top N</a>
+<ul>
+<li><a href="#%E4%BD%BF%E7%94%A8-processallwindowfunction">使用 ProcessAllWindowFunction</a></li>
+<li><a href="#%E4%BD%BF%E7%94%A8-keyedprocessfunction">使用 KeyedProcessFunction</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BE%A7%E8%BE%93%E5%87%BA%E6%B5%81side-output">侧输出流（Side Output）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/rxadb61B8/">
+                <span class="post-title">
+                  第九章 状态编程和容错机制&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/6pSug_PPu/">
+              <span class="post-title">
+                第七章 flink流合并&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

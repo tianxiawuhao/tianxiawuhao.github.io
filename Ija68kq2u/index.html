@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Kubernetes的存储 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="Kubernetes的存储 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="Kubernetes的存储" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/Ija68kq2u/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/NdxF1vK3u/" class="tag">运维</a>
+                
+                <a href="https://tianxiawuhao.github.io/8zEh217Avy/" class="tag">k8s</a>
+                
+              </span>
+              <h1>Kubernetes的存储</h1>
+              <span class="meta">
+                Posted on
+                2022-10-26，20 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/Ija68kq2u.png" alt="封面图">
+          </img>
+          
+          <h3 id="一-k8s的存储的基础知识与分类"><strong>一、K8s的存储的基础知识与分类</strong></h3>
+<p>参考官方文档：https://kubernetes.io/zh/docs/concepts/storage/</p>
+<h4 id="1-基础知识"><strong>1、基础知识：</strong></h4>
+<p>K8s的基本单位为Pod，但是一个Pod中实际工作的是容器containers，所以要挂载的卷其实也是给容器使用的；K8s卷的设计：</p>
+<ul>
+<li>容器Container：申请容器内的哪个目录/文件将被挂载出来；（但是如何挂载，他不做细节干涉）</li>
+<li>Pod：为其中的每个容器声明出来的挂载，指定详细的挂载详情；（有很多种挂载模式，可以是本地的、可以是远程的、甚至还可以是云服务上提供的对象存储服务）</li>
+</ul>
+<h4 id="2-数据卷分类"><strong>2、数据卷分类：</strong></h4>
+<p>数据卷实现分类有很多，可通过explain查看所有暂时支持的实现分类（多达30种）</p>
+<pre><code class="language-shell">kubectl explain pod.spec.volumes
+</code></pre>
+<p>但是我们大概可以粗分为以下三大类：</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1636079774456510.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<ul>
+<li>配置信息：类似于独立环境变量文件的方式，将文件种的键值对挂载到容器内；</li>
+<li>临时存储：这些存储虽然挂出来了，但是如果容器被删除，或者在其他机器上被拉起，这些挂载文件将无法继续被读取到；</li>
+<li>持久化存储：真正的持久化，K8s将自己不擅长的存储实现，交给了别的擅长于存储的服务商或软件；——这也是我们以后学习的重点难点！</li>
+</ul>
+</blockquote>
+<hr>
+<h3 id="二-nfs网络文件系统的安装与调试"><strong>二、NFS网络文件系统的安装与调试</strong></h3>
+<p>NFS（Network File System）即网络文件系统，它允许网络中的计算机之间通过网络共享资源。将NFS主机分享的目录，挂载到本地客户端当中，本地NFS的客户端应用可以透明地读写位于远端NFS服务器上的文件，在客户端端看起来，就像访问本地文件一样。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1636080279415407.png" alt="image.png" loading="lazy"></figure>
+<p>NFS设计成C/S架构，通过RPC远程过程调用的方式实现数据同步！</p>
+<h4 id="1-在master节点安装nfs-server当然其他节点也可以"><strong>1、在Master节点安装NFS Server（当然，其他节点也可以）</strong></h4>
+<pre><code class="language-shell">yum install -y nfs-utils
+ 
+#执行命令 vi /etc/exports，创建 exports 文件，文件内容如下：
+echo &quot;/nfs/data/ *(insecure,rw,sync,no_root_squash)&quot; &gt; /etc/exports
+ 
+# 执行以下命令，启动 nfs 服务;创建共享目录
+mkdir -p /nfs/data
+systemctl enable rpcbind
+systemctl enable nfs-server
+systemctl start rpcbind
+systemctl start nfs-server
+exportfs -r
+ 
+#检查配置是否生效
+[root@k8s-01 /]# exportfs
+/nfs/data      &lt;world&gt;
+## 说明已经nfs-server服务已经启动，生效
+</code></pre>
+<h4 id="2-在我们两台需要共享nfs-server的机器上安装nfs-client"><strong>2、在我们两台需要共享nfs server的机器上，安装NFS Client</strong></h4>
+<pre><code class="language-shell">yum install -y nfs-utils
+ 
+#执行以下命令检查 nfs 服务器端是否有设置共享目录
+# showmount -e $(nfs服务器的IP)
+showmount -e 192.168.56.20
+# 输出结果如下所示
+Export list for 192.168.56.20
+/nfs/data *
+ 
+#执行以下命令挂载 nfs 服务器上的共享目录到本机路径 /root/nfsmount
+mkdir /root/nfsmount
+ 
+# mount -t nfs $(nfs服务器的IP):/root/nfs_root /root/nfsmount
+mount -t nfs 192.168.56.20:/nfs/data /root/nfsmount
+</code></pre>
+<h4 id="3-测试nfs服务是否在3台服务器上已经生效"><strong>3、测试NFS服务是否在3台服务器上已经生效</strong></h4>
+<pre><code class="language-shell">#1、 client节点执行命令，看本地的文件系统列表：
+[root@k8s-02 ~]# df -Th
+Filesystem              Type      Size  Used Avail Use% Mounted on
+devtmpfs                devtmpfs  1.9G     0  1.9G   0% /dev
+tmpfs                   tmpfs     1.9G     0  1.9G   0% /dev/shm
+tmpfs                   tmpfs     1.9G  9.4M  1.9G   1% /run
+tmpfs                   tmpfs     1.9G     0  1.9G   0% /sys/fs/cgroup
+/dev/sda1               xfs        40G   11G   30G  27% /
+tmpfs                   tmpfs     379M     0  379M   0% /run/user/0
+192.168.56.20:/nfs/data nfs4       40G  6.3G   34G  16% /root/nfsmount
+## 可以看到，有一个是远程的网络文件系统，挂载了我们自己本地的/root/nfsmount 目录上
+ 
+#2、在server上目录种创建文件aaa.txt
+#3、在clinet上目录中创建文件bbb.txt
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1636082103160000.png" alt="image.png" loading="lazy"></figure>
+<p>可以看到，3台主机上对应的文件已经立即得到了同步！</p>
+<h4 id="4-补充有时候我们即使安装了nfs-utils依然无法使用showmount-e-ip"><strong>4、补充，有时候，我们即使安装了nfs-utils，依然无法使用showmount -e ip</strong></h4>
+<p>我们可以直接在客户端配置fstab挂载：</p>
+<pre><code class="language-shell">vi /etc/fstab
+##追加nfs master的信息
+10.130.59.50:/nfs/data  /nfs/data                  nfs     defaults     0 0
+</code></pre>
+<p>执行以下命令，让修改后的fstab生效：</p>
+<pre><code class="language-shell">mount -a
+</code></pre>
+<p>之后查看：</p>
+<pre><code class="language-shell">df -Th
+##存在以下行：
+10.130.59.50:/nfs/data nfs4       50G  4.4G   46G   9% /nfs/data
+</code></pre>
+<p>之后创建文件，测试正常！</p>
+<hr>
+<h3 id="三-使用一个nginx测试pod使用nfs进行挂载"><strong>三、使用一个Nginx测试Pod使用NFS进行挂载</strong></h3>
+<h4 id="1-创建nginxnfsyaml文件"><strong>1、创建nginxnfs.yaml文件：</strong></h4>
+<pre><code class="language-yaml">#测试Pod直接挂载NFS了
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vol-nfs
+  namespace: mytest
+spec:
+  containers:
+  - name: mynginx
+    image: nginx
+    volumeMounts:
+    - name: html
+      mountPath: /usr/share/nginx/html/
+  volumes:
+  - name: html
+    nfs:
+      path: /nfs/data
+      server: 192.168.56.20
+</code></pre>
+<h4 id="2-执行此yaml文件部署一台nginx"><strong>2、执行此yaml文件，部署一台nginx：</strong></h4>
+<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f nginxnfs.yaml 
+pod/vol-nfs created
+ 
+[root@k8s-01 mytest]# kubectl get pod -n mytest -owide
+NAME      READY   STATUS    RESTARTS   AGE   IP               NODE     NOMINATED NODE   READINESS GATES
+vol-nfs   1/1     Running   0          68s   10.244.165.226   k8s-03   &lt;none&gt;           &lt;none&gt;
+</code></pre>
+<h4 id="3-nfs-server的对应目录下创建一个indexhtml文件然后访问"><strong>3、nfs server的对应目录下，创建一个index.html文件，然后访问：</strong></h4>
+<pre><code class="language-shell">[root@k8s-01 mytest]# echo 12345 &gt; /nfs/data/index.html
+[root@k8s-01 mytest]# curl 10.244.165.226
+12345
+</code></pre>
+<p>可以看到，明明部署在k8s-03节点上面的pod，依然可以正常使用k8s-01节点上的文件系统进行文件挂载！</p>
+<hr>
+<h3 id="四-pv-pvc-storageclass的基础知识"><strong>四、PV、PVC、StorageClass的基础知识</strong></h3>
+<blockquote>
+<p><strong>背景：为什么要把一个存储事情分成这么多层？如此复杂？</strong></p>
+<p>答：<strong>存储的管理</strong>是一个与<strong>计算实例的管理</strong>完全不同的问题。</p>
+<p>因为整个Pod部署的yaml文件可能都是由我们开发人员编写的，但是我们以后部署的服务器什么情况我们肯定是不知道的，服务器上能支持的文件存储方式我们也是不知道的，那我们的Pod肯定没有办法一气呵成地完成所有的事情！</p>
+<figure data-type="image" tabindex="4"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20211105/1636098068554379.png" alt="image.png" loading="lazy"></figure>
+<p>有了PV（Persistent Volume）、PVC（Persistent Volume Claim）后，我们就可以让运维人员提前准备好很多的PV，这样我们在部署Pod的yaml文件种，只需要添加一个PVC（PV的使用申请），这样K8s就能够自动地为Pod匹配上可以使用的PV存储卷了；</p>
+<ul>
+<li>****程序员：****负责Pod + PVC的yaml文件即可；</li>
+<li>**K8s运维人员：**负责准备好PV；—— 这里还分为静态供应、自动供应 两类；</li>
+</ul>
+</blockquote>
+<h4 id="1-什么是pvpersistent-volume-持久化存储卷"><strong>1、什么是PV（*<em>Persistent Volume 持久化存储卷*</em>）？</strong></h4>
+<p>PV 卷的供应有两种方式：静态供应或动态供应。</p>
+<ul>
+<li>静态供应：所有的事情，尤其是PV的创建，我是由管理员手动创建的，如果没有现成的可用的PV存在，我们的PVC申请将一直处于Pending状态；</li>
+<li>动态供应：PV的创建是自动化完成的，主要依赖于底层的StorageClass来实现；—— 后面详述</li>
+</ul>
+<p>手动创建PV（mypv.yaml）—— 我一次创建了3个PV：</p>
+<pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mypv-10m
+  labels:
+    type: local
+spec:
+  storageClassName: my-nfs-storage
+  capacity:
+    storage: 10m
+  accessModes:
+    - ReadWriteOnce
+  nfs: #使用nfs存储系统，挂载的目录为192.168.56.20:/nfs/data/one
+    server: 192.168.56.20
+    path: /nfs/data/one
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mypv-20m
+  labels:
+    type: local
+spec:
+  storageClassName: my-nfs-storage
+  capacity:
+    storage: 20m
+  accessModes:
+    - ReadWriteOnce
+  nfs: #使用nfs存储系统，挂载的目录为192.168.56.20:/nfs/data/one
+    server: 192.168.56.20
+    path: /nfs/data/two
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mypv-50m
+  labels:
+    type: local
+spec:
+  storageClassName: my-nfs-storage
+  capacity:
+    storage: 50m
+  accessModes:
+    - ReadWriteOnce
+  nfs: #使用nfs存储系统，挂载的目录为192.168.56.20:/nfs/data/one
+    server: 192.168.56.20
+    path: /nfs/data/three
+</code></pre>
+<p>应用此yaml文件后，将产生3个pv存储卷：</p>
+<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f mypv.yaml 
+persistentvolume/mypv-10m created
+persistentvolume/mypv-20m created
+persistentvolume/mypv-50m created
+[root@k8s-01 mytest]# kubectl get pv -n mytest 
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS     REASON   AGE
+mypv-10m   10m        RWO            Retain           Available           my-nfs-storage            11s
+mypv-20m   20m        RWO            Retain           Available           my-nfs-storage            11s
+mypv-50m   50m        RWO            Retain           Available           my-nfs-storage            11s
+</code></pre>
+<blockquote>
+<p>注：其中重要的字段：</p>
+<ul>
+<li>
+<p><strong>ACCESS MODES：访问模式</strong></p>
+</li>
+<li>
+<ul>
+<li>RWO – ReadWriteOnce：允许单节点读写</li>
+<li>ROX – ReadOnlyMany：允许多节点只读（读写分离时可用）</li>
+<li>RWX – ReadWriteMany：允许多节点读写（集群常用）</li>
+<li>RWOP – ReadWriteOncePod：只允许单Pod读写（比RWO更精细）</li>
+</ul>
+</li>
+<li>
+<p><strong>RECLAIM POLICY：回收策略</strong></p>
+</li>
+<li>
+<ul>
+<li>
+<p>Retain — 手动回收，PVC被删除，PV纹丝不动，自己手动控制，最安全；</p>
+</li>
+<li>
+<p>Recycle — 基本擦除 (rm -rf /thevolume/*)，卷里面的内容将会被清除，卷变为Released状态，依然无法被其他其他PVC申领；</p>
+</li>
+<li>
+<p>Delete — 诸如 AWS EBS、GCE PD、Azure Disk 或 OpenStack Cinder 卷这类关联存储资产也被删除；</p>
+<p>目前，仅 NFS 和 HostPath 支持回收（Recycle）。 AWS EBS、GCE PD、Azure Disk 和 Cinder 卷都支持删除（Delete）。： pv自己也跟着删除</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>STATUS：当前状态</strong></p>
+</li>
+<li>
+<ul>
+<li>Available（可用）– 卷是一个空闲资源，尚未绑定到任何申领；</li>
+<li>Bound（已绑定）– 该卷已经绑定到某申领；</li>
+<li>Released（已释放）– 所绑定的PVC已被删除，但是资源尚未被集群回收；</li>
+<li>Failed（失败）– 卷的自动回收操作失败。</li>
+</ul>
+</li>
+<li>
+<p><strong>CLAIM：当前正被哪个PVC绑定</strong> —— 当某个PV被PVC申领之后，该列就会有数值了！</p>
+</li>
+<li>
+<ul>
+<li><strong>STORAGECLASS：存储类——动态供应的重点，每个StorageClass都对应着自己的一套自己的存储实现；</strong></li>
+</ul>
+</li>
+<li>
+<p><strong><img src="https://tianxiawuhao.github.io/post-images/1636102583137121.png" alt="image.png" loading="lazy"></strong></p>
+</li>
+</ul>
+</blockquote>
+<h4 id="2-什么是pvcpersistent-volume-claim-持久化存储卷申明申请"><strong>2、什么是PVC（Persistent Volume Claim 持久化存储卷申明/申请）？</strong></h4>
+<p>PVC其实就是我们程序员编写的，对于PV资源的一个申请，当有合适的PV的时候，我们即可以进行绑定，如果没有合适的PV，我们申请的PVC将一直处于Pending状态，直到有合适的PV被创建出来！</p>
+<p>手动创建一个PVC（mypvc.yaml）</p>
+<pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mypvc
+  namespace: mytest
+  labels:
+    app: nginx-pvc
+spec:
+  storageClassName: my-nfs-storage #必须与PV的该项对应，K8s将会从该SC对应的pv资源种为我们匹配合适的资源
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15m #我故意写的15m，看看K8s是否会帮我们挑选一个最合适的PV资源
+</code></pre>
+<p>我们应用此yaml文件后，查看pvc和pv的状态：</p>
+<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f mypvc.yaml 
+persistentvolumeclaim/mypvc created
+[root@k8s-01 mytest]# kubectl get pvc -n mytest 
+NAME    STATUS   VOLUME     CAPACITY   ACCESS MODES   STORAGECLASS     AGE
+mypvc   Bound    mypv-20m   20m        RWO            my-nfs-storage   14s
+[root@k8s-01 mytest]# kubectl get pv -n mytest 
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM          STORAGECLASS     REASON   AGE
+mypv-10m   10m        RWO            Retain           Available                  my-nfs-storage            2m36s
+mypv-20m   20m        RWO            Retain           Bound       mytest/mypvc   my-nfs-storage            2m36s
+mypv-50m   50m        RWO            Retain           Available                  my-nfs-storage            2m36s
+</code></pre>
+<blockquote>
+<p>可以看到，pv和pvc的状态都变为了Bound状态；同时，K8s为我们挑选的时最合适的PV资源；</p>
+</blockquote>
+<h4 id="3-我们再编写一个nginx的pod来使用上面创建的pvc申请pvcnginxyaml"><strong>3、我们再编写一个Nginx的Pod，来使用上面创建的pvc申请（pvcnginx.yaml）</strong></h4>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: &quot;mypvc-nginx&quot;
+  namespace: mytest
+  labels:
+    app: &quot;mypvc-nginx&quot;
+spec:
+  containers:
+  - name: mypvc-nginx
+    image: &quot;nginx&quot;
+    ports:
+    - containerPort: 80
+      name:  http
+    volumeMounts:
+    - name: localtime
+      mountPath: /etc/localtime
+    - name: html
+      mountPath: /usr/share/nginx/html
+  volumes:
+    - name: localtime
+      hostPath:
+        path: /usr/share/zoneinfo/Asia/Shanghai
+    - name: html
+      persistentVolumeClaim:
+        claimName: mypvc  #我自己创建的pvc的名字
+  restartPolicy: Always
+</code></pre>
+<p>我们应用此yaml后，对应的nginx即可被创建，然后我们在对应的two文件夹种创建index.html文件即可看到效果：</p>
+<pre><code class="language-shell">[[root@k8s-01 mytest]# kubectl get all -n mytest
+NAME              READY   STATUS    RESTARTS   AGE
+pod/mypvc-nginx   1/1     Running   0          3m55s
+pod/vol-nfs       1/1     Running   0          5h25m
+[root@k8s-01 mytest]# echo mypvc-nginx &gt; /nfs/data/two/index.html
+[root@k8s-01 mytest]# curl 10.244.165.227
+mypvc-nginx
+</code></pre>
+<p>这样，整个”静态供应“的流程就完成了！</p>
+<h4 id="4-什么是storageclass存储类"><strong>4、什么是StorageClass（存储类）？</strong></h4>
+<p>整个静态供应的过程中，我们好像都没有 StorageClass 什么事情，除了就用它来隔绝PV资源一样，没有了其他作用！</p>
+<blockquote>
+<p>每个 StorageClass 都包含 provisioner、parameters 和 reclaimPolicy 字段， 这些字段会在 StorageClass 需要动态分配 PersistentVolume 时会使用到。</p>
+<p>provisioner：我们一般称之为 供应商；</p>
+<ul>
+<li>
+<p>当我们创建StorageClass的时候，会指定使用哪个provisioner来为我们供应服务（自动创建PV）</p>
+</li>
+<li>
+<p>而在我们的PVC中，我们会选择使用哪一个StorageClass来为我们服务；</p>
+<p>这样，整个”动态供应“的模型就出来了！我们程序员只需要编写 Pod、PVC的yaml文件，在PVC中指定StorageClassName即可，至于StorageClass对应的是自动供应PV，还是手动创建PV，都跟我们没有关系了！</p>
+</li>
+</ul>
+</blockquote>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1636102814567874.png" alt="image.png" loading="lazy"></figure>
+<hr>
+<h3 id="五-借助nfs存储服务实现一个动态供应案例"><strong>五、借助NFS存储服务实现一个动态供应案例</strong></h3>
+<p>再来回顾一下”动态供应“的流程：（其中重点就是：当没有合适的PV时候，K8s会获取StorageClass信息，帮我们创建合适的PV资源）</p>
+<figure data-type="image" tabindex="6"><img src="https://tianxiawuhao.github.io/post-images/1636103246534625.png" alt="image.png" loading="lazy"></figure>
+<h4 id="1-参考-nfs-subdir-external-provisioner-动态供应的文档创建yaml"><strong>1、参考 nfs-subdir-external-provisioner 动态供应的文档创建yaml</strong></h4>
+<p>官方文档地址：https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner</p>
+<figure data-type="image" tabindex="7"><img src="https://tianxiawuhao.github.io/post-images/1636103528321198.png" alt="image.png" loading="lazy"></figure>
+<p>我们把这三个文件写在同一个 pvc-provisioner.yaml 文件中，便于移植：</p>
+<pre><code class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: managed-nfs-storage
+  annotations: 
+    storageclass.kubernetes.io/is-default-class: &quot;true&quot;
+provisioner: k8s-sigs.io/nfs-subdir-external-provisioner 
+parameters:
+  archiveOnDelete: &quot;true&quot;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-client-provisioner
+  labels:
+    app: nfs-client-provisioner
+  # replace with namespace where provisioner is deployed
+  namespace: mynfs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nfs-client-provisioner
+  template:
+    metadata:
+      labels:
+        app: nfs-client-provisioner
+    spec:
+      serviceAccountName: nfs-client-provisioner
+      containers:
+        - name: nfs-client-provisioner
+          image: registry.cn-hangzhou.aliyuncs.com/jgqk8s/nfs-subdir-external-provisioner:v4.0.2
+          volumeMounts:
+            - name: nfs-client-root
+              mountPath: /persistentvolumes
+          env:
+            - name: PROVISIONER_NAME
+              value: k8s-sigs.io/nfs-subdir-external-provisioner
+            - name: NFS_SERVER
+              value: 10.206.114.4
+            - name: NFS_PATH  
+              value: /nfs/data
+      volumes:
+        - name: nfs-client-root
+          nfs:
+            server: 10.206.114.4
+            path: /nfs/data
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nfs-client-provisioner
+  # replace with namespace where provisioner is deployed
+  namespace: mynfs
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: nfs-client-provisioner-runner
+rules:
+  - apiGroups: [&quot;&quot;]
+    resources: [&quot;nodes&quot;]
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
+  - apiGroups: [&quot;&quot;]
+    resources: [&quot;persistentvolumes&quot;]
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;, &quot;create&quot;, &quot;delete&quot;]
+  - apiGroups: [&quot;&quot;]
+    resources: [&quot;persistentvolumeclaims&quot;]
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;, &quot;update&quot;]
+  - apiGroups: [&quot;storage.k8s.io&quot;]
+    resources: [&quot;storageclasses&quot;]
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
+  - apiGroups: [&quot;&quot;]
+    resources: [&quot;events&quot;]
+    verbs: [&quot;create&quot;, &quot;update&quot;, &quot;patch&quot;]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: run-nfs-client-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: nfs-client-provisioner
+    # replace with namespace where provisioner is deployed
+    namespace: mynfs
+roleRef:
+  kind: ClusterRole
+  name: nfs-client-provisioner-runner
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: leader-locking-nfs-client-provisioner
+  # replace with namespace where provisioner is deployed
+  namespace: mynfs
+rules:
+  - apiGroups: [&quot;&quot;]
+    resources: [&quot;endpoints&quot;]
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;, &quot;create&quot;, &quot;update&quot;, &quot;patch&quot;]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: leader-locking-nfs-client-provisioner
+  # replace with namespace where provisioner is deployed
+  namespace: mynfs
+subjects:
+  - kind: ServiceAccount
+    name: nfs-client-provisioner
+    # replace with namespace where provisioner is deployed
+    namespace: mynfs
+roleRef:
+  kind: Role
+  name: leader-locking-nfs-client-provisioner
+  apiGroup: rbac.authorization.k8s.io
+</code></pre>
+<h4 id="2-执行上面的yaml文件"><strong>2、执行上面的yaml文件：</strong></h4>
+<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f pvc-provisioner.yaml 
+storageclass.storage.k8s.io/managed-nfs-storage created
+deployment.apps/nfs-client-provisioner created
+serviceaccount/nfs-client-provisioner created
+clusterrole.rbac.authorization.k8s.io/nfs-client-provisioner-runner created
+clusterrolebinding.rbac.authorization.k8s.io/run-nfs-client-provisioner created
+role.rbac.authorization.k8s.io/leader-locking-nfs-client-provisioner created
+rolebinding.rbac.authorization.k8s.io/leader-locking-nfs-client-provisioner created
+[root@k8s-01 mytest]# kubectl get storageclass
+NAME                            PROVISIONER                                   RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+managed-nfs-storage (default)   k8s-sigs.io/nfs-subdir-external-provisioner   Delete          Immediate           false                  94s
+</code></pre>
+<blockquote>
+<p>其中的default，就代表该StorageClass为默认SC；</p>
+</blockquote>
+<p>如果刚开始的Yaml文件中配置配置为 default 默认SC，我们可以通过以下两种方式修改；</p>
+<ul>
+<li>通过 kubectl edit 命令修改：</li>
+</ul>
+<pre><code class="language-shell">kubectl edit sc managed-nfs-storage
+</code></pre>
+<ul>
+<li>通过 kubectl patch 命令修改：</li>
+</ul>
+<pre><code class="language-shell">kubectl patch storageclass managed-nfs-storage -p '{&quot;metadata&quot;: {&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;true&quot;}}}'
+</code></pre>
+<h4 id="3-创建一个pod-pvc使用上面的-sc-完成动态供应"><strong>3、创建一个Pod + PVC，使用上面的 SC 完成动态供应</strong></h4>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: &quot;auto-pv-nginx&quot;
+  namespace: mytest
+  labels:
+    app: &quot;auto-pv-nginx&quot;
+spec:
+  containers:
+  - name: auto-pv-nginx
+    image: &quot;nginx&quot;
+    ports:
+    - containerPort: 80
+      name:  http
+    volumeMounts:
+    - name: localtime
+      mountPath: /etc/localtime
+    - name: html
+      mountPath: /usr/share/nginx/html
+  volumes:
+    - name: localtime
+      hostPath:
+        path: /usr/share/zoneinfo/Asia/Shanghai
+    - name: html
+      persistentVolumeClaim:
+        claimName: auto-pvc  #下方对应的pvc的名字
+  restartPolicy: Always
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auto-pvc
+  namespace: mytest
+  labels:
+    app: auto-pvc
+spec:
+  storageClassName: managed-nfs-storage #如果我们已经配置了默认的StorageClass，该行可以缺省
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30m #待会看看是不是会自动创建一个30m的PV资源
+</code></pre>
+<p>应用该yaml后，看看是否自动创建了一个30m的PV资源：</p>
+<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f auto-pv-nginx.yaml 
+pod/auto-pv-nginx created
+persistentvolumeclaim/auto-pvc created
+[root@k8s-01 mytest]# kubectl get pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM             STORAGECLASS          REASON   AGE
+mypv-10m                                   10m        RWO            Retain           Available                     my-nfs-storage                 78m
+mypv-20m                                   20m        RWO            Retain           Bound       mytest/mypvc      my-nfs-storage                 78m
+mypv-50m                                   50m        RWO            Retain           Available                     my-nfs-storage                 78m
+pvc-b7ecbdff-89f4-4135-91b9-cf8d227ce86f   30m        RWO            Delete           Bound       mytest/auto-pvc   managed-nfs-storage            26s
+</code></pre>
+<h4 id="4-我们将刚刚部署的测试用的pod和pvc删除检验该sc的回收策略"><strong>4、我们将刚刚部署的测试用的pod和pvc删除，检验该SC的回收策略？</strong></h4>
+<pre><code class="language-shell">[root@k8s-01 mytest]# ls /nfs/data/
+aaa.txt  bbb.txt  index.html  mytest-auto-pvc-pvc-b7ecbdff-89f4-4135-91b9-cf8d227ce86f  one  three  two
+[root@k8s-01 mytest]# kubectl delete -f auto-pv-nginx.yaml 
+pod &quot;auto-pv-nginx&quot; deleted
+persistentvolumeclaim &quot;auto-pvc&quot; deleted
+[root@k8s-01 mytest]# ls /nfs/data/
+aaa.txt  archived-mytest-auto-pvc-pvc-b7ecbdff-89f4-4135-91b9-cf8d227ce86f  bbb.txt  index.html  one  three  two
+</code></pre>
+<blockquote>
+<p>上面的现象足以证明：</p>
+<ul>
+<li>我们此StorageClass创建出来的PV的回收策略为DELETE（PVC删除时候，PV也被删除）</li>
+<li>但是虽然PV被删除了，但是删除前，该SC帮我们做了数据备份；（原文件夹前增加了archived-前缀）—— archiveOnDelete 字段为true</li>
+</ul>
+</blockquote>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#%E4%B8%80-k8s%E7%9A%84%E5%AD%98%E5%82%A8%E7%9A%84%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E4%B8%8E%E5%88%86%E7%B1%BB"><strong>一、K8s的存储的基础知识与分类</strong></a>
+<ul>
+<li><a href="#1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86"><strong>1、基础知识：</strong></a></li>
+<li><a href="#2-%E6%95%B0%E6%8D%AE%E5%8D%B7%E5%88%86%E7%B1%BB"><strong>2、数据卷分类：</strong></a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%8C-nfs%E7%BD%91%E7%BB%9C%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E7%9A%84%E5%AE%89%E8%A3%85%E4%B8%8E%E8%B0%83%E8%AF%95"><strong>二、NFS网络文件系统的安装与调试</strong></a>
+<ul>
+<li><a href="#1-%E5%9C%A8master%E8%8A%82%E7%82%B9%E5%AE%89%E8%A3%85nfs-server%E5%BD%93%E7%84%B6%E5%85%B6%E4%BB%96%E8%8A%82%E7%82%B9%E4%B9%9F%E5%8F%AF%E4%BB%A5"><strong>1、在Master节点安装NFS Server（当然，其他节点也可以）</strong></a></li>
+<li><a href="#2-%E5%9C%A8%E6%88%91%E4%BB%AC%E4%B8%A4%E5%8F%B0%E9%9C%80%E8%A6%81%E5%85%B1%E4%BA%ABnfs-server%E7%9A%84%E6%9C%BA%E5%99%A8%E4%B8%8A%E5%AE%89%E8%A3%85nfs-client"><strong>2、在我们两台需要共享nfs server的机器上，安装NFS Client</strong></a></li>
+<li><a href="#3-%E6%B5%8B%E8%AF%95nfs%E6%9C%8D%E5%8A%A1%E6%98%AF%E5%90%A6%E5%9C%A83%E5%8F%B0%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8A%E5%B7%B2%E7%BB%8F%E7%94%9F%E6%95%88"><strong>3、测试NFS服务是否在3台服务器上已经生效</strong></a></li>
+<li><a href="#4-%E8%A1%A5%E5%85%85%E6%9C%89%E6%97%B6%E5%80%99%E6%88%91%E4%BB%AC%E5%8D%B3%E4%BD%BF%E5%AE%89%E8%A3%85%E4%BA%86nfs-utils%E4%BE%9D%E7%84%B6%E6%97%A0%E6%B3%95%E4%BD%BF%E7%94%A8showmount-e-ip"><strong>4、补充，有时候，我们即使安装了nfs-utils，依然无法使用showmount -e ip</strong></a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%89-%E4%BD%BF%E7%94%A8%E4%B8%80%E4%B8%AAnginx%E6%B5%8B%E8%AF%95pod%E4%BD%BF%E7%94%A8nfs%E8%BF%9B%E8%A1%8C%E6%8C%82%E8%BD%BD"><strong>三、使用一个Nginx测试Pod使用NFS进行挂载</strong></a>
+<ul>
+<li><a href="#1-%E5%88%9B%E5%BB%BAnginxnfsyaml%E6%96%87%E4%BB%B6"><strong>1、创建nginxnfs.yaml文件：</strong></a></li>
+<li><a href="#2-%E6%89%A7%E8%A1%8C%E6%AD%A4yaml%E6%96%87%E4%BB%B6%E9%83%A8%E7%BD%B2%E4%B8%80%E5%8F%B0nginx"><strong>2、执行此yaml文件，部署一台nginx：</strong></a></li>
+<li><a href="#3-nfs-server%E7%9A%84%E5%AF%B9%E5%BA%94%E7%9B%AE%E5%BD%95%E4%B8%8B%E5%88%9B%E5%BB%BA%E4%B8%80%E4%B8%AAindexhtml%E6%96%87%E4%BB%B6%E7%84%B6%E5%90%8E%E8%AE%BF%E9%97%AE"><strong>3、nfs server的对应目录下，创建一个index.html文件，然后访问：</strong></a></li>
+</ul>
+</li>
+<li><a href="#%E5%9B%9B-pv-pvc-storageclass%E7%9A%84%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86"><strong>四、PV、PVC、StorageClass的基础知识</strong></a>
+<ul>
+<li><a href="#1-%E4%BB%80%E4%B9%88%E6%98%AFpvpersistent-volume-%E6%8C%81%E4%B9%85%E5%8C%96%E5%AD%98%E5%82%A8%E5%8D%B7"><strong>1、什么是PV（*<em>Persistent Volume 持久化存储卷*</em>）？</strong></a></li>
+<li><a href="#2-%E4%BB%80%E4%B9%88%E6%98%AFpvcpersistent-volume-claim-%E6%8C%81%E4%B9%85%E5%8C%96%E5%AD%98%E5%82%A8%E5%8D%B7%E7%94%B3%E6%98%8E%E7%94%B3%E8%AF%B7"><strong>2、什么是PVC（Persistent Volume Claim 持久化存储卷申明/申请）？</strong></a></li>
+<li><a href="#3-%E6%88%91%E4%BB%AC%E5%86%8D%E7%BC%96%E5%86%99%E4%B8%80%E4%B8%AAnginx%E7%9A%84pod%E6%9D%A5%E4%BD%BF%E7%94%A8%E4%B8%8A%E9%9D%A2%E5%88%9B%E5%BB%BA%E7%9A%84pvc%E7%94%B3%E8%AF%B7pvcnginxyaml"><strong>3、我们再编写一个Nginx的Pod，来使用上面创建的pvc申请（pvcnginx.yaml）</strong></a></li>
+<li><a href="#4-%E4%BB%80%E4%B9%88%E6%98%AFstorageclass%E5%AD%98%E5%82%A8%E7%B1%BB"><strong>4、什么是StorageClass（存储类）？</strong></a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%94-%E5%80%9F%E5%8A%A9nfs%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1%E5%AE%9E%E7%8E%B0%E4%B8%80%E4%B8%AA%E5%8A%A8%E6%80%81%E4%BE%9B%E5%BA%94%E6%A1%88%E4%BE%8B"><strong>五、借助NFS存储服务实现一个动态供应案例</strong></a>
+<ul>
+<li><a href="#1-%E5%8F%82%E8%80%83-nfs-subdir-external-provisioner-%E5%8A%A8%E6%80%81%E4%BE%9B%E5%BA%94%E7%9A%84%E6%96%87%E6%A1%A3%E5%88%9B%E5%BB%BAyaml"><strong>1、参考 nfs-subdir-external-provisioner 动态供应的文档创建yaml</strong></a></li>
+<li><a href="#2-%E6%89%A7%E8%A1%8C%E4%B8%8A%E9%9D%A2%E7%9A%84yaml%E6%96%87%E4%BB%B6"><strong>2、执行上面的yaml文件：</strong></a></li>
+<li><a href="#3-%E5%88%9B%E5%BB%BA%E4%B8%80%E4%B8%AApod-pvc%E4%BD%BF%E7%94%A8%E4%B8%8A%E9%9D%A2%E7%9A%84-sc-%E5%AE%8C%E6%88%90%E5%8A%A8%E6%80%81%E4%BE%9B%E5%BA%94"><strong>3、创建一个Pod + PVC，使用上面的 SC 完成动态供应</strong></a></li>
+<li><a href="#4-%E6%88%91%E4%BB%AC%E5%B0%86%E5%88%9A%E5%88%9A%E9%83%A8%E7%BD%B2%E7%9A%84%E6%B5%8B%E8%AF%95%E7%94%A8%E7%9A%84pod%E5%92%8Cpvc%E5%88%A0%E9%99%A4%E6%A3%80%E9%AA%8C%E8%AF%A5sc%E7%9A%84%E5%9B%9E%E6%94%B6%E7%AD%96%E7%95%A5"><strong>4、我们将刚刚部署的测试用的pod和pvc删除，检验该SC的回收策略？</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/vU42syr2A/">
+                <span class="post-title">
+                  发布JAR包到远程中央仓库&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/A4ZOEAhc9/">
+              <span class="post-title">
+                序列化工具Protobuf&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>学习率调度策略 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="学习率调度策略 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="学习率调度策略" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/vfv73gaU-n/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/PjnFH7MKT/" class="tag">机器学习</a>
+                
+              </span>
+              <h1>学习率调度策略</h1>
+              <span class="meta">
+                Posted on
+                2025-03-23，6 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/vfv73gaU-n.png" alt="封面图">
+          </img>
+          
+          <p>在深度学习中，调整学习率是优化模型性能的重要手段。不同的学习率调度策略适用于不同的场景和需求。以下是几种常见的学习率调度策略及其优缺点：</p>
+<hr>
+<h3 id="1-固定学习率-fixed-learning-rate">1. <strong>固定学习率 (Fixed Learning Rate)</strong></h3>
+<h4 id="描述">描述：</h4>
+<ul>
+<li>整个训练过程中学习率保持不变。</li>
+</ul>
+<h4 id="优点">优点：</h4>
+<ul>
+<li>实现简单，无需额外的计算。</li>
+<li>在某些简单的任务或小规模数据集上表现良好。</li>
+</ul>
+<h4 id="缺点">缺点：</h4>
+<ul>
+<li>学习率过高可能导致模型无法收敛。</li>
+<li>学习率过低会导致训练速度变慢，甚至陷入局部最优。</li>
+<li>不适合复杂的任务或大规模数据集。</li>
+</ul>
+<hr>
+<h3 id="2-分段常数衰减-step-decay-step-lr">2. <strong>分段常数衰减 (Step Decay / Step LR)</strong></h3>
+<h4 id="描述-2">描述：</h4>
+<ul>
+<li>每隔固定的epoch或step，将学习率乘以一个衰减因子（如0.1）。</li>
+</ul>
+<h4 id="示例">示例：</h4>
+<pre><code class="language-python">lr = initial_lr * gamma ** (epoch // step_size)
+</code></pre>
+<h4 id="优点-2">优点：</h4>
+<ul>
+<li>简单易实现。</li>
+<li>能够在特定阶段降低学习率，帮助模型更精细地优化。</li>
+</ul>
+<h4 id="缺点-2">缺点：</h4>
+<ul>
+<li>需要手动设置<code>step_size</code>和<code>gamma</code>，对超参数敏感。</li>
+<li>可能导致学习率下降过快或过慢，影响模型性能。</li>
+</ul>
+<hr>
+<h3 id="3-指数衰减-exponential-decay">3. <strong>指数衰减 (Exponential Decay)</strong></h3>
+<h4 id="描述-3">描述：</h4>
+<ul>
+<li>学习率按指数函数逐渐减小。</li>
+</ul>
+<h4 id="公式">公式：</h4>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>l</mi><mi>r</mi><mo>=</mo><mi>i</mi><mi>n</mi><mi>i</mi><mi>t</mi><mi>i</mi><mi>a</mi><mi>l</mi><mi mathvariant="normal">_</mi><mi>l</mi><mi>r</mi><mo>×</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>k</mi><mi>t</mi></mrow></msup></mrow><annotation encoding="application/x-tex">lr = initial\_lr \times e^{-kt}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.00444em;vertical-align:-0.31em;"></span><span class="mord mathdefault">i</span><span class="mord mathdefault">n</span><span class="mord mathdefault">i</span><span class="mord mathdefault">t</span><span class="mord mathdefault">i</span><span class="mord mathdefault">a</span><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="mord" style="margin-right:0.02778em;">_</span><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8991079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathdefault">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span><span class="mord mathdefault mtight">t</span></span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>其中，<em>t</em> 是当前的训练步数，<em>k</em> 是衰减速率。</p>
+<h4 id="优点-3">优点：</h4>
+<ul>
+<li>学习率平滑下降，避免突然变化。</li>
+<li>适合需要持续优化的任务。</li>
+</ul>
+<h4 id="缺点-3">缺点：</h4>
+<ul>
+<li>对于复杂任务，可能需要仔细调整 <em>k</em> 值。</li>
+<li>如果衰减过快，可能导致模型收敛到次优解。</li>
+</ul>
+<hr>
+<h3 id="4-余弦退火-cosine-annealing">4. <strong>余弦退火 (Cosine Annealing)</strong></h3>
+<h4 id="描述-4">描述：</h4>
+<ul>
+<li>学习率按照余弦函数周期性变化，通常从初始值逐渐下降到最小值。</li>
+</ul>
+<h4 id="公式-2">公式：</h4>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>l</mi><mi>r</mi><mo>=</mo><mtext>min_lr</mtext><mo>+</mo><mfrac><mrow><mtext>max_lr</mtext><mo>−</mo><mtext>min_lr</mtext></mrow><mn>2</mn></mfrac><mo>×</mo><mrow><mo fence="true">(</mo><mn>1</mn><mo>+</mo><mi>cos</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mi>π</mi><mo>⋅</mo><mfrac><msub><mi>T</mi><mtext>cur</mtext></msub><msub><mi>T</mi><mtext>max</mtext></msub></mfrac><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">lr = \text{min\_lr} + \frac{\text{max\_lr} - \text{min\_lr}} 2 \times {\left(1 + \cos\left(\pi \cdot \frac{T_{\text{cur}}}{T_{\text{max}}}\right)\right)}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.00444em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">min_lr</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.08044em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.39444em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord">2</span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.6999999999999997em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">max_lr</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord text"><span class="mord">min_lr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.40003em;vertical-align:-0.95003em;"></span><span class="mord"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord mathdefault" style="margin-right:0.03588em;">π</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.3139999999999996em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">max</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">cur</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8360000000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span></span></span></span></span></span></p>
+<p>其中，<em>T</em>cur 是当前的训练步数，<em>T</em>max 是周期的最大步数。</p>
+<h4 id="优点-4">优点：</h4>
+<ul>
+<li>能够自动调整学习率，避免手动设置超参数。</li>
+<li>学习率的变化更加平滑，有助于跳出局部最优。</li>
+<li>周期性变化可以提高模型的泛化能力。</li>
+</ul>
+<h4 id="缺点-4">缺点：</h4>
+<ul>
+<li>实现相对复杂。</li>
+<li>对于某些任务，可能需要调整周期长度。</li>
+</ul>
+<hr>
+<h3 id="5-warmup-衰减-warmup-decay">5. <strong>Warmup + 衰减 (Warmup + Decay)</strong></h3>
+<h4 id="描述-5">描述：</h4>
+<ul>
+<li>训练初期使用较小的学习率逐步增加（Warmup），然后按照某种策略（如余弦退火或线性衰减）逐渐减小。</li>
+</ul>
+<h4 id="示例-2">示例：</h4>
+<pre><code class="language-python">if current_step &lt; warmup_steps:
+    lr = initial_lr * (current_step / warmup_steps)
+else:
+    lr = initial_lr * (1 - (current_step - warmup_steps) / total_steps)
+</code></pre>
+<h4 id="优点-5">优点：</h4>
+<ul>
+<li>Warmup可以防止训练初期梯度爆炸。</li>
+<li>后续的衰减策略可以帮助模型更好地收敛。</li>
+<li>常用于Transformer等复杂模型的训练。</li>
+</ul>
+<h4 id="缺点-5">缺点：</h4>
+<ul>
+<li>需要设置Warmup步数和后续的衰减策略。</li>
+<li>对于不同任务，可能需要调整Warmup步数。</li>
+</ul>
+<hr>
+<h3 id="6-reduce-on-plateau-基于验证集性能调整学习率">6. <strong>Reduce on Plateau (基于验证集性能调整学习率)</strong></h3>
+<h4 id="描述-6">描述：</h4>
+<ul>
+<li>当验证集上的性能（如损失或准确率）停止改善时，降低学习率。</li>
+</ul>
+<h4 id="示例-3">示例：</h4>
+<pre><code class="language-python">scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+</code></pre>
+<h4 id="优点-6">优点：</h4>
+<ul>
+<li>自动根据模型性能调整学习率，无需手动干预。</li>
+<li>适合验证集性能波动较大的任务。</li>
+</ul>
+<h4 id="缺点-6">缺点：</h4>
+<ul>
+<li>对验证集的依赖较强，如果验证集不具有代表性，可能导致错误的调整。</li>
+<li>可能导致学习率过早下降，影响训练效果。</li>
+</ul>
+<hr>
+<h3 id="7-循环学习率-cyclic-learning-rate">7. <strong>循环学习率 (Cyclic Learning Rate)</strong></h3>
+<h4 id="描述-7">描述：</h4>
+<ul>
+<li>学习率在一个范围内周期性地增大和减小。</li>
+</ul>
+<h4 id="示例-4">示例：</h4>
+<pre><code class="language-python">scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.1, step_size_up=2000)
+</code></pre>
+<h4 id="优点-7">优点：</h4>
+<ul>
+<li>能够帮助模型跳出局部最优。</li>
+<li>适合探索性较强的任务。</li>
+</ul>
+<h4 id="缺点-7">缺点：</h4>
+<ul>
+<li>参数设置较为复杂（如最大最小学习率、周期长度）。</li>
+<li>对于某些任务，可能导致训练不稳定。</li>
+</ul>
+<hr>
+<h3 id="8-自适应学习率方法-adaptive-methods">8. <strong>自适应学习率方法 (Adaptive Methods)</strong></h3>
+<h4 id="描述-8">描述：</h4>
+<ul>
+<li>使用自适应优化器（如Adam、RMSProp）动态调整每个参数的学习率。</li>
+</ul>
+<h4 id="优点-8">优点：</h4>
+<ul>
+<li>不需要手动设置学习率调度策略。</li>
+<li>能够针对不同参数动态调整学习率，适合非凸优化问题。</li>
+</ul>
+<h4 id="缺点-8">缺点：</h4>
+<ul>
+<li>自适应优化器可能会导致模型在训练后期收敛较慢。</li>
+<li>对于某些任务，可能需要结合其他学习率调度策略。</li>
+</ul>
+<hr>
+<h3 id="9-onecycle-learning-rate">9. <strong>OneCycle Learning Rate</strong></h3>
+<h4 id="描述-9">描述：</h4>
+<ul>
+<li>学习率在一个周期内先上升后下降，同时配合动量的调整。</li>
+</ul>
+<h4 id="优点-9">优点：</h4>
+<ul>
+<li>能够快速收敛并达到较好的性能。</li>
+<li>适合训练时间有限的任务。</li>
+</ul>
+<h4 id="缺点-9">缺点：</h4>
+<ul>
+<li>需要设置最大学习率、周期长度等超参数。</li>
+<li>对于某些任务，可能需要多次实验才能找到合适的参数。</li>
+</ul>
+<hr>
+<h3 id="总结对比">总结对比</h3>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>固定学习率</td>
+<td>简单易用</td>
+<td>容易过拟合或欠拟合</td>
+</tr>
+<tr>
+<td>分段常数衰减</td>
+<td>易实现，适合阶段性优化</td>
+<td>对超参数敏感</td>
+</tr>
+<tr>
+<td>指数衰减</td>
+<td>平滑下降，适合长期优化</td>
+<td>可能衰减过快</td>
+</tr>
+<tr>
+<td>余弦退火</td>
+<td>平滑且周期性变化，有助于跳出局部最优</td>
+<td>实现复杂，需要调整周期</td>
+</tr>
+<tr>
+<td>Warmup + 衰减</td>
+<td>防止梯度爆炸，适合复杂模型</td>
+<td>需要设置多个超参数</td>
+</tr>
+<tr>
+<td>Reduce on Plateau</td>
+<td>自动调整，适合验证集性能波动大的任务</td>
+<td>对验证集依赖强</td>
+</tr>
+<tr>
+<td>循环学习率</td>
+<td>帮助跳出局部最优，适合探索性任务</td>
+<td>参数设置复杂，可能导致不稳定</td>
+</tr>
+<tr>
+<td>自适应学习率方法</td>
+<td>动态调整，适合非凸优化问题</td>
+<td>收敛较慢，可能需要结合其他策略</td>
+</tr>
+<tr>
+<td>OneCycle Learning Rate</td>
+<td>快速收敛，适合时间有限的任务</td>
+<td>需要多次实验调整超参数</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="选择策略的建议">选择策略的建议</h3>
+<ol>
+<li><strong>简单任务</strong> ：固定学习率或分段常数衰减。</li>
+<li><strong>复杂任务</strong> ：Warmup + 余弦退火或OneCycle。</li>
+<li><strong>验证集性能波动大</strong> ：Reduce on Plateau。</li>
+<li><strong>探索性任务</strong> ：循环学习率。</li>
+<li><strong>大规模模型</strong> ：结合Warmup和自适应优化器（如AdamW）。</li>
+</ol>
+<p>根据具体任务的需求和实验结果，灵活选择合适的学习率调度策略。</p>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#1-%E5%9B%BA%E5%AE%9A%E5%AD%A6%E4%B9%A0%E7%8E%87-fixed-learning-rate">1. <strong>固定学习率 (Fixed Learning Rate)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0">描述：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#2-%E5%88%86%E6%AE%B5%E5%B8%B8%E6%95%B0%E8%A1%B0%E5%87%8F-step-decay-step-lr">2. <strong>分段常数衰减 (Step Decay / Step LR)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-2">描述：</a></li>
+<li><a href="#%E7%A4%BA%E4%BE%8B">示例：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-2">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-2">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#3-%E6%8C%87%E6%95%B0%E8%A1%B0%E5%87%8F-exponential-decay">3. <strong>指数衰减 (Exponential Decay)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-3">描述：</a></li>
+<li><a href="#%E5%85%AC%E5%BC%8F">公式：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-3">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-3">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#4-%E4%BD%99%E5%BC%A6%E9%80%80%E7%81%AB-cosine-annealing">4. <strong>余弦退火 (Cosine Annealing)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-4">描述：</a></li>
+<li><a href="#%E5%85%AC%E5%BC%8F-2">公式：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-4">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-4">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#5-warmup-%E8%A1%B0%E5%87%8F-warmup-decay">5. <strong>Warmup + 衰减 (Warmup + Decay)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-5">描述：</a></li>
+<li><a href="#%E7%A4%BA%E4%BE%8B-2">示例：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-5">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-5">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#6-reduce-on-plateau-%E5%9F%BA%E4%BA%8E%E9%AA%8C%E8%AF%81%E9%9B%86%E6%80%A7%E8%83%BD%E8%B0%83%E6%95%B4%E5%AD%A6%E4%B9%A0%E7%8E%87">6. <strong>Reduce on Plateau (基于验证集性能调整学习率)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-6">描述：</a></li>
+<li><a href="#%E7%A4%BA%E4%BE%8B-3">示例：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-6">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-6">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#7-%E5%BE%AA%E7%8E%AF%E5%AD%A6%E4%B9%A0%E7%8E%87-cyclic-learning-rate">7. <strong>循环学习率 (Cyclic Learning Rate)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-7">描述：</a></li>
+<li><a href="#%E7%A4%BA%E4%BE%8B-4">示例：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-7">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-7">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#8-%E8%87%AA%E9%80%82%E5%BA%94%E5%AD%A6%E4%B9%A0%E7%8E%87%E6%96%B9%E6%B3%95-adaptive-methods">8. <strong>自适应学习率方法 (Adaptive Methods)</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-8">描述：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-8">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-8">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#9-onecycle-learning-rate">9. <strong>OneCycle Learning Rate</strong></a>
+<ul>
+<li><a href="#%E6%8F%8F%E8%BF%B0-9">描述：</a></li>
+<li><a href="#%E4%BC%98%E7%82%B9-9">优点：</a></li>
+<li><a href="#%E7%BC%BA%E7%82%B9-9">缺点：</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93%E5%AF%B9%E6%AF%94">总结对比</a></li>
+<li><a href="#%E9%80%89%E6%8B%A9%E7%AD%96%E7%95%A5%E7%9A%84%E5%BB%BA%E8%AE%AE">选择策略的建议</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/n7vyn_1QRC/">
+              <span class="post-title">
+                LoRA（Low-Rank Adaptation）&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

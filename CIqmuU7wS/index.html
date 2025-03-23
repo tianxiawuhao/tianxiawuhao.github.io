@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Centos7部署MinIO | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="Centos7部署MinIO | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="Centos7部署MinIO" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/CIqmuU7wS/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/NdxF1vK3u/" class="tag">运维</a>
+                
+              </span>
+              <h1>Centos7部署MinIO</h1>
+              <span class="meta">
+                Posted on
+                2022-12-29，10 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/CIqmuU7wS.png" alt="封面图">
+          </img>
+          
+          <blockquote>
+<p>英文官网：https://min.io/</p>
+<p>中文官网：http://minio.org.cn/（更新不及时，容易被坑）</p>
+</blockquote>
+<h3 id="一-为什么要使用minio"><strong>一、为什么要使用MinIO</strong></h3>
+<p>其实抛开Ceph这类复杂的存储解决方案外，小公司小团队的选择一般都会是FastDFS或者MinIO，那么这里我们就简单对比下MinIO相较于FastDFS的优势！</p>
+<p><strong>1、安装部署(运维)复杂度</strong></p>
+<p>虽然我觉得FastDFS安装也不算很复杂，但是MinIO的安装可以说更简单；</p>
+<p>FastDFS安装：</p>
+<p><strong>2、文档</strong></p>
+<p>FastDFS可以说发展了十几年几乎没有官方文档，都是靠热心网友投稿；</p>
+<p>而MinIO文档还是比较全的，中文文档：http://docs.minio.org.cn/docs/master/minio-monitoring-guide</p>
+<p><strong>3、开源项目运营组织</strong></p>
+<p>FastDFS是阿里余庆大神的个人项目，而MinIO背靠的是Apache开源组织；</p>
+<p><strong>4、UI界面</strong></p>
+<p>FastDFS默认是不带UI界面的，而MinIO服务部署时候，是自带UI界面的，开箱即用；</p>
+<p><strong>5、性能</strong></p>
+<p>MinIO号称是世界上速度最快的对象存储服务器，标准硬件设备上，读/写速度都是GB级别的；FastDFS差多了；</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1645081709786691.png" alt="image.png" loading="lazy"></figure>
+<p><strong>6、容器化支持</strong></p>
+<p>MinIO提供了与k8s、etcd、docker等容器化技术深度集成方案，可以说就是为了云环境而生的。这点是FastDFS不具备的。</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1645081610212459.png" alt="image.png" loading="lazy"></figure>
+<p><strong>7、丰富的SDK支持</strong></p>
+<p>MinIO支持的不同语言SDK多于FastDFS，尤其文档，更是完胜；</p>
+<p><strong>8、AWS S3标准兼容</strong></p>
+<p>Amazon的S3 API是对象存储领域的事实标准。MinIO是S3兼容性的事实上的标准，是第一个采用API和第一个添加对S3 Select支持的标准之一。包括微软Azure在内的750多家公司使用MinIO的S3网关，这一数字超过了业内其他公司的总和。</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1645081824309240.png" alt="image.png" loading="lazy"></figure>
+<p>什么意思？就是说你现在为了节约成本使用MinIO，等你的公司壮大了、有钱了。不想自己运维基础设施了，你就可以把对象存储放到云上，只要云厂商支持S3标准，你的应用程序是不需要重新开发的。</p>
+<hr>
+<h3 id="二-minio的部署之centos单机部署"><strong>二、MinIO的部署之Centos单机部署</strong></h3>
+<blockquote>
+<p>此单机模式，每一份对象数据，minio直接在data目录下存储一份数据，不会建立副本，也不会启用纠删码机制（数据恢复），存在单点故障；</p>
+</blockquote>
+<p><strong>1、直接下载二进制执行文件，并启动：</strong></p>
+<p>文件下载地址：https://min.io/download#/linux</p>
+<pre><code class="language-shell">wget https://dl.min.io/server/minio/release/linux-amd64/minio
+chmod +x minio
+MINIO_ROOT_USER=admin MINIO_ROOT_PASSWORD=password ./minio server /mnt/data --console-address &quot;:9001&quot;
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1645085599975525.png" alt="image.png" loading="lazy"></figure>
+<p>后端调用就是9000端口，访问前端页面就是9001端口：</p>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1645085833540794.png" alt="image.png" loading="lazy"></figure>
+<p>一切都是如此的简单！</p>
+<p>编写一个后台运行的nohup脚本runminio.sh:</p>
+<pre><code class="language-shell">#!/bin/bash
+export MINIO_ROOT_USER=admin
+export MINIO_ROOT_PASSWORD=Haier2022
+ 
+nohup /usr/local/minio/minio server /mnt/data --console-address &quot;:9001&quot; &gt; log.file 2&gt;&amp;1 &amp;
+ 
+#默认服务端口为9000，如果端口冲突，可以修改端口
+nohup /usr/local/minio/minio server /mnt/data --address &quot;:9999&quot; --console-address &quot;:9001&quot; &gt; log.file 2&gt;&amp;1 &amp;
+</code></pre>
+<blockquote>
+<p>nohup命令<br>
+关闭当前session不会中断程序，可以通过kill等命令终止。<br>
+示例及说明<br>
+nohup command &gt; output.log 2&gt;&amp;1 &amp;<br>
+其中 2&gt;&amp;1是用来将标准错误2重定向到标准输出1中。1前面的&amp;是为了让bash将1解释成标准输出而不是文件1。而最后一个&amp;是为了让bash在后台执行。</p>
+</blockquote>
+<p><strong>2、配置Minio的开机自启：</strong></p>
+<p>创建配置文件：minio.conf</p>
+<pre><code class="language-shell">[root@localhost minio]# mkdir /usr/local/minio/conf
+[root@localhost minio]# vim /usr/local/minio/conf/minio.conf
+MINIO_VOLUMES=&quot;/data/minio&quot;
+MINIO_OPTS=&quot;--console-address :9001&quot;
+MINIO_ROOT_USER=&quot;admin&quot;
+MINIO_ROOT_PASSWORD=&quot;Wolong2022&quot;
+MINIO_SERVER_URL=&quot;http://192.168.0.117:9000&quot;
+</code></pre>
+<p>在/etc/systemd/system目录下新建一个服务minio.service</p>
+<pre><code class="language-shell">[root@localhost minio]# vim /etc/systemd/system/minio.service
+[Unit]
+Description=MinIO
+Documentation=https://docs.min.io
+Wants=network-online.target
+After=network-online.target
+AssertFileIsExecutable=/usr/local/minio/minio
+ 
+[Service]
+User=root
+Group=root
+EnvironmentFile=/usr/local/minio/conf/minio.conf
+ExecStart=/usr/local/minio/minio server $MINIO_OPTS $MINIO_VOLUMES
+ 
+# Let systemd restart this service always
+Restart=always
+# Specifies the maximum file descriptor number that can be opened by this process
+LimitNOFILE=65536
+# Disable timeout logic and wait until process is stopped
+TimeoutStopSec=infinity
+SendSIGKILL=no
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<p><strong>3、启动minio并设置开机自启：</strong></p>
+<pre><code class="language-shell">[root@localhost minio]# systemctl start minio
+[root@localhost minio]# systemctl enable minio
+Created symlink from /etc/systemd/system/multi-user.target.wants/minio.service to /etc/systemd/system/minio.service.
+[root@localhost minio]# systemctl status minio
+● minio.service - MinIO
+   Loaded: loaded (/etc/systemd/system/minio.service; enabled; vendor preset: disabled)
+   Active: active (running) since 二 2022-11-01 15:19:19 CST; 14s ago
+     Docs: https://docs.min.io
+ Main PID: 34443 (minio)
+   CGroup: /system.slice/minio.service
+           └─34443 /usr/local/minio/minio server --console-address :9001 /data/minio
+</code></pre>
+<hr>
+<h3 id="三-minio的部署之docker单机部署"><strong>三、MinIO的部署之Docker单机部署</strong></h3>
+<blockquote>
+<p>此单机模式，每一份对象数据，minio直接在data目录下存储一份数据，不会建立副本，也不会启用纠删码机制（数据恢复），存在单点故障；</p>
+</blockquote>
+<p><strong>直接执行docker命令：</strong></p>
+<pre><code class="language-shell">docker run -d \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  --name minio \
+  -e &quot;MINIO_ROOT_USER=admin&quot; \
+  -e &quot;MINIO_ROOT_PASSWORD=password&quot; \
+  -v /mnt/data:/data \
+  -v /mnt/config:/root/.minio \
+  quay.io/minio/minio server /data --console-address &quot;:9001&quot;
+</code></pre>
+<hr>
+<h3 id="四-minio的部署之纠删码模式部署"><strong>四、MinIO的部署之纠删码模式部署</strong></h3>
+<blockquote>
+<p>该部署模式使用纠删码（Reasure Code）和校验checksum来保护数据免受硬件故障或无声数据损坏，即使你丢了一般数量（N/2）的硬盘，你仍可以恢复数据！</p>
+<p>纠删码技术的官方描述资料：http://docs.minio.org.cn/docs/master/minio-erasure-code-quickstart-guide</p>
+</blockquote>
+<p>使用docker进行单机版的纠删码模式部署：</p>
+<pre><code class="language-shell">docker run -d \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  --name minio \
+  -e &quot;MINIO_ROOT_USER=admin&quot; \
+  -e &quot;MINIO_ROOT_PASSWORD=password&quot; \
+  -v /mnt/data1:/data1 \
+  -v /mnt/data2:/data2 \
+  -v /mnt/data3:/data3 \
+  -v /mnt/data4:/data4 \
+  -v /mnt/data5:/data5 \
+  -v /mnt/data6:/data6 \
+  -v /mnt/data7:/data7 \
+  -v /mnt/data8:/data8 \
+  -v /mnt/config:/root/.minio \
+  quay.io/minio/minio server /data{1...8} --console-address &quot;:9001&quot;
+</code></pre>
+<p>执行成功后，我们登录到后台，然后上传几个文件看看效果：</p>
+<pre><code class="language-shell">[root@node2 /]# tree /mnt
+/mnt
+├── config
+│   └── certs
+│       └── CAs
+├── data
+│   └── haier
+│       ├── harbor-offline-installer-v1.10.10.tgz
+│       ├── maven.jpeg
+│       └── nexus3.jpg
+├── data1
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+├── data2
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+├── data3
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+├── data4
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+├── data5
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+├── data6
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+├── data7
+│   └── haier
+│       ├── maven.jpeg
+│       │   └── xl.meta
+│       └── nexus3.jpg
+│           └── xl.meta
+└── data8
+    └── haier
+        ├── maven.jpeg
+        │   └── xl.meta
+        └── nexus3.jpg
+            └── xl.meta
+ 
+37 directories, 19 files
+</code></pre>
+<p>此时，我做了一次简单的测试，删盘（其实是删除文件夹）：</p>
+<blockquote>
+<ul>
+<li>当我删除4个文件夹时候，数据依然可以正常访问；</li>
+<li>当我删除第5个文件夹时候，数据文法正常访问，UI页面无法登录，报错：</li>
+</ul>
+<figure data-type="image" tabindex="6"><img src="https://tianxiawuhao.github.io/post-images/1645089650700442.png" alt="image.png" loading="lazy"></figure>
+</blockquote>
+<hr>
+<p><strong>五、MinIO的部署之分部署集群部署</strong></p>
+<blockquote>
+<p><strong>启动一个分布式Minio实例，你只需要把硬盘位置做为参数传给minio server命令即可，然后，你需要在所有其它节点运行同样的命令。</strong></p>
+<ul>
+<li>分布式Minio里所有的节点需要有同样的access秘钥和secret秘钥，这样这些节点才能建立联接。为了实现这个，你需要在执行minio server命令之前，先将access秘钥和secret秘钥export成环境变量，新版本使用MINIO_ROOT_USER 和 MINIO_ROOT_PASSWORD。</li>
+<li>分布式Minio使用的磁盘里必须是干净的，里面没有数据。</li>
+<li>下面示例里的IP仅供示例参考，你需要改成你真实用到的IP和文件夹路径。</li>
+<li>分布式Minio里的节点时间差不能超过3秒，你可以使用NTP 来保证时间一致。</li>
+<li>在Windows下运行分布式Minio处于实验阶段，请悠着点使用。</li>
+</ul>
+</blockquote>
+<p>比如我打算用三台机器部署分布式集群，挂载6块盘</p>
+<p><strong>1、首先，在三台机器的 /usr/local/minio 目录下下载好我们的minio程序，并添加环境变量：</strong></p>
+<pre><code class="language-shell">chmod +x minio
+export MINIO_ROOT_USER=admin 
+export MINIO_ROOT_PASSWORD=Haier2022
+</code></pre>
+<p><strong>2、在每台机器上，都执行以下命令，启动集群：</strong></p>
+<pre><code class="language-shell">nohup /usr/local/minio/minio server --config-dir /minio/config --address ':9000' --console-address ':9001' \
+http://10.206.73.154/minio/data1 http://10.206.73.154/minio/data2\
+http://10.206.73.155/minio/data1 http://10.206.73.155/minio/data2\
+http://10.206.73.156/minio/data1 http://10.206.73.156/minio/data2&gt; /usr/local/minio/log.file 2&gt;&amp;1 &amp;
+</code></pre>
+<p>但是当我们执行时，经常会碰到这个问题：</p>
+<figure data-type="image" tabindex="7"><img src="https://tianxiawuhao.github.io/post-images/1645147392632219.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p><strong>即必须要使用新的挂载磁盘，不可以使用与系统root目录相同的磁盘；这时候我们就要想办法先给系统挂载一块新磁盘到 /minio 目录上，之后才能进行之后的操作了！</strong></p>
+</blockquote>
+<p><strong>3、挂载完了，但是我只有一块机器有磁盘，将就一下：</strong></p>
+<pre><code class="language-shell">nohup /usr/local/minio/minio server --config-dir /minio/config --address ':9000' --console-address ':9001' \
+http://10.206.73.156/minio/data1 http://10.206.73.156/minio/data2 \
+http://10.206.73.156/minio/data3 http://10.206.73.156/minio/data4 \
+http://10.206.73.156/minio/data5 http://10.206.73.156/minio/data6&gt; /usr/local/minio/log.file 2&gt;&amp;1 &amp;
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20220222/1645530765327519.png" alt="image.png" loading="lazy"></figure>
+<p><strong>4、在minio的9001面板中，对服务进行监控：</strong></p>
+<figure data-type="image" tabindex="9"><img src="https://tianxiawuhao.github.io/post-images/1645530829607535.png" alt="image.png" loading="lazy"></figure>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#%E4%B8%80-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BD%BF%E7%94%A8minio"><strong>一、为什么要使用MinIO</strong></a></li>
+<li><a href="#%E4%BA%8C-minio%E7%9A%84%E9%83%A8%E7%BD%B2%E4%B9%8Bcentos%E5%8D%95%E6%9C%BA%E9%83%A8%E7%BD%B2"><strong>二、MinIO的部署之Centos单机部署</strong></a></li>
+<li><a href="#%E4%B8%89-minio%E7%9A%84%E9%83%A8%E7%BD%B2%E4%B9%8Bdocker%E5%8D%95%E6%9C%BA%E9%83%A8%E7%BD%B2"><strong>三、MinIO的部署之Docker单机部署</strong></a></li>
+<li><a href="#%E5%9B%9B-minio%E7%9A%84%E9%83%A8%E7%BD%B2%E4%B9%8B%E7%BA%A0%E5%88%A0%E7%A0%81%E6%A8%A1%E5%BC%8F%E9%83%A8%E7%BD%B2"><strong>四、MinIO的部署之纠删码模式部署</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/w4yOxhPAW/">
+                <span class="post-title">
+                  图的遍历方法&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/nfaGbmKb_/">
+              <span class="post-title">
+                存储系统搭建—Ceph集群&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

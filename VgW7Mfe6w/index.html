@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Actuator监控，并集成Prometheus/Grafana展示（实战） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="Actuator监控，并集成Prometheus/Grafana展示（实战） | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="Actuator监控，并集成Prometheus/Grafana展示（实战）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/VgW7Mfe6w/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/NdxF1vK3u/" class="tag">运维</a>
+                
+              </span>
+              <h1>Actuator监控，并集成Prometheus/Grafana展示（实战）</h1>
+              <span class="meta">
+                Posted on
+                2023-05-17，12 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/VgW7Mfe6w.png" alt="封面图">
+          </img>
+          
+          <p><strong>一、基础概念</strong></p>
+<p><strong>1、何为“可观测性Observability”？</strong></p>
+<p>可观测性Observability：对线上的应用进行观测、监控、预警等：</p>
+<ul>
+<li>健康状况 Health：【组件状态、存货状态】等；</li>
+<li>运行指标 Metrics：【cpu、内存、垃圾回收、吞吐量、响应成功率】等；</li>
+<li>链路追踪等；</li>
+</ul>
+<p><strong>2、Springboot为我们提供了一个开箱即用的可观测性解决方案：</strong></p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+&lt;/dependency&gt;
+</code></pre>
+<hr>
+<p><strong>二、初始化一个Springboot3项目</strong></p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1690116478408.png" alt="" loading="lazy"></figure>
+<p>创建完成后的pom.xml文件如下：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;project xmlns=&quot;http://maven.apache.org/POM/4.0.0&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
+         xsi:schemaLocation=&quot;http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd&quot;&gt;
+    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+    &lt;parent&gt;
+        &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+        &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+        &lt;version&gt;3.1.1&lt;/version&gt;
+        &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt;
+    &lt;/parent&gt;
+    &lt;groupId&gt;com.jiguiquan.www&lt;/groupId&gt;
+    &lt;artifactId&gt;actuator&lt;/artifactId&gt;
+    &lt;version&gt;0.0.1-SNAPSHOT&lt;/version&gt;
+    &lt;name&gt;actuator&lt;/name&gt;
+    &lt;description&gt;actuator&lt;/description&gt;
+    &lt;properties&gt;
+        &lt;java.version&gt;17&lt;/java.version&gt;
+    &lt;/properties&gt;
+    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+ 
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+            &lt;optional&gt;true&lt;/optional&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+ 
+    &lt;build&gt;
+        &lt;plugins&gt;
+            &lt;plugin&gt;
+                &lt;groupId&gt;org.graalvm.buildtools&lt;/groupId&gt;
+                &lt;artifactId&gt;native-maven-plugin&lt;/artifactId&gt;
+            &lt;/plugin&gt;
+            &lt;plugin&gt;
+                &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+                &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+                &lt;configuration&gt;
+                    &lt;excludes&gt;
+                        &lt;exclude&gt;
+                            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+                            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+                        &lt;/exclude&gt;
+                    &lt;/excludes&gt;
+                &lt;/configuration&gt;
+            &lt;/plugin&gt;
+        &lt;/plugins&gt;
+    &lt;/build&gt;
+ 
+&lt;/project&gt;
+</code></pre>
+<hr>
+<p><strong>三、演示Actuator的简单使用/常用端点</strong></p>
+<p><strong>1、在 application.yml 中增加如下配置：</strong></p>
+<pre><code class="language-yml">management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'  # 通过web方式，暴露所有端点
+</code></pre>
+<p><strong>2、此时我们在运行，即可看到 /actuator 接口暴露了很多端点：</strong></p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1689313398957343.png" alt="1689313398957343.png" loading="lazy"></figure>
+<p><strong>其中，一切常用的端点介绍：</strong></p>
+<ul>
+<li>/actuator/health：健康状况的端点；</li>
+<li>/actuator/metrics：指标数据；</li>
+<li>/actuator/beans：当前IOC容器中有多少Bean；</li>
+<li>/actuator/caches：服务当前的缓存情况；</li>
+<li>/actuator/condition：当前服务中涉及到的条件，哪些条件是满足的，哪些条件是没满足的；</li>
+</ul>
+<p><strong>其中最重要的：/actuator/metrics 指标信息：</strong></p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1689313904881909.png" alt="1689313904881909.png" loading="lazy"></figure>
+<p>如果我们想看某个指标的详细信息：/actuator/metrics/指标名</p>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1689314003483472.png" alt="1689314003483472.png" loading="lazy"></figure>
+<p>有了这些指标信息，我们以后构建自己的监控平台面板将会变得非常容易！</p>
+<p><strong>3、以下以表格形式列举我们工作中可能会用到的端点：</strong></p>
+<table>
+<thead>
+<tr>
+<th>**端点 **</th>
+<th><strong>描述</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>auditevents</td>
+<td>暴露当前应用程序的审核事件信息。需要一个AuditEventRepository组件。</td>
+</tr>
+<tr>
+<td>beans</td>
+<td>显示应用程序中所有Spring Bean的完整列表。</td>
+</tr>
+<tr>
+<td>caches</td>
+<td>暴露当前的缓存情况。</td>
+</tr>
+<tr>
+<td>conditions</td>
+<td>显示自动配置的所有条件信息，包括匹配或不匹配的原因。</td>
+</tr>
+<tr>
+<td>configprops</td>
+<td>显示所有@ConfigurationProperties。</td>
+</tr>
+<tr>
+<td>env</td>
+<td>暴露Spring的属性ConfigurableEnvironment</td>
+</tr>
+<tr>
+<td>flyway</td>
+<td>显示已应用的所有Flyway数据库迁移，需要一个或多个Flyway组件。</td>
+</tr>
+<tr>
+<td>health</td>
+<td>显示应用程序运行状况信息。</td>
+</tr>
+<tr>
+<td>httptrace</td>
+<td>显示HTTP跟踪信息（默认情况下，最近100个HTTP请求-响应）。需要一个HttpTraceRepository组件。</td>
+</tr>
+<tr>
+<td>info</td>
+<td>显示应用程序信息。</td>
+</tr>
+<tr>
+<td>integrationgraph</td>
+<td>显示Spring integrationgraph 。需要依赖spring-integration-core。</td>
+</tr>
+<tr>
+<td>loggers</td>
+<td>显示和修改应用程序中日志的配置。</td>
+</tr>
+<tr>
+<td>liquibase</td>
+<td>显示已应用的所有Liquibase数据库迁移。需要一个或多个Liquibase组件。</td>
+</tr>
+<tr>
+<td>metrics</td>
+<td>显示当前应用程序的“指标”信息。</td>
+</tr>
+<tr>
+<td>mappings</td>
+<td>显示所有@RequestMapping路径列表。</td>
+</tr>
+<tr>
+<td>scheduledtasks</td>
+<td>显示应用程序中的计划任务。</td>
+</tr>
+<tr>
+<td>sessions</td>
+<td>允许从Spring Session支持的会话存储中检索和删除用户会话。需要使用Spring Session的基于Servlet的Web应用程序。</td>
+</tr>
+<tr>
+<td>shutdown</td>
+<td>使应用程序正常关闭。默认禁用。</td>
+</tr>
+<tr>
+<td>startup</td>
+<td>显示由ApplicationStartup收集的启动步骤数据。需要使用SpringApplication进行配置BufferingApplicationStartup。</td>
+</tr>
+<tr>
+<td>threaddump</td>
+<td>执行线程转储。</td>
+</tr>
+<tr>
+<td>heapdump</td>
+<td>返回hprof堆转储文件。</td>
+</tr>
+<tr>
+<td>jolokia</td>
+<td>通过HTTP暴露JMX bean（需要引入Jolokia，不适用于WebFlux）。需要引入依赖jolokia-core。</td>
+</tr>
+<tr>
+<td>logfile</td>
+<td>返回日志文件的内容（如果已设置logging.file.name或logging.file.path属性）。支持使用HTTPRange标头来检索部分日志文件的内容。</td>
+</tr>
+<tr>
+<td>prometheus</td>
+<td>以Prometheus服务器可以抓取的格式公开指标。需要依赖micrometer-registry-prometheus。</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p><strong>四、自定义监控端点</strong></p>
+<p>首先，如果想监控详细的健康状况，我们配置文件中还得增加一些配置：</p>
+<pre><code class="language-yml">management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'  # 通过web方式，暴露所有端点
+  endpoint:
+    health:
+      # 如果想展示所有组件健康状况的详细信息，下面两项必须配置，否则/health端点只会展示当前服务的存活情况
+      enabled: true
+      show-details: always
+</code></pre>
+<p><strong>1、自定义健康监控Health端点（ 存活/死亡 ）：核心 HealthIndicator</strong></p>
+<blockquote>
+<p><strong>目标：监控 ZidanService 这个组件的健康状况：</strong></p>
+</blockquote>
+<p>被监控组件：ZidanService.java：</p>
+<pre><code class="language-java">@Service
+public class ZidanService {
+ 
+    // 随机返回一个整数，作为健康检查的依据
+    public int check(){
+        return new Random().nextInt();
+    }
+}
+</code></pre>
+<p>健康状况监控器类：</p>
+<pre><code class="language-java">/**
+ * 方法1、只需要实现HealthIndicator接口中的health()方法，即可来定制组件的健康状态；
+ * 方法2、或者继承AbstractHealthIndicator抽象类，实现其doHealthCheck()抽象方法即可！
+ */
+@Component
+//public class ZidanServiceHealthIndicator implements HealthIndicator {
+public class ZidanServiceHealthIndicator extends AbstractHealthIndicator {
+    @Autowired
+    private ZidanService zidanService;
+ 
+    @Override
+    protected void doHealthCheck(Health.Builder builder) throws Exception {
+        // 调用这个组件的check方法，然后根据返回结果，构建出一个存活结果
+        int result = zidanService.check();
+ 
+        // 我们就假设，如果result是偶数，则存活，是奇数，则死亡
+        if ((result % 2) == 0) {
+            builder.up()
+                    .withDetail(&quot;code&quot;, &quot;200&quot;)
+                    .withDetail(&quot;msg&quot;, &quot;活得很好&quot;)
+                    .withDetail(&quot;data&quot;, &quot;我是吉老板&quot;)
+                    .build();
+        } else {
+            builder.down()
+                    .withDetail(&quot;code&quot;, &quot;500&quot;)
+                    .withDetail(&quot;msg&quot;, &quot;我不太好&quot;)
+                    .withDetail(&quot;data&quot;, &quot;嘿嘿&quot;)
+                    .build();
+        }
+    }
+}
+</code></pre>
+<p>此时，我们再见调用Health端点，就可以看到ZidanService这个组件的健康状况了：</p>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1689317840685478.png" alt="1689317840685478.png" loading="lazy"></figure>
+<p><strong>2、自定义指标监控Metrics端点（ 次数、率 ）：核心 MeterRegistry</strong></p>
+<blockquote>
+<p>目标：监控DemoController.demo()方法被调用了多少次！</p>
+</blockquote>
+<p>DemoController.java：</p>
+<pre><code class="language-java">@RestController
+public class DemoController {
+ 
+    Counter counter;
+ 
+    // 通过构造方法，注入MeterRegistry，从而给counter计数器赋值
+    public DemoController(MeterRegistry meterRegistry){
+        counter = meterRegistry.counter(&quot;jiguiquan.demo&quot;);
+ 
+    }
+ 
+    @GetMapping(&quot;/demo&quot;)
+    public void demo(){
+        counter.increment();
+        System.out.println(&quot;demo接口被调用了 &quot; + counter.count() + &quot; 次&quot;);
+    }
+}
+</code></pre>
+<p>此时，我们访问 /metrics/jiguiquan.demo 端点，就能看到我们自定义的计数指标信息！</p>
+<figure data-type="image" tabindex="6"><img src="https://tianxiawuhao.github.io/post-images/1689318690891961.png" alt="1689318690891961.png" loading="lazy"></figure>
+<hr>
+<p><strong>五、整合Prometheus + Grafana</strong></p>
+<p><strong>1、需要整合Prometheus，我们首先需要在项目中引入整合Prometheus的依赖：</strong></p>
+<p>这个依赖可以是 /metrics/prometheus 端点返回适配Prometheus的数据结构：</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
+    &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
+    &lt;version&gt;1.10.6&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p><strong>2、测试 /prometheus 的端点是否正常获取到数据：</strong></p>
+<figure data-type="image" tabindex="7"><img src="https://tianxiawuhao.github.io/post-images/1689326284281072.png" alt="1689326284281072.png" loading="lazy"></figure>
+<p><strong>3、没有问题，那么我们现在就将我们的代码拷贝到服务器上，进行打包编译：</strong></p>
+<pre><code class="language-shell"># 将代码拷贝到服务器的/code/目录下
+[root actuator]# pwd
+/code/actuator
+[root actuator]# ls
+pom.xml  src 
+ 
+# 3个命令，将actuator项目打包成二进制可执行文件：
+mvn clean package -DskipTests
+mvn spring-boot:process-aot
+mvn -Pnative native:build
+</code></pre>
+<p><strong>4、通过编译好的二进制文件，快速启动actuator项目：</strong></p>
+<figure data-type="image" tabindex="8"><img src="https://tianxiawuhao.github.io/post-images/1689327015585183.png" alt="1689327015585183.png" loading="lazy"></figure>
+<p>后台启动：</p>
+<pre><code class="language-shell"># 二进制文件启动
+nohup target/actuator &gt;actuator.log 2&gt;&amp;1 &amp;
+ 
+## 如果是jar包直接启动：
+nohup java -jar target/actuator-0.0.1-SNAPSHOT.jar &gt;actuator.log 2&gt;&amp;1 &amp;
+</code></pre>
+<figure data-type="image" tabindex="9"><img src="https://tianxiawuhao.github.io/post-images/1689327550321004.png" alt="1689327550321004.png" loading="lazy"></figure>
+<p>服务运行正常！</p>
+<hr>
+<p><strong>六、配置Prometheus，从actuator服务的/prometheus端点上定时拉取数据：</strong></p>
+<p><strong>1、将Prometheus下载并解压到服务器的指定位置：</strong></p>
+<pre><code class="language-shell">[root prometheus]# ls
+grafana-8.3.6  prometheus-2.37.8
+[root prometheus]# cd prometheus-2.37.8/
+[root prometheus-2.37.8]# ls
+console_libraries  consoles  LICENSE  NOTICE  prometheus  prometheus.yml  promtool
+</code></pre>
+<p><strong>2、修改Prometheus的核心配置文件prometheus.yml，添加一个新任务：</strong></p>
+<pre><code class="language-yml"># my global config
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+ 
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+ 
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - &quot;first_rules.yml&quot;
+  # - &quot;second_rules.yml&quot;
+ 
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=&lt;job_name&gt;` to any timeseries scraped from this config.
+  - job_name: &quot;prometheus&quot;
+    static_configs:
+      - targets: [&quot;localhost:9090&quot;]
+ 
+# 这就是我们的服务的端口，因为原定的9090和prometheus冲突了，所以我这里已经调整了actuator的端口
+  - job_name: &quot;actuator&quot;
+    metrics_path: '/actuator/prometheus' #指定抓取的路径
+    static_configs:
+      - targets: [&quot;localhost:10000&quot;]
+        labels:
+          nodename: 'actuator-demo'
+</code></pre>
+<p><strong>3、nohup后台启动prometheus服务：</strong></p>
+<pre><code class="language-shell">nohup ./prometheus --config.file=prometheus.yml &gt; prometheus.log 2&gt;&amp;1 &amp;
+</code></pre>
+<p><strong>4、访问 http://ip:9090/targets端点，可以查看数据采集情况：</strong></p>
+<figure data-type="image" tabindex="10"><img src="https://tianxiawuhao.github.io/post-images/1689573602824523.png" alt="1689573602824523.png" loading="lazy"></figure>
+<p>数据采集正常！</p>
+<hr>
+<p><strong>七、配置Grafana面板，展示actuator服务监控状态</strong></p>
+<p><strong>1、依然显示将Grafana下载解压到服务器的指定位置：</strong></p>
+<pre><code class="language-shell">[root prometheus]# ls
+grafana-8.3.6  prometheus-2.37.8
+[root prometheus]# cd grafana-8.3.6/
+[root grafana-8.3.6]# ls
+bin  conf  LICENSE  NOTICE.md  plugins-bundled  public  README.md  scripts  VERSION
+</code></pre>
+<p><strong>2、暂时我们不修改Gafana的配置文件，直接nohup后台运行：</strong></p>
+<pre><code class="language-shell">nohup` `bin``/grafana-server` `&gt; grafana.log 2&gt;&amp;1 &amp;
+</code></pre>
+<p><strong>3、通过 http://ip:3000 访问Grafana服务：</strong></p>
+<figure data-type="image" tabindex="11"><img src="https://tianxiawuhao.github.io/post-images/1689574677463357.png" alt="1689574677463357.png" loading="lazy"></figure>
+<blockquote>
+<p>Grafana默认账号密码为：admin ：admin，登录时我们可以修改下次密码，也可以Skip跳过！</p>
+</blockquote>
+<p><strong>4、登录后，我们首先需要先配置一个Prometheus数据源：</strong></p>
+<figure data-type="image" tabindex="12"><img src="https://tianxiawuhao.github.io/post-images/1665388313137919.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="./1689575615746645.png" alt="1689575615746645.png" loading="lazy"></figure>
+<p><strong>5、去官方Dashboard市场找一个好看的仪表板（如果有实力，也可以自己搭建）：</strong></p>
+<blockquote>
+<p>官网Dashboard下载页面：https://grafana.com/grafana/dashboards/</p>
+</blockquote>
+<p>我选择的是这个：https://grafana.com/grafana/dashboards/12900-springboot-apm-dashboard/</p>
+<p>复制它的Dashboard ID或者下载JSON文件都可以：</p>
+<p><strong>6、在Grafana中导入Dashboard：</strong></p>
+<figure data-type="image" tabindex="14"><img src="https://tianxiawuhao.github.io/post-images/1689587441245062.png" alt="1689587441245062.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="15"><img src="https://tianxiawuhao.github.io/post-images/1689587637105338.png" alt="1689587637105338.png" loading="lazy"></figure>
+<p><strong>7、配置完成后的效果如下图所示：</strong></p>
+<figure data-type="image" tabindex="16"><img src="https://tianxiawuhao.github.io/post-images/1689589778671992.png" alt="1689589778671992.png" loading="lazy"></figure>
+<blockquote>
+<p>到这里，整个Springboot项目的指标监控全流程就走通了，以后的项目中，可以适当的暴露这些监控端点哦，还可以自定义自己的“健康状况”或“运行指标”信息！</p>
+</blockquote>
+
+          <div class="toc-container"></div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/RokgvWufI/">
+                <span class="post-title">
+                  一文彻底弄懂ctx.close()和ctx.channel().close()的区别&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/ZZ6BztHhQ/">
+              <span class="post-title">
+                基于PostgreSQL的时序数据库TimescaleDB的基本用法和概念&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

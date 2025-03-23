@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>王树森深度强化学习笔记11：Dueling Network | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="王树森深度强化学习笔记11：Dueling Network | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="王树森深度强化学习笔记11：Dueling Network" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/HCoq7nVQ7/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/M9xPODHX8/" class="tag">强化学习</a>
+                
+              </span>
+              <h1>王树森深度强化学习笔记11：Dueling Network</h1>
+              <span class="meta">
+                Posted on
+                2024-01-23，3 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/HCoq7nVQ7.png" alt="封面图">
+          </img>
+          
+          <h2 id="一-优势函数advantage-function">一、优势函数（Advantage Function）</h2>
+<p>首先回顾折扣回报、动作价值函数和状态价值函数：</p>
+<figure data-type="image" tabindex="1"><img src="https://pic1.zhimg.com/80/v2-d820f4eff9ee528737342ba651cedb90_720w.webp" alt="img" loading="lazy"></figure>
+<p>接下来是最优动作价值函数和最优状态价值函数：</p>
+<figure data-type="image" tabindex="2"><img src="https://pic2.zhimg.com/80/v2-82750c659dd5cc084dce02cc5bcaab89_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里我们引入一个新的概念：最优优势函数。它是由最优动作价值函数和最优状态价值函数确定的。这里把最优状态价值函数作为baseline，它的实际意义是动作a相对于baseline的优势，动作a越好，优势就越大。</p>
+<p>为了推导出Dueling Network，我们需要分析优势函数的一个理论性质。</p>
+<p>这需要一个定理：</p>
+<figure data-type="image" tabindex="3"><img src="https://pic2.zhimg.com/80/v2-7e4074d135afcee28f02ce2426da5c65_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里有一个推导：</p>
+<figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-edaedae9b4686f070b2849a37532b815_720w.webp" alt="img" loading="lazy"></figure>
+<p>将A*(s,a)变换一下，可以得到：</p>
+<figure data-type="image" tabindex="5"><img src="https://pic3.zhimg.com/80/v2-d05f54910a2eec57f8dd81fb34933536_720w.webp" alt="img" loading="lazy"></figure>
+<p>又因为maxA*=0，所以可以得到：定理2</p>
+<figure data-type="image" tabindex="6"><img src="https://pic3.zhimg.com/80/v2-8fa04e8631eedadbfe52ebbacf53f592_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="二-dueling-network">二、Dueling Network</h2>
+<p>回顾一下DQN：</p>
+<figure data-type="image" tabindex="7"><img src="https://pic3.zhimg.com/80/v2-eb2e57a157c727d87f8ee61ff811d1a6_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里我们采用一个神经网络对优势函数A*(s,a;w^A)的近似：</p>
+<figure data-type="image" tabindex="8"><img src="https://pic3.zhimg.com/80/v2-d9af266013b4fe57965a13de14d5a5d2_720w.webp" alt="img" loading="lazy"></figure>
+<p>我们需要一个神经网络来近似最优状态价值函数V*(s;w^V)</p>
+<figure data-type="image" tabindex="9"><img src="https://pic4.zhimg.com/80/v2-37a6fea54193b9580aa13b11b034ad33_720w.webp" alt="img" loading="lazy"></figure>
+<p>我们可以看到，这两个神经网络都有着相似的结构，即利用卷积层对输入提取特征。那么我们在真正实现这两个神经网络时就可以让他们共享神经网络参数。</p>
+<p>有了这两个近似，我们就可以得到这如下公式：</p>
+<p>这里的Q(s,a;w<sup>A,w</sup>V)即Dueling Network，这里用w来代替(w<sup>A,w</sup>V)</p>
+<figure data-type="image" tabindex="10"><img src="https://pic4.zhimg.com/80/v2-e0a14dc2619a5720d71a5dd9aa55a2a7_720w.webp" alt="img" loading="lazy"></figure>
+<p>如下就是整体流程：</p>
+<figure data-type="image" tabindex="11"><img src="https://pic3.zhimg.com/80/v2-bb7d9b9338ba114fdddc5590b7ed3a46_720w.webp" alt="img" loading="lazy"></figure>
+<p>Dueling Network与DQN的结构相似，但Dueling Network比DQN的神经网络结构更好，效果也更好。</p>
+<p>值得一提的是，我们在训练Dueling Network时，可以采用的训练方法：PER,DDQN,Multi-Step TD target等</p>
+<figure data-type="image" tabindex="12"><img src="https://pic1.zhimg.com/80/v2-f75930ba028cd99bf1dbc5f59db336fc_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="三-解决不唯一性overcome-non-identifiability">三、解决不唯一性（Overcome Non-identifiability）</h2>
+<p>如果不加最大化，可能会出现V和A都训练不好。举个例子，如果记V' = V*+10，A' = A*-10，它们的和并不会对Q产生影响，但实际上，V<em>和A</em>都产生了很大的波动，造成了V<em>和A</em>对应的神经网络都训练不好的结果。</p>
+<figure data-type="image" tabindex="13"><img src="https://pic2.zhimg.com/80/v2-8e4cdf7e1cc5cea2b56782bc97c70845_720w.webp" alt="img" loading="lazy"></figure>
+<p>而加了最大化这一项，可以很好的保持V<em>和A</em>对应的神经网络的平衡</p>
+<figure data-type="image" tabindex="14"><img src="https://pic2.zhimg.com/80/v2-64b48e47f8889656d55513e32a3db8dd_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="四-总结summary">四、总结（Summary）</h2>
+<p>MARK：要把Dueling Network当成一个整体去训练而不是分别单独的去训练对应的神经网络</p>
+<figure data-type="image" tabindex="15"><img src="https://pic3.zhimg.com/80/v2-143b46369caa301883196f34d3e6b4aa_720w.webp" alt="img" loading="lazy"></figure>
+<hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-%E4%BC%98%E5%8A%BF%E5%87%BD%E6%95%B0advantage-function">一、优势函数（Advantage Function）</a></li>
+<li><a href="#%E4%BA%8C-dueling-network">二、Dueling Network</a></li>
+<li><a href="#%E4%B8%89-%E8%A7%A3%E5%86%B3%E4%B8%8D%E5%94%AF%E4%B8%80%E6%80%A7overcome-non-identifiability">三、解决不唯一性（Overcome Non-identifiability）</a></li>
+<li><a href="#%E5%9B%9B-%E6%80%BB%E7%BB%93summary">四、总结（Summary）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/cFQZiMqpR/">
+                <span class="post-title">
+                  王树森深度强化学习笔记12：策略梯度中的基准（Policy Gradient with Baseline）&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/FrqjohR4Q/">
+              <span class="post-title">
+                王树森深度强化学习笔记10：高估问题、目标网络、DDQN（Overestimate、Target Network、Double DQN）&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

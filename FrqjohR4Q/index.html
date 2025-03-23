@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>王树森深度强化学习笔记10：高估问题、目标网络、DDQN（Overestimate、Target Network、Double DQN） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="王树森深度强化学习笔记10：高估问题、目标网络、DDQN（Overestimate、Target Network、Double DQN） | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="王树森深度强化学习笔记10：高估问题、目标网络、DDQN（Overestimate、Target Network、Double DQN）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/FrqjohR4Q/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/M9xPODHX8/" class="tag">强化学习</a>
+                
+              </span>
+              <h1>王树森深度强化学习笔记10：高估问题、目标网络、DDQN（Overestimate、Target Network、Double DQN）</h1>
+              <span class="meta">
+                Posted on
+                2024-01-17，5 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/FrqjohR4Q.png" alt="封面图">
+          </img>
+          
+          <h2 id="一-自举问题bootstrapping">一、自举问题（Bootstrapping）</h2>
+<p>在强化学习中，Bootstrapping的意思是用一种估算去更新同类的估算。</p>
+<figure data-type="image" tabindex="1"><img src="https://pic4.zhimg.com/80/v2-02e3e3235374603efbdd105c6f30bb53_720w.webp" alt="img" loading="lazy"></figure>
+<p>首先来，看一下TD target yt，它包含当前观测到的奖励rt和DQN对下一步状态和动作的预测值。</p>
+<figure data-type="image" tabindex="2"><img src="https://pic3.zhimg.com/80/v2-4a887bd9592c0598dffa5674fd9f7aca_720w.webp" alt="img" loading="lazy"></figure>
+<p>然后我们采用随机梯度下降（SGD）来更新DQN模型参数w。这里使用的SGD用到了yt，而yt又部分基于DQN在t+1时刻的估计。因此，采用TD算法来更新DQN就是一个bootstrapping的一个例子。</p>
+<figure data-type="image" tabindex="3"><img src="https://pic2.zhimg.com/80/v2-093eff4d6b4aa856ebe80e3682234b05_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="二-高估问题problem-of-overestimation">二、高估问题（Problem of Overestimation）</h2>
+<p>首先，我们要知道：TD算法可能会导致高估真实的动作价值。造成高估的主要原因有两个：</p>
+<p><strong>①原因一：计算TD target时使用了最大化（The Maximization）</strong></p>
+<figure data-type="image" tabindex="4"><img src="https://pic1.zhimg.com/80/v2-757dff67de486827ec52be8624db3760_720w.webp" alt="img" loading="lazy"></figure>
+<p>证明如下：</p>
+<p>首先我们获取到一些观测到真实数据：x1,x2,...,xn。然后在这些观测值中加入一些均值为0的随机噪声Q1,Q2,...,Qn。由于噪声的均值为0，所以对Q的均值求期望，就等于对x求期望。然而，Q最大值的期望却会大于等于x的最大值，且Q最小值的期望也会小于等于x的最小值。</p>
+<figure data-type="image" tabindex="5"><img src="https://pic4.zhimg.com/80/v2-49804077c1b1cd07d632c31fb0c262ef_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里我们回到DQN的高估问题：假设我们得到了一些动作价值，x(a1),...,x(an)，且有一些DQN的噪声估计Q(s,a1;w),...,Q(s,an;w)。这里我们假设估计是无偏的，也就是上述中Q的均值为0。那么这里的q作为Q(s,a;w)的最大值，就会产生上述的高估问题。如下图所示：</p>
+<figure data-type="image" tabindex="6"><img src="https://pic3.zhimg.com/80/v2-5a6c32d2b82218501853082bdc639802_720w.webp" alt="img" loading="lazy"></figure>
+<p>上面我们已经知道了，q是x(a)的高估，因此我们这里假设qt+1是对t+1时刻真实的动作价值的预测，因此它是高估的。然而我们的TD target是取决于当前观测到的奖励rt和DQN对qt+1的预测，因此也是高估的。而TD算法的目的就是使Q(st,at;w)向TD target逼近，而yt是一个高估的量，继而导致Q(st,at;w)也会高估真实的动作价值。</p>
+<figure data-type="image" tabindex="7"><img src="https://pic4.zhimg.com/80/v2-9c40d3f1d79c5d81c102dbfbd7c8b267_720w.webp" alt="img" loading="lazy"></figure>
+<p><strong>②原因二：自举产生的高估问题（Bootstrapping）</strong></p>
+<p>如果已经产生了高估，那么再进行Bootstrapping，高估就会越来越大。</p>
+<figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-a1d1d6b656b6d857623a9f80b8d5a540_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里讨论为什么Bootstrapping会导致高估：</p>
+<p>我们知道TD target实际上是使用了下面的一个最大化的公式，且我们使用TD target用于更新Q(st,at;w)。假设DQN已经产生了高估的动作价值，那么Q(st,at;w)就已经是一个高估的量。然而我们采用了一个最大化公式，会使qt+1更大，而我们再使用qt+1去更新Q(st,at;w)即将高估的量传回DQN用于更新模型参数。因此，高估问题会越来越严重。</p>
+<figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-b56d6d96b6973729a1ebbcd2f7e8a728_720w.webp" alt="img" loading="lazy"></figure>
+<p>总结一下：直接上图</p>
+<figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-1eac1b3aba23780eba5ab2ca81928de2_720w.webp" alt="img" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="https://pic4.zhimg.com/80/v2-ead5129d36b21210c7a3be90162dcf6b_720w.webp" alt="img" loading="lazy"></figure>
+<figure data-type="image" tabindex="12"><img src="https://pic4.zhimg.com/80/v2-8ce35d29d59d4fda1373880814213d0b_720w.webp" alt="img" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="https://pic2.zhimg.com/80/v2-2692a9a909a3129b0ae23efd6ae495e5_720w.webp" alt="img" loading="lazy"></figure>
+<p>高估不是问题。我们在采用最大化时，参考的是相对值，而不是绝对值，因此如果是均匀的高估并不影响实际结果。有问题的是非均匀的高估。</p>
+<figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-b7297ade7c9e4e2f649a89dfe756fc1c_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里有两种方法用于缓解高估问题：</p>
+<p><strong>①使用目标网络（Target Network）</strong></p>
+<p><strong>②使用双DQN(Double DQN)</strong></p>
+<figure data-type="image" tabindex="15"><img src="https://pic2.zhimg.com/80/v2-cd3f98ead7cadd23e4ece7f11f1de631_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="三-目标网络target-network">三、目标网络（Target Network）</h2>
+<p>相比于DQN，Target Network是独立于DQN的。它与DQN有着相同的神经网络结构，但有不同的参数，记作w-。</p>
+<p>我们使用Q(s,a;w)来控制Agent并且收集经验即transition{(st,at,rt,st+1)}。</p>
+<p>使用Q(s,q;w-)来计算TD target。</p>
+<p>以前使用DQN来计算yt，用yt来更新DQN的参数。这会产生自举。现在我们使用Target Network，用Target Network来计算yt。这样就可以缓解高估问题。</p>
+<figure data-type="image" tabindex="16"><img src="https://pic4.zhimg.com/80/v2-2ca0339a87b721efc0aedeb98047c77f_720w.webp" alt="img" loading="lazy"></figure>
+<p>注意一下，这里计算TD target采用的Target Network，参数为w-，而随机梯度下降（SGD）仅用于更新DQN的神经网络参数w</p>
+<figure data-type="image" tabindex="17"><img src="https://pic3.zhimg.com/80/v2-266f711a9ffdb37894e39866ed6b6a1a_720w.webp" alt="img" loading="lazy"></figure>
+<p>这里用几种方法用于更新w-</p>
+<figure data-type="image" tabindex="18"><img src="https://pic1.zhimg.com/80/v2-7b16dd2c43ac6350eba9025cf3e2a298_720w.webp" alt="img" loading="lazy"></figure>
+<p>对比一下两种更新DQN的方法：</p>
+<p>原始方法利用自举，这会造成高估。</p>
+<p>而采用了Target Network可以缓解高估问题。</p>
+<figure data-type="image" tabindex="19"><img src="https://pic1.zhimg.com/80/v2-e3950e041b2e8159baef2267c31e7e84_720w.webp" alt="img" loading="lazy"></figure>
+<p>尽管采用上述方法可以缓解DQN最大化和自举产生的高估问题，但仍不可避免TD算法所产生的高估问题。下面的双DQN（Double DQN）方法可以更有效地避免高估问题。</p>
+<h2 id="四-双dqndouble-dqn">四、双DQN（Double DQN）</h2>
+<h3 id="1传统dqn">1）传统DQN</h3>
+<p>为了说明原始DQN，Target Network和DDQN之间的区别，这里把求最大化的过程拆成两步：</p>
+<p>TD target的第一步是做选择：</p>
+<figure data-type="image" tabindex="20"><img src="https://pic2.zhimg.com/80/v2-3c5092c9f3f31476a4425ae3c097ee41_720w.webp" alt="img" loading="lazy"></figure>
+<p>第二步是计算TD target：</p>
+<figure data-type="image" tabindex="21"><img src="https://pic4.zhimg.com/80/v2-ea65b2884a72cce52544034ea1833c67_720w.webp" alt="img" loading="lazy"></figure>
+<p>这种训练方式效果最差。</p>
+<h3 id="2target-network">2）Target Network</h3>
+<figure data-type="image" tabindex="22"><img src="https://pic1.zhimg.com/80/v2-c6646a443560dad782970fc89bad1c94_720w.webp" alt="img" loading="lazy"></figure>
+<h3 id="3ddqn">3）DDQN</h3>
+<figure data-type="image" tabindex="23"><img src="https://pic4.zhimg.com/80/v2-f1ac2f251af82092b8662b433277bf7b_720w.webp" alt="img" loading="lazy"></figure>
+<p>DDQN在第一步求最大化的动作时，采用了传统的DQN方法，进行求取最优动作a*。而在第二步评估TD target时，采用了Target Network，很容易得到如下不等式：</p>
+<figure data-type="image" tabindex="24"><img src="https://pic4.zhimg.com/80/v2-7809878c0f55b00f8639c32717e5491b_720w.webp" alt="img" loading="lazy"></figure>
+<h2 id="五-总结summary">五、总结（Summary）</h2>
+<figure data-type="image" tabindex="25"><img src="https://pic1.zhimg.com/80/v2-3890fd41d1d737dd8c61eb1db29459a4_720w.webp" alt="img" loading="lazy"></figure>
+<p>对比一下三种方法计算TD Target：</p>
+<figure data-type="image" tabindex="26"><img src="https://pic1.zhimg.com/80/v2-7ba9f5ac57a1f3777ab850cbddaa85e8_720w.webp" alt="img" loading="lazy"></figure>
+<hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-%E8%87%AA%E4%B8%BE%E9%97%AE%E9%A2%98bootstrapping">一、自举问题（Bootstrapping）</a></li>
+<li><a href="#%E4%BA%8C-%E9%AB%98%E4%BC%B0%E9%97%AE%E9%A2%98problem-of-overestimation">二、高估问题（Problem of Overestimation）</a></li>
+<li><a href="#%E4%B8%89-%E7%9B%AE%E6%A0%87%E7%BD%91%E7%BB%9Ctarget-network">三、目标网络（Target Network）</a></li>
+<li><a href="#%E5%9B%9B-%E5%8F%8Cdqndouble-dqn">四、双DQN（Double DQN）</a>
+<ul>
+<li><a href="#1%E4%BC%A0%E7%BB%9Fdqn">1）传统DQN</a></li>
+<li><a href="#2target-network">2）Target Network</a></li>
+<li><a href="#3ddqn">3）DDQN</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%94-%E6%80%BB%E7%BB%93summary">五、总结（Summary）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/HCoq7nVQ7/">
+                <span class="post-title">
+                  王树森深度强化学习笔记11：Dueling Network&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/BOSW3NMIw/">
+              <span class="post-title">
+                王树森深度强化学习笔记9：经验回放 Experience Replay&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>

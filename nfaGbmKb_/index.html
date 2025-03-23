@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>存储系统搭建—Ceph集群 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="存储系统搭建—Ceph集群 | tianxia » Feed"
+  href="https://tianxiawuhao.github.io/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="存储系统搭建—Ceph集群" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/nfaGbmKb_/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+</head>
+
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                
+                <a href="https://tianxiawuhao.github.io/NdxF1vK3u/" class="tag">运维</a>
+                
+              </span>
+              <h1>存储系统搭建—Ceph集群</h1>
+              <span class="meta">
+                Posted on
+                2022-12-13，19 min read
+              </span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/nfaGbmKb_.png" alt="封面图">
+          </img>
+          
+          <h2 id="一-ceph基础简介"><strong>一、Ceph基础简介</strong></h2>
+<blockquote>
+<p>nfs存储方式只能用于开发测试，生产环节绝对不可以用，我们选择Ceph！</p>
+</blockquote>
+<h3 id="1-ceph简介"><strong>1、Ceph简介</strong></h3>
+<p>Ceph是一种为优秀的性能、可靠性和可扩展性而设计的统一的、<a href="https://baike.baidu.com/item/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/1250388?fromModule=lemma_inlink">分布式文件系统</a>。</p>
+<h3 id="2-ceph集群的安装方式选择"><strong>2、Ceph集群的安装方式选择</strong></h3>
+<p>官方安装文档：https://docs.ceph.com/en/pacific/install</p>
+<ul>
+<li>Cephadm安装（推荐）：</li>
+<li>Rook安装（推荐）：使用Rook部署一个能管理Ceph集群的系统，一步到位！Rook官网：</li>
+<li>其他方式（手动-不推荐）</li>
+</ul>
+<h3 id="3-rook简介httpswwwrookiodocsrookv17quickstarthtml"><strong>3、Rook简介：</strong><a href="https://www.rook.io/docs/rook/v1.7/quickstart.html"><strong>https://www.rook.io/docs/rook/v1.7/quickstart.html</strong></a></h3>
+<ul>
+<li>Rook：存储编排系统；</li>
+<li>K8s：容器编排系统；</li>
+</ul>
+<p>Rook的工作原理：</p>
+<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1637113940473631.png" alt="image.png" loading="lazy"></figure>
+<p>Rook的架构设计：</p>
+<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1637113988125733.png" alt="image.png" loading="lazy"></figure>
+<hr>
+<h2 id="二-rookceph的安装"><strong>二、Rook+Ceph的安装</strong></h2>
+<h3 id="1-查看前提条件硬件要求"><strong>1、查看前提条件——硬件要求</strong></h3>
+<ul>
+<li>Raw devices (no partitions or formatted filesystems)； 原始磁盘，无分区或者格式化</li>
+<li>Raw partitions (no formatted filesystem)；原始分区，无格式化文件系统</li>
+</ul>
+<blockquote>
+<p>意思就是不要使用自己系统已经用过的磁盘，最好是干净的几块磁盘，因为Ceph底层有自己的文件系统（是基于LVM2可拓展的文件系统）</p>
+</blockquote>
+<pre><code class="language-shell">fdisk -l 
+找到自己挂载的磁盘
+如： Disk /dev/vdc: 107.4 GB, 107374182400 bytes, 209715200 sectors
+ 
+# 查看满足要求的
+lsblk -f
+## 结果：
+vda                                                           
+└─vda1 xfs               9cff3d69-3769-4ad9-8460-9c54050583f9 /
+vdb    swap   YUNIFYSWAP 48eb1df6-1663-4a52-ab30-040d552c2d76 
+vdc    #没有任何文件系统的干净磁盘，可用
+ 
+#云厂商都这么磁盘清0
+dd if=/dev/zero of=/dev/vdc bs=1M status=progress
+</code></pre>
+<h3 id="2-升级内核"><strong>2、升级内核</strong></h3>
+<p>升级内核（可选） 如果你将使用 Ceph 共享文件系统（CephFS）来创建卷（Volumes），则 rook 官方建议使用至少 4.17 版本的 Linux 内核。如果你使用的内核版本低于 4.17，则请求的 Persistent Volume Claim（PVC）大小将不会被强制执行。存储配额（Storage quotas）只能在较新的内核上得到强制执行。</p>
+<p>在 Kubernetes 中，PVC 用于向存储系统请求指定大小的存储空间。如果请求的 PVC 大小无法得到强制执行，则无法保证所请求的存储空间大小。由于存储配额在较旧的内核上无法得到强制执行，因此在使用 CephFS 创建卷时，如果使用较旧的内核版本，则可能无法正确地管理和分配存储空间。因此，rook 官方建议使用至少 4.17 版本的内核。</p>
+<p>在所有k8s节点升级内核，之前忘记考虑这个事情，以后得提前升级好内核再搭建k8s集群，这种情况下升级内核，很难保证不会对k8s集群带来直接影响。注意了，生产环境可不能这么玩，得提前做好规划和准备。</p>
+<p>我的centos7内核当前版本：</p>
+<pre><code class="language-shell">[root@k8s-a-node01 ~]# uname -r
+3.10.0-1160.el7.x86_64
+</code></pre>
+<p><strong>开始升级</strong></p>
+<pre><code class="language-shell">rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+rpm -Uvh https://www.elrepo.org/elrepo-release-7.el7.elrepo.noarch.rpm
+yum --enablerepo=elrepo-kernel install kernel-ml-devel kernel-ml-headers kernel-ml -y
+grub2-set-default 0
+grub2-mkconfig -o /boot/grub2/grub.cfg
+reboot
+uname -sr
+# 升级完成后查看内核，已经满足条件
+[root@k8s-a-node10 ~]# uname -sr
+Linux 6.2.9-1.el7.elrepo.x86_64
+# 看看k8s是否正常，我的没问题，非常顺利。
+kubectl get nodes
+kubectl get pod -n kube-system
+</code></pre>
+<h3 id="3-克隆rook的git仓库代码"><strong>3、克隆Rook的git仓库代码</strong></h3>
+<pre><code class="language-shell">git clone --single-branch --branch v1.11.2 https://github.com/rook/rook.git
+cd rook/deploy/examples
+</code></pre>
+<h3 id="4-修改安装operatoryaml"><strong>4、修改安装operator.yaml：</strong></h3>
+<p>把文件中的默认镜像修改为自己的：</p>
+<pre><code class="language-yaml">##首先把ceph镜像换成我们自己的
+rook/ceph:v1.6.3   换成  xxxx/rook-ceph:v1.6.3
+ 
+## 建议修改以下的东西。在operator.yaml里面
+ROOK_CSI_CEPH_IMAGE: &quot;xxxx/cephcsi:v3.3.1&quot;
+ROOK_CSI_REGISTRAR_IMAGE: &quot;xxxx/csi-node-driver-registrar:v2.0.1&quot;
+ROOK_CSI_RESIZER_IMAGE: &quot;xxxx/csi-resizer:v1.0.1&quot;
+ROOK_CSI_PROVISIONER_IMAGE: &quot;xxxx/csi-provisioner:v2.0.4&quot;
+ROOK_CSI_SNAPSHOTTER_IMAGE: &quot;xxxx/csi-snapshotter:v4.0.0&quot;
+ROOK_CSI_ATTACHER_IMAGE: &quot;xxxx/csi-attacher:v3.0.2&quot;
+</code></pre>
+<p><strong>安装operator：</strong></p>
+<pre><code class="language-shell">kubectl create -f crds.yaml -f common.yaml -f operator.yaml
+# 在继续操作之前，验证 rook-ceph-operator 是否正常运行
+kubectl get deployment -n rook-ceph
+kubectl get pod -n rook-ceph
+</code></pre>
+<h3 id="5-修改-clusteryaml中的集群信息"><strong>5、修改 cluster.yaml中的集群信息：</strong></h3>
+<p>因为默认是使用所有节点，如果我们不适用所有节点，则需要做以下修改：</p>
+<pre><code class="language-yaml"> storage: # cluster level storage configuration and selection
+#   resources   生产环境尽量配置大一点，测试环境不用动。
+#   useAllNodes: false   是否用所有节点      默认用所有
+#   useAllDevices: false   是否用所有设备    默认用所有
+    useAllNodes: false
+    useAllDevices: false
+    config:
+      osdsPerDevice: &quot;3&quot; #每个设备osd数量
+    nodes:
+    - name: &quot;k8s-node3&quot;
+      devices: 
+      - name: &quot;vdc&quot;
+    - name: &quot;k8s-node1&quot;
+      devices: 
+      - name: &quot;vdc&quot;
+    - name: &quot;k8s-node2&quot;
+      devices: 
+      - name: &quot;vdc&quot;
+</code></pre>
+<h3 id="6-正式安装集群"><strong>6、正式安装集群：</strong></h3>
+<pre><code class="language-shell">kubectl apply -f cluster.yaml
+</code></pre>
+<p>漫长等待，部署成功后的pod数量：</p>
+<pre><code class="language-shell">[root@master01 examples]# kubectl get pod -n rook-ceph 
+NAME                                               READY   STATUS      RESTARTS   AGE    IP             NODE     
+csi-cephfsplugin-74xkg                             3/3     Running     0          125m   10.233.96.16   node2    
+csi-cephfsplugin-98xmt                             3/3     Running     0          125m   10.233.90.14   node1    
+csi-cephfsplugin-provisioner-5d498c4bdd-vq2pc      6/6     Running     0          125m   10.233.90.15   node1    
+csi-cephfsplugin-provisioner-5d498c4bdd-x97g7      6/6     Running     0          125m   10.233.96.17   node2    
+csi-cephfsplugin-zknsc                             3/3     Running     0          118m   10.233.70.14   master   
+csi-rbdplugin-provisioner-7bd657db4c-6cl6r         6/6     Running     0          125m   10.233.96.15   node2    
+csi-rbdplugin-provisioner-7bd657db4c-tg4d2         6/6     Running     0          125m   10.233.90.13   node1    
+csi-rbdplugin-skx2m                                3/3     Running     0          118m   10.233.70.12   master   
+csi-rbdplugin-t86nx                                3/3     Running     0          125m   10.233.96.14   node2    
+csi-rbdplugin-vww89                                3/3     Running     0          125m   10.233.90.12   node1    
+rook-ceph-crashcollector-master-58b49b5db6-m9m5v   1/1     Running     0          11m    10.233.70.21   master   
+rook-ceph-crashcollector-node1-5965f9db96-ncgm8    1/1     Running     0          12m    10.233.90.28   node1    
+rook-ceph-crashcollector-node2-7d67bb865-sh2ch     1/1     Running     0          11m    10.233.96.39   node2    
+rook-ceph-mgr-a-7bd599b466-bgkqg                   1/1     Running     0          12m    10.233.96.35   node2    
+rook-ceph-mon-a-6ff5f6b6cb-99mcz                   1/1     Running     0          18m    10.233.90.25   node1    
+rook-ceph-mon-c-5cf8b995b5-pxssc                   1/1     Running     0          14m    10.233.96.33   node2    
+rook-ceph-mon-d-6cd9c57459-pr5dp                   1/1     Running     0          11m    10.233.70.22   master   
+rook-ceph-operator-5bbbb569df-5nbh9                1/1     Running     0          150m   10.233.96.12   node2    
+rook-ceph-osd-0-64b57fd54c-trmt5                   1/1     Running     0          11m    10.233.90.29   node1    
+rook-ceph-osd-1-6b7568d5c7-bzt9v                   1/1     Running     0          11m    10.233.96.38   node2    
+rook-ceph-osd-prepare-node1-2vhbd                  0/1     Completed   0          10m    10.233.90.33   node1    
+rook-ceph-osd-prepare-node2-646sj                  0/1     Completed   0          10m    10.233.96.41   node2
+</code></pre>
+<h3 id="7-验证ceph集群"><strong>7、验证ceph集群</strong></h3>
+<p>要验证群集是否处于正常状态，可以连接到 toolbox 工具箱并运行命令</p>
+<pre><code class="language-shell">kubectl create -f toolbox.yaml
+kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
+# 进去之后就可以执行各种命令了：
+ceph status
+ceph osd status
+ceph df
+rados df
+# 看看我的
+[root@k8s-a-master examples]kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
+bash-4.4$ ceph -s
+  cluster:
+    id:     0b64957b-9aaa-43ef-9946-211ca911dc92
+    health: HEALTH_OK
+ 
+  services:
+    mon: 3 daemons, quorum a,b,c (age 3m)
+    mgr: a(active, since 64s), standbys: b
+    osd: 3 osds: 3 up (since 116s), 3 in (since 2m)
+ 
+  data:
+    pools:   1 pools, 1 pgs
+    objects: 2 objects, 449 KiB
+    usage:   234 MiB used, 9.8 TiB / 9.8 TiB avail
+    pgs:     1 active+clean
+ 
+bash-4.4$ ceph osd status
+ID  HOST           USED  AVAIL  WR OPS  WR DATA  RD OPS  RD DATA  STATE      
+ 0  k8s-a-node02  23.9M   999G      0        0       0        0   exists,up  
+ 1  k8s-a-node03  20.9M   999G      0        0       0        0   exists,up  
+ 2  k8s-a-node01  23.8M   999G      0        0       0        0   exists,up  
+</code></pre>
+<p>每个 OSD 都有一个状态，可以是以下几种之一：</p>
+<ul>
+<li>up：表示该 OSD 正常运行，并且可以处理数据请求。</li>
+<li>down：表示该 OSD 当前无法运行或不可用，可能由于硬件故障或软件问题。</li>
+<li>out：表示该 OSD 不参与数据存储或恢复，这通常是由于管理员手动将其标记为不可用。</li>
+<li>exists：表示该 OSD 配置存在，但尚未启动或加入集群。</li>
+</ul>
+<h3 id="8-确保mgr-dashboard这个service是可以访问的"><strong>8、确保mgr-dashboard这个service是可以访问的</strong></h3>
+<pre><code class="language-shell">[root@master ceph]# kubectl get svc -n rook-ceph
+NAME                       TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
+csi-cephfsplugin-metrics   ClusterIP   10.233.24.242   &lt;none&gt;        8080/TCP,8081/TCP   129m
+csi-rbdplugin-metrics      ClusterIP   10.233.1.189    &lt;none&gt;        8080/TCP,8081/TCP   129m
+rook-ceph-mgr              ClusterIP   10.233.57.190   &lt;none&gt;        9283/TCP            15m
+rook-ceph-mgr-dashboard    ClusterIP   10.233.59.74    &lt;none&gt;        8443/TCP            15m
+rook-ceph-mon-a            ClusterIP   10.233.2.171    &lt;none&gt;        6789/TCP,3300/TCP   22m
+rook-ceph-mon-c            ClusterIP   10.233.51.168   &lt;none&gt;        6789/TCP,3300/TCP   18m
+rook-ceph-mon-d            ClusterIP   10.233.58.171   &lt;none&gt;        6789/TCP,3300/TCP   14m
+</code></pre>
+<ul>
+<li>
+<p>rook-ceph-mgr：是 Ceph 的管理进程（Manager），负责集群的监控、状态报告、数据分析、调度等功能，它默认监听 9283 端口，并提供了 Prometheus 格式的监控指标，可以被 Prometheus 拉取并用于集群监控。</p>
+</li>
+<li>
+<p>rook-ceph-mgr-dashboard：是 Rook 提供的一个 Web 界面，用于方便地查看 Ceph 集群的监控信息、状态、性能指标等。</p>
+</li>
+<li>
+<p>rook-ceph-mon：是 Ceph Monitor 进程的 Kubernetes 服务。Ceph Monitor 是 Ceph 集群的核心组件之一，负责维护 Ceph 集群的状态、拓扑结构、数据分布等信息，是 Ceph 集群的管理节点。</p>
+</li>
+</ul>
+<h3 id="9-使用-nodeport-类型的service暴露dashboard-dashboard-external-httpsyaml"><strong>9、使用 NodePort 类型的Service暴露dashboard dashboard-external-https.yaml</strong></h3>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: rook-ceph-mgr-dashboard-external-https
+  namespace: rook-ceph
+  labels:
+    app: rook-ceph-mgr
+    rook_cluster: rook-ceph
+spec:
+  ports:
+  - name: dashboard
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: rook-ceph-mgr
+    rook_cluster: rook-ceph
+  sessionAffinity: None
+  type: NodePort
+</code></pre>
+<h3 id="10-创建后nodeport类的svc后查看"><strong>10、创建后NodePort类的svc后查看</strong></h3>
+<pre><code class="language-shell">[root@k8s-a-master examples]# kubectl get svc -n rook-ceph
+NAME                                     TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+rook-ceph-mgr                            ClusterIP   10.96.58.93      &lt;none&gt;        9283/TCP            28m
+rook-ceph-mgr-dashboard                  ClusterIP   10.103.131.77    &lt;none&gt;        8443/TCP            28m # 记得干掉
+rook-ceph-mgr-dashboard-external-https   NodePort    10.107.247.53    &lt;none&gt;        8443:32564/TCP      9m38s
+rook-ceph-mon-a                          ClusterIP   10.98.168.35     &lt;none&gt;        6789/TCP,3300/TCP   29m
+rook-ceph-mon-b                          ClusterIP   10.103.127.134   &lt;none&gt;        6789/TCP,3300/TCP   29m
+rook-ceph-mon-c                          ClusterIP   10.111.46.187    &lt;none&gt;        6789/TCP,3300/TCP   29m
+</code></pre>
+<hr>
+<h2 id="三-ceph的后续使用"><strong>三、Ceph的后续使用</strong></h2>
+<p>Ceph的后台的管理员账号为admin，为了方便，我还是换成了NodePort的方式暴露Dashboard了！</p>
+<h3 id="1-获取ceph后台的默认访问密码"><strong>1、获取Ceph后台的默认访问密码：</strong></h3>
+<pre><code class="language-shell">[root@master ceph]# kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath=&quot;{['data']['password']}&quot; | base64 --decode &amp;&amp; echo
+JXr&quot;@`8)_?]7%GwP,(C^
+</code></pre>
+<p>后台如图：</p>
+<figure data-type="image" tabindex="3"><img src="https://tianxiawuhao.github.io/post-images/1637129649467923.png" alt="image.png" loading="lazy"></figure>
+<p>登录完，右上角修改以下密码！</p>
+<h3 id="2-创建存储池storageclassblock-cephyaml用于块存储的storageclass"><strong>2、创建存储池+StorageClass——block-ceph.yaml——用于块存储的StorageClass</strong></h3>
+<pre><code class="language-yaml">apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: replicapool
+  namespace: rook-ceph
+spec:
+  failureDomain: host  #容灾模式，host或者osd
+  replicated:
+    size: 2  #数据副本数量
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass  #存储驱动
+metadata:
+   name: rook-ceph-block
+# Change &quot;rook-ceph&quot; provisioner prefix to match the operator namespace if needed
+provisioner: rook-ceph.rbd.csi.ceph.com
+parameters:
+    # clusterID is the namespace where the rook cluster is running
+    clusterID: rook-ceph
+    # Ceph pool into which the RBD image shall be created
+    pool: replicapool
+ 
+    # (optional) mapOptions is a comma-separated list of map options.
+    # For krbd options refer
+    # https://docs.ceph.com/docs/master/man/8/rbd/#kernel-rbd-krbd-options
+    # For nbd options refer
+    # https://docs.ceph.com/docs/master/man/8/rbd-nbd/#options
+    # mapOptions: lock_on_read,queue_depth=1024
+ 
+    # (optional) unmapOptions is a comma-separated list of unmap options.
+    # For krbd options refer
+    # https://docs.ceph.com/docs/master/man/8/rbd/#kernel-rbd-krbd-options
+    # For nbd options refer
+    # https://docs.ceph.com/docs/master/man/8/rbd-nbd/#options
+    # unmapOptions: force
+ 
+    # RBD image format. Defaults to &quot;2&quot;.
+    imageFormat: &quot;2&quot;
+ 
+    # RBD image features. Available for imageFormat: &quot;2&quot;. CSI RBD currently supports only `layering` feature.
+    imageFeatures: layering
+ 
+    # The secrets contain Ceph admin credentials.
+    csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+    csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+    csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+    csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+    csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+    csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+ 
+    # Specify the filesystem type of the volume. If not specified, csi-provisioner
+    # will set default as `ext4`. Note that `xfs` is not recommended due to potential deadlock
+    # in hyperconverged settings where the volume is mounted on the same node as the osds.
+    csi.storage.k8s.io/fstype: ext4
+ 
+# Delete the rbd volume when a PVC is deleted
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+</code></pre>
+<h3 id="3-创建存储池storageclasscephfs-cephyaml用于共享文件存储的storageclass"><strong>3、*<em>创建存储池**+StorageClass**——cephfs-ceph.yaml——用于共享文件存储的StorageClass*</em></strong></h3>
+<pre><code class="language-yaml">apiVersion: ceph.rook.io/v1
+kind: CephFilesystem
+metadata:
+  name: myfs
+  namespace: rook-ceph # namespace:cluster
+spec:
+  # The metadata pool spec. Must use replication.
+  metadataPool:
+    replicated:
+      size: 2
+      requireSafeReplicaSize: true
+    parameters:
+      # Inline compression mode for the data pool
+      # Further reference: https://docs.ceph.com/docs/nautilus/rados/configuration/bluestore-config-ref/#inline-compression
+      compression_mode:
+        none
+        # gives a hint (%) to Ceph in terms of expected consumption of the total cluster capacity of a given pool
+      # for more info: https://docs.ceph.com/docs/master/rados/operations/placement-groups/#specifying-expected-pool-size
+      #target_size_ratio: &quot;.5&quot;
+  # The list of data pool specs. Can use replication or erasure coding.
+  dataPools:
+    - failureDomain: host
+      replicated:
+        size: 2
+        # Disallow setting pool with replica 1, this could lead to data loss without recovery.
+        # Make sure you're *ABSOLUTELY CERTAIN* that is what you want
+        requireSafeReplicaSize: true
+      parameters:
+        # Inline compression mode for the data pool
+        # Further reference: https://docs.ceph.com/docs/nautilus/rados/configuration/bluestore-config-ref/#inline-compression
+        compression_mode:
+          none
+          # gives a hint (%) to Ceph in terms of expected consumption of the total cluster capacity of a given pool
+        # for more info: https://docs.ceph.com/docs/master/rados/operations/placement-groups/#specifying-expected-pool-size
+        #target_size_ratio: &quot;.5&quot;
+  # Whether to preserve filesystem after CephFilesystem CRD deletion
+  preserveFilesystemOnDelete: true
+  # The metadata service (mds) configuration
+  metadataServer:
+    # The number of active MDS instances
+    activeCount: 1
+    # Whether each active MDS instance will have an active standby with a warm metadata cache for faster failover.
+    # If false, standbys will be available, but will not have a warm cache.
+    activeStandby: true
+    # The affinity rules to apply to the mds deployment
+    placement:
+      #  nodeAffinity:
+      #    requiredDuringSchedulingIgnoredDuringExecution:
+      #      nodeSelectorTerms:
+      #      - matchExpressions:
+      #        - key: role
+      #          operator: In
+      #          values:
+      #          - mds-node
+      #  topologySpreadConstraints:
+      #  tolerations:
+      #  - key: mds-node
+      #    operator: Exists
+      #  podAffinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - rook-ceph-mds
+            # topologyKey: kubernetes.io/hostname will place MDS across different hosts
+            topologyKey: kubernetes.io/hostname
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - rook-ceph-mds
+              # topologyKey: */zone can be used to spread MDS across different AZ
+              # Use &lt;topologyKey: failure-domain.beta.kubernetes.io/zone&gt; in k8s cluster if your cluster is v1.16 or lower
+              # Use &lt;topologyKey: topology.kubernetes.io/zone&gt;  in k8s cluster is v1.17 or upper
+              topologyKey: topology.kubernetes.io/zone
+    # A key/value list of annotations
+    annotations:
+    #  key: value
+    # A key/value list of labels
+    labels:
+    #  key: value
+    resources:
+    # The requests and limits set here, allow the filesystem MDS Pod(s) to use half of one CPU core and 1 gigabyte of memory
+    #  limits:
+    #    cpu: &quot;500m&quot;
+    #    memory: &quot;1024Mi&quot;
+    #  requests:
+    #    cpu: &quot;500m&quot;
+    #    memory: &quot;1024Mi&quot;
+    # priorityClassName: my-priority-class
+  mirroring:
+    enabled: false
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-cephfs
+#  annotations:
+#    storageclass.kubernetes.io/is-default-class: &quot;true&quot;
+# Change &quot;rook-ceph&quot; provisioner prefix to match the operator namespace if needed
+provisioner: rook-ceph.cephfs.csi.ceph.com
+parameters:
+  # clusterID is the namespace where operator is deployed.
+  clusterID: rook-ceph
+ 
+  # CephFS filesystem name into which the volume shall be created
+  fsName: myfs
+  # Ceph pool into which the volume shall be created
+  # Required for provisionVolume: &quot;true&quot;
+  pool: myfs-data0
+  # The secrets contain Ceph admin credentials. These are generated automatically by the operator
+  # in the same namespace as the cluster.
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+ 
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+</code></pre>
+<p>上面两个StorageClass都创建完成后，可以再后台存储池中看到：</p>
+<figure data-type="image" tabindex="4"><img src="https://tianxiawuhao.github.io/post-images/1637131207171094.png" alt="image.png" loading="lazy"></figure>
+<h3 id="4-当storageclass都准备好之后我们就可以查看到了"><strong>4、当StorageClass都准备好之后，我们就可以查看到了：</strong></h3>
+<pre><code class="language-shell">[root@master ceph]# kubectl get sc -A
+NAME              PROVISIONER                     RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+local (default)   openebs.io/local                Delete          WaitForFirstConsumer   false                  24h
+rook-ceph-block   rook-ceph.rbd.csi.ceph.com      Delete          Immediate              true                   22m
+rook-cephfs       rook-ceph.cephfs.csi.ceph.com   Delete          Immediate              true                   3m26s
+</code></pre>
+<p>之后，在申请pvc的时候，我们只需要指定对应的StorageClass即可！</p>
+<figure data-type="image" tabindex="5"><img src="https://tianxiawuhao.github.io/post-images/1637132264684259.png" alt="" loading="lazy"></figure>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E4%B8%80-ceph%E5%9F%BA%E7%A1%80%E7%AE%80%E4%BB%8B"><strong>一、Ceph基础简介</strong></a>
+<ul>
+<li><a href="#1-ceph%E7%AE%80%E4%BB%8B"><strong>1、Ceph简介</strong></a></li>
+<li><a href="#2-ceph%E9%9B%86%E7%BE%A4%E7%9A%84%E5%AE%89%E8%A3%85%E6%96%B9%E5%BC%8F%E9%80%89%E6%8B%A9"><strong>2、Ceph集群的安装方式选择</strong></a></li>
+<li><a href="#3-rook%E7%AE%80%E4%BB%8Bhttpswwwrookiodocsrookv17quickstarthtml">**3、Rook简介：**<strong>https://www.rook.io/docs/rook/v1.7/quickstart.html</strong></a></li>
+</ul>
+</li>
+<li><a href="#%E4%BA%8C-rookceph%E7%9A%84%E5%AE%89%E8%A3%85"><strong>二、Rook+Ceph的安装</strong></a>
+<ul>
+<li><a href="#1-%E6%9F%A5%E7%9C%8B%E5%89%8D%E6%8F%90%E6%9D%A1%E4%BB%B6%E7%A1%AC%E4%BB%B6%E8%A6%81%E6%B1%82"><strong>1、查看前提条件——硬件要求</strong></a></li>
+<li><a href="#2-%E5%8D%87%E7%BA%A7%E5%86%85%E6%A0%B8"><strong>2、升级内核</strong></a></li>
+<li><a href="#3-%E5%85%8B%E9%9A%86rook%E7%9A%84git%E4%BB%93%E5%BA%93%E4%BB%A3%E7%A0%81"><strong>3、克隆Rook的git仓库代码</strong></a></li>
+<li><a href="#4-%E4%BF%AE%E6%94%B9%E5%AE%89%E8%A3%85operatoryaml"><strong>4、修改安装operator.yaml：</strong></a></li>
+<li><a href="#5-%E4%BF%AE%E6%94%B9-clusteryaml%E4%B8%AD%E7%9A%84%E9%9B%86%E7%BE%A4%E4%BF%A1%E6%81%AF"><strong>5、修改 cluster.yaml中的集群信息：</strong></a></li>
+<li><a href="#6-%E6%AD%A3%E5%BC%8F%E5%AE%89%E8%A3%85%E9%9B%86%E7%BE%A4"><strong>6、正式安装集群：</strong></a></li>
+<li><a href="#7-%E9%AA%8C%E8%AF%81ceph%E9%9B%86%E7%BE%A4"><strong>7、验证ceph集群</strong></a></li>
+<li><a href="#8-%E7%A1%AE%E4%BF%9Dmgr-dashboard%E8%BF%99%E4%B8%AAservice%E6%98%AF%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE%E7%9A%84"><strong>8、确保mgr-dashboard这个service是可以访问的</strong></a></li>
+<li><a href="#9-%E4%BD%BF%E7%94%A8-nodeport-%E7%B1%BB%E5%9E%8B%E7%9A%84service%E6%9A%B4%E9%9C%B2dashboard-dashboard-external-httpsyaml"><strong>9、使用 NodePort 类型的Service暴露dashboard dashboard-external-https.yaml</strong></a></li>
+<li><a href="#10-%E5%88%9B%E5%BB%BA%E5%90%8Enodeport%E7%B1%BB%E7%9A%84svc%E5%90%8E%E6%9F%A5%E7%9C%8B"><strong>10、创建后NodePort类的svc后查看</strong></a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%89-ceph%E7%9A%84%E5%90%8E%E7%BB%AD%E4%BD%BF%E7%94%A8"><strong>三、Ceph的后续使用</strong></a>
+<ul>
+<li><a href="#1-%E8%8E%B7%E5%8F%96ceph%E5%90%8E%E5%8F%B0%E7%9A%84%E9%BB%98%E8%AE%A4%E8%AE%BF%E9%97%AE%E5%AF%86%E7%A0%81"><strong>1、获取Ceph后台的默认访问密码：</strong></a></li>
+<li><a href="#2-%E5%88%9B%E5%BB%BA%E5%AD%98%E5%82%A8%E6%B1%A0storageclassblock-cephyaml%E7%94%A8%E4%BA%8E%E5%9D%97%E5%AD%98%E5%82%A8%E7%9A%84storageclass"><strong>2、创建存储池+StorageClass——block-ceph.yaml——用于块存储的StorageClass</strong></a></li>
+<li><a href="#3-%E5%88%9B%E5%BB%BA%E5%AD%98%E5%82%A8%E6%B1%A0storageclasscephfs-cephyaml%E7%94%A8%E4%BA%8E%E5%85%B1%E4%BA%AB%E6%96%87%E4%BB%B6%E5%AD%98%E5%82%A8%E7%9A%84storageclass"><strong>3、*<em>创建存储池**+StorageClass**——cephfs-ceph.yaml——用于共享文件存储的StorageClass*</em></strong></a></li>
+<li><a href="#4-%E5%BD%93storageclass%E9%83%BD%E5%87%86%E5%A4%87%E5%A5%BD%E4%B9%8B%E5%90%8E%E6%88%91%E4%BB%AC%E5%B0%B1%E5%8F%AF%E4%BB%A5%E6%9F%A5%E7%9C%8B%E5%88%B0%E4%BA%86"><strong>4、当StorageClass都准备好之后，我们就可以查看到了：</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+          <hr />
+          
+            <p class="prev-post">上一篇：
+              <a href="https://tianxiawuhao.github.io/CIqmuU7wS/">
+                <span class="post-title">
+                  Centos7部署MinIO&rarr;
+                </span>
+              </a>
+            </p>
+          
+          
+          <p class="next-post">下一篇：
+            <a href="https://tianxiawuhao.github.io/lhZ2-aE1I/">
+              <span class="post-title">
+                Clickhouse优缺点及性能情况&rarr;
+              </span>
+            </a>
+          </p>
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span><br><a href="https://github.com/getgridea/gridea" class="Themeinfo">Powered by Gridea</a></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+</body>
+
+</html>
