@@ -141,7 +141,7 @@
 <h3 id="5-修改环境变量">5 修改环境变量</h3>
 <pre><code class="language-java">vim /etc/profile
 </code></pre>
-<p><strong>注意javahome的路径是我们刚刚设置的，那个文件夹</strong></p>
+<p><strong>注意：JAVA_HOME 的路径要指向刚才解压出的 jdk 文件夹</strong></p>
 <pre><code class="language-java">#jdk17
 export JAVA_HOME=/home/jdk17/jdk-17.0.10
 export CLASSPATH=.:$JAVA_HOME/lib/tools.jar:$JAVA_HOME/lib/dt.jar
@@ -154,25 +154,25 @@ export PATH=$JAVA_HOME/bin:$PATH
 <pre><code class="language-java">java -version
 </code></pre>
 <h2 id="安装maven">安装maven</h2>
-<h3 id="1-创建jdk的目录">1 创建jdk的目录</h3>
+<h3 id="1-创建jdk的目录">1 创建 maven 目录</h3>
 <pre><code class="language-java">mkdir /home/maven
 </code></pre>
-<h3 id="2-下载jdk17并将其放到我们所建立的目录中-2">2 下载jdk17并将其放到我们所建立的目录中</h3>
-<pre><code class="language-java">wget https://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/3.8.4/binaries/apache-maven-3.8.4-bin.tar.gz -P /home/maven/
+<h3 id="2-下载jdk17并将其放到我们所建立的目录中-2">2 下载 maven 安装包并放入该目录</h3>
+<pre><code class="language-java">wget https://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/3.8.8/binaries/apache-maven-3.8.8-bin.tar.gz -P /home/maven/
 </code></pre>
 <p>或者去官网下载</p>
 <p><a href="https://maven.apache.org/download.cgi">Maven – Download Apache Maven</a></p>
 <h3 id="3-解压文件-2">3 解压文件</h3>
-<pre><code class="language-java">tar xf /home/maven/apache-maven-3.8.4-bin.tar.gz -C /home/maven/
+<pre><code class="language-java">tar xf /home/maven/apache-maven-3.8.8-bin.tar.gz -C /home/maven/
 </code></pre>
-<h3 id="4-查看安装的jdk具体的版本是什么-2">4 查看安装的jdk具体的版本是什么</h3>
+<h3 id="4-查看安装的jdk具体的版本是什么-2">4 查看解压出的 maven 目录内容</h3>
 <pre><code class="language-java">cd /home/maven/
 ls
 </code></pre>
 <h3 id="5-修改环境变量-2">5 修改环境变量</h3>
 <pre><code class="language-java">vim /etc/profile
 </code></pre>
-<p><strong>注意javahome的路径是我们刚刚设置的，那个文件夹</strong></p>
+<p><strong>注意：MAVEN_HOME 的路径要指向刚才解压出的 maven 文件夹</strong></p>
 <pre><code class="language-java">#maven 
 export MAVEN_HOME=/home/maven/apache-maven-3.8.8
 export PATH=$MAVEN_HOME/bin:$PATH 
@@ -249,9 +249,9 @@ services:
       - /home/maven/apache-maven-3.8.8:/home/maven/apache-maven-3.8.8
       - /root/.ssh:/root/.ssh
 </code></pre>
-<pre><code class="language-java">docker run -di -p 8080:8080 -p 50000:50000 --name jenkins --restart=always -v /home/jenkins/jenkins_home/:/var/jenkins_home/ -v /var/run/docker.sock:/var/run/docker.sock -v/usr/bin/docker:/usr/bin/docker -v /home/jdk17/jdk-17.0.10:/home/jdk17/jdk-17.0.10 -v /home/maven/apache-maven-3.8.8:/home/maven/apache-maven-3.8.8 -v /root/.ssh:/root/.ssh jenkins/jenkins
+<pre><code class="language-java">docker run -di -p 8080:8080 -p 50000:50000 --name jenkins --restart=always -v /home/jenkins/jenkins_home/:/var/jenkins_home/ -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker -v /home/jdk17/jdk-17.0.10:/home/jdk17/jdk-17.0.10 -v /home/maven/apache-maven-3.8.8:/home/maven/apache-maven-3.8.8 -v /root/.ssh:/root/.ssh jenkins/jenkins
 </code></pre>
-<h3 id="5-设置权限">5 设置权限</h3>
+<h3 id="5-设置权限">4 设置权限</h3>
 <pre><code class="language-java">chown -R 1000:1000 /home/jenkins/jenkins_home
 chown -R 1000:1000 /home/maven
 </code></pre>
@@ -260,7 +260,7 @@ chown -R 1000:1000 /home/maven
 <pre><code class="language-java">第一步：sudo gpasswd -a username docker  #将普通用户username加入到docker组中，username这个字段也可以直接换成$USER。
 第二步：newgrp docker  #更新docker组
 </code></pre>
-<h3 id="4-启动容器">4 启动容器</h3>
+<h3 id="4-启动容器">5 启动容器前配置国内更新源（可选）</h3>
 <p>Jenkins需要下载大量内容，但是由于默认下载地址下载速度较慢，如有需要可以设置下载地址为国内镜像站</p>
 <pre><code class="language-java">cd /home/jenkins/jenkins_home/
 cat hudson.model.UpdateCenter.xml 
@@ -284,11 +284,11 @@ cat hudson.model.UpdateCenter.xml
 &lt;/sites&gt;
 # 清华大学的插件源也可以https://mirrors.tuna.tsinghua.edu.cn/jenkins/updates/update-center.json
 </code></pre>
-<h3 id="4-启动容器-2">4 启动容器</h3>
+<h3 id="4-启动容器-2">6 启动容器</h3>
 <pre><code class="language-java">#在docker-compose.yml所在目录启动
 docker-compose up -d jenkins
 </code></pre>
-<h3 id="5-访问jenkins">5 访问jenkins</h3>
+<h3 id="5-访问jenkins">7 访问 Jenkins</h3>
 <p>1、启动之后使用http://ip:端口访问jenkins。</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1711711879057.png" alt="" loading="lazy"></figure>
 <p><strong>复制管理员密码</strong></p>
@@ -338,9 +338,9 @@ jenkins.war  jenkins.war.22.3.17.bak  other-version  ref
 <li>选择&quot;Username with password&quot;，输入Gitlab的用户名和密码，点击&quot;确定&quot;。<br>
 <img src="/post-images/1711711920667.png" alt="" loading="lazy"></li>
 </ul>
-<h3 id="2-配置源码管理从gitlab拉取代码">2 配置源码管理，从gitlab拉取代码</h3>
+<h3 id="2-配置源码管理从gitlab拉取代码">3 配置源码管理，从 GitLab 拉取代码</h3>
 <figure data-type="image" tabindex="4"><img src="/post-images/1711711931712.png" alt="" loading="lazy"></figure>
-<h3 id="编译打包">编译打包</h3>
+<h3 id="编译打包">4 编译打包</h3>
 <pre><code class="language-java">构建-&gt;添加构建步骤-&gt;Executor Shell
 echo “开始编译和打包”
 mvn clean install -DskipTests
@@ -357,7 +357,7 @@ echo &quot;=============== 登出  ===============&quot;
 docker logout
 echo “编译和打包结束”
 </code></pre>
-<h2 id="推送支的代码-自动执行jenkins">推送支的代码， 自动执行jenkins</h2>
+<h2 id="推送支的代码-自动执行jenkins">推送代码后自动触发 Jenkins 构建</h2>
 <h3 id="1-jenkins中gitlab插件">1 jenkins中Gitlab插件</h3>
 <figure data-type="image" tabindex="5"><img src="/post-images/1711711941427.png" alt="" loading="lazy"></figure>
 <h3 id="2-触发功能配置">2 触发功能配置</h3>
@@ -383,10 +383,10 @@ echo “编译和打包结束”
 </li>
 <li><a href="#%E5%AE%89%E8%A3%85maven">安装maven</a>
 <ul>
-<li><a href="#1-%E5%88%9B%E5%BB%BAjdk%E7%9A%84%E7%9B%AE%E5%BD%95">1 创建jdk的目录</a></li>
-<li><a href="#2-%E4%B8%8B%E8%BD%BDjdk17%E5%B9%B6%E5%B0%86%E5%85%B6%E6%94%BE%E5%88%B0%E6%88%91%E4%BB%AC%E6%89%80%E5%BB%BA%E7%AB%8B%E7%9A%84%E7%9B%AE%E5%BD%95%E4%B8%AD-2">2 下载jdk17并将其放到我们所建立的目录中</a></li>
+<li><a href="#1-%E5%88%9B%E5%BB%BAjdk%E7%9A%84%E7%9B%AE%E5%BD%95">1 创建 maven 目录</a></li>
+<li><a href="#2-%E4%B8%8B%E8%BD%BDjdk17%E5%B9%B6%E5%B0%86%E5%85%B6%E6%94%BE%E5%88%B0%E6%88%91%E4%BB%AC%E6%89%80%E5%BB%BA%E7%AB%8B%E7%9A%84%E7%9B%AE%E5%BD%95%E4%B8%AD-2">2 下载 maven 安装包并放入该目录</a></li>
 <li><a href="#3-%E8%A7%A3%E5%8E%8B%E6%96%87%E4%BB%B6-2">3 解压文件</a></li>
-<li><a href="#4-%E6%9F%A5%E7%9C%8B%E5%AE%89%E8%A3%85%E7%9A%84jdk%E5%85%B7%E4%BD%93%E7%9A%84%E7%89%88%E6%9C%AC%E6%98%AF%E4%BB%80%E4%B9%88-2">4 查看安装的jdk具体的版本是什么</a></li>
+<li><a href="#4-%E6%9F%A5%E7%9C%8B%E5%AE%89%E8%A3%85%E7%9A%84jdk%E5%85%B7%E4%BD%93%E7%9A%84%E7%89%88%E6%9C%AC%E6%98%AF%E4%BB%80%E4%B9%88-2">4 查看解压出的 maven 目录内容</a></li>
 <li><a href="#5-%E4%BF%AE%E6%94%B9%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F-2">5 修改环境变量</a></li>
 <li><a href="#6-%E6%B5%8B%E8%AF%95%E6%98%AF%E5%90%A6%E5%AE%89%E8%A3%85%E6%88%90%E5%8A%9F-2">6 测试是否安装成功</a></li>
 <li><a href="#7-%E4%BF%AE%E6%94%B9%E6%95%B0%E6%8D%AE%E6%BA%90">7 修改数据源</a></li>
@@ -403,14 +403,14 @@ echo “编译和打包结束”
 <li><a href="#1-%E6%9F%A5%E8%AF%A2%E9%95%9C%E5%83%8F">1 查询镜像</a></li>
 <li><a href="#2-%E4%B8%8B%E8%BD%BD%E9%95%9C%E5%83%8F">2 下载镜像</a></li>
 <li><a href="#3-%E7%BC%96%E5%86%99docker-composeyml">3 编写docker-compose.yml</a></li>
-<li><a href="#5-%E8%AE%BE%E7%BD%AE%E6%9D%83%E9%99%90">5 设置权限</a></li>
-<li><a href="#4-%E5%90%AF%E5%8A%A8%E5%AE%B9%E5%99%A8">4 启动容器</a>
+<li><a href="#5-%E8%AE%BE%E7%BD%AE%E6%9D%83%E9%99%90">4 设置权限</a></li>
+<li><a href="#4-%E5%90%AF%E5%8A%A8%E5%AE%B9%E5%99%A8">5 启动容器前配置国内更新源（可选）</a>
 <ul>
 <li><a href="#%E4%BF%AE%E6%94%B9%E6%95%B0%E6%8D%AE%E5%8D%B7%E4%B8%AD%E7%9A%84hudsonmodelupdatecenterxml%E6%96%87%E4%BB%B6">修改数据卷中的hudson.model.UpdateCenter.xml文件</a></li>
 </ul>
 </li>
-<li><a href="#4-%E5%90%AF%E5%8A%A8%E5%AE%B9%E5%99%A8-2">4 启动容器</a></li>
-<li><a href="#5-%E8%AE%BF%E9%97%AEjenkins">5 访问jenkins</a></li>
+<li><a href="#4-%E5%90%AF%E5%8A%A8%E5%AE%B9%E5%99%A8-2">6 启动容器</a></li>
+<li><a href="#5-%E8%AE%BF%E9%97%AEjenkins">7 访问 Jenkins</a></li>
 </ul>
 </li>
 <li><a href="#%E6%9B%B4%E6%96%B0jenkins">更新jenkins</a>
@@ -423,11 +423,11 @@ echo “编译和打包结束”
 <ul>
 <li><a href="#1-%E5%88%9B%E5%BB%BA%E9%A1%B9%E7%9B%AE">1 创建项目</a></li>
 <li><a href="#2-%E7%94%A8%E6%88%B7%E5%AF%86%E7%A0%81%E7%B1%BB%E5%9E%8B">2 用户密码类型</a></li>
-<li><a href="#2-%E9%85%8D%E7%BD%AE%E6%BA%90%E7%A0%81%E7%AE%A1%E7%90%86%E4%BB%8Egitlab%E6%8B%89%E5%8F%96%E4%BB%A3%E7%A0%81">2 配置源码管理，从gitlab拉取代码</a></li>
-<li><a href="#%E7%BC%96%E8%AF%91%E6%89%93%E5%8C%85">编译打包</a></li>
+<li><a href="#2-%E9%85%8D%E7%BD%AE%E6%BA%90%E7%A0%81%E7%AE%A1%E7%90%86%E4%BB%8Egitlab%E6%8B%89%E5%8F%96%E4%BB%A3%E7%A0%81">3 配置源码管理，从 GitLab 拉取代码</a></li>
+<li><a href="#%E7%BC%96%E8%AF%91%E6%89%93%E5%8C%85">4 编译打包</a></li>
 </ul>
 </li>
-<li><a href="#%E6%8E%A8%E9%80%81%E6%94%AF%E7%9A%84%E4%BB%A3%E7%A0%81-%E8%87%AA%E5%8A%A8%E6%89%A7%E8%A1%8Cjenkins">推送支的代码， 自动执行jenkins</a>
+<li><a href="#%E6%8E%A8%E9%80%81%E6%94%AF%E7%9A%84%E4%BB%A3%E7%A0%81-%E8%87%AA%E5%8A%A8%E6%89%A7%E8%A1%8Cjenkins">推送代码后自动触发 Jenkins 构建</a>
 <ul>
 <li><a href="#1-jenkins%E4%B8%ADgitlab%E6%8F%92%E4%BB%B6">1 jenkins中Gitlab插件</a></li>
 <li><a href="#2-%E8%A7%A6%E5%8F%91%E5%8A%9F%E8%83%BD%E9%85%8D%E7%BD%AE">2 触发功能配置</a></li>
