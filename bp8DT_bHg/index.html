@@ -168,9 +168,9 @@
 <li>AP集群，存在数据的短时间不一致，但是可以保证最终一致性，对客户端的影响也就是可能配置更新慢那么一点。</li>
 </ul>
 <hr>
-<h3 id="一-nacos客户端加载配置的核心逻辑">一 nacos客户端加载配置的核心逻辑</h3>
-<h4 id="1-nacos核心配置nacospropertysourcelocator类的定位"><strong>1 nacos核心配置NacosPropertySourceLocator类的定位：</strong></h4>
-<p>如果要弄清楚Nacos配置文件加载到Spring容器中的流程，还需要熟悉Springcloud的源码流程，了解Springcloud中的配置，还有重要的Bean是如果装载到Spring容器中的；</p>
+<h2 id="一-nacos客户端加载配置的核心逻辑">一 nacos客户端加载配置的核心逻辑</h2>
+<h3 id="1-nacos核心配置nacospropertysourcelocator类的定位"><strong>1 nacos核心配置NacosPropertySourceLocator类的定位：</strong></h3>
+<p>如果要弄清楚 Nacos 配置文件加载到 Spring 容器中的流程，还需要熟悉 Spring Cloud 的源码流程，了解 Spring Cloud 中的配置，以及这些重要的 Bean 是如何装载到 Spring 容器中的。</p>
 <p>这里只能大概聊一下：</p>
 <ul>
 <li>Springboot项目启动时，在prepareEnvironment()阶段，会通过spring.factories文件中的BootstrapConfiguration类找到NacosConfigBootstrapConfiguration配置类，并完成注入：</li>
@@ -203,12 +203,12 @@
 }
 </code></pre>
 <ul>
-<li>然后在prepareContext()上下文的时候，会通过之前从spring.factories中读取到的ApplicationInitializer初始化器，这里遍历执行时，就会执行到springcloud的PropertySpurceBootstrapConfiguration类的initialize()方法：</li>
+<li>然后在prepareContext()上下文的时候，会通过之前从 spring.factories 中读取到的 ApplicationContextInitializer 初始化器，这里遍历执行时，就会执行到springcloud的PropertySourceBootstrapConfiguration类的initialize()方法：</li>
 </ul>
 <figure data-type="image" tabindex="4"><img src="/post-images/1658666184206.png" alt="" loading="lazy"></figure>
-<p>可以看到PropertySpurceBootstrapConfiguration.initialize()方法中需要用到PropertySourceLocator接口的实现类，而我们配置的Nacos正好为这个接口提供了实现类NacosPropertySourceLocator</p>
+<p>可以看到PropertySourceBootstrapConfiguration.initialize()方法中需要用到PropertySourceLocator接口的实现类，而我们配置的Nacos正好为这个接口提供了实现类NacosPropertySourceLocator</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1658666209114.png" alt="" loading="lazy"></figure>
-<h4 id="2-通过nacospropertysourcelocator类理清nacos各中配置文件的优先级"><strong>2 通过NacosPropertySourceLocator类，理清Nacos各中配置文件的优先级：</strong></h4>
+<h3 id="2-通过nacospropertysourcelocator类理清nacos各中配置文件的优先级"><strong>2 通过NacosPropertySourceLocator类，理清Nacos各中配置文件的优先级：</strong></h3>
 <pre><code class="language-java">// com.alibaba.cloud.nacos.client.NacosPropertySourceLocator#locate
 public PropertySource&lt;?&gt; locate(Environment env) {
     this.nacosConfigProperties.setEnvironment(env);
@@ -266,9 +266,9 @@ private void loadApplicationConfiguration(CompositePropertySource compositePrope
 <p><strong>order-config-dev.yaml &gt; order-config.yaml &gt; order-config &gt; extension-configs &gt; shared-configs</strong></p>
 </blockquote>
 <hr>
-<h3 id="二-nacos配置中心的核心类nacosconfigservice的引入">二 Nacos配置中心的核心类NacosConfigService的引入</h3>
+<h2 id="二-nacos配置中心的核心类nacosconfigservice的引入">二 Nacos配置中心的核心类NacosConfigService的引入</h2>
 <figure data-type="image" tabindex="6"><img src="/post-images/1658666249886.png" alt="" loading="lazy"></figure>
-<h4 id="1-客户端是何时从远程配置nacos服务端拉取配置的"><strong>1 客户端是何时从远程配置Nacos服务端拉取配置的</strong></h4>
+<h3 id="1-客户端是何时从远程配置nacos服务端拉取配置的"><strong>1 客户端是何时从远程配置Nacos服务端拉取配置的</strong></h3>
 <pre><code class="language-java">// 还记得刚开始时候，通过spring.factories注入了一个配置类NacosConfigBootstrapConfiguration 
 // 该配置类，会向Spring容器中注入一个Bean：NacosConfigManager
 @Bean
@@ -292,7 +292,7 @@ public static ConfigService createConfigService(Properties properties) throws Na
 }
 </code></pre>
 <p>此时，NacosConfigService闪亮登场！</p>
-<h4 id="2-nacosconfigservice类的构造方法中会创建重要的两个属性agent和worker"><strong>2 NacosConfigService类的构造方法中会创建重要的两个属性agent和worker：</strong></h4>
+<h3 id="2-nacosconfigservice类的构造方法中会创建重要的两个属性agent和worker"><strong>2 NacosConfigService类的构造方法中会创建重要的两个属性agent和worker：</strong></h3>
 <pre><code class="language-java">public NacosConfigService(Properties properties) throws NacosException {
     ValidatorUtils.checkInitParam(properties);
     String encodeTmp = properties.getProperty(PropertyKeyConst.ENCODE);
@@ -311,7 +311,7 @@ public static ConfigService createConfigService(Properties properties) throws Na
     this.worker = new ClientWorker(this.agent, this.configFilterChainManager, properties);
 }
 </code></pre>
-<h4 id="3-nacosconfigservice中的核心获取配置方法getconfig-getconfiginner"><strong>3 NacosConfigService中的核心获取配置方法getConfig() ——&gt; getConfigInner()：</strong></h4>
+<h3 id="3-nacosconfigservice中的核心获取配置方法getconfig-getconfiginner"><strong>3 NacosConfigService中的核心获取配置方法getConfig() ——&gt; getConfigInner()：</strong></h3>
 <ul>
 <li>客户端需要使用配置文件时，<strong>不是直接去调用远端Server获取，而是先尝试从本地Failover文件获取</strong>；</li>
 <li>如果<strong>本地文件不存在，则才会从远端Server获取</strong>；</li>
@@ -392,7 +392,7 @@ public String[] getServerConfig(String dataId, String group, String tenant, long
     }
 }
 </code></pre>
-<h4 id="4-client第一次获取到server端配置后之后如何进行定时更新"><strong>4 Client第一次获取到Server端配置后，之后如何进行定时更新？</strong></h4>
+<h3 id="4-client第一次获取到server端配置后之后如何进行定时更新"><strong>4 Client第一次获取到Server端配置后，之后如何进行定时更新？</strong></h3>
 <pre><code class="language-java">// ClientWorker构造时，会创建2个线程池
 // 1. executor(单线程) ：定时每10毫秒执行checkConfigInfo()方法
 // 2. executorService(1~核数/2): 具体的执行长轮询的线程
@@ -457,7 +457,7 @@ public void checkConfigInfo() {
 <li><strong>executorService（多线程1~核数/2）:具体执行长轮询LongPolling任务的工作线程；</strong></li>
 </ul>
 </blockquote>
-<h4 id="5-nacos客户端长轮询longpolling任务的核心逻辑md5比对"><strong>5 Nacos客户端长轮询LongPolling任务的核心逻辑（md5比对）：</strong></h4>
+<h3 id="5-nacos客户端长轮询longpolling任务的核心逻辑md5比对"><strong>5 Nacos客户端长轮询LongPolling任务的核心逻辑（md5比对）：</strong></h3>
 <p>监听配置的长轮询接口API：https://nacos.io/zh-cn/docs/open-api.html</p>
 <figure data-type="image" tabindex="8"><img src="/post-images/1658666302821.png" alt="" loading="lazy"></figure>
 <pre><code class="language-java">// LongPollingRunnable.run()
@@ -610,7 +610,7 @@ List&lt;String&gt; checkUpdateConfigStr(String probeUpdateString, boolean isInit
 <li>最后，<strong>再次执行本次的 LongPollingRunnable 任务，循环往复，完成配置的实时监听更新</strong>！</li>
 </ul>
 </blockquote>
-<h4 id="6-经过长轮询后如果本地配置文件更新后该如何通知到我们的应用程序注册监听器"><strong>6 经过长轮询后，如果本地配置文件更新后，该如何通知到我们的应用程序（注册监听器）？</strong></h4>
+<h3 id="6-经过长轮询后如果本地配置文件更新后该如何通知到我们的应用程序注册监听器"><strong>6 经过长轮询后，如果本地配置文件更新后，该如何通知到我们的应用程序（注册监听器）？</strong></h3>
 <p>在Springboot项目完成refresh(context)后，会调用 listeners.running(context) 方法，这个方法会向系统发出ApplicationReadyEvent事件，其它的监听了这个事件的Listener就可以做对应的工作了，而<strong>NacosContextRefresher</strong>就是其中之一！</p>
 <pre><code class="language-java">public class NacosContextRefresher implements ApplicationListener&lt;ApplicationReadyEvent&gt;, ApplicationContextAware {
  
@@ -644,7 +644,7 @@ List&lt;String&gt; checkUpdateConfigStr(String probeUpdateString, boolean isInit
 <p><strong>有了这一系列的监听器，当客户端知道配置发生改变时，就会回调对应的监听器的回调方法，通知应用程序更新对应的Bean（从IOC容器中删除旧Bean，放入新的Bean）。</strong></p>
 </blockquote>
 <hr>
-<h3 id="三-ap模式nacos集群服务端如何工作">三 AP模式nacos集群，服务端如何工作</h3>
+<h2 id="三-ap模式nacos集群服务端如何工作">三 AP模式nacos集群，服务端如何工作</h2>
 <p>首先一定要清楚，即使集群情况下，配置了mysql，当客户端查询配置时，也不是直接从mysql获取的，而是从每个节点的本地文件读取；</p>
 <ul>
 <li><strong>各节点本地文件：具体的配置；</strong></li>
@@ -652,14 +652,14 @@ List&lt;String&gt; checkUpdateConfigStr(String probeUpdateString, boolean isInit
 <li><strong>Mysql：具体的配置的最新值和历史记录，方便新节点启动时加载，以及节点之间的数据同步；</strong></li>
 </ul>
 <figure data-type="image" tabindex="10"><img src="/post-images/1658666346288.png" alt="" loading="lazy"></figure>
-<h4 id="1-配置文件的dump加载dumpservice"><strong>1 配置文件的Dump加载：DumpService</strong></h4>
+<h3 id="1-配置文件的dump加载dumpservice"><strong>1 配置文件的Dump加载：DumpService</strong></h3>
 <p>DumpService由两个实现类：EmbeddedDumpService（derby） 和 ExternalDumpService（mysql）；</p>
 <p>当新节点启动时，需要从mysql中加载配置数据，如果最后心跳时间&gt;6h，则从mysql加载全量数据；如果最后心跳时间&lt;6h，则从mysql加载增量数据；</p>
 <ul>
 <li>全量加载：删除本地的配置文件，全部从mysql加载配置数据；（每次捞取1000条）</li>
 <li>增量加载：捞取最近6小时的新增配置，更新本地和内存元数据后，与mysql数据库中的配置进行比对，如果不一致，则再同步一次！</li>
 </ul>
-<h4 id="2-新的配置被发布后如何在集群间进行同步"><strong>2 新的配置被发布后，如何在集群间进行同步？</strong></h4>
+<h3 id="2-新的配置被发布后如何在集群间进行同步"><strong>2 新的配置被发布后，如何在集群间进行同步？</strong></h3>
 <ul>
 <li>AP集群，每个节点地位平等，发布配置后，根据轮询机制，会<strong>由某一台Server节点处理本地请求，该节点首先会将配置写入到Mysql数据库中</strong>；</li>
 <li>该节点会<strong>发布一个ConfigDataChangeEvent事件</strong>，该事件会<strong>被自己的监听器处理</strong>，处理时，会<strong>通过HTTP调用集群的所有节点，告知配置发生改变（包括自己</strong>，因为上面只是写mysql，自己的本地文件和内存文件也都没有被修改）</li>
