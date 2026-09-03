@@ -84,50 +84,7 @@
   </div>
 </nav>
   <!-- Page Header -->
-  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
-  <div class="container">
-    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
-    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
-      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
-      aria-label="Toggle navigation">
-      Menu
-      <i class="fas fa-bars"></i>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarResponsive">
-      <ul class="navbar-nav ml-auto">
-        
-        <li class="nav-item">
-          
-          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
-          
-        </li>
-        
-        <li class="nav-item">
-          
-          <a class="nav-link" href="/archives">归档</a>
-          
-        </li>
-        
-        <li class="nav-item">
-          
-          <a class="nav-link" href="/tags">标签</a>
-          
-        </li>
-        
-        <li class="nav-item">
-          <div class="gridea-search-container">
-            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
-              action="/search/index.html">
-              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
-              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
-            </form>
-          </div>
-        </li>
-      </ul>
-    </div>
-  </div>
-</nav>
-<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
   <div class="overlay"></div>
   <div class="container">
     <div class="row">
@@ -163,15 +120,19 @@
           <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/_MxFmWNQI.png" alt="封面图">
           </img>
           
-          <p>docker打包包含jdk17,maven3.8.8,node18环境的jenkins镜像包</p>
+          <p>用 Docker 打包一个内置 JDK 17、Maven 3.8.8、Node.js 18 环境的 Jenkins 镜像，供 CI 流水线直接复用。</p>
 <pre><code class="language-xml">FROM jenkins/jenkins
 
-# 安装 Node.js
 USER root
+
+# 先更新软件源（基础镜像默认不带可用的包索引，需 update 后才能 install）
+RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends curl ca-certificates
+
+# 安装 Node.js 18
 RUN curl -sL https://deb.nodesource.com/setup_18.x | bash -
 RUN apt-get install -y nodejs
 
-# 安装 Yarn
+# 安装 Yarn（v1；如需 Yarn 2+ 可改用 corepack enable）
 RUN npm install -g yarn
 
 # 安装 Maven 3.8.8
@@ -196,7 +157,7 @@ ENV M2_HOME /opt/maven
 ENV M2 /opt/maven/bin
 ENV PATH $JAVA_HOME/bin:$M2:$PATH
 
-# 替换war最新版本
+# 可选：用自定义 jenkins.war 覆盖镜像默认版本（一般无需替换，按需使用）
 COPY jenkins.war /usr/share/jenkins/
 
 USER jenkins
