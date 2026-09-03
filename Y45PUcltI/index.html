@@ -121,15 +121,15 @@
           <img class="post-feature-header-image" src="/post-images/Y45PUcltI.png" alt="封面图">
           </img>
           
-          <h3 id="一-总结前置">一、总结前置：</h3>
-<h4 id="1-ribbonfeignopenfeign三者的对比">1 ribbon,feign,openfeign三者的对比</h4>
-<p>我们现在工作中现在几乎都是直接使用openfeign，而我们很有必要了解一下，ribbon、feign、openfeign三者之间的关系！</p>
+          <h2 id="一-总结前置">一、总结前置：</h2>
+<h3 id="1-ribbonfeignopenfeign三者的对比">1 ribbon,feign,openfeign三者的对比</h3>
+<p>我们现在工作中几乎都是直接使用 OpenFeign，而我们很有必要了解一下，ribbon、feign、openfeign三者之间的关系！</p>
 <ul>
 <li><strong>ribbon</strong>：ribbon是netflix开源的客户端负载均衡组件，可以调用注册中心获取服务列表，并通过负载均衡算法挑选一台Server；</li>
 <li><strong>feign</strong>：feign也是netflix开源的，<strong>是对ribbon的一层封装，通过接口的方式使用，更加优雅</strong>，不需要每次都去写restTemplate，只需要定义一个接口来使用；<strong>但是Feign不支持springmvc的注解；</strong></li>
 <li><strong>openfeign</strong>：是对feign的进一步封装，使其能够支持springmvc注解，如@GetMapping等，使用起来更加方便和优雅！</li>
 </ul>
-<h4 id="2-工作中都是如何使用openfeign">2 工作中都是如何使用openfeign</h4>
+<h3 id="2-工作中都是如何使用openfeign">2 工作中都是如何使用openfeign</h3>
 <pre><code class="language-java">// 想要使用openfeign，必须要在启动类增加@EnableFeignClient注解，否则启动报错
 @FeignClient(&quot;feign-provider&quot;)
 public interface OrderService {
@@ -138,15 +138,15 @@ public interface OrderService {
     public String getById(@PathVariable(&quot;id&quot;) String id);
 }
 </code></pre>
-<h4 id="3-openfeign与ribbon如何分工">3 openfeign与ribbon如何分工</h4>
+<h3 id="3-openfeign与ribbon如何分工">3 openfeign与ribbon如何分工</h3>
 <ul>
 <li><strong>openfeign通过动态代理</strong>的方式，对feignclient注解修饰的类进行动态代理，<strong>拼接成临时URL：http://feign-provider/order/get/100</strong>，交给ribbon</li>
 <li><strong>ribbon通过自己的拦截器</strong>，截取出serviceName<strong>在服务注册表中找到对应的serverList，并通过负载均衡策略挑选一台Server</strong>，<strong>拼接成最终的URL：http://10.206.73.156:1111/order/get/100</strong>，交还给feign；</li>
 <li>最后，<strong>feign通过自己封装的Client对目标地址发起调用</strong>，并获得返回结果；（Client是对原生 java.net 中的URL类的封装，实现远程调用）</li>
 </ul>
 <hr>
-<h3 id="二-核心代码openfeign生成的动态代理类是啥">二 核心代码——Openfeign生成的动态代理类是啥</h3>
-<h4 id="1-启动类必须增加enablefeignclient那我们就从这里入口">1 启动类必须增加@EnableFeignClient，那我们就从这里入口</h4>
+<h2 id="二-核心代码openfeign生成的动态代理类是啥">二 核心代码——Openfeign生成的动态代理类是啥</h2>
+<h3 id="1-启动类必须增加enablefeignclient那我们就从这里入口">1 启动类必须增加@EnableFeignClient，那我们就从这里入口</h3>
 <pre><code class="language-java">@EnableFeignClients
 @Import(FeignClientsRegistrar.class)
 // 遇到import(Registrar)，我们就去看它的registerBeanDefinitions()方法：
@@ -204,7 +204,7 @@ private void registerFeignClient(BeanDefinitionRegistry registry,
    BeanDefinitionReaderUtils.registerBeanDefinition(holder, registry);
 }
 </code></pre>
-<h4 id="2-见名知意feignclient的工厂beanfeignclientfactorybeangetobject方法">2 见名知意FeignClient的工厂bean：FeignClientFactoryBean.getObject()方法</h4>
+<h3 id="2-见名知意feignclient的工厂beanfeignclientfactorybeangetobject方法">2 见名知意FeignClient的工厂bean：FeignClientFactoryBean.getObject()方法</h3>
 <pre><code class="language-java">class FeignClientFactoryBean{
     @Override
     public Object getObject() throws Exception {
@@ -248,11 +248,11 @@ protected &lt;T&gt; T loadBalance(Feign.Builder builder, FeignContext context,
          &quot;No Feign Client for loadBalancing defined. Did you forget to include spring-cloud-starter-netflix-ribbon?&quot;);
 }
 </code></pre>
-<h4 id="3-容器中类型为client的bean是谁">3 容器中类型为Client的Bean是谁</h4>
+<h3 id="3-容器中类型为client的bean是谁">3 容器中类型为Client的Bean是谁</h3>
 <p>此时还是启动阶段，我们去看看有哪些bean会被注入，在 spring.factories 中，我们会找到两个自动配置类：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1658666477690.png" alt="" loading="lazy"></figure>
 <p>这两个类，很关键，都会往容器中注入负载均衡的Client Bean，但是只会有一个成功，</p>
-<p>FeignRibbonClientAutoCOnfiguration类：</p>
+<p>FeignRibbonClientAutoConfiguration 类：</p>
 <pre><code class="language-java">@ConditionalOnClass({ ILoadBalancer.class, Feign.class })
 @ConditionalOnProperty(value = &quot;spring.cloud.loadbalancer.ribbon.enabled&quot;,matchIfMissing = true)
 @Configuration(proxyBeanMethods = false)
@@ -316,8 +316,8 @@ class DefaultFeignLoadBalancerConfiguration {
 </ul>
 <p>所以，<strong>最终的结论就是：Openfeign通过的动态代理，为每个“@FeignClient”注解修饰的接口生成一个类型为 “LoadBalancerFeignClient”的代理类。</strong></p>
 <hr>
-<h3 id="三-feignclient代理类执行时是如何使用ribbon的">三 FeignClient代理类执行时，是如何使用Ribbon的</h3>
-<h4 id="1-当执行loadbalancerfeignclientexecute方法时">1 当执行LoadBalancerFeignClient.execute()方法时：</h4>
+<h2 id="三-feignclient代理类执行时是如何使用ribbon的">三 FeignClient代理类执行时，是如何使用Ribbon的</h2>
+<h3 id="1-当执行loadbalancerfeignclientexecute方法时">1 当执行LoadBalancerFeignClient.execute()方法时：</h3>
 <pre><code class="language-java">// org.springframework.cloud.openfeign.ribbon.LoadBalancerFeignClient#execute
 public Response execute(Request request, Request.Options options) throws IOException {
    try {
@@ -340,7 +340,7 @@ public Response execute(Request request, Request.Options options) throws IOExcep
 }
 </code></pre>
 <p>我们可以很清楚的看到，这里肯定会要用到Ribbon；</p>
-<h4 id="2-通过负载均衡器执行调用并返回结果">2 通过负载均衡器，执行调用，并返回结果</h4>
+<h3 id="2-通过负载均衡器执行调用并返回结果">2 通过负载均衡器，执行调用，并返回结果</h3>
 <pre><code class="language-java">// com.netflix.client.AbstractLoadBalancerAwareClient#executeWithLoadBalancer(...)
 public T executeWithLoadBalancer(final S request, final IClientConfig requestConfig) throws ClientException {
     LoadBalancerCommand&lt;T&gt; command = buildLoadBalancerCommand(request, requestConfig);
@@ -381,7 +381,7 @@ public Observable&lt;T&gt; submit(final ServerOperation&lt;T&gt; operation) {
             });
 }
 </code></pre>
-<h4 id="3-selectserver具体方法">3 selectServer()具体方法</h4>
+<h3 id="3-selectserver具体方法">3 selectServer()具体方法</h3>
 <pre><code class="language-java">// com.netflix.loadbalancer.reactive.LoadBalancerCommand#selectServer
 private Observable&lt;Server&gt; selectServer() {
     return Observable.create(new OnSubscribe&lt;Server&gt;() {
@@ -398,7 +398,7 @@ private Observable&lt;Server&gt; selectServer() {
     });
 }
 </code></pre>
-<h4 id="4-这里将使用到非常重要的一个zoneawareloadbalancer">4 这里将使用到非常重要的一个ZoneAwareLoadBalancer</h4>
+<h3 id="4-这里将使用到非常重要的一个zoneawareloadbalancer">4 这里将使用到非常重要的一个ZoneAwareLoadBalancer</h3>
 <pre><code class="language-java">// com.netflix.loadbalancer.LoadBalancerContext#getServerFromLoadBalancer
 public Server getServerFromLoadBalancer(@Nullable URI original, @Nullable Object loadBalancerKey) throws ClientException {
     String host = null;
@@ -470,7 +470,7 @@ public Server choose(Object key) {
     }       
 }
 </code></pre>
-<h4 id="5-可以看到-lbgetallserver正是zoneawareloadbalancergetallservers方法">5 可以看到 lb.getAllServer()，正是ZoneAwareLoadBalancer.getAllServers()方法</h4>
+<h3 id="5-可以看到-lbgetallserver正是zoneawareloadbalancergetallservers方法">5 可以看到 lb.getAllServer()，正是ZoneAwareLoadBalancer.getAllServers()方法</h3>
 <pre><code class="language-java">// com.netflix.loadbalancer.BaseLoadBalancer#getAllServers
 public class BaseLoadBalancer extends AbstractLoadBalancer {
     protected volatile List&lt;Server&gt; allServerList = Collections.synchronizedList(new ArrayList&lt;Server&gt;());
@@ -480,14 +480,14 @@ public class BaseLoadBalancer extends AbstractLoadBalancer {
     }
 }
 </code></pre>
-<p>所以，我们现在用弄清楚的有两点：</p>
+<p>所以，我们现在要弄清楚的有两点：</p>
 <ul>
 <li><strong>为什么重要的ILoadBalancer的实现就是ZoneAwareLoadBalancer；</strong></li>
 <li><strong>ZoneAwareLoadBalancer中的allServerList属性是何时被赋值的；</strong></li>
 </ul>
 <hr>
-<h3 id="四-zoneawareloadbalancer是何时注入的">四 ZoneAwareLoadBalancer是何时注入的</h3>
-<h4 id="1-在spring-cloud-netfliex-ribbon包的springfactories中有ribbonautoconfiguration类">1 在spring-cloud-netfliex-ribbon包的spring.factories中有RibbonAutoConfiguration类</h4>
+<h2 id="四-zoneawareloadbalancer是何时注入的">四 ZoneAwareLoadBalancer是何时注入的</h2>
+<h3 id="1-在spring-cloud-netfliex-ribbon包的springfactories中有ribbonautoconfiguration类">1 在 spring-cloud-netflix-ribbon 包的 spring.factories 中有 RibbonAutoConfiguration 类</h3>
 <figure data-type="image" tabindex="2"><img src="/post-images/1658666526979.png" alt="" loading="lazy"></figure>
 <p>我们看到这个类的构造方法，创建了一个SpringClientFactory工厂类：</p>
 <pre><code class="language-java">@Configuration
@@ -546,7 +546,7 @@ public abstract class NamedContextFactory&lt;C extends NamedContextFactory.Speci
 }
 </code></pre>
 <p>显然，<strong>构造了一个上下工厂“NamedContextFactory”类，这个工厂类的默认配置类是“RibbonClientConfiguraion”</strong>，这个在之后Feign的调用过程中非常关键；</p>
-<h4 id="2-loadbalancerfeignclient这个代理类的execute方法中">2 LoadBalancerFeignClient这个代理类的execute()方法中</h4>
+<h3 id="2-loadbalancerfeignclient这个代理类的execute方法中">2 LoadBalancerFeignClient这个代理类的execute()方法中</h3>
 <pre><code class="language-java">// org.springframework.cloud.openfeign.ribbon.LoadBalancerFeignClient#execute
 public Response execute(Request request, Request.Options options) throws IOException {
    try {
@@ -595,8 +595,8 @@ public &lt;T&gt; T getInstance(String name, Class&lt;T&gt; type) {
     return BeanFactoryUtils.beanNamesForTypeIncludingAncestors(context, type).length &gt; 0 ? context.getBean(type) : null;
 }
 </code></pre>
-<p>找到了**NamedContextFactory  ，就和第一点串起来了，它的 默认 配置类正是RibbonClientConfiguration **；</p>
-<h4 id="3-ribbonclientconfiguration又是如何注入我们需要的zoneawareloadbalancer的">3 RibbonClientConfiguration又是如何注入我们需要的ZoneAwareLoadBalancer的</h4>
+<p>找到了 NamedContextFactory，就和第一点串起来了：它的默认配置类正是 RibbonClientConfiguration；</p>
+<h3 id="3-ribbonclientconfiguration又是如何注入我们需要的zoneawareloadbalancer的">3 RibbonClientConfiguration又是如何注入我们需要的ZoneAwareLoadBalancer的</h3>
 <pre><code class="language-java">@Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties
 // Order is important here, last should be the default, first should be optional
@@ -625,8 +625,8 @@ public class RibbonClientConfiguration {
 <p><strong>所以，这就解释了，为什么在后面的 ILoadBalancer lb = getLoadBalancer(); 获得到的就是ZoneAwareLoadBalancer！</strong></p>
 <p><strong>同时，这个类是在动态代理被执行execute()的时候被调起的，所以Ribbon也是在被使用时才从Nacos获取注册表的，并不是在容器启动时！</strong></p>
 <hr>
-<h3 id="五-ribbon又是何时从nacos服务端获取allserverlist的">五 Ribbon又是何时从Nacos服务端获取allServerList的</h3>
-<h4 id="1-我们需要跟踪zoneawareloadbalancer对应的bean的构造过程">1 我们需要跟踪ZoneAwareLoadBalancer对应的Bean的构造过程</h4>
+<h2 id="五-ribbon又是何时从nacos服务端获取allserverlist的">五 Ribbon又是何时从Nacos服务端获取allServerList的</h2>
+<h3 id="1-我们需要跟踪zoneawareloadbalancer对应的bean的构造过程">1 我们需要跟踪ZoneAwareLoadBalancer对应的Bean的构造过程</h3>
 <pre><code class="language-java">// com.netflix.loadbalancer.ZoneAwareLoadBalancer#ZoneAwareLoadBalancer
 public ZoneAwareLoadBalancer(IClientConfig clientConfig, IRule rule,
                              IPing ping, ServerList&lt;T&gt; serverList, ServerListFilter&lt;T&gt; filter,
@@ -650,7 +650,7 @@ public DynamicServerListLoadBalancer(IClientConfig clientConfig, IRule rule, IPi
     restOfInit(clientConfig);
 }
 </code></pre>
-<h4 id="2-远程调用nacos并初始化restofinit方法的逻辑">2 远程调用Nacos并初始化restOfInit()方法的逻辑</h4>
+<h3 id="2-远程调用nacos并初始化restofinit方法的逻辑">2 远程调用Nacos并初始化restOfInit()方法的逻辑</h3>
 <pre><code class="language-java">void restOfInit(IClientConfig clientConfig) {
     boolean primeConnection = this.isEnablePrimingConnections();
     // turn this off to avoid duplicated asynchronous priming done in BaseLoadBalancer.setServerList()
@@ -705,7 +705,7 @@ public void updateListOfServers() {
 <blockquote>
 <p><strong>NacosServerList.getUpdatedListOfServers()最终会调用nacos客户端的核心类 NacosNamingServer.selectInstances() 方法，该方法只会返回健康实例列表；</strong></p>
 </blockquote>
-<h4 id="4-根据从nacos获得到的servers更新本地的allserverlist属性">4 根据从nacos获得到的Servers，更新本地的allServerList属性</h4>
+<h3 id="4-根据从nacos获得到的servers更新本地的allserverlist属性">4 根据从nacos获得到的Servers，更新本地的allServerList属性</h3>
 <pre><code class="language-java">// com.netflix.loadbalancer.DynamicServerListLoadBalancer#updateAllServerList
 protected void updateAllServerList(List&lt;T&gt; ls) {
     // other threads might be doing this - in which case, we pass
@@ -776,12 +776,12 @@ public void setServersList(List lsrv) {
 <blockquote>
 <p>至此，整个从FeignClient注解生成动态代理类LoadBalancerFeignClient；</p>
 <p>——&gt; Client执行时会生成ribbon下的ZoneAwareLoadBalancer类，调用nacos服务端获取服务列表；</p>
-<p>——&gt; 在通过ZoneAwareLoadBalancer的父类的BaseLoadBalancer.chooseServer()方法根据负载均衡算法挑选一台服务器；</p>
-<p>——&gt; 最后交给Feign的的Client通过URL类完成调用。</p>
+<p>——&gt; 再通过 ZoneAwareLoadBalancer 的父类 BaseLoadBalancer.chooseServer() 方法根据负载均衡算法挑选一台服务器；</p>
+<p>——&gt; 最后交给 Feign 的 Client 通过 URL 类完成调用。</p>
 </blockquote>
 <hr>
-<h3 id="六-feign和ribbon的重试机制">六 Feign和Ribbon的重试机制</h3>
-<h4 id="1-首先我们做两个事情">1 首先我们做两个事情</h4>
+<h2 id="六-feign和ribbon的重试机制">六 Feign和Ribbon的重试机制</h2>
+<h3 id="1-首先我们做两个事情">1 首先我们做两个事情</h3>
 <p>服务提供者feign-provider：</p>
 <pre><code class="language-java">@GetMapping(&quot;/get/{id}&quot;)
 public String getById(@PathVariable(&quot;id&quot;) String id){
@@ -800,18 +800,18 @@ public String test(){
     return orderService.getById(&quot;100&quot;);
 }
 </code></pre>
-<h4 id="2-不配置任何重试机制使用默认值">2 不配置任何重试机制，使用默认值</h4>
+<h3 id="2-不配置任何重试机制使用默认值">2 不配置任何重试机制，使用默认值</h3>
 <p>调用接口后，看服务提供者的日志（重试了2次，时间间隔为1秒）：</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1658666579245.png" alt="" loading="lazy"></figure>
-<h4 id="3-我们为系统注入feign的默认retryer重试机制">3 我们为系统注入Feign的默认Retryer重试机制</h4>
+<h3 id="3-我们为系统注入feign的默认retryer重试机制">3 我们为系统注入Feign的默认Retryer重试机制</h3>
 <pre><code class="language-java">@Bean
 public Retryer retryer(){
    return new Retryer.Default();
 }
 </code></pre>
-<p>再次调用，再看日志（重试了10次，）：</p>
+<p>再次调用，再看日志（重试了 10 次）：</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1658666591041.png" alt="" loading="lazy"></figure>
-<h4 id="4-feign的默认重试器的核心代码默认是不开启的">4 Feign的默认重试器的核心代码（默认是不开启的）</h4>
+<h3 id="4-feign的默认重试器的核心代码默认是不开启的">4 Feign的默认重试器的核心代码（默认是不开启的）</h3>
 <pre><code class="language-java">public static class Default implements Retryer {
     private final int maxAttempts;
     private final long period;
@@ -832,13 +832,13 @@ public Retryer retryer(){
     }
 }
 </code></pre>
-<h4 id="5-ribbon和feign的重试器的源码就不过度追溯了直接上结论">5 Ribbon和Feign的重试器的源码就不过度追溯了，直接上结论</h4>
+<h3 id="5-ribbon和feign的重试器的源码就不过度追溯了直接上结论">5 Ribbon和Feign的重试器的源码就不过度追溯了，直接上结论</h3>
 <ul>
 <li><strong>Ribbon的重试机制默认是开启的，重试1次，共调用两次；</strong></li>
 <li><strong>Feign的Retryer重试器默认是关闭的 NEVER_RETRY;</strong></li>
 <li><strong>Feign如果想开启默认重试器，直接在Spring容器中注入 Retryer.Default 即可，默认重试5次；</strong></li>
 </ul>
-<h4 id="6-修改ribbon的默认重试机制">6 修改Ribbon的默认重试机制</h4>
+<h3 id="6-修改ribbon的默认重试机制">6 修改Ribbon的默认重试机制</h3>
 <pre><code class="language-yaml"># Ribbon 配置
 ribbon:
   # 单节点最大重试次数(不包含默认调用的1次)，达到最大值时，切换到下一个示例
@@ -850,13 +850,13 @@ ribbon:
   # 是否对所有请求进行重试，默认fasle，则只会对GET请求进行重试，建议配置为false，不然添加数据接口，会造成多条重复，也就是幂等性问题。
   OkToRetryOnAllOperations: false
 </code></pre>
-<h4 id="7-自定义feign重试机制直接给-retryerdefault-构造方法传参即可">7 自定义Feign重试机制（直接给 Retryer.Default 构造方法传参即可）</h4>
+<h3 id="7-自定义feign重试机制直接给-retryerdefault-构造方法传参即可">7 自定义Feign重试机制（直接给 Retryer.Default 构造方法传参即可）</h3>
 <pre><code class="language-java">@Bean
 public Retryer retryer(){
    return new Retryer.Default(100, 1000, 3); // 调用3次（包含原本的一次调用）
 }
 </code></pre>
-<p>当然，如果对 Retryer.Dafault 的默认的方法逻辑不认可，可以直接实现一个自己的CustomRetryer注入到spring容器中即可：</p>
+<p>当然，如果对 Retryer.Default 的默认方法逻辑不认可，可以直接实现一个自己的CustomRetryer注入到spring容器中即可：</p>
 <pre><code class="language-java">@Bean
 public Retryer customerRetryer(){
     return new Retryer() {
@@ -903,7 +903,7 @@ public Retryer customerRetryer(){
 </li>
 <li><a href="#%E5%9B%9B-zoneawareloadbalancer%E6%98%AF%E4%BD%95%E6%97%B6%E6%B3%A8%E5%85%A5%E7%9A%84">四 ZoneAwareLoadBalancer是何时注入的</a>
 <ul>
-<li><a href="#1-%E5%9C%A8spring-cloud-netfliex-ribbon%E5%8C%85%E7%9A%84springfactories%E4%B8%AD%E6%9C%89ribbonautoconfiguration%E7%B1%BB">1 在spring-cloud-netfliex-ribbon包的spring.factories中有RibbonAutoConfiguration类</a></li>
+<li><a href="#1-%E5%9C%A8spring-cloud-netfliex-ribbon%E5%8C%85%E7%9A%84springfactories%E4%B8%AD%E6%9C%89ribbonautoconfiguration%E7%B1%BB">1 在 spring-cloud-netflix-ribbon 包的 spring.factories 中有 RibbonAutoConfiguration 类</a></li>
 <li><a href="#2-loadbalancerfeignclient%E8%BF%99%E4%B8%AA%E4%BB%A3%E7%90%86%E7%B1%BB%E7%9A%84execute%E6%96%B9%E6%B3%95%E4%B8%AD">2 LoadBalancerFeignClient这个代理类的execute()方法中</a></li>
 <li><a href="#3-ribbonclientconfiguration%E5%8F%88%E6%98%AF%E5%A6%82%E4%BD%95%E6%B3%A8%E5%85%A5%E6%88%91%E4%BB%AC%E9%9C%80%E8%A6%81%E7%9A%84zoneawareloadbalancer%E7%9A%84">3 RibbonClientConfiguration又是如何注入我们需要的ZoneAwareLoadBalancer的</a></li>
 </ul>
