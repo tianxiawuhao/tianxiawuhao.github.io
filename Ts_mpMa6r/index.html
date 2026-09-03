@@ -122,7 +122,7 @@
           </img>
           
           <p>零拷贝的应用程序要求内核（kernel）直接将数据从磁盘文件拷贝到套接字（Socket），而无须通过应用程序。零拷贝不仅提高了应用程序的性能，而且减少了内核和用户模式见上下文切换。</p>
-<h3 id="数据传输传统方法">数据传输：传统方法</h3>
+<h2 id="数据传输传统方法">数据传输：传统方法</h2>
 <p>从文件中读取数据，并将数据传输到网络上的另一个程序的场景：从下图可以看出，拷贝的操作需要4次用户模式和内核模式之间的上下文切换，而且在操作完成前数据被复制了4次。(DMA：直接内存拷贝)</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1634105723930.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="2"><img src="/post-images/1634105729894.png" alt="" loading="lazy"></figure>
@@ -136,13 +136,13 @@ write(socket, tmp_buf, len);</p>
 <p>3.调用write时候，先将user模式下的内容copy到kernel模式下的socket的buffer中（用户模式-&gt;内核模式，数据再次被放置在内核缓存区中，send（）套接字调用）</p>
 <p>4.最后将kernel模式下的socket buffer的数据copy到网卡设备中；（send套接字调用返回）</p>
 <p>从图中看2，3两次copy是多余的，数据从kernel模式到user模式走了一圈，浪费了2次copy。</p>
-<h3 id="数据传输mmap-优化">数据传输：mmap 优化</h3>
+<h2 id="数据传输mmap-优化">数据传输：mmap 优化</h2>
 <p>mmap 通过内存映射，将文件映射到内核缓冲区，同时，用户空间可以共享内核空间的数据。这样，在进行网络传输时，就可以减少内核空间到用户空间的拷贝次数。如下图：</p>
 <figure data-type="image" tabindex="4"><img src="https://imgconvert.csdnimg.cn/aHR0cHM6Ly91cGxvYWQtaW1hZ2VzLmppYW5zaHUuaW8vdXBsb2FkX2ltYWdlcy80MjM2NTUzLWM1ZWEwMGI3OGUxYjkzZmQucG5n?x-oss-process=image/format,png" alt="mmap 流程" loading="lazy"></figure>
 <p>如上图，user buffer 和 kernel buffer 共享 index.html。如果你想把硬盘的 index.html 传输到网络中，再也不用拷贝到用户空间，再从用户空间拷贝到 Socket 缓冲区。</p>
 <p>现在，你只需要从内核缓冲区拷贝到 Socket 缓冲区即可，这将减少一次内存拷贝（从 4 次变成了 3 次），但不减少上下文切换次数。</p>
-<h3 id="数据传输零拷贝方法">数据传输：零拷贝方法</h3>
-<p>从传统的场景看，会注意到上图，第2次和第3次拷贝根本就是多余的。应用程序只是起到缓存数据被将传回到套接字的作用而已，别无他用。</p>
+<h2 id="数据传输零拷贝方法">数据传输：零拷贝方法</h2>
+<p>从传统的场景看，会注意到上图，第2次和第3次拷贝根本就是多余的。应用程序只是起到缓存数据、再将数据传回套接字的作用而已，别无他用。</p>
 <p>应用程序使用zero-copy来请求kernel直接把disk的数据传输到socket中，而不是通过应用程序传输。zero-copy大大提高了应用程序的性能，并且减少了kernel和user模式的上下文切换。</p>
 <p>数据可以直接从read buffer 读缓存区传输到套接字缓冲区，也就是省去了将操作系统的read buffer 拷贝到程序的buffer，以及从程序buffer拷贝到socket buffer的步骤，直接将read buffer拷贝到socket buffer。JDK NIO中的的<code>transferTo()</code> 方法就能够让您实现这个操作，这个实现依赖于操作系统底层的sendFile（）实现的：</p>
 <pre><code class="language-java">public void transferTo(long position, long count, WritableByteChannel target);
@@ -162,7 +162,7 @@ ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count);
 <p>linux 2.1 内核开始引入了sendfile函数，用于将文件通过socket传输。</p>
 <pre><code class="language-java">sendfile(socket, file, len);
 </code></pre>
-<p>该函数通过一次调用完成了文件的传输。 该函数通过一次系统调用完成了文件的传输，减少了原来read/write方式的模式切换。此外更是减少了数据的copy，sendfile的详细过程如图：</p>
+<p>该函数通过一次系统调用即可完成文件的传输，减少了原来 read/write 方式的模式切换。此外更是减少了数据的copy，sendfile的详细过程如图：</p>
 <figure data-type="image" tabindex="7"><img src="/post-images/1634107245108.png" alt="" loading="lazy"></figure>
 <p>通过sendfile传送文件只需要一次系统调用，当调用sendfile时：</p>
 <p>1.首先通过DMA将数据从磁盘读取到kernel buffer中</p>
@@ -174,7 +174,7 @@ ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count);
 <p>改进后的处理过程如下：</p>
 <ol>
 <li>将文件拷贝到kernel buffer中；(DMA引擎将文件内容copy到内核缓存区)</li>
-<li>向socket buffer中追加当前要发生的数据在kernel buffer中的位置和偏移量；</li>
+<li>向 socket buffer 中追加当前要发送的数据在 kernel buffer 中的位置和偏移量；</li>
 <li>根据socket buffer中的位置和偏移量直接将kernel buffer的数据copy到网卡设备（protocol engine）中；</li>
 </ol>
 <p>从图中看到，linux 2.1内核中的 “<strong>数据被copy到socket buffe</strong>r”的动作，在Linux2.4 内核做了优化，取而代之的是只包含关于数据的位置和长度的信息的描述符被追加到了socket buffer 缓冲区中。<strong>DMA引擎直接把数据从内核缓冲区传输到协议引擎</strong>（protocol engine），从而消除了最后一次CPU copy。经过上述过程，数据只经过了2次copy就从磁盘传送出去了。这个才是真正的Zero-Copy(这里的零拷贝是针对kernel来讲的，数据在kernel模式下是Zero-Copy)。</p>
