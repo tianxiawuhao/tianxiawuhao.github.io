@@ -1,92 +1,119 @@
 "use strict";
+/* =====================================================================
+   tianxia blog — 目录增强脚本
+   1) 宽屏（>=1280px）：把文末 .markdownIt-TOC 克隆为右侧吸顶 #tocSidebar，
+      滚动时高亮当前章节（.is-active），原生锚点平滑跳转。
+   2) 窄屏：保留文末目录卡片（由 styles/main.css 负责外观），仅绑定平滑滚动。
+   不劫持链接、不注入行号，避免破坏正文与代码。
+   ===================================================================== */
 !(function () {
-	for (var n = document.getElementsByTagName("pre"), e = n.length, s = 0; s < e; s++) {
-		for (var a = n[s].innerHTML.split(/\n/).length, r = 0; r < a - 1; r++) {
-			var firstSpan = n[s].getElementsByTagName("span")[0];
-			if (firstSpan) {
-				firstSpan.innerHTML += "<span>" + (r + 1) + "</span>";
-			}
-		}
-	}
+  var WIDE = window.matchMedia && window.matchMedia("(min-width: 1280px)");
+
+  function findToc() {
+    var box = document.querySelector(".toc-container .markdownIt-TOC");
+    if (!box) return null;
+    return box;
+  }
+
+  function smoothAnchors(root) {
+    if (!root) return;
+    var links = root.querySelectorAll("a[href^='#']");
+    for (var i = 0; i < links.length; i++) {
+      links[i].addEventListener("click", function (e) {
+        var id = this.getAttribute("href");
+        if (!id || id.length < 2) return;
+        var target = document.getElementById(decodeURIComponent(id.slice(1)));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          history.replaceState(null, "", "#" + encodeURIComponent(id.slice(1)));
+        }
+      });
+    }
+  }
+
+  function buildSidebar(source) {
+    var existing = document.getElementById("tocSidebar");
+    if (existing) existing.parentNode.removeChild(existing);
+
+    var aside = document.createElement("aside");
+    aside.id = "tocSidebar";
+    aside.setAttribute("aria-label", "文章目录");
+    aside.innerHTML =
+      '<div class="toc-label">目录 · Contents</div>' +
+      source.innerHTML;
+
+    document.body.appendChild(aside);
+    document.body.classList.add("toc-ready");
+
+    smoothAnchors(aside);
+
+    var links = aside.querySelectorAll("a[href^='#']");
+    var heads = [];
+    for (var i = 0; i < links.length; i++) {
+      var id = decodeURIComponent((links[i].getAttribute("href") || "#").slice(1));
+      heads.push({ link: links[i], el: document.getElementById(id) });
+    }
+
+    function spy() {
+      var pos = (window.pageYOffset || document.documentElement.scrollTop || 0) + 110;
+      var current = -1;
+      for (var j = 0; j < heads.length; j++) {
+        if (!heads[j].el) continue;
+        var top = heads[j].el.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+        if (top <= pos) current = j;
+      }
+      for (var k = 0; k < heads.length; k++) {
+        if (heads[k].link.classList.contains("is-active") !== (k === current)) {
+          if (k === current) heads[k].link.classList.add("is-active");
+          else heads[k].link.classList.remove("is-active");
+        }
+      }
+    }
+
+    spy();
+    var ticking = false;
+    window.addEventListener(
+      "scroll",
+      function () {
+        if (!ticking) {
+          ticking = true;
+          window.requestAnimationFrame(function () {
+            spy();
+            ticking = false;
+          });
+        }
+      },
+      { passive: true }
+    );
+  }
+
+  function init() {
+    var toc = findToc();
+    if (!toc) return;
+    // 锚点平滑滚动：宽屏 rail 与窄屏卡片都生效
+    smoothAnchors(toc);
+    if (WIDE && WIDE.matches) {
+      buildSidebar(toc);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+  if (WIDE && WIDE.addEventListener) {
+    WIDE.addEventListener("change", function (e) {
+      var toc = findToc();
+      if (!toc) return;
+      if (e.matches) buildSidebar(toc);
+      else {
+        var rail = document.getElementById("tocSidebar");
+        if (rail) rail.parentNode.removeChild(rail);
+        document.body.classList.remove("toc-ready");
+      }
+    });
+  }
 })();
-
-// 获取目录A标签
-let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
-let container = document.getElementById("post-content-article");
-let containerTop = container.offsetTop;
-
-// 遍历Toc，重写点击事件
-mainNavLinks.forEach((link, index) => {
-	link.name = "TocA-" + link.hash; // 将href对应的url塞入name里
-	link.href = "javascript:void(0)"; // 将href置空
-	link.onclick = () => {
-		let section = document.getElementById(decodeURI(link.name).substring(6));
-		let scrollY = section.offsetTop + containerTop - 67;
-		// window.scrollTo(0, scrollY);
-		window.scrollTo({
-			top: scrollY,
-			behavior: "smooth",
-		});
-	};
-});
-
-// 监听滚动，设置当前TOC
-window.addEventListener("scroll", (event) => {
-	let fromTop = window.scrollY;
-
-	mainNavLinks.forEach((link, index) => {
-		// name对应的标签
-		let section = document.getElementById(decodeURI(link.name).substring(6));
-		// 下一个标签
-		let nextSection = null;
-		if (mainNavLinks[index + 1]) {
-			nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].name).substring(6));
-		}
-		if (section.offsetTop + containerTop <= fromTop + 67) {
-			if (nextSection) {
-				if (nextSection.offsetTop + containerTop > fromTop + 67) {
-					link.classList.add("currentToc");
-				} else {
-					link.classList.remove("currentToc");
-				}
-			} else {
-				link.classList.add("currentToc");
-			}
-		} else {
-			link.classList.remove("currentToc");
-		}
-	});
-});
-
-// var list = document.querySelectorAll(".katex");
-// for (var i = 0; i < list.length; i++) {
-// 	list[i].style.display = "unset";
-// }
-// var h = document.documentElement,
-// 	b = document.body,
-// 	st = "scrollTop",
-// 	sh = "scrollHeight",
-// 	progress = document.querySelector(".progress"),
-// 	scroll;
-// document.addEventListener("scroll", function () {
-// 	if (progress) {
-// 		scroll = ((h[st] || b[st]) / ((h[sh] || b[sh]) - h.clientHeight)) * 100;
-// 		progress.style.setProperty("--scroll", scroll + "%");
-// 	}
-// });
-// var wxScale = new WxScale({ fullPage: document.querySelector("#fullPage"), canvas: document.querySelector("#canvas") });
-// var imgBox = document.querySelectorAll("#md_block img");
-// for (var i = 0; i < imgBox.length; i++) {
-// 	imgBox[i].onclick = function (e) {
-// 		wxScale.start(this);
-// 	};
-// }
-// var content = "本文最后更新于<%= post.dateFormat %>，已超过 1 年没有更新，涉及的内容可能已经失效！";
-// var date1 = "<%= post.date %>";
-// date1 = date1.replace("-", "/");
-// var date2 = new Date();
-// var date3 = date2.getTime() - new Date(date1).getTime();
-// var days = Math.floor(date3 / (24 * 3600 * 1000));
-// if (days >= 365) {
-// 	document.getElementById("warn").innerHTML = content;
-// }
