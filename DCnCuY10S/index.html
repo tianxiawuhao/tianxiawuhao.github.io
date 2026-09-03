@@ -131,8 +131,8 @@ public interface ServiceAspect {
     /**
      * 上传，成功返回文件信息，失败返回 null
      */
-    default serviceInfo serviceAround(ServiceAspectChain chain,ServiceInfo serviceInfo) {
-        return chain.next(service);
+    default ServiceInfo serviceAround(ServiceAspectChain chain, ServiceInfo serviceInfo) {
+        return chain.next(serviceInfo);
     }
 }
 </code></pre>
@@ -144,9 +144,9 @@ public interface ServiceAspect {
 public class ServiceAspectChain {
 
     private ServiceAspectChainCallback callback;
-    private Iterator&lt;serviceAspect&gt; aspectIterator;
+    private Iterator&lt;ServiceAspect&gt; aspectIterator;
 
-    public UploadAspectChain(Iterable&lt;ServiceAspect&gt; aspects,ServiceAspectChainCallback callback) {
+    public ServiceAspectChain(Iterable&lt;ServiceAspect&gt; aspects, ServiceAspectChainCallback callback) {
         this.aspectIterator = aspects.iterator();
         this.callback = callback;
     }
@@ -161,19 +161,7 @@ public class ServiceAspectChain {
             return callback.run(serviceInfo);
         }
     }
-    
-    /**
-     * 调用下一个切面(遍历执行所有)
-     */
-    public ServiceInfo next(ServiceInfo serviceInfo) {
-        if (aspectIterator.hasNext()) {//还有下一个
-            service = aspectIterator.next().serviceAround(this,serviceInfo);
-            return callback.run(serviceInfo);
-        } else {
-            return callback.run(serviceInfo);
-        }
     }
-}
 
 </code></pre>
 <pre><code class="language-java">/**
@@ -183,7 +171,7 @@ public interface ServiceAspectChainCallback {
     ServiceInfo run(ServiceInfo serviceInfo);
 }
 </code></pre>
-<pre><code class="language-java">private CopyOnWriteArrayList&lt;serviceAspect&gt; aspectList;
+<pre><code class="language-java">private CopyOnWriteArrayList&lt;ServiceAspect&gt; aspectList;
 private ServiceInfo serviceInfo;
 
 //处理切面
@@ -211,7 +199,7 @@ public class LogServiceAspect implements ServiceAspect {
 </code></pre>
 <pre><code class="language-java">{
     //获得切面 List
-    CopyOnWriteArrayList&lt;ServiceAspect&gt; list = new ArrayList();
+    List&lt;ServiceAspect&gt; list = new CopyOnWriteArrayList&lt;&gt;();
 
     //增加
     LogServiceAspect aspect = new LogServiceAspect();
