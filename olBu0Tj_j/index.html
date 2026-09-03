@@ -127,7 +127,7 @@
 <h3 id="11-消息队列模式">1.1 消息队列模式</h3>
 <p>消息队列目前主要 2 种模式，分别为“点对点模式”和“发布/订阅模式”。</p>
 <h4 id="111-点对点模式">1.1.1 点对点模式</h4>
-<p>一个具体的消息只能由一个消费者消费，多个生产者可以向同一个消息队列发送消息，但是一个消息在被一个消息者处理的时候，这个消息在队列上会被锁住或者被移除并且其他消费者无法处理该消息。</p>
+<p>一个具体的消息只能由一个消费者消费，多个生产者可以向同一个消息队列发送消息，但是一个消息在被一个消费者处理的时候，这个消息在队列上会被锁住或者被移除并且其他消费者无法处理该消息。</p>
 <p>需要额外注意的是，如果消费者处理一个消息失败了，消息系统一般会把这个消息放回队列，这样其他消费者可以继续处理。</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1657628845595.png" alt="" loading="lazy"></figure>
 <h4 id="112-发布订阅模式">1.1.2 发布/订阅模式</h4>
@@ -209,7 +209,7 @@
 <li>master queue：每个队列都分为一个主队列和若干个镜像队列。</li>
 <li>mirror queue：镜像队列，作为master queue的备份。在master queue所在节点挂掉之后，系统把mirror queue提升为master queue，负责处理客户端队列操作请求。注意，mirror queue只做镜像，设计目的不是为了承担客户端读写压力。</li>
 </ul>
-<p>集群中有两个节点，每个节点上有一个broker，每个broker负责本机上队列的维护，并且borker之间可以互相通信。集群中有两个队列A和B，每个队列都分为master queue和mirror queue（备份）。那么队列上的生产消费怎么实现的呢？</p>
+<p>集群中有两个节点，每个节点上有一个broker，每个 broker 负责本机上队列的维护，并且 broker 之间可以互相通信。集群中有两个队列A和B，每个队列都分为master queue和mirror queue（备份）。那么队列上的生产消费怎么实现的呢？</p>
 <figure data-type="image" tabindex="9"><img src="/post-images/1657628950134.png" alt="" loading="lazy"></figure>
 <p>对于消费队列，如下图有两个consumer消费队列A，这两个consumer连在了集群的不同机器上。RabbitMQ集群中的任何一个节点都拥有集群上所有队列的元信息，所以连接到集群中的任何一个节点都可以，主要区别在于有的consumer连在master queue所在节点，有的连在非master queue节点上。</p>
 <p>因为mirror queue要和master queue保持一致，故需要同步机制，正因为一致性的限制，导致所有的读写操作都必须都操作在master queue上（想想，为啥读也要从master queue中读？和数据库读写分离是不一样的），然后由master节点同步操作到mirror queue所在的节点。即使consumer连接到了非master queue节点，该consumer的操作也会被路由到master queue所在的节点上，这样才能进行消费。</p>
@@ -766,7 +766,7 @@ Queue.DeclareOk queueDeclare(String queue, boolean durable, boolean exclusive, b
 <li>对于重要的数据，一般设置 durable=true, autoDeleted=false</li>
 <li>对于设置 autoDeleted=true 的队列，当没有消费者之后，队列会自动被删除</li>
 </ul>
-<h2 id="64-ack">6.4 ACK</h2>
+<h3 id="64-ack">6.2 ACK</h3>
 <p>执行一个任务可能需要花费几秒钟，你可能会担心如果一个消费者在执行任务过程中挂掉了。一旦RabbitMQ将消息分发给了消费者，就会从内存中删除。在这种情况下，如果正在执行任务的消费者宕机，会丢失正在处理的消息和分发给这个消费者但尚未处理的消息。</p>
 <p>但是，我们不想丢失任何任务，如果有一个消费者挂掉了，那么我们应该将分发给它的任务交付给另一个消费者去处理。</p>
 <p>为了确保消息不会丢失，RabbitMQ支持消息应答。消费者发送一个消息应答，告诉RabbitMQ这个消息已经接收并且处理完毕了。RabbitMQ就可以删除它了。</p>
@@ -853,7 +853,7 @@ channel.basicConsume(queue, false, consumer);
 </li>
 </ul>
 </li>
-<li><a href="#64-ack">6.4 ACK</a></li>
+<li><a href="#64-ack">6.2 ACK</a></li>
 </ul>
 </li>
 </ul>
