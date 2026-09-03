@@ -123,18 +123,18 @@
           <img class="post-feature-header-image" src="/post-images/R-yFR9BFl.png" alt="封面图">
           </img>
           
-          <p><strong>在开发MQTT时有两种方式一种是使用Paho Java 原生库来完成，一种是使用spring boot 来完成。</strong></p>
-<h3 id="paho-java-库实现">Paho Java 库实现</h3>
-<p>Eclipse Paho Java Client (opens new window)是用 Java 编写的 MQTT 客户端库（MQTT Java Client），可用于 JVM 或其他 Java 兼容平台（例如Android）。<br>
-Eclipse Paho Java Client 提供了MqttAsyncClient 和 MqttClient 异步和同步 API</p>
-<p>通过 Maven 安装 Paho Java</p>
-<pre><code class="language-java">&lt;dependency&gt;
+          <p><strong>开发 MQTT 客户端通常有两种方式：一种是使用 Paho Java 原生库，另一种是使用 Spring Boot 集成。</strong></p>
+<h2 id="paho-java-库实现">Paho Java 库实现</h2>
+<p>Eclipse Paho Java Client 是用 Java 编写的 MQTT 客户端库，可用于 JVM 或其他 Java 兼容平台（例如 Android）。<br>
+它提供了 MqttAsyncClient（异步）与 MqttClient（同步）两套 API。</p>
+<p>通过 Maven 引入 Paho Java：</p>
+<pre><code class="language-xml">&lt;dependency&gt;
   &lt;groupId&gt;org.eclipse.paho&lt;/groupId&gt;
 	&lt;artifactId&gt;org.eclipse.paho.client.mqttv3&lt;/artifactId&gt;
 	&lt;version&gt;1.2.2&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<h4 id="paho-java-使用示例">Paho Java 使用示例</h4>
+<h3 id="paho-java-使用示例">Paho Java 使用示例</h3>
 <p>Java 体系中 Paho Java 是比较稳定、广泛应用的 MQTT 客户端库，本示例包含 Java 语言的 Paho Java 连接 EMQX Broker，并进行消息收发完整代码：</p>
 <pre><code class="language-java">package io.emqx;
 
@@ -166,7 +166,7 @@ public class App {
             connOpts.setCleanSession(true);
     
             // 设置回调
-            client.setCallback(new PushCallback());
+            client.setCallback(new OnMessageCallback());
     
             // 建立连接
             System.out.println(&quot;Connecting to broker: &quot; + broker);
@@ -200,7 +200,7 @@ public class App {
 
 }
 </code></pre>
-<h4 id="回调消息处理类-onmessagecallbackjava">回调消息处理类 OnMessageCallback.java</h4>
+<h3 id="回调消息处理类-onmessagecallbackjava">回调消息处理类 OnMessageCallback.java</h3>
 <pre><code class="language-java">package io.emqx;
 
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
@@ -226,8 +226,8 @@ public class OnMessageCallback implements MqttCallback {
 
 }
 </code></pre>
-<p>好的上述就实现了简单的 MQTT的连接和消息收发。</p>
-<h3 id="spring-boot集成mqtt">spring boot集成mqtt</h3>
+<p>至此，就实现了简单的 MQTT 连接与消息收发。</p>
+<h2 id="spring-boot集成mqtt">Spring Boot 集成 MQTT</h2>
 <pre><code>spring boot 环境
 spring-boot 版本 2.2.2
 spring-integration的版本为：5.4.3
@@ -256,7 +256,7 @@ Spring Integration提供了入站适配器和出站适配器以支持MQTT协议�
     topic: default
     completionTimeout: 2000
 </code></pre>
-<h4 id="核心代码">核心代码</h4>
+<h3 id="核心代码">核心代码</h3>
 <p>配置类</p>
 <pre><code class="language-java">@Data
 @Configuration
@@ -342,7 +342,7 @@ public class MqttInboundConfiguration {
     }
     
     /**
-     * mqtt入站消息处理工具，对于指定消息入站通道接收到生产者生产的消息后处理消息的工具。
+     * MQTT 入站消息处理器：从入站通道接收生产者发来的消息并处理。
      *
      * @return
      */
@@ -367,10 +367,10 @@ public class MqttMessageReceiver implements MessageHandler {
             MessageHeaders headers = message.getHeaders();
             //获取消息Topic
             String receivedTopic = (String) headers.get(MqttHeaders.RECEIVED_TOPIC);
-            log.info(&quot;[获取到的消息的topic :]{} &quot;, receivedTopic);
+            log.info(&quot;[获取到的消息 topic：]{}&quot;, receivedTopic);
             //获取消息体
             String payload = (String) message.getPayload();
-            log.info(&quot;[获取到的消息的payload :]{} &quot;, payload);
+            log.info(&quot;[获取到的消息 payload：]{}&quot;, payload);
             //todo ....
         } catch (Exception e) {
             e.printStackTrace();
@@ -398,7 +398,7 @@ public class MqttOutboundConfiguration {
     @ServiceActivator(inputChannel = &quot;mqttOutboundChannel&quot;)
     public MessageHandler mqttOutbound() {
         MqttPahoMessageHandler messageHandler = new MqttPahoMessageHandler(
-                mqttConfig.getClientId()+&quot;-&quot;+System.currentTimeMillis() + System.currentTimeMillis(), factory);
+                mqttConfig.getClientId() + &quot;-out-&quot; + System.currentTimeMillis(), factory);
     
         messageHandler.setDefaultQos(0);
         //开启异步
@@ -426,9 +426,9 @@ public interface MqttGateway {
      * 发送包含qos的消息
      * @param topic 主题
      * @param qos 对消息处理的几种机制。
-     *          * 0 表示的是订阅者没收到消息不会再次发送，消息会丢失。&lt;br&gt;
-     *          * 1 表示的是会尝试重试，一直到接收到消息，但这种情况可能导致订阅者收到多次重复消息。&lt;br&gt;
-     *          * 2 多了一次去重的动作，确保订阅者收到的消息有一次。
+     *          * QoS 0：最多发送一次，不保证送达，消息可能丢失。&lt;br&gt;
+     *          * QoS 1：至少送达一次，会重试直到收到确认，但订阅者可能收到重复消息。&lt;br&gt;
+     *          * QoS 2：通过一次去重流程，确保订阅者恰好收到一次消息。
      * @param payload 消息体
      * @return void
      */
@@ -438,9 +438,9 @@ public interface MqttGateway {
      * 发送包含qos的消息
      * @param topic 主题
      * @param qos 对消息处理的几种机制。
-     *          * 0 表示的是订阅者没收到消息不会再次发送，消息会丢失。&lt;br&gt;
-     *          * 1 表示的是会尝试重试，一直到接收到消息，但这种情况可能导致订阅者收到多次重复消息。&lt;br&gt;
-     *          * 2 多了一次去重的动作，确保订阅者收到的消息有一次。
+     *          * QoS 0：最多发送一次，不保证送达，消息可能丢失。&lt;br&gt;
+     *          * QoS 1：至少送达一次，会重试直到收到确认，但订阅者可能收到重复消息。&lt;br&gt;
+     *          * QoS 2：通过一次去重流程，确保订阅者恰好收到一次消息。
      * @param payload 消息体
      * @return void
      */
@@ -492,19 +492,15 @@ public class MqttMessageSender {
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
 <ul>
-<li>
-<ul>
 <li><a href="#paho-java-%E5%BA%93%E5%AE%9E%E7%8E%B0">Paho Java 库实现</a>
 <ul>
 <li><a href="#paho-java-%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B">Paho Java 使用示例</a></li>
 <li><a href="#%E5%9B%9E%E8%B0%83%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E7%B1%BB-onmessagecallbackjava">回调消息处理类 OnMessageCallback.java</a></li>
 </ul>
 </li>
-<li><a href="#spring-boot%E9%9B%86%E6%88%90mqtt">spring boot集成mqtt</a>
+<li><a href="#spring-boot%E9%9B%86%E6%88%90mqtt">Spring Boot 集成 MQTT</a>
 <ul>
 <li><a href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81">核心代码</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
