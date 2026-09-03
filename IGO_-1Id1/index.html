@@ -123,35 +123,35 @@
           
           <h2 id="一-深度q网络deep-q-network-dqn">一、深度Q网络（Deep Q-Network DQN）</h2>
 <h3 id="1近似q函数approximate-the-q-function">1）近似Q函数（Approximate the Q* Function）</h3>
-<p><em>Q*(s,a)<em>可以被看成一个先知，它可以告诉Agent如何选择一个最好的动作a，但</em>Q*(s,a)<em>并不知道，因此这里需要近似</em>Q*（s,a）</em></p>
-<p>DQN是一种价值学习的方法，利用一个神经网络（Neural Network NN）去近似一个<em>Q*(s,a)</em>，记为<em>Q(s,a;w)</em></p>
+<p>可以把 Q*(s,a) 看作一位“先知”：它能告诉 Agent 在状态 s 下如何选择最好的动作 a；但真正的 Q*(s,a) 我们并不知道，因此需要用一个函数去近似它。</p>
+<p>DQN 是一种价值学习方法：利用神经网络（Neural Network，NN）去近似 Q*(s,a)，记作 Q(s,a;w)。</p>
 <figure data-type="image" tabindex="1"><img src="https://pic4.zhimg.com/80/v2-6a6577b722a95433c1f42574fba0286f_720w.webp" alt="img" loading="lazy"></figure>
 <p>对于不同问题，DQN也许不一样，以超级玛丽为例：</p>
 <figure data-type="image" tabindex="2"><img src="https://pic2.zhimg.com/80/v2-447ae08144ded2fd6967cab64206384d_720w.webp" alt="img" loading="lazy"></figure>
-<p>DQN的训练Agent的一个trajectory如下图：</p>
+<p>DQN 训练 Agent 时的一条 trajectory 如下图所示：</p>
 <figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-97d40954aa482dbbc359bdedcec86084_720w.webp" alt="img" loading="lazy"></figure>
-<p><strong>2）时序差分方法（Temporal Difference Learning TD-Learning）</strong></p>
-<p><strong>### 重要 重要 非常重要 ###</strong></p>
-<p>以我自己的想法复述一遍王树森老师的例子：如果我想要从纽约到亚特兰大，且模型*Q(w)*预测了消耗的时间是1000分钟，这个模型一开始是随机的。</p>
+<h3 id="2-时序差分方法temporal-difference-learning-td-learning">2）时序差分方法（Temporal Difference Learning TD-Learning）</h3>
+<p><strong>重要 · 重要 · 非常重要</strong></p>
+<p>以我自己的理解复述王树森老师的例子：从纽约到亚特兰大，模型 Q(w) 预测耗时为 1000 分钟，而这个模型一开始是随机的。</p>
 <p>那么如何更新模型，使模型的预测值变得越来越准确？</p>
 <p>①首先做出一个预测：q=Q(w) → q=1000</p>
 <p>②完成这段路程得到真实值y：y=860</p>
 <p>这时，产生了一个偏差（q-y）</p>
-<p>我们记损失Loss为：L=1/2*(q-y)²，即L2范式，前面的1/2可以理解为方便计算梯度，线性变换并不会影响数据整体的相对值，例如，1相对于2是1/2倍的关系，0.5相对于1是1/2倍的关系。（若有问题，欢迎大佬指点）</p>
-<p>那么，为了是预测值尽可能的逼近真实值，我们必须需要让Loss取到最小值。因此这里就引入了L对w的梯度Gradient，也可以认为是求导。使用偏微分的链式法则，我们可以推导出L对w梯度的表达式，如下图所示：</p>
+<p>记损失 Loss 为 L = ½·(q−y)²。前面的 1/2 只是为求导方便：常数缩放不会改变最优点（Loss 乘同一常数后，梯度同向缩放，最优参数 w 不变）。</p>
+<p>为了使预测值尽可能逼近真实值，需要让 Loss 取到最小值，因此引入 L 对 w 的梯度（Gradient），即求偏导；利用偏微分的链式法则，可推导出 L 对 w 的梯度表达式，如下图所示：</p>
 <figure data-type="image" tabindex="4"><img src="https://pic3.zhimg.com/80/v2-0d235e526592ad647fd8d51caf10113a_720w.webp" alt="img" loading="lazy"></figure>
 <p>这样，我们在进行参数更新时，采用梯度下降算法（Gradient Descent）即可使参数w不断接近真实值对应的参数w*。</p>
-<p>而现在，若到达不了目的地，不获取到真实的全路程的真实值，就可以利用TD算法来更新模型参数。</p>
-<p>假设我们从纽约想亚特兰大出发，途中经过华盛顿，而在华盛顿停住不走，那么此时的预测就不再能使用整条路的真实值来更新预测值了。</p>
-<p>因此，这里采用TD算法</p>
+<p>而当无法到达目的地、拿不到整段路程的真实值时，就可以利用 TD 算法来更新模型参数。</p>
+<p>假设我们从纽约向亚特兰大出发，途中经过华盛顿，但在华盛顿停住不再前进，那么此时就不能再用整条路程的真实值来更新预测值了。</p>
+<p>因此，这里采用 TD 算法。</p>
 <p>我们已知模型做出一个预测：q=Q(w) → q=1000</p>
-<p>而从我们从纽约经过华盛顿停住不走，那么便有一个从纽约到华盛顿的真实值：y1=300</p>
+<p>我们从纽约走到华盛顿后停住，于是得到纽约到华盛顿的真实值：y1 = 300</p>
 <p>而从华盛顿到亚特兰大有一个模型预测值：q1=Q(w1)→q=600</p>
-<p>那么此时我们定义<strong>TD target</strong>为 y=y1+q1=900,这里的<strong>TD target</strong>比原本的模型预测值1000更加可靠。</p>
-<p>我们记损失Loss为：L=1/2*(q-y)²，定义<strong>TD error</strong>为δ=q-y=1000-900；此处也可以理解成模型对纽约到华盛顿的预测值为400，而真实值是300，δ=400-300=100</p>
+<p>此时定义 <strong>TD target</strong> 为 y = y1 + q1 = 900。这个 TD target 比原来的模型预测值 1000 更加可靠。</p>
+<p>记损失为 L = ½·(q−y)²，定义 <strong>TD error</strong> 为 δ = q−y = 1000−900；也可以理解为：模型对纽约到华盛顿的预测值为 400，真实值为 300，故 δ = 400−300 = 100。</p>
 <p>类似地，我们可以得到Loss Function关于w的一个函数，对w求梯度，得到Loss的最小值对应的w用于更新参数（采用梯度下降方法Gradient Descent）</p>
 <figure data-type="image" tabindex="5"><img src="https://pic1.zhimg.com/80/v2-9693763347535be662c8baa936e6ac28_720w.webp" alt="img" loading="lazy"></figure>
-<p>我们必须使TD error尽可能地小，当TD error=0时，那么我们就获得了最优的模型</p>
+<p>我们必须使 TD error 尽可能小；当 TD error = 0 时，就得到了最优的模型。</p>
 <h2 id="二-td-learningdqn">二、TD Learning+DQN</h2>
 <h3 id="如何将td算法用于学习dqn">如何将TD算法用于学习DQN</h3>
 <p>对于上述例子，我们有了这样的方程</p>
@@ -178,8 +178,8 @@
 <ul>
 <li><a href="#%E4%B8%80-%E6%B7%B1%E5%BA%A6q%E7%BD%91%E7%BB%9Cdeep-q-network-dqn">一、深度Q网络（Deep Q-Network DQN）</a>
 <ul>
-<li><a href="#1%E8%BF%91%E4%BC%BCq%E5%87%BD%E6%95%B0approximate-the-q-function">1）近似Q函数（Approximate the Q* Function）</a></li>
-</ul>
+$1
+<li><a href="#2-%E6%97%B6%E5%BA%8F%E5%B7%AE%E5%88%86%E6%96%B9%E6%B3%95temporal-difference-learning-td-learning">2）时序差分方法（Temporal Difference Learning TD-Learning）</a></li>$2$3
 </li>
 <li><a href="#%E4%BA%8C-td-learningdqn">二、TD Learning+DQN</a>
 <ul>
