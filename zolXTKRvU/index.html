@@ -121,8 +121,8 @@
           <img class="post-feature-header-image" src="/post-images/zolXTKRvU.png" alt="封面图">
           </img>
           
-          <h3 id="一-nacos-cp集群架构的基础知识">一 Nacos CP集群架构的基础知识</h3>
-<h4 id="1-nacos集群部署后可以同时支持ap和cp注意不是同时支持cap">1 Nacos集群部署后，可以同时支持AP和CP（注意，不是同时支持CAP）</h4>
+          <h2 id="一-nacos-cp集群架构的基础知识">一 Nacos CP集群架构的基础知识</h2>
+<h3 id="1-nacos集群部署后可以同时支持ap和cp注意不是同时支持cap">1 Nacos集群部署后，可以同时支持AP和CP（注意，不是同时支持CAP）</h3>
 <ul>
 <li>AP架构：临时实例</li>
 <li>CP架构：持久化实例</li>
@@ -140,7 +140,7 @@
         cluster-name: BJ
         ephemeral: true  # 持久化实例走CP架构
 </code></pre>
-<h4 id="2-nacos-cp架构使用的分布式一致性协议简化版的raft">2 Nacos CP架构使用的分布式一致性协议？（简化版的Raft）</h4>
+<h3 id="2-nacos-cp架构使用的分布式一致性协议简化版的raft">2 Nacos CP架构使用的分布式一致性协议？（简化版的Raft）</h3>
 <p>Raft分布式一致性协议 和 Zookeeper使用的ZAB原子广播协议非常相似；</p>
 <p>都是一个Leader带领多个Follower，区别在于，Leader选举时的投票机制：</p>
 <ul>
@@ -149,10 +149,10 @@
 </ul>
 <p>但是，对结果的判断，ZAB 和 Raft 都遵循“半数机制”。</p>
 <hr>
-<h3 id="二-cp架构下持久化实例的注册逻辑">二 CP架构下，持久化实例的注册逻辑</h3>
-<h4 id="1-注册实例的api接口不变nacosv1nsinstance">1 注册实例的API接口不变：/nacos/v1/ns/instance</h4>
+<h2 id="二-cp架构下持久化实例的注册逻辑">二 CP架构下，持久化实例的注册逻辑</h2>
+<h3 id="1-注册实例的api接口不变nacosv1nsinstance">1 注册实例的API接口不变：/nacos/v1/ns/instance</h3>
 <figure data-type="image" tabindex="1"><img src="/post-images/1658665954910.png" alt="" loading="lazy"></figure>
-<p>这里当然时选择RaftConsistencyServiceImpl的实现：</p>
+<p>这里当然是选择 RaftConsistencyServiceImpl 的实现：</p>
 <pre><code class="language-java">public void put(String key, Record value) throws NacosException {
     checkIsStopWork();
     try {
@@ -162,7 +162,7 @@
     }
 }
 </code></pre>
-<h4 id="2-整个cp架构下的主节点注册逻辑都在signalpublish方法中">2 整个CP架构下的主节点注册逻辑都在signalPublish()方法中</h4>
+<h3 id="2-整个cp架构下的主节点注册逻辑都在signalpublish方法中">2 整个CP架构下的主节点注册逻辑都在signalPublish()方法中</h3>
 <pre><code class="language-java">public void signalPublish(String key, Record value) throws Exception {
     if (stopWork) {
         throw new IllegalStateException(&quot;old raft protocol already stop work&quot;);
@@ -223,7 +223,7 @@
 </code></pre>
 <p>其实Nacos实现的简单Raft协议，逻辑有点不太严谨，就是：即使本次同步不成功，但是主节点的本地磁盘文件 + 内存文件 已经都修改过了，不像Zookeeper的两阶段提交；</p>
 <p>后期Nacos的一致性协议会修改为JRaft，这点肯定会解决！</p>
-<h4 id="3-leader本节点保存数据的逻辑onpublishdatum-peerslocal">3、Leader本节点保存数据的逻辑：onPublish(datum, peers.local())</h4>
+<h3 id="3-leader本节点保存数据的逻辑onpublishdatum-peerslocal">3、Leader本节点保存数据的逻辑：onPublish(datum, peers.local())</h3>
 <pre><code class="language-java">public void onPublish(Datum datum, RaftPeer source) throws Exception {
     ......
  
@@ -296,8 +296,8 @@ public void onChange(String key, Instances value) throws Exception {
 <p>至此，整个Leader节点的持久化节点注册逻辑就完成了！</p>
 <p>同步数据给其它Follower节点，就是HTTP调用“raft/datum/commit”接口，处理逻辑比主节点简单！</p>
 <hr>
-<h3 id="三-nacos-cp集群选举过程">三 Nacos CP集群选举过程</h3>
-<h4 id="1-集群节点启动时会执行raftcoreinit核心方法">1 集群节点启动时，会执行RaftCore.init()核心方法</h4>
+<h2 id="三-nacos-cp集群选举过程">三 Nacos CP集群选举过程</h2>
+<h3 id="1-集群节点启动时会执行raftcoreinit核心方法">1 集群节点启动时，会执行RaftCore.init()核心方法</h3>
 <p>这个Init()核心方法，会启动2个核心定时任务（每500ms执行一次）：</p>
 <ul>
 <li><strong>选举任务：new MasterElection()</strong></li>
@@ -337,7 +337,7 @@ public class RaftCore implements Closeable {
  
 }
 </code></pre>
-<h4 id="2-选举任务的核心run方法">2 选举任务的核心run()方法</h4>
+<h3 id="2-选举任务的核心run方法">2 选举任务的核心run()方法</h3>
 <pre><code class="language-java">public class MasterElection implements Runnable {
  
     @Override
@@ -418,20 +418,20 @@ public class RaftCore implements Closeable {
     }
 }
 </code></pre>
-<h4 id="3-其它节点收到投票后的处理逻辑">3 其它节点收到投票后的处理逻辑</h4>
+<h3 id="3-其它节点收到投票后的处理逻辑">3 其它节点收到投票后的处理逻辑</h3>
 <ul>
 <li>如果<strong>收到的候选节点的term小于自己本地节点的term，则voteFor自己</strong>；（我更适合做Leader，这一票我投给自己）</li>
 <li><strong>否则，<strong>重置自己的election timeout，设置</strong>voteFor为收到的候选节点，更新集群周期term为候选节点的term</strong>；（我同意收到的节点做Leader）</li>
 </ul>
 <p>给Http的调用方返回response；</p>
 <hr>
-<h3 id="四-nacos-cp集群的心跳任务">四 Nacos CP集群的心跳任务</h3>
-<h4 id="1-心跳任务由leader节点发出有2个作用">1 心跳任务由Leader节点发出，有2个作用</h4>
+<h2 id="四-nacos-cp集群的心跳任务">四 Nacos CP集群的心跳任务</h2>
+<h3 id="1-心跳任务由leader节点发出有2个作用">1 心跳任务由Leader节点发出，有2个作用</h3>
 <ul>
 <li><strong>确定Follower节点在线；</strong></li>
 <li><strong>帮助Follower节点判断数据是否一致；</strong>（因为服务注册或变更时，Leader节点自己修改了，且收到了“过半”以上节点的ack，但是不排除有些节点没有执行成功，所以通过心跳任务，进行纠错容错）</li>
 </ul>
-<h4 id="2-心跳任务的核心run方法只有leader节点才可以向其它节点发送心跳包">2 心跳任务的核心run()方法(只有Leader节点才可以向其它节点发送心跳包)</h4>
+<h3 id="2-心跳任务的核心run方法只有leader节点才可以向其它节点发送心跳包">2 心跳任务的核心run()方法(只有Leader节点才可以向其它节点发送心跳包)</h3>
 <pre><code class="language-java">public class HeartBeat implements Runnable {
  
     @Override
@@ -543,7 +543,7 @@ public class RaftCore implements Closeable {
     }
 }
 </code></pre>
-<h4 id="3-follower节点收到心跳包后的处理逻辑">3 Follower节点收到心跳包后的处理逻辑</h4>
+<h3 id="3-follower节点收到心跳包后的处理逻辑">3 Follower节点收到心跳包后的处理逻辑</h3>
 <ul>
 <li>Leader发出的<strong>心跳包中，包含了数据中的所有key和timestamp</strong>，Follower节点<strong>通过遍历对比，可以排查</strong>自己数据是否为最新最全<strong>数据</strong>；</li>
 <li>如果<strong>数据不是最新或最全的，则</strong>批量从Leader节点<strong>获取不一致的数据的最新值</strong>；（Leader节点新增或修改的数据）</li>
