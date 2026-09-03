@@ -122,7 +122,7 @@
           </img>
           
           <p>Sentinel源码拓展之——限流的各种实现方式</p>
-<h3 id="一-常见的限流功能实现有以下三种方式">一 常见的限流功能实现有以下三种方式</h3>
+<h2 id="一-常见的限流功能实现有以下三种方式">一 常见的限流功能实现有以下三种方式</h2>
 <p>滑动时间窗口、令牌桶、漏桶，这三种实现方式，有各自擅长的应用场景，而在 Sentinel 中这三种限流实现都有被用到，只不过使用在不同的限流场景下：</p>
 <ul>
 <li>**滑动时间窗口：**普通QPS限流下的快速失败、Warmup预热，使用场景最多；—— Sentinel的实现，是使用“环形时间窗口”来表示无边无际的时间；</li>
@@ -130,23 +130,23 @@
 <li>**漏桶（流量整形）：**普通QPS限流下的排队等待，将请求暂存在一个队列中，按时间间隔拉取并处理；—— Sentinel的实现，实际不是真的放入一个队列中；</li>
 </ul>
 <figure data-type="image" tabindex="1"><img src="/post-images/1658667500749.png" alt="" loading="lazy"></figure>
-<h4 id="1-时间窗口滑动时间窗口">1 时间窗口（滑动时间窗口）</h4>
+<h3 id="1-时间窗口滑动时间窗口">1 时间窗口（滑动时间窗口）</h3>
 <p>固定时间窗口，由于时间窗口粒度太粗，而时间本身其实是没有边界的，所以无法保证任意单位时间窗口中的QPS都不超限（如下图粉红色区域）；</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1658667533086.png" alt="" loading="lazy"></figure>
 <p>为了解决这种问题，可以将我们设置的时间窗口做N等分，划分为更小粒度的窗口，这就是滑动时间窗口：</p>
 <ul>
-<li>假设滑动时间跨度Internel为1秒，我们可以做N=2等分，那么最小时间窗口其实就是500ms；</li>
+<li>假设滑动时间跨度 Interval 为 1 秒，我们可以做N=2等分，那么最小时间窗口其实就是500ms；</li>
 <li>在限流统计QPS时，窗口范围就是从( currentTime – interval) 之后的第一个时区开始，到 currentTime 所在时间窗口。</li>
 </ul>
 <figure data-type="image" tabindex="3"><img src="/post-images/1658667562075.png" alt="" loading="lazy"></figure>
 <p>随着N的值越大，限流的精度就会越高。</p>
-<h4 id="2-令牌桶">2 令牌桶</h4>
+<h3 id="2-令牌桶">2 令牌桶</h3>
 <ul>
 <li>以固定的速率生成令牌，存在令牌桶中，如果令牌桶满了以后，多余的令牌将会被丢弃；</li>
 <li>请求进入后，必须先尝试从令牌桶中获取令牌，获取到令牌的请求才会被处理，没有获取到令牌的请求将会被拒绝，或者等待。</li>
 </ul>
 <figure data-type="image" tabindex="4"><img src="/post-images/1658667591134.png" alt="" loading="lazy"></figure>
-<h4 id="3-漏桶">3 漏桶</h4>
+<h3 id="3-漏桶">3 漏桶</h3>
 <ul>
 <li>将每一个“请求”视作“水滴”，放入“漏桶”中存储；</li>
 <li>“漏桶”以固定速率向外“漏出”请求进行处理，如果“漏桶”空了则代表没有待处理的请求；</li>
@@ -157,22 +157,22 @@
 <p>以上都是三种实现方案的理论知识，而Sentinel在实际实现时，是做了一定的优化的！</p>
 </blockquote>
 <hr>
-<h3 id="二-sentinel中三种限流方案的实现源码剖析之滑动时间窗口算法">二 Sentinel中三种限流方案的实现源码剖析之——滑动时间窗口算法</h3>
+<h2 id="二-sentinel中三种限流方案的实现源码剖析之滑动时间窗口算法">二 Sentinel中三种限流方案的实现源码剖析之——滑动时间窗口算法</h2>
 <p><strong>滑动时间窗口 —— QPS快速失败 + WarmUp预热：</strong></p>
 <p>Sentinel中的时间窗口，其实使用的是如下图所示的环形时间窗口：</p>
 <ul>
 <li>因为时间是没有边界的，</li>
-<li>而且我们一般也只会关注一个Internel之内的时间，如果一个Internel被分成了N个小窗口，那么我们也只会关注N个小的时间窗口；</li>
+<li>而且我们一般也只会关注一个 Interval 之内的时间，如果一个 Interval 被分成了 N 个小窗口，那么我们也只会关注N个小的时间窗口；</li>
 </ul>
-<p>所以使用环形时间窗口，既能满足使用需求，又能解决内存空间。</p>
+<p>所以使用环形时间窗口，既能满足使用需求，又能节省内存空间。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1658667653355.png" alt="" loading="lazy"></figure>
 <p>通过上一篇关于 ProcessorSlotChain 插槽链的介绍，我们已经清楚了：</p>
 <ul>
 <li>QPS 的统计工作将会由 StatisticSlot 插槽完成；</li>
 <li>限流判断的逻辑将会由 FlowSlot 插槽来完成；</li>
 </ul>
-<p>而所有的 PrcessorSlot 的处理逻辑，都在他们的 entry() 方法中；</p>
-<h4 id="1-时间窗口请求量统计statisticslot">1 时间窗口请求量统计：StatisticSlot</h4>
+<p>而所有的 ProcessorSlot 的处理逻辑，都在它们的 entry() 方法中；</p>
+<h3 id="1-时间窗口请求量统计statisticslot">1 时间窗口请求量统计：StatisticSlot</h3>
 <pre><code class="language-java">public class StatisticSlot extends AbstractLinkedProcessorSlot&lt;DefaultNode&gt; {
  
     @Override
@@ -332,7 +332,7 @@ public WindowWrap&lt;T&gt; currentWindow(long timeMillis) {
 <ul>
 <li>获取到时间窗口后，增加计数就比较简单了，使用“自旋 + CAS”的方式完成计数器安全增加即可。</li>
 </ul>
-<h4 id="2-滑动窗口qps计算并判断限流逻辑flowslot">2 滑动窗口QPS计算，并判断限流逻辑：FlowSlot</h4>
+<h3 id="2-滑动窗口qps计算并判断限流逻辑flowslot">2 滑动窗口QPS计算，并判断限流逻辑：FlowSlot</h3>
 <pre><code class="language-java">public class FlowSlot extends AbstractLinkedProcessorSlot&lt;DefaultNode&gt; {
  
     @Override
@@ -467,14 +467,14 @@ public boolean isWindowDeprecated(long time, WindowWrap&lt;T&gt; windowWrap) {
 </ul>
 </li>
 <li>
-<p>FlowSlot在需要的时候，会去除当前时间窗口内包含的所有小窗口，然后累加他们的请求量；</p>
+<p>FlowSlot 在需要的时候，会取出当前时间窗口内包含的所有小窗口，然后累加它们的请求量；</p>
 </li>
 <li>
 <p>最后判断是否溢出限流阈值，允许通过，或直接拒绝！</p>
 </li>
 </ul>
 <hr>
-<h3 id="三-sentinel中三种限流方案的实现源码剖析之令牌桶算法">三 Sentinel中三种限流方案的实现源码剖析之——令牌桶算法</h3>
+<h2 id="三-sentinel中三种限流方案的实现源码剖析之令牌桶算法">三 Sentinel中三种限流方案的实现源码剖析之——令牌桶算法</h2>
 <blockquote>
 <p>“热点参数”限流策略，不适合使用 StatisticSlot 中常规的 “滑动时间窗口算法”，因为StatisticSlot中统计的维度是Node级别；</p>
 <p>很显然，“热点参数”并不适合使用上面的“环形时间窗口算法”来实现；</p>
@@ -531,7 +531,7 @@ public boolean isWindowDeprecated(long time, WindowWrap&lt;T&gt; windowWrap) {
     }
 }
 </code></pre>
-<h4 id="1parametermetricstorageinitparammetricsfor-令牌桶初始化方法">1ParameterMetricStorage.initParamMetricsFor() 令牌桶初始化方法</h4>
+<h3 id="1parametermetricstorageinitparammetricsfor-令牌桶初始化方法">1ParameterMetricStorage.initParamMetricsFor() 令牌桶初始化方法</h3>
 <pre><code class="language-java">public final class ParameterMetricStorage {
  
     // 以资源名区分不同资源下的令牌桶容器（因为这还不是真正的令牌桶）
@@ -559,10 +559,10 @@ public boolean isWindowDeprecated(long time, WindowWrap&lt;T&gt; windowWrap) {
     }
 }
 </code></pre>
-<h4 id="2-初始化令牌桶容器真正的令牌桶即将出现">2 初始化令牌桶容器，真正的令牌桶即将出现</h4>
+<h3 id="2-初始化令牌桶容器真正的令牌桶即将出现">2 初始化令牌桶容器，真正的令牌桶即将出现</h3>
 <p>Sentinel中的令牌桶，其实是维护2个双层Map：</p>
 <ul>
-<li>容器中剩余令牌数的Map：&lt;ParamFlowRule, &lt;参数值, 属于这个参数值得桶中的剩余可用令牌数&gt;&gt;：此时第二层Map还是空Map；</li>
+<li>容器中剩余令牌数的Map：&lt;ParamFlowRule, &lt;参数值, 属于这个参数值的桶中的剩余可用令牌数&gt;&gt;：此时第二层Map还是空Map；</li>
 <li>记录最近一次通过的请求时间戳的Map：&lt;ParamFlowRule, &lt;参数值, 最近一次请求的时间戳&gt;&gt;：此时第二层Map还是空Map；</li>
 </ul>
 <pre><code class="language-java">public class ParameterMetric {
@@ -614,7 +614,7 @@ public boolean isWindowDeprecated(long time, WindowWrap&lt;T&gt; windowWrap) {
 <blockquote>
 <p>以上，<strong>只算是将令牌桶容器初始化好了，但是还没开始正式使用！</strong></p>
 </blockquote>
-<h4 id="3-正式使用上面创建的令牌桶容器一步步调用至热点参数限流判断逻辑核心方法">3 正式使用上面创建的令牌桶容器，一步步调用至“热点参数限流”判断逻辑核心方法</h4>
+<h3 id="3-正式使用上面创建的令牌桶容器一步步调用至热点参数限流判断逻辑核心方法">3 正式使用上面创建的令牌桶容器，一步步调用至“热点参数限流”判断逻辑核心方法</h3>
 <pre><code class="language-java">ParamFlowChecker.passCheck(resourceWrapper, rule, count, args)
 
 com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowChecker#passLocalCheck
@@ -623,7 +623,7 @@ com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowChecker#passSingleValue
 
 com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowChecker#passDefaultLocalCheck
 </code></pre>
-<h4 id="4paramflowcheckerpassdefaultlocalcheck-即为热点限流逻辑的核心方法">4ParamFlowChecker.passDefaultLocalCheck() 即为“热点限流逻辑”的核心方法</h4>
+<h3 id="4paramflowcheckerpassdefaultlocalcheck-即为热点限流逻辑的核心方法">4ParamFlowChecker.passDefaultLocalCheck() 即为“热点限流逻辑”的核心方法</h3>
 <figure data-type="image" tabindex="10"><img src="/post-images/1658667803098.jpg" alt="" loading="lazy"></figure>
 <pre><code class="language-java">// com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowChecker#passDefaultLocalCheck  
 static boolean passDefaultLocalCheck(ResourceWrapper resourceWrapper, ParamFlowRule rule, int acquireCount, Object value) {
@@ -631,7 +631,7 @@ static boolean passDefaultLocalCheck(ResourceWrapper resourceWrapper, ParamFlowR
      
     // 根据rule从上面初始化好的令牌桶容器中去除第二层Map
     // &lt;参数值, 上次请求的时间戳&gt;
-    // &lt;参数值, 属于这个参数值得桶中的剩余可用令牌数&gt;
+    // &lt;参数值, 属于这个参数值的桶中的剩余可用令牌数&gt;
     CacheMap&lt;Object, AtomicLong&gt; tokenCounters = metric == null ? null : metric.getRuleTokenCounter(rule);
     CacheMap&lt;Object, AtomicLong&gt; timeCounters = metric == null ? null : metric.getRuleTimeCounter(rule);
      
@@ -727,7 +727,7 @@ static boolean passDefaultLocalCheck(ResourceWrapper resourceWrapper, ParamFlowR
 </li>
 <li>
 <ul>
-<li>容器中剩余令牌数的tokenMap：&lt;ParamFlowRule, &lt;参数值, 属于这个参数值得桶中的剩余可用令牌数&gt;&gt;</li>
+<li>容器中剩余令牌数的tokenMap：&lt;ParamFlowRule, &lt;参数值, 属于这个参数值的桶中的剩余可用令牌数&gt;&gt;</li>
 <li>记录最近一次通过的请求时间戳的timeMap：&lt;ParamFlowRule, &lt;参数值, 最近一次请求的时间戳&gt;&gt;</li>
 </ul>
 </li>
@@ -750,7 +750,7 @@ static boolean passDefaultLocalCheck(ResourceWrapper resourceWrapper, ParamFlowR
 </li>
 </ul>
 <hr>
-<h3 id="四-sentinel中三种限流方案的实现源码剖析之漏桶算法">四、Sentinel中三种限流方案的实现源码剖析之——漏桶算法</h3>
+<h2 id="四-sentinel中三种限流方案的实现源码剖析之漏桶算法">四、Sentinel中三种限流方案的实现源码剖析之——漏桶算法</h2>
 <p>漏桶算法的核心思想是：将请求放在漏桶中，漏桶会按照固定时间间隔，向外“漏出”请求，进行处理，这样很明显的好处就是“流量整形”，当瞬间流量过大时，也可以先放在漏桶中，慢慢处理！</p>
 <p>漏桶算法的入口也是在FlowSlot中，上面有讲过：</p>
 <p>FlowSlot的限流判断最终都由<code>TrafficShapingController</code>接口中的<code>canPass</code>方法来实现。该接口有三个实现类：</p>
