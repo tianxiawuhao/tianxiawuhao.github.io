@@ -18,6 +18,17 @@
     return box;
   }
 
+  /* 找到目录要插入的"文章 row"。优先用文章页 ID；找不到则兜底用 body。 */
+  function findMount() {
+    var row =
+      document.querySelector("article#post-content-article > .container > .row") ||
+      document.querySelector(".toc-container .markdownIt-TOC")?.closest("article")?.querySelector(".row") ||
+      document.querySelector(".toc-container")?.closest(".row") ||
+      document.querySelector(".toc-container")?.closest("article") ||
+      null;
+    return row;
+  }
+
   function smoothAnchors(root) {
     if (!root) return;
     var links = root.querySelectorAll("a[href^='#']");
@@ -56,7 +67,14 @@
       '<div class="toc-label">目录 · Contents</div>' +
       source.innerHTML;
 
-    document.body.appendChild(aside);
+    // 关键变化：把 sidebar 挂到文章 row 里，让 sticky 真正"和文章挂钩"
+    var mount = findMount();
+    if (mount) {
+      mount.appendChild(aside);
+    } else {
+      // 兜底：旧行为 — append 到 body，配合 fixed 定位
+      document.body.appendChild(aside);
+    }
     document.body.classList.add("toc-ready");
 
     smoothAnchors(aside);
