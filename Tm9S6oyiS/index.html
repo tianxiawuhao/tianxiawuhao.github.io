@@ -123,7 +123,7 @@
           
           <p>SpringBoot 启动流程</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1661776742013.png" alt="" loading="lazy"></figure>
-<h3 id="new-springapplication阶段">new SpringApplication阶段</h3>
+<h2 id="new-springapplication阶段">new SpringApplication阶段</h2>
 <p>一般的springboot的启动类长这个样子。</p>
 <pre><code class="language-java">@SpringBootApplication
 public class SampleApplication {
@@ -174,7 +174,7 @@ public static ConfigurableApplicationContext run(Class&lt;?&gt;[] primarySources
     this.mainApplicationClass = deduceMainApplicationClass();
 }
 </code></pre>
-<h4 id="确定应用程序类型servlet">确定应用程序类型(servlet)</h4>
+<h3 id="确定应用程序类型servlet">确定应用程序类型(servlet)</h3>
 <p>首先就是确定一下我们这个项目的类型<br>
 判断方法比较简单粗暴，就是看一下你项目中有没有对应类型的标志性的类。举个例子，如果你有WEBFLUX_INDICATOR_CLASS这个类的话，就认为你的项目类型是REACTIVE。</p>
 <pre><code class="language-java">private static final String WEBMVC_INDICATOR_CLASS = &quot;org.springframework.web.servlet.DispatcherServlet&quot;;
@@ -200,7 +200,7 @@ static WebApplicationType deduceFromClasspath() {
     return WebApplicationType.SERVLET;
 }
 </code></pre>
-<h4 id="spi加载springfactories">spi加载spring.factories</h4>
+<h3 id="spi加载springfactories">spi加载spring.factories</h3>
 <p>然后就是通过SPI机制获取spring.factories的配置<br>
 在构造器中，我们可以很明显的看到有两次对于getSpringFactoriesInstances方法的调用，这个方法兜兜转转，最后会调用到SpringFactoriesLoader的loadSpringFactories的方法。在这个方法中，对于相同的classsloader，只会尝试load一次spring.factories文件中的配置。</p>
 <pre><code class="language-java">private static Map&lt;String, List&lt;String&gt;&gt; loadSpringFactories(@Nullable ClassLoader classLoader) {
@@ -234,8 +234,8 @@ static WebApplicationType deduceFromClasspath() {
     }
 }
 </code></pre>
-<h4 id="加载applicationcontextinitializer初始化器和applicationlistener监听器">加载ApplicationContextInitializer(初始化器)和ApplicationListener(监听器)</h4>
-<p>从load好的spring.factorie中获取配置好的ApplicationContextInitializer和ApplicationListener<br>
+<h3 id="加载applicationcontextinitializer初始化器和applicationlistener监听器">加载ApplicationContextInitializer(初始化器)和ApplicationListener(监听器)</h3>
+<p>从加载好的 spring.factories 中获取配置好的 ApplicationContextInitializer 和 ApplicationListener<br>
 这个就没啥好说了。需要注意的是，这些ApplicationListener是在调用run方法之前就已经加载进来的，所以这些ApplicationListener不仅仅能够接收ApplicationStartedEvent以及之后的ApplicationEvent，之前的比如ApplicationStartingEvent、ApplicationEnvironmentPreparedEvent等等事件类型也都可以接收到。</p>
 <p>确定主类<br>
 这个的逻辑也比较简单，首先获取当前的方法调用栈（这点还是有疑问为啥不通过Thread.currentThread().getStackTrace()这种看起来更加正式的方法来获取stackTrace）。然后从栈顶一个一个找下去，直到找到一个名字为main的方法，这个方法所对应的类就可以认为是主类了。</p>
@@ -268,8 +268,8 @@ public class SampleApplication {
     }
 }
 </code></pre>
-<p>发现调用Test.main方法之后，定位出来的mainclass确实是SampleApplication。</p>
-<h3 id="run方法">run()方法</h3>
+<p>发现调用 Test.main 方法之后，定位出来的 main class 确实是 SampleApplication。</p>
+<h2 id="run方法">run()方法</h2>
 <p>run()方法做了哪些事情<br>
 还是先看这些稍微加了点注释的源码</p>
 <pre><code class="language-java">public ConfigurableApplicationContext run(String... args) {
@@ -410,11 +410,11 @@ Collection&lt;SpringBootExceptionReporter&gt; exceptionReporters = new ArrayList
 configureHeadlessProperty();
 SpringApplicationRunListeners listeners = getRunListeners(args);
 </code></pre>
-<h4 id="开启计时器">开启计时器</h4>
+<h3 id="开启计时器">开启计时器</h3>
 <p>一个是创建了一个timer（StopWatch）用来之后计算启动耗时，下面这段日志就是它功能的体现。</p>
 <pre><code class="language-java">2021-09-22 16:29:38.241  INFO 8044 --- [           main] com.sample.app.SampleApplication       : Started SampleApplication in 32.023 seconds (JVM running for 121.055)
 </code></pre>
-<h4 id="headlesstrue-设置无外接设备启动">headless=true 设置无外接设备启动</h4>
+<h3 id="headlesstrue-设置无外接设备启动">headless=true 设置无外接设备启动</h3>
 <p>一个是调用configureHeadlessProperty方法来设置java.awt.headless的系统环境变量，这个默认值是true。</p>
 <pre><code class="language-java"> private boolean headless = true;
 
@@ -423,7 +423,7 @@ SpringApplicationRunListeners listeners = getRunListeners(args);
               System.getProperty(SYSTEM_PROPERTY_JAVA_AWT_HEADLESS, Boolean.toString(this.headless)));
   }
 </code></pre>
-<h4 id="获取并启用监听器">获取并启用监听器</h4>
+<h3 id="获取并启用监听器">获取并启用监听器</h3>
 <p>再有就是从之前解析好的spring.factories中读取所有的SpringApplicationRunListeners。</p>
 <pre><code class="language-java">private SpringApplicationRunListeners getRunListeners(String[] args) {
     Class&lt;?&gt;[] types = new Class&lt;?&gt;[] { SpringApplication.class, String[].class };
@@ -443,13 +443,13 @@ DelegatingApplicationListener
 LogbackLoggingSystem
 BackgroundPreinitializer
 </code></pre>
-<h4 id="设置应用程序参数">设置应用程序参数</h4>
-<p>staring之后，environmentPrepared之前<br>
+<h3 id="设置应用程序参数">设置应用程序参数</h3>
+<p>starting 之后、environmentPrepared 之前<br>
 对应的代码在run方法里对应两行，其中第一行是把系统参数包装一下，使得用起来更加方便。第二行则是进行一些环境的准备工作。</p>
 <pre><code class="language-java">ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
 ConfigurableEnvironment environment = prepareEnvironment(listeners, applicationArguments);
 </code></pre>
-<h4 id="准备环境变量">准备环境变量</h4>
+<h3 id="准备环境变量">准备环境变量</h3>
 <p>我们重点看prepareEnvironment这个方法中做了哪些工作。</p>
 <pre><code class="language-java">private ConfigurableEnvironment prepareEnvironment(SpringApplicationRunListeners listeners,
         ApplicationArguments applicationArguments) {
@@ -609,7 +609,7 @@ protected void addPropertySources(ConfigurableEnvironment environment, ResourceL
                                  });
 }
 </code></pre>
-<h4 id="忽略bean信息">忽略bean信息</h4>
+<h3 id="忽略bean信息">忽略bean信息</h3>
 <pre><code class="language-java"> private void configureIgnoreBeanInfo(ConfigurableEnvironment environment) {
 		if (System.getProperty(
 				CachedIntrospectionResults.IGNORE_BEANINFO_PROPERTY_NAME) == null) {
@@ -620,14 +620,14 @@ protected void addPropertySources(ConfigurableEnvironment environment, ResourceL
 		}
  }
 </code></pre>
-<h4 id="打印banner信息">打印banner信息</h4>
-<p>显而易见，这个流程就是用来打印控制台那个很大的spring的banner的，就是下面这个东东<br>
+<h3 id="打印banner信息">打印banner信息</h3>
+<p>显而易见，这个流程就是用来在控制台打印那个大大的 Spring banner，就是下面这个东东<br>
 <img src="/post-images/1661777022899.png" alt="" loading="lazy"><br>
 那他在哪里打印的呢？他在 SpringBootBanner.java 里面打印的，这个类实现了Banner 接口，</p>
 <p>而且banner信息是直接在代码里面写死的；<br>
 <img src="/post-images/1661777039318.png" alt="" loading="lazy"><br>
 有些公司喜欢自定义banner信息，如果想要改成自己喜欢的图标该怎么办呢，其实很简单,只需要在resources目录下添加一个 banner.txt 的文件即可，一定要添加到resources目录下，别加错了</p>
-<h4 id="创建应用程序上下文">创建应用程序上下文</h4>
+<h3 id="创建应用程序上下文">创建应用程序上下文</h3>
 <p>environmentPrepared之后，contextPrepared之前<br>
 这部分在SpringApplication对应的代码主要是这么三行</p>
 <pre><code class="language-java">//初始化
@@ -660,9 +660,9 @@ prepareContext(context, environment, listeners, applicationArguments, printedBan
         return (ConfigurableApplicationContext) BeanUtils.instantiateClass(contextClass);
     }
 </code></pre>
-<h4 id="实例化异常报告器">实例化异常报告器</h4>
+<h3 id="实例化异常报告器">实例化异常报告器</h3>
 <p>第二行就是获取SpringBootExceptionReporter的实例。</p>
-<p>异常报告器是用来捕捉全局异常使用的，当springboot应用程序在发生异常时，异常报告器会将其捕捉并做相应处理，在spring.factories 文件里配置了默认的异常报告器，</p>
+<p>异常报告器用于捕捉全局异常：当 Spring Boot 应用程序发生异常时，异常报告器会将其捕获并做相应处理。在 spring.factories 文件里配置了默认的异常报告器。</p>
 <p><img src="/post-images/1661777103389.png" alt="" loading="lazy"><br>
 需要注意的是，这个异常报告器只会捕获启动过程抛出的异常，如果是在启动完成后，在用户请求时报错，异常报告器不会捕获请求中出现的异常，<br>
 <img src="/post-images/1661777116513.png" alt="" loading="lazy"><br>
@@ -703,7 +703,7 @@ com.spring.application.MyExceptionReporter
 </code></pre>
 <p>启动后，控制台打印如下图<br>
 <img src="/post-images/1661777149995.png" alt="" loading="lazy"></p>
-<h4 id="准备上下文环境">准备上下文环境</h4>
+<h3 id="准备上下文环境">准备上下文环境</h3>
 <p>第三行所对应的方法比较复杂，和我们这个阶段对应的主要是这么几行。</p>
 <pre><code class="language-java">private void prepareContext(ConfigurableApplicationContext context, ConfigurableEnvironment environment,
         SpringApplicationRunListeners listeners, ApplicationArguments applicationArguments, Banner printedBanner) {
@@ -741,7 +741,7 @@ EventPublishingRunListener发布ApplicationContextInitializedEvent事件</p>
             .multicastEvent(new ApplicationContextInitializedEvent(this.application, this.args, context));
 }
 </code></pre>
-<p>订阅了这个事件的ApplicationListener只找到个两个，我们先记录下来。都没做啥事</p>
+<p>订阅了这个事件的 ApplicationListener 只找到两个，我们先记录下来——都没做什么事。</p>
 <pre><code class="language-java">BackgroundPreinitializer
 DelegatingApplicationListener
 </code></pre>
@@ -767,7 +767,7 @@ LoggingApplicationListener
 BackgroundPreinitializer
 DelegatingApplicationListener
 </code></pre>
-<h4 id="刷新上下文">刷新上下文</h4>
+<h3 id="刷新上下文">刷新上下文</h3>
 <p>contextLoaded之后，started之前<br>
 这个在run方法中只对应了一行代码refreshContext(context);。它会间接的对ApplicationContext的refresh方法进行调用。由于我们现在debug的是一个web项目，因此走进去对应的ApplicationContext的实现类是ServletWebServerApplicationContext。它的refresh方法可以简单的视为对父类refresh方法的调用，它的onRefresh方法则在父类(AbstractApplicationContext)的方法之上创建了WebServer。</p>
 <pre><code class="language-java">@Override
@@ -865,7 +865,7 @@ protected void onRefresh() {
     }
 }
 </code></pre>
-<h4 id="刷新上下文后置处理">刷新上下文后置处理</h4>
+<h3 id="刷新上下文后置处理">刷新上下文后置处理</h3>
 <p>afterRefresh 方法是启动后的一些处理，留给用户扩展使用，目前这个方法里面是空的，</p>
 <pre><code class="language-java">/**
 	 * Called after the context has been refreshed.
@@ -876,8 +876,8 @@ protected void onRefresh() {
 			ApplicationArguments args) {
 	}
 </code></pre>
-<h4 id="结束计时器">结束计时器</h4>
-<h4 id="发布上下文准备就绪事件">发布上下文准备就绪事件</h4>
+<h3 id="结束计时器">结束计时器</h3>
+<h3 id="发布上下文准备就绪事件">发布上下文准备就绪事件</h3>
 <p>started之后，running之前<br>
 这个部分就比较简单了，主要是invoke了ApplicationRunner和CommandLineRunner</p>
 <pre><code class="language-java">private void callRunners(ApplicationContext context, ApplicationArguments args) {
@@ -895,7 +895,7 @@ protected void onRefresh() {
     }
 }
 </code></pre>
-<p>这是一个扩展功能，callRunners(context, applicationArguments) 可以在启动完成后执行自定义的run方法；有2中方式可以实现：</p>
+<p>这是一个扩展功能：callRunners(context, applicationArguments) 可以在启动完成后执行自定义的 run 方法，有 2 种方式可以实现：</p>
 <ol>
 <li>实现 ApplicationRunner 接口</li>
 <li>实现 CommandLineRunner 接口</li>
