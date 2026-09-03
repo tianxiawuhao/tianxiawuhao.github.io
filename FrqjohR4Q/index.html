@@ -124,26 +124,26 @@
           <h2 id="一-自举问题bootstrapping">一、自举问题（Bootstrapping）</h2>
 <p>在强化学习中，Bootstrapping的意思是用一种估算去更新同类的估算。</p>
 <figure data-type="image" tabindex="1"><img src="https://pic4.zhimg.com/80/v2-02e3e3235374603efbdd105c6f30bb53_720w.webp" alt="img" loading="lazy"></figure>
-<p>首先来，看一下TD target yt，它包含当前观测到的奖励rt和DQN对下一步状态和动作的预测值。</p>
+<p>首先来看 TD target y_t：它包含当前观测到的奖励 r_t，以及 DQN 对下一时刻状态和动作的预测值。</p>
 <figure data-type="image" tabindex="2"><img src="https://pic3.zhimg.com/80/v2-4a887bd9592c0598dffa5674fd9f7aca_720w.webp" alt="img" loading="lazy"></figure>
-<p>然后我们采用随机梯度下降（SGD）来更新DQN模型参数w。这里使用的SGD用到了yt，而yt又部分基于DQN在t+1时刻的估计。因此，采用TD算法来更新DQN就是一个bootstrapping的一个例子。</p>
+<p>然后我们采用随机梯度下降（SGD）来更新DQN模型参数w。这里使用的SGD用到了yt，而yt又部分基于DQN在t+1时刻的估计。因此，用 TD 算法更新 DQN 就是 bootstrapping 的一个例子。</p>
 <figure data-type="image" tabindex="3"><img src="https://pic2.zhimg.com/80/v2-093eff4d6b4aa856ebe80e3682234b05_720w.webp" alt="img" loading="lazy"></figure>
 <h2 id="二-高估问题problem-of-overestimation">二、高估问题（Problem of Overestimation）</h2>
 <p>首先，我们要知道：TD算法可能会导致高估真实的动作价值。造成高估的主要原因有两个：</p>
 <p><strong>①原因一：计算TD target时使用了最大化（The Maximization）</strong></p>
 <figure data-type="image" tabindex="4"><img src="https://pic1.zhimg.com/80/v2-757dff67de486827ec52be8624db3760_720w.webp" alt="img" loading="lazy"></figure>
 <p>证明如下：</p>
-<p>首先我们获取到一些观测到真实数据：x1,x2,...,xn。然后在这些观测值中加入一些均值为0的随机噪声Q1,Q2,...,Qn。由于噪声的均值为0，所以对Q的均值求期望，就等于对x求期望。然而，Q最大值的期望却会大于等于x的最大值，且Q最小值的期望也会小于等于x的最小值。</p>
+<p>首先，我们获得一些真实的观测数据：x1, x2, …, xn。然后在这些观测值中加入一些均值为0的随机噪声Q1,Q2,...,Qn。由于噪声的均值为0，所以对Q的均值求期望，就等于对x求期望。然而，Q最大值的期望却会大于等于x的最大值，且Q最小值的期望也会小于等于x的最小值。</p>
 <figure data-type="image" tabindex="5"><img src="https://pic4.zhimg.com/80/v2-49804077c1b1cd07d632c31fb0c262ef_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里我们回到DQN的高估问题：假设我们得到了一些动作价值，x(a1),...,x(an)，且有一些DQN的噪声估计Q(s,a1;w),...,Q(s,an;w)。这里我们假设估计是无偏的，也就是上述中Q的均值为0。那么这里的q作为Q(s,a;w)的最大值，就会产生上述的高估问题。如下图所示：</p>
+<p>这里我们回到DQN的高估问题：假设我们得到了一些动作价值，x(a1),...,x(an)，且有一些DQN的噪声估计Q(s,a1;w),...,Q(s,an;w)。这里假设估计是无偏的，即上述噪声的均值为 0。那么这里的q作为Q(s,a;w)的最大值，就会产生上述的高估问题。如下图所示：</p>
 <figure data-type="image" tabindex="6"><img src="https://pic3.zhimg.com/80/v2-5a6c32d2b82218501853082bdc639802_720w.webp" alt="img" loading="lazy"></figure>
-<p>上面我们已经知道了，q是x(a)的高估，因此我们这里假设qt+1是对t+1时刻真实的动作价值的预测，因此它是高估的。然而我们的TD target是取决于当前观测到的奖励rt和DQN对qt+1的预测，因此也是高估的。而TD算法的目的就是使Q(st,at;w)向TD target逼近，而yt是一个高估的量，继而导致Q(st,at;w)也会高估真实的动作价值。</p>
+<p>由上文可知，q 高估了真实的 x(a)。这里假设 q_{t+1} 是对 t+1 时刻真实动作价值的估计，因此它同样偏高；而 TD target 由当前观测到的奖励 r_t 与 DQN 对 q_{t+1} 的预测组成，所以也会偏高。TD 算法的目标是使 Q(s_t,a_t;w) 逼近 TD target，而 y_t 偏高，继而导致 Q(s_t,a_t;w) 也高估真实的动作价值。</p>
 <figure data-type="image" tabindex="7"><img src="https://pic4.zhimg.com/80/v2-9c40d3f1d79c5d81c102dbfbd7c8b267_720w.webp" alt="img" loading="lazy"></figure>
 <p><strong>②原因二：自举产生的高估问题（Bootstrapping）</strong></p>
 <p>如果已经产生了高估，那么再进行Bootstrapping，高估就会越来越大。</p>
 <figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-a1d1d6b656b6d857623a9f80b8d5a540_720w.webp" alt="img" loading="lazy"></figure>
 <p>这里讨论为什么Bootstrapping会导致高估：</p>
-<p>我们知道TD target实际上是使用了下面的一个最大化的公式，且我们使用TD target用于更新Q(st,at;w)。假设DQN已经产生了高估的动作价值，那么Q(st,at;w)就已经是一个高估的量。然而我们采用了一个最大化公式，会使qt+1更大，而我们再使用qt+1去更新Q(st,at;w)即将高估的量传回DQN用于更新模型参数。因此，高估问题会越来越严重。</p>
+<p>TD target 的公式中包含最大化运算，且我们用 TD target 更新 Q(s_t,a_t;w)。假设 DQN 的动作价值已经偏高，那么 Q(s_t,a_t;w) 本身就是一个高估的量；最大化又会使 q_{t+1} 更大，再用偏高的 q_{t+1} 去更新 Q(s_t,a_t;w)，等于把高估继续传回 DQN 用于更新参数。因此，高估问题会越来越严重。</p>
 <figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-b56d6d96b6973729a1ebbcd2f7e8a728_720w.webp" alt="img" loading="lazy"></figure>
 <p>总结一下：直接上图</p>
 <figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-1eac1b3aba23780eba5ab2ca81928de2_720w.webp" alt="img" loading="lazy"></figure>
@@ -158,13 +158,13 @@
 <figure data-type="image" tabindex="15"><img src="https://pic2.zhimg.com/80/v2-cd3f98ead7cadd23e4ece7f11f1de631_720w.webp" alt="img" loading="lazy"></figure>
 <h2 id="三-目标网络target-network">三、目标网络（Target Network）</h2>
 <p>相比于DQN，Target Network是独立于DQN的。它与DQN有着相同的神经网络结构，但有不同的参数，记作w-。</p>
-<p>我们使用Q(s,a;w)来控制Agent并且收集经验即transition{(st,at,rt,st+1)}。</p>
-<p>使用Q(s,q;w-)来计算TD target。</p>
-<p>以前使用DQN来计算yt，用yt来更新DQN的参数。这会产生自举。现在我们使用Target Network，用Target Network来计算yt。这样就可以缓解高估问题。</p>
+<p>我们使用 Q(s,a;w) 控制 Agent 并收集经验，即 transition (s_t, a_t, r_t, s_{t+1})。</p>
+<p>使用目标网络 Q(s,a; w⁻) 来计算 TD target。</p>
+<p>以前用 DQN 自身计算 y_t 并更新参数，会产生自举；现在改用 Target Network 计算 y_t，从而缓解高估问题。</p>
 <figure data-type="image" tabindex="16"><img src="https://pic4.zhimg.com/80/v2-2ca0339a87b721efc0aedeb98047c77f_720w.webp" alt="img" loading="lazy"></figure>
-<p>注意一下，这里计算TD target采用的Target Network，参数为w-，而随机梯度下降（SGD）仅用于更新DQN的神经网络参数w</p>
+<p>注意：计算 TD target 用的是 Target Network，参数为 w⁻；随机梯度下降（SGD）仅用于更新 DQN 的参数 w。</p>
 <figure data-type="image" tabindex="17"><img src="https://pic3.zhimg.com/80/v2-266f711a9ffdb37894e39866ed6b6a1a_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里用几种方法用于更新w-</p>
+<p>更新 w⁻ 常用的几种方法如下</p>
 <figure data-type="image" tabindex="18"><img src="https://pic1.zhimg.com/80/v2-7b16dd2c43ac6350eba9025cf3e2a298_720w.webp" alt="img" loading="lazy"></figure>
 <p>对比一下两种更新DQN的方法：</p>
 <p>原始方法利用自举，这会造成高估。</p>
@@ -183,7 +183,7 @@
 <figure data-type="image" tabindex="22"><img src="https://pic1.zhimg.com/80/v2-c6646a443560dad782970fc89bad1c94_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="3ddqn">3）DDQN</h3>
 <figure data-type="image" tabindex="23"><img src="https://pic4.zhimg.com/80/v2-f1ac2f251af82092b8662b433277bf7b_720w.webp" alt="img" loading="lazy"></figure>
-<p>DDQN在第一步求最大化的动作时，采用了传统的DQN方法，进行求取最优动作a*。而在第二步评估TD target时，采用了Target Network，很容易得到如下不等式：</p>
+<p>DDQN 的第一步（求最大化动作）沿用传统 DQN 的方法选出最优动作 a*；第二步评估 TD target 时改用 Target Network，由此很容易得到如下不等式：</p>
 <figure data-type="image" tabindex="24"><img src="https://pic4.zhimg.com/80/v2-7809878c0f55b00f8639c32717e5491b_720w.webp" alt="img" loading="lazy"></figure>
 <h2 id="五-总结summary">五、总结（Summary）</h2>
 <figure data-type="image" tabindex="25"><img src="https://pic1.zhimg.com/80/v2-3890fd41d1d737dd8c61eb1db29459a4_720w.webp" alt="img" loading="lazy"></figure>
