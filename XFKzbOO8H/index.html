@@ -121,16 +121,16 @@
           <img class="post-feature-header-image" src="/post-images/XFKzbOO8H.png" alt="封面图">
           </img>
           
-          <h3 id="seata-是什么">Seata 是什么?</h3>
-<p>Seata 是一款开源的分布式事务解决方案，致力于提供高性能和简单易用的分布式事务服务。Seata 将为用户提供了 AT、TCC、SAGA 和 XA 事务模式，为用户打造一站式的分布式解决方案。</p>
+          <h2 id="seata-是什么">Seata 是什么?</h2>
+<p>Seata 是一款开源的分布式事务解决方案，致力于提供高性能、简单易用的分布式事务服务。Seata 为用户提供 AT、TCC、SAGA 和 XA 事务模式，打造一站式的分布式解决方案。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1659011805071.png" alt="" loading="lazy"></figure>
-<h3 id="at-模式">AT 模式</h3>
-<h4 id="前提">前提</h4>
+<h2 id="at-模式">AT 模式</h2>
+<h3 id="前提">前提</h3>
 <ul>
 <li>基于支持本地 ACID 事务的关系型数据库。</li>
 <li>Java 应用，通过 JDBC 访问数据库。</li>
 </ul>
-<h4 id="整体机制">整体机制</h4>
+<h3 id="整体机制">整体机制</h3>
 <p>两阶段提交协议的演变：</p>
 <ul>
 <li>
@@ -146,7 +146,7 @@
 </ul>
 </li>
 </ul>
-<h4 id="写隔离">写隔离</h4>
+<h3 id="写隔离">写隔离</h3>
 <ul>
 <li>一阶段本地事务提交前，需要确保先拿到 <strong>「全局锁」</strong> 。</li>
 <li>拿不到 <strong>「全局锁」</strong> ，不能提交本地事务。</li>
@@ -161,13 +161,13 @@
 <p>如果 tx1 的二阶段全局回滚，则 tx1 需要重新获取该数据的本地锁，进行反向补偿的更新操作，实现分支的回滚。</p>
 <p>此时，如果 tx2 仍在等待该数据的 <strong>「全局锁」</strong>，同时持有本地锁，则 tx1 的分支回滚会失败。分支的回滚会一直重试，直到 tx2 的 <strong>「全局锁」</strong> 等锁超时，放弃 <strong>「全局锁」</strong> 并回滚本地事务释放本地锁，tx1 的分支回滚最终成功。</p>
 <p>因为整个过程 <strong>「全局锁」</strong> 在 tx1 结束前一直是被 tx1 持有的，所以不会发生 <strong>「脏写」</strong> 的问题。</p>
-<h4 id="读隔离">读隔离</h4>
+<h3 id="读隔离">读隔离</h3>
 <p>在数据库本地事务隔离级别 <strong>「读已提交（Read Committed）」</strong> 或以上的基础上，Seata（AT 模式）的默认全局隔离级别是 <strong>「读未提交（Read Uncommitted）」</strong> 。</p>
 <p>如果应用在特定场景下，必需要求全局的 <strong>「读已提交」</strong> ，目前 Seata 的方式是通过 SELECT FOR UPDATE 语句的代理。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1659011835961.png" alt="" loading="lazy"></figure>
 <p>SELECT FOR UPDATE 语句的执行会申请 <strong>「全局锁」</strong> ，如果 <strong>「全局锁」</strong> 被其他事务持有，则释放本地锁（回滚 SELECT FOR UPDATE 语句的本地执行）并重试。这个过程中，查询是被 block 住的，直到 <strong>「全局锁」</strong> 拿到，即读取的相关数据是 <strong>「已提交」</strong> 的，才返回。</p>
 <p>出于总体性能上的考虑，Seata 目前的方案并没有对所有 SELECT 语句都进行代理，仅针对 FOR UPDATE 的 SELECT 语句。</p>
-<h4 id="工作机制">工作机制</h4>
+<h3 id="工作机制">工作机制</h3>
 <p>以一个示例来说明整个 AT 分支的工作过程。</p>
 <p>业务表：<code>product</code></p>
 <table>
@@ -296,15 +296,15 @@
 </code></pre>
 <ol>
 <li>提交前，向 TC 注册分支：申请 <code>product</code> 表中，主键值等于 1 的记录的 <strong>「全局锁」</strong> 。</li>
-<li>本地事务提交：业务数据的更新和前面步骤中生成的 UNDO LOG 一并提交。</li>
+<li>本地事务提交：业务数据的更新和前面步骤中生成的 UNDO_LOG 一并提交。</li>
 <li>将本地事务提交的结果上报给 TC。</li>
 </ol>
 <p><strong>「二阶段-回滚」</strong></p>
 <ol>
 <li>收到 TC 的分支回滚请求，开启一个本地事务，执行如下操作。</li>
-<li>通过 XID 和 Branch ID 查找到相应的 UNDO LOG 记录。</li>
-<li>数据校验：拿 UNDO LOG 中的后镜与当前数据进行比较，如果有不同，说明数据被当前全局事务之外的动作做了修改。这种情况，需要根据配置策略来做处理，详细的说明在另外的文档中介绍。</li>
-<li>根据 UNDO LOG 中的前镜像和业务 SQL 的相关信息生成并执行回滚的语句：</li>
+<li>通过 XID 和 Branch ID 查找到相应的 UNDO_LOG 记录。</li>
+<li>数据校验：拿 UNDO_LOG 中的后镜与当前数据进行比较，如果有不同，说明数据被当前全局事务之外的动作做了修改。这种情况，需要根据配置策略来做处理，详细的说明在另外的文档中介绍。</li>
+<li>根据 UNDO_LOG 中的前镜像和业务 SQL 的相关信息生成并执行回滚的语句：</li>
 </ol>
 <pre><code class="language-sql">update product set name = 'TXC' where id = 1;
 </code></pre>
@@ -314,9 +314,9 @@
 <p><strong>「二阶段-提交」</strong></p>
 <ol>
 <li>收到 TC 的分支提交请求，把请求放入一个异步任务的队列中，马上返回提交成功的结果给 TC。</li>
-<li>异步任务阶段的分支提交请求将异步和批量地删除相应 UNDO LOG 记录。</li>
+<li>异步任务阶段的分支提交请求将异步和批量地删除相应 UNDO_LOG 记录。</li>
 </ol>
-<h4 id="附录">附录</h4>
+<h3 id="附录">附录</h3>
 <p><strong>「回滚日志表」</strong></p>
 <p>UNDO_LOG Table：不同数据库在类型上会略有差别。</p>
 <p>以 MySQL 为例：</p>
@@ -372,7 +372,7 @@ CREATE TABLE `undo_log` (
   UNIQUE KEY `ux_undo_log` (`xid`,`branch_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 </code></pre>
-<h3 id="tcc-模式">TCC 模式</h3>
+<h2 id="tcc-模式">TCC 模式</h2>
 <p>回顾总览中的描述：一个分布式的全局事务，整体是 <strong>「两阶段提交」</strong> 的模型。全局事务是由若干分支事务组成的，分支事务要满足 <strong>「两阶段提交」</strong> 的模型要求，即需要每个分支事务都具备自己的：</p>
 <ul>
 <li>一阶段 prepare 行为</li>
@@ -393,22 +393,22 @@ CREATE TABLE `undo_log` (
 <li>二阶段 rollback 行为：调用 <strong>「自定义」</strong> 的 rollback 逻辑。</li>
 </ul>
 <p>所谓 TCC 模式，是指支持把 <strong>「自定义」</strong> 的分支事务纳入到全局事务的管理中。</p>
-<h3 id="saga-模式">Saga 模式</h3>
-<p>Saga模式是SEATA提供的长事务解决方案，在Saga模式中，业务流程中每个参与者都提交本地事务，当出现某一个参与者失败则补偿前面已经成功的参与者，一阶段正向服务和二阶段补偿服务都由业务开发实现。</p>
+<h2 id="saga-模式">Saga 模式</h2>
+<p>Saga 模式是 Seata 提供的长事务解决方案，在 Saga 模式中，业务流程中每个参与者都提交本地事务，当出现某一个参与者失败则补偿前面已经成功的参与者，一阶段正向服务和二阶段补偿服务都由业务开发实现。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1659011864916.png" alt="" loading="lazy"></figure>
-<p>理论基础：Hector &amp; Kenneth 发表论⽂ Sagas （1987）</p>
-<h4 id="适用场景">适用场景</h4>
+<p>理论基础：Hector &amp; Kenneth 发表论文《Sagas》（1987）</p>
+<h3 id="适用场景">适用场景</h3>
 <ul>
 <li>业务流程长、业务流程多</li>
 <li>参与者包含其它公司或遗留系统服务，无法提供 TCC 模式要求的三个接口</li>
 </ul>
-<h4 id="优势">优势</h4>
+<h3 id="优势">优势</h3>
 <ul>
 <li>一阶段提交本地事务，无锁，高性能</li>
 <li>事件驱动架构，参与者可异步执行，高吞吐</li>
 <li>补偿服务易于实现</li>
 </ul>
-<h4 id="缺点">缺点</h4>
+<h3 id="缺点">缺点</h3>
 <ul>
 <li>不保证隔离性</li>
 </ul>
