@@ -127,8 +127,8 @@
 <li>重入性的实现原理；</li>
 <li>公平锁和非公平锁</li>
 </ol>
-<h3 id="reentrantlock源码解析">ReentrantLock源码解析</h3>
-<h4 id="加锁">加锁</h4>
+<h2 id="reentrantlock源码解析">ReentrantLock源码解析</h2>
+<h3 id="加锁">加锁</h3>
 <pre><code class="language-java">//使用案例
 class Bank{
       /**
@@ -203,7 +203,7 @@ class Bank{
 <p>初始化默认使用非公平锁</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1634801159801.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="2"><img src="/post-images/1634801206315.png" alt="" loading="lazy"></figure>
-<p>公平锁和非公平锁继承AbstractQueuedSynchronizer接口（抽象的队列式的同步器，AQS定义了一套多线程访问共享资源的同步器框架）</p>
+<p>公平锁和非公平锁继承自 AbstractQueuedSynchronizer（抽象的队列式同步器，AQS 定义了一套多线程访问共享资源的同步器框架）</p>
 <p>AQS框架</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1634801241636.png" alt="" loading="lazy"></figure>
 <ul>
@@ -228,7 +228,7 @@ final void lock() {
 }
 
 </code></pre>
-<p>加锁时调用lock方法，首先判断AQS中的sate参数是否被标记,尝试以cas方式尝试将AQS中的state从0更新为1，成功将当前线程赋予AQS</p>
+<p>加锁时调用 lock 方法，首先判断 AQS 中的 state 参数是否被标记，尝试以 CAS 方式将 AQS 中的 state 从 0 更新为 1，成功则将当前线程赋予 AQS</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1634801522921.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="6"><img src="/post-images/1634801553641.png" alt="" loading="lazy"></figure>
 <p>失败则调用AQS类的acquire(1)方法</p>
@@ -335,7 +335,7 @@ private final boolean compareAndSetHead(Node update) {
 }
 </code></pre>
 <ul>
-<li>compareAndSetTail(t, node),CAS方式更新tial指针,仅当原值为t时更新成功</li>
+<li>compareAndSetTail(t, node)，CAS 方式更新 tail 指针，仅当原值为 t 时更新成功</li>
 </ul>
 <pre><code class="language-java">/**
  * CAS tail field. Used only by enq.
@@ -483,7 +483,7 @@ private final boolean parkAndCheckInterrupt() {
 <p>概括的说,线程在同步队列中会尝试获取锁,失败则被阻塞,被唤醒后会不停的重复这个过程,直到线程真正持有了锁,并将自身结点置于队列头部。</p>
 <p>ReentrantLock非公平模式下的加锁流程如下<br>
 <img src="/post-images/1634801907228.png" alt="" loading="lazy"></p>
-<h4 id="解锁">解锁</h4>
+<h3 id="解锁">解锁</h3>
 <p>解锁源码如下：</p>
 <figure data-type="image" tabindex="12"><img src="/post-images/1634801926669.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="13"><img src="/post-images/1634801941512.png" alt="" loading="lazy"></figure>
@@ -554,7 +554,7 @@ public final boolean release(int arg) {
 <p>一般情况下只要唤醒后继结点的线程就行了,但是后继结点可能已经取消等待,所以从队列尾部往前回溯,找到离头结点最近的正常结点,并唤醒其线程。</p>
 <p><strong>解锁流程源码总结</strong></p>
 <figure data-type="image" tabindex="16"><img src="/post-images/1634801989557.png" alt="" loading="lazy"></figure>
-<h3 id="公平锁相比非公平锁的不同">公平锁相比非公平锁的不同</h3>
+<h2 id="公平锁相比非公平锁的不同">公平锁相比非公平锁的不同</h2>
 <p>公平锁模式下,对锁的获取有严格的条件限制。在同步队列有线程等待的情况下,所有线程在获取锁前必须先加入同步队列。队列中的线程按加入队列的先后次序获得锁。<br>
 从公平锁加锁的入口开始,<br>
 <img src="/post-images/1634802000468.png" alt="" loading="lazy"></p>
@@ -586,8 +586,8 @@ public final boolean release(int arg) {
 </ul>
 <p>所以(s = h.next) == null 就是用来判断2刚执行成功但还未执行3这种情况的。这种情况第二个结点必然属于其他线程。<br>
 以上两种情况都会使该方法返回true,即当前有优先级更高的线程在队列中等待,那么当前线程将不会执行CAS操作去获取锁,保证了线程获取锁的顺序与加入同步队列的顺序一致，很好的保证了公平性,但也增加了获取锁的成本。</p>
-<h3 id="一些疑问的解答">一些疑问的解答</h3>
-<h4 id="为什么基于fifo的同步队列可以实现非公平锁">为什么基于FIFO的同步队列可以实现非公平锁？</h4>
+<h2 id="一些疑问的解答">一些疑问的解答</h2>
+<h3 id="为什么基于fifo的同步队列可以实现非公平锁">为什么基于FIFO的同步队列可以实现非公平锁？</h3>
 <p>由FIFO队列的特性知,先加入同步队列等待的线程会比后加入的线程更靠近队列的头部,那么它将比后者更早的被唤醒,它也就能更早的得到锁。从这个意义上,对于在同步队列中等待的线程而言,它们获得锁的顺序和加入同步队列的顺序一致，这显然是一种公平模式。然而,线程并非只有在加入队列后才有机会获得锁,哪怕同步队列中已有线程在等待,非公平锁的不公平之处就在于此。回看下非公平锁的加锁流程,线程在进入同步队列等待之前有两次抢占锁的机会:</p>
 <ul>
 <li>第一次是非重入式的获取锁,只有在当前锁未被任何线程占有(包括自身)时才能成功;</li>
@@ -596,7 +596,7 @@ public final boolean release(int arg) {
 <p>只有这两次获取锁都失败后,线程才会构造结点并加入同步队列等待。而线程释放锁时是先释放锁(修改state值),然后才唤醒后继结点的线程的。试想下这种情况,线程A已经释放锁,但还没来得及唤醒后继线程C,而这时另一个线程B刚好尝试获取锁,此时锁恰好不被任何线程持有,它将成功获取锁而不用加入队列等待。线程C被唤醒尝试获取锁,而此时锁已经被线程B抢占,故而其获取失败并继续在队列中等待。整个过程如下图所示<br>
 <img src="/post-images/1634802025981.png" alt="" loading="lazy"></p>
 <p>如果以线程第一次尝试获取锁到最后成功获取锁的次序来看,非公平锁确实很不公平。因为在队列中等待很久的线程相比还未进入队列等待的线程并没有优先权,甚至竞争也处于劣势:在队列中的线程要等待其他线程唤醒,在获取锁之前还要检查前驱结点是否为头结点。在锁竞争激烈的情况下,在队列中等待的线程可能迟迟竞争不到锁。这也就非公平在高并发情况下会出现的饥饿问题。那我们再开发中为什么大多使用会导致饥饿的非公平锁？很简单,因为它性能好啊。</p>
-<h4 id="为什么非公平锁性能好">为什么非公平锁性能好</h4>
+<h3 id="为什么非公平锁性能好">为什么非公平锁性能好</h3>
 <p>非公平锁对锁的竞争是抢占式的(队列中线程除外),线程在进入等待队列前可以进行两次尝试,这大大增加了获取锁的机会。这种好处体现在两个方面:</p>
 <ul>
 <li>1.线程不必加入等待队列就可以获得锁,不仅免去了构造结点并加入队列的繁琐操作,同时也节省了线程阻塞唤醒的开销,线程阻塞和唤醒涉及到线程上下文的切换和操作系统的系统调用,是非常耗时的。在高并发情况下,如果线程持有锁的时间非常短,短到线程入队阻塞的过程超过线程持有并释放锁的时间开销,那么这种抢占式特性对并发性能的提升会更加明显。</li>
@@ -606,7 +606,7 @@ public final boolean release(int arg) {
 <p>另一处就是入队的操作,将同步队列非空的情况提前处理<br>
 <img src="/post-images/1634802048793.png" alt="" loading="lazy"></p>
 <p>这两部分的代码在之后的通用逻辑处理中都有,很显然属于重复代码,但因为避免了执行无意义的流程代码,比如for循环,获取同步状态等,高并发场景下也能减少CAS竞争失败的可能。</p>
-<h3 id="读写锁reentrantreadwritelock">读写锁ReentrantReadWriteLock</h3>
+<h2 id="读写锁reentrantreadwritelock">读写锁ReentrantReadWriteLock</h2>
 <p>首先明确一下，不是说 ReentrantLock 不好，只是 ReentrantLock 某些时候有局限。如果使用 ReentrantLock，可能本身是为了防止线程 A 在写数据、线程 B 在读数据造成的数据不一致，但这样，如果线程 C 在读数据、线程 D 也在读数据，读数据是不会改变数据的，没有必要加锁，但是还是加锁了，降低了程序的性能。因为这个，才诞生了读写锁 ReadWriteLock。</p>
 <p>ReadWriteLock 是一个读写锁接口，读写锁是用来提升并发程序性能的锁分离技术，ReentrantReadWriteLock 是 ReadWriteLock 接口的一个具体实现，实现了读写的分离，读锁是共享的，写锁是独占的，读和读之间不会互斥，读和写、写和读、写和写之间才会互斥，提升了读写的性能。</p>
 <p>而读写锁有以下三个重要的特性：</p>
