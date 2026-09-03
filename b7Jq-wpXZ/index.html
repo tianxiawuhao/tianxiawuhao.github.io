@@ -121,7 +121,7 @@
           <img class="post-feature-header-image" src="/post-images/b7Jq-wpXZ.png" alt="封面图">
           </img>
           
-          <h3 id="lock-接口lock-interface简介">Lock 接口(Lock interface)简介</h3>
+          <h2 id="lock-接口lock-interface简介">Lock 接口(Lock interface)简介</h2>
 <blockquote>
 <p>Lock 接口比同步方法和同步块提供了更具扩展性的锁操作。他们允许更灵活的结构，可以具有完全不同的性质，并且可以支持多个相关类的条件对象。</p>
 </blockquote>
@@ -132,16 +132,16 @@
 <p>（3）可以让线程尝试获取锁，并在无法获取锁的时候立即返回或者等待一段时间</p>
 <p>（4）可以在不同的范围，以不同的顺序获取和释放锁</p>
 <p>整体上来说 Lock 是 synchronized 的扩展版，Lock 提供了无条件的、可轮询的(tryLock 方法)、定时的(tryLock 带参方法)、可中断的(lockInterruptibly)、可多条件队列的(newCondition 方法)锁操作。另外 Lock 的实现类基本都支持非公平锁(默认)和公平锁，synchronized 只支持非公平锁，当然，在大部分情况下，非公平锁是高效的选择。</p>
-<h4 id="乐观锁和悲观锁">乐观锁和悲观锁</h4>
+<h3 id="乐观锁和悲观锁">乐观锁和悲观锁</h3>
 <p>悲观锁：总是假设最坏的情况，每次去拿数据的时候都认为别人会修改，所以每次在拿数据的时候都会上锁，这样别人想拿这个数据就会阻塞直到它拿到锁。传统的关系型数据库里边就用到了很多这种锁机制，比如行锁，表锁等，读锁，写锁等，都是在做操作之前先上锁。再比如 Java 里面的同步原语 <code>synchronized</code> 关键字的实现也是悲观锁。</p>
 <p>乐观锁：顾名思义，就是很乐观，每次去拿数据的时候都认为别人不会修改，所以不会上锁，但是在更新的时候会判断一下在此期间别人有没有去更新这个数据，可以使用版本号等机制。乐观锁适用于多读的应用类型，这样可以提高吞吐量，像数据库提供的类似于 write_condition 机制，其实都是提供的乐观锁。在 Java中 <code>java.util.concurrent.atomic</code> 包下面的原子变量类就是使用了乐观锁的一种实现方式 <code>CAS</code> 实现的。</p>
-<h5 id="乐观锁的实现方式">乐观锁的实现方式：</h5>
+<h4 id="乐观锁的实现方式">乐观锁的实现方式：</h4>
 <p>1、使用版本标识来确定读到的数据与提交时的数据是否一致。提交后修改版本标识，不一致时可以采取丢弃和再次尝试的策略。</p>
 <p>2、java 中的 Compare and Swap 即 CAS ，当多个线程尝试使用 CAS 同时更新同一个变量时，只有其中一个线程能更新变量的值，而其它线程都失败，失败的线程并不会被挂起，而是被告知这次竞争中失败，并可以再次尝试。 CAS 操作中包含三个操作数 —— 需要读写的内存位置（V），进行比较的预期原值（A）和拟写入的新值(B)。如果内存位置 V 的值与预期原值 A 相匹配，那么处理器会自动将该位置值更新为新值 B。否则处理器不做任何操作。</p>
-<h5 id="cas">CAS</h5>
+<h4 id="cas">CAS</h4>
 <p>CAS 是 compare and swap 的缩写，即我们所说的比较交换。</p>
-<p>CAS 是一种基于锁的操作，而且是乐观锁。在 java 中锁分为乐观锁和悲观锁。悲观锁是将资源锁住，等一个之前获得锁的线程释放锁之后，下一个线程才可以访问。而乐观锁采取了一种宽泛的态度，通过某种方式不加锁来处理资源，比如通过给记录加 version 来获取数据，性能较悲观锁有很大的提高。</p>
-<p>CAS 操作包含三个操作数 —— 内存位置（V）、预期原值（A）和新值(B)。如果内存地址里面的值和 A 的值是一样的，那么就将内存里面的值更新成 B。CAS是通过无限循环来获取数据的，若果在第一轮循环中，a 线程获取地址里面的值被b 线程修改了，那么 a 线程需要自旋，到下次循环才有可能机会执行。</p>
+<p>CAS 是一种无锁操作，属于乐观锁的实现。在 Java 中锁分为乐观锁和悲观锁。悲观锁是将资源锁住，等一个之前获得锁的线程释放锁之后，下一个线程才可以访问。而乐观锁采取了一种宽泛的态度，通过某种方式不加锁来处理资源，比如通过给记录加 version 来获取数据，性能较悲观锁有很大的提高。</p>
+<p>CAS 操作包含三个操作数 —— 内存位置（V）、预期原值（A）和新值(B)。如果内存地址里面的值和 A 的值是一样的，那么就将内存里面的值更新成 B。CAS 是通过无限循环来获取数据的。如果在第一轮循环中，a 线程获取地址里的值被 b 线程修改了，那么 a 线程需要自旋，到下次循环才有可能机会执行。</p>
 <p><code>java.util.concurrent.atomic</code> 包下的类大多是使用 CAS 操作来实现的(<code>AtomicInteger</code>,<code>AtomicBoolean</code>,<code>AtomicLong</code>)。</p>
 <h6 id="cas产生的问题">CAS产生的问题</h6>
 <ol>
@@ -158,7 +158,7 @@
 <p>当对一个共享变量执行操作时，我们可以使用循环 CAS 的方式来保证原子操作，但是对多个共享变量操作时，循环 CAS 就无法保证操作的原子性，这个时候就可以用锁。</p>
 </li>
 </ol>
-<h4 id="公平锁锁和非公平锁">公平锁锁和非公平锁</h4>
+<h3 id="公平锁锁和非公平锁">公平锁锁和非公平锁</h3>
 <p>公平锁：多个线程按照申请锁的顺序去获得锁，线程会直接进入队列去排队，永远都是队列的第一位才能得到锁。</p>
 <ul>
 <li>优点：所有的线程都能得到资源，不会饿死在队列中。</li>
@@ -169,7 +169,7 @@
 <li>优点：可以减少CPU唤醒线程的开销，整体的吞吐效率会高点，CPU也不必取唤醒所有线程，会减少唤起线程的数量。</li>
 <li>缺点：你们可能也发现了，这样可能导致队列中间的线程一直获取不到锁或者长时间获取不到锁，导致饿死。</li>
 </ul>
-<h4 id="伪共享">伪共享</h4>
+<h3 id="伪共享">伪共享</h3>
 <p><strong>一、伪共享的定义：</strong></p>
 <blockquote>
 <p>缓存系统中是以缓存行（cache line）为单位存储的，当多线程修改互相独立的变量时，如果这些变量共享同一个缓存行，就会无意中影响彼此的性能，这就是伪共享。</p>
@@ -199,7 +199,7 @@
 <p>可以进行缓存行填充（Padding） 。例如，如果一条缓存行有 64 字节，而 Java 程序的对象头固定占 8 字节(32位系统)或 12 字节( 64 位系统默认开启压缩, 不开压缩为 16 字节)，所以我们只需要填 6 个无用的长整型补上6*8=48字节，让不同的 VolatileLong 对象处于不同的缓存行，就避免了伪共享( 64 位系统超过缓存行的 64 字节也无所谓，只要保证不同线程不操作同一缓存行就可以)。</p>
 <p>2）使用编译指示，强制使每一个变量对齐。</p>
 <p>强制使对象按照缓存行的边界对齐。例如可以使数据按64位对齐，那么一个缓存行只有一个可操作对象，这样发生伪共享之后，也只是对应缓存行的数据变化，并不影响其他的对象。</p>
-<h4 id="无锁队列">无锁队列</h4>
+<h3 id="无锁队列">无锁队列</h3>
 <pre><code class="language-java">import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
  
@@ -280,9 +280,9 @@ public class LockFreeQueue {
  
 }
 </code></pre>
-<h4 id="死锁">死锁</h4>
+<h3 id="死锁">死锁</h3>
 <p>当线程 A 持有独占锁a，并尝试去获取独占锁 b 的同时，线程 B 持有独占锁 b，并尝试获取独占锁 a 的情况下，就会发生 AB 两个线程由于互相持有对方需要的锁，而发生的阻塞现象，我们称为死锁。</p>
-<h5 id="1-产生死锁的条件和防止死锁">1. 产生死锁的条件和防止死锁</h5>
+<h4 id="1-产生死锁的条件和防止死锁">1. 产生死锁的条件和防止死锁</h4>
 <p><strong>互斥 请求与保持 不可剥夺 循环等待</strong></p>
 <p>产生死锁的必要条件：</p>
 <ol>
@@ -342,7 +342,7 @@ public class DeadLockDemo {
     }
 }
 </code></pre>
-<h5 id="2-死锁与活锁与饥饿的区别">2. 死锁与活锁与饥饿的区别</h5>
+<h4 id="2-死锁与活锁与饥饿的区别">2. 死锁与活锁与饥饿的区别</h4>
 <p>死锁：是指两个或两个以上的进程（或线程）在执行过程中，因争夺资源而造成的一种互相等待的现象，若无外力作用，它们都将无法推进下去。</p>
 <p>活锁：任务或者执行者没有被阻塞，由于某些条件没有满足，导致一直重复尝试，失败，尝试，失败。</p>
 <p>活锁和死锁的区别在于，处于活锁的实体是在不断的改变状态，这就是所谓的“活”， 而处于死锁的实体表现为等待；活锁有可能自行解开，死锁则不能。</p>
@@ -351,19 +351,19 @@ public class DeadLockDemo {
 <p>1、高优先级线程吞噬所有的低优先级线程的 CPU 时间。</p>
 <p>2、线程被永久堵塞在一个等待进入同步块的状态，因为其他线程总是能在它之前持续地对该同步块进行访问。</p>
 <p>3、线程在等待一个本身也处于永久等待完成的对象(比如调用这个对象的 wait 方法)，因为其他线程总是被持续地获得唤醒。</p>
-<h3 id="reentrantlock重入锁">ReentrantLock(重入锁)</h3>
+<h2 id="reentrantlock重入锁">ReentrantLock(重入锁)</h2>
 <p><code>ReentrantLock</code>重入锁，是实现Lock接口的一个类，也是在实际编程中使用频率很高的一个锁，支持重入性，表示能够对共享资源能够重复加锁，即当前线程获取该锁再次获取不会被阻塞。</p>
 <p>在java关键字synchronized隐式支持重入性，synchronized通过获取自增，释放自减的方式实现重入。与此同时，ReentrantLock还支持公平锁和非公平锁两种方式。那么，要想完完全全的弄懂ReentrantLock的话，主要也就是ReentrantLock同步语义的学习：</p>
 <ol>
 <li>重入性的实现原理；</li>
 <li>公平锁和非公平锁</li>
 </ol>
-<h4 id="1-重入性的实现原理">1. 重入性的实现原理</h4>
+<h3 id="1-重入性的实现原理">1. 重入性的实现原理</h3>
 <p>要想支持重入性，就要解决两个问题：</p>
 <p><strong>1. 在线程获取锁的时候，如果已经获取锁的线程是当前线程的话则直接再次获取成功；</strong></p>
 <p><strong>2. 由于锁会被获取n次，那么只有锁在被释放同样的n次之后，该锁才算是完全释放成功</strong>。</p>
 <p>ReentrantLock支持两种锁：<strong>公平锁</strong>和<strong>非公平锁</strong>。<strong>何谓公平性，是针对获取锁而言的，如果一个锁是公平的，那么锁的获取顺序就应该符合请求上的绝对时间顺序，满足FIFO</strong>。</p>
-<h4 id="2-reentrantlock使用">2. ReentrantLock使用</h4>
+<h3 id="2-reentrantlock使用">2. ReentrantLock使用</h3>
 <pre><code class="language-java">class Bank{
       /**
        * volatile实现
@@ -416,14 +416,14 @@ public class DeadLockDemo {
       }
 }
 </code></pre>
-<h4 id="读写锁reentrantreadwritelock">读写锁ReentrantReadWriteLock</h4>
+<h3 id="读写锁reentrantreadwritelock">读写锁ReentrantReadWriteLock</h3>
 <p>首先明确一下，不是说 ReentrantLock 不好，只是 ReentrantLock 某些时候有局限。如果使用 ReentrantLock，可能本身是为了防止线程 A 在写数据、线程 B 在读数据造成的数据不一致，但这样，如果线程 C 在读数据、线程 D 也在读数据，读数据是不会改变数据的，没有必要加锁，但是还是加锁了，降低了程序的性能。因为这个，才诞生了读写锁 ReadWriteLock。</p>
 <p>ReadWriteLock 是一个读写锁接口，读写锁是用来提升并发程序性能的锁分离技术，ReentrantReadWriteLock 是 ReadWriteLock 接口的一个具体实现，实现了读写的分离，读锁是共享的，写锁是独占的，读和读之间不会互斥，读和写、写和读、写和写之间才会互斥，提升了读写的性能。</p>
 <p>而读写锁有以下三个重要的特性：</p>
 <p>（1）公平选择性：支持非公平（默认）和公平的锁获取方式，吞吐量还是非公平优于公平。</p>
 <p>（2）重进入：读锁和写锁都支持线程重进入。</p>
-<h3 id="并发容器">并发容器</h3>
-<h4 id="1-concurrenthashmap">1. ConcurrentHashMap</h4>
+<h2 id="并发容器">并发容器</h2>
+<h3 id="1-concurrenthashmap">1. ConcurrentHashMap</h3>
 <p><code>ConcurrentHashMap</code>是Java中的一个<strong>线程安全且高效的HashMap实现</strong>。平时涉及高并发如果要用map结构，那第一时间想到的就是它。相对于hashmap来说，<code>ConcurrentHashMap</code>就是线程安全的map，其中利用了锁分段的思想提高了并发度。</p>
 <p>那么它到底是如何实现线程安全的？</p>
 <p>JDK 1.6版本关键要素：</p>
@@ -432,21 +432,21 @@ public class DeadLockDemo {
 <li>segment维护了哈希散列表的若干个桶，每个桶由<code>HashEntry</code>构成的链表。</li>
 </ul>
 <p>JDK1.8后，<code>ConcurrentHashMap</code>抛弃了原有的<strong>Segment 分段锁，而采用了 CAS + synchronized 来保证并发安全性</strong>。</p>
-<h5 id="11-concurrenthashmap-的并发度">1.1 ConcurrentHashMap 的并发度</h5>
+<h4 id="11-concurrenthashmap-的并发度">1.1 ConcurrentHashMap 的并发度</h4>
 <p><code>ConcurrentHashMap</code> 把实际 map 划分成若干部分来实现它的可扩展性和线程安全。这种划分是使用并发度获得的，它是 <code>ConcurrentHashMap</code> 类构造函数的一个可选参数，默认值为 16，这样在多线程情况下就能避免争用。</p>
 <p>在 JDK8 后，它摒弃了 Segment（锁段）的概念，而是启用了一种全新的方式实现,利用 CAS 算法。同时加入了更多的辅助变量来提高并发度，</p>
-<h5 id="12-并发容器的实现">1.2 并发容器的实现</h5>
+<h4 id="12-并发容器的实现">1.2 并发容器的实现</h4>
 <p>何为同步容器：可以简单地理解为通过 synchronized 来实现同步的容器，如果有多个线程调用同步容器的方法，它们将会串行执行。比如<code> Vector</code>，<code>Hashtable</code>，以及 <code>Collections.synchronizedSet</code>，<code>synchronizedList</code> 等方法返回的容器。可以通过查看 <code>Vector</code>，<code>Hashtable </code>等这些同步容器的实现代码，可以看到这些容器实现线程安全的方式就是将它们的状态封装起来，并在需要同步的方法上加上关键字 synchronized。</p>
 <p>并发容器使用了与同步容器完全不同的加锁策略来提供更高的并发性和伸缩性，例如在 <code>ConcurrentHashMap</code> 中采用了一种粒度更细的加锁机制，可以称为分段锁，在这种锁机制下，允许任意数量的读线程并发地访问 map，并且执行读操作的线程和写操作的线程也可以并发的访问 map，同时允许一定数量的写操作线程并发地修改 map，所以它可以在并发环境下实现更高的吞吐量。</p>
-<h5 id="13-同步集合与并发集合区别">1.3 同步集合与并发集合区别</h5>
+<h4 id="13-同步集合与并发集合区别">1.3 同步集合与并发集合区别</h4>
 <p>同步集合与并发集合都为多线程和并发提供了合适的线程安全的集合，不过并发集合的可扩展性更高。在 Java1.5 之前程序员们只有同步集合来用且在多线程并发的时候会导致争用，阻碍了系统的扩展性。Java5 介绍了并发集合像<code>ConcurrentHashMap</code>，不仅提供线程安全还用锁分离和内部分区等现代技术提高了可扩展性。</p>
-<h5 id="14-synchronizedmap-和-concurrenthashmap-比较">1.4 SynchronizedMap 和 ConcurrentHashMap 比较</h5>
+<h4 id="14-synchronizedmap-和-concurrenthashmap-比较">1.4 SynchronizedMap 和 ConcurrentHashMap 比较</h4>
 <p><code>SynchronizedMap</code> 一次锁住整张表来保证线程安全，所以每次只能有一个线程来访为 map。</p>
 <p><code>ConcurrentHashMap</code> 使用分段锁来保证在多线程下的性能。</p>
 <p><code>ConcurrentHashMap</code> 中则是一次锁住一个桶。<code>ConcurrentHashMap</code> 默认将hash 表分为 16 个桶，诸如 get，put，remove 等常用操作只锁当前需要用到的桶。</p>
 <p>这样，原来只能一个线程进入，现在却能同时有 16 个写线程执行，并发性能的提升是显而易见的。</p>
 <p>另外 <code>ConcurrentHashMap</code> 使用了一种不同的迭代方式。在这种迭代方式中，当iterator 被创建后集合再发生改变就不再是抛出<code>ConcurrentModificationException</code>，取而代之的是在改变时 new 新的数据从而不影响原有的数据，iterator 完成后再将头指针替换为新的数据 ，这样 iterator线程可以使用原来老的数据，而写线程也可以并发的完成改变。</p>
-<h4 id="2-copyonwritearraylist">2. CopyOnWriteArrayList</h4>
+<h3 id="2-copyonwritearraylist">2. CopyOnWriteArrayList</h3>
 <p><code>CopyOnWriteArrayList</code> 是一个并发容器。有很多人称它是线程安全的，我认为这句话不严谨，缺少一个前提条件，那就是非复合场景下操作它是线程安全的。</p>
 <p><code>CopyOnWriteArrayList</code>(免锁容器)的好处之一是当多个迭代器同时遍历和修改这个列表时，不会抛出<code> ConcurrentModificationException</code>。在<code>CopyOnWriteArrayList</code> 中，写入将导致创建整个底层数组的副本，而源数组将保留在原地，使得复制的数组在被修改时，读取操作可以安全地执行。</p>
 <p><code>CopyOnWriteArrayList</code> 的使用场景</p>
@@ -463,7 +463,7 @@ public class DeadLockDemo {
 <li>最终一致性</li>
 <li>使用另外开辟空间的思路，来解决并发冲突</li>
 </ol>
-<h4 id="3-threadlocal">3. ThreadLocal</h4>
+<h3 id="3-threadlocal">3. ThreadLocal</h3>
 <p>ThreadLocal 是一个本地线程副本变量工具类，在每个线程中都创建了一个 ThreadLocalMap 对象，简单说 ThreadLocal 就是一种以空间换时间的做法，每个线程可以访问自己内部 ThreadLocalMap 对象内的 value。通过这种方式，避免资源在多线程间共享。</p>
 <p>原理：线程局部变量是局限于线程内部的变量，属于线程自身所有，不在多个线程间共享。Java提供ThreadLocal类来支持线程局部变量，是一种实现线程安全的方式。但是在管理环境下（如 web 服务器）使用线程局部变量的时候要特别小心，在这种情况下，工作线程的生命周期比任何应用变量的生命周期都要长。任何线程局部变量一旦在工作完成后没有释放，Java 应用就存在内存泄露的风险。</p>
 <p>经典的使用场景是为每个线程分配一个 JDBC 连接 Connection。这样就可以保证每个线程的都在各自的 Connection 上进行数据库的操作，不会出现 A 线程关了 B线程正在使用的 Connection； 还有 Session 管理 等问题。</p>
@@ -507,9 +507,9 @@ public class DeadLockDemo {
 </code></pre>
 <p>打印结果：启动了 3 个线程，每个线程最后都打印到 “ThreadLocal num=5”，而不是 num 一直在累加直到值等于 15</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1620459942353.png" alt="" loading="lazy"></figure>
-<h5 id="31什么是线程局部变量">3.1什么是线程局部变量？</h5>
+<h4 id="31什么是线程局部变量">3.1什么是线程局部变量？</h4>
 <p>线程局部变量是局限于线程内部的变量，属于线程自身所有，不在多个线程间共享。Java 提供 ThreadLocal 类来支持线程局部变量，是一种实现线程安全的方式。但是在管理环境下（如 web 服务器）使用线程局部变量的时候要特别小心，在这种情况下，工作线程的生命周期比任何应用变量的生命周期都要长。任何线程局部变量一旦在工作完成后没有释放，Java 应用就存在内存泄露的风险。</p>
-<h5 id="32-threadlocal内存泄漏分析与解决方案">3.2 ThreadLocal内存泄漏分析与解决方案</h5>
+<h4 id="32-threadlocal内存泄漏分析与解决方案">3.2 ThreadLocal内存泄漏分析与解决方案</h4>
 <p><strong>ThreadLocal造成内存泄漏的原因？</strong></p>
 <p>ThreadLocalMap 中使用的 key 为 ThreadLocal 的弱引用,而 value 是强引用。所以，如果 ThreadLocal 没有被外部强引用的情况下，在垃圾回收的时候，key 会被清理掉，而 value 不会被清理掉。这样一来，ThreadLocalMap 中就会出现key为null的Entry。假如我们不做任何措施的话，value 永远无法被GC 回收，这个时候就可能会产生内存泄露。ThreadLocalMap实现中已经考虑了这种情况，在调用 set()、get()、remove() 方法的时候，会清理掉 key 为 null 的记录。使用完 ThreadLocal方法后 最好手动调用remove()方法</p>
 <p><strong>ThreadLocal内存泄漏解决方案？</strong></p>
@@ -517,7 +517,7 @@ public class DeadLockDemo {
 <li>每次使用完ThreadLocal，都调用它的remove()方法，清除数据。</li>
 <li>在使用线程池的情况下，没有及时清理ThreadLocal，不仅是内存泄漏的问题，更严重的是可能导致业务逻辑出现问题。所以，使用ThreadLocal就跟加锁完要解锁一样，用完就清理。</li>
 </ul>
-<h4 id="4-blockingqueue">4. BlockingQueue</h4>
+<h3 id="4-blockingqueue">4. BlockingQueue</h3>
 <p><code>阻塞队列（BlockingQueue）</code>是一个支持两个附加操作的队列。</p>
 <p>这两个附加的操作是：在队列为空时，获取元素的线程会等待队列变为非空。当队列满时，存储元素的线程会等待队列可用。</p>
 <p>阻塞队列常用于生产者和消费者的场景，生产者是往队列里添加元素的线程，消费者是从队列里拿元素的线程。阻塞队列就是生产者存放元素的容器，而消费者也只从容器里拿元素。</p>
