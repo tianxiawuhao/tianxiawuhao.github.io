@@ -100,34 +100,42 @@
   window.addEventListener("resize", updateProgress);
   updateProgress();
 
-  /* ---------- 入场动画（如无减少动态偏好） ---------- */
-  var els = document.querySelectorAll(".post-row-container, .post-archives a.post, .post-content-container, #gridea-search-result a");
-  if (!reduced || !reduced.matches) {
-    if ("IntersectionObserver" in window && els.length) {
-      var obs = new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (en, idx) {
-            if (en.isIntersecting) {
-              var el = en.target;
-              if (!el.classList.contains("rv")) {
-                el.classList.add("rv");
-                el.classList.add("in");
-              }
-              obs.unobserve(el);
-            }
-          });
-        },
-        { threshold: 0.06, rootMargin: "0px 0px -6% 0px" }
-      );
-      els.forEach(function (el, i) {
-        el.classList.add("rv");
-        if (i < 12) el.style.transitionDelay = (i * 28) % 200 + "ms";
-        obs.observe(el);
-      });
-    }
-  } else {
-    els.forEach(function (el) {
-      el.classList.add("in");
+  /* ---------- 入场动画（渐进增强；动画失败/不支持时回退到「默认可见」） ----------
+     旧实现：forEach 先加 .rv，再在观察回调里 `if (!el.classList.contains('rv'))` 跳过 .in，
+     导致 .post-row-container / .post-content-container / .post-archives a.post / 搜索结果卡片
+     opacity 始终为 0（用户反馈「文字看不见」就是这个原因）。
+     新实现：默认就可见；仅在 IO 可用且无 reduced-motion 时启用动画，并把 .rv 与 .in 一起
+     在回调里添加；2s 安全网兜底，确保任何元素最迟 2s 后一定可见。 */
+  var rvEls = document.querySelectorAll(
+    ".post-row-container, .post-archives a.post, .post-content-container, #gridea-search-result a"
+  );
+  var hasIO = "IntersectionObserver" in window;
+  var reducedMotion = !!(reduced && reduced.matches);
+
+  if (hasIO && !reducedMotion && rvEls.length) {
+    var rvObs = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          var el = en.target;
+          el.classList.add("rv", "in");
+          rvObs.unobserve(el);
+        });
+      },
+      { threshold: 0.06, rootMargin: "0px 0px -6% 0px" }
+    );
+    rvEls.forEach(function (el, i) {
+      if (i < 12) el.style.transitionDelay = (i * 28) % 200 + "ms";
+      rvObs.observe(el);
     });
+    // 安全网：2s 内仍没拿到 .in 的元素（IO 异常 / 视口外元素从未进入）强制可见
+    setTimeout(function () {
+      rvEls.forEach(function (el) {
+        if (!el.classList.contains("in")) el.classList.add("rv", "in");
+      });
+    }, 2000);
+  } else if (rvEls.length) {
+    // 不支持 IO 或用户开启了减少动态：直接可见，不挂动画
+    rvEls.forEach(function (el) { el.classList.add("in"); });
   }
 })();
