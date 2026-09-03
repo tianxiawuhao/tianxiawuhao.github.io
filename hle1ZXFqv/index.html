@@ -134,7 +134,7 @@ insert into tab_partition(dt,v) values ('2020-02-11',23),('2020-02-13',45);
 </code></pre>
 <p>MergeTree 存储引擎在写入数据之后生成对应的分区文件为：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1639552667308.webp" alt="" loading="lazy"></figure>
-<p>MergeTree 的分区目录是在写入数据的过程中被创建出来，每 insert 一次，就会创建一批次分区目录。也就是说如果仅创建表结构，是不会创建分区目录的，因为木有数据。</p>
+<p>MergeTree 的分区目录是在写入数据的过程中被创建出来，每 insert 一次，就会创建一批次分区目录。也就是说如果仅创建表结构，是不会创建分区目录的，因为没有数据。</p>
 <p>MergeTree 数据分区目录命名规则其规则为：<strong>PartitionID_MinBlockNum_MaxBlockNum_Level</strong><br>
 比如 <strong>202002_4_4_0</strong> 其中 202002 是分区ID ，<strong>4_4</strong> 对应的是<br>
 最小的数据块编号和最大的数据块编号，最后的 _0 表示目前分区合并的层级。<br>
@@ -149,7 +149,7 @@ PartitionID：该值由 insert 数据时分区键的值来决定。分区键支�
 <p>MinBlockNum 和 MaxBlockNum：BlockNum 是一个整型的自增长型编号，该编号在单张 MergeTree 表中从 1 开始全局累加，当有新的分区目录创建后，该值就加 1，对新的分区目录来讲，MinBlockNum 和 MaxBlockNum 取值相同。例如上面示例数据为 202002_1_1_0  202002_1_5_1，但当分区目录进行合并后，取值规则会发生变化，MinBlockNum 取同一分区所欲目录中最新的 MinBlockNum 值。MaxBlockNum 取同一分区内所有目录中的最大值。<br>
 Level：表示合并的层级。相当于某个分区被合并的次数，它不是以表全局累加，而是以分区为单位，初始创建的分区，初始值为 0，相同分区 ID 发生合并动作时，在相应分区内累计加 1。</p>
 <h2 id="mergetree-数据分区合并规则">MergeTree 数据分区合并规则</h2>
-<p>随着数据的写入 MergeTree 存储引擎会很多分区目录。如果分区目录数太多怎么办？因为 Clickhouse 的 MergeTree 存储引擎是基于 LSM 实现的。MergeTree 可以通过分区合并将属于相同分区的多个目录合并为一个新的目录（官方描述在 10 到 15 分钟内会进行合并，也可直接执行 optimize 语句），已经存在的旧目录（也即 system.parts 表中 activie 为 0 的分区）在之后某个时刻通过后台任务删除（默认 8 分钟）。</p>
+<p>随着数据的写入，MergeTree 存储引擎会产生很多分区目录。如果分区目录数太多怎么办？因为 Clickhouse 的 MergeTree 存储引擎是基于 LSM 实现的。MergeTree 可以通过分区合并将属于相同分区的多个目录合并为一个新的目录（官方描述在 10 到 15 分钟内会进行合并，也可直接执行 optimize 语句），已经存在的旧目录（也即 system.parts 表中 activie 为 0 的分区）在之后某个时刻通过后台任务删除（默认 8 分钟）。</p>
 <h3 id="分区合并">分区合并</h3>
 <p>我们回顾之前创建的表的分区目录</p>
 <pre><code class="language-bash"># ls 
