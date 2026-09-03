@@ -170,7 +170,7 @@ public class StackErrorMock {
 <p>查看三张结果图，可以看出每次的Stack deep值都有所不同。究其原因，就需要深入到<code>JVM</code>的源码中才能探讨，这里不作赘述。</p>
 <p>虚拟机栈除了上述错误外，还有另一种错误，那就是当申请不到空间时，会抛出<code>OutOfMemoryError</code>。这里有一个小细节需要注意，catch捕获的是Throwable，而不是Exception，这是因为<code>StackOverflowError</code>和<code>OutOfMemoryError</code>都不属于Exception的子类。</p>
 <h3 id="本地方法栈">本地方法栈：</h3>
-<p>这部分主要与虚拟机用到的Native方法相关，一般情况下，Java应用程序员并不需要关系这部分内容。</p>
+<p>这部分主要与虚拟机用到的 Native 方法相关，一般情况下，Java 应用程序员并不需要关心这部分内容。</p>
 <h3 id="pc寄存器">PC寄存器：</h3>
 <p>PC寄存器，也叫程序计数器。<code>JVM</code>支持多个线程同时运行，每个线程都有自己的程序计数器。倘若当前执行的是<code>JVM</code>方法，则该寄存器中保存当前执行指令的地址；倘若执行的是native方法，则PC寄存器为空。</p>
 <h3 id="堆">堆 ：</h3>
@@ -208,20 +208,20 @@ public class HeapOomMock {
 <p>注意，这里我们指定了堆内存的大小为16M，所以这个地方显示的Count=13(这个数字不是固定的)，至于为什么会是13或其他数字，需要根据GC日志来判断。</p>
 <h3 id="方法区">方法区：</h3>
 <p>方法区是一块所有线程共享的内存逻辑区域，在<code>JVM</code>中只有一个方法区，用来存储一些线程可共享的内容，它是线程安全的，多个线程同时访问方法区中同一个内容时，只能有一个线程装载该数据，其它线程只能等待。</p>
-<p>方法区可存储的内容有：类的全路径名、类的直接超类的权全限定名、类的访问修饰符、类的类型（类或接口）、类的直接接口全限定名的有序列表、常量池（字段，方法信息，静态变量，类型引用（class））等。</p>
+<p>方法区可存储的内容有：类的全路径名、类的直接超类的全限定名、类的访问修饰符、类的类型（类或接口）、类的直接接口全限定名的有序列表、常量池（字段，方法信息，静态变量，类型引用（class））等。</p>
 <p>关于方法区的内存溢出问题会在下文中详细讨论。</p>
 <h3 id="方法区和元空间">方法区和元空间</h3>
 <p>Java1.7及之前的虚拟机在运行中会把它所管理的内存分为如上图的若干数据区域。</p>
 <p>方法区用于存储已被虚拟机加载的类信息、常量、静态变量、动态生成的类等数据。实际上在Java虚拟机的规范中方法区是堆中的一个逻辑部分，但是它却拥有一个叫做非堆(Non-Heap)的别名。</p>
-<p>对于方法区的实现，不同虚拟机中策略也不同。以我们常用的HotSpot虚拟机为例，其设计团队使用永久带来实现方法区，并把GC的分代收集扩展至永久带。这样设计的好处就是能够省去专门为方法区编写内存管理的代码。但是在实际的场景中，这样的实现并不是一个好的方式，因为永久带有MAX上限，所以这样做会更容易遇到内存溢出问题。</p>
+<p>对于方法区的实现，不同虚拟机中策略也不同。以我们常用的HotSpot虚拟机为例，其设计团队使用永久代来实现方法区，并把GC的分代收集扩展至永久代。这样设计的好处就是能够省去专门为方法区编写内存管理的代码。但是在实际的场景中，这样的实现并不是一个好的方式，因为永久代有MAX上限，所以这样做会更容易遇到内存溢出问题。</p>
 <p>关于方法区的GC回收，Java虚拟机规范并没有严格的限制。虚拟机在实现中可以自由选择是否实现垃圾回收。主要原因还是方法区内存回收的效果比较难以令人满意，方法区的内存回收主要是针对常量池(1.7已经将常量池逐步移除方法区)以及类型的卸载，但是类型卸载在实际场景中的条件相当苛刻。</p>
-<p>另外还需要注意的是在HotSpot虚拟机中永久带和堆虽然相互隔离，但是他们的物理内存是连续的。而且老年代和永久带的垃圾收集器进行了捆绑，因此无论谁满了都会触发永久带和老年的GC。</p>
-<p><strong>因此在Java1.8中，HotSpot虚拟机已经将方法区(永久带)移除，取而代之的就是元空间。</strong></p>
+<p>另外还需要注意的是在HotSpot虚拟机中永久代和堆虽然相互隔离，但是他们的物理内存是连续的。而且老年代和永久代的垃圾收集器进行了捆绑，因此无论谁满了都会触发永久代和老年的GC。</p>
+<p><strong>因此在Java1.8中，HotSpot虚拟机已经将方法区(永久代)移除，取而代之的就是元空间。</strong></p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1660658940224.jpg" alt="" loading="lazy"></figure>
 <p>Java1.8的运行时数据区域如图所示。方法区已经不见了踪影，多出来的是叫做元数据区的区域。</p>
-<p>元空间在1.8中不在与堆是连续的物理内存，而是改为使用本地内存(Native memory)。元空间使用本地内存也就意味着只要本地内存足够，就不会出现OOM的错误。</p>
+<p>元空间在 1.8 中不再与堆共享连续的物理内存，而是改为使用本地内存（Native memory）。元空间使用本地内存也就意味着只要本地内存足够，就不会出现OOM的错误。</p>
 <h2 id="permgen永久代">PermGen(永久代)</h2>
-<p>绝大部分Java程序员应该都见过<code>“java.lang.OutOfMemoryError: PremGen space”</code>异常。这里的<code>“PermGen space”</code>其实指的就是方法区。不过方法区和<code>“PermGen space”</code>又有着本质的区别。前者是<code>JVM</code>的规范，而后者则是<code>JVM</code>规范的一种实现，并且只有<code>HotSpot</code>才有<code>“PermGen space”</code>，而对于其他类型的虚拟机，如<code>JRockit(Oracle)</code>、<code>J9(IBM)</code>并没有<code>“PermGen space”</code>。由于方法区主要存储类的相关信息，所以对于动态生成类的情况比较容易出现永久代的内存溢出。最典型的场景就是，在<code>JSP</code>页面比较多的情况，容易出现永久代内存溢出。我们现在通过动态生成类来模拟<code>“PermGen space”</code>的内存溢出：</p>
+<p>绝大部分Java程序员应该都见过<code>“java.lang.OutOfMemoryError: PermGen space”</code>异常。这里的<code>“PermGen space”</code>其实指的就是方法区。不过方法区和<code>“PermGen space”</code>又有着本质的区别。前者是<code>JVM</code>的规范，而后者则是<code>JVM</code>规范的一种实现，并且只有<code>HotSpot</code>才有<code>“PermGen space”</code>，而对于其他类型的虚拟机，如<code>JRockit(Oracle)</code>、<code>J9(IBM)</code>并没有<code>“PermGen space”</code>。由于方法区主要存储类的相关信息，所以对于动态生成类的情况比较容易出现永久代的内存溢出。最典型的场景就是，在<code>JSP</code>页面比较多的情况，容易出现永久代内存溢出。我们现在通过动态生成类来模拟<code>“PermGen space”</code>的内存溢出：</p>
 <pre><code class="language-java">package com.paddx.test.memory;
  
 import java.io.File;
