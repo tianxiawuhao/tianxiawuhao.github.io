@@ -123,9 +123,9 @@
           
           <h2 id="docker-overlay2磁盘占用过高">Docker overlay2磁盘占用过高</h2>
 <p>Docker overlay2磁盘占用过高主要有以下三个原因：<br>
-  - 1、容器日志文件过大，未作限制<br>
-  - 2、docker未用容器、镜像、缓存等过多<br>
-  - 3、docker默认路径存放不合理</p>
+  - 1、容器日志文件过大，未做限制<br>
+  - 2、无用的容器、镜像、缓存等过多<br>
+  - 3、Docker 默认路径存放不合理</p>
 <h3 id="一-磁盘容量查询">一、磁盘容量查询</h3>
 <p>通过以下两条命令可以定位磁盘占用过高原因，可根据查询结果做相应处置。</p>
 <h4 id="1-df-h-容量查询">1、df -h 容量查询</h4>
@@ -142,7 +142,7 @@ overlay          50G   50G   35M 100% /data/docker/overlay2/a18694da44feba8f8379
 [root@hostname ~]# du -sh /*
 7.2G    /var
 [root@hostname ~]# du -sh /var/*
-37G     /opt/open
+6.9G    /var/lib
 [root@hostname ~]# du -sh /var/lib/*
 6.6G    /var/lib/docker
 </code></pre>
@@ -166,12 +166,12 @@ overlay          50G   50G   35M 100% /data/docker/overlay2/a18694da44feba8f8379
     }
 }
 </code></pre>
-<p><strong>1.3 重启dokcer</strong></p>
+<p><strong>1.3 重启 docker</strong></p>
 <pre><code class="language-shell">[root@test ~]# systemctl daemon-reload
 [root@test ~]# systemctl restart docker
 </code></pre>
 <blockquote>
-<p>注：已存在的容器不会生效，需要重建该容器才可以使配置生效</p>
+<p>注：配置对已存在的容器不会生效，需要重建该容器才会按新配置运行</p>
 </blockquote>
 <h4 id="2-历史数据清理">2、历史数据清理</h4>
 <p>Docker长时间运行，会产生大量无用的镜像、容器、网络等缓存信息，占用大量磁盘空间。此时我们可以使用prune命令清理。</p>
@@ -199,16 +199,16 @@ Total reclaimed space: 202.4kB
 [root@test ~]# docker network prune   //清理未使用网络
 [root@test ~]# docker system prune   //清理构建缓存
 </code></pre>
-<h3 id="3-修改docker运行路径">3、修改Docker运行路径</h3>
+<h4 id="3-修改docker运行路径">3、修改Docker运行路径</h4>
 <blockquote>
-<p>注：此方法需停止容器，迁移docker运行目录，请在业务空闲期，备份好数据后操作。<br>
-  Docker运行时使用的目录默认 “/var/lib/docker”，该目录占用根目录磁盘空间，根目录磁盘容量普遍较小。日常生成环境Linux常会挂载大容量数据盘，</p>
+<p>注：此方法需要停止容器并迁移 Docker 运行目录，请在业务空闲期、备份好数据后再操作。<br>
+  Docker 运行时使用的目录默认为 “/var/lib/docker”，该目录占用根目录的磁盘空间，而根目录容量普遍较小。日常生产环境 Linux 常会挂载大容量数据盘，</p>
 </blockquote>
 <p>可以将Docker默认运行目录修改到数据盘。<br>
  修改Docker运行路径有两种方法：<br>
-  - 1、迁移/var/lib/docker数据，创建软连接。此种方法不需要改配置文件。<br>
+  - 1、迁移/var/lib/docker数据，创建软链接。此种方法不需要改配置文件。<br>
   - 2、迁移/var/lib/docker数据，修改docker配置文件。</p>
-<p><strong>3.1 迁移/var/lib/docker数据，创建软连接</strong></p>
+<p><strong>3.1 迁移/var/lib/docker数据，创建软链接</strong></p>
 <pre><code class="language-shell">#docker运行目录在/var/lib/docker下
 [root@test ~]# df -h    
 文件系统                 容量  已用  可用 已用% 挂载点
@@ -222,7 +222,7 @@ overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/176c72f
 #查询是否已剪切完成
 [root@test ~]# ls /opt/
 containerd  docker  hio  rh
-#新运行目录创建软连接
+#新运行目录创建软链接
 [root@test ~]# ln -s /opt/docker  /var/lib/docker
 #重启docker服务
 [root@test ~]# systemctl restart docker
@@ -291,10 +291,8 @@ overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/c9de256d8de
 <li><a href="#%E4%BA%8C-%E7%A3%81%E7%9B%98%E5%8D%A0%E7%94%A8%E8%BF%87%E9%AB%98%E5%A4%84%E7%90%86%E6%96%B9%E6%B3%95">二、磁盘占用过高处理方法</a>
 <ul>
 <li><a href="#1-%E6%97%A5%E5%BF%97%E6%96%87%E4%BB%B6%E6%B8%85%E7%90%86">1、日志文件清理</a></li>
-<li><a href="#2-%E5%8E%86%E5%8F%B2%E6%95%B0%E6%8D%AE%E6%B8%85%E7%90%86">2、历史数据清理</a></li>
-</ul>
-</li>
-<li><a href="#3-%E4%BF%AE%E6%94%B9docker%E8%BF%90%E8%A1%8C%E8%B7%AF%E5%BE%84">3、修改Docker运行路径</a></li>
+$1
+<li><a href="#3-%E4%BF%AE%E6%94%B9docker%E8%BF%90%E8%A1%8C%E8%B7%AF%E5%BE%84">3、修改Docker运行路径</a></li>$2
 </ul>
 </li>
 </ul>
