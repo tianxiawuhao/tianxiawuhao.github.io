@@ -121,7 +121,7 @@
           <img class="post-feature-header-image" src="/post-images/XvNkKhwMg.png" alt="封面图">
           </img>
           
-          <h3 id="1-表引擎的使用">1 表引擎的使用</h3>
+          <h2 id="1-表引擎的使用">1 表引擎的使用</h2>
 <p>表引擎是 ClickHouse 的一大特色。可以说，表引擎决定了如何存储表的数据。包括：</p>
 <blockquote>
 <p>数据的存储方式和位置，写到哪里以及从哪里读取数据。(默认是在安装路径下的 data 路径)<br>
@@ -133,16 +133,16 @@
 表引擎的使用方式就是必须显式在创建表时定义该表使用的引擎，以及引擎使用的相关参数。</p>
 <p>特别注意：引擎的名称大小写敏感, 驼峰命名</p>
 </blockquote>
-<h3 id="2-tinylog">2 TinyLog</h3>
+<h2 id="2-tinylog">2 TinyLog</h2>
 <p>以列文件的形式保存在磁盘上，不支持索引，没有并发控制。一般保存少量数据的小表，生产环境上作用有限。可以用于平时练习测试用。</p>
 <p>如：</p>
 <pre><code class="language-sql">create table t_tinylog ( id String, name String) engine=TinyLog;
 </code></pre>
-<h3 id="3-memory">3 Memory</h3>
-<p>内存引擎，数据以未压缩的原始形式直接保存在内存当中，服务器重启数据就会消失。读写操作不会相互阻塞，不支持索引。简单查询下有非常非常高的性能表现（超过 10G/s）。<br>
+<h2 id="3-memory">3 Memory</h2>
+<p>内存引擎，数据以未压缩的原始形式直接保存在内存当中，服务器重启数据就会消失。读写操作不会相互阻塞，不支持索引。简单查询下有非常高的性能表现（超过 10G/s）。<br>
 一般用到它的地方不多，除了用来测试，就是在需要非常高的性能，同时数据量又不太大（上限大概 1 亿行）的场景。</p>
-<h3 id="4-mergetree">4 MergeTree</h3>
-<p>ClickHouse 中最强大的表引擎当属 MergeTree（合并树）引擎及该系列（*MergeTree）中的其他引擎，支持索引和分区，地位可以相当于 innodb 之于 Mysql。而且基于 MergeTree，还衍生除了很多小弟，也是非常有特色的引擎。</p>
+<h2 id="4-mergetree">4 MergeTree</h2>
+<p>ClickHouse 中最强大的表引擎当属 MergeTree（合并树）引擎及该系列（*MergeTree）中的其他引擎，支持索引和分区，地位可以相当于 innodb 之于 Mysql。而且基于 MergeTree，还衍生出了很多小弟引擎，也非常有特色。</p>
 <p><strong>建表语句</strong></p>
 <pre><code class="language-sql">create table t_order_mt(
     id UInt32,
@@ -164,7 +164,7 @@ order by (id,sku_id);
 (102,'sku_002',600.00,'2020-06-02 12:00:00');
 </code></pre>
 <p>MergeTree 其实还有很多参数(绝大多数用默认值即可)，但是三个参数是更加重要的，也涉及了关于 MergeTree 的很多概念。</p>
-<h4 id="41-partition-by-分区可选">4.1 partition by 分区(可选)</h4>
+<h3 id="41-partition-by-分区可选">4.1 partition by 分区(可选)</h3>
 <p><strong>作用</strong><br>
 学过 hive 的应该都不陌生，分区的目的主要是降低扫描的范围，优化查询速度，如果不填,只会使用一个分区 —— all。</p>
 <p><strong>分区目录</strong><br>
@@ -189,20 +189,20 @@ MergeTree 是以列文件+索引文件+表定义文件组成的，但是如果�
 <p>手动 <code>optimize</code> 之后</p>
 <pre><code class="language-sql">optimize table t_order_mt final;
 </code></pre>
-<h4 id="42-primary-key-主键可选">4.2 primary key 主键(可选)</h4>
+<h3 id="42-primary-key-主键可选">4.2 primary key 主键(可选)</h3>
 <p>ClickHouse 中的主键，和其他数据库不太一样，它只提供了数据的一级索引，但是却不是唯一约束。这就意味着是可以存在相同 primary key 的数据的。<br>
 主键的设定主要依据是查询语句中的 where 条件。<br>
 根据条件通过对主键进行某种形式的二分查找，能够定位到对应的 index granularity,避免了全表扫描。<br>
 index granularity： 直接翻译的话就是索引粒度，指在稀疏索引中两个相邻索引对应数据的间隔。ClickHouse 中的 MergeTree 默认是 8192。官方不建议修改这个值，除非该列存在大量重复值，比如在一个分区中几万行才有一个不同数据。</p>
 <p>稀疏索引：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1656505152575.png" alt="" loading="lazy"></figure>
-<p>稀疏索引的好处就是可以用很少的索引数据，定位更多的数据，代价就是只能定位到索引粒度的第一行，然后再进行进行一点扫描。</p>
-<h4 id="43-order-by必选">4.3 order by（必选）</h4>
+<p>稀疏索引的好处是可以用很少的索引数据定位更多的数据，代价是只能定位到索引粒度的第一行，然后再进行一点扫描。</p>
+<h3 id="43-order-by必选">4.3 order by（必选）</h3>
 <p>order by 设定了分区内的数据按照哪些字段顺序进行有序保存。<br>
 order by 是 MergeTree 中唯一一个必填项，甚至比 primary key 还重要，因为当用户不设置主键的情况，很多处理会依照 order by 的字段进行处理（比如后面会讲的去重和汇总）。<br>
 要求：主键必须是 order by 字段的前缀字段。有点类似 SQL 索引中的最左前缀。<br>
 比如 order by 字段是 (id,sku_id) 那么主键必须是 id 或者(id,sku_id)</p>
-<h4 id="44-二级索引跳数索引">4.4 二级索引(跳数索引)</h4>
+<h3 id="44-二级索引跳数索引">4.4 二级索引(跳数索引)</h3>
 <p>目前在 ClickHouse 的官网上二级索引的功能在 v20.1.2.4 之前是被标注为实验性的，在这个版本之后默认是开启的。</p>
 <p>老版本使用二级索引前需要增加设置<br>
 是否允许使用实验性的二级索引（v20.1.2.4 开始，这个参数已被删除，默认开启）</p>
@@ -242,7 +242,7 @@ GRANULARITY N：是设定二级索引对于一级索引粒度的粒度。一级�
 <pre><code class="language-shell">clickhouse-client --send_logs_level=trace &lt;&lt;&lt; 'select * from t_order_mt2 where total_amount &gt; toDecimal32(900., 2)';
 </code></pre>
 <figure data-type="image" tabindex="2"><img src="/post-images/1656505167546.png" alt="" loading="lazy"></figure>
-<h4 id="45-数据-ttl数据存活时间">4.5 数据 TTL（数据存活时间）</h4>
+<h3 id="45-数据-ttl数据存活时间">4.5 数据 TTL（数据存活时间）</h3>
 <p>TTL 即 Time To Live，MergeTree 提供了可以管理数据表或者列的生命周期的功能。过期的数据不会立马处理，只是会做标记，等到合并时一起处理。</p>
 <p><strong>列级别 TTL</strong><br>
 （1）创建测试表</p>
@@ -274,7 +274,7 @@ create_time：使用了当前表中的一个 Datetime 类型的列，TTL 中引�
 (107,'sku_002',2000.00,'2020-06-12 22:52:30'),
 (110,'sku_003',600.00,'2020-06-13 12:00:00');
 </code></pre>
-<p>（3）手动合并，查看效果,到期后，指定的字段数据归 0；如果执行合并后还是可以看到数据，可能是需要设置时区，或者需要重启。</p>
+<p>（3）手动合并，查看效果。到期后，指定的字段数据归 0；如果执行合并后还是可以看到数据，可能是需要设置时区，或者需要重启。</p>
 <p><strong>表级 TTL</strong><br>
 与列级相同，在建表时与建表之后都有对应的语法进行设置<br>
 （1）在建表时，写在 Order By 的后面</p>
@@ -317,7 +317,7 @@ TO DISK ‘aaa’ - 将数据移动到磁盘 aaa 上<br>
 TO VOLUME ‘bbb’ - 将数据移动到磁盘 bbb 上<br>
 GROUP BY - 聚合过期行</p>
 </blockquote>
-<h3 id="5-replacingmergetree">5 ReplacingMergeTree</h3>
+<h2 id="5-replacingmergetree">5 ReplacingMergeTree</h2>
 <p>ReplacingMergeTree 是 MergeTree 的一个变种，它存储特性完全继承 MergeTree，只是多了一个去重的功能。 尽管 MergeTree 可以设置主键，但是 primary key 其实没有唯一约束的功能。如果你想处理掉重复的数据，可以借助这个 ReplacingMergeTree。去重按照order by的字段去重</p>
 <p><strong>去重时机</strong><br>
 数据的去重只会在合并的过程中出现。合并会在未知的时间在后台进行，所以你无法预先作出计划。有一些数据可能仍未被处理。</p>
@@ -364,7 +364,7 @@ order by (id, sku_id);
 认定重复的数据保留，版本字段值最大的<br>
 如果版本字段相同则按插入顺序保留最后一笔</p>
 </blockquote>
-<h3 id="6-summingmergetree">6 SummingMergeTree</h3>
+<h2 id="6-summingmergetree">6 SummingMergeTree</h2>
 <p>对于不查询明细，只关心以维度进行汇总聚合结果的场景。如果只使用普通的MergeTree的话，无论是存储空间的开销，还是查询时临时聚合的开销都比较大。<br>
 ClickHouse 为了这种场景，提供了一种能够“预聚合”的引擎 SummingMergeTree。该引擎聚合的依据依然是 order by 的字段，相当于按照 order by 的字段做了一次 Group By。</p>
 <p><strong>案例演示</strong><br>
