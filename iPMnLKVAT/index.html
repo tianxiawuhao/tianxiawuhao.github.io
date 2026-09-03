@@ -126,7 +126,7 @@
 <h2 id="一-创建方式">一、创建方式</h2>
 <h3 id="1-用默认线程池">1. 用默认线程池</h3>
 <p><code>CompletableFuture&lt;String&gt; future = new CompletableFuture&lt;&gt;();</code></p>
-<p>默认使用 ForkJoinPool.commonPool()，commonPool是一个会被很多任务 共享 的线程池，比如同一 JVM 上的所有 CompletableFuture、并行 Stream 都将共享 commonPool，commonPool 设计时的目标场景是运行 非阻塞的 CPU 密集型任务，为最大化利用 CPU，其线程数默认为 CPU 数量 - 1。</p>
+<p>默认使用 ForkJoinPool.commonPool()，commonPool 是一个会被很多任务共享的线程池，比如同一 JVM 上的所有 CompletableFuture、并行 Stream 都将共享 commonPool，commonPool 设计时的目标场景是运行 非阻塞的 CPU 密集型任务，为最大化利用 CPU，其线程数默认为 CPU 数量 - 1。</p>
 <h3 id="2-用自定义线程池">2. 用自定义线程池</h3>
 <pre><code class="language-java">ThreadPoolExecutor pool = new ThreadPoolExecutor(2, 4, 3,
                 TimeUnit.SECONDS, new ArrayBlockingQueue&lt;Runnable&gt;(3),
@@ -147,12 +147,12 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <tr>
 <td>runAsync</td>
 <td>无</td>
-<td>进行数据处理，接收前一步骤传递的数据，无返回值。</td>
+<td>异步执行一个 Runnable 任务，无返回值。</td>
 </tr>
 <tr>
 <td>supplyAsync</td>
 <td>有</td>
-<td>进行数据处理，接收前一步骤传递的数据，处理加工后返回。返回数据类型可以和前一步骤返回的数据类型不同。</td>
+<td>异步执行一个 Supplier 任务，返回执行结果；返回类型由 Supplier 决定。</td>
 </tr>
 </tbody>
 </table>
@@ -167,7 +167,8 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
     CompletableFuture cf = CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;));
     assertFalse(cf.isDone());    
     //使用自定义线程池
-    CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;),                                                 Executors.newSingleThreadExecutor());
+    CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
+        Executors.newSingleThreadExecutor());
     }
 </code></pre>
 <h4 id="2supplyasync">（2）supplyAsync</h4>
@@ -228,7 +229,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 }
 </code></pre>
 <p>示例</p>
-<pre><code class="language-csharp">csharp复制代码public static void thenApply() throws ExecutionException, InterruptedException {
+<pre><code class="language-java">public static void thenApply() throws ExecutionException, InterruptedException {
     CompletableFuture cf = CompletableFuture.completedFuture(&quot;message&quot;).thenApplyAsync(s -&gt; {
         System.out.println(s);
         return s.toUpperCase();
@@ -240,13 +241,12 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 }
 </code></pre>
 <p><code>then</code>意味着这个阶段的动作发生当前的阶段正常完成之后。本例中，当前节点完成，返回字符串<code>message</code>。</p>
-<p><code>Apply</code>意味着返回的阶段将会对结果前一阶段的结果应用一个函数。</p>
+<p><code>Apply</code> 意味着返回的阶段会对前一阶段的结果应用一个函数。</p>
 <p>函数的执行会被<strong>阻塞</strong></p>
 <h4 id="2thenaccept">（2）thenAccept</h4>
-<pre><code class="language-scss">public static &lt;U&gt; CompletableFuture&lt;U&gt; supplyAsync(Supplier&lt;U&gt; supplier) {
-    return asyncSupplyStage(asyncPool, supplier);
-}
-</code></pre>
+<pre><code class="language-java">public CompletableFuture&lt;Void&gt; thenAccept(Consumer&lt;? super T&gt; action) {
+    return uniAcceptStage(null, action);
+}</code></pre>
 <p>示例</p>
 <pre><code class="language-java">public static void thenAccept() throws InterruptedException {
     CompletableFuture&lt;Void&gt; future = CompletableFuture.supplyAsync(() -&gt; {
@@ -297,7 +297,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <tr>
 <td>thenAcceptBoth</td>
 <td>无</td>
-<td>合并另外一个任务，两个任务都完成后，执行这个方法等待第一个阶段的完成(大写转换)， 它的结果传给一个指定的返回CompletableFuture函数，它的结果就是返回的CompletableFuture的结果，入参为两个任务结果，不返回新结果</td>
+<td>合并另一个任务，两个任务都完成后，用 BiConsumer 消费两个任务的结果，无返回值。参为两个任务结果，不返回新结果</td>
 </tr>
 <tr>
 <td>runAfterBoth</td>
@@ -412,7 +412,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <tr>
 <td>runAfterEither</td>
 <td>无返回值无入参</td>
-<td>其中任一任务完成后，执行Runnable，消费结果，无入参。不返回新结果，不要求两个任务结果为同一类型</td>
+<td>其中任一任务完成后执行 Runnable，不消费结果、无入参、无返回值；不要求两个任务结果类型一致</td>
 </tr>
 </tbody>
 </table>
@@ -466,7 +466,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 </tbody>
 </table>
 <h4 id="1thencompose">（1）thenCompose</h4>
-<p>这个方法等待第一个阶段的完成(大写转换)， 它的结果传给一个指定的返回CompletableFuture函数，它的结果就是返回的CompletableFuture的结果。</p>
+<p>thenCompose 等待第一个阶段完成，把它的结果传给一个指定的函数；该函数返回一个新的 CompletableFuture，它的结果就是最终结果（与 flatMap 类似）。</p>
 <pre><code class="language-java">public &lt;U&gt; CompletableFuture&lt;U&gt; thenCompose(
     Function&lt;? super T, ? extends CompletionStage&lt;U&gt;&gt; fn) {
     return uniComposeStage(null, fn);
@@ -609,7 +609,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <h4 id="1allof">（1）allOf</h4>
 <p>我们在处理业务时，有时会有多任务异步处理，同步返回结果的情况</p>
 <ul>
-<li>采用多线程执异步行某种任务，比如在不同主机查询磁盘列表信息。</li>
+<li>采用多线程并行执行某些任务，比如在不同主机上查询磁盘列表信息。</li>
 <li>将执行结果搜集，分组分类，处理。</li>
 <li>将处理以后的结果给予展示。</li>
 </ul>
@@ -708,30 +708,30 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <h4 id="1isdone">（1）isDone()</h4>
 <p>判断任务是否完成。三种完成情况：normally（正常执行完毕）、exceptionally（执行异常）、via cancellation（取消）</p>
 <h4 id="2get">（2）get()</h4>
-<p>阻塞获取结果或抛出受检测异常，需要显示进行try...catch处理。</p>
+<p>阻塞获取结果或抛出受检异常，需要显式进行 try...catch 处理。</p>
 <h4 id="3getlong-timeouttimeunit-unit">（3）get(long timeout,TimeUnit unit)</h4>
-<p>超时阻塞获取结果</p>
+<p>超时阻塞获取结果。</p>
 <h4 id="4cancelboolean-mayinterruptifrunning">（4）cancel(boolean mayInterruptIfRunning)</h4>
-<p>取消任务，若一个任务未完成，则以CancellationException异常。其相关未完成的子任务也会以CompletionException结束</p>
+<p>取消任务：若任务未完成，则令其以 CancellationException 异常结束；相关未完成的子任务也会以 CompletionException 结束。</p>
 <h4 id="5iscancelled">（5）isCancelled()</h4>
-<p>是否已取消，在任务正常执行完成前取消，才为true。否则为false。</p>
+<p>任务是否已取消：在正常执行完成之前被取消才为 true，否则为 false。</p>
 <h3 id="2-completablefuture接口">2. CompletableFuture接口</h3>
 <h4 id="1join">（1）join</h4>
-<p>​        阻塞获取结果或抛出非受检异常。</p>
+<p>        阻塞获取结果或抛出非受检异常。</p>
 <h4 id="2getnowt-valueifabsent">（2）getNow(T valueIfAbsent)</h4>
-<p>​        若当前任务无结果，则返回valueIfAbsent，否则返回已完成任务的结果。</p>
+<p>        若当前任务无结果，则返回valueIfAbsent，否则返回已完成任务的结果。</p>
 <h4 id="3completet-value">（3）complete(T value)</h4>
-<p>​        设置任务结果，任务正常结束，之后的任务状态为已完成。</p>
+<p>设置任务结果，令任务正常结束，之后任务状态为已完成。</p>
 <h4 id="4completeexceptionallythrowable-ex">（4）completeExceptionally(Throwable ex)</h4>
-<p>​        设置任务异常结果，任务异常结束，之后的任务状态为已完成。</p>
+<p>设置任务异常结果，令任务异常结束，之后任务状态为已完成。</p>
 <h4 id="5iscompletedexceptionally">（5）isCompletedExceptionally()</h4>
-<p>​        判断任务是否异常结束。异常可能的原因有：取消、显示设置任务异常结果、任务动作执行异常等。</p>
+<p>        判断任务是否异常结束。异常可能的原因有：取消、显示设置任务异常结果、任务动作执行异常等。</p>
 <h4 id="6getnumberofdependents">（6）getNumberOfDependents()</h4>
-<p>​        返回依赖当前任务的任务数量，主要用于监控。</p>
+<p>        返回依赖当前任务的任务数量，主要用于监控。</p>
 <h4 id="7ortimeoutlong-timeouttimeunit-unit-jdk9">（7）orTimeout(long timeout,TimeUnit unit) jdk9</h4>
-<p>​        设置任务完成超时时间，若在指定时间内未正常完成，则任务会以异常(TimeoutException)结束。</p>
+<p>设置任务完成的超时时间：若在指定时间内未正常完成，任务将以 TimeoutException 异常结束。</p>
 <h4 id="8completeontimeoutt-valuelong-timeouttimeunit-unit-jdk9">（8）completeOnTimeout(T value,long timeout,TimeUnit unit) jdk9</h4>
-<p>​        设置任务完成超时时间，若在指定时间内未正常完成，则以给定的value为任务结果</p>
+<p>设置任务完成的超时时间：若在指定时间内未正常完成，则以给定的 value 作为任务结果。</p>
 <h2 id="四-实战">四、实战</h2>
 <h3 id="1-api网关做接口的聚合">1. API网关做接口的聚合</h3>
 <pre><code class="language-java">//这两个参数从外部获得
@@ -744,7 +744,7 @@ OrderInfo orderInfo = orderService.getOrderInfo(orderId);
 //返回两者的聚合DTO
 return new OrderDetailDTO(userInfo,orderInfo);
 </code></pre>
-<p>​        下面三个外部接口的信息一定是不相关联的，也就是可以并行获取，三个接口的结果都获取完毕之后做一次数据聚合到DTO即可，也就是聚合的耗时大致是这三个接口中耗时最长的接口的响应时间</p>
+<p>        下面三个外部接口的信息一定是不相关联的，也就是可以并行获取，三个接口的结果都获取完毕之后做一次数据聚合到DTO即可，也就是聚合的耗时大致是这三个接口中耗时最长的接口的响应时间</p>
 <pre><code class="language-java">@Service
 public class OrderDetailService {
 	/**
@@ -767,13 +767,13 @@ public class OrderDetailService {
 </code></pre>
 <h2 id="五-区别">五、区别</h2>
 <h4 id="1whencomplete和handle区别">（1）whenComplete和handle区别</h4>
-<p><code>whenComplete</code> 与 <code>handle</code> 方法就类似于 <code>try..catch..finanlly</code> 中 <code>finally</code> 代码块。无论是否发生异常，都将会执行的。这两个方法区别在于 <code>handle</code> 支持返回结果。</p>
+<p><code>whenComplete</code> 与 <code>handle</code> 都类似于 try...catch...finally 中的 finally 代码块：无论是否发生异常都会执行。两者的区别在于 <code>handle</code> 支持返回处理后的结果。</p>
 <h4 id="2thenapply与thencompose的异同">（2）thenApply与thenCompose的异同</h4>
-<p>​		对于thenApply，fn函数是一个对一个已完成的stage或者说CompletableFuture的的返回值进行计算、操作；</p>
-<p>​		对于thenCompose，fn函数是对另一个CompletableFuture进行计算、操作。</p>
+<p>对于 thenApply：fn 对上一个已完成 stage 的返回值进行同步计算、转换。</p>
+<p>对于 thenCompose：fn 接收上一个 stage 的返回值，并返回一个新的 CompletableFuture 与之组合（扁平化）。</p>
 <h4 id="3有无async的区别">（3）有无Async的区别</h4>
-<p>没有Async的在CompleteableFuture调用它的线程定义的线程上运行，因此通常不知道在哪里执行该线程。如果结果已经可用，它可能会立即执行。</p>
-<p>​     有Async的无论环境如何，都在环境定义的执行程序上运行。为此CompletableFuture通常ForkJoinPool.commonPool()。</p>
+<p>没有 Async 后缀的方法，会在调用它的线程所在的调用链上运行，因此通常无法预知在哪里执行；如果结果已经可用，甚至可能立即执行。</p>
+<p>带 Async 后缀的方法会在执行器上运行：未指定线程池时通常使用 ForkJoinPool.commonPool()，指定了线程池则在传入的执行器上运行。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
