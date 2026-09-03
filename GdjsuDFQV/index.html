@@ -122,7 +122,7 @@
           </img>
           
           <figure data-type="image" tabindex="1"><img src="/post-images/1659699437789.png" alt="" loading="lazy"></figure>
-<h3 id="什么是消息推送push">什么是消息推送（push）</h3>
+<h2 id="什么是消息推送push">什么是消息推送（push）</h2>
 <p>推送的场景比较多，比如有人关注我的公众号，这时我就会收到一条推送消息，以此来吸引我点击打开应用。</p>
 <p>消息推送(<code>push</code>)通常是指网站的运营工作等人员，通过某种工具对用户当前网页或移动设备APP进行的主动消息推送。</p>
 <p>消息推送一般又分为<code>web端消息推送</code>和<code>移动端消息推送</code>。</p>
@@ -132,7 +132,7 @@
 <p>通常在服务端会有若干张消息推送表，用来记录用户触发不同事件所推送不同类型的消息，前端主动查询（拉）或者被动接收（推）用户所有未读的消息数。</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1659699463526.png" alt="" loading="lazy"></figure>
 <p>消息推送无非是推（<code>push</code>）和拉（<code>pull</code>）两种形式，下边我们逐个了解下。</p>
-<h3 id="短轮询">短轮询</h3>
+<h2 id="短轮询">短轮询</h2>
 <p>轮询(<code>polling</code>)应该是实现消息推送方案中最简单的一种，这里我们暂且将轮询分为<code>短轮询</code>和<code>长轮询</code>。</p>
 <p>短轮询很好理解，指定的时间间隔，由浏览器向服务器发出<code>HTTP</code>请求，服务器实时返回未读消息数据给客户端，浏览器再做渲染显示。</p>
 <p>一个简单的JS定时器就可以搞定，每秒钟请求一次未读消息数接口，返回的数据展示即可。</p>
@@ -147,10 +147,10 @@
 </code></pre>
 <p>效果还是可以的，短轮询实现固然简单，缺点也是显而易见，由于推送数据并不会频繁变更，无论后端此时是否有新的消息产生，客户端都会进行请求，势必会对服务端造成很大压力，浪费带宽和服务器资源。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1659699476971.gif" alt="" loading="lazy"></figure>
-<h3 id="长轮询">长轮询</h3>
+<h2 id="长轮询">长轮询</h2>
 <p>长轮询是对上边短轮询的一种改进版本，在尽可能减少对服务器资源浪费的同时，保证消息的相对实时性。长轮询在中间件中应用的很广泛，比如<code>Nacos</code>和<code>apollo</code>配置中心，消息队列<code>kafka</code>、<code>RocketMQ</code>中都有用到长轮询。</p>
-<p>[nocas长轮询](<a href="https://tinaxiawuhao.github.io/post/t9Kci8xf6/">nocas长轮询 | tianxia (tinaxiawuhao.github.io)</a>)一文中我详细介绍过<code>Nacos</code>长轮询的实现原理，感兴趣的小伙伴可以瞅瞅。</p>
-<p>这次我使用<code>apollo</code>配置中心实现长轮询的方式，应用了一个类<code>DeferredResult</code>，它是在<code>servelet3.0</code>后经过Spring封装提供的一种异步请求机制，直意就是延迟结果。</p>
+<p>在<a href="https://tinaxiawuhao.github.io/post/t9Kci8xf6/">Nacos 长轮询</a>一文中，我详细介绍过 Nacos 长轮询的实现原理，感兴趣的小伙伴可以看看。</p>
+<p>这次我使用<code>apollo</code>配置中心实现长轮询的方式，应用了一个类<code>DeferredResult</code>，它是 <code>Servlet 3.0</code> 之后由 Spring 封装提供的一种异步请求机制，直译就是“延迟结果”。</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1659699490948.png" alt="" loading="lazy"></figure>
 <p><code>DeferredResult</code>可以允许容器线程快速释放占用的资源，不阻塞请求线程，以此接受更多的请求提升系统的吞吐量，然后启动异步工作线程处理真正的业务逻辑，处理完成调用<code>DeferredResult.setResult(200)</code>提交响应结果。</p>
 <p>下边我们用长轮询来实现消息推送。</p>
@@ -209,10 +209,10 @@ public class AsyncRequestTimeoutHandler {
     }
 }
 </code></pre>
-<p>我们来测试一下，首先页面发起长轮询请求<code>/polling/watch/10086</code>监听消息更变，请求被挂起，不变更数据直至超时，再次发起了长轮询请求；紧接着手动变更数据<code>/polling/publish/10086</code>，长轮询得到响应，前端处理业务逻辑完成后再次发起请求，如此循环往复。</p>
+<p>我们来测试一下，首先页面发起长轮询请求<code>/polling/watch/10086</code>监听消息变更，请求被挂起，不变更数据直至超时，再次发起了长轮询请求；紧接着手动变更数据<code>/polling/publish/10086</code>，长轮询得到响应，前端处理业务逻辑完成后再次发起请求，如此循环往复。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1659699505567.gif" alt="" loading="lazy"></figure>
 <p>长轮询相比于短轮询在性能上提升了很多，但依然会产生较多的请求，这是它的一点不完美的地方。</p>
-<h3 id="iframe流">iframe流</h3>
+<h2 id="iframe流">iframe流</h2>
 <p>iframe流就是在页面中插入一个隐藏的<code>&lt;iframe&gt;</code>标签，通过在<code>src</code>中请求消息数量API接口，由此在服务端和客户端之间创建一条长连接，服务端持续向<code>iframe</code>传输数据。</p>
 <blockquote>
 <p>传输的数据通常是<code>HTML</code>、或是内嵌的<code>javascript</code>脚本，来达到实时更新页面的效果。</p>
@@ -242,7 +242,7 @@ public class IframeController {
 </code></pre>
 <p>但我个人不推荐，因为它在浏览器上会显示请求未加载完，图标会不停旋转，简直是强迫症杀手。</p>
 <figure data-type="image" tabindex="8"><img src="/post-images/1659699528248.gif" alt="" loading="lazy"></figure>
-<h3 id="sse-我的方式">SSE (我的方式)</h3>
+<h2 id="sse-我的方式">SSE (我的方式)</h2>
 <p>很多人可能不知道，服务端向客户端推送消息，其实除了可以用<code>WebSocket</code>这种耳熟能详的机制外，还有一种服务器发送事件(<code>Server-sent events</code>)，简称<code>SSE</code>。</p>
 <p><code>SSE</code>它是基于<code>HTTP</code>协议的，我们知道一般意义上的HTTP协议是无法做到服务端主动向客户端推送消息的，但SSE是个例外，它变换了一种思路。</p>
 <figure data-type="image" tabindex="9"><img src="/post-images/1659699537210.png" alt="" loading="lazy"></figure>
@@ -262,7 +262,7 @@ public class IframeController {
 <p>技术并没有好坏之分，只有哪个更合适</p>
 </blockquote>
 <p>SSE好像一直不被大家所熟知，一部分原因是出现了WebSockets，这个提供了更丰富的协议来执行双向、全双工通信。对于游戏、即时通信以及需要双向近乎实时更新的场景，拥有双向通道更具吸引力。</p>
-<p>但是，在某些情况下，不需要从客户端发送数据。而你只需要一些服务器操作的更新。比如：站内信、未读消息数、状态更新、股票行情、监控数量等场景，<code>SEE</code>不管是从实现的难易和成本上都更加有优势。此外，SSE 具有<code>WebSockets</code>在设计上缺乏的多种功能，例如：<code>自动重新连接</code>、<code>事件ID</code>和<code>发送任意事件</code>的能力。</p>
+<p>但是，在某些情况下，不需要从客户端发送数据。而你只需要一些服务器操作的更新。比如：站内信、未读消息数、状态更新、股票行情、监控数量等场景，<code>SSE</code> 不管是从实现难易度还是成本上都更有优势。此外，SSE 具有<code>WebSockets</code>在设计上缺乏的多种功能，例如：<code>自动重新连接</code>、<code>事件ID</code>和<code>发送任意事件</code>的能力。</p>
 <p>前端只需进行一次HTTP请求，带上唯一ID，打开事件流，监听服务端推送的事件就可以了</p>
 <pre><code class="language-java">&lt;script&gt;
     let source = null;
@@ -336,20 +336,20 @@ public static void sendMessage(String userId, String message) {
 <img src="/post-images/1659699572510.gif" alt="" loading="lazy"></p>
 <p><strong>注意：</strong> SSE不支持<code>IE</code>浏览器，对其他主流浏览器兼容性做的还不错。<br>
 <img src="/post-images/1659699593415.png" alt="" loading="lazy"></p>
-<h3 id="mqtt">MQTT</h3>
+<h2 id="mqtt">MQTT</h2>
 <p>什么是 MQTT协议？</p>
-<p><code>MQTT</code> 全称(Message Queue Telemetry Transport)：一种基于发布/订阅（<code>publish</code>/<code>subscribe</code>）模式的<code>轻量级</code>通讯协议，通过订阅相应的主题来获取消息，是物联网（<code>Internet of Thing</code>）中的一个标准传输协议。</p>
+<p><code>MQTT</code> 全称(Message Queue Telemetry Transport)：一种基于发布/订阅（<code>publish</code>/<code>subscribe</code>）模式的<code>轻量级</code>通讯协议，通过订阅相应的主题来获取消息，是物联网（<code>Internet of Things</code>）中的一个标准传输协议。</p>
 <p>该协议将消息的发布者（<code>publisher</code>）与订阅者（<code>subscriber</code>）进行分离，因此可以在不可靠的网络环境中，为远程连接的设备提供可靠的消息服务，使用方式与传统的MQ有点类似。</p>
 <figure data-type="image" tabindex="11"><img src="/post-images/1659699602151.png" alt="" loading="lazy"></figure>
 <p><code>TCP</code>协议位于传输层，<code>MQTT</code> 协议位于应用层，<code>MQTT</code> 协议构建于<code>TCP/IP</code>协议上，也就是说只要支持<code>TCP/IP</code>协议栈的地方，都可以使用<code>MQTT</code>协议。</p>
 <p>为什么要用 MQTT协议？</p>
-<p><code>MQTT</code>协议为什么在物联网（IOT）中如此受偏爱？而不是其它协议，比如我们更为熟悉的 <code>HTTP</code>协议呢？</p>
+<p><code>MQTT</code>协议为什么在物联网（IoT）中如此受偏爱？而不是其它协议，比如我们更为熟悉的 <code>HTTP</code>协议呢？</p>
 <ul>
-<li>首先<code>HTTP</code>协议它是一种同步协议，客户端请求后需要等待服务器的响应。而在物联网（IOT）环境中，设备会很受制于环境的影响，比如带宽低、网络延迟高、网络通信不稳定等，显然异步消息协议更为适合<code>IOT</code>应用程序。</li>
-<li><code>HTTP</code>是单向的，如果要获取消息客户端必须发起连接，而在物联网（IOT）应用程序中，设备或传感器往往都是客户端，这意味着它们无法被动地接收来自网络的命令。</li>
+<li>首先<code>HTTP</code>协议它是一种同步协议，客户端请求后需要等待服务器的响应。而在物联网（IoT）环境中，设备会很受制于环境的影响，比如带宽低、网络延迟高、网络通信不稳定等，显然异步消息协议更为适合<code>IOT</code>应用程序。</li>
+<li><code>HTTP</code>是单向的，如果要获取消息客户端必须发起连接，而在物联网（IoT）应用程序中，设备或传感器往往都是客户端，这意味着它们无法被动地接收来自网络的命令。</li>
 <li>通常需要将一条命令或者消息，发送到网络上的所有设备上。<code>HTTP</code>要实现这样的功能不但很困难，而且成本极高。</li>
 </ul>
-<h3 id="websocket">Websocket</h3>
+<h2 id="websocket">Websocket</h2>
 <p><code>websocket</code>应该是大家都比较熟悉的一种实现消息推送的方式，上边我们在讲SSE的时候也和websocket进行过比较。</p>
 <p>WebSocket是一种在<code>TCP</code>连接上进行全双工通信的协议，建立客户端和服务器之间的通信渠道。浏览器和服务器仅需一次握手，两者之间就直接可以创建持久性的连接，并进行双向数据传输。</p>
 <figure data-type="image" tabindex="12"><img src="/post-images/1659699610850.png" alt="" loading="lazy"></figure>
@@ -449,8 +449,8 @@ public class WebSocketServer {
 <p>页面初始化建立websocket连接，之后就可以进行双向通信了，效果还不错</p>
 <figure data-type="image" tabindex="13"><img src="/post-images/1659699700840.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="14"><img src="/post-images/1659699622801.gif" alt="" loading="lazy"></figure>
-<h3 id="自定义推送">自定义推送</h3>
-<p>上边我们给我出了6种方案的原理和代码实现，但在实际业务开发过程中，不能盲目的直接拿过来用，还是要结合自身系统业务的特点和实际场景来选择合适的方案。</p>
+<h2 id="自定义推送">自定义推送</h2>
+<p>上边我们给出了 6 种方案的原理和代码实现；但在实际业务开发中，不能盲目照搬，还是要结合自身系统的业务特点和实际场景选择合适的方案。</p>
 <p>推送最直接的方式就是使用第三推送平台，毕竟<strong>钱能解决的需求都不是问题</strong>，无需复杂的开发运维，直接可以使用，省时、省力、省心，像goEasy、极光推送都是很不错的三方服务商。</p>
 <p>一般大型公司都有自研的消息推送平台，像我们本次实现的web站内信只是平台上的一个触点而已，短信、邮件、微信公众号、小程序凡是可以触达到用户的渠道都可以接入进来。</p>
 <figure data-type="image" tabindex="15"><img src="/post-images/1659699652455.png" alt="" loading="lazy"></figure>
