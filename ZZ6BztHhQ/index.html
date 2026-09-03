@@ -121,17 +121,8 @@
           <img class="post-feature-header-image" src="/post-images/ZZ6BztHhQ.png" alt="封面图">
           </img>
           
-          <p>时序数据是指按照时间顺序存储的数据,TimescaleDB是一个开源的、扩展了PostgreSQL的时序数据库扩展,本文就给大家详细的介绍一下基于PostgreSQL的时序数据库TimescaleDB的基本用法和概念,需要的朋友可以参考下</p>
-<p><strong>目录</strong></p>
-<ul>
-<li><a href="">一、TimescaleDB概述</a></li>
-<li><a href="">二、安装和配置</a></li>
-<li><a href="">三、数据写入和查询</a></li>
-<li><a href="">四、连续聚集表</a></li>
-<li><a href="">五、分区管理</a></li>
-<li><a href="">六. 综合使用示例</a></li>
-<li><a href="">七、小结一下</a></li>
-</ul>
+          <p>时序数据是按时间顺序存储的数据。TimescaleDB 是一个开源的、扩展了 PostgreSQL 的时序数据库扩展。本文详细介绍基于 PostgreSQL 的时序数据库 TimescaleDB 的基本用法和概念，需要的朋友可以参考。</p>
+
 <blockquote>
 <p>时序数据是指按照时间顺序存储的数据。它在很多领域得到广泛应用，例如物联网、日志分析、金融交易等。为了高效处理时序数据，TimescaleDB应运而生。TimescaleDB是一个开源的、扩展了PostgreSQL的时序数据库扩展，它结合了关系型数据库和时序数据库的优势，提供了更好的时序数据管理和分析能力。</p>
 </blockquote>
@@ -169,7 +160,7 @@ CREATE TABLE conditions (
     humidity    DOUBLE PRECISION  NULL
 );
 -- 对超级表进行分区
-SELECT create_hypertable('table_name', 'time_column');
+SELECT create_hypertable('conditions', 'time');
 </code></pre>
 <p>创建Hypertable：TimescaleDB中的核心概念是Hypertable，它是一个逻辑表，负责将普通表划分成不同的时间段。其中，'table_name'是原始表的名称，'time_column'是存储时间信息的列。</p>
 <h2 id="三-数据写入和查询">三、数据写入和查询</h2>
@@ -189,8 +180,8 @@ SELECT create_hypertable('conditions', 'time', chunk_time_interval =&gt; INTERVA
 </code></pre>
 <p><strong>3. 超级表的复制和副本</strong></p>
 <p>TimescaleDB支持复制和副本功能，可以在多个节点上创建超级表的副本，实现数据冗余和高可用性。以下示例展示了如何创建一个超级表的副本：</p>
-<pre><code class="language-sql">-- 在节点2上创建conditions超级表的副本
-SELECT add_data_node('conditions', '2');
+<pre><code class="language-sql">-- 将超级表 conditions 复制到分布式数据节点 dn2
+SELECT attach_data_node('dn2', 'conditions');
 </code></pre>
 <p><strong>4. 插入数据</strong></p>
 <p>向超级表中插入数据与向普通表中插入数据类似。以下示例向超级表<code>conditions</code>插入一行数据：</p>
@@ -199,7 +190,7 @@ VALUES ('2023-06-29 06:00:00', 'New York', 25.4, 60.2);
 </code></pre>
 <p><strong>5. 更新和删除数据</strong></p>
 <p>在超级表中更新和删除数据与普通表相同。以下示例演示了如何更新和删除符合特定条件的数据：</p>
-<pre><code class="language-sql">-- 更新温度大于30的记录
+<pre><code class="language-sql">-- 将温度大于 30 的记录统一设为 30.0
 UPDATE conditions SET temperature = 30.0 WHERE temperature &gt; 30.0;
 -- 删除湿度小于50的记录
 DELETE FROM conditions WHERE humidity &lt; 50.0;
@@ -241,7 +232,10 @@ FROM table_name GROUP BY bucket ORDER BY bucket;
 <h2 id="四-连续聚集表">四、连续聚集表</h2>
 <p>连续聚集表是TimescaleDB的一个重要特性，它可以在后台自动维护预定义的聚合数据。通过使用连续聚集表，可以极大地提高大规模时序数据的查询性能。以下是创建和使用连续聚集表的示例：</p>
 <p><strong>1. 创建连续聚集表：</strong></p>
-<pre><code class="language-sql">SELECT create_continuous_aggregate('ca_table', 'SELECT time_bucket('5 minutes', time_column) AS bucket, AVG(value_column) AS avg_value FROM table_name GROUP BY bucket');
+<pre><code class="language-sql">SELECT create_continuous_aggregate('ca_table', SELECT time_bucket('5 minutes', time_column) AS bucket,
+       AVG(value_column) AS avg_value
+FROM table_name
+GROUP BY bucket);
 
 
 </code></pre>
@@ -252,27 +246,32 @@ FROM table_name GROUP BY bucket ORDER BY bucket;
 <h2 id="五-分区管理">五、分区管理</h2>
 <p>TimescaleDB使用分区（partitioning）来管理大规模的时序数据。它可以将表按照时间范围进行自动划分，提高查询性能和数据的可维护性。以下是创建和管理分区的示例：</p>
 <p><strong>1. 创建分区：</strong></p>
-<pre><code class="language-sql">SELECT add_hypertable_partition('table_name', TIMESTAMP '2023-06-01', TIMESTAMP '2023-07-01');
+<pre><code class="language-sql">-- 为已创建的超级表按月增加分区维度
+SELECT add_dimension('table_name', 'time_column', chunk_time_interval =&gt; INTERVAL '1 month');
 
 </code></pre>
 <p><strong>2. 管理分区：</strong></p>
 <ul>
 <li>查询所有分区：</li>
 </ul>
-<pre><code class="language-sql">SELECT show_partitions('table_name');
+<pre><code class="language-sql">-- 查看 table_name 的所有数据块
+SELECT hypertable_name, chunk_name, range_start, range_end
+FROM timescaledb_information.chunks
+WHERE hypertable_name = 'table_name';
 
 </code></pre>
 <ul>
 <li>删除分区：</li>
 </ul>
-<pre><code class="language-sql">SELECT drop_partition('table_name', TIMESTAMP '2023-06-01');
+<pre><code class="language-sql">-- 删除 1 个月之前的旧数据块
+SELECT drop_chunks('table_name', older_than =&gt; INTERVAL '1 month');
 
 </code></pre>
 <p><strong>3. 数据连续性和存储优化</strong></p>
 <p>TimescaleDB通过数据连续性来优化存储空间和查询性能。数据连续性指的是调整超级表的分区和存储策略，以确保相邻时间段的数据存储在一起，从而提高查询性能。</p>
 <p><strong>4. 数据保留策略</strong></p>
 <p>TimescaleDB允许定义数据的保留策略，以自动删除过时的数据。通过设置保留策略，可以控制超级表中数据的保存时长，以及是否自动删除过期数据。</p>
-<h2 id="六-综合使用示例">六. 综合使用示例</h2>
+<h2 id="六-综合使用示例">六、综合使用示例</h2>
 <p><strong>1. 创建超级表并插入数据</strong></p>
 <p>假设我们有一个名为<code>conditions</code>的超级表，包含时间、地点、温度和湿度字段。以下示例演示了如何创建该超级表，并向其中插入一些数据：</p>
 <pre><code class="language-sql">CREATE TABLE conditions (
@@ -307,13 +306,13 @@ GROUP BY minute;
 
 </code></pre>
 <h2 id="七-小结一下">七、小结一下</h2>
-<p>通过使用TimescaleDB，我们可以高效地存储和查询时序数据，并利用连续聚集表和分区管理功能进一步提高性能和可维护性。 Timescale DB跟同类的其他数据库相比具有一些令人兴奋的功能：</p>
+<p>使用 TimescaleDB 可以高效地存储和查询时序数据，并借助连续聚集表与分区管理功能进一步提高性能和可维护性。与同类数据库相比，TimescaleDB 有一些令人兴奋的特性：</p>
 <ul>
 <li>它建立在PostgreSQL之上(目前最好的开源关系数据库)。如果您的项目已经在运行PostgreSQL，Timescale可以重点考虑。</li>
 <li>通过熟悉的SQL语法进行查询，从而减少了学习难度。</li>
-<li>极快的写入速度-每秒数百万次的插入。</li>
-<li>数十亿行或PB的数据，对于Timescale来说没什么大不了的。</li>
-<li>模式具有真正的灵活性-可以根据需要选择关系模式或无模式。</li>
+<li>极快的写入速度——每秒可达数百万次插入。</li>
+<li>数十亿行乃至 PB 级数据，对 TimescaleDB 而言也不在话下。</li>
+<li>模式非常灵活——既可以使用关系模式，也可以选择无模式（schema-less）。</li>
 </ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
@@ -324,7 +323,7 @@ GROUP BY minute;
 <li><a href="#%E4%B8%89-%E6%95%B0%E6%8D%AE%E5%86%99%E5%85%A5%E5%92%8C%E6%9F%A5%E8%AF%A2">三、数据写入和查询</a></li>
 <li><a href="#%E5%9B%9B-%E8%BF%9E%E7%BB%AD%E8%81%9A%E9%9B%86%E8%A1%A8">四、连续聚集表</a></li>
 <li><a href="#%E4%BA%94-%E5%88%86%E5%8C%BA%E7%AE%A1%E7%90%86">五、分区管理</a></li>
-<li><a href="#%E5%85%AD-%E7%BB%BC%E5%90%88%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B">六. 综合使用示例</a></li>
+<li><a href="#%E5%85%AD-%E7%BB%BC%E5%90%88%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B">六、综合使用示例</a></li>
 <li><a href="#%E4%B8%83-%E5%B0%8F%E7%BB%93%E4%B8%80%E4%B8%8B">七、小结一下</a></li>
 </ul>
 </li>
