@@ -84,50 +84,7 @@
   </div>
 </nav>
   <!-- Page Header -->
-  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
-  <div class="container">
-    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
-    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
-      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
-      aria-label="Toggle navigation">
-      Menu
-      <i class="fas fa-bars"></i>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarResponsive">
-      <ul class="navbar-nav ml-auto">
-        
-        <li class="nav-item">
-          
-          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
-          
-        </li>
-        
-        <li class="nav-item">
-          
-          <a class="nav-link" href="/archives">归档</a>
-          
-        </li>
-        
-        <li class="nav-item">
-          
-          <a class="nav-link" href="/tags">标签</a>
-          
-        </li>
-        
-        <li class="nav-item">
-          <div class="gridea-search-container">
-            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
-              action="/search/index.html">
-              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
-              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
-            </form>
-          </div>
-        </li>
-      </ul>
-    </div>
-  </div>
-</nav>
-<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+  <header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
   <div class="overlay"></div>
   <div class="container">
     <div class="row">
@@ -166,8 +123,8 @@
           <h3 id="lora-low-rank-adaptation"><strong>LoRA (Low-Rank Adaptation)</strong></h3>
 <p>LoRA（低秩适配）是一种高效的参数高效微调（Parameter-Efficient Fine-Tuning, PEFT）方法，旨在通过低秩分解的方式对预训练模型进行微调。<br>
 相比于全参数微调（Full Fine-Tuning），LoRA 只需要更新少量的参数。<br>
-LoRA 的核心思想是：在模型的权重矩阵中引入低秩分解，仅对低秩部分进行更新，而保持原始预训练权重不变。<br>
-代码可见以下，完全从0实现LoRA流程，不依赖第三方库的封装。</p>
+LoRA 的核心思想是：冻结预训练权重 W<sub>0</sub>，在其上引入低秩分解增量 ΔW = BA（B、A 为低秩矩阵），仅训练 A、B 而保持原始预训练权重不变，前向计算变为 h = W<sub>0</sub>x + ΔW·x。<br>
+完整代码见下文：完全从 0 实现 LoRA 微调流程，不依赖任何第三方库对 LoRA 的封装。</p>
 <pre><code class="language-python">import os  # 文件操作
 import argparse  # 命令行参数解析
 import time  # 时间管理
@@ -882,13 +839,11 @@ class LMConfig(PretrainedConfig):
         super().__init__(**kwargs)
 </code></pre>
 <blockquote>
-<p>训练后的模型权重文件默认每隔<code>100步</code>保存为: <code>lora_xxx_*.pth</code>（*为模型具体dimension，每次保存时新文件会覆盖旧文件）</p>
+<p>训练日志默认每隔 <code>100</code> 步打印一次；模型权重保存间隔由 <code>--save_interval</code> 控制（示例代码中默认为每个 step 保存），保存为 <code>./out/lora/&lt;lora_name&gt;_&lt;dim&gt;.pth</code>，同名文件会被新权重覆盖。</p>
 </blockquote>
-<p>非常多的人困惑，如何使模型学会自己私有领域的知识？如何准备数据集？如何迁移通用领域模型打造垂域模型？<br>
-这里举几个例子，对于通用模型，医学领域知识欠缺，可以尝试在原有模型基础上加入领域知识，以获得更好的性能。<br>
-同时，我们通常不希望学会领域知识的同时损失原有基础模型的其它能力，此时LoRA可以很好的改善这个问题。<br>
-只需要准备如下格式的对话数据集放置到<code>./dataset/lora_xxx.jsonl</code>，启动 <code>python train_lora.py</code><br>
-训练即可得到<code>./out/lora/lora_xxx.pth</code>新模型权重。</p>
+<p>很多人困惑于：如何让模型学会私有领域的知识？如何准备数据集？如何基于通用模型打造垂域模型？<br>
+这里举几个例子：通用模型往往欠缺医学等领域知识，可以尝试在原有模型基础上注入领域知识以获得更好的表现；同时，我们又希望不因学习领域知识而损失基础模型的其它通用能力，此时 LoRA 可以很好地改善这个问题。<br>
+只需要准备如下格式的对话数据集，放置到 <code>./dataset/lora_xxx.jsonl</code>，启动 <code>python train_lora.py</code> 训练，即可得到 <code>./out/lora/lora_xxx.pth</code> 的新模型权重。</p>
 <p><strong>医疗场景</strong></p>
 <pre><code class="language-text"> {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;请问颈椎病的人枕头多高才最好？&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;颈椎病患者选择枕头的高度应该根据...&quot;}]}
  {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;请问xxx&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;xxx...&quot;}]}
@@ -897,7 +852,7 @@ class LMConfig(PretrainedConfig):
 <pre><code class="language-text"> {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;你叫什么名字？&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;我叫minimind...&quot;}]}
  {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;你是谁&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;我是...&quot;}]}
 </code></pre>
-<p>此时【基础模型+LoRA模型】即可获得医疗场景模型增强的能力，相当于为基础模型增加了LoRA外挂，这个过程并不损失基础模型的本身能力。<br>
+<p>此时「基础模型 + LoRA 权重」即可获得医疗等场景的增强能力，相当于给基础模型外挂了 LoRA 插件，且不损失基础模型原有的通用能力。<br>
 我们可以通过<code>eval_model.py</code>进行模型评估测试。</p>
 <pre><code class="language-python">import argparse
 import random
@@ -1094,7 +1049,7 @@ python eval_model.py --lora_name 'lora_medical' --model_mode 2
 👶: 你和openai是什么关系？
 🤖️: 我是 MiniMind，一个由 Jingyao Gong 开发的人工智能助手。我通过自然语言处理和算法训练来与用户进行交互。
 </code></pre>
-<p>PS：只要有所需要的数据集，也可以full_sft全参微调（需要进行通用知识的混合配比，否则过拟合领域数据会让模型变傻，损失通用性）</p>
+<p>PS：只要有所需要的数据集，也可以做 full_sft 全参微调（此时需混合通用知识数据一起训练，否则过拟合领域数据会让模型变傻、损失通用能力）。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
