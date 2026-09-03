@@ -18,10 +18,10 @@
   href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
   rel='stylesheet' type='text/css'>
 <link rel="alternate" type="application/rss+xml" title="第八章 ProcessFunction API（底层 API） | tianxia » Feed"
-  href="https://tianxiawuhao.github.io/atom.xml">
+  href="/atom.xml">
 <link rel="stylesheet"
   href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
-<link href="https://tianxiawuhao.github.io/styles/main.css" rel="stylesheet">
+<link href="/styles/main.css" rel="stylesheet">
 <script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
@@ -44,7 +44,7 @@
   <!-- Page Header -->
   <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
   <div class="container">
-    <a class="navbar-brand" href="https://tianxiawuhao.github.io">tianxia</a>
+    <a class="navbar-brand" href="/">tianxia</a>
     <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
       data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
       aria-label="Toggle navigation">
@@ -56,7 +56,7 @@
         
         <li class="nav-item">
           
-          <a class="nav-link" href="https://tianxiawuhao.github.io">首页</a>
+          <a class="nav-link" href="/">首页</a>
           
         </li>
         
@@ -85,7 +85,7 @@
     </div>
   </div>
 </nav>
-<header class="masthead" style="background-image: url('https://tianxiawuhao.github.io/media/images/home-bg.jpg')">
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
   <div class="overlay"></div>
   <div class="container">
     <div class="row">
@@ -97,7 +97,7 @@
             <div class="post-heading">
               <span class="tags">
                 
-                <a href="https://tianxiawuhao.github.io/seQXl0jPasu/" class="tag">flink</a>
+                <a href="/seQXl0jPasu/" class="tag">flink</a>
                 
               </span>
               <h1>第八章 ProcessFunction API（底层 API）</h1>
@@ -118,11 +118,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <img class="post-feature-header-image" src="https://tianxiawuhao.github.io/post-images/cctea1w9G.png" alt="封面图">
+          <img class="post-feature-header-image" src="/post-images/cctea1w9G.png" alt="封面图">
           </img>
           
           <p>之前所介绍的流处理 API，无论是基本的转换、聚合，还是更为复杂的窗口操作，其实都是基于 DataStream 进行转换的；所以可以统称为 DataStream API，这也是 Flink 编程的核心。而我们知道，为了让代码有更强大的表现力和易用性，Flink 本身提供了多层 API，DataStream API 只是中间的一环</p>
-<figure data-type="image" tabindex="1"><img src="https://tianxiawuhao.github.io/post-images/1681037421118.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1681037421118.png" alt="" loading="lazy"></figure>
 <p>在更底层，我们可以不定义任何具体的算子（比如 map，filter，或者 window），而只是提炼出一个统一的“处理”（process）操作——它是所有转换算子的一个概括性的表达，可以自定义处理逻辑，所以这一层接口就被叫作“处理函数”（process function）。</p>
 <p>在处理函数中，我们直面的就是数据流中最基本的元素：数据事件（event）、状态（state）以及时间（time）。这就相当于对流有了完全的控制权。处理函数比较抽象，没有具体的操作，所以对于一些常见的简单应用（比如求和、开窗口）会显得有些麻烦；不过正是因为它不限定具体做什么，所以理论上我们可以做任何事情，实现所有需求。所以可以说，处理函数是我们进行 Flink 编程的“大招”，轻易不用，一旦放出来必然会扫平一切。</p>
 <h2 id="基本处理函数processfunction">基本处理函数（ProcessFunction）</h2>
@@ -617,7 +617,7 @@ public class ProcessAllWindowTopN {
 <p>没有这么简单。因为数据流中的元素是逐个到来的，所以即使理论上我们应该“同时”收到很多 url 的浏览量统计结果，实际也是有先后的、只能一条一条处理。下游任务（就是我们定义的 KeyedProcessFunction）看到一个 url 的统计结果，并不能保证这个时间段的统计数据不会再来了，所以也不能贸然进行排序输出。解决的办法，自然就是要等所有数据到齐了——这很容易让我们联想起水位线设置延迟时间的方法。这里我们也可以“多等一会儿”，等到水位线真正超过了窗口结束时间，要统计的数据就肯定到齐了。</p>
 <p>具体实现上，可以采用一个延迟触发的事件时间定时器。基于窗口的结束时间来设定延迟，其实并不需要等太久——因为我们是靠水位线的推进来触发定时器，而水位线的含义就是“之前的数据都到齐了”。所以我们只需要设置 1 毫秒的延迟，就一定可以保证这一点。</p>
 <p>而在等待过程中，之前已经到达的数据应该缓存起来，我们这里用一个自定义的“列表状态”（ListState）来进行存储，如图所示。这个状态需要使用富函数类的 getRuntimeContext()方法获取运行时上下文来定义，我们一般把它放在 open()生命周期方法中。之后每来一个UrlViewCount，就把它添加到当前的列表状态中，并注册一个触发时间为窗口结束时间加 1毫秒（windowEnd + 1）的定时器。待到水位线到达这个时间，定时器触发，我们可以保证当前窗口所有 url 的统计结果 UrlViewCount 都到齐了；于是从状态中取出进行排序输出。</p>
-<figure data-type="image" tabindex="2"><img src="https://tianxiawuhao.github.io/post-images/1681037392627.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1681037392627.png" alt="" loading="lazy"></figure>
 <pre><code class="language-java">import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.AggregateFunction;
@@ -829,7 +829,7 @@ SingleOutputStreamOperator&lt;Long&gt; longStream = stream.process(new ProcessFu
           <hr />
           
             <p class="prev-post">上一篇：
-              <a href="https://tianxiawuhao.github.io/rxadb61B8/">
+              <a href="/rxadb61B8/">
                 <span class="post-title">
                   第九章 状态编程和容错机制&rarr;
                 </span>
@@ -838,7 +838,7 @@ SingleOutputStreamOperator&lt;Long&gt; longStream = stream.process(new ProcessFu
           
           
           <p class="next-post">下一篇：
-            <a href="https://tianxiawuhao.github.io/6pSug_PPu/">
+            <a href="/6pSug_PPu/">
               <span class="post-title">
                 第七章 flink流合并&rarr;
               </span>
@@ -877,7 +877,7 @@ SingleOutputStreamOperator&lt;Long&gt; longStream = stream.process(new ProcessFu
             
               
               <!-- <li class="list-inline-item">
-              <a href="https://tianxiawuhao.github.io/atom.xml" target="_blank">
+              <a href="/atom.xml" target="_blank">
                 <span class="fa-stack fa-lg">
                   <i class="fas fa-circle fa-stack-2x"></i>
                   <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
@@ -892,10 +892,10 @@ SingleOutputStreamOperator&lt;Long&gt; longStream = stream.process(new ProcessFu
    </footer>
   <!-- Bootstrap core JavaScript -->
   <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
-  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
   <!-- Bootstrap core JavaScript -->
   <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
-  <!-- <script src="https://tianxiawuhao.github.io/media/scripts/clean-blog.min.js"></script> -->
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
   <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
   <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
 <a id="back_to_top" href="#" class="back_to_top">
@@ -925,9 +925,9 @@ SingleOutputStreamOperator&lt;Long&gt; longStream = stream.process(new ProcessFu
     }
   })(this));</script>
   
-  <script src="https://tianxiawuhao.github.io/media/scripts/tocScript.js"></script>
+  <script src="/media/scripts/tocScript.js"></script>
 
-<script src="https://tianxiawuhao.github.io/media/scripts/site.js"></script>
+<script src="/media/scripts/site.js"></script>
 </body>
 
 </html>
