@@ -121,9 +121,9 @@
           <img class="post-feature-header-image" src="/post-images/wT9gsiZx3.png" alt="封面图">
           </img>
           
-          <h3 id="future">Future</h3>
-<p>Future模式是多线程设计常用的一种设计模式。Future模式可以理解成：我有一个任务，提交给了Future，Future替我完成这个任务。期间我自己可以去做任何想做的事情。一段时间之后，我就便可以从Future那儿取出结果。</p>
-<h4 id="future提供了三种功能">Future提供了三种功能：</h4>
+          <h2 id="future">Future</h2>
+<p>Future模式是多线程设计常用的一种设计模式。Future 模式可以理解成：我有一个任务，提交给了 Future，由 Future 替我完成这个任务。期间我自己可以去做任何想做的事情，一段时间之后，我便可以从 Future 那儿取出结果。</p>
+<h3 id="future提供了三种功能">Future提供了三种功能：</h3>
 <ul>
 <li>判断任务是否完成</li>
 <li>能够中断任务</li>
@@ -132,7 +132,7 @@
 三段式的编程：1.启动多线程任务2.处理其他事3.收集多线程任务结果，Future虽然可以实现获取异步执行结果的需求，但是它没有提供通知的机制，要么使用阻塞，在future.get()的地方等待future返回的结果，这时又变成同步操作；要么使用isDone()轮询地判断Future是否完成，这样会耗费CPU的资源。<br>
 <strong>解决方法：CompletionService和CompletableFuture（按照任务完成的先后顺序获取任务的结果）</strong></li>
 </ul>
-<h3 id="executorservice">ExecutorService</h3>
+<h2 id="executorservice">ExecutorService</h2>
 <p>创建线程池，多线程功能调用</p>
 <pre><code class="language-java">public static void test1() throws Exception {
     ExecutorService executorService = Executors.newCachedThreadPool();
@@ -191,7 +191,7 @@
 总裁上完大号了，你去接他
 中层管理上完大号了，你去接他
 </code></pre>
-<h3 id="executorcompletionservice">ExecutorCompletionService</h3>
+<h2 id="executorcompletionservice">ExecutorCompletionService</h2>
 <pre><code class="language-java">public static void test2() throws Exception {
     ExecutorService executorService = Executors.newCachedThreadPool();
     ExecutorCompletionService&lt;String&gt; completionService = new ExecutorCompletionService&lt;&gt;(executorService);
@@ -245,9 +245,9 @@
 总裁：1小时了 我上完大号了。你来接吧
 总裁上完大号了，你去接他
 </code></pre>
-<h3 id="源码分析">源码分析</h3>
+<h2 id="源码分析">源码分析</h2>
 <p>completionService是JUC里的线程池ExecutorCompletionService</p>
-<h4 id="初始化线程池">初始化线程池</h4>
+<h3 id="初始化线程池">初始化线程池</h3>
 <ol>
 <li>
 <p>同步初始化一个完成队列completionQueue</p>
@@ -262,7 +262,7 @@
 </code></pre>
 </li>
 </ol>
-<h4 id="执行submit方法">执行submit方法</h4>
+<h3 id="执行submit方法">执行submit方法</h3>
 <ol>
 <li>
 <p>线程池执行的时候传入了自己的内部类QueueingFuture</p>
@@ -364,14 +364,14 @@
 </code></pre>
 </li>
 </ol>
-<p>所以每次线程完成任务，都会往completionQueue中新增一条记录。completionQueue中的记录需要通过别的方式取：ExecutorCompletionService.take()。<br>
+<p>因此，每次线程完成任务，都会往 completionQueue 中新增一条记录。completionQueue 中的记录需要通过别的方式取出：ExecutorCompletionService.take()。<br>
 ExecutorCompletionService的实际用法应该是这样的：CompletionService一边执行任务，一边处理完成的任务结果，这样可以将执行的任务与处理任务隔离开来进行处理，使用submit执行任务，使用take获取已完成的任务，先完成的任务结果先加入队列。获取的结果，跟提交给线程池的任务是无关联的。</p>
 <pre><code class="language-java">Future&lt;String&gt; submit = completionService.submit(() -&gt; {
     return &quot;假装有返回&quot;;
 });
 submit.get();//直接获取返回值
 </code></pre>
-<p>如上如果我们在使用过程中由于需要的是当前线程任务的返回值，所以没有调用take方法，而是通过get方法获取到当前线程调用的返回值，会导致task任务在队列中一直增加，从而造成OOM</p>
+<p>如上所述，如果我们在使用过程中需要的是当前线程任务的返回值，因而没有调用 take 方法，而是通过 get 方法获取当前线程调用的返回值，就会导致 task 在队列中一直堆积，从而造成 OOM。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
