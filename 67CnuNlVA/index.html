@@ -128,7 +128,7 @@
 <p><strong>可见性，是指线程之间的可见性，一个线程修改的状态对另一个线程是可见的</strong>也就是一个线程修改的结果。另一个线程马上就能看到。比如：用volatile修饰的变量，就会具有可见性。volatile修饰的变量不允许线程内部缓存和重排序，即直接修改内存。所以对其他线程是可见的。但是这里需要注意一个问题，volatile只能让被他修饰内容具有可见性，但不能保证它具有原子性。比如 volatile int a = 0；之后有一个操作 a++；这个变量a具有可见性，但是a++ 依然是一个非原子操作，也就是这个操作同样存在线程安全问题。</p>
 <p>在 Java 中 <code>volatile</code>、<code>synchronized</code> 和<code> final</code> 实现可见性。</p>
 <h3 id="原子性">原子性：</h3>
-<p><strong>原子是世界上的最小单位，具有不可分割性</strong>，比如 a=0；（a非long和double类型） 这个操作是不可分割的，那么我们说这个操作是原子操作。再比如：a++； 这个操作实际是a = a + 1；是可分割的，所以他不是一个原子操作。非原子操作都会存在线程安全问题，需要我们使用同步技术（sychronized）来让它变成一个原子操作。一个操作是原子操作，那么我们称它具有原子性。java的concurrent包下提供了一些原子类，我们可以通过阅读API来了解这些原子类的用法。比如：<code>AtomicInteger</code>、<code>AtomicLong</code>、<code>AtomicReference</code>等。</p>
+<p><strong>原子是世界上的最小单位，具有不可分割性</strong>，比如 a=0；（a非long和double类型） 这个操作是不可分割的，那么我们说这个操作是原子操作。再比如：a++； 这个操作实际是a = a + 1；是可分割的，所以他不是一个原子操作。非原子操作都会存在线程安全问题，需要我们使用同步技术（synchronized）来让它变成一个原子操作。一个操作是原子操作，那么我们称它具有原子性。java的concurrent包下提供了一些原子类，我们可以通过阅读API来了解这些原子类的用法。比如：<code>AtomicInteger</code>、<code>AtomicLong</code>、<code>AtomicReference</code>等。</p>
 <p>在 Java 中 <code>synchronized</code> 和在 <code>lock</code>、<code>unlock</code> 中操作保证原子性。</p>
 <h3 id="有序性">有序性：</h3>
 <p>Java 语言提供了 volatile 和 synchronized 两个关键字来保证线程之间操作的有序性，volatile 是因为其本身包含“禁止指令重排序”的语义，synchronized 是由“一个变量在同一个时刻只允许一条线程对其进行 lock 操作”这条规则获得的，此规则决定了持有同一个对象锁的两个同步块只能串行执行。</p>
@@ -136,7 +136,7 @@
 <p>在学习<code>Java内存模型(JMM, Java Memory Model)</code>时，关于线程、主存(main memory)、工作内存(working memory)，这些概念都有着实体的相互对应，线程可能对应着一个内核线程，主存对应着内存，而工作内存则涵盖了写缓冲区、缓存(cache)、寄存器等一系列为了提高数据存取效率的<strong>暂存区域</strong>。但是，一提到<strong>happens-before原则</strong>，就让人有点“丈二和尚摸不着头脑”。这个涵盖了整个<code>JMM</code>中可见性原则的规则，究竟如何理解？</p>
 <p>两个操作间具有happens-before关系，并不意味着前一个操作必须要在后一个操作之前执行。happens-before仅仅要求前一个操作对后一个操作可见。happens-before原则和一般意义上的<strong>时间先后</strong>是不同的</p>
 <h2 id="有哪些happens-before规则">有哪些happens-before规则</h2>
-<p><code>程序次序规则</code>：在一个线程内一段代码的执行结果是有序的。就是还会指令重排，但是随便它怎么排，结果是按照我们代码的顺序生成的不会变。<br>
+<p><code>程序次序规则</code>：在一个线程内一段代码的执行结果是有序的。即使发生指令重排序，最终结果也符合按代码顺序执行的语义。<br>
 <code>管程锁定规则</code>：就是无论是在单线程环境还是多线程环境，对于同一个锁来说，一个线程对这个锁解锁之后，另一个线程获取了这个锁都能看到前一个线程的操作结果！(管程是一种通用的同步原语，synchronized就是管程的实现）<br>
 <code>volatile变量规则</code>：就是如果一个线程先去写一个volatile变量，然后一个线程去读这个变量，那么这个写操作的结果一定对读的这个线程可见。<br>
 <code>线程启动规则</code>：在主线程A执行过程中，启动子线程B，那么线程A在启动子线程B之前对共享变量的修改结果对线程B可见。<br>
@@ -207,7 +207,7 @@
 <p>那么既然我们无法讨论指令执行的先后，也不需要讨论，我们实际只想知道某线程的操作对另一个线程是否可见，于是就规定了happens-before这个<strong>可见性原则</strong>，程序员可以基于这个原则进行可见性的判断。</p>
 <h2 id="volatile原理">Volatile原理</h2>
 <p>Java语言提供了一种稍弱的同步机制，即volatile变量，用来确保将变量的更新操作通知到其他线程。当把变量声明为volatile类型后，编译器与运行时都会注意到这个变量是共享的，因此不会将该变量上的操作与其他内存操作一起重排序。volatile变量不会被缓存在寄存器或者对其他处理器不可见的地方，因此在读取volatile类型的变量时总会返回最新写入的值。</p>
-<p>在访问volatile变量时不会执行加锁操作，因此也就不会使执行线程阻塞，因此<code>volatile</code>变量是一种比<code>sychronized</code>关键字更轻量级的同步机制。<br>
+<p>在访问volatile变量时不会执行加锁操作，因此也就不会使执行线程阻塞，因此<code>volatile</code>变量是一种比<code>synchronized</code>关键字更轻量级的同步机制。<br>
 <img src="/post-images/1619330405178.png" alt="" loading="lazy"></p>
 <p>当对非 volatile 变量进行读写的时候，每个线程先从内存拷贝变量到CPU缓存中。如果计算机有多个CPU，每个线程可能在不同的CPU上被处理，这意味着每个线程可以拷贝到不同的 CPU cache 中。</p>
 <p>而声明变量是 volatile 的，JVM 保证了每次读变量都从内存中读，跳过 CPU cache 这一步。</p>
