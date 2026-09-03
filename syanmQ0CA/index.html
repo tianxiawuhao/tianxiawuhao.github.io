@@ -127,16 +127,16 @@
 <figure data-type="image" tabindex="1"><img src="https://pic1.zhimg.com/80/v2-307ee4710d0b11ca06b020f7a40afc28_720w.webp" alt="img" loading="lazy"></figure>
 <h2 id="一-价值网络和策略网络value-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</h2>
 <p>首先回顾状态价值函数Vπ(s)，它是动作状态函数Qπ(s,a)的数学期望，如果动作是离散的，那么它是由策略函数π(a|s)作为权重系数，和动作价值函数Qπ(s,a)[可以评价动作的好坏程度]相乘并对a做求和得到。如果动作是连续的，那么就要对a求积分。</p>
-<p>**①Policy network（Actor）😗*控制Agent运动，即在某一状态s做出动作a</p>
+<p><strong>① Policy network（Actor）</strong>：控制 Agent 运动，即在某一状态 s 做出动作 a。</p>
 <p>我们利用策略网络π(a|s;θ)来近似策略函数π(a|s)，θ是一个可训练的神经网络参数。</p>
-<p>**②Value network（Critic）😗*不控制Agent运动，仅给Agent打分</p>
-<p>我们利用价值网络q(s,a;w)来近似价值函数Qπ(s,a)，w是一个可训练的神经网络参数</p>
+<p><strong>② Value network（Critic）</strong>：不控制 Agent 运动，仅给 Agent 打分。</p>
+<p>我们利用价值网络q(s,a;w)来近似价值函数Qπ(s,a)，w 是一个可训练的神经网络参数。</p>
 <figure data-type="image" tabindex="2"><img src="https://pic4.zhimg.com/80/v2-1d777e4ca0d687837a46bdfcc86f1663_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="1策略网络policy-networkactor">1）策略网络（Policy Network）（Actor）</h3>
 <p>以超级玛丽为例：</p>
 <p>该网络有一个输入：状态s</p>
 <p>将超级玛丽的一帧画面传输到策略网络中，即输入一个状态s。</p>
-<p>价值网络中包含：一个卷积层，将一帧画面变成特征向量；全连接层，将特征向量转变为相对于动作空间（Action Space）中元素个数对应的向量；再采用Softmax激活函数将其转换为求和为1的值，即一策略的概率密度。</p>
+<p>价值网络中包含：一个卷积层，将一帧画面变成特征向量；全连接层，将特征向量转变为相对于动作空间（Action Space）中元素个数对应的向量；再采用 Softmax 激活函数，将其转换为各动作概率求和为 1 的值，即策略的概率分布。</p>
 <figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-8535085bc52a8a9500f72d711ced5220_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="2价值网络value-networkcritic">2）价值网络（Value Network）（Critic）</h3>
 <p>以超级玛丽为例：</p>
@@ -148,7 +148,7 @@
 <p>然后将两个特征向量进行拼接，得到一个更高维的特征向量，再通过一个全连接层输出一个实数q(s,a;w)，即Critic对于Agent处于状态s下做出动作a的评价。</p>
 <figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-a5344bd46cff01b68e06314bb30d8bd1_720w.webp" alt="img" loading="lazy"></figure>
 <p>值得一提的是，价值网络和策略网络中的参数是可以共享的；当然，其中的参数也可以各自独立。</p>
-<p>同时训练价值网络和策略网络就是Actor-Critic Method（AC Method）</p>
+<p>同时训练价值网络和策略网络，就是 Actor-Critic Method（AC Method）。</p>
 <h2 id="二-训练神经网络train-the-neural-network">二、训练神经网络（Train the Neural Network）</h2>
 <p>因此，我们可以用策略网络和价值网络来近似状态价值函数。</p>
 <p>针对于两个网络的参数θ和w，我们的更新方法是不一样的：</p>
@@ -158,23 +158,21 @@
 <p>利用如下五个步骤来对两个神经网络做一次更新：</p>
 <figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-a86048ee7d13168bdb37c84aec417945_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="1-使用时序差分算法更新价值网络qupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</h3>
-<p>解释一下，流程大概是这样的：</p>
-<p>当我们使用TD算法去更新价值网络q时，要首先获取到Actor给出的t时刻和t+1时刻的状态st、st+1以及动作at、a~t+1，此时Critic网络中的参数为wt。因此我们就能得到我们的TD target：yt，有了TD target和t时刻的观测值，即可写出Loss L(w)，且以L2范式形式表示，然后利用梯度下降（Gradient Descent）去更新Critic网络中的参数w，记为wt+1。需要注意的是，Agent并不会做出a~t+1这个动作，仅仅是用于Critic用于TD算法的参数更新</p>
+<p>用 TD 算法更新价值网络 q 时，需要先获取 Actor 在 t 时刻与 t+1 时刻的状态 s_t、s_{t+1} 及动作 a_t、ã_{t+1}，此时 Critic 的参数为 w_t。由此得到 TD target y_t；结合 t 时刻的观测值即可写出 Loss L(w)（通常取 δ_t²/2 的形式），再用梯度下降（Gradient Descent）更新 Critic 的参数，得到 w_{t+1}。需要注意的是，Agent 并不会真正执行 ã_{t+1} 这个动作，它只是供 Critic 做 TD 参数更新使用的。</p>
 <p>直接附图：</p>
 <figure data-type="image" tabindex="7"><img src="https://pic2.zhimg.com/80/v2-3d0c7377e346ce2a56cff226fa4b912d_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="2使用策略梯度更新策略网络πupdate-policy-network-π-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</h3>
 <p>首先回顾一下策略梯度：</p>
-<p>策略梯度是对自定义函数g(A,θ)关于A求期望，由于一个g(A,θ)是对整体的g(A,θ)的一个无偏估计，因此这里用了蒙特卡洛近似。</p>
+<p>策略梯度是对某个函数 g(A,θ) 关于 A 求期望。因为按策略随机抽取得到的单个 g(a_t,θ) 是整体期望的无偏估计，所以这里使用蒙特卡洛近似。</p>
 <figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-f97f15bbc5b5c39a687d08fcd722b63c_720w.webp" alt="img" loading="lazy"></figure>
-<p>解释一下，流程大概是这样的：</p>
-<p>根据策略π对动作a进行一次随机抽样，然后针对该动作a进行一次随机梯度上升（Stochastic Gradient Ascent SGA），用于更新θ，记为θt+1。</p>
+<p>根据策略 π 对动作 a 做一次随机抽样，然后对该样本做一次随机梯度上升（Stochastic Gradient Ascent，SGA）来更新 θ，得到 θ_{t+1}。</p>
 <figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-5e17c6dfe8d7afe44950bd9bea8a32b8_720w.webp" alt="img" loading="lazy"></figure>
 <p>AC方法的整体流程和对应关系：</p>
 <figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-9c0bad295340d7057cbd037b7400c93a_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="3算法总结summary-of-algorithm">3）算法总结（Summary of Algorithm）</h3>
 <p>直接上图，非常清晰：</p>
 <figure data-type="image" tabindex="11"><img src="https://pic1.zhimg.com/80/v2-db8d172e038bf40ed57a750cc2d30d80_720w.webp" alt="img" loading="lazy"></figure>
-<p>值得注意的是，在论文和教科书中，最后一步往往不适用qt，而采用的是TD error δt。使用δt叫做基线策略梯度（Policy Gradient with Baseline），其效果更好。好的baseline可以降低方差，使算法收敛更快。</p>
+<p>值得注意的是，在论文和教科书中，最后一步往往不使用 q_t，而采用 TD error δ_t。使用δt叫做基线策略梯度（Policy Gradient with Baseline），其效果更好。好的baseline可以降低方差，使算法收敛更快。</p>
 <p>Baseline：任何接近qt的数都可以是baseline，但它不能是at的函数，即不与at存在映射关系。</p>
 <h2 id="三-总结summary">三、总结（Summary）</h2>
 <figure data-type="image" tabindex="12"><img src="https://pic3.zhimg.com/80/v2-68d72b2c946eb65e90bb9d1a1ff46fda_720w.webp" alt="img" loading="lazy"></figure>
