@@ -122,7 +122,7 @@
           </img>
           
           <blockquote>
-<p>ThreadLocal是一个本地线程副本变量工具类。主要用于将私有线程和该线程存放的副本对象做一个映射，各个线程之间的变量互不干扰，在高并发场景下，可以实现无状态的调用，特别适用于各个线程依赖不通的变量值完成操作的场景。</p>
+<p>ThreadLocal是一个本地线程副本变量工具类。主要用于将私有线程和该线程存放的副本对象做一个映射，各个线程之间的变量互不干扰，在高并发场景下，可以实现无状态的调用，特别适用于各个线程依赖不同的变量值来完成操作的场景。</p>
 </blockquote>
 <h3 id="数据结构">数据结构</h3>
 <p>下图为ThreadLocal的内部结构图<br>
@@ -296,7 +296,7 @@ private static int prevIndex(int i, int len) {
     return ((i - 1 &gt;= 0) ? i - 1 : len - 1);
 }
 </code></pre>
-<p>显然ThreadLocalMap采用线性探测的方式解决Hash冲突的效率很低，如果有大量不同的ThreadLocal对象放入map中时发送冲突，或者发生二次冲突，则效率很低。<br>
+<p>显然，ThreadLocalMap 采用线性探测方式解决 Hash 冲突的效率很低，如果有大量不同的 ThreadLocal 对象放入 map 中时发生冲突，或者发生二次冲突，效率会更低。<br>
 <code>所以这里引出的良好建议是：每个线程只存一个变量，这样的话所有的线程存放到map中的Key都是相同的ThreadLocal，如果一个线程要保存多个变量，就需要创建多个ThreadLocal，多个ThreadLocal放入Map中时会极大的增加Hash冲突的可能。 ThreadLocalMap的问题</code><br>
 由于ThreadLocalMap的key是弱引用，而Value是强引用。这就导致了一个问题，ThreadLocal在没有外部对象强引用时，发生GC时弱引用Key会被回收，而Value不会回收，如果创建ThreadLocal的线程一直持续运行，那么这个Entry对象中的value就有可能一直得不到回收，发生内存泄露。</p>
 <h3 id="如何避免泄漏">如何避免泄漏</h3>
@@ -338,7 +338,7 @@ public static Session getCurrentSession(){
 使用ThreadLocal的典型场景正如上面的数据库连接管理，线程会话管理等场景，只适用于独立变量副本的情况，如果变量为全局共享的，则不适用在高并发下使用。</p>
 <h2 id="总结">总结</h2>
 <ol>
-<li>每个ThreadLocal只能保存一个变量副本，如果想要上线一个线程能够保存多个副本以上，就需要创建多个ThreadLocal。</li>
+<li>每个 ThreadLocal 只能保存一个变量副本，如果想让一个线程保存多个副本，就需要创建多个 ThreadLocal。</li>
 <li>ThreadLocal内部的ThreadLocalMap键为弱引用，会有内存泄漏的风险。</li>
 <li>适用于无状态，副本变量独立后不影响业务逻辑的高并发场景。如果如果业务逻辑强依赖于副本变量，则不适合用ThreadLocal解决，需要另寻解决方案。</li>
 </ol>
