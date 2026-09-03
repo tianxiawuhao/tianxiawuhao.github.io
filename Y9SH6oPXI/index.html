@@ -260,10 +260,9 @@ public class CorsConfig implements WebMvcConfigurer {
 </code></pre>
 <p>除了使用 RequestContextHolder 还可以使用 Request Scope 的 Bean，或者使用 ThreadLocalTargetSource ，原理上是类似的。</p>
 <p>需要时刻注意 ThreadLocal 相当于线程内部的 static 变量，是一个非常容易产生泄露的点，因此使用 ThreadLocal 应该额外小心。</p>
-<p>Threadlocal可能会产生内存泄露的问题及原理<br>
-刚遇到一个关于threadlocal的内存泄漏问题，刚好总结一下</p>
+<h2 id="tl-leak-theory">ThreadLocal 可能会产生内存泄露的问题及原理</h2><p>刚遇到一个关于 ThreadLocal 的内存泄漏问题，刚好总结一下。</p>
 <p>比较常用的这里先不提，直接提比较重要的部分</p>
-<p>为什么会产生内存泄露？</p>
+<h3 id="tl-why">为什么会产生内存泄露？</h3>
 <pre><code class="language-java">public void set(T value) {
 
     Thread t = Thread.currentThread();
@@ -274,9 +273,9 @@ public class CorsConfig implements WebMvcConfigurer {
         createMap(t, value);
 }
 </code></pre>
-<p>set方法里面，先调用到当前线程thread，每个线程里都会有一个threadlocals成员变量，指向对应的ThreadLocalMap ，然后以new出来的引用作为key，和给定的value一块保存起来。</p>
-<p>当外部引用解除以后，对应的ThreadLocal对象由于被内部ThreadLocalMap 引用，不会GC，可能会导致内存泄露。</p>
-<p>JVM解决的办法</p>
+<p>在 set 方法中，会先获取当前线程（thread）：每个线程都有一个 threadLocals 成员变量，指向对应的 ThreadLocalMap；然后以 ThreadLocal 对象作为 key，与给定的 value 一起保存起来。</p>
+<p>当外部引用解除后，对应的 ThreadLocal 对象仍被内部的 ThreadLocalMap 引用，无法被 GC 回收，可能会导致内存泄露。</p>
+<h3 id="tl-jvm">JVM 解决的办法</h3>
 <pre><code class="language-java">static class Entry extends WeakReference&lt;ThreadLocal&lt;?&gt;&gt; {
 
     /** The value associated with this ThreadLocal. */
@@ -289,9 +288,22 @@ public class CorsConfig implements WebMvcConfigurer {
 }
 </code></pre>
 <p>继承了一个软引用，在系统进行gc的时候就可以回收</p>
-<p>但是回收以后，key变成null，value也无法被访问到，还是可能存在内存泄露。 因此一旦不用了，必须对里面的keyvalue对remove掉，否则就会有内存泄露；而且在threadlocal源码里面，在每次get或者set的时候会清楚里面key为value的记录</p>
+<p>但回收后 key 变成 null，value 也无法被访问，仍可能存在内存泄露。因此一旦不再使用，必须把对应的 key-value 对 remove 掉；另外，ThreadLocal 源码在每次 get/set 时也会清理 key 为 null 的记录。</p>
 
-          <div class="toc-container"></div>
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#tl-leak-theory">ThreadLocal 可能会产生内存泄露的问题及原理</a>
+<ul>
+<li><a href="#tl-why">为什么会产生内存泄露？</a></li>
+<li><a href="#tl-jvm">JVM 解决的办法</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+
           <hr />
           
             <p class="prev-post">上一篇：
