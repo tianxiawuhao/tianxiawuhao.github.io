@@ -133,7 +133,7 @@
 <figure data-type="image" tabindex="2"><img src="/post-images/1658668389660.png" alt="" loading="lazy"></figure>
 <h3 id="初步整合springcloud-gateway">初步整合SpringCloud Gateway</h3>
 <p>（1）在服务网关shop-gateway模块的pom.xml文件中添加如下依赖。</p>
-<pre><code class="language-java">&lt;dependencies&gt;
+<pre><code class="language-xml">&lt;dependencies&gt;
     &lt;dependency&gt;
         &lt;groupId&gt;org.springframework.cloud&lt;/groupId&gt;
         &lt;artifactId&gt;spring-cloud-starter-gateway&lt;/artifactId&gt;
@@ -141,7 +141,7 @@
 &lt;/dependencies&gt;
 </code></pre>
 <p>（2）在服务网关shop-gateway模块的resources目录下新建application.yml文件，并在文件中添加如下配置信息。</p>
-<pre><code class="language-java">server:
+<pre><code class="language-yaml">server:
   port: 10001
 spring:
   application:
@@ -151,7 +151,7 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: &quot;*&quot;
+            allowedOriginPatterns: &quot;*&quot;
             allowedMethods: &quot;*&quot;
             allowCredentials: true
             allowedHeaders: &quot;*&quot;
@@ -192,6 +192,11 @@ spring:
 <li>filters：网关过滤器，在过滤器中可以修改请求的参数和header信息，以及响应的结果和header信息，网关过滤器也是一个数组，可以配置多个过滤规则。</li>
 <li>StripPrefix：网关在进行路由转发之前，会去掉1层访问路径。</li>
 </ul>
+<p><strong>两点补充说明：</strong></p>
+<ul>
+<li>网关模块只能依赖 WebFlux，不能再引入 <code>spring-boot-starter-web</code>（Spring MVC）。如果公共模块里引了 web starter，需要在网关模块的 pom.xml 中排除，否则启动时会报 “Spring MVC found on classpath, which is incompatible with Spring Cloud Gateway”。</li>
+<li>跨域配置中 <code>allowedOrigins: &quot;*&quot;</code> 与 <code>allowCredentials: true</code> 同时出现是有问题的：浏览器不允许在 <code>Access-Control-Allow-Origin</code> 返回 <code>*</code> 的同时携带凭证，Spring 也会直接抛出 IllegalArgumentException。解决办法是改用 <code>allowedOriginPatterns: &quot;*&quot;</code>（Spring 5.3 及以上支持），或者显式列出允许的域名；本文示例已按前者修正。</li>
+</ul>
 <p>（3）在服务网关shop-gateway模块的<code>io.binghe.shop</code>包下新建GatewayStarter类，表示服务网关的启动类，源码如下所示。</p>
 <pre><code class="language-java">/**
  * @version 1.0.0
@@ -208,18 +213,18 @@ public class GatewayStarter {
 <ul>
 <li>进入到Nacos的bin目录下，输入如下命令启动Nacos。</li>
 </ul>
-<pre><code class="language-java">startup.cmd -m standalone
+<pre><code class="language-bash">startup.cmd -m standalone
 </code></pre>
 <ul>
 <li>进入Sentinel Jar包所在的目录，输入如下命令启动Sentinel。</li>
 </ul>
-<pre><code class="language-java">java -Dserver.port=8888 -Dcsp.sentinel.dashboard.server=localhost:8888 -Dproject.name=sentinel-dashboard -jar sentinel-dashboard-1.8.4.jar
+<pre><code class="language-bash">java -Dserver.port=8888 -Dcsp.sentinel.dashboard.server=localhost:8888 -Dproject.name=sentinel-dashboard -jar sentinel-dashboard-1.8.4.jar
 </code></pre>
 <p>（5）分别启动用户微服务、商品微服务、订单微服务和服务网关。</p>
 <p>（6）通过服务网关访问用户微服务，在浏览器中输入<code>http://localhost:10001/server-user/user/get/1001</code>，如下所示。</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1658668418813.png" alt="" loading="lazy"></figure>
 <p>用户微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;id&quot;: 1001,
   &quot;username&quot;: &quot;binghe&quot;,
   &quot;password&quot;: &quot;c26be8aaf53b15054896983b43eb6a65&quot;,
@@ -231,7 +236,7 @@ public class GatewayStarter {
 <p>（7）通过服务网关访问商品微服务，在浏览器中输入<code>http://localhost:10001/server-product/product/get/1001</code>，如下所示。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1658668445345.png" alt="" loading="lazy"></figure>
 <p>商品微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;id&quot;: 1001,
   &quot;proName&quot;: &quot;华为&quot;,
   &quot;proPrice&quot;: 2399,
@@ -242,26 +247,27 @@ public class GatewayStarter {
 <p>（8）通过服务网关访问订单微服务，在浏览器中输入<code>http://localhost:10001/server-order/order/test_sentinel</code>，如下所示。</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1658668471947.png" alt="" loading="lazy"></figure>
 <p>可以看到，通过服务网关能够正确访问到订单微服务。</p>
+<p><img src="/post-assets/PN2nvPeue/01-gateway-flow.svg" alt="Spring Cloud Gateway 请求处理流程：断言匹配、过滤器链组装与排序、路径改写、负载均衡转发与响应回放"></p>
 <h3 id="网关整合nacos">网关整合Nacos</h3>
 <p>在初步整合SpringCloud Gateway中，我们在服务网关模块的application.yml文件中硬编码配置了服务转发的地址，如下所示。</p>
 <ul>
 <li>硬编码用户微服务地址</li>
 </ul>
-<pre><code class="language-java"> uri: http://localhost:8060
+<pre><code class="language-yaml"> uri: http://localhost:8060
 </code></pre>
 <ul>
 <li>硬编码商品微服务地址</li>
 </ul>
-<pre><code class="language-java">uri: http://localhost:8070
+<pre><code class="language-yaml">uri: http://localhost:8070
 </code></pre>
 <ul>
 <li>硬编码订单微服务地址</li>
 </ul>
-<pre><code class="language-java">uri: http://localhost:8080
+<pre><code class="language-yaml">uri: http://localhost:8080
 </code></pre>
 <p>这里，我们将网关整合Nacos实现从Nacos注册中心获取转发的服务地址。</p>
 <p>（1）在服务网关shop-gateway模块的pom.xml文件中继续添加如下依赖。</p>
-<pre><code class="language-java">&lt;dependency&gt;
+<pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.alibaba.cloud&lt;/groupId&gt;
     &lt;artifactId&gt;spring-cloud-starter-alibaba-nacos-discovery&lt;/artifactId&gt;
 &lt;/dependency&gt;
@@ -280,7 +286,7 @@ public class GatewayStarter {
 }
 </code></pre>
 <p>（3）将application.yml备份一份，命名为application-simple.yml，并修改application.yml配置文件，修改后的文件如下所示。</p>
-<pre><code class="language-java">server:
+<pre><code class="language-yaml">server:
   port: 10001
 spring:
   application:
@@ -295,7 +301,7 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: &quot;*&quot;
+            allowedOriginPatterns: &quot;*&quot;
             allowedMethods: &quot;*&quot;
             allowCredentials: true
             allowedHeaders: &quot;*&quot;
@@ -329,14 +335,14 @@ spring:
             - StripPrefix=1
 </code></pre>
 <p>上述配置中增加了Nacos相关的配置，如下所示。</p>
-<pre><code class="language-java">spring:
+<pre><code class="language-yaml">spring:
   cloud:
     nacos:
       discovery:
         server-addr: 127.0.0.1:8848
 </code></pre>
 <p>新增了让SpringCloud Gateway可以发现Nacos中的服务配置，如下所示。</p>
-<pre><code class="language-java">Spring:
+<pre><code class="language-yaml">spring:
   cloud:
     gateway:
       discovery:
@@ -347,23 +353,23 @@ spring:
 <ul>
 <li>从Nacos中获取用户微服务</li>
 </ul>
-<pre><code class="language-java">uri: lb://server-user
+<pre><code class="language-yaml">uri: lb://server-user
 </code></pre>
 <ul>
 <li>从Nacos中获取商品微服务</li>
 </ul>
-<pre><code class="language-java">uri: lb://server-product
+<pre><code class="language-yaml">uri: lb://server-product
 </code></pre>
 <ul>
 <li>从Nacos中获取订单微服务</li>
 </ul>
-<pre><code class="language-java">uri: lb://server-order
+<pre><code class="language-yaml">uri: lb://server-order
 </code></pre>
 <p>其中，lb指的是从Nacos中按照微服务的名称获取微服务地址，并按照负载均衡的策略分发。使用lb从Nacos中获取微服务时，遵循如下的格式。</p>
-<pre><code class="language-java">lb://微服务名称
+<pre><code class="language-text">lb://微服务名称
 </code></pre>
 <p>微服务的名称就是各个微服务在application.yml文件中配置的服务名称。</p>
-<pre><code class="language-java">spring:
+<pre><code class="language-yaml">spring:
   application:
     name: 服务名称
 </code></pre>
@@ -371,7 +377,7 @@ spring:
 <p>（5）通过服务网关访问用户微服务，在浏览器中输入<code>http://localhost:10001/server-user/user/get/1001</code>，如下所示。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1658668500284.png" alt="" loading="lazy"></figure>
 <p>用户微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;id&quot;: 1001,
   &quot;username&quot;: &quot;binghe&quot;,
   &quot;password&quot;: &quot;c26be8aaf53b15054896983b43eb6a65&quot;,
@@ -383,7 +389,7 @@ spring:
 <p>（6）通过服务网关访问商品微服务，在浏览器中输入<code>http://localhost:10001/server-product/product/get/1001</code>，如下所示。</p>
 <figure data-type="image" tabindex="7"><img src="/post-images/1658668536499.png" alt="" loading="lazy"></figure>
 <p>商品微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;id&quot;: 1001,
   &quot;proName&quot;: &quot;华为&quot;,
   &quot;proPrice&quot;: 2399,
@@ -397,7 +403,7 @@ spring:
 <h3 id="网关整合nacos最简配置">网关整合Nacos最简配置</h3>
 <p>SpringCloud Gateway整合Nacos后，可以不用手动指定其他微服务的名称来从Nacos中获取微服务的地址。接下来，我们就来实现SpringCloud Gateway网关整合Nacos的最简配置。</p>
 <p>（1）将application.yml备份一份，命名为application-nacos.yml，并修改application.yml配置文件，修改后的文件如下所示。</p>
-<pre><code class="language-java">server:
+<pre><code class="language-yaml">server:
   port: 10001
 spring:
   application:
@@ -412,7 +418,7 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: &quot;*&quot;
+            allowedOriginPatterns: &quot;*&quot;
             allowedMethods: &quot;*&quot;
             allowCredentials: true
             allowedHeaders: &quot;*&quot;
@@ -425,7 +431,7 @@ spring:
 <p>（3）通过服务网关访问用户微服务，在浏览器中输入<code>http://localhost:10001/server-user/user/get/1001</code>，如下所示。</p>
 <figure data-type="image" tabindex="9"><img src="/post-images/1658668577780.png" alt="" loading="lazy"></figure>
 <p>用户微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;id&quot;: 1001,
   &quot;username&quot;: &quot;binghe&quot;,
   &quot;password&quot;: &quot;c26be8aaf53b15054896983b43eb6a65&quot;,
@@ -437,7 +443,7 @@ spring:
 <p>（4）通过服务网关访问商品微服务，在浏览器中输入<code>http://localhost:10001/server-product/product/get/1001</code>，如下所示。</p>
 <figure data-type="image" tabindex="10"><img src="/post-images/1658668595804.png" alt="" loading="lazy"></figure>
 <p>商品微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;id&quot;: 1001,
   &quot;proName&quot;: &quot;华为&quot;,
   &quot;proPrice&quot;: 2399,
@@ -449,7 +455,7 @@ spring:
 <figure data-type="image" tabindex="11"><img src="/post-images/1658668615921.png" alt="" loading="lazy"></figure>
 <p>可以看到，通过服务网关能够正确访问到订单微服务。</p>
 <p><strong>注意：SpringCloud Gateway整合Nacos最简配置时，通过网关访问微服务的格式如下所示。</strong></p>
-<pre><code class="language-java">http(s)://网关IP:网关端口/访问的目标微服务名称/接口地址
+<pre><code class="language-text">http(s)://网关IP:网关端口/访问的目标微服务名称/接口地址
 </code></pre>
 <h2 id="网关整合sentinel限流">网关整合Sentinel限流</h2>
 <p>Sentinel从1.6.0版本开始，提供了SpringCloud Gateway的适配模块，并且可以提供两种资源维度的限流，一种是route维度；另一种是自定义API分组维度。</p>
@@ -459,7 +465,7 @@ spring:
 </ul>
 <h3 id="实现route维度限流">实现route维度限流</h3>
 <p>（1）在服务网关shop-gateway模块的pom.xml文件中添加如下依赖。</p>
-<pre><code class="language-java">&lt;dependencies&gt;
+<pre><code class="language-xml">&lt;dependencies&gt;
     &lt;dependency&gt;
         &lt;groupId&gt;com.alibaba.cloud&lt;/groupId&gt;
         &lt;artifactId&gt;spring-cloud-starter-alibaba-sentinel&lt;/artifactId&gt;
@@ -571,7 +577,7 @@ public class GatewayConfig {
         GatewayFlowRule gatewayFlowRule = new GatewayFlowRule(resource);
         //限流阈值
         gatewayFlowRule.setCount(1);
-        //统计的时间窗口，单位为
+        // 统计的时间窗口，单位为秒
         gatewayFlowRule.setIntervalSec(1);
         return gatewayFlowRule;
     }
@@ -596,23 +602,24 @@ public class GatewayConfig {
                 map.put(&quot;code&quot;, 1001);
                 map.put(&quot;codeMsg&quot;, &quot;接口被限流了&quot;);
                 return ServerResponse.status(HttpStatus.OK).
-                        contentType(MediaType.APPLICATION_JSON_UTF8).
-                        body(BodyInserters.fromObject(map));
+                        contentType(MediaType.APPLICATION_JSON).
+                        body(BodyInserters.fromValue(map));
             }
         };
         GatewayCallbackManager.setBlockHandler(blockRequestHandler);
     }
 }
 </code></pre>
-<p>GatewayConfig类的源代码看上去比较多，但是都是一些非常简单的方法，冰河在这里就不再赘述了。</p>
+<p>GatewayConfig类的源代码看上去比较多，但是都是一些非常简单的方法，这里就不再赘述了。</p>
+<p><strong>注意：</strong><code>MediaType.APPLICATION_JSON_UTF8</code> 自 Spring 5.2 起已标记为过时（并在 Spring 6 中移除），<code>BodyInserters.fromObject()</code> 同样在 Spring 5.2 起被 <code>BodyInserters.fromValue()</code> 取代，因此上面的示例已分别改为 <code>MediaType.APPLICATION_JSON</code> 和 <code>BodyInserters.fromValue(map)</code>。</p>
 <p><strong>这里有个需要特别注意的地方：</strong></p>
 <p><strong>Sentinel1.8.4整合SpringCloud Gateway使用的API类型为Route ID类型时，也就是基于route维度时，由于Sentinel为SpringCloud Gateway网关生成的API名称规则如下：</strong></p>
-<p><strong>生成的规则为：****${spring.cloud.gateway.discovery.locator.route-id-prefix}后面直接加上目标微服务的名称，如下所示。</strong></p>
+<p><strong>生成的规则为：${spring.cloud.gateway.discovery.locator.route-id-prefix}后面直接加上目标微服务的名称，如下所示。</strong></p>
 <p><strong>{spring.cloud.gateway.discovery.locator.route-id-prefix}目标微服务的名称。其中，${spring.cloud.gateway.discovery.locator.route-id-prefix}是在yml文件中配置的访问前缀。</strong></p>
 <p><strong>为了让通过服务网关访问目标微服务链接后，请求链路中生成的API名称与流控规则中生成的API名称一致，以达到启动项目即可实现访问链接的限流效果，而无需登录Setinel管理界面手动配置限流规则，可以将生成GatewayFlowRule对象的resource参数设置为${spring.cloud.gateway.discovery.locator.route-id-prefix}目标微服务的名称</strong></p>
 <p><strong>当然，如果不按照上述配置，也可以在项目启动后，通过服务网关访问目标微服务链接后，在Sentinel管理界面的请求链路中找到对应的API名称所代表的请求链路，然后手动配置限流规则。</strong></p>
 <p>（3）将服务网关shop-gateway模块的application.yml文件备份一份名称为application-nacos-simple.yml的文件，并将application.yml文件的内容修改成如下所示。</p>
-<pre><code class="language-java">server:
+<pre><code class="language-yaml">server:
   port: 10001
 spring:
   application:
@@ -634,7 +641,7 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: &quot;*&quot;
+            allowedOriginPatterns: &quot;*&quot;
             allowedMethods: &quot;*&quot;
             allowCredentials: true
             allowedHeaders: &quot;*&quot;
@@ -651,7 +658,7 @@ spring:
 <p>（4）在IDEA中配置启动服务网关shop-gateway模块的参数<code>-Dcsp.sentinel.app.type=1</code>，如下所示。</p>
 <p><img src="/post-images/1658668642858.png" alt="" loading="lazy"><br>
 如果是在命令行启动网关服务的Jar包，则可以使用如下命令。</p>
-<pre><code class="language-java">java -Dcsp.sentinel.app.type=1 shop-gateway.jar
+<pre><code class="language-bash">java -Dcsp.sentinel.app.type=1 shop-gateway.jar
 </code></pre>
 <p>或者在启动类<code>io.binghe.shop.GatewayStarter</code>的main()方法中添加一行<code>System.setProperty(&quot;csp.sentinel.app.type&quot;, &quot;1&quot;);</code>代码，如下所示。</p>
 <pre><code class="language-java">/**
@@ -674,7 +681,7 @@ public class GatewayStarter {
 <p>（6）通过服务网关访问用户微服务，在浏览器中输入<code>http://localhost:10001/server-user/user/get/1001</code>，不断刷新页面，如下所示。</p>
 <figure data-type="image" tabindex="14"><img src="/post-images/1658668691646.png" alt="" loading="lazy"></figure>
 <p>用户微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;code&quot;: 1001,
   &quot;codeMsg&quot;: &quot;接口被限流了&quot;
 }
@@ -683,7 +690,7 @@ public class GatewayStarter {
 <p>（7）通过服务网关访问商品微服务，在浏览器中输入<code>http://localhost:10001/server-product/product/get/1001</code>，不断刷新页面，如下所示。</p>
 <figure data-type="image" tabindex="15"><img src="/post-images/1658668707383.png" alt="" loading="lazy"></figure>
 <p>商品微服务返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;code&quot;: 1001,
   &quot;codeMsg&quot;: &quot;接口被限流了&quot;
 }
@@ -705,7 +712,7 @@ public class GatewayStarter {
         }});
     ApiDefinition api2 = new ApiDefinition(&quot;user_api2&quot;)
         .setPredicateItems(new HashSet&lt;ApiPredicateItem&gt;() {{
-            // 以/server-user/user/api2/demo1 完成的url路径匹配
+            // 以/server-user/user/api2/demo1 完全匹配的url路径
             add(new ApiPathPredicateItem().setPattern(&quot;/server-user/user/api2/demo1&quot;));
         }});
     definitions.add(api1);
@@ -715,7 +722,7 @@ public class GatewayStarter {
 </code></pre>
 <p>上述代码中，配置了两个API分组，每个API分组的规则如下。</p>
 <ul>
-<li>user_api1 分组：匹配以 <code>/server-product/product/api1</code> 开头的所有请求。</li>
+<li>user_api1 分组：匹配以 <code>/server-user/user/api1/**</code> 开头的所有请求。</li>
 <li>user_api2分组：精确匹配<code>/server-user/user/api2/demo1</code>。</li>
 </ul>
 <p>（2）在服务网关shop-gateway模块的<code>io.binghe.shop.config.GatewayConfig</code>配置类中init()方法中调用initCustomizedApis()方法，为了避免route维度的限流对自定义API分组维度的限流产生影响，这里，同时在init()方法中注释掉调用initGatewayRules()方法，修改后的init()方法的代码如下所示。</p>
@@ -774,7 +781,7 @@ public String api2Demo2(){
 <p>（7）在浏览器上频繁访问<code>http://localhost:10001/server-user/user/api1/demo1</code>，如下所示。</p>
 <figure data-type="image" tabindex="24"><img src="/post-images/1658668864366.png" alt="" loading="lazy"></figure>
 <p>返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;code&quot;: 1001,
   &quot;codeMsg&quot;: &quot;接口被限流了&quot;
 }
@@ -783,7 +790,7 @@ public String api2Demo2(){
 <p>（8）在浏览器上频繁访问<code>http://localhost:10001/server-user/user/api1/demo2</code>，如下所示。</p>
 <figure data-type="image" tabindex="25"><img src="/post-images/1658668872082.png" alt="" loading="lazy"></figure>
 <p>返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;code&quot;: 1001,
   &quot;codeMsg&quot;: &quot;接口被限流了&quot;
 }
@@ -792,7 +799,7 @@ public String api2Demo2(){
 <p>（9）在浏览器上频繁访问<code>http://localhost:10001/server-user/user/api2/demo1</code>，如下所示。</p>
 <figure data-type="image" tabindex="26"><img src="/post-images/1658668880990.png" alt="" loading="lazy"></figure>
 <p>返回的原始数据如下所示。</p>
-<pre><code class="language-java">{
+<pre><code class="language-json">{
   &quot;code&quot;: 1001,
   &quot;codeMsg&quot;: &quot;接口被限流了&quot;
 }
@@ -802,11 +809,117 @@ public String api2Demo2(){
 <figure data-type="image" tabindex="27"><img src="/post-images/1658668890430.png" alt="" loading="lazy"></figure>
 <p>可以看到，访问<code>http://localhost:10001/server-user/user/api2/demo2</code>时，无论访问的频率多频繁，都不会触发Sentinel限流。</p>
 <p>至此，我们就成功在项目中整合了SpringCloud Gateway网关，并通过Sentinel整合SpringCloud Gateway实现了网关的限流操作。</p>
+<h2 id="spring-cloud-gateway-核心概念">Spring Cloud Gateway 核心概念</h2>
+<p>前面的实战部分已经把网关跑通了，但要真正用好网关，还需要弄清楚它的三个核心概念：路由（Route）、断言（Predicate）和过滤器（Filter）。</p>
+<h3 id="routeroutelocator断言与过滤器">Route、RouteLocator、断言与过滤器</h3>
+<ul>
+<li><strong>Route（路由）</strong>：网关的基本转发单元，由 id（唯一标识）、uri（目标地址）、predicates（断言数组）、filters（过滤器数组）和 order（优先级，值越小优先级越高）组成。请求必须同时满足某条路由的全部断言，才会被转发到该路由的 uri。</li>
+<li><strong>RouteLocator（路由定位器）</strong>：路由的容器，负责提供路由定义。配置文件里写的是 RouteDefinition，启动时被转换成 Route；用 Java 代码配置时，通过 <code>RouteLocatorBuilder</code> 构建 <code>RouteLocator</code>，例如 <code>builder.routes().route("user-gateway", r -&gt; r.path("/server-user/**").filters(f -&gt; f.stripPrefix(1)).uri("lb://server-user")).build()</code>。请求进来后由 <code>RoutePredicateHandlerMapping</code> 按 order 顺序遍历路由并逐一匹配断言。</li>
+<li><strong>Predicate（断言）</strong>：由 Predicate 工厂生产。内置工厂包括 Path、Method、Host、Header、Query、Cookie、After/Before/Between（按时间匹配）、RemoteAddr、Weight（按权重分流）等；同一个路由下的多个断言之间是“与”的关系，可以组合使用。</li>
+<li><strong>Filter（过滤器）</strong>：分为两类——路由级的 GatewayFilter（只作用于当前路由，如 StripPrefix、RewritePath、AddRequestHeader）和全局的 GlobalFilter（作用于所有路由，如 NettyRoutingFilter、LoadBalancerClientFilter、ForwardRoutingFilter）。二者会被 <code>FilteringWebHandler</code> 合并成一条过滤器链。</li>
+</ul>
+<h3 id="过滤器链的执行顺序">过滤器链的执行顺序</h3>
+<p>GatewayFilter 和 GlobalFilter 都实现了 <code>Ordered</code> 接口，<code>order</code> 值越小越先执行。一个过滤器同时包含 pre（请求被转发之前）和 post（收到响应之后）两段逻辑：</p>
+<ul>
+<li>pre 阶段按 order 升序执行，先完成路径改写、鉴权、限流等准备工作，再发起转发。</li>
+<li>post 阶段按 order 降序回放，最先执行 pre 逻辑的过滤器最后处理响应。</li>
+</ul>
+<p>这与 Zuul 1 把 pre、route、post 拆成独立过滤器类型的做法不同：在 Gateway 中，pre 与 post 逻辑写在同一个过滤器的 <code>filter()</code> 方法里，用 <code>chain.filter(exchange)</code> 前后的代码区分。自定义全局过滤器时可以用 <code>@Order</code> 注解或实现 <code>getOrder()</code> 指定顺序，例如 <code>@Order(Ordered.HIGHEST_PRECEDENCE)</code> 表示最先执行。</p>
+<h3 id="stripprefix-与-rewritepath-的区别">StripPrefix 与 RewritePath 的区别</h3>
+<p>两者都在 pre 阶段改写请求路径，但粒度不同：</p>
+<ul>
+<li><strong>StripPrefix=1</strong>：无条件去掉路径的第一层前缀。请求 <code>/server-user/user/get/1001</code> 转发到用户微服务时变成 <code>/user/get/1001</code>。</li>
+<li><strong>RewritePath</strong>：用正则重写路径，可以只改其中一段，也可以保留分组，例如 <code>- RewritePath=/server-user/(?&lt;segment&gt;.*), /$\{segment}</code>，效果与 StripPrefix 类似，但支持 <code>/server-user/v1/user</code> 到 <code>/api/user</code> 这类更复杂的映射。注意 yml 中要写成 <code>$\{segment}</code>，直接写 <code>${segment}</code> 会被当作普通字符串而失去分组引用。</li>
+</ul>
+<h2 id="限流熔断与超时">限流、熔断与超时</h2>
+<h3 id="基于redis的requestratelimiter限流">基于 Redis 的 RequestRateLimiter 限流</h3>
+<p>前面用 Sentinel 做的是网关限流，Gateway 自身也内置了限流过滤器 <code>RequestRateLimiter</code>，它基于 Redis + Lua 脚本实现令牌桶算法，多个网关实例共享同一个令牌桶，因此适合集群部署。</p>
+<p>（1）引入响应式 Redis 依赖：</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-data-redis-reactive&lt;/artifactId&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>（2）在路由的 filters 中配置限流器：</p>
+<pre><code class="language-yaml">      routes:
+        - id: user-gateway
+          uri: lb://server-user
+          predicates:
+            - Path=/server-user/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@ipKeyResolver}"
+</code></pre>
+<p>三个限流参数的含义是：<code>replenishRate</code> 为令牌桶每秒填充的令牌数，也就是允许的平均 QPS；<code>burstCapacity</code> 为令牌桶的总容量，也就是允许的瞬时最大 QPS；<code>requestedTokens</code> 为每个请求消耗的令牌数，默认 1，配置成 2 相当于把限流阈值减半。<code>key-resolver</code> 用 SpEL 指定 KeyResolver 的 bean 名称，限流的维度由 KeyResolver 决定。</p>
+<pre><code class="language-java">@Bean
+public KeyResolver ipKeyResolver() {
+    // 按客户端 IP 限流
+    return exchange -&gt; Mono.just(exchange.getRequest().getRemoteAddress()
+            .getAddress().getHostAddress());
+}
+
+@Bean
+public KeyResolver userKeyResolver() {
+    // 按请求参数中的 user 维度限流
+    return exchange -&gt; Mono.just(exchange.getRequest().getQueryParams()
+            .getFirst("user"));
+}
+</code></pre>
+<p>当 <code>burstCapacity</code> 等于 <code>replenishRate</code> 时令牌桶退化为匀速器；<code>burstCapacity</code> 大于 <code>replenishRate</code> 时允许一定程度的突发流量。被限流的请求默认返回 HTTP 429（Too Many Requests），可以像前面那样写一个自定义的 <code>BlockRequestHandler</code> 或异常处理器来返回统一格式的响应。</p>
+<h3 id="熔断降级集成">熔断降级集成</h3>
+<p>网关还可以在转发失败时直接返回兜底响应，避免故障向调用方扩散：</p>
+<pre><code class="language-yaml">          filters:
+            - name: CircuitBreaker
+              args:
+                name: orderCircuitBreaker
+                fallbackUri: forward:/fallback/order
+</code></pre>
+<p><code>CircuitBreaker</code> 过滤器基于 Spring Cloud CircuitBreaker 抽象：Hoxton 版本默认对接 Hystrix，2020.0 及以后改为对接 Resilience4j（需要引入 <code>spring-cloud-starter-circuitbreaker-reactor-resilience4j</code>）。<code>fallbackUri</code> 必须以 <code>forward:</code> 开头，指向网关自身（而不是目标微服务）的接口。在本项目中也可以直接使用前面配置的 Sentinel 限流异常处理器返回自定义 JSON，两种方式并不冲突。</p>
+<h3 id="连接与响应超时配置">连接与响应超时配置</h3>
+<pre><code class="language-yaml">spring:
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 1000        # 连接超时，单位毫秒
+        response-timeout: 5s         # 响应超时，支持 5s、5000ms 等写法
+</code></pre>
+<p>需要注意的是：如果同时使用了 Hystrix 或 Sentinel 等熔断过滤器，熔断器自身的超时时间会先于 <code>response-timeout</code> 生效（例如 Hystrix 默认 1000 ms），排查超时问题时要把两处配置一起检查。</p>
+<h2 id="动态路由版本演进与zuul对比">动态路由、版本演进与 Zuul 对比</h2>
+<h3 id="动态路由">动态路由</h3>
+<p>本文前面用到的两种方式其实都属于动态路由的范畴：</p>
+<ul>
+<li><code>spring.cloud.gateway.discovery.locator.enabled=true</code>：网关自动为注册中心（Nacos）中的每个服务生成一条路由，服务上下线时路由自动增减，不必修改配置。</li>
+<li>显式配置 <code>routes</code>：路由定义写在 application.yml 中，要修改必须重启网关，属于静态路由。</li>
+</ul>
+<p>如果希望在不重启网关的前提下修改路由，可以在上述基础上做扩展：自行实现 <code>RouteDefinitionRepository</code> 接口（默认实现是内存版的 <code>InMemoryRouteDefinitionRepository</code>），把路由定义保存到 Nacos 配置中心或数据库，配置变更后发布 <code>RefreshRoutesEvent</code> 事件，让 RouteLocator 重新加载路由；也可以调用 Spring Cloud Gateway Actuator 提供的 <code>/actuator/gateway/routes</code>（查询路由）与 <code>/actuator/gateway/refresh</code>（刷新路由）端点。需要注意的是，Actuator 默认只暴露 health、info，需要通过 <code>management.endpoints.web.exposure.include</code> 把 gateway 端点显式暴露出来。</p>
+<h3 id="spring-cloud-gateway-与-zuul-的对比">Spring Cloud Gateway 与 Zuul 的对比</h3>
+<table>
+<thead><tr><th>对比项</th><th>Zuul 1.x</th><th>Spring Cloud Gateway</th></tr></thead>
+<tbody>
+<tr><td>编程模型</td><td>基于 Servlet，同步阻塞式，一个请求占用一个线程</td><td>基于 Spring WebFlux + Reactor Netty，异步非阻塞</td></tr>
+<tr><td>依赖坐标</td><td>spring-cloud-starter-netflix-zuul</td><td>spring-cloud-starter-gateway</td></tr>
+<tr><td>过滤器模型</td><td>ZuulFilter，分为 pre、route、post、error 四种类型</td><td>GatewayFilter / GlobalFilter，pre 与 post 逻辑写在同一个过滤器中</td></tr>
+<tr><td>长连接支持</td><td>较弱，需要额外处理</td><td>原生支持 WebSocket、SSE 等服务端推送场景</td></tr>
+<tr><td>高并发开销</td><td>线程数随并发线性增长，开销较大</td><td>少量事件循环线程即可支撑大量并发连接</td></tr>
+<tr><td>维护状态</td><td>Spring Cloud 2020.0 起已从 Spring Cloud 中移除</td><td>官方主推的网关组件，持续维护</td></tr>
+</tbody>
+</table>
+<h3 id="版本演进与依赖变化">版本演进与依赖变化</h3>
+<ul>
+<li>本文示例基于 Spring Cloud Hoxton（Spring Boot 2.3.x）与 Spring Cloud Alibaba，网关依赖为 <code>spring-cloud-starter-gateway</code>，Sentinel 的网关适配包为 <code>spring-cloud-alibaba-sentinel-gateway</code>。</li>
+<li>Spring Cloud 2020.0（Ilford）及以后，Ribbon、Hystrix、Zuul 全部移出，负载均衡改用 Spring Cloud LoadBalancer（<code>lb://</code> 依赖它），熔断改用 Spring Cloud CircuitBreaker + Resilience4j；<code>spring-cloud-starter-gateway</code> 的坐标不变，仍可直接使用。</li>
+<li>Spring Cloud Alibaba 的版本要与 Spring Cloud 对应（Hoxton 对应 2.2.x，Spring Cloud 2021.0.x 对应 2021.x 系列），升级 Spring Cloud 时 Nacos、Sentinel 的适配包也要同步升级。</li>
+</ul>
+
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E9%A1%B9%E7%9B%AE%E6%95%B4%E5%90%88%E7%BD%91%E5%85%B3">项目整合网关</a>
+<a href="#%E9%A1%B9%E7%9B%AE%E6%95%B4%E5%90%88%E7%BD%91%E5%85%B3">项目整合网关</a>
 <ul>
 <li><a href="#%E6%96%B0%E5%BB%BA%E7%BD%91%E5%85%B3%E6%A8%A1%E5%9D%97">新建网关模块</a></li>
 <li><a href="#%E5%88%9D%E6%AD%A5%E6%95%B4%E5%90%88springcloud-gateway">初步整合SpringCloud Gateway</a></li>
@@ -814,12 +927,35 @@ public String api2Demo2(){
 <li><a href="#%E7%BD%91%E5%85%B3%E6%95%B4%E5%90%88nacos%E6%9C%80%E7%AE%80%E9%85%8D%E7%BD%AE">网关整合Nacos最简配置</a></li>
 </ul>
 </li>
-<li><a href="#%E7%BD%91%E5%85%B3%E6%95%B4%E5%90%88sentinel%E9%99%90%E6%B5%81">网关整合Sentinel限流</a>
+<li>
+<a href="#%E7%BD%91%E5%85%B3%E6%95%B4%E5%90%88sentinel%E9%99%90%E6%B5%81">网关整合Sentinel限流</a>
 <ul>
 <li><a href="#%E5%AE%9E%E7%8E%B0route%E7%BB%B4%E5%BA%A6%E9%99%90%E6%B5%81">实现route维度限流</a></li>
 <li><a href="#%E5%AE%9E%E7%8E%B0%E8%87%AA%E5%AE%9A%E4%B9%89api%E5%88%86%E7%BB%84%E7%BB%B4%E5%BA%A6%E9%99%90%E6%B5%81">实现自定义API分组维度限流</a></li>
 </ul>
 </li>
+<li>
+<a href="#spring-cloud-gateway-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5">Spring Cloud Gateway 核心概念</a>
+<ul>
+<li><a href="#routeroutelocator%E6%96%AD%E8%A8%80%E4%B8%8E%E8%BF%87%E6%BB%A4%E5%99%A8">Route、RouteLocator、断言与过滤器</a></li>
+<li><a href="#%E8%BF%87%E6%BB%A4%E5%99%A8%E9%93%BE%E7%9A%84%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F">过滤器链的执行顺序</a></li>
+<li><a href="#stripprefix-%E4%B8%8E-rewritepath-%E7%9A%84%E5%8C%BA%E5%88%AB">StripPrefix 与 RewritePath 的区别</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E9%99%90%E6%B5%81%E7%86%94%E6%96%AD%E4%B8%8E%E8%B6%85%E6%97%B6">限流、熔断与超时</a>
+<ul>
+<li><a href="#%E5%9F%BA%E4%BA%8Eredis%E7%9A%84requestratelimiter%E9%99%90%E6%B5%81">基于 Redis 的 RequestRateLimiter 限流</a></li>
+<li><a href="#%E7%86%94%E6%96%AD%E9%99%8D%E7%BA%A7%E9%9B%86%E6%88%90">熔断降级集成</a></li>
+<li><a href="#%E8%BF%9E%E6%8E%A5%E4%B8%8E%E5%93%8D%E5%BA%94%E8%B6%85%E6%97%B6%E9%85%8D%E7%BD%AE">连接与响应超时配置</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%8A%A8%E6%80%81%E8%B7%AF%E7%94%B1%E7%89%88%E6%9C%AC%E6%BC%94%E8%BF%9B%E4%B8%8Ezuul%E5%AF%B9%E6%AF%94">动态路由、版本演进与 Zuul 对比</a>
+<ul>
+<li><a href="#%E5%8A%A8%E6%80%81%E8%B7%AF%E7%94%B1">动态路由</a></li>
+<li><a href="#spring-cloud-gateway-%E4%B8%8E-zuul-%E7%9A%84%E5%AF%B9%E6%AF%94">Spring Cloud Gateway 与 Zuul 的对比</a></li>
+<li><a href="#%E7%89%88%E6%9C%AC%E6%BC%94%E8%BF%9B%E4%B8%8E%E4%BE%9D%E8%B5%96%E5%8F%98%E5%8C%96">版本演进与依赖变化</a></li>
 </ul>
 </li>
 </ul>

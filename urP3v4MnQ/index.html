@@ -36,7 +36,12 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
   <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
-<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script>document.addEventListener("DOMContentLoaded",function(){if(window.renderMathInElement){renderMathInElement(document.body,{delimiters:[{left:"\\(",right:"\\)",display:false},{left:"\\[",right:"\\]",display:true}],throwOnError:false});}});</script>
+</head>
 
 <body>
   <!-- Navigation -->
@@ -189,6 +194,7 @@
 </blockquote>
 <p>旅行推销员问题显然属于 NP 类问题：任意给出一个行程安排，都能很容易地算出总开销；但要判断是否存在总路费小于 C 的行程，最坏情况下必须检查所有可能的旅行安排（其判定形式实为 NP-完全问题）。</p>
 <p><strong>启发式算法是相对于最优化算法提出的，是基于直观或者经验构造的算法，在可接受的开销（时间和空间）内给出待解决组合优化问题的一个可行解</strong>。</p>
+<p><img src="/post-assets/urP3v4MnQ/03-exact-vs-heuristic.svg" alt="精确算法与启发式算法在求解目标、时间复杂度、解的质量、适用问题、关键参数与结果确定性上的对比"></p>
 <h2 id="目前通用的启发式算法">目前通用的启发式算法</h2>
 <p>目前比较通用的启发式算法一般有<code>模拟退火算法（Simulated Annealing，SA）</code>、<code>遗传算法（Genetic Algorithm, GA）</code>、<code>蚁群算法（Ant Colony Optimization, ACO）</code>、<code>人工神经网络(Artificial Neural Networks, ANNs)</code>、<code>粒子群算法（Particle Swarm Optimization, PSO）</code>等。</p>
 <h3 id="模拟退火算法saa">模拟退火算法(SA)</h3>
@@ -202,15 +208,18 @@
 <p>随机生成邻域解 x_new；</p>
 </li>
 <li>
-<p>用目标函数 f(x) 评价解的好坏，并计算增量 Δf = f(x_new) − f(x)；</p>
+<p>用目标函数 f(x) 评价解的好坏，并计算增量 ΔE = f(x_new) − f(x)；</p>
 </li>
 <li>
-<p>若 f(x_new) &lt; f(x)（最小化问题中新解更优），则无条件接受 x_new；否则以概率 exp(−(f(x_new)−f(x))/(k·T)) 接受较差的新解（Metropolis 准则），以避免过早陷入局部最优。</p>
+<p>若 ΔE &lt; 0（最小化问题中新解更优），则无条件接受 x_new；否则以概率 \(\exp(-\Delta E / T)\) 接受较差的新解，这就是 Metropolis 准则。其中 T 为当前温度：温度越高，接受差解的概率越大，算法越不容易陷在局部最优；温度越低，接受差解的概率越小，算法越接近只在邻域中择优的爬山法。</p>
+<div class="math-block">\[ P(\text{接受新解}) = \begin{cases} 1, & \Delta E < 0 \\ \exp\!\left(-\dfrac{\Delta E}{T}\right), & \Delta E \ge 0 \end{cases} \]</div>
+<p>严格地说，物理退火中的 Metropolis 准则写作 \(\exp(-\Delta E/(k_B T))\)，其中 \(k_B\) 为玻尔兹曼常数；算法实现时这个常数可以被温度 T 吸收，因此程序里通常直接写成 \(\exp(-\Delta E/T)\)。</p>
 </li>
 <li>
 <p>当温度降到 Tmin 以下时退出循环并输出当前结果；否则按降温公式 T = a·T（0&lt;a&lt;1，通常 a 取接近 1 的值）降低温度，回到第 2 步继续迭代。</p>
 </li>
 </ul>
+<p><img src="/post-assets/urP3v4MnQ/01-sa-flow.svg" alt="模拟退火算法流程图：初始化参数、产生邻域新解、按 Metropolis 准则接受、降温与终止判断"></p>
 <h4 id="模拟退火算法实例">模拟退火算法实例</h4>
 <p>求解函数最小值问题：给定任意 y 值，在 0 ≤ x ≤ 100 范围内求使 F(x) 最小的 x。</p>
 <pre><code class="language-java">public class SATest {
@@ -263,9 +272,8 @@
                         // 替换
                         x[i] = x_new;
                     } else {
-                        // 以概率替换
-                        double p = 1 / (1 + Math
-                                .exp(-(funTmp_new - funTmp) / T));
+                        // Metropolis 准则：以 exp(-ΔE / T) 的概率接受更差的解（ΔE = funTmp_new - funTmp &gt; 0）
+                        double p = Math.exp(-(funTmp_new - funTmp) / T);
                         if (Math.random() &lt; p) {
                             x[i] = x_new;
                         }
@@ -377,7 +385,7 @@
 </li>
 <li>
 <p><strong>（5）部分匹配交叉（PMX）法（用于互换编码）</strong></p>
-<p>先随机产生两个交叉点，定义这两点间的区域为匹配区域，并用交换两个父代的匹配区域。</p>
+<p>先随机产生两个交叉点，定义这两点间的区域为匹配区域，并交换两个父代的匹配区域。</p>
 <blockquote>
 <p>父代A：872 | 130 | 9546</p>
 <p>父代B：983 | 567 | 1420</p>
@@ -416,7 +424,7 @@
 </li>
 <li>
 <p>变异(mutation)：交叉后可能（很小的概率）对染色体进行更改，来防止算法过早收敛而陷入局部最优解中。</p>
-<p>变异概率 P_m 不能太小，否则会降低全局搜索能力；也不能太大，当 P_m &gt; 0.5 时，遗传算法将退化为随机搜索。</p>
+<p>变异概率 \(P_m\) 不能太小，否则会降低全局搜索能力；也不能太大，当 \(P_m &gt; 0.5\) 时，遗传算法将退化为随机搜索。工程上 \(P_m\) 常取 0.001～0.1，交叉概率 \(P_c\) 常取 0.6～0.9，并且通常让交叉概率远大于变异概率。</p>
 <ul>
 <li>
 <p>（1）基本位变异算子（用于二进制编码）</p>
@@ -450,18 +458,28 @@
 <h4 id="遗传算法步骤">遗传算法步骤</h4>
 <ul>
 <li>
-<p>对潜在问题进行编码，初始化基因组，并根据基因组随机初始化种群，并指定繁衍代数。</p>
+<p>编码并初始化：确定基因型表示（二进制编码、互换编码等），随机生成 N 个个体组成初始种群 P(0)，并指定最大繁衍代数。</p>
 </li>
 <li>
-<p>计算种群中每个个体的适应度，选择一定数目的留下，其余淘汰。</p>
+<p>适应度评价：计算种群中每个个体的适应度 \(f(x)\)，适应度是选择与淘汰的唯一依据。</p>
 </li>
 <li>
-<p>在留下的个体中随机繁衍：对父代基因进行交叉（并以极小概率变异），从而产生下一代。</p>
+<p>选择：按适应度用轮盘赌、锦标赛等方式选出较优个体，体现优胜劣汰。</p>
 </li>
 <li>
-<p>回到第 2 步循环，直到达到指定的繁衍代数。</p>
+<p>交叉：以交叉概率 \(P_c\) 交换父代的基因片段，产生新个体。</p>
+</li>
+<li>
+<p>变异：以变异概率 \(P_m\) 改变个别基因，防止算法早熟收敛。</p>
+</li>
+<li>
+<p>精英保留（elitism）：把上一代的最优个体直接复制到下一代，保证历史最优解不会因交叉、变异而丢失。示例代码中先淘汰、交叉、变异，最后用 <code>best = max(zip(fitnesses, self.group), key=lambda x: x[0])</code> 取出上一代最优个体，再 <code>new_group.append(best[1])</code> 补回种群，实现的就是精英保留。</p>
+</li>
+<li>
+<p>回到第 2 步循环，直到达到最大繁衍代数，输出最优个体。</p>
 </li>
 </ul>
+<p><img src="/post-assets/urP3v4MnQ/02-ga-loop.svg" alt="遗传算法主循环：编码初始化、适应度评价、选择、交叉、变异、精英保留与终止判断"></p>
 <h4 id="遗传算法实例">遗传算法实例</h4>
 <pre><code class="language-python">import random
 import math
@@ -497,7 +515,7 @@ class GeneticAlgorithm:
             fitness = self.fitness_function(x)
             fitnesses.append(fitness)
         min_fitness = min(fitnesses)
-        # 淘汰最菜的个体 避免适应度为0
+        # 减去最小值，避免出现负权重（最差个体的权重为 0）
         weights = [f - min_fitness for f in fitnesses]
         # 2. 轮盘赌选择
         # 选择数量小于 种群数量 留出位置保留最优个体
@@ -595,18 +613,23 @@ plt.show()
 <p>设定蚂蚁的起点、终点。</p>
 </li>
 <li>
-<p>蚂蚁从起点出发根据信息素浓度，有一定的概率性选择路段，浓度越高，概率越大，逐步回到终点。</p>
+<p>蚂蚁从起点出发，按转移概率选择下一座城市：信息素越浓、距离越短的城市被选中的概率越大，直到走完所有城市并回到终点。</p>
 </li>
 <li>
-<p>在蚂蚁走过的路径上，根据每条路段的长度按比例释放信息素，短的路段释放的信息素多，长的路段释放的信息素少。</p>
+<p>按本次周游的总路程释放信息素：路途越短的蚂蚁释放的增量越大。</p>
 </li>
 <li>
-<p>对所有路段的信息素进行挥发。</p>
+<p>对所有路段的信息素统一挥发，再叠加本轮的增量。</p>
 </li>
 <li>
-<p>回到第二步进行循环，直到蚂蚁数量迭代完。</p>
+<p>回到第二步继续迭代，直到达到最大迭代次数。</p>
 </li>
 </ul>
+<p>设蚂蚁数量为 \(m\)、城市数量为 \(n\)，\(\tau_{ij}\) 表示城市 i 到城市 j 这条路段上的信息素浓度，\(\eta_{ij}=1/d_{ij}\) 为启发函数（\(d_{ij}\) 为两城市间距离），\(\alpha\) 为信息素重要程度因子、\(\beta\) 为启发函数重要程度因子，allowed\(_k\) 为蚂蚁 k 尚未访问的城市集合，则蚂蚁 k 在 t 时刻从城市 i 转移到城市 j 的概率为：</p>
+<div class="math-block">\[ p_{ij}^{k}(t)=\frac{[\tau_{ij}(t)]^{\alpha}\cdot[\eta_{ij}]^{\beta}}{\sum_{s\in \text{allowed}_k}[\tau_{is}(t)]^{\alpha}\cdot[\eta_{is}]^{\beta}},\qquad j\in \text{allowed}_k \]</div>
+<p>当所有蚂蚁完成一次周游后，信息素按“先挥发、再累加”的方式更新（这里采用的是蚁周模型）：</p>
+<div class="math-block">\[ \tau_{ij}(t+1)=(1-\rho)\cdot\tau_{ij}(t)+\sum_{k=1}^{m}\Delta\tau_{ij}^{k},\qquad \Delta\tau_{ij}^{k}=\begin{cases} Q/L_k, & \text{蚂蚁 }k\text{ 经过边}(i,j) \\ 0, & \text{否则} \end{cases} \]</div>
+<p>其中 \(\rho\in(0,1)\) 为信息素挥发系数，\(Q\) 为信息素常数，\(L_k\) 为第 k 只蚂蚁本次周游的路径总长。\(\rho\) 越大，历史信息素衰减越快，算法越倾向于探索新路径；\(\alpha\) 越大越依赖信息素的积累，\(\beta\) 越大越依赖距离的启发信息。</p>
 <h4 id="蚁群算法实例">蚁群算法实例</h4>
 <p>TSP（Traveling Salesman Problem，旅行商问题）：给定一组城市及每对城市之间的距离，旅行商从某一城市出发，每个城市恰好经过一次，最后回到起点城市，求访问所有城市的最短回路。</p>
 <pre><code class="language-python"># 蚁群算法解决 TSP
@@ -638,7 +661,7 @@ city_condition = np.array(city_condition)     #获取30城市坐标
 #lm=np.array(range(0,31,3))
 #print(lm)
 
-# 建立 city_count × city_count 的距离矩阵，存放每对城市间的距离。启发函数 η_ij 为城市 i 与 j 距离的倒数，因此对角线不能为 0，这里设其为 10000（只要不为 0 即可）。
+# 建立 city_count × city_count 的距离矩阵，存放每对城市间的距离。启发函数 η_ij 为城市 i 与 j 距离的倒数，因此对角线不能为 0，这里设其为 100000（只要不为 0 即可）。
                                                                    
 #Distance距离矩阵
 city_count = len(city_name)  #取数组长度
@@ -719,7 +742,7 @@ while iter &lt;  MAX_iter:
                 # 计算从当前城市到各未访问城市的转移概率：(tau^alpha) * (eta^beta)
                 # eta 为城市间距离的倒数，tau 为信息素浓度；alpha、beta 为对应的权重系数
                 protrans[k] = np.power(pheromonetable[visit][unvisit[k]], alpha) * np.power(
-                    etable[visit][unvisit[k]], (alpha + 1))
+                    etable[visit][unvisit[k]], beta)
 
             # 累计概率，轮盘赌选择
             cumsumprobtrans = (protrans / sum(protrans)).cumsum()
@@ -795,7 +818,7 @@ plt.xlabel(&quot;Number of iterations&quot;)#迭代次数
 plt.ylabel(&quot;Distance value&quot;)#距离值
 plt.show()
 </code></pre>
-<pre><code class="language-plaintext">城市坐标信息（全部）： ['1,41,94\n', '2,37,84\n', '3,53,67\n', '4,25,62\n', '5,7,64\n', '6,2,99\n', '7,68,58\n', '8,71, 44\n', '9,54,62\n', '10,83,69\n', '11,64,60\n', '12,18,54\n', '13,22,60\n', '14,83,46\n', '15,91,38\n', '16,25,38\n', '17,24,42\n', '18,58,69\n', '19,71,71\n', '20,74,78\n', '21,87,76\n', '22,18,40\n', '23,13,40\n', '24,82,7\n', '25,62,32\n', '26,58,35\n', '27,45,21\n', '28,41,26\n', '29,44,35\n', '30,4,50\n']
+<pre><code class="language-text">城市坐标信息（全部）： ['1,41,94\n', '2,37,84\n', '3,53,67\n', '4,25,62\n', '5,7,64\n', '6,2,99\n', '7,68,58\n', '8,71, 44\n', '9,54,62\n', '10,83,69\n', '11,64,60\n', '12,18,54\n', '13,22,60\n', '14,83,46\n', '15,91,38\n', '16,25,38\n', '17,24,42\n', '18,58,69\n', '19,71,71\n', '20,74,78\n', '21,87,76\n', '22,18,40\n', '23,13,40\n', '24,82,7\n', '25,62,32\n', '26,58,35\n', '27,45,21\n', '28,41,26\n', '29,44,35\n', '30,4,50\n']
 蚁群算法的最优路径 [14. 15. 24. 25. 26. 29. 28. 27. 16. 17. 22. 23. 30. 12. 13.  4.  5.  6.
   1.  2.  9.  3. 18. 19. 20. 21. 10.  7. 11.  8.]
 迭代 200 次后 蚁群算法求得最优解 427.55589628421023
@@ -827,10 +850,11 @@ plt.show()
 <p><strong>粒子群的速度和位置更新</strong></p>
 <p>粒子群的位置更新操作可用速度更新和位置更新表示。</p>
 <p>速度更新为</p>
-<p>v_ij(t+1) = v_ij(t) + c1·r1·(p_best_ij(t) − x_ij(t)) + c2·r2·(g_best_j − x_ij(t))</p>
+<div class="math-block">\[ v_{ij}(t+1)=w\cdot v_{ij}(t)+c_1 r_1\left(p\_best_{ij}(t)-x_{ij}(t)\right)+c_2 r_2\left(g\_best_{j}-x_{ij}(t)\right) \]</div>
 <p>位置更新为</p>
-<p>x_ij(t+1) = x_ij(t) + v_ij(t+1)</p>
-<p>其中，下标 j 表示维度，i 表示第 i 个粒子，t 为当前迭代次数；c1、c2 为加速常量，通常取 (0,2) 内的值；r1、r2 是 [0,1] 上两个相互独立的随机数。由公式可见，c1、c2 把“向个体学习”和“向群体学习”结合起来，使粒子既能借鉴自身经验，也能借鉴群体的搜索经验。</p>
+<div class="math-block">\[ x_{ij}(t+1)=x_{ij}(t)+v_{ij}(t+1) \]</div>
+<p>其中，下标 j 表示维度，i 表示第 i 个粒子，t 为当前迭代次数；\(w\) 为惯性权重，用来平衡全局探索与局部开发——\(w\) 较大时全局搜索能力强，较小时收敛快，通常让它随迭代线性递减（如从 0.9 降到 0.4）；\(c_1\)、\(c_2\) 为加速常量（学习因子），分别控制“向个体最优学习”和“向全局最优学习”的步长，常见取值为 \(c_1=c_2=2\)，一般取值在 0～4 之间（也有取 \(c_1=c_2=1.49445\) 的收缩因子做法）；\(r_1\)、\(r_2\) 是 \([0,1]\) 上两个相互独立的随机数。</p>
+<p>需要说明的是，1995 年 Eberhart 和 Kennedy 提出的原始 PSO 公式中并没有惯性权重 \(w\)（相当于 \(w=1\)），\(w\) 是 1998 年由 Shi 和 Eberhart 引入的改进，本文下面的示例代码采用的正是不含 \(w\) 的原始形式。此外，为防止粒子速度过大而跳过最优解，通常还要把速度限制在 \([v_{min}, v_{max}]\) 范围内。</p>
 </li>
 </ul>
 <h4 id="粒子群优化算法步骤">粒子群优化算法步骤</h4>
@@ -842,10 +866,10 @@ plt.show()
 <p>步骤2：根据适应度函数计算各粒子的适应度，记录个体历史最优值 p_best 与全局最优值 g_best。</p>
 </li>
 <li>
-<p>步骤3：利用速度更新公式 v_ij(t+1) = v_ij(t) + c1·r1·(p_best_ij(t) − x_ij(t)) + c2·r2·(g_best_j − x_ij(t)) 更新粒子速度，并对越界速度加以约束。</p>
+<p><p>步骤3：利用上面的速度更新公式更新粒子速度，并把越界的速度限制在 \([v_{min}, v_{max}]\) 内。</p>
 </li>
 <li>
-<p>步骤4：利用位置更新公式 x_ij(t+1) = x_ij(t) + v_ij(t+1) 更新粒子位置，并对越界位置加以约束。</p>
+<p><p>步骤4：利用位置更新公式 \(x_{ij}(t+1)=x_{ij}(t)+v_{ij}(t+1)\) 更新粒子位置，并利用边界条件约束越界的位置。</p>
 </li>
 <li>
 <p>步骤5：根据适应度函数重新计算各粒子的适应度值。</p>
@@ -861,70 +885,70 @@ plt.show()
 </li>
 </ul>
 <h4 id="粒子群优化算法实例">粒子群优化算法实例</h4>
-<pre><code class="language-matlab">#--------------粒子群函数----------------------#
-# 输入：
-#   pop:种群数量
-#   dim:单个粒子的维度
-#   ub:粒子上边界信息，维度为[1,dim];
-#   lb:粒子下边界信息，维度为[1,dim];
-#   fobj:为适应度函数接口
-#   vmax: 为速度的上边界信息，维度为[1,dim];
-#   vmin: 为速度的下边界信息，维度为[1,dim];
-#   maxIter: 算法的最大迭代次数，用于控制算法的停止。
-# 输出：
-#   Best_Pos：为粒子群找到的最优位置
-#   Best_fitness: 最优位置对应的适应度值
-#   IterCure:  用于记录每次迭代的最佳适应度，即后续用来绘制迭代曲线。
+<pre><code class="language-matlab">%--------------粒子群函数----------------------%
+% 输入：
+%   pop:种群数量
+%   dim:单个粒子的维度
+%   ub:粒子上边界信息，维度为[1,dim];
+%   lb:粒子下边界信息，维度为[1,dim];
+%   fobj:为适应度函数接口
+%   vmax: 为速度的上边界信息，维度为[1,dim];
+%   vmin: 为速度的下边界信息，维度为[1,dim];
+%   maxIter: 算法的最大迭代次数，用于控制算法的停止。
+% 输出：
+%   Best_Pos：为粒子群找到的最优位置
+%   Best_fitness: 最优位置对应的适应度值
+%   IterCure:  用于记录每次迭代的最佳适应度，即后续用来绘制迭代曲线。
 function [Best_Pos,Best_fitness,IterCurve] = pso(pop,dim,ub,lb,fobj,vmax,vmin,maxIter)
-    #设置c1,c2参数
+    %设置c1,c2参数
     c1 = 2.0;
     c2 = 2.0;
-    # 初始化种群速度
+    % 初始化种群速度
     V = initialization(pop,vmax,vmin,dim);
-    # 初始化种群位置
+    % 初始化种群位置
     X = initialization(pop,ub,lb,dim);
 
-    # 计算适应度值
+    % 计算适应度值
     fitness = zeros(1,pop);
     for i = 1:pop
        fitness(i) = fobj(X(i,:));
     end
-    # 将初始种群作为历史最优
+    % 将初始种群作为历史最优
     pBest = X;
     pBestFitness = fitness;
-    # 记录初始全局最优解,默认优化最小值。
-    #寻找适应度最小的位置
+    % 记录初始全局最优解,默认优化最小值。
+    %寻找适应度最小的位置
     [~,index] = min(fitness);
-    #记录适应度值和位置
+    %记录适应度值和位置
     gBestFitness = fitness(index);
     gBest = X(index,:);
 
-    Xnew = X; #新位置
-    fitnessNew = fitness;#新位置适应度值
+    Xnew = X; %新位置
+    fitnessNew = fitness;%新位置适应度值
 
     IterCurve = zeros(1,maxIter);
-    # 开始迭代
+    % 开始迭代
     for t = 1:maxIter
-       #对每个粒子进行更新 
+       %对每个粒子进行更新 
        for i = 1:pop
-          #速度更新
+          %速度更新
           r1 = rand(1,dim);
           r2 = rand(1,dim);
           V(i,:) = V(i,:) + c1.*r1.*(pBest(i,:) - X(i,:)) + c2.*r2.*(gBest - X(i,:));
-          #速度边界检查及约束
+          %速度边界检查及约束
           V(i,:) = BoundaryCheck(V(i,:),vmax,vmin,dim);
-          #位置更新
+          %位置更新
           Xnew(i,:) = X(i,:) + V(i,:);
-          #位置边界检查及约束
+          %位置边界检查及约束
           Xnew(i,:) = BoundaryCheck(Xnew(i,:),ub,lb,dim);
-          #计算新位置适应度值
+          %计算新位置适应度值
           fitnessNew(i) = fobj(Xnew(i,:));
-          #更新历史最优值
+          %更新历史最优值
           if fitnessNew(i) &lt; pBestFitness(i)
               pBest(i,:) = Xnew(i,:);
               pBestFitness(i) = fitnessNew(i);    
           end
-          #更新全局最优值
+          %更新全局最优值
           if fitnessNew(i)&lt;gBestFitness
               gBestFitness = fitnessNew(i);
               gBest = Xnew(i,:);
@@ -932,22 +956,48 @@ function [Best_Pos,Best_fitness,IterCurve] = pso(pop,dim,ub,lb,fobj,vmax,vmin,ma
        end
        X = Xnew;
        fitness = fitnessNew;
-       # 记录当前迭代最优值和最优适应度值
-       #记录最优解
+       % 记录当前迭代最优值和最优适应度值
+       %记录最优解
        Best_Pos = gBest;
-       #记录最优解的适应度值
+       %记录最优解的适应度值
        Best_fitness = gBestFitness;
-       #记录当前迭代的最优解适应度值
+       %记录当前迭代的最优解适应度值
        IterCurve(t) = gBestFitness;   
     end
 end
 </code></pre>
+<h3 id="爬山法禁忌搜索与模拟退火的对比">爬山法、禁忌搜索与模拟退火的对比</h3>
+<p>除了模拟退火和遗传算法，局部搜索类算法中最常被拿来比较的是爬山法和禁忌搜索。它们与模拟退火同属“邻域搜索”框架，区别主要在是否接受差解、是否记忆搜索历史。</p>
+<h4 id="爬山法hill-climbing">爬山法（Hill Climbing）</h4>
+<p>爬山法从当前解出发，在邻域中寻找更优的解并替换当前解，只接受更优的解，直到邻域中不存在更优解为止。它实现简单、收敛快，但本质上是一种贪心策略：一旦爬到某个“山峰”就再也走不下来，因此解的质量依赖初始解，极易陷入局部最优。</p>
+<h4 id="禁忌搜索tabu-search">禁忌搜索（Tabu Search）</h4>
+<p>禁忌搜索由 Glover 于 1986 年提出，核心思想是“允许接受较差的解，但记住最近走过的路”：</p>
+<ul>
+<li>邻域移动与候选解：在当前解的邻域中产生若干候选解，即使候选解比当前解差，也可能被选为新的当前解，从而具备跳出局部最优的能力。</li>
+<li>禁忌表与禁忌长度：用禁忌表记录最近执行过的若干次移动（或移动后得到的解），在禁忌长度（tenure）规定的迭代步数内禁止重复这些移动，避免算法在两三个解之间来回循环。</li>
+<li>特赦准则（藐视准则）：如果某个被禁忌的移动能够产生优于历史最优解的新解，则解除对它的禁忌，允许该移动，保证不丢失更好的解。</li>
+<li>停止准则：达到最大迭代步数、最优解在连续若干步内不再改进，或达到可接受的计算时间。</li>
+</ul>
+<p>与模拟退火相比，两者都允许接受差解：模拟退火用随温度下降而减小的概率 \(\exp(-\Delta E/T)\) 控制“退步”的幅度，是概率性的；禁忌搜索则用确定性的禁忌表限制“退步”的方向，具有记忆能力。与爬山法相比，二者都通过机制设计避免了爬山法“只能上坡”的缺陷。</p>
+<table>
+<thead><tr><th>算法</th><th>是否接受差解</th><th>是否使用历史记忆</th><th>主要参数</th><th>特点</th></tr></thead>
+<tbody>
+<tr><td>爬山法</td><td>否，只接受更优解</td><td>否</td><td>无（只与邻域结构有关）</td><td>简单快速，极易陷入局部最优</td></tr>
+<tr><td>模拟退火</td><td>是，以概率 \(\exp(-\Delta E/T)\) 接受</td><td>否（只有当前温度）</td><td>初始温度 T、降温系数 a、每个温度的迭代次数 L、终止温度 T_min</td><td>理论上可收敛到全局最优，但对参数敏感、收敛较慢</td></tr>
+<tr><td>禁忌搜索</td><td>是，取邻域中最优解（可能更差）</td><td>是（禁忌表）</td><td>禁忌长度、候选解个数、特赦准则、停止准则</td><td>有记忆、不易循环，性能依赖禁忌长度与邻域设计</td></tr>
+</tbody>
+</table>
+<p>因此在选型上：问题规模小、需要可证明的最优解时用精确算法；解空间连续、追求实现简单时可以先试爬山法；需要跳出局部最优又希望实现简单时用模拟退火；需要记忆搜索历史、避免循环搜索时用禁忌搜索；而遗传算法、蚁群和粒子群更适合解空间离散、可以并行评价大量候选解的场合。</p>
+
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%8D%81%E5%A4%A7%E7%AE%97%E6%B3%95">十大算法</a>
 <ul>
-<li><a href="#%E5%8D%81%E5%A4%A7%E7%AE%97%E6%B3%95">十大算法</a></li>
-<li><a href="#%E5%B8%B8%E7%94%A8%E4%BA%94%E5%A4%A7%E6%A8%A1%E5%9E%8B">常用五大模型</a>
+</ul>
+</li>
+<li>
+<a href="#%E5%B8%B8%E7%94%A8%E4%BA%94%E5%A4%A7%E6%A8%A1%E5%9E%8B">常用五大模型</a>
 <ul>
 <li><a href="#1-%E9%A2%84%E6%B5%8B%E6%A8%A1%E5%9E%8B">1、预测模型</a></li>
 <li><a href="#2-%E8%AF%84%E4%BB%B7%E6%A8%A1%E5%9E%8B">2、评价模型</a></li>
@@ -956,37 +1006,19 @@ end
 <li><a href="#5-%E7%BB%9F%E8%AE%A1%E5%88%86%E6%9E%90%E6%A8%A1%E5%9E%8B">5、统计分析模型</a></li>
 </ul>
 </li>
-<li><a href="#%E5%90%AF%E5%8F%91%E5%BC%8F%E7%AE%97%E6%B3%95">启发式算法</a></li>
-<li><a href="#%E7%9B%AE%E5%89%8D%E9%80%9A%E7%94%A8%E7%9A%84%E5%90%AF%E5%8F%91%E5%BC%8F%E7%AE%97%E6%B3%95">目前通用的启发式算法</a>
+<li>
+<a href="#%E5%90%AF%E5%8F%91%E5%BC%8F%E7%AE%97%E6%B3%95">启发式算法</a>
 <ul>
-<li><a href="#%E6%A8%A1%E6%8B%9F%E9%80%80%E7%81%AB%E7%AE%97%E6%B3%95saa">模拟退火算法(SA)</a>
-<ul>
-<li><a href="#%E6%A8%A1%E6%8B%9F%E9%80%80%E7%81%AB%E7%AE%97%E6%B3%95%E6%AD%A5%E9%AA%A4">模拟退火算法步骤</a></li>
-<li><a href="#%E6%A8%A1%E6%8B%9F%E9%80%80%E7%81%AB%E7%AE%97%E6%B3%95%E5%AE%9E%E4%BE%8B">模拟退火算法实例</a></li>
 </ul>
 </li>
-<li><a href="#%E9%81%97%E4%BC%A0%E7%AE%97%E6%B3%95ga">遗传算法(GA)</a>
+<li>
+<a href="#%E7%9B%AE%E5%89%8D%E9%80%9A%E7%94%A8%E7%9A%84%E5%90%AF%E5%8F%91%E5%BC%8F%E7%AE%97%E6%B3%95">目前通用的启发式算法</a>
 <ul>
-<li><a href="#%E7%9B%B8%E5%85%B3%E6%9C%AF%E8%AF%AD">相关术语</a></li>
-<li><a href="#%E9%81%97%E4%BC%A0%E7%AE%97%E6%B3%95%E6%AD%A5%E9%AA%A4">遗传算法步骤</a></li>
-<li><a href="#%E9%81%97%E4%BC%A0%E7%AE%97%E6%B3%95%E5%AE%9E%E4%BE%8B">遗传算法实例</a></li>
-</ul>
-</li>
-<li><a href="#%E8%9A%81%E7%BE%A4%E7%AE%97%E6%B3%95aco">蚁群算法(ACO)</a>
-<ul>
-<li><a href="#%E8%9A%81%E7%BE%A4%E7%AE%97%E6%B3%95%E6%AD%A5%E9%AA%A4">蚁群算法步骤</a></li>
-<li><a href="#%E8%9A%81%E7%BE%A4%E7%AE%97%E6%B3%95%E5%AE%9E%E4%BE%8B">蚁群算法实例</a></li>
-</ul>
-</li>
-<li><a href="#%E7%B2%92%E5%AD%90%E7%BE%A4%E4%BC%98%E5%8C%96%E7%AE%97%E6%B3%95pso">粒子群优化算法（PSO）</a>
-<ul>
-<li><a href="#%E7%9B%B8%E5%85%B3%E6%9C%AF%E8%AF%AD-2">相关术语</a></li>
-<li><a href="#%E7%B2%92%E5%AD%90%E7%BE%A4%E4%BC%98%E5%8C%96%E7%AE%97%E6%B3%95%E6%AD%A5%E9%AA%A4">粒子群优化算法步骤</a></li>
-<li><a href="#%E7%B2%92%E5%AD%90%E7%BE%A4%E4%BC%98%E5%8C%96%E7%AE%97%E6%B3%95%E5%AE%9E%E4%BE%8B">粒子群优化算法实例</a></li>
-</ul>
-</li>
-</ul>
-</li>
+<li><a href="#%E6%A8%A1%E6%8B%9F%E9%80%80%E7%81%AB%E7%AE%97%E6%B3%95saa">模拟退火算法(SA)</a></li>
+<li><a href="#%E9%81%97%E4%BC%A0%E7%AE%97%E6%B3%95ga">遗传算法(GA)</a></li>
+<li><a href="#%E8%9A%81%E7%BE%A4%E7%AE%97%E6%B3%95aco">蚁群算法(ACO)</a></li>
+<li><a href="#%E7%B2%92%E5%AD%90%E7%BE%A4%E4%BC%98%E5%8C%96%E7%AE%97%E6%B3%95pso">粒子群优化算法（PSO）</a></li>
+<li><a href="#%E7%88%AC%E5%B1%B1%E6%B3%95%E7%A6%81%E5%BF%8C%E6%90%9C%E7%B4%A2%E4%B8%8E%E6%A8%A1%E6%8B%9F%E9%80%80%E7%81%AB%E7%9A%84%E5%AF%B9%E6%AF%94">爬山法、禁忌搜索与模拟退火的对比</a></li>
 </ul>
 </li>
 </ul>
