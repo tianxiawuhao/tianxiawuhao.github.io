@@ -126,60 +126,66 @@
           <img class="post-feature-header-image" src="/post-images/1h169zkFb.png" alt="封面图">
           
           <h2 id="1-整型">1. 整型</h2>
-<p>固定长度的整型，包括 有符号整型(有正有负) 或 无符号整型。</p>
+<p>固定长度的整型，包括有符号整型（可取正负）和无符号整型（只能取非负值）。</p>
 <p><strong>类比 Java 类型：</strong></p>
 <table>
 <thead>
 <tr>
-<th>CH类型</th>
-<th>Java类型</th>
+<th>CH 类型</th>
+<th>取值范围</th>
+<th>Java 类型</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>整型范围（-2n-1~2n-1-1）</td>
-<td></td>
-</tr>
-<tr>
-<td>Int8 - [-128 : 127]</td>
+<td>Int8</td>
+<td>-128 ~ 127</td>
 <td>Byte</td>
 </tr>
 <tr>
-<td>Int16 - [-32768 : 32767]</td>
+<td>Int16</td>
+<td>-32768 ~ 32767</td>
 <td>Short</td>
 </tr>
 <tr>
-<td>Int32 - [-2147483648 : 2147483647]</td>
+<td>Int32</td>
+<td>-2147483648 ~ 2147483647</td>
 <td>Int</td>
 </tr>
 <tr>
-<td>Int64 - [-9223372036854775808 : 9223372036854775807]</td>
+<td>Int64</td>
+<td>-9223372036854775808 ~ 9223372036854775807</td>
 <td>Long</td>
 </tr>
 <tr>
-<td>无符号整型范围（0~2n-1）</td>
-<td></td>
+<td>UInt8</td>
+<td>0 ~ 255</td>
+<td>—</td>
 </tr>
 <tr>
-<td>UInt8 - [0 : 255]</td>
-<td></td>
+<td>UInt16</td>
+<td>0 ~ 65535</td>
+<td>—</td>
 </tr>
 <tr>
-<td>UInt16 - [0 : 65535]</td>
-<td></td>
+<td>UInt32</td>
+<td>0 ~ 4294967295</td>
+<td>—</td>
 </tr>
 <tr>
-<td>UInt32 - [0 : 4294967295]</td>
-<td></td>
-</tr>
-<tr>
-<td>UInt64 - [0 : 18446744073709551615]</td>
-<td></td>
+<td>UInt64</td>
+<td>0 ~ 18446744073709551615</td>
+<td>—</td>
 </tr>
 </tbody>
 </table>
-<p>后面的数组就代表位数</p>
+<p>类型名后缀的数字就代表位数：Int8 占 8 位，因此有符号整型的范围是 \(-2^{n-1} \sim 2^{n-1}-1\)，无符号整型的范围是 \(0 \sim 2^{n}-1\)；Java 中没有对应的无符号类型。</p>
+<pre><code class="language-sql">-- ClickHouse 会根据字面量大小自动推断类型
+SELECT toTypeName(1), toTypeName(-1), toTypeName(300), toTypeName(3000000000);
+-- UInt8         Int8          UInt16        UInt64
+</code></pre>
 <p>使用场景：个数、数量，也可以存储 id。</p>
+<p><img src="/post-assets/1h169zkFb/01-type-catalog.svg" alt="ClickHouse 常用数据类型总览：数值、字符串、时间、复合四大类的成员与关键参数"></p>
 <h2 id="2-浮点型">2. 浮点型</h2>
 <p><strong>类比 Java 类型：</strong></p>
 <table>
@@ -205,80 +211,175 @@
 <h2 id="3-布尔型">3. 布尔型</h2>
 <p>没有单独的类型来存储布尔值。可以使用 UInt8 类型，取值限制为 0 或 1。</p>
 <h2 id="4-decimal-型">4. Decimal 型</h2>
-<p>有符号的浮点数，可在加、减和乘法运算过程中保持精度。对于除法，最低有效数字会被丢弃（不四舍五入）。</p>
-<blockquote>
-<p>有三种声明 (s 标识小数位)：</p>
-<p>Decimal32(s)，即一共有 8 位，其中小数部分占 s 位，相当于 MySQL 中的 Decimal(9-s, s)<br>
-Decimal64(s)， 即 一共有 18 位，其中小数部分占 s 位，相当于 Decimal(18-s,s)<br>
-Decimal128(s)， 即 一共有 38位，其中小数部分占 s 位，相当于 Decimal(38-s,s)<br>
-使用场景： 一般金额字段、汇率、利率等字段为了保证小数点精度，都使用 Decimal进行存储。</p>
-</blockquote>
+<p>Decimal 是<strong>有符号的定点数</strong>，在加、减、乘法运算过程中可以保持精度；但除法会丢弃最低有效位，并且<strong>不四舍五入</strong>。</p>
+<p>声明方式为 <code>Decimal32(s)</code> / <code>Decimal64(s)</code> / <code>Decimal128(s)</code>，其中 s 表示小数位数（scale），含义与底层位数如下：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>总位数</th>
+<th>s 的取值</th>
+<th>等价的 MySQL 类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Decimal32(s)</td>
+<td>32 位</td>
+<td>0 ~ 9</td>
+<td>Decimal(9-s, s)</td>
+</tr>
+<tr>
+<td>Decimal64(s)</td>
+<td>64 位</td>
+<td>0 ~ 18</td>
+<td>Decimal(18-s, s)</td>
+</tr>
+<tr>
+<td>Decimal128(s)</td>
+<td>128 位</td>
+<td>0 ~ 38</td>
+<td>Decimal(38-s, s)</td>
+</tr>
+</tbody>
+</table>
+<p>使用场景：金额、汇率、利率等字段为了保证小数点精度，都用 Decimal 存储。</p>
+<pre><code class="language-sql">-- 5 位小数，整数部分最多 4 位，整体等价于 MySQL 的 DECIMAL(9, 5)
+CREATE TABLE t_price
+(
+	price Decimal32(5)
+)
+ENGINE = TinyLog;
+
+INSERT INTO t_price VALUES (12.34567);
+-- 除法会截断而非四舍五入
+SELECT toDecimal64(1, 4) / toDecimal64(3, 4);  -- 0.3333
+</code></pre>
 <h2 id="5-字符串">5. 字符串</h2>
-<p><strong>String - 对应 Mysql - Varchar</strong><br>
-字符串可以任意长度的。它可以包含任意的字节集，包含空字节。</p>
+<p><strong>String — 对应 MySQL 的 Varchar</strong><br>
+长度不受限，可以包含任意的字节集，也包括空字节。</p>
 <p><strong>FixedString(N)</strong><br>
-固定长度 N 的字符串，N 必须是严格的正自然数。当服务端读取长度小于 N 的字符串时候，通过在字符串末尾添加空字节来达到 N 字节长度。 当服务端读取长度大于 N 的字符串时候，将返回错误消息。<br>
-与 String 相比，极少会使用 FixedString，因为使用起来不是很方便。</p>
-<p>使用场景：名称、文字描述、字符型编码。 固定长度的可以保存一些定长的内容，比如一些编码、性别等；但是考虑到数据可能变化、定长带来的收益不够明显，所以定长字符串使用意义有限。</p>
+固定长度的字符串，N 必须是严格的正整数。写入长度小于 N 的字符串时，ClickHouse 在末尾补空字节补齐到 N 字节；写入长度大于 N 的字符串时，服务端直接返回错误。<br>
+与 String 相比，FixedString 极少使用，因为用起来并不方便。</p>
+<p>使用场景：名称、文字描述、字符型编码。定长类型可以保存长度固定的内容，比如编码、性别等；但考虑到数据内容可能变化、定长带来的收益又不明显，定长字符串的使用意义有限。</p>
 <h2 id="6-枚举类型">6. 枚举类型</h2>
-<p>包括 Enum8 和 Enum16 类型。Enum 保存 ‘string’= integer 的对应关系。</p>
-<blockquote>
-<p>Enum8 用 ‘String’= Int8 对描述。<br>
-Enum16 用 ‘String’= Int16 对描述。</p>
-</blockquote>
-<p>创建一个带有一个枚举 Enum8(‘hello’ = 1, ‘world’ = 2) 类型的列</p>
+<p>包括 Enum8 和 Enum16 两种类型。Enum 保存的是『字符串 = 整数』的对应关系：</p>
+<ul>
+<li>Enum8 用 <code>'String' = Int8</code> 描述，最多 256 个取值；</li>
+<li>Enum16 用 <code>'String' = Int16</code> 描述，取值更多。</li>
+</ul>
+<p>下面创建一个带枚举列 <code>Enum8('hello' = 1, 'world' = 2)</code> 的表：</p>
 <pre><code class="language-sql">CREATE TABLE t_enum
 (
 	x Enum8('hello' = 1, 'world' = 2)
 )
 ENGINE = TinyLog;
 </code></pre>
-<p>这个 x 列只能存储类型定义中列出的值：‘hello’或’world’</p>
-<pre><code class="language-shell">INSERT INTO t_enum VALUES ('hello'), ('world'), ('hello');
+<p>这个 x 列只能存储类型定义中列出的值：<code>'hello'</code> 或 <code>'world'</code>。</p>
+<pre><code class="language-sql">INSERT INTO t_enum VALUES ('hello'), ('world'), ('hello');
 </code></pre>
-<p>如果尝试保存任何其他值，ClickHouse 抛出异常</p>
-<pre><code class="language-shell">insert into t_enum values('a')
+<p>如果尝试保存任何其他值，ClickHouse 会抛出异常（不同版本报错文案略有差异）：</p>
+<pre><code class="language-sql">INSERT INTO t_enum VALUES ('a');
+-- Unknown element 'a' for enum
 </code></pre>
-<p>如果需要看到对应行的数值，则必须将 Enum 值转换为整数类型</p>
-<pre><code class="language-shell">SELECT CAST(x, 'Int8') FROM t_enum;
+<p>如果需要看到对应行的数值，必须把 Enum 值转换成整数类型：</p>
+<pre><code class="language-sql">SELECT CAST(x AS Int8) FROM t_enum;
 </code></pre>
-<p>使用场景：对一些状态、类型的字段算是一种空间优化，也算是一种数据约束。但是实际使用中往往因为一些数据内容的变化增加一定的维护成本，甚至是数据丢失问题。所以谨慎使用。</p>
+<p>使用场景：对一些状态、类型的字段算是一种空间优化，也算是一种数据约束。但实际使用中，往往因为数据内容的变化而增加维护成本，甚至造成数据丢失，所以要谨慎使用。</p>
 <h2 id="7-时间类型">7. 时间类型</h2>
-<p>目前 ClickHouse 有三种时间类型</p>
-<blockquote>
-<p>Date 接受年-月-日的字符串比如 ‘2019-12-16’<br>
-Datetime 接受年-月-日 时:分:秒的字符串比如 ‘2019-12-16 20:50:10’<br>
-Datetime64 接受年-月-日 时:分:秒.亚秒的字符串比如‘2019-12-16 20:50:10.66’<br>
-日期类型，用两个字节存储，表示从 1970-01-01 (无符号) 到当前的日期值。</p>
-</blockquote>
+<p>目前 ClickHouse 常用的时间类型有 Date、Date32、DateTime 和 DateTime64：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>存储</th>
+<th>精度与范围</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Date</td>
+<td>2 字节</td>
+<td>精确到天，范围 1970-01-01 ~ 2149-06-06</td>
+</tr>
+<tr>
+<td>Date32</td>
+<td>4 字节</td>
+<td>精确到天，范围 1900-01-01 ~ 2299-12-31</td>
+</tr>
+<tr>
+<td>DateTime</td>
+<td>4 字节</td>
+<td>精确到秒，范围 1970-01-01 00:00:00 ~ 2106-02-07 06:28:15</td>
+</tr>
+<tr>
+<td>DateTime64(precision, tz)</td>
+<td>8 字节</td>
+<td>precision 取 0 ~ 9 表示亚秒精度，如 3 为毫秒、6 为微秒</td>
+</tr>
+</tbody>
+</table>
+<p>字面量写法示例：Date 接受 <code>'2019-12-16'</code>，DateTime 接受 <code>'2019-12-16 20:50:10'</code>，DateTime64 接受 <code>'2019-12-16 20:50:10.66'</code>。DateTime 和 DateTime64 还可以附加时区参数，例如 <code>DateTime('Asia/Shanghai')</code>。</p>
+<p><img src="/post-assets/1h169zkFb/02-time-types.svg" alt="ClickHouse 四种时间类型的精度与时间轴范围对比"></p>
 <h2 id="8-数组">8. 数组</h2>
-<p>Array(T)：由 T 类型元素组成的数组。<br>
-T 可以是任意类型，包含数组类型。 但不推荐使用多维数组，ClickHouse 对多维数组的支持有限。例如，不能在 MergeTree 表中存储多维数组。</p>
-<p><strong>创建数组方式 1，使用 array 函数array(T)</strong></p>
-<pre><code class="language-shell">SELECT array(1, 2) AS x, toTypeName(x) ;
+<p><code>Array(T)</code>：由 T 类型元素组成的数组。<br>
+T 可以是任意类型，也包括数组类型本身；但不推荐使用多维数组，ClickHouse 对多维数组的支持有限，例如不能在 MergeTree 表中存储多维数组。</p>
+<p><strong>创建数组方式 1：使用 array 函数 array(T)</strong></p>
+<pre><code class="language-sql">SELECT array(1, 2) AS x, toTypeName(x);
+-- [1,2]   Array(UInt8)
 </code></pre>
-<p><strong>创建数组方式 2：使用方括号[]</strong></p>
-<pre><code class="language-shell">SELECT [1, 2] AS x, toTypeName(x);
+<p><strong>创建数组方式 2：使用方括号 []</strong></p>
+<pre><code class="language-sql">SELECT [1, 2] AS x, toTypeName(x);
+-- [1,2]   Array(UInt8)
 </code></pre>
 <h2 id="9-其他">9. 其他</h2>
-<p>还有很多数据结构，可以参考官方文档：https://clickhouse.com/docs/zh/sql-reference/data-types/</p>
+<p>除上面这些，ClickHouse 还提供 <code>Nullable(T)</code>（允许 NULL）、<code>LowCardinality(T)</code>（字典编码优化）、<code>UUID</code>、<code>IPv4</code> / <code>IPv6</code>、<code>Tuple</code>、<code>Map</code>、<code>Nested</code>、<code>AggregateFunction</code> 等类型；<code>Integer</code>、<code>Float</code> 则是 Int32、Float32 的别名。</p>
+<p>完整的类型清单可以参考官方文档：<a href="https://clickhouse.com/docs/zh/sql-reference/data-types/" target="_blank" rel="noopener">ClickHouse 数据类型</a>。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#1-%E6%95%B4%E5%9E%8B">1. 整型</a>
 <ul>
-<li>
-<ul>
-<li><a href="#1-%E6%95%B4%E5%9E%8B">1. 整型</a></li>
-<li><a href="#2-%E6%B5%AE%E7%82%B9%E5%9E%8B">2. 浮点型</a></li>
-<li><a href="#3-%E5%B8%83%E5%B0%94%E5%9E%8B">3. 布尔型</a></li>
-<li><a href="#4-decimal-%E5%9E%8B">4. Decimal 型</a></li>
-<li><a href="#5-%E5%AD%97%E7%AC%A6%E4%B8%B2">5. 字符串</a></li>
-<li><a href="#6-%E6%9E%9A%E4%B8%BE%E7%B1%BB%E5%9E%8B">6. 枚举类型</a></li>
-<li><a href="#7-%E6%97%B6%E9%97%B4%E7%B1%BB%E5%9E%8B">7. 时间类型</a></li>
-<li><a href="#8-%E6%95%B0%E7%BB%84">8. 数组</a></li>
-<li><a href="#9-%E5%85%B6%E4%BB%96">9. 其他</a></li>
 </ul>
 </li>
+<li>
+<a href="#2-%E6%B5%AE%E7%82%B9%E5%9E%8B">2. 浮点型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#3-%E5%B8%83%E5%B0%94%E5%9E%8B">3. 布尔型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#4-decimal-%E5%9E%8B">4. Decimal 型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#5-%E5%AD%97%E7%AC%A6%E4%B8%B2">5. 字符串</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#6-%E6%9E%9A%E4%B8%BE%E7%B1%BB%E5%9E%8B">6. 枚举类型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#7-%E6%97%B6%E9%97%B4%E7%B1%BB%E5%9E%8B">7. 时间类型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#8-%E6%95%B0%E7%BB%84">8. 数组</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#9-%E5%85%B6%E4%BB%96">9. 其他</a>
+<ul>
 </ul>
 </li>
 </ul>
