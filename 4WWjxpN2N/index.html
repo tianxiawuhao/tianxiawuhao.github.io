@@ -133,12 +133,27 @@
 <li>方法可以不写return，返回最后一句代码</li>
 <li>代码块可以作为参数传递</li>
 </ul>
+<p>Groovy 的定位是运行在 JVM 上的动态语言，编译后同样是字节码，可以与 Java 类互相调用。上面的四条规则中，“没有分号”和“省略括号”让 Gradle 构建脚本看起来像声明式 DSL，而“代码块作为参数传递”正是闭包的基础。</p>
 <h2 id="定义">定义</h2>
 <pre><code class="language-java">def param = 'hello world'
 def param1 = &quot;hello world&quot;
 println &quot;${param1} ,li&quot; 
 </code></pre>
-<p>${}里面可以放变量，也可以是表达式，只有双引号里面可以使用</p>
+<p>${} 里面可以放变量，也可以是表达式，但只有双引号字符串（GString）才会插值；单引号字符串是普通的 java.lang.String，其中的 ${} 会原样输出。GString 在需要时可通过 toString() 或 as String 转换回普通字符串。</p>
+<h3 id="gstring-与字符串插值">GString 与字符串插值</h3>
+<p>GString 与 Java 字符串的另一个差别是惰性求值：闭包占位符会在 GString 被转成字符串时才执行，而 ${} 中的表达式在构造时就求值。</p>
+<pre><code class="language-java">def name = 'li'
+def greeting = &quot;hello ${name}&quot;      // GString，转字符串后为 hello li
+def plain = 'hello ${name}'         // String，原样输出 hello ${name}
+
+def counter = 0
+def lazy = &quot;count=${-&gt; ++counter}&quot;   // 闭包占位符，惰性求值
+println lazy.toString()             // count=1
+println lazy.toString()             // count=2
+
+assert greeting instanceof groovy.lang.GString
+assert plain instanceof java.lang.String
+</code></pre>
 <h2 id="声明变量">声明变量</h2>
 <p>可以在构建脚本中声明两种变量：局部变量和额外属性。</p>
 <h3 id="局部变量">局部变量</h3>
@@ -191,7 +206,7 @@ main
 plugin
 </code></pre>
 <h3 id="变量范围本地和脚本范围">变量范围：本地和脚本范围</h3>
-<p>用类型修饰符声明的变量在闭包中可见，但在方法中不可见。</p>
+<p>用类型修饰符（如 String）或 def 声明的变量在闭包中可见，但在方法中不可见；而直接赋值创建的脚本绑定（script binding）在方法中可以访问到。下面的例子分别验证这三种情况。</p>
 <pre><code class="language-java">String localScope1 = 'localScope1'
 def localScope2 = 'localScope2'
 scriptScope = 'scriptScope'
@@ -223,8 +238,8 @@ def method() {
 closure.call()
 method()
 </code></pre>
-<p>输出 groovy scope.groovy</p>
-<pre><code class="language-shell">&gt; groovy作用域
+<p>输出：闭包可以读取全部三个变量；方法内只有脚本绑定 scriptScope 可见，读取 localScope1 与 localScope2 会抛出 MissingPropertyException。</p>
+<pre><code class="language-text">&gt; groovy scope.groovy
 localScope1
 localScope2
 scriptScope
@@ -312,6 +327,7 @@ def func(closure) {
 </code></pre>
 <h3 id="闭包委托">闭包委托</h3>
 <p>每个闭包都有一个<code>delegate</code>对象，Groovy使用该对象来查找不是闭包的局部变量或参数的变量和方法引用。</p>
+<p>委托策略决定变量和方法的解析顺序：OWNER_FIRST（默认，先找闭包的所有者，再找 delegate）、DELEGATE_FIRST（先找 delegate）、OWNER_ONLY、DELEGATE_ONLY 与 TO_SELF。Gradle 的配置块普遍使用 DELEGATE_FIRST，所以在闭包里写 code = &quot;cix&quot; 会直接设置到 delegate 对象上。</p>
 <p>例.闭包委托</p>
 <pre><code class="language-java">class Info {
     int id;
@@ -369,36 +385,130 @@ test.systemProperty('some.prop', 'value')
 repositories() { println &quot;in a closure&quot; }
 repositories({ println &quot;in a closure&quot; })
 </code></pre>
+<h2 id="groovy-与-java-的差异">Groovy 与 Java 的差异</h2>
+<p>Groovy 不是 Java 的替代品，而是补充：它编译成 JVM 字节码，可以直接调用 Java 类库，也可以在 Java 项目中调用 Groovy 类。下面是日常使用中最容易感知的差异，图中按类别做了对照。</p>
+<p><img src="/post-assets/4WWjxpN2N/01-groovy-vs-java.svg" alt="Groovy 与 Java 主要特性对照图"></p>
+<ul>
+<li>类型系统：def 声明的变量是动态类型，方法调用在运行时解析；Java 是静态类型，编译期检查。需要性能与静态检查时，可以用 @CompileStatic 或 @TypeChecked 让编译器按静态方式处理。</li>
+<li>字符串：Groovy 有 GString（&quot;${name}&quot; 插值、多行字符串、闭包占位符惰性求值），Java 用 String.format 或拼接。</li>
+<li>闭包：Groovy 的闭包是一等公民，有 owner、this、delegate 和委托策略；Java 只有 Lambda 与匿名内部类，没有 delegate 概念。</li>
+<li>安全操作符：Groovy 提供 ?. 安全导航、?.. 安全属性/方法访问、?: Elvis 运算符和 ?. 与 ?: 的组合；Java 需要显式判空或 Optional。</li>
+<li>集合：Groovy 为 List、Map、Range 内置 each、collect、find、findAll、inject、groupBy、sort 等扩展方法，并有负数下标与区间取值；Java 依赖 for 循环或 Stream API。</li>
+<li>对象配置：with 与 tap 可以在闭包内直接读写对象属性；Java 通常用构造器、setter 链或 Builder。</li>
+<li>语法糖：Groovy 可省略分号、括号与 return，支持命名参数自动收拢为 Map、属性访问器与运算符重载；Java 语法更严格。</li>
+</ul>
+<h3 id="安全导航与-elvis">安全导航与 Elvis</h3>
+<p>?. 在对象为 null 时不会抛 NullPointerException，而是直接返回 null；Elvis 运算符 ?: 在左侧表达式为假值（null、false、0、空字符串）时取右侧的值。</p>
+<pre><code class="language-java">def user = [name: 'li', address: null]
+
+println user.address?.city        // null，不会抛 NPE
+println user.address?.city ?: '未填写'  // 未填写
+println user?.name?.toUpperCase() // LI
+def city = null
+println city ?: 'unknown'         // unknown，等价于 city ? city : 'unknown'
+
+// ?.. 用于直接访问属性或方法而跳过 getter 派发
+def prop = user.@class            // 直接读取字段
+</code></pre>
+<h3 id="集合扩展方法">集合扩展方法</h3>
+<pre><code class="language-java">def nums = [1, 2, 3, 4, 5]
+
+println nums.collect { it * 2 }        // [2, 4, 6, 8, 10]
+println nums.findAll { it % 2 == 0 }   // [2, 4]
+println nums.find { it &gt; 3 }           // 4
+println nums.inject(0) { sum, it -&gt; sum + it } // 15
+println nums.sum()                     // 15
+println nums.groupBy { it % 2 }        // [1:[1, 3, 5], 0:[2, 4]]
+println nums.max()                     // 5
+nums.eachWithIndex { n, i -&gt; println &quot;$i:$n&quot; }
+</code></pre>
+<h3 id="with-与-tap">with 与 tap</h3>
+<p>with 返回闭包中最后一行表达式的值，适合对一个对象做多步读取或计算；tap 始终返回对象本身，适合链式配置。</p>
+<pre><code class="language-java">def sb = new StringBuilder()
+def len = sb.with {
+    append('hello')
+    append(' world')
+    length()                 // with 的返回值
+}
+println &quot;len=$len, text=$sb&quot; // len=11, text=hello world
+
+def config = new Expando()
+config.tap {
+    name = 'demo'
+    timeout = 30
+}.tap {
+    retries = 3
+}
+println &quot;$config.name/$config.timeout/$config.retries&quot; // demo/30/3
+</code></pre>
+<h3 id="compilestatic-与性能">@CompileStatic 与性能</h3>
+<p>动态派发带来灵活性，也带来运行时开销。在热点代码或希望获得编译期检查时，可以加上 @CompileStatic 注解，让编译器生成与 Java 等价的静态调用；@TypeChecked 只做类型检查而不改变调用方式。</p>
+<pre><code class="language-java">import groovy.transform.CompileStatic
+import groovy.transform.TypeChecked
+
+@CompileStatic
+class Calculator {
+    int add(int a, int b) { a + b }   // 编译为静态调用，速度接近 Java
+}
+
+@TypeChecked
+class Checked {
+    String upper(String s) { s.toUpperCase() } // 类型不匹配会在编译期报错
+}
+</code></pre>
+<p>需要注意：@CompileStatic 会关闭动态特性，依赖 delegate 的 Gradle 配置块、Expando 动态属性等写法不能直接套用。</p>
+<h3 id="与-gradle-和-spock-的关系">与 Gradle 和 Spock 的关系</h3>
+<p>Gradle 的构建脚本 build.gradle 就是 Groovy 脚本，前面看到的 ext 属性、闭包委托、命名参数、with 与属性访问器，正是 Gradle DSL 的实现方式；而 Gradle 的 Kotlin DSL 则是另一套语法。Spock 是建立在 JUnit 之上的 Groovy 测试框架，用 given/when/then 标签组织用例，并支持数据驱动的 where 块，测试代码可以直接调用被测的 Java 类。</p>
+<pre><code class="language-java">class MathSpec extends spock.lang.Specification {
+    def &quot;max should return the larger number&quot;() {
+        expect:
+        Math.max(a, b) == expected
+
+        where:
+        a | b | expected
+        1 | 3 | 3
+        5 | 2 | 5
+    }
+}
+</code></pre>
 <h2 id="集合">集合</h2>
 <h3 id="list">List</h3>
 <pre><code class="language-java">def list = [1,2,3,4]
 println list[0] // 1
 println list[-1] // 4 最后一个
 println list[-2] // 3 倒数第二个
-println list[0..2] // 第1-3个
+println list[0..2] // [1, 2, 3]，下标 0 到 2 的子列表
+println list[0..-2] // [1, 2, 3]，负数下标可以与区间混用
  
 list.each { //迭代
     println it
 }
 </code></pre>
 <h3 id="map">Map</h3>
-<pre><code class="language-java">def map= ['name':'li', 'age':18]
-println map[name] // li
+<pre><code class="language-java">def map = ['name':'li', 'age':18]
+println map['name'] // li
 println map.age // 18
  
-list.each { //迭代
-    println &quot;${it.key}:${it.value}&quot;
+map.each { key, value -&gt; // 迭代 Map，闭包接收两个参数
+    println &quot;${key}:${value}&quot;
 }
- 
+map.each { entry -&gt; // 只声明一个参数时拿到 Map.Entry
+    println &quot;${entry.key}:${entry.value}&quot;
+}
 </code></pre>
+<p>Map 的键默认是字符串，写 map[name] 会先求值变量 name 而抛出 MissingPropertyException，所以中括号里要写字符串字面量或已定义的变量。另外，Groovy 会把 apply plugin: 'java' 这类命名参数自动收拢成一个 Map 作为最后一个参数，这正是 Gradle DSL 能写成 plugin: 'java' 的原因。</p>
 <h2 id="javabean">JavaBean</h2>
-<pre><code class="language-java">class A{
-    private int a; //可通过A().a 获取修改
-    public int getB(){//可通过A().b获取，但不能修改
-        1
-    }
+<pre><code class="language-java">class A {
+    private int a          // Groovy 属性：自动生成 getter/setter，可通过 a 访问
+    int b                  // 同上，公共属性
+    final int c = 1        // 只有 getter，没有 setter，不能修改
 }
+def x = new A()
+x.a = 10                   // 实际调用 setA(10)
+println x.a                // 实际调用 getA()
+println x.b
 </code></pre>
+<p>属性访问器是 Groovy 简化 JavaBean 的关键：字段声明本身就等价于私有字段加 getter/setter，点号访问会自动派发到对应方法；只有 getter 没有 setter 时赋值会抛出 ReadOnlyPropertyException。这一机制也是后面 with、tap 与闭包委托得以工作的基础。</p>
 <p>build.gradle</p>
 <pre><code class="language-java">// List literal
 test.includes = ['org/gradle/api/**', 'org/gradle/internal/**']
@@ -646,48 +756,84 @@ import org.gradle.workers.*
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#groovy%E5%9F%BA%E7%A1%80">Groovy基础</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#%E5%9F%BA%E6%9C%AC%E8%A7%84%E5%88%99">基本规则</a>
 <ul>
-<li><a href="#groovy%E5%9F%BA%E7%A1%80">Groovy基础</a></li>
-<li><a href="#%E5%9F%BA%E6%9C%AC%E8%A7%84%E5%88%99">基本规则</a></li>
-<li><a href="#%E5%AE%9A%E4%B9%89">定义</a></li>
-<li><a href="#%E5%A3%B0%E6%98%8E%E5%8F%98%E9%87%8F">声明变量</a>
+</ul>
+</li>
+<li>
+<a href="#%E5%AE%9A%E4%B9%89">定义</a>
+<ul>
+<li><a href="#gstring-%E4%B8%8E%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%8F%92%E5%80%BC">GString 与字符串插值</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%A3%B0%E6%98%8E%E5%8F%98%E9%87%8F">声明变量</a>
 <ul>
 <li><a href="#%E5%B1%80%E9%83%A8%E5%8F%98%E9%87%8F">局部变量</a></li>
 <li><a href="#ext%E5%B1%9E%E6%80%A7">ext属性</a></li>
 <li><a href="#%E5%8F%98%E9%87%8F%E8%8C%83%E5%9B%B4%E6%9C%AC%E5%9C%B0%E5%92%8C%E8%84%9A%E6%9C%AC%E8%8C%83%E5%9B%B4">变量范围：本地和脚本范围</a></li>
 </ul>
 </li>
-<li><a href="#%E5%AF%B9%E8%B1%A1">对象</a>
+<li>
+<a href="#%E5%AF%B9%E8%B1%A1">对象</a>
 <ul>
 <li><a href="#%E4%BD%BF%E7%94%A8%E5%AF%B9%E8%B1%A1">使用对象</a></li>
 <li><a href="#%E4%BD%BF%E7%94%A8%E5%A4%96%E9%83%A8%E8%84%9A%E6%9C%AC%E9%85%8D%E7%BD%AE%E4%BB%BB%E6%84%8F%E5%AF%B9%E8%B1%A1">使用外部脚本配置任意对象</a></li>
 </ul>
 </li>
-<li><a href="#%E5%B1%9E%E6%80%A7%E8%AE%BF%E9%97%AE%E5%99%A8">属性访问器</a></li>
-<li><a href="#%E9%97%AD%E5%8C%85">闭包</a>
+<li>
+<a href="#%E5%B1%9E%E6%80%A7%E8%AE%BF%E9%97%AE%E5%99%A8">属性访问器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%97%AD%E5%8C%85">闭包</a>
 <ul>
 <li><a href="#%E9%97%AD%E5%8C%85%E5%A7%94%E6%89%98">闭包委托</a></li>
 </ul>
 </li>
-<li><a href="#%E6%96%B9%E6%B3%95">方法</a>
+<li>
+<a href="#%E6%96%B9%E6%B3%95">方法</a>
 <ul>
 <li><a href="#%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8%E4%B8%8A%E7%9A%84%E5%8F%AF%E9%80%89%E6%8B%AC%E5%8F%B7">方法调用上的可选括号</a></li>
 <li><a href="#%E9%97%AD%E5%8C%85%E4%BD%9C%E4%B8%BA%E6%96%B9%E6%B3%95%E4%B8%AD%E7%9A%84%E6%9C%80%E5%90%8E%E4%B8%80%E4%B8%AA%E5%8F%82%E6%95%B0">闭包作为方法中的最后一个参数</a></li>
 </ul>
 </li>
-<li><a href="#%E9%9B%86%E5%90%88">集合</a>
+<li>
+<a href="#groovy-%E4%B8%8E-java-%E7%9A%84%E5%B7%AE%E5%BC%82">Groovy 与 Java 的差异</a>
+<ul>
+<li><a href="#%E5%AE%89%E5%85%A8%E5%AF%BC%E8%88%AA%E4%B8%8E-elvis">安全导航与 Elvis</a></li>
+<li><a href="#%E9%9B%86%E5%90%88%E6%89%A9%E5%B1%95%E6%96%B9%E6%B3%95">集合扩展方法</a></li>
+<li><a href="#with-%E4%B8%8E-tap">with 与 tap</a></li>
+<li><a href="#compilestatic-%E4%B8%8E%E6%80%A7%E8%83%BD">@CompileStatic 与性能</a></li>
+<li><a href="#%E4%B8%8E-gradle-%E5%92%8C-spock-%E7%9A%84%E5%85%B3%E7%B3%BB">与 Gradle 和 Spock 的关系</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E9%9B%86%E5%90%88">集合</a>
 <ul>
 <li><a href="#list">List</a></li>
 <li><a href="#map">Map</a></li>
 </ul>
 </li>
-<li><a href="#javabean">JavaBean</a></li>
-<li><a href="#%E9%BB%98%E8%AE%A4%E5%AF%BC%E5%85%A5">默认导入</a></li>
-<li><a href="#%E5%AF%BC%E5%85%A5%E4%BE%9D%E8%B5%96">导入依赖</a></li>
+<li>
+<a href="#javabean">JavaBean</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E9%BB%98%E8%AE%A4%E5%AF%BC%E5%85%A5">默认导入</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%AF%BC%E5%85%A5%E4%BE%9D%E8%B5%96">导入依赖</a>
+<ul>
 </ul>
 </li>
 </ul>
