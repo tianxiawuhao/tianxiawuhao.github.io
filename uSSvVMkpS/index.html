@@ -136,13 +136,13 @@
 <p>一致性C：在事务完成时，所有数据必须保持在一致的状态。（事务完成后，最终结果与预期结果一致）</p>
 </li>
 <li>
-<p>隔离性：一次事务操作，要么是其他事务操作前的状态，要么是其他事务操作后的状态，不存在中间状态。</p>
+<p>隔离性I：一次事务操作，要么是其他事务操作前的状态，要么是其他事务操作后的状态，不存在中间状态。</p>
 </li>
 <li>
-<p>持久性：事务提交后，数据会落到本地磁盘，修改是永久性的。</p>
+<p>持久性D：事务提交后，数据会落到本地磁盘，修改是永久性的。</p>
 </li>
 </ul>
-<p>PostgreSQL中，在事务的并发问题里，也是基于MVCC，多版本并发控制去维护数据的一致性。相比于传统的锁操作，MVCC最大的有点就是可以让<strong>读写互相不冲突 。</strong></p>
+<p>PostgreSQL中，在事务的并发问题里，也是基于MVCC，多版本并发控制去维护数据的一致性。相比于传统的锁操作，MVCC 最大的优点就是可以让<strong>读写互相不冲突</strong>。</p>
 <p>当然，PostgreSQL也支持表锁和行锁，可以解决写写的冲突问题。</p>
 <p>PostgreSQL 相比其他数据库有一个比较大的优化：DDL 也可以包含在事务中。例如集群中的操作，一个事务要保证所有节点都成功建出表才算成功。</p>
 <h3 id="102-事务的基本使用">10.2 事务的基本使用</h3>
@@ -184,7 +184,7 @@ begin;
 insert into test values (8,'铃铛',55,11);
 -- 添加一个保存点
 savepoint ok1;
--- 再插入数据,比如出了一场
+-- 再插入数据，比如出现了异常
 insert into test values (9,'大唐官府',66,22);
 -- 回滚到之前的提交点
 rollback to savepoint ok1;
@@ -236,6 +236,7 @@ commit;
 <p>xmax：删除/更新该行版本的事务 ID；若当前版本未被删除或更新，xmax 为 0。其他事务做了未提交的写操作时，该版本号会写入 xmax；相关事务提交后，xmax 归 0。</p>
 </li>
 </ul>
+<p><img src="/post-assets/uSSvVMkpS/01-mvcc-row-versions.svg" alt="MVCC 行版本与 xmin/xmax 读写不阻塞示意图"></p>
 <figure data-type="image" tabindex="2"><img src="/post-images/71599c0cf131ecc03a5719a436aca28b.png" alt="" loading="lazy"></figure>
 <p>基于上图的操作查看一波效果</p>
 <p>事务A</p>
@@ -288,7 +289,7 @@ select xmin,xmax,* from test where id = 8;
 -- 基于互斥锁，锁住test表
 -- 先开启事务
 begin;
--- 基于默认的ACCESS EXCLUSIVE锁住test表
+-- 基于 ACCESS SHARE 共享锁锁住test表
 lock test in ACCESS SHARE mode;
 -- 操作
 select * from test;
@@ -347,7 +348,7 @@ commit;
 <li>
 <p>WalWriter进程：WAL就是write ahead log的缩写，说人话就是预写日志（redo log）。其实数据还在内存中时，就已经先写入了一份 WAL 日志；这样一来，即便 BgWriter 还没来得及写盘，数据也不会丢失。<br>
 WAL能单独做备份么？单独不行！<br>
-但是WAL日志有个问题，这个日志会循环使用，WAL日志有大小的线程，只能保存指定时间的日志信息，如果超过了，会覆盖之前的日志。</p>
+但是WAL日志有个问题，这个日志会循环使用，WAL 日志有固定大小并循环使用，只能保留一段时间内的日志；写满之后，较早的日志会被覆盖。</p>
 </li>
 <li>
 <p>PgArch进程：WAL日志会循环使用，数据会丢失。没关系，还有一个归档的进程，会在切换wal日志前，将WAL日志备份出来。PostgreSQL 还提供了全量备份操作，可以结合 WAL 日志选择任意时间点进行恢复。<br>
@@ -356,7 +357,7 @@ WAL能单独做备份么？单独不行！<br>
 </ul>
 <figure data-type="image" tabindex="4"><img src="/post-images/5e73a90defe770f975ae6fdfac527644.png" alt="" loading="lazy"></figure>
 <p>这些就是归档日志</p>
-<pre><code class="language-sql">wal日志的名称，是三块内容组成，
+<pre><code class="language-text">wal日志的名称，是三块内容组成，
 每8个字符分成一组，用16进制标识的
 00000001 00000000 0000000A
 时间线 逻辑id 物理id
@@ -369,7 +370,7 @@ select pg_walfile_name('0/47233270');
 </code></pre>
 <p>归档默认不是开启的，需要手动开启归档操作，才能保证wal日志的完整性</p>
 <p>修改postgresql.conf文件</p>
-<pre><code class="language-text"># 开启wal日志的内容，注释去掉即可
+<pre><code class="language-text"># 归档所需的基础配置：wal_level 至少为 replica
 wal_level = replica
 fsync = on
 </code></pre>
@@ -383,7 +384,7 @@ archive_command = 'test ! -f /archive/%f &amp;&amp; cp %p /archive/%f'
 <p>修改完上述配置后，记得重启 PostgreSQL 进程才会生效。</p>
 <p>归档操作执行时，需要保证 /archive 目录存在，并且 postgres 用户有写（w）权限。</p>
 <p>构建/archive路径</p>
-<pre><code class="language-sql"># postgres没有权限在/目录下构建目录
+<pre><code class="language-bash"># postgres没有权限在/目录下构建目录
 # 切换到root，构建目录，将目录的拥有者更改为postgres
 mkdir /archive
 chown -R postgres. archive
@@ -441,13 +442,13 @@ pg_basebackup -D /pg_basebackup -Ft -Pv -Upostgres -h 192.168.11.32 -p 5432 -R
 </code></pre>
 <p>准备测试，走你~</p>
 <p>提前准备出/pg_basebackup目录。记得将拥有者赋予postgres用户</p>
-<pre><code class="language-sql">mkdir /pg_basebackup
+<pre><code class="language-bash">mkdir /pg_basebackup
 chown -R postgres. /pg_basebackup/
 </code></pre>
 <p>给postgres用户提供replication的权限，修改pg_hba.conf，记得重启生效</p>
 <figure data-type="image" tabindex="11"><img src="/post-images/7e45c3f77d539d72d1170577a37d45a8.png" alt="" loading="lazy"></figure>
 <p>执行备份</p>
-<pre><code class="language-sql">pg_basebackup -D /pg_basebackup -Ft -Pv -Upostgres -h 192.168.11.32 -p 5432 -R
+<pre><code class="language-bash">pg_basebackup -D /pg_basebackup -Ft -Pv -Upostgres -h 192.168.11.32 -p 5432 -R
 </code></pre>
 <p>需要输入postgres的密码，这里可以设置，重新备份。</p>
 <figure data-type="image" tabindex="12"><img src="/post-images/9a06068bc1052258712861533b87e1ea.png" alt="" loading="lazy"></figure>
@@ -484,7 +485,7 @@ insert into t3 values (1);
 insert into t3 values (11);
 </code></pre>
 <p><strong>2、模拟凌晨2点开始做全备操作</strong></p>
-<pre><code class="language-sql">pg_basebackup -D /pg_basebackup -Ft -Pv -Upostgres -h 192.168.11.32 -p 5432 -R
+<pre><code class="language-bash">pg_basebackup -D /pg_basebackup -Ft -Pv -Upostgres -h 192.168.11.32 -p 5432 -R
 </code></pre>
 <p><strong>3、再次做一些写操作，然后误删数据</strong></p>
 <pre><code class="language-sql">-- 凌晨2点已经全备完毕
@@ -560,7 +561,7 @@ yum -y install pgloader
 <p>PostgreSQL 本身只支持简单的主从复制，没有自动主从切换；类似 Nginx 的高可用方案，可以配合 keepalived，在主节点宕机后通过脚本完成切换。</p>
 <h3 id="151-主从实现异步流复制">15.1 主从实现（异步流复制）</h3>
 <p>操作方式类似于之前的备份与恢复。</p>
-<p>**1、准备环境：**准备两台虚拟机，完成上述的环境准备</p>
+<p><strong>1、准备环境：</strong>准备两台虚拟机，完成上述的环境准备</p>
 <table>
 <thead>
 <tr>
@@ -596,21 +597,21 @@ select * from t1;
 <p>提前构建好归档日志和备份目录，并且设置好拥有者</p>
 <figure data-type="image" tabindex="29"><img src="/post-images/868b4ee2eeec7b55a60878833b4bb51d.png" alt="" loading="lazy"></figure>
 <p>重启PostgreSQL服务</p>
-<pre><code class="language-sql">systemctl restart postgresql-12
+<pre><code class="language-bash">systemctl restart postgresql-12
 </code></pre>
 <p>4、从节点加入到主节点<br>
 关闭从节点服务</p>
-<pre><code class="language-sql">systemctl stop postgresql-12
+<pre><code class="language-bash">systemctl stop postgresql-12
 </code></pre>
 <p>删除从节点数据（删除data目录）</p>
-<pre><code class="language-sql">rm -rf ~/12/data/*
+<pre><code class="language-bash">rm -rf ~/12/data/*
 </code></pre>
 <p>基于pbk去主节点备份数据</p>
-<pre><code class="language-sql"># 确认好备份的路径，还有主节点的ip
-pg_basebackup -D /pgbasebackup -Ft -Pv -Upostgres -h 192.168.11.66 -p 5432 -R
+<pre><code class="language-bash"># 确认好备份的路径，还有主节点的ip
+pg_basebackup -D /pg_basebackup -Ft -Pv -Upostgres -h 192.168.11.66 -p 5432 -R
 </code></pre>
 <p>恢复数据操作，解压tar包</p>
-<pre><code class="language-sql">cd /pgbasebackuo
+<pre><code class="language-bash">cd /pgbasebackup
 tar -xf base.tar -C ~/12/data
 tar -xf pg_wal.tar -C /archive
 </code></pre>
@@ -620,10 +621,9 @@ tar -xf pg_wal.tar -C /archive
 restore_command = 'cp /archive/%f %p'
 primary_conninfo = 'user=postgres password=postgres host=192.168.11.66 port=5432 sslmode=prefer sslcompression=0 gssencmode=prefer krbsrvname=postgres target_session_attrs=any'
 </code></pre>
-<p>修改standby.signal文件，开启从节点备份模式</p>
-<pre><code class="language-sql"># 开启从节点备份
-
-standby_mode = 'on'
+<p>创建 standby.signal 文件，开启从节点（备份）模式。PostgreSQL 12 起已移除 standby_mode 参数，该文件存在即代表本实例是从节点。</p>
+<pre><code class="language-bash"># PostgreSQL 12+：创建空文件即可
+touch ~/12/data/standby.signal
 </code></pre>
 <p>启动从节点服务</p>
 <pre><code class="language-bash">systemctl restart postgresql-12
@@ -683,11 +683,11 @@ standby_mode = 'on'
 <ul>
 <li>1、rewind需要开启一项配置才可以使用</li>
 </ul>
-<p>修改postgresql.conf中的 wal_log_hints = ‘on’</p>
+<p>修改 postgresql.conf，设置 wal_log_hints = 'on'</p>
 <ul>
 <li>2、为了可以更方便的使用rewind，需要设置一下 /usr/pgsql-12/bin/ 的环境变量</li>
 </ul>
-<pre><code class="language-sql">vi /etc/profile
+<pre><code class="language-bash">vi /etc/profile
   追加信息
   export PATH=/usr/pgsql-12/bin/:$PATH
 source /etc/profile
@@ -700,7 +700,7 @@ source /etc/profile
 <p>4、从节点切换为主节点</p>
 </li>
 </ul>
-<pre><code class="language-sql"># 因为他会去找$PGDATA，我没配置，就基于-D指定一下PGSQL的data目录
+<pre><code class="language-bash"># 因为他会去找$PGDATA，我没配置，就基于-D指定一下PGSQL的data目录
 
 pg_ctl promote -D ~/12/data/
 </code></pre>
@@ -709,21 +709,21 @@ pg_ctl promote -D ~/12/data/
 </ul>
 <p>启动虚拟机<br>
 停止PGSQL服务</p>
-<pre><code class="language-sql">pg_ctl stop -D ~/12/data
+<pre><code class="language-bash">pg_ctl stop -D ~/12/data
 </code></pre>
 <p>基于pg_rewind加入到集群</p>
-<pre><code class="language-sql">pg_rewind -D ~/12/data/ --source-server='host=192.168.11.66 user=postgres password=postgres'
+<pre><code class="language-bash">pg_rewind -D ~/12/data/ --source-server='host=192.168.11.66 user=postgres password=postgres'
 </code></pre>
 <p>如果上述命令失败，需要先启动再关闭 PostgreSQL，然后再次执行，完成归档日志同步。</p>
-<pre><code class="language-sql">pg_ctl start -D ~/12/data
+<pre><code class="language-bash">pg_ctl start -D ~/12/data
 pg_ctl stop -D ~/12/data
 pg_rewind -D ~/12/data/ --source-server='host=192.168.11.66 user=postgres password=postgres'
 </code></pre>
 <ul>
 <li>6、修改新从节点的配置，然后启动</li>
 </ul>
-<p>构建standby.signal</p>
-<pre><code class="language-text">standby_mode = 'on'
+<p>构建 standby.signal 文件（PostgreSQL 12 起创建空文件即可，无需 standby_mode 参数）</p>
+<pre><code class="language-bash">touch ~/12/data/standby.signal
 </code></pre>
 <p>修改postgresql.auto.conf文件</p>
 <pre><code class="language-sql"># 注意ip地址
@@ -737,27 +737,29 @@ restore_command = 'cp /archive/%f %p'
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E5%8D%81-%E4%BA%8B%E5%8A%A1">十、事务</a>
+<a href="#%E5%8D%81-%E4%BA%8B%E5%8A%A1">十、事务</a>
 <ul>
 <li><a href="#101-%E4%BB%80%E4%B9%88%E6%98%AFacid%E5%B8%B8%E8%AF%86">10.1 什么是ACID？（常识）</a></li>
 <li><a href="#102-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8">10.2 事务的基本使用</a></li>
 <li><a href="#103-%E4%BF%9D%E5%AD%98%E7%82%B9%E4%BA%86%E8%A7%A3">10.3 保存点（了解）</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8D%81%E4%B8%80-%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98">十一、并发问题</a>
+<li>
+<a href="#%E5%8D%81%E4%B8%80-%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98">十一、并发问题</a>
 <ul>
 <li><a href="#111-%E4%BA%8B%E5%8A%A1%E7%9A%84%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB">11.1 事务的隔离级别</a></li>
 <li><a href="#112-mvcc">11.2 MVCC</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8D%81%E4%BA%8C-%E9%94%81">十二、锁</a>
+<li>
+<a href="#%E5%8D%81%E4%BA%8C-%E9%94%81">十二、锁</a>
 <ul>
 <li><a href="#121-%E8%A1%A8%E9%94%81">12.1 表锁</a></li>
 <li><a href="#122-%E8%A1%8C%E9%94%81">12.2 行锁</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8D%81%E4%B8%89-%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D">十三、备份&amp;恢复</a>
+<li>
+<a href="#%E5%8D%81%E4%B8%89-%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D">十三、备份&amp;恢复</a>
 <ul>
 <li><a href="#131-%E9%80%BB%E8%BE%91%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D">13.1 逻辑备份&amp;恢复</a></li>
 <li><a href="#132-%E7%89%A9%E7%90%86%E5%A4%87%E4%BB%BD%E5%BD%92%E6%A1%A3%E7%89%A9%E7%90%86">13.2 物理备份（归档+物理）</a></li>
@@ -765,14 +767,17 @@ restore_command = 'cp /archive/%f %p'
 <li><a href="#134-%E7%89%A9%E7%90%86%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8Dpitr-point-in-time-recovery">13.4 物理备份&amp;恢复（PITR-Point in time Recovery）</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8D%81%E5%9B%9B-%E6%95%B0%E6%8D%AE%E8%BF%81%E7%A7%BB">十四、数据迁移</a></li>
-<li><a href="#%E5%8D%81%E4%BA%94-%E4%B8%BB%E4%BB%8E%E6%93%8D%E4%BD%9C">十五、主从操作</a>
+<li>
+<a href="#%E5%8D%81%E5%9B%9B-%E6%95%B0%E6%8D%AE%E8%BF%81%E7%A7%BB">十四、数据迁移</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%BA%94-%E4%B8%BB%E4%BB%8E%E6%93%8D%E4%BD%9C">十五、主从操作</a>
 <ul>
 <li><a href="#151-%E4%B8%BB%E4%BB%8E%E5%AE%9E%E7%8E%B0%E5%BC%82%E6%AD%A5%E6%B5%81%E5%A4%8D%E5%88%B6">15.1 主从实现（异步流复制）</a></li>
 <li><a href="#sec152-manual-switch">15.2 手动切换（不推荐）</a></li>
 <li><a href="#153-%E4%B8%BB%E4%BB%8E%E6%95%85%E9%9A%9C%E5%88%87%E6%8D%A2">15.3 主从故障切换</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
