@@ -138,7 +138,25 @@
 <p><code>@SpringBootConfiguration</code>：组合了 @Configuration 注解，实现配置文件的功能。</p>
 <p><code>@EnableAutoConfiguration</code>：打开自动配置的功能，也可以关闭某个自动配置的选项，如关闭数据源自动配置功能： <code>@SpringBootApplication(exclude = { DataSourceAutoConfiguration.class })</code>。</p>
 <p><code>@ComponentScan</code>：Spring组件扫描。</p>
-<p>所有其它 Spring 组件（如 Controller 层、Service 层、Dao 层、定时器等）都必须放在应用 @SpringBootApplication 注解所在类的同包或其子包下面，因为应用从启动类开始启动，然后会扫描启动类同包及其子包下面的组件，如果放在其它地方则会因为扫描不到而加载不了</p>
+<p>三个注解各司其职，把它们拆开来看会更清楚：</p>
+<ul>
+<p><img src="/post-assets/O58auJO44/01-startup-flow.svg" alt="Spring Boot 启动流程：三大阶段、关键事件与内嵌容器创建时机"></p>
+<li><code>@SpringBootConfiguration</code>：本质上是 Spring 标准注解 <code>@Configuration</code> 的“改名版”，作用只有一个——声明“当前类是一个配置类”，即一个 JavaConfig 形式的 Bean 定义来源。Spring Boot 之所以不直接用它而另起一个注解，是为了让框架能在测试或工具中识别“这是应用的主配置类”。一个应用中通常只应出现一次。</li>
+<li><code>@EnableAutoConfiguration</code>：自动配置的总开关。它通过 <code>@Import(AutoConfigurationImportSelector.class)</code> 把所有候选自动配置类批量导入容器，再由这些配置类上的 <code>@Conditional</code> 条件决定“到底生不生效”。所以它带来的是“有条件的选择性装配”，而不是无条件地把所有组件都创建出来。</li>
+<li><code>@ComponentScan</code>：开启组件扫描。默认扫描<b>当前类所在包及其所有子包</b>，这也是官方建议把启动类放在最外层根包（如 <code>com.example.demo</code>）的原因。</li>
+</ul>
+<p>三者合起来的效果可以概括为：<b>我先是一个配置类（@SpringBootConfiguration），我再去扫描自己包下的组件（@ComponentScan），最后让 Spring Boot 按条件帮我补齐基础设施（@EnableAutoConfiguration）。</b></p>
+<p>需要关闭特定的自动配置时，除了 <code>exclude</code>，还可以用 <code>excludeName</code> 按类名排除；也可以在配置文件里用 <code>spring.autoconfigure.exclude</code> 指定，无需改动启动类：</p>
+<pre><code class="language-java">@SpringBootApplication(exclude = {DataSourceAutoConfiguration.class})
+public class DemoApplication { /* ... */ }
+
+// 只写类名字符串，适合不想在启动类上引入该自动配置类依赖的场景
+@SpringBootApplication(excludeName = {
+        "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"})
+public class DemoApplication2 { /* ... */ }</code></pre>
+<pre><code class="language-properties"># 纯配置方式排除自动配置，效果等价
+spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration</code></pre>
+<p>此外要注意 <code>@ComponentScan</code> 的默认范围：所有其它 Spring 组件（如 Controller 层、Service 层、Dao 层、定时器等）都必须放在应用 <code>@SpringBootApplication</code> 注解所在类的同包或其子包下面，因为应用从启动类开始启动，然后会扫描启动类同包及其子包下面的组件；如果放在其它地方，会因为扫描不到而加载不了。确需跨包时，显式写成 <code>@SpringBootApplication(scanBasePackages = "com.example.other")</code>，或在任意配置类上单独加 <code>@ComponentScan("com.example.other")</code>。</p>
 <h2 id="javaconfig">JavaConfig</h2>
 <p><code>Spring JavaConfig</code> 是 Spring 社区的产品，它提供了配置 Spring IoC 容器的纯Java 方法。因此它有助于避免使用 XML 配置。使用 JavaConfig 的优点在于：</p>
 <p>（1）面向对象的配置。由于配置被定义为 JavaConfig 中的类，因此用户可以充分利用 Java 中的面向对象功能。一个配置类可以继承另一个，重写它的@Bean 方法等。</p>
@@ -192,23 +210,165 @@ user.cityMap.mapK1=长沙市
 user.cityMap.mapK2=深圳市
 user.maps=&quot;{mapK1: '长沙市', mapK2: '深圳市'}&quot;
 </code></pre>
+<h2 id="内嵌容器与启动流程">内嵌容器与启动流程</h2>
+<h3 id="内嵌容器">内嵌容器</h3>
+<p>传统 Spring 项目把 war 包交给外部的 Tomcat 部署，容器先启动、再由容器加载应用；Spring Boot 反过来——<b>由应用的 main 方法启动，过程中把 Web 容器“当作一个普通组件”创建出来并启动</b>。所以启动方式变成直接运行 <code>SpringApplication.run(...)</code>，打出来的是可执行 jar（<code>java -jar app.jar</code>），可以独立运行，也更贴合容器化部署。默认容器是 Tomcat，通过排除并替换依赖可换成 Jetty 或 Undertow；WebFlux 场景默认是 Reactor Netty。</p>
+<p>这里有一个容易踩坑的版本差异：<b>Spring Boot 3.x 基于 Jakarta EE 9+，Servlet API 包名由 <code>javax.servlet.*</code> 变为 <code>jakarta.servlet.*</code></b>（内嵌容器为 Tomcat 10+）。因此本文后面示例中的 <code>import javax.servlet.*</code> 只在 Spring Boot 2.x（Tomcat 9、Servlet 4.0）下可直接编译；迁移到 3.x 时需整体替换为 <code>jakarta.servlet</code>，同时 <code>@WebServlet</code> 等注解所在包也随之改变。</p>
+<h3 id="springapplicationrun-的关键步骤">SpringApplication.run 的关键步骤</h3>
+<p>把 <code>SpringApplication.run(DemoApplication.class, args)</code> 拆开，主要分三大阶段：</p>
+<ol>
+<li><b>启动引导</b>：构造 <code>SpringApplication</code> 并推断应用类型。<code>WebApplicationType.deduceFromClasspath()</code> 判断类路径：有 Servlet 相关类则为 SERVLET（Web 应用），只有 WebFlux 相关类则为 REACTIVE，两者都没有则为 NONE（普通应用）。同时通过 <code>setInitializers</code> / <code>setListeners</code> 从 <code>spring.factories</code> 加载 <code>ApplicationContextInitializer</code> 与 <code>ApplicationListener</code>。</li>
+<li><b>Environment 准备</b>：创建 <code>Environment</code>（Web 应用为 StandardServletEnvironment），发布 <code>ApplicationEnvironmentPreparedEvent</code>，由 EnvironmentPostProcessor / ConfigData 机制读取命令行参数、系统属性、环境变量、application.yml / properties 以及 profile 相关文件，构造出完整的有序属性源。随后 <code>environmentPrepared</code> 完成绑定。<b>这一步之后，配置值就已经全部就绪</b>，后续的自动配置才能按配置条件决定是否生效。</li>
+<li><b>应用上下文（IoC 容器）创建与刷新</b>：按应用类型创建 <code>AnnotationConfigServletWebServerApplicationContext</code> 等上下文实例，调用 <code>prepareContext</code>（应用 Initializer、注册主配置类 <code>DemoApplication</code>、<code>BeanDefinitionLoader</code> 加载 Bean 定义）。随后进入 <code>refreshContext</code>，即 Spring 的 refreshed 核心流程：解析 <code>@SpringBootApplication</code> → 触发自动配置 → 实例化并初始化全部单例 Bean。<b>内嵌容器正是在上下文 refresh 期间创建的</b>：<code>ServletWebServerApplicationContext.onRefresh()</code> 会调用 <code>createWebServer()</code>，由 <code>ServletWebServerFactory</code> 创建并启动 Tomcat，再把 DispatcherServlet 注册进去，随后 <code>finishRefresh()</code> 发布 <code>ServletWebServerInitializedEvent</code>。</li>
+<li><b>收尾</b>：调用所有 <code>ApplicationRunner</code> / <code>CommandLineRunner</code>，最后发布 <code>ApplicationReadyEvent</code>，应用即可对外服务。</li>
+</ol>
+<h3 id="启动过程中的事件与监听器">启动过程中的事件与监听器</h3>
+<p>Spring Boot 在启动各阶段发布了 <code>SpringApplicationEvent</code>（继承自 Spring 的 <code>ApplicationEvent</code>），自定义逻辑可以挂在这些扩展点上：</p>
+<ul>
+<li><code>ApplicationStartingEvent</code>：run 方法最开始，此时 Environment 尚未准备。</li>
+<li><code>ApplicationEnvironmentPreparedEvent</code>：Environment 刚准备好，配置源已加载。需要尽早读取配置的框架常监听它。</li>
+<li><code>ApplicationContextInitializedEvent</code>：上下文已创建、Initializer 已执行，但 Bean 定义尚未加载。</li>
+<li><code>ApplicationPreparedEvent</code>：Bean 定义已加载，容器尚未 refresh。</li>
+<li><code>ContextRefreshedEvent</code>：容器 refresh 完成，内嵌容器已启动。</li>
+<li><code>ApplicationStartedEvent</code>：refresh 之后、Runner 执行<b>之前</b>发布。<b>注意其“AfterRefresh”语义只代表容器已就绪，此时业务 Runner 还没跑完。</b></li>
+<li><code>ApplicationReadyEvent</code>：Runner 执行完毕，应用已可接收请求——这是最常用于“启动后初始化”的时点。</li>
+<li><code>ApplicationFailedEvent</code>：启动过程中抛出异常时发布。</li>
+</ul>
+<p>监听方式有三种：<code>@Component</code> 类实现 <code>ApplicationListener&lt;E&gt;</code>；任意 Bean 中的 <code>@EventListener</code> 方法（Spring 4.2+，更灵活，可按事件类型和 SpEL 条件过滤）；或在 <code>META-INF/spring.factories</code> 的 <code>org.springframework.boot.context.ApplicationListener</code> 键下登记类名，由 SpringApplication 在启动早期加载（此时容器尚未创建，适合框架级组件）。</p>
+<pre><code class="language-java">@Component
+public class StartupReporter {
+
+    // 应用完全就绪后回调，最常用于预热缓存、打印访问地址
+    @EventListener(ApplicationReadyEvent.class)
+    public void onReady(ApplicationReadyEvent event) {
+        System.out.println(&quot;应用已就绪，启动耗时(ms)：&quot;
+                + event.getTimeTaken().toMillis());
+    }
+
+    // 容器 refresh 完成、内嵌容器已启动
+    @EventListener(ContextRefreshedEvent.class)
+    public void onRefreshed(ContextRefreshedEvent event) {
+        System.out.println(&quot;容器已刷新：&quot; + event.getApplicationContext().getId());
+    }
+}</code></pre>
+<pre><code class="language-text"># META-INF/spring.factories：启动早期就被加载，适合框架/基础组件
+org.springframework.boot.context.ApplicationListener=\
+com.example.MyEarlyListener</code></pre>
+<h3 id="优雅关闭">优雅关闭</h3>
+<p>启动的最后要配套考虑关闭：应用退出时会发布 <code>ContextClosedEvent</code>，容器随即销毁单例 Bean。直接 <code>context.close()</code> 后从 main 方法返回并不会自动触发 Spring Boot 的优雅关闭流程，推荐用 <code>SpringApplication.exit(context, () -&gt; exitCode)</code>；若需等待在途请求处理完，可开启 <code>server.shutdown=graceful</code> 并配合 <code>spring.lifecycle.timeout-per-shutdown-phase</code> 设定超时。</p>
 <h2 id="spring-boot-自动配置">Spring Boot 自动配置</h2>
-<p>注解 @EnableAutoConfiguration, @Configuration, @ConditionalOnClass 就是自动配置的核心，</p>
-<p>@EnableAutoConfiguration 给容器导入META-INF/spring.factories 里定义的自动配置类。</p>
-<p>筛选有效的自动配置类。</p>
-<p>每一个自动配置类结合对应的 xxxProperties.java 读取配置文件进行自动配置功能</p>
+<p>自动配置的核心可以概括为一句话：<b>注解 @EnableAutoConfiguration 负责“把候选配置类找出来并导入”，@Conditional 系列注解负责“决定哪些真正生效”，xxxProperties 负责“把配置文件里的值绑定成 Bean”。</b></p>
+<h3 id="自动配置类的加载入口">自动配置类的加载入口</h3>
+<p>@EnableAutoConfiguration 上标注了 <code>@Import(AutoConfigurationImportSelector.class)</code>，由这个 ImportSelector 去读取候选自动配置类的全限定名列表。列表的来源随 Spring Boot 版本发生过一次重要变化：</p>
+<ul>
+<li><b>Spring Boot 2.7 之前</b>：所有候选自动配置类都登记在自动配置 jar 自己的 <code>META-INF/spring.factories</code> 中，键为 <code>org.springframework.boot.autoconfigure.EnableAutoConfiguration</code>。这是一个 Properties 格式文件，同一个键下用逗号分隔上百个类名，无法表达“顺序”与“条件”，也难以按需裁剪。</li>
+<li><b>Spring Boot 2.7 起</b>：新增专用文件 <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>，每行一个自动配置类全限定名，可读性和工具支持都更好；同时 <code>spring.factories</code> 中的 EnableAutoConfiguration 键被标记为废弃（deprecated），但仍兼容读取。</li>
+<li><b>Spring Boot 3.0 起</b>：<code>spring.factories</code> 作为自动配置入口的支持被<b>彻底移除</b>，自动配置类只能通过 <code>AutoConfiguration.imports</code> 注册。若把 2.x 的自定义 starter 直接搬到 3.x，最典型的症状就是“自动配置类不生效”。</li>
+</ul>
+<p>注意区分：<code>spring.factories</code> 文件本身在 3.x 并未消失，它仍然承载 <code>ApplicationContextInitializer</code>、<code>ApplicationListener</code>、<code>EnvironmentPostProcessor</code>、<code>FailureAnalyzer</code> 等扩展点的注册；被移除的只是用它来登记<b>自动配置类</b>这一种用法。</p>
+<p>迁移时把自动配置类从 spring.factories 改为 imports 文件，写法如下：</p>
+<pre><code class="language-properties"># 旧写法（Spring Boot 2.6 及以前）META-INF/spring.factories
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.example.starter.HelloAutoConfiguration,\
+com.example.starter.WorldAutoConfiguration</code></pre>
+<pre><code class="language-text"># 新写法（Spring Boot 2.7+，3.x 唯一支持）META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+com.example.starter.HelloAutoConfiguration
+com.example.starter.WorldAutoConfiguration</code></pre>
+<h3 id="spring-boot-autoconfigure-里有什么">spring-boot-autoconfigure 里有什么</h3>
+<p>绝大多数开箱即用的自动配置类都来自 <code>spring-boot-autoconfigure</code> 这个 jar（引入 spring-boot-starter 时会随之进入依赖树）。它内含 Web、JDBC、Redis、Jackson、缓存、消息等各技术栈的 <code>XxxAutoConfiguration</code> 配置类，以及配套的 <code>XxxProperties</code> 属性类；而在 spring-boot-autoconfigure 的 <code>AutoConfiguration.imports</code> 文件里，登记的就是这批类的清单。第三方 starter 只需在自己 jar 的同一路径下放一个同名文件，就能把自己的自动配置类加入候选队列。</p>
+<h3 id="conditional-系列条件注解">@Conditional 系列条件注解</h3>
+<p>spring-boot-autoconfigure 中几乎每个配置类（以及配置类中的每个 @Bean 方法）都带条件注解，只有条件全部满足时才装配。这正是“导入了全部候选类，却只生效一小部分”的原因。常用的条件注解如下：</p>
+<ul>
+<li><code>@ConditionalOnClass</code> / <code>@ConditionalOnMissingClass</code>：类路径上存在／不存在指定类时生效。它让自动配置与具体依赖解耦——没引入 Redis 依赖，RedisAutoConfiguration 就自动让位。</li>
+<li><code>@ConditionalOnBean</code> / <code>@ConditionalOnMissingBean</code>：容器中已有／没有指定 Bean 时生效。<b>它体现了“约定优于配置、用户优先”</b>：开发者自己定义了 DataSource Bean，自动配置的默认数据源就退让。</li>
+<li><code>@ConditionalOnProperty</code>：配置文件中某属性等于（或不等于）指定值时生效，常用于功能开关。</li>
+<li><code>@ConditionalOnResource</code>、<code>@ConditionalOnWebApplication</code>、<code>@ConditionalOnNotWebApplication</code>、<code>@ConditionalOnSingleCandidate</code>、<code>@ConditionalOnJava</code>、<code>@ConditionalOnExpression</code> 等：分别按资源是否存在、应用类型、候选 Bean 是否唯一、JDK 版本、SpEL 表达式判断。</li>
+</ul>
+<p>这些注解的元注解是 Spring Framework 的 <code>@Conditional</code>，底层由 <code>Condition</code> 接口实现判断。因此在 Spring Boot 中调试自动配置，最直接的手段是开启调试日志，它会打印“生效／未生效”的完整报告（Negative matches 会说明每个条件为何不满足）：</p>
+<pre><code class="language-properties"># application.properties：打印自动配置条件评估报告
+debug=true
+# 或者只关注自动配置这一个日志类别
+logging.level.org.springframework.boot.autoconfigure=DEBUG</code></pre>
+<h3 id="一个自动配置类的典型结构">一个自动配置类的典型结构</h3>
+<pre><code class="language-java">@AutoConfiguration                          // 2.7+ 新增，本身组合了 @Configuration(proxyBeanMethods = false)
+@ConditionalOnClass(HelloService.class)      // 类路径有 HelloService 才继续
+@EnableConfigurationProperties(HelloProperties.class) // 让属性类生效并被注入
+public class HelloAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean                  // 用户没自己定义 HelloService 时才给默认实现
+    public HelloService helloService(HelloProperties properties) {
+        return new HelloService(properties.getPrefix());
+    }
+}</code></pre>
+<pre><code class="language-java">@ConfigurationProperties(prefix = "hello")   // 把 hello.* 绑定到字段
+public class HelloProperties {
+    private String prefix = "Hello";          // 提供合理的默认值
+    // getter / setter 省略
+}</code></pre>
+<p>把这三段串起来看，就是完整的自动配置链路：</p>
+<p><img src="/post-assets/O58auJO44/02-autoconfiguration.svg" alt="自动配置装配流程：从 spring.factories 到 AutoConfiguration.imports 的条件筛选"></p>
+<h3 id="自动配置装配流程">自动配置装配流程</h3>
+<pre><code class="language-text">启动类 @SpringBootApplication
+  └─ @EnableAutoConfiguration
+       └─ @Import(AutoConfigurationImportSelector)
+            ├─ 读取 AutoConfiguration.imports（2.7 之前为 spring.factories）
+            ├─ 去重 + 按 @AutoConfigureOrder / @AutoConfigureBefore / @AutoConfigureAfter 排序
+            └─ 得到候选自动配置类列表
+                 ↓ 逐个评估 @Conditional 条件
+                 ├─ 不满足 → 记入 Negative matches，跳过
+                 └─ 满足   → 注册配置类 → 解析其 @Bean 方法
+                              └─ XxxProperties 绑定 application.yml/properties 中的值
+                                   └─ Bean 进入 IoC 容器，可直接 @Autowired 使用</code></pre>
+<h2 id="起步依赖与父-pom">起步依赖与父 POM</h2>
+<p>Spring Boot 让人“少写依赖”的关键，一半靠起步依赖（starter），一半靠父 POM。</p>
+<h3 id="父-pom-与依赖管理">父 POM 与依赖管理</h3>
+<p>Spring Boot 项目通常继承 <code>spring-boot-starter-parent</code>，而它又继承自 <code>spring-boot-dependencies</code>。真正干活的 <code>spring-boot-dependencies</code> 的 <code>dependencyManagement</code> 里锁定了整套依赖的版本：Spring Framework、Tomcat、Jackson、Logback、HikariCP 等等。因此我们在 <code>&lt;dependencies&gt;</code> 中写依赖时一般<b>不写 &lt;version&gt;</b>，版本由父 POM 统一决定，从而天然避免“大量 Maven 导入和版本冲突”。</p>
+<pre><code class="language-xml">&lt;!-- 方式一：继承官方父 POM，最省事 --&gt;
+&lt;parent&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+    &lt;version&gt;3.2.5&lt;/version&gt;
+    &lt;relativePath/&gt;
+&lt;/parent&gt;</code></pre>
+<p>父 POM 还顺带提供了三项常被忽略的便利：默认的 Java 编译版本与编码 UTF-8、<code>repackage</code>（打可执行 fat jar）的执行配置、以及一套面向 Spring Boot 的资源过滤（让 application.yml 里也能用 <code>@...@</code> 占位符）。</p>
+<p>如果项目已有自己的父 POM（例如公司统一父工程），就不能再继承官方父 POM，此时改用“导入式”依赖管理，效果几乎一样：</p>
+<pre><code class="language-xml">&lt;!-- 方式二：不继承，改用 BOM 导入 --&gt;
+&lt;dependencyManagement&gt;
+    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-dependencies&lt;/artifactId&gt;
+            &lt;version&gt;3.2.5&lt;/version&gt;
+            &lt;type&gt;pom&lt;/type&gt;
+            &lt;scope&gt;import&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+&lt;/dependencyManagement&gt;</code></pre>
+<h3 id="起步依赖是怎么做到开箱即用的">起步依赖是怎么“做到开箱即用”的</h3>
+<p>起步依赖本身几乎不含代码，它是一个“依赖集合 + 自动配置”的组合包：把某个功能所需的一组 jar 聚合成一个坐标，同时这些 jar 里的 <code>AutoConfiguration.imports</code> 会带来自动配置。例如 <code>spring-boot-starter-web</code> 一次性引入 spring-webmvc、spring-web、Jackson、校验、日志，以及 <code>spring-boot-starter-tomcat</code>（内嵌容器），于是“加一个依赖就能写出 REST 接口”。</p>
+<p>常用起步依赖：</p>
+<ul>
+<li><code>spring-boot-starter</code>：最基础的起步依赖，含自动配置支持、日志、YAML 解析。</li>
+<li><code>spring-boot-starter-web</code>：Web MVC + REST + Jackson + 内嵌 Tomcat。</li>
+<li><code>spring-boot-starter-webflux</code>：响应式 Web 栈，默认内嵌 Reactor Netty。</li>
+<li><code>spring-boot-starter-data-jpa</code> / <code>spring-boot-starter-jdbc</code> / <code>spring-boot-starter-data-redis</code>：数据访问。</li>
+<li><code>spring-boot-starter-security</code>、<code>spring-boot-starter-validation</code>、<code>spring-boot-starter-actuator</code>、<code>spring-boot-starter-test</code>：安全、校验、监控、测试。</li>
+</ul>
+<p>需要替换默认内嵌容器时，用 <code>&lt;exclusions&gt;</code> 排掉再引入目标容器即可（如 <code>spring-boot-starter-jetty</code>、<code>spring-boot-starter-undertow</code>）。另外要注意：第三方 starter 的命名规范是 <code>xxx-spring-boot-starter</code>，而官方 starter 是 <code>spring-boot-starter-xxx</code>，看名字就能区分。</p>
 <h2 id="spring-boot-配置加载顺序">Spring Boot 配置加载顺序</h2>
 <p>Spring Boot 支持多种外部配置方式，如下所示，从上往下加载优先级由高到低，内容相同时覆盖，不相同时累加。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1622190707004.png" alt="" loading="lazy"></figure>
-<p>如果在不同的目录中存在多个配置文件，它的读取顺序是：<br>
-1、config/application.properties（项目根目录中config目录下）<br>
-2、config/application.yml<br>
-3、application.properties（项目根目录下）<br>
-4、application.yml<br>
-5、resources/config/application.properties（项目resources目录中config目录下）<br>
-6、resources/config/application.yml<br>
-7、resources/application.properties（项目的resources目录下）<br>
-8、resources/application.yml</p>
+<p>配置文件所在位置同样影响优先级（后面的覆盖前面的）：jar 包外的 <code>./config/</code> → jar 包外的 <code>./</code> → jar 包内 classpath 的 <code>/config</code> 包 → jar 包内 classpath 根路径。同一目录下 <code>.properties</code> 优先于 <code>.yml</code>。常见内置配置位置与覆盖关系如下：</p>
+<pre><code class="language-text">1. file:./config/application.properties   （jar 同级 config 目录，优先级最高，适合运维改配置）
+2. file:./config/application.yml
+3. file:./application.properties           （jar 同级目录）
+4. file:./application.yml
+5. classpath:/config/application.properties（打进的包里，如 resources/config/）
+6. classpath:/config/application.yml
+7. classpath:/application.properties
+8. classpath:/application.yml              （优先级最低，作为默认值兜底）</code></pre>
+<p>需要特别注意：这些是“同一个属性在不同位置出现”时的覆盖关系；而不同配置来源（命令行参数、环境变量、配置文件……）之间则由前面那张图的整体优先级决定。要观察实际生效的最终结果，可以开启 <code>--debug</code>，或访问 actuator 的 <code>/actuator/env</code> 端点查看属性源顺序。</p>
 <h2 id="yaml-配置">YAML 配置</h2>
 <p>YAML 现在可以算是非常流行的一种配置文件格式了，无论是前端还是后端，都可以见到 YAML 配置。那么 YAML 配置和传统的 properties 配置相比到底有哪些优势呢？</p>
 <ol>
@@ -216,7 +376,7 @@ user.maps=&quot;{mapK1: '长沙市', mapK2: '深圳市'}&quot;
 <li>支持数组，数组中的元素可以是基本数据类型也可以是对象</li>
 <li>简洁</li>
 </ol>
-<p>相比 properties 配置文件，YAML 还有一个缺点，就是不支持 <code>@PropertySource</code> 注解导入自定义的 YAML 配置。</p>
+<p>相比 properties 配置文件，YAML 还有一个缺点，就是不支持 <code>@PropertySource</code> 注解导入自定义的 YAML 配置：<code>@PropertySource</code> 默认只解析 properties 格式，直接指向 .yml 文件会报错。真要在 Java 代码里导入 YAML，需要自定义一个 <code>PropertySourceFactory</code>（内部用 <code>YamlPropertySourceLoader</code> 解析）并在注解上指定 <code>factory</code> 属性。实践中最省事的做法仍是把需要 @PropertySource 引入的配置留成 properties 文件。</p>
 <h2 id="spring-boot-是否可以使用-xml-配置">Spring Boot 是否可以使用 XML 配置</h2>
 <p>Spring Boot 推荐使用 Java 配置而非 XML 配置，但是 Spring Boot 中也可以使用 XML 配置，通过 <code>@ImportResource</code> 注解可以引入一个 XML 配置。</p>
 <h2 id="spring-boot-核心配置文件bootstrapproperties和-applicationproperties-有何区别">spring boot 核心配置文件bootstrap.properties和 application.properties 有何区别</h2>
@@ -228,22 +388,55 @@ user.maps=&quot;{mapK1: '长沙市', mapK2: '深圳市'}&quot;
 </ul>
 <h2 id="spring-profiles">Spring Profiles</h2>
 <figure data-type="image" tabindex="2"><img src="/post-images/1622190724869.png" alt="" loading="lazy"></figure>
-<pre><code class="language-yaml">spring:
- profiles:
-  active: devel #指定激活哪个环境配置，激活后，第一个文档内容失效;不指定时，以第一个文档为准
-server:
- port: 8083
---- #&quot;---&quot;用于分隔不同的profiles（）文档块
+<p>Profile 用于区分不同环境的配置。除“按文件拆分”（<code>application-dev.yml</code>、<code>application-prod.yml</code>）外，还可以在同一个文件里用 <code>---</code> 分隔多个文档块，每个块用 profile 表达式限定生效条件。</p>
+<pre><code class="language-yaml"># Spring Boot 2.4 及以后推荐写法：用 spring.config.activate.on-profile 限定文档块
 spring:
- profiles: devel #指定环境标识为&quot;devel&quot;,相当于&quot;application-{profile}.properties/yml&quot;中的profile
+  profiles:
+    active: devel            # 指定激活哪个环境；不指定时只有无 profile 限定的文档/文件生效
 server:
- port: 8081
+  port: 8083                 # 无 profile 限定的默认块，优先级最低
 ---
 spring:
- profiles: deploy #指定环境标识为&quot;deploy&quot;,相当于&quot;application-{profile}.properties/yml&quot;中的profile
+  config:
+    activate:
+      on-profile: devel        # 该块仅在 devel 环境激活时生效，等价于 application-devel.yml
 server:
- port: 8082
+  port: 8081
+---
+spring:
+  config:
+    activate:
+      on-profile: deploy
+server:
+  port: 8082
 </code></pre>
+<p><b>过时写法提醒</b>：在文档块中用 <code>spring.profiles</code> 标识 profile 的写法自 Spring Boot 2.4 起已废弃，会直接导致启动失败，必须换成 <code>spring.config.activate.on-profile</code>。同时要分清几个长得很像的键：</p>
+<ul>
+<li><code>spring.profiles.active</code>：声明“激活哪些 profile”，只能出现在<b>没有</b> profile 限定的文档块或文件里，否则抛 <code>InactiveConfigDataAccessException</code>。</li>
+<li><code>spring.profiles.include</code>：在当前已命中的 profile 之上追加激活其他 profile；2.4 起同样不允许写在 profile 限定的文档块中。</li>
+<li><code>spring.profiles.default</code>：未显式指定 active 时使用的默认 profile，默认值为 <code>default</code>。</li>
+<li><code>spring.profiles.group.xxx</code>：profile 分组，可一次激活一组，例如把 <code>prod</code> 定义为 <code>prod-db,prod-mq</code>。</li>
+</ul>
+<p>除配置文件外，profile 还可以通过命令行 <code>--spring.profiles.active=prod</code>、环境变量 <code>SPRING_PROFILES_ACTIVE</code>、JVM 参数 <code>-Dspring.profiles.active=prod</code> 指定，或在启动代码里追加：</p>
+<pre><code class="language-java">SpringApplication app = new SpringApplication(DemoApplication.class);
+app.setAdditionalProfiles(&quot;devel&quot;);   // 追加激活 profile（不覆盖命令行传入的 active）
+app.run(args);</code></pre>
+<p>在代码中按环境装配不同 Bean 时，用 <code>@Profile</code> 标注：只有对应 profile 激活，这个 Bean 才会注册。</p>
+<pre><code class="language-java">@Configuration
+public class DataSourceConfig {
+
+    @Bean
+    @Profile(&quot;dev&quot;)     // 只在 dev 环境注册内存库
+    public DataSource h2DataSource() {
+        return new EmbeddedDatabaseBuilder().setType(EmbeddedDatabaseType.H2).build();
+    }
+
+    @Bean
+    @Profile(&quot;!dev&quot;)    // 非 dev 环境注册真实连接池
+    public DataSource mysqlDataSource() {
+        return DataSourceBuilder.create().build();
+    }
+}</code></pre>
 <h2 id="比较一下-spring-security-和-shiro-各自的优缺点">比较一下 Spring Security 和 Shiro 各自的优缺点</h2>
 <p>由于 Spring Boot 官方提供了大量的非常方便的开箱即用的 Starter ，包括 Spring Security 的 Starter ，使得在 Spring Boot 中使用 Spring Security 变得更加容易，甚至只需要添加一个依赖就可以保护所有的接口，所以，如果是 Spring Boot 项目，一般选择 Spring Security 。当然这只是一个建议的组合，单纯从技术上来说，无论怎么组合，都是没有问题的。Shiro 和 Spring Security 相比，主要有如下一些特点：</p>
 <ol>
@@ -597,38 +790,91 @@ public class RedisStuWebApplication {
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#spring-boot-%E4%BC%98%E7%82%B9">Spring Boot 优点</a>
 <ul>
-<li><a href="#spring-boot-%E4%BC%98%E7%82%B9">Spring Boot 优点</a></li>
-<li><a href="#spring-boot-%E7%9A%84%E6%A0%B8%E5%BF%83%E6%B3%A8%E8%A7%A3%E6%98%AF%E5%93%AA%E4%B8%AA%E5%AE%83%E4%B8%BB%E8%A6%81%E7%94%B1%E5%93%AA%E5%87%A0%E4%B8%AA%E6%B3%A8%E8%A7%A3%E7%BB%84%E6%88%90%E7%9A%84">Spring Boot 的核心注解是哪个？它主要由哪几个注解组成的？</a></li>
-<li><a href="#javaconfig">JavaConfig</a></li>
-<li><a href="#spring-boot-%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE">Spring Boot 自动配置</a></li>
-<li><a href="#spring-boot-%E9%85%8D%E7%BD%AE%E5%8A%A0%E8%BD%BD%E9%A1%BA%E5%BA%8F">Spring Boot 配置加载顺序</a></li>
-<li><a href="#yaml-%E9%85%8D%E7%BD%AE">YAML 配置</a></li>
-<li><a href="#spring-boot-%E6%98%AF%E5%90%A6%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8-xml-%E9%85%8D%E7%BD%AE">Spring Boot 是否可以使用 XML 配置</a></li>
-<li><a href="#spring-boot-%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6bootstrapproperties%E5%92%8C-applicationproperties-%E6%9C%89%E4%BD%95%E5%8C%BA%E5%88%AB">spring boot 核心配置文件bootstrap.properties和 application.properties 有何区别</a></li>
-<li><a href="#spring-profiles">Spring Profiles</a></li>
-<li><a href="#%E6%AF%94%E8%BE%83%E4%B8%80%E4%B8%8B-spring-security-%E5%92%8C-shiro-%E5%90%84%E8%87%AA%E7%9A%84%E4%BC%98%E7%BC%BA%E7%82%B9">比较一下 Spring Security 和 Shiro 各自的优缺点</a></li>
-<li><a href="#spring-boot-%E4%B8%AD%E5%A6%82%E4%BD%95%E8%A7%A3%E5%86%B3%E8%B7%A8%E5%9F%9F%E9%97%AE%E9%A2%98">Spring Boot 中如何解决跨域问题</a></li>
-<li><a href="#spring-boot-%E4%B8%AD%E7%9A%84%E7%9B%91%E8%A7%86%E5%99%A8">Spring Boot 中的监视器</a></li>
-<li><a href="#%E6%B3%A8%E5%86%8C-servlet-%E4%B8%89%E5%A4%A7%E7%BB%84%E4%BB%B6-servlet-filter-listener">注册 Servlet 三大组件 Servlet、Filter、Listener</a>
-<ul>
-<li><a href="#%E7%BB%A7%E6%89%BF%E6%8E%A5%E5%8F%A3%E5%AE%9E%E7%8E%B0%E6%96%B9%E5%BC%8F">继承，接口实现方式</a>
-<ul>
-<li><a href="#servletregistrationbean-%E6%B3%A8%E5%86%8C-servlet">ServletRegistrationBean 注册 Servlet</a></li>
-<li><a href="#filterregistrationbean-%E6%B3%A8%E5%86%8C-filter">FilterRegistrationBean 注册 Filter</a></li>
-<li><a href="#servletlistenerregistrationbean-%E6%B3%A8%E5%86%8C-listener">ServletListenerRegistrationBean 注册 Listener</a></li>
 </ul>
 </li>
-<li><a href="#%E6%B3%A8%E8%A7%A3%E6%96%B9%E5%BC%8F">注解方式</a>
+<li>
+<a href="#spring-boot-%E7%9A%84%E6%A0%B8%E5%BF%83%E6%B3%A8%E8%A7%A3%E6%98%AF%E5%93%AA%E4%B8%AA%E5%AE%83%E4%B8%BB%E8%A6%81%E7%94%B1%E5%93%AA%E5%87%A0%E4%B8%AA%E6%B3%A8%E8%A7%A3%E7%BB%84%E6%88%90%E7%9A%84">Spring Boot 的核心注解是哪个？它主要由哪几个注解组成的？</a>
 <ul>
-<li><a href="#webservlet">@WebServlet</a></li>
-<li><a href="#webfilter">@WebFilter</a></li>
-<li><a href="#weblistener">@WebListener</a></li>
-<li><a href="#servletcomponentscan">@ServletComponentScan</a></li>
 </ul>
 </li>
+<li>
+<a href="#javaconfig">JavaConfig</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E5%86%85%E5%B5%8C%E5%AE%B9%E5%99%A8%E4%B8%8E%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B">内嵌容器与启动流程</a>
+<ul>
+<li><a href="#%E5%86%85%E5%B5%8C%E5%AE%B9%E5%99%A8">内嵌容器</a></li>
+<li><a href="#springapplicationrun-%E7%9A%84%E5%85%B3%E9%94%AE%E6%AD%A5%E9%AA%A4">SpringApplication.run 的关键步骤</a></li>
+<li><a href="#%E5%90%AF%E5%8A%A8%E8%BF%87%E7%A8%8B%E4%B8%AD%E7%9A%84%E4%BA%8B%E4%BB%B6%E4%B8%8E%E7%9B%91%E5%90%AC%E5%99%A8">启动过程中的事件与监听器</a></li>
+<li><a href="#%E4%BC%98%E9%9B%85%E5%85%B3%E9%97%AD">优雅关闭</a></li>
+</ul>
+</li>
+<li>
+<a href="#spring-boot-%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE">Spring Boot 自动配置</a>
+<ul>
+<li><a href="#%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E7%B1%BB%E7%9A%84%E5%8A%A0%E8%BD%BD%E5%85%A5%E5%8F%A3">自动配置类的加载入口</a></li>
+<li><a href="#spring-boot-autoconfigure-%E9%87%8C%E6%9C%89%E4%BB%80%E4%B9%88">spring-boot-autoconfigure 里有什么</a></li>
+<li><a href="#conditional-%E7%B3%BB%E5%88%97%E6%9D%A1%E4%BB%B6%E6%B3%A8%E8%A7%A3">@Conditional 系列条件注解</a></li>
+<li><a href="#%E4%B8%80%E4%B8%AA%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E7%B1%BB%E7%9A%84%E5%85%B8%E5%9E%8B%E7%BB%93%E6%9E%84">一个自动配置类的典型结构</a></li>
+<li><a href="#%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E8%A3%85%E9%85%8D%E6%B5%81%E7%A8%8B">自动配置装配流程</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E8%B5%B7%E6%AD%A5%E4%BE%9D%E8%B5%96%E4%B8%8E%E7%88%B6-pom">起步依赖与父 POM</a>
+<ul>
+<li><a href="#%E7%88%B6-pom-%E4%B8%8E%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86">父 POM 与依赖管理</a></li>
+<li><a href="#%E8%B5%B7%E6%AD%A5%E4%BE%9D%E8%B5%96%E6%98%AF%E6%80%8E%E4%B9%88%E5%81%9A%E5%88%B0%E5%BC%80%E7%AE%B1%E5%8D%B3%E7%94%A8%E7%9A%84">起步依赖是怎么“做到开箱即用”的</a></li>
+</ul>
+</li>
+<li>
+<a href="#spring-boot-%E9%85%8D%E7%BD%AE%E5%8A%A0%E8%BD%BD%E9%A1%BA%E5%BA%8F">Spring Boot 配置加载顺序</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#yaml-%E9%85%8D%E7%BD%AE">YAML 配置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#spring-boot-%E6%98%AF%E5%90%A6%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8-xml-%E9%85%8D%E7%BD%AE">Spring Boot 是否可以使用 XML 配置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#spring-boot-%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6bootstrapproperties%E5%92%8C-applicationproperties-%E6%9C%89%E4%BD%95%E5%8C%BA%E5%88%AB">spring boot 核心配置文件bootstrap.properties和 application.properties 有何区别</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#spring-profiles">Spring Profiles</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%AF%94%E8%BE%83%E4%B8%80%E4%B8%8B-spring-security-%E5%92%8C-shiro-%E5%90%84%E8%87%AA%E7%9A%84%E4%BC%98%E7%BC%BA%E7%82%B9">比较一下 Spring Security 和 Shiro 各自的优缺点</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#spring-boot-%E4%B8%AD%E5%A6%82%E4%BD%95%E8%A7%A3%E5%86%B3%E8%B7%A8%E5%9F%9F%E9%97%AE%E9%A2%98">Spring Boot 中如何解决跨域问题</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#spring-boot-%E4%B8%AD%E7%9A%84%E7%9B%91%E8%A7%86%E5%99%A8">Spring Boot 中的监视器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%B3%A8%E5%86%8C-servlet-%E4%B8%89%E5%A4%A7%E7%BB%84%E4%BB%B6-servlet-filter-listener">注册 Servlet 三大组件 Servlet、Filter、Listener</a>
+<ul>
+<li><a href="#%E7%BB%A7%E6%89%BF%E6%8E%A5%E5%8F%A3%E5%AE%9E%E7%8E%B0%E6%96%B9%E5%BC%8F">继承，接口实现方式</a></li>
+<li><a href="#%E6%B3%A8%E8%A7%A3%E6%96%B9%E5%BC%8F">注解方式</a></li>
 </ul>
 </li>
 </ul>

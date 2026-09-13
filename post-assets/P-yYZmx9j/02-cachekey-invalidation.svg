@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="380" viewBox="0 0 900 380"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>CacheKey 组成与 update 清空缓存的执行路径</title>
+  <rect width="900" height="380" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+    <marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2e9e5b"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">CacheKey 的组成与写操作清空缓存的路径</text>
+
+  <rect x="20" y="55" width="270" height="130" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="155" y="79" font-size="13" font-weight="700" fill="#2f6fd0" text-anchor="middle">CacheKey 的组成</text>
+  <text x="38" y="104" font-size="12" fill="#1f2b38">1. statementId</text>
+  <text x="38" y="126" font-size="12" fill="#1f2b38">2. 分页 offset / limit</text>
+  <text x="38" y="148" font-size="12" fill="#1f2b38">3. SQL 语句（含 ? 占位符）</text>
+  <text x="38" y="170" font-size="12" fill="#1f2b38">4. 实际传入的参数值</text>
+
+  <line x1="290" y1="120" x2="330" y2="120" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah)"/>
+
+  <rect x="340" y="72" width="240" height="96" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="460" y="96" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">缓存键哈希</text>
+  <text x="460" y="120" font-size="12" fill="#1f2b38" text-anchor="middle">equals / hashCode</text>
+  <text x="460" y="142" font-size="11.5" fill="#5b6b7c" text-anchor="middle">四项有任一不同即视为不同查询</text>
+  <text x="460" y="159" font-size="11.5" fill="#5b6b7c" text-anchor="middle">缓存因此不会串味</text>
+
+  <line x1="580" y1="120" x2="620" y2="120" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah)"/>
+
+  <rect x="630" y="72" width="250" height="96" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="755" y="96" font-size="13" font-weight="700" fill="#2e9e5b" text-anchor="middle">命中判断</text>
+  <text x="755" y="120" font-size="12" fill="#1f2b38" text-anchor="middle">getObject(key) 非空</text>
+  <text x="755" y="142" font-size="11.5" fill="#5b6b7c" text-anchor="middle">readOnly=false 时</text>
+  <text x="755" y="159" font-size="11.5" fill="#5b6b7c" text-anchor="middle">返回反序列化副本</text>
+
+  <rect x="20" y="205" width="860" height="152" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="40" y="229" font-size="14" font-weight="700" fill="#e08a1e">一次 update / insert / delete 的执行路径</text>
+  <line x1="40" y1="241" x2="860" y2="241" stroke="#e08a1e" stroke-width="1" opacity="0.45"/>
+
+  <rect x="40" y="256" width="180" height="80" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="130" y="281" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">1. Executor.update</text>
+  <text x="130" y="302" font-size="11.5" fill="#5b6b7c" text-anchor="middle">flushCache 默认 true</text>
+  <text x="130" y="320" font-size="11.5" fill="#5b6b7c" text-anchor="middle">先清缓存再写库</text>
+
+  <line x1="220" y1="296" x2="256" y2="296" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah)"/>
+
+  <rect x="260" y="256" width="180" height="80" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="350" y="281" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">2. clearLocalCache()</text>
+  <text x="350" y="302" font-size="11.5" fill="#5b6b7c" text-anchor="middle">清空当前会话一级缓存</text>
+  <text x="350" y="320" font-size="11.5" fill="#5b6b7c" text-anchor="middle">对象保留，可继续使用</text>
+
+  <line x1="440" y1="296" x2="476" y2="296" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah)"/>
+
+  <rect x="480" y="256" width="180" height="80" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="570" y="281" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">3. TransactionalCache</text>
+  <text x="570" y="302" font-size="11.5" fill="#5b6b7c" text-anchor="middle">clear 只挂起，不清空</text>
+  <text x="570" y="320" font-size="11.5" fill="#5b6b7c" text-anchor="middle">避免脏数据提前可见</text>
+
+  <line x1="660" y1="296" x2="696" y2="296" stroke="#2e9e5b" stroke-width="1.6" marker-end="url(#ahr)"/>
+
+  <rect x="700" y="256" width="160" height="80" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="780" y="281" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">4. 事务提交</text>
+  <text x="780" y="302" font-size="11.5" fill="#5b6b7c" text-anchor="middle">提交：真正清空二级缓存</text>
+  <text x="780" y="320" font-size="11.5" fill="#5b6b7c" text-anchor="middle">回滚：保留旧缓存</text>
+</svg>

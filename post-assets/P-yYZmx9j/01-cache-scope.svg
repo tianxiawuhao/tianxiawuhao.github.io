@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>MyBatis 一级缓存与二级缓存的作用范围与失效路径</title>
+  <rect width="900" height="520" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+    <marker id="aht" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e08a1e"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">一级缓存（SqlSession 级）与二级缓存（namespace 级）的作用范围</text>
+
+  <rect x="20" y="55" width="860" height="205" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <path d="M24 91 L876 91" stroke="#c8d3e0" stroke-width="1.2"/>
+  <text x="40" y="79" font-size="14" font-weight="700" fill="#2f6fd0">namespace = com.demo.mapper.BlogMapper</text>
+  <text x="860" y="79" font-size="12" fill="#5b6b7c" text-anchor="end">二级缓存按 namespace 共享</text>
+  <rect x="340" y="104" width="270" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="475" y="122" font-size="13" font-weight="700" fill="#2f6fd0" text-anchor="middle">二级缓存 Cache（PerpetualCache）</text>
+  <text x="475" y="139" font-size="11.5" fill="#5b6b7c" text-anchor="middle">同一 namespace 的所有 SqlSession 共享</text>
+
+  <rect x="35" y="162" width="390" height="86" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="230" y="183" font-size="13" font-weight="700" fill="#2e9e5b" text-anchor="middle">SqlSession A</text>
+  <rect x="52" y="194" width="356" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+  <text x="230" y="212" font-size="12" fill="#1f2b38" text-anchor="middle">Executor → 一级缓存 PerpetualCache（HashMap）</text>
+  <text x="230" y="229" font-size="11.5" fill="#5b6b7c" text-anchor="middle">会话内共享，跨会话互不可见</text>
+
+  <rect x="475" y="162" width="390" height="86" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="670" y="183" font-size="13" font-weight="700" fill="#2e9e5b" text-anchor="middle">SqlSession B</text>
+  <rect x="492" y="194" width="356" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+  <text x="670" y="212" font-size="12" fill="#1f2b38" text-anchor="middle">Executor → 一级缓存 PerpetualCache（HashMap）</text>
+  <text x="670" y="229" font-size="11.5" fill="#5b6b7c" text-anchor="middle">会话内共享，跨会话互不可见</text>
+
+  <line x1="230" y1="162" x2="400" y2="146" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="670" y1="162" x2="550" y2="146" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <line x1="450" y1="260" x2="450" y2="282" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah)"/>
+  <rect x="325" y="290" width="250" height="40" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="450" y="315" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">数据库 DataSource</text>
+
+  <rect x="20" y="352" width="860" height="148" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="40" y="376" font-size="14" font-weight="700" fill="#e08a1e">失效与穿透路径</text>
+  <line x1="40" y1="388" x2="860" y2="388" stroke="#e08a1e" stroke-width="1" opacity="0.45"/>
+
+  <line x1="40" y1="412" x2="70" y2="412" stroke="#e08a1e" stroke-width="1.6" marker-end="url(#aht)"/>
+  <text x="82" y="409" font-size="12" font-weight="700" fill="#1f2b38">一级缓存命中</text>
+  <text x="82" y="426" font-size="11.5" fill="#5b6b7c">同会话 + 同 statementId + 同参数/分页 → 直接返回，不发 SQL</text>
+
+  <line x1="40" y1="447" x2="70" y2="447" stroke="#e08a1e" stroke-width="1.6" marker-end="url(#aht)"/>
+  <text x="82" y="444" font-size="12" font-weight="700" fill="#1f2b38">一级缓存清空</text>
+  <text x="82" y="461" font-size="11.5" fill="#5b6b7c">会话内任意 update/insert/delete、clearCache()、close()、flushCache=true 的查询、localCacheScope=STATEMENT</text>
+
+  <line x1="40" y1="482" x2="70" y2="482" stroke="#e08a1e" stroke-width="1.6" marker-end="url(#aht)"/>
+  <text x="82" y="479" font-size="12" font-weight="700" fill="#1f2b38">二级缓存失效</text>
+  <text x="82" y="496" font-size="11.5" fill="#5b6b7c">同一 namespace 的写操作提交后清空；事务回滚不清空；跨 namespace 的写操作不会清空本 namespace</text>
+</svg>

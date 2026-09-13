@@ -124,7 +124,6 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/XFKzbOO8H.png" alt="封面图">
-          </img>
           
           <h2 id="seata-是什么">Seata 是什么?</h2>
 <p>Seata 是一款开源的分布式事务解决方案，致力于提供高性能、简单易用的分布式事务服务。Seata 为用户提供 AT、TCC、SAGA 和 XA 事务模式，打造一站式的分布式解决方案。</p>
@@ -143,8 +142,6 @@
 </li>
 <li>
 <p>二阶段：</p>
-</li>
-<li>
 <ul>
 <li>提交异步化，非常快速地完成。</li>
 <li>回滚通过一阶段的回滚日志进行反向补偿。</li>
@@ -321,6 +318,122 @@
 <li>收到 TC 的分支提交请求，把请求放入一个异步任务的队列中，马上返回提交成功的结果给 TC。</li>
 <li>异步任务阶段的分支提交请求将异步和批量地删除相应 UNDO_LOG 记录。</li>
 </ol>
+<h3 id="tp-角色与全局事务流程">TP 角色与全局事务流程</h3>
+<p>Seata 的全局事务由三个角色协作完成，三者通过长连接交换 RPC 消息：</p>
+<ul>
+<li><strong>TC（Transaction Coordinator，事务协调者）</strong>：独立部署的 Seata Server，维护全局事务与分支事务的状态机，负责生成 XID、管理 <code>lock_table</code> 全局锁、驱动二阶段的全局提交或回滚。</li>
+<li><strong>TM（Transaction Manager，事务管理者）</strong>：定义全局事务的边界，向 TC 发起 <code>begin</code>、<code>commit</code>、<code>rollback</code>，通常由业务入口方法上的 <code>@GlobalTransactional</code> 注解驱动。</li>
+<li><strong>RM（Resource Manager，资源管理者）</strong>：管理分支事务的资源，向 TC 注册分支、上报分支状态，并根据 TC 的指令完成二阶段的提交或回滚。AT 模式的 RM 以数据源代理的形式工作。</li>
+</ul>
+<p>一次典型的全局事务时序如下：TM 向 TC 申请开启全局事务并拿到 XID，XID 通过上下文在微服务调用链中传播；每个 RM 在执行本地事务时注册分支、申请全局锁；TM 在业务方法返回后通知 TC 全局提交或回滚，TC 再逐个驱动分支完成二阶段。</p>
+<p><img src="/post-assets/XFKzbOO8H/03-at-global-lock-sequence.svg" alt="Seata AT 模式全局锁与两阶段提交时序图"></p>
+<h3 id="常见坑与配置要点">常见坑与配置要点</h3>
+<p>AT 模式把一致性做进了框架，但以下问题仍然需要业务和运维配合处理，它们也是线上事故的高发区。</p>
+<p><strong>1. 脏写与镜像校验</strong></p>
+<p>二阶段回滚时会先做数据校验：拿 <code>undo_log</code> 中的后镜像（afterImage）与当前数据比较，如果不同，说明该行被全局事务之外的动作修改过。此时盲目按前镜像覆盖就会产生脏写。默认策略是抛出异常并记录，人工介入；根本的解决办法是让所有写路径都进入全局事务，或对外部写入的表显式加全局锁。</p>
+<p><strong>2. TCC 的空回滚与悬挂</strong></p>
+<p>空回滚指一阶段 Try 没有执行成功（例如网络超时），TC 却发起了 Cancel，此时 Cancel 不能真的去扣减资源，需要先判断「事务是否执行过」；悬挂指 Cancel 比迟到的 Try 先执行，导致 Try 占用的资源永远不会被释放。通用做法是引入事务控制表：Try 执行前先登记并检查是否存在已回滚记录，Cancel 时插入回滚标记，并保证 Try / Confirm / Cancel 三个方法都幂等。</p>
+<p><strong>3. 其他高频问题</strong></p>
+<ul>
+<li>表必须有主键：AT 依赖主键定位前后镜像，无主键的表无法生成可用的回滚语句。</li>
+<li>后镜像的定位：对 <code>update ... where 非主键条件</code>，Seata 需要能唯一确定被修改的行，否则回滚范围可能扩大。</li>
+<li>全局锁重试：拿不到全局锁时默认按 <code>client.rm.lock.retry-interval</code>（默认 10 ms）重试 <code>client.rm.lock.retry-times</code>（默认 30 次），超出后回滚本地事务并释放本地锁，避免长时间占用连接。</li>
+<li>读隔离：只有 <code>SELECT ... FOR UPDATE</code> 会被代理并申请全局锁，普通 <code>SELECT</code> 读到的是未提交数据，对账、金额类场景要自行加锁读取。</li>
+<li>undo_log 表：需要业务库提前建表并授权；<code>client.undo.log-table</code> 可改名，<code>client.undo.data-validation</code> 控制是否做镜像校验。</li>
+<li>TC 高可用：单机 file 存储模式仅适合开发环境，生产环境应使用 <code>db</code> 或 <code>redis</code> 存储模式部署 TC 集群。</li>
+</ul>
+<p>核心配置示例（<code>file.conf</code> / <code>registry.conf</code> 可被 application.yml 覆盖）：</p>
+<pre><code class="language-yaml">seata:
+  enabled: true
+  application-id: order-service
+  tx-service-group: my_tx_group      # 需与 TC 侧 service.vgroupMapping 对应
+  enable-auto-data-source-proxy: true
+  data-source-proxy-mode: AT          # AT / XA
+  service:
+    vgroup-mapping:
+      my_tx_group: default            # 事务分组到 TC 集群的映射
+    grouplist:
+      default: 127.0.0.1:8091
+  client:
+    rm:
+      lock:
+        retry-interval: 10            # 全局锁重试间隔，单位 ms
+        retry-times: 30               # 全局锁重试次数，超限则回滚本地事务
+      table-meta-check-enable: false
+      report-success-enable: false
+    undo:
+      data-validation: true           # 二阶段回滚前是否校验后镜像
+      log-serialization: jackson
+      log-table: undo_log
+  config:
+    type: file
+  registry:
+    type: file
+</code></pre>
+<h3 id="事务模式对比">事务模式对比：AT / TCC / SAGA / XA</h3>
+<p>四种模式解决的是不同约束下的问题，选择依据主要是「一致性强度、业务改造成本、资源是否支持事务型」：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">维度</th>
+<th style="text-align:left">AT</th>
+<th style="text-align:left">TCC</th>
+<th style="text-align:left">SAGA</th>
+<th style="text-align:left">XA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">一致性</td>
+<td style="text-align:left">最终一致</td>
+<td style="text-align:left">最终一致</td>
+<td style="text-align:left">最终一致</td>
+<td style="text-align:left">强一致（数据库级两阶段）</td>
+</tr>
+<tr>
+<td style="text-align:left">资源要求</td>
+<td style="text-align:left">关系型数据库 + JDBC</td>
+<td style="text-align:left">任意资源，需业务提供接口</td>
+<td style="text-align:left">任意资源，需正向与补偿服务</td>
+<td style="text-align:left">支持 XA 的数据库</td>
+</tr>
+<tr>
+<td style="text-align:left">业务侵入</td>
+<td style="text-align:left">几乎无侵入，框架自动补偿</td>
+<td style="text-align:left">高，需要实现 Try/Confirm/Cancel</td>
+<td style="text-align:left">中，需要实现每个服务的补偿逻辑</td>
+<td style="text-align:left">低，仅需切换数据源代理模式</td>
+</tr>
+<tr>
+<td style="text-align:left">隔离性</td>
+<td style="text-align:left">默认全局读未提交，靠全局锁防脏写</td>
+<td style="text-align:left">由业务在 Try 中预留资源实现</td>
+<td style="text-align:left">不保证隔离，需要业务容忍中间态</td>
+<td style="text-align:left">由数据库本地事务隔离级别保证</td>
+</tr>
+<tr>
+<td style="text-align:left">锁与性能</td>
+<td style="text-align:left">全局锁只在提交窗口期持有，性能较好</td>
+<td style="text-align:left">无数据库长事务，但需幂等与防悬挂</td>
+<td style="text-align:left">一阶段无锁，吞吐高</td>
+<td style="text-align:left">连接与行锁持有到二阶段，性能最差</td>
+</tr>
+<tr>
+<td style="text-align:left">典型场景</td>
+<td style="text-align:left">电商下单扣库存、账户转账</td>
+<td style="text-align:left">跨库扣减、需要资源预留的资金类业务</td>
+<td style="text-align:left">长流程、跨公司或遗留系统编排</td>
+<td style="text-align:left">强一致要求且数据库支持 XA 的存量系统</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/post-assets/XFKzbOO8H/04-at-rollback-pitfalls.svg" alt="AT 回滚的异常场景：脏写校验、空回滚、悬挂与防悬挂设计"></p>
+<h3 id="与其他最终一致方案的关系">与其他最终一致方案的关系</h3>
+<ul>
+<li><strong>本地消息表</strong>：业务与消息记录写在同一个本地事务里，再由定时任务投递消息。实现简单、不依赖 TC，但需要自己处理投递重试、幂等与消息堆积，且没有全局锁和统一回滚视图。</li>
+<li><strong>最大努力通知</strong>：调用方尽力重试通知，接收方提供查询对账接口兜底补偿。只适合对一致性要求不高的通知类场景，失败时需要人工或对账系统介入。</li>
+<li><strong>Seata AT</strong>：把「本地事务 + 回滚日志 + 二阶段驱动」交给框架，业务侧只写本地 SQL，适合数据库均为关系型、希望低侵入获得最终一致的场景；代价是引入 TC 组件与全局锁，并接受默认读未提交的隔离级别。</li>
+</ul>
 <h3 id="附录">附录</h3>
 <p><strong>「回滚日志表」</strong></p>
 <p>UNDO_LOG Table：不同数据库在类型上会略有差别。</p>
@@ -385,7 +498,7 @@ CREATE TABLE `undo_log` (
 </ul>
 <figure data-type="image" tabindex="5"><img src="/post-images/1659011856143.png" alt="" loading="lazy"></figure>
 <p>根据两阶段行为模式的不同，我们将分支事务划分为 <strong>「Automatic (Branch) Transaction Mode」</strong> 和 <strong>「Manual (Branch) Transaction Mode」</strong>.</p>
-<p>AT 模式（参考链接 TBD）基于 <strong>「支持本地 ACID 事务」</strong> 的 <strong>「关系型数据库」</strong>：</p>
+<p><strong>AT 模式</strong>是 Automatic (Branch) Transaction Mode 的缩写，基于 <strong>「支持本地 ACID 事务」</strong> 的 <strong>「关系型数据库」</strong>，由 Seata 自动完成 SQL 解析、前后镜像记录与反向补偿，业务代码几乎零侵入：</p>
 <ul>
 <li>一阶段 prepare 行为：在本地事务中，一并提交业务数据更新和相应回滚日志记录。</li>
 <li>二阶段 commit 行为：马上成功结束，<strong>「自动」</strong> 异步批量清理回滚日志。</li>
@@ -415,35 +528,61 @@ CREATE TABLE `undo_log` (
 </ul>
 <h3 id="缺点">缺点</h3>
 <ul>
-<li>不保证隔离性</li>
+<li>不保证隔离性，中间状态对外可见，需要业务设计可容忍的补偿语义</li>
+<li>补偿逻辑需要业务自行实现并保证幂等，正向与补偿接口成对维护成本较高</li>
 </ul>
+<h2 id="xa-模式">XA 模式</h2>
+<p>XA 模式是对数据库原生 XA 协议的封装，Seata 在其中承担 TC 的角色，把多个 XA 资源的分支事务纳入同一个全局事务：</p>
+<ul>
+<li>一阶段：RM 执行本地 XA 事务的 <code>XA START</code> / 业务 SQL / <code>XA END</code> / <code>XA PREPARE</code>，连接与锁一直持有到二阶段。</li>
+<li>二阶段：TC 根据全局结果通知 RM 执行 <code>XA COMMIT</code> 或 <code>XA ROLLBACK</code>。</li>
+</ul>
+<p>XA 的优点是强一致、业务改造量小，适合「服务已是存量系统、只想最小改动拿到分布式事务」的场景；缺点是依赖数据库对 XA 的支持，二阶段结束前连接和行锁不会释放，高并发下性能明显弱于 AT，因此 Seata 官方更推荐优先评估 AT。</p>
+<h2 id="小结">小结</h2>
+<p>Seata 的价值在于把分布式事务的通用部分（事务协调、分支注册、回滚补偿、全局锁）收敛到 TC 与框架层，让业务侧尽量只关心本地事务。选型时先看资源类型与一致性要求：关系型数据库优先 AT；需要资源预留或跨异构资源用 TCC；长流程、跨组织编排用 SAGA；已有 XA 能力且要求强一致再考虑 XA。同时务必针对脏写校验、空回滚、悬挂这三类问题做专项设计与压测。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#seata-%E6%98%AF%E4%BB%80%E4%B9%88">Seata 是什么?</a>
 <ul>
+</ul>
+</li>
 <li>
-<ul>
-<li><a href="#seata-%E6%98%AF%E4%BB%80%E4%B9%88">Seata 是什么?</a></li>
-<li><a href="#at-%E6%A8%A1%E5%BC%8F">AT 模式</a>
+<a href="#at-%E6%A8%A1%E5%BC%8F">AT 模式</a>
 <ul>
 <li><a href="#%E5%89%8D%E6%8F%90">前提</a></li>
 <li><a href="#%E6%95%B4%E4%BD%93%E6%9C%BA%E5%88%B6">整体机制</a></li>
 <li><a href="#%E5%86%99%E9%9A%94%E7%A6%BB">写隔离</a></li>
 <li><a href="#%E8%AF%BB%E9%9A%94%E7%A6%BB">读隔离</a></li>
 <li><a href="#%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6">工作机制</a></li>
+<li><a href="#tp-%E8%A7%92%E8%89%B2%E4%B8%8E%E5%85%A8%E5%B1%80%E4%BA%8B%E5%8A%A1%E6%B5%81%E7%A8%8B">TP 角色与全局事务流程</a></li>
+<li><a href="#%E5%B8%B8%E8%A7%81%E5%9D%91%E4%B8%8E%E9%85%8D%E7%BD%AE%E8%A6%81%E7%82%B9">常见坑与配置要点</a></li>
+<li><a href="#%E4%BA%8B%E5%8A%A1%E6%A8%A1%E5%BC%8F%E5%AF%B9%E6%AF%94">事务模式对比：AT / TCC / SAGA / XA</a></li>
+<li><a href="#%E4%B8%8E%E5%85%B6%E4%BB%96%E6%9C%80%E7%BB%88%E4%B8%80%E8%87%B4%E6%96%B9%E6%A1%88%E7%9A%84%E5%85%B3%E7%B3%BB">与其他最终一致方案的关系</a></li>
 <li><a href="#%E9%99%84%E5%BD%95">附录</a></li>
 </ul>
 </li>
-<li><a href="#tcc-%E6%A8%A1%E5%BC%8F">TCC 模式</a></li>
-<li><a href="#saga-%E6%A8%A1%E5%BC%8F">Saga 模式</a>
+<li>
+<a href="#tcc-%E6%A8%A1%E5%BC%8F">TCC 模式</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#saga-%E6%A8%A1%E5%BC%8F">Saga 模式</a>
 <ul>
 <li><a href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF">适用场景</a></li>
 <li><a href="#%E4%BC%98%E5%8A%BF">优势</a></li>
 <li><a href="#%E7%BC%BA%E7%82%B9">缺点</a></li>
 </ul>
 </li>
+<li>
+<a href="#xa-%E6%A8%A1%E5%BC%8F">XA 模式</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E5%B0%8F%E7%BB%93">小结</a>
+<ul>
 </ul>
 </li>
 </ul>

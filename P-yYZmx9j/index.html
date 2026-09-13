@@ -125,10 +125,12 @@
           
           <img class="post-feature-header-image" src="/post-images/P-yYZmx9j.png" alt="封面图">
           
-          <p>缓存是一般的ORM 框架都会提供的功能，目的就是提升查询的效率和减少数据库的压力。跟Hibernate 一样，MyBatis 也有一级缓存和二级缓存，并且预留了集成第三方缓存的接口。</p>
+          <p>缓存是大多数 ORM 框架都会提供的功能，目的是提升查询效率、减少数据库压力。和 Hibernate 一样，MyBatis 也有一级缓存和二级缓存，并且预留了集成第三方缓存的接口。</p>
 <p>缓存体系结构：</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1622193533861.png" alt="" loading="lazy"></figure>
-<p>MyBatis 跟缓存相关的类都在cache 包里面，其中有一个Cache 接口，只有一个默认的实现类 <code>PerpetualCache</code>，它是用<code>HashMap</code> 实现的。</p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1622193533861.png" alt="MyBatis 缓存体系结构图" loading="lazy"></figure>
+<p>先用一张图理清两级缓存各自的作用范围，后面的失效条件、事务坑点都可以挂到这张图上：</p>
+<p><img src="/post-assets/P-yYZmx9j/01-cache-scope.svg" alt="一级缓存（SqlSession 级）与二级缓存（namespace 级）的作用范围与失效路径示意图"></p>
+<p>MyBatis 跟缓存相关的类都在 <code>cache</code> 包里面。其中 <code>Cache</code> 是顶层接口，默认实现类只有 <code>PerpetualCache</code>，它内部就是一个 <code>HashMap</code>；其他实现类都是围绕它做装饰（淘汰策略、序列化、日志、加锁、事务等）。</p>
 <p>所有的缓存实现类总体上可分为三类：基本缓存、淘汰算法缓存、装饰器缓存。</p>
 <table>
 <thead>
@@ -249,29 +251,46 @@
 <li>statement 级别的缓存，避坑： 为了避免这个问题，可以将一级缓存的级别设为 statement 级别的，这样每次查询结束都会清掉一级缓存。</li>
 </ol>
 <h2 id="二级缓存">二级缓存</h2>
-<p>二级缓存是用来解决一级缓存不能跨会话共享的问题的，范围是<code>namespace</code> 级别的，可以被多个<code>SqlSession</code> 共享（只要是同一个接口里面的相同方法，都可以共享），生命周期和应用同步。如果你的MyBatis使用了二级缓存，并且你的Mapper和select语句也配置使用了二级缓存，那么在执行select查询的时候，MyBatis会先从二级缓存中取输入，其次才是一级缓存，即MyBatis查询数据的顺序是：二级缓存  —&gt; 一级缓存 —&gt; 数据库。</p>
+<p>二级缓存是为了解决一级缓存不能跨会话共享的问题：它的范围是 <code>namespace</code> 级别的，可以被多个 <code>SqlSession</code> 共享（只要是同一个接口里的相同方法就能共享），生命周期和应用同步。如果开启了二级缓存，并且 Mapper 与 select 语句也配置使用缓存，那么执行查询时 MyBatis 的取值顺序是：<strong>二级缓存 → 一级缓存 → 数据库</strong>。</p>
+<table>
+<thead>
+<tr><th style="text-align:center">对比项</th><th style="text-align:center">一级缓存（Local Cache）</th><th style="text-align:center">二级缓存（namespace 级）</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align:center">作用范围</td><td style="text-align:center">单个 <code>SqlSession</code> 内，跨会话不可见</td><td style="text-align:center">一个 <code>namespace</code>（Mapper 接口）内，跨会话、跨线程共享</td></tr>
+<tr><td style="text-align:center">宿主对象</td><td style="text-align:center"><code>BaseExecutor</code> 持有的 <code>PerpetualCache</code></td><td style="text-align:center"><code>CachingExecutor</code> 装饰的 <code>TransactionalCache</code> / 自定义 <code>Cache</code></td></tr>
+<tr><td style="text-align:center">默认开关</td><td style="text-align:center">始终开启，无法关闭，只能改级别</td><td style="text-align:center">默认关闭，需 <code>cacheEnabled=true</code> 且 Mapper 中写 <code>&lt;cache/&gt;</code></td></tr>
+<tr><td style="text-align:center">命中范围控制</td><td style="text-align:center">statement + 参数 + 分页，由 CacheKey 决定</td><td style="text-align:center">同上，另可用 <code>useCache="false"</code> 单条语句退出</td></tr>
+<tr><td style="text-align:center">清空时机</td><td style="text-align:center">会话内写操作、<code>clearCache()</code>、<code>close()</code>、<code>flushCache=true</code> 的查询</td><td style="text-align:center">同一 namespace 的写操作<strong>事务提交后</strong>清空（回滚不清空）</td></tr>
+<tr><td style="text-align:center">数据形态</td><td style="text-align:center">直接持有对象引用，同一会话内返回同一实例</td><td style="text-align:center"><code>readOnly=false</code> 时经序列化，返回副本</td></tr>
+<tr><td style="text-align:center">典型风险</td><td style="text-align:center">多会话/多数据源读到旧值，脏读</td><td style="text-align:center">跨 namespace 的写操作不会清本 namespace，需自行约束</td></tr>
+</tbody>
+</table>
 <p>作为一个作用范围更广的缓存，它肯定是在SqlSession 的外层，否则不可能被多个SqlSession 共享。而一级缓存是在SqlSession 内部的，所以第一个问题，肯定是工作在一级缓存之前，也就是只有取不到二级缓存的情况下才到一个会话中去取一级缓存。第二个问题，二级缓存放在哪个对象中维护呢？ 要跨会话共享的话，SqlSession 本身和它里面的BaseExecutor 已经满足不了需求了，那我们应该在BaseExecutor 之外创建一个对象。</p>
 <p>实际上MyBatis 用了一个装饰器的类来维护，就是<code>CachingExecutor</code>。如果启用了二级缓存，MyBatis 在创建Executor 对象的时候会对Executor 进行装饰。<code>CachingExecutor</code> 对于查询请求，会判断二级缓存是否有缓存结果，如果有就直接返回，如果没有委派交给真正的查询器Executor 实现类，比如<code>SimpleExecutor</code> 来执行查询，再走到一级缓存的流程。最后会把结果缓存起来，并且返回给用户。</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1622193575153.png" alt="" loading="lazy"></figure>
 <p>开启二级缓存的方法</p>
-<p>第一步：配置 <code>mybatis.configuration.cache-enabled=true</code>，只要没有显式地设置<code>cacheEnabled=false</code>，都会用<code>CachingExecutor</code> 装饰基本的执行器。</p>
-<p>第二步：在Mapper.xml 中配置<cache/>标签：</p>
+<p>第一步：配置 <code>mybatis.configuration.cache-enabled=true</code>（等价于 XML 里的 <code>&lt;setting name="cacheEnabled" value="true"/&gt;</code>）。<code>cacheEnabled</code> 的默认值本来就是 <code>true</code>，只要没有显式设置为 <code>false</code>，MyBatis 就会用 <code>CachingExecutor</code> 装饰基本执行器。注意它只管「是否套装饰器」，不决定某个 Mapper 有没有缓存。</p>
+<p>第二步：在 <code>Mapper.xml</code> 中配置 <code>&lt;cache/&gt;</code> 标签，这一步才真正为该 namespace 创建 <code>Cache</code> 对象：</p>
 <pre><code class="language-xml">&lt;cache type=&quot;org.apache.ibatis.cache.impl.PerpetualCache&quot;
     size=&quot;1024&quot;
 eviction=&quot;LRU&quot;
 flushInterval=&quot;120000&quot;
 readOnly=&quot;false&quot;/&gt;
 </code></pre>
-<p>基本上就是这样。这个简单语句的效果如下:</p>
+<p>只写一个 <code>&lt;cache/&gt;</code>（不加任何属性）时，采用全部默认值（<code>eviction=LRU</code>、<code>flushInterval</code> 不设置、<code>size=1024</code>、<code>readOnly=false</code>），效果如下：</p>
 <ul>
 <li>映射语句文件中的所有 select 语句的结果将会被缓存。</li>
 <li>映射语句文件中的所有 insert、update 和 delete 语句会刷新缓存。</li>
 <li>缓存会使用最近最少使用算法（LRU, Least Recently Used）算法来清除不需要的缓存。</li>
-<li>缓存不会定时进行刷新（也就是说，没有刷新间隔）。</li>
-<li>缓存会保存列表或对象（无论查询方法返回哪种）的 1024 个引用。</li>
+<li>缓存不会定时刷新（因为没有设置 <code>flushInterval</code>），只在执行写语句时刷新。</li>
+<li>缓存会保存列表或对象（无论查询方法返回哪种）的 1024 个引用（<code>size=1024</code>）。</li>
 <li>缓存会被视为读/写缓存，这意味着获取到的对象并不是共享的，可以安全地被调用者修改，而不干扰其他调用者或线程所做的潜在修改。</li>
 </ul>
-<p>这个更高级的配置创建了一个 FIFO 缓存，每隔 60 秒刷新，最多可以存储结果对象或列表的 512 个引用，而且返回的对象被认为是只读的，因此对它们进行修改可能会在不同线程中的调用者产生冲突。可用的清除策略有：</p>
+<p>如果写成前面示例那样带属性的形式，例如：</p>
+<pre><code class="language-xml">&lt;cache eviction="FIFO" flushInterval="60000" size="512" readOnly="true"/&gt;
+</code></pre>
+<p>它创建的是一个 FIFO 缓存：每隔 60 秒刷新一次，最多存储结果对象或列表的 512 个引用，返回的对象被视为只读，因此<strong>不要修改</strong>取出来的对象，否则可能影响其他线程中的调用者。可用的清除策略有：</p>
 <ul>
 <li>LRU – 最近最少使用：移除最长时间不被使用的对象。</li>
 <li>FIFO – 先进先出：按对象进入缓存的顺序来移除它们。</li>
@@ -283,22 +302,78 @@ readOnly=&quot;false&quot;/&gt;
 <p><strong><code>size</code></strong>（引用数目）属性可以被设置为任意正整数，要注意欲缓存对象的大小和运行环境中可用的内存资源。默认值是 1024。</p>
 <p><strong><code>readOnly</code></strong>（只读）属性可以被设置为 true 或 false。只读的缓存会给所有调用者返回缓存对象的相同实例。 因此这些对象不能被修改。这就提供了可观的性能提升。而可读写的缓存会（通过序列化）返回缓存对象的拷贝。 速度上会慢一些，但是更安全，因此默认值是 false。</p>
 <p>注：二级缓存是事务性的。这意味着，当 SqlSession 完成并提交时，或是完成并回滚，但没有执行 <code>flushCache=true </code>的 <code>insert/delete/update</code> 语句时，缓存会获得更新。</p>
-<p><code>Mapper.xml</code> 配置了<cache>之后，select()会被缓存。update()、delete()、insert()会刷新缓存。：如果<code>cacheEnabled=true</code>，<code>Mapper.xml</code> 没有配置标签，还有二级缓存吗？（没有）还会出现CachingExecutor 包装对象吗？（会）</p>
-<p>只要<code>cacheEnabled=true</code> 基本执行器就会被装饰。有没有配置<cache>，决定了在启动的时候会不会创建这个mapper 的Cache 对象，只是最终会影响到<code>CachingExecutorquery</code> 方法里面的判断。如果某些查询方法对数据的实时性要求很高，不需要二级缓存，怎么办？我们可以在单个Statement ID 上显式关闭二级缓存（默认是true）：</p>
-<pre><code class="language-xml">&lt;select id=&quot;selectBlog&quot; resultMap=&quot;BaseResultMap&quot; useCache=&quot;false&quot;&gt;
+<p><code>Mapper.xml</code> 配置了 <code>&lt;cache/&gt;</code> 之后，select() 结果会被缓存，update()、delete()、insert() 会刷新缓存。反过来问：如果 <code>cacheEnabled=true</code>，但 <code>Mapper.xml</code> 里没有配置 <code>&lt;cache/&gt;</code> 标签，还有二级缓存吗？——没有；还会出现 <code>CachingExecutor</code> 包装对象吗？——会。</p>
+<p>只要 <code>cacheEnabled=true</code>，基本执行器就会被装饰。而「有没有配置 <code>&lt;cache/&gt;</code>」决定的是启动时<strong>会不会为该 mapper 创建 Cache 对象</strong>（不配置则 <code>delegate</code> 时拿到的是 <code>null</code>，最终影响 <code>CachingExecutor.query()</code> 里的判断）。所以这两件事要分开理解：套装饰器 ≠ 有缓存。</p>
+<p>相关属性一共三个，容易混淆，这里一起说清楚：</p>
+<ul>
+<li><code>cacheEnabled</code>（全局，默认 <code>true</code>）：是否用 <code>CachingExecutor</code> 装饰 Executor，以及是否为 <code>&lt;cache/&gt;</code> 创建缓存。</li>
+<li><code>useCache</code>（语句级，只对 select 有效，默认 <code>true</code>）：本条查询是否<strong>读取</strong>二级缓存，同时决定结果是否写入二级缓存。实时性要求高的查询可以显式关掉它。</li>
+<li><code>flushCache</code>（语句级）：本条语句执行前是否<strong>清空</strong>缓存。select 默认 <code>false</code>；insert/update/delete 默认 <code>true</code>（这也是写操作能自动清缓存的原因）。把某条 select 设为 <code>flushCache="true"</code>，它每次执行都会先清空一级与二级缓存，等于放弃缓存，常用于强一致查询或报表类 SQL。</li>
+</ul>
+<p>如果某些查询方法对数据的实时性要求很高，不需要二级缓存，可以在单个 statement 上显式关闭：</p>
+<pre><code class="language-xml">&lt;select id="selectBlog" resultMap="BaseResultMap" useCache="false" flushCache="true"&gt;
+    select * from blog where id = #{id}
+&lt;/select&gt;
+</code></pre>
+<h3 id="cachekey-如何生成与失效">CacheKey 如何生成，写操作为什么能清空缓存</h3>
+<p>缓存能不能命中，取决于 key 是否相等。MyBatis 用 <code>CacheKey</code> 承载一次查询的全部身份信息，参与计算的有四项：</p>
+<ol>
+<li><code>statementId</code>（含 namespace 的完整语句 id，如 <code>com.demo.mapper.BlogMapper.selectById</code>）；</li>
+<li>分页参数 <code>rowBounds</code> 的 offset 与 limit；</li>
+<li>SQL 语句本身（含 <code>?</code> 占位符的模板，如 <code>select * from blog where id = ?</code>，由 <code>BoundSql.getSql()</code> 得到）；</li>
+<li>实际传入的参数值（<code>parameterObject</code>，由 <code>ParameterMapping</code> 逐个取值）。</li>
+</ol>
+<p>四项里有任何一项不同，<code>equals/hashCode</code> 就会判定为不同的查询，因此缓存不会串味。<code>CacheKey</code> 内部用 <code>update()</code> 逐个累加并计算哈希，还有 <code>multiplier</code>、<code>hashcode</code>、<code>checksum</code> 等字段用于快速比较。由此也能反推两个常见现象：</p>
+<ul>
+<li><code>&lt;foreach&gt;</code> 拼接的 in 查询、动态 SQL 拼接出的不同 SQL 文本，都会生成不同的 key，缓存命中率低；</li>
+<li><code>RowBounds</code> 不同（翻页）就是不同的 key，所以一级缓存不会把第 2 页的数据当成第 1 页返回。</li>
+</ul>
+<p>写操作为什么能自动清缓存？因为 <code>flushCache</code> 默认为 <code>true</code>，<code>BaseExecutor.update()</code> 会先调用 <code>clearLocalCache()</code> 清空一级缓存再执行 SQL；二级缓存则由 <code>CachingExecutor</code> 交给 <code>TransactionalCache</code> 处理——注意它在事务中执行 <code>clear()</code> 时只是打上「提交时清空」的标记，并不会立刻清空，以免把未提交的数据暴露给其他会话。</p>
+<p><img src="/post-assets/P-yYZmx9j/02-cachekey-invalidation.svg" alt="CacheKey 由 statementId、分页、SQL、参数四部分组成，以及 update 清空缓存的四步路径示意图"></p>
+<h3 id="spring-事务与多-sqlsession-的坑">与 Spring 事务、多 SqlSession 配合时的坑</h3>
+<p>一级缓存绑定在 <code>SqlSession</code> 上，而 <code>SqlSession</code> 由谁创建、何时关闭，在裸用 MyBatis 和用 Spring 时完全不同，坑也主要出在这里。</p>
+<ul>
+<li><strong>不在事务中</strong>：<code>SqlSessionTemplate</code> 每次执行都会新开一个 <code>SqlSession</code>，方法结束就关闭。一级缓存随会话一起销毁，几乎不生效。</li>
+<li><strong>在 Spring 事务中</strong>：<code>SqlSession</code> 被绑定到事务（<code>SqlSessionHolder</code> + <code>TransactionSynchronizationManager</code>），整个事务内复用同一个会话，一级缓存全程有效——这会放大脏读窗口：同一事务里先查一次，别的会话改了库，本事务再查还是旧值。</li>
+<li><strong><code>@Transactional</code> 失效或被绕过</strong>：同类内部方法调用、<code>private</code> 方法、<code>this</code> 调用都不会走代理，注解不生效，于是每个 Mapper 调用各自新开会话，事务与缓存的作用域都跟你以为的不一样。</li>
+<li><strong>事务未提交时二级缓存不会更新</strong>：<code>TransactionalCache</code> 把写操作暂存到 <code>entriesToAddOnCommit</code>，只有提交时才真正 <code>put</code> 进底层缓存并执行清空；回滚则直接丢弃。这保证了「提交前的数据不会被别人读到」，但也意味着同一事务内后续查询要依赖自己的一级缓存。</li>
+<li><strong>读写分离 / 多数据源</strong>：主库写、从库读时，写操作清空的只是它所在 namespace 的缓存；如果读走另一个数据源，缓存与主从延迟叠加，脏读会更明显。</li>
+</ul>
+<h3 id="分布式环境下的脏读风险">分布式环境下的脏读风险</h3>
+<p>本地二级缓存是「进程内」的：每台应用服务器各存一份。假设部署了两个实例，请求 A 打到实例 1，请求 B 打到实例 2：实例 1 上的写操作只会清空实例 1 的缓存，实例 2 的缓存仍是旧值，直到它自己的 TTL 到期或被本实例的写操作清掉。这就是分布式下最常见的脏读来源。</p>
+<p>要跨实例共享，就必须把缓存从进程内挪到进程外，让所有实例读写同一份数据，同时解决「写操作如何通知其他实例失效」的问题：</p>
+<ul>
+<li>换成 Redis、Memcached、Ehcache 集群等集中式缓存（实现 <code>Cache</code> 接口，例如 <code>mybatis-redis</code>、<code>mybatis-ehcache</code>）；</li>
+<li>为缓存设置合理的 TTL，用「短暂不一致」换取最终一致；</li>
+<li>对强一致要求的场景，直接放弃二级缓存，把缓存交给业务层按 key 精确管理。</li>
+</ul>
+<h3 id="什么时候应该关掉本地缓存">什么时候应该关掉本地缓存</h3>
+<ul>
+<li>数据实时性要求高，不能接受毫秒级以上的旧值（如库存、余额、订单状态）。</li>
+<li>多实例部署、又没接入集中式缓存，本地缓存只会带来不一致。</li>
+<li>同一张表会被多个 namespace 写入（例如 BlogMapper 与 BlogExtMapper 都改 blog 表）：写操作只清自己 namespace 的缓存，另一个 namespace 的缓存就成了脏数据。这是二级缓存最容易被忽略的坑，此时应关闭二级缓存或改用集中式缓存。</li>
+<li>频繁的批量写：缓存被反复清空，命中率极低，只剩维护成本。</li>
+<li>单条 SQL 级别的临时规避：对该语句用 <code>useCache="false"</code> / <code>flushCache="true"</code>，而不是全局关缓存。</li>
+</ul>
+<p>补充一个常见误区：<strong>一级缓存无法真正关闭</strong>。官方称它为 Local Cache，只能改级别。默认 <code>localCacheScope=SESSION</code>；在 <code>mybatis-config.xml</code> 或 Spring Boot 配置中改为 <code>STATEMENT</code> 后，每次查询结束都会清掉本地缓存，等价于禁用一级缓存，能规避「同一会话读到旧值」的问题（代价是同一事务内重复查询也会重复访问数据库）：</p>
+<pre><code class="language-xml">&lt;settings&gt;
+    &lt;setting name="localCacheScope" value="STATEMENT"/&gt;
+&lt;/settings&gt;
+</code></pre>
+<pre><code class="language-properties"># Spring Boot 中等价写法
+mybatis.configuration.local-cache-scope=STATEMENT
 </code></pre>
 <h3 id="第三方缓存做二级缓存">第三方缓存做二级缓存</h3>
-<p>除了MyBatis 自带的二级缓存之外，我们也可以通过实现Cache 接口来自定义二级缓存。MyBatis 官方提供了一些第三方缓存集成方式，比如ehcache 和redis：https://github.com/mybatis/redis-cache ,这里就不过多介绍了。当然，我们也可以使用独立的缓存服务，不使用MyBatis 自带的二级缓存。</p>
-<p>pom 文件引入依赖：</p>
-<pre><code class="language-java">&lt;dependency&gt;
-	&lt;groupId&gt;org.mybatis.caches&lt;/groupId&gt;
-	&lt;artifactId&gt;mybatis-redis&lt;/artifactId&gt;
-	&lt;version&gt;1.0.0-beta2&lt;/version&gt;
+<p>除了 MyBatis 自带的二级缓存，我们也可以通过实现 <code>Cache</code> 接口来自定义二级缓存。MyBatis 官方提供了一些第三方缓存集成方式，比如 ehcache 和 redis，详见 <a href="https://github.com/mybatis/redis-cache">mybatis/redis-cache</a>。当然，也可以完全使用独立的缓存服务，不使用 MyBatis 自带的二级缓存。</p>
+<p>pom 文件引入依赖（版本以仓库最新为准，下面这个版本较老）：</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.mybatis.caches&lt;/groupId&gt;
+    &lt;artifactId&gt;mybatis-redis&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0-beta2&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<p>MybatisRedisCache</p>
-<pre><code class="language-java">
-import com.xxx.util.JsonUtils;
+<p>下面是「自己实现一个 Redis 二级缓存」的示例，可直接对照着看 <code>Cache</code> 接口需要实现哪些方法（MybatisRedisCache）：</p>
+<pre><code class="language-java">import com.xxx.util.JsonUtils;
 import org.apache.ibatis.cache.Cache;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -481,7 +556,8 @@ public class RedisConfig {
         Jackson2JsonRedisSerializer serializer = new Jackson2JsonRedisSerializer(Object.class);
         ObjectMapper mapper = new ObjectMapper();
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        mapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
+        // Jackson 2.10 起 enableDefaultTyping 已废弃，推荐：
+        mapper.activateDefaultTyping(mapper.getPolymorphicTypeValidator(), ObjectMapper.DefaultTyping.NON_FINAL);
         serializer.setObjectMapper(mapper);
         return serializer;
     }
@@ -490,24 +566,24 @@ public class RedisConfig {
 </code></pre>
 <p>开启Mybatis二级缓存设置</p>
 <p>方式1：mybatis-config.xml</p>
-<pre><code class="language-java">&lt;configuration&gt;
+<pre><code class="language-xml">&lt;configuration&gt;
     &lt;settings&gt;
         &lt;!-- 开启二级缓存 --&gt;
-        &lt;setting name=&quot;cacheEnabled&quot; value=&quot;true&quot;/&gt;
+        &lt;setting name="cacheEnabled" value="true"/&gt;
     &lt;/settings&gt;
-   ...
+    ...
 &lt;/configuration&gt;
 </code></pre>
 <p>方式2：Springboot - application.properties</p>
-<pre><code class="language-java">#使全局的映射器启用或禁用缓存。
+<pre><code class="language-properties"># 使全局的映射器启用或禁用缓存
 mybatis.configuration.cache-enabled=true
 </code></pre>
-<p>Mapper.xml 配置，type 使用RedisCache：</p>
-<pre><code class="language-java">&lt;cache type=&quot;org.mybatis.caches.redis.RedisCache&quot;
-eviction=&quot;FIFO&quot; flushInterval=&quot;60000&quot; size=&quot;512&quot; readOnly=&quot;true&quot;/&gt;
+<p>Mapper.xml 中把 <code>type</code> 指向自定义实现（以 mybatis-redis 的 <code>RedisCache</code> 为例）。注意：<code>eviction</code>、<code>flushInterval</code>、<code>size</code>、<code>readOnly</code> 这些属性是给 MyBatis 自带缓存装饰器用的，第三方实现未必读取它们，行为要以该实现自身的说明为准——例如 <code>mybatis-redis</code> 需要自己保证序列化与失效策略：</p>
+<pre><code class="language-xml">&lt;cache type="org.mybatis.caches.redis.RedisCache"
+       eviction="FIFO" flushInterval="60000" size="512" readOnly="true"/&gt;
 </code></pre>
 <p>redis.properties 配置：</p>
-<pre><code class="language-java">host=localhost
+<pre><code class="language-properties">host=localhost
 port=6379
 connectionTimeout=5000
 soTimeout=5000
@@ -516,17 +592,18 @@ database=0
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80%E7%BA%A7%E7%BC%93%E5%AD%98%E6%9C%AC%E5%9C%B0%E7%BC%93%E5%AD%98">一级缓存（本地缓存）</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#%E4%BA%8C%E7%BA%A7%E7%BC%93%E5%AD%98">二级缓存</a>
 <ul>
-<li><a href="#%E4%B8%80%E7%BA%A7%E7%BC%93%E5%AD%98%E6%9C%AC%E5%9C%B0%E7%BC%93%E5%AD%98">一级缓存（本地缓存）</a></li>
-<li><a href="#%E4%BA%8C%E7%BA%A7%E7%BC%93%E5%AD%98">二级缓存</a>
-<ul>
+<li><a href="#cachekey-%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90%E4%B8%8E%E5%A4%B1%E6%95%88">CacheKey 如何生成，写操作为什么能清空缓存</a></li>
+<li><a href="#spring-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E5%A4%9A-sqlsession-%E7%9A%84%E5%9D%91">与 Spring 事务、多 SqlSession 配合时的坑</a></li>
+<li><a href="#%E5%88%86%E5%B8%83%E5%BC%8F%E7%8E%AF%E5%A2%83%E4%B8%8B%E7%9A%84%E8%84%8F%E8%AF%BB%E9%A3%8E%E9%99%A9">分布式环境下的脏读风险</a></li>
+<li><a href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E5%BA%94%E8%AF%A5%E5%85%B3%E6%8E%89%E6%9C%AC%E5%9C%B0%E7%BC%93%E5%AD%98">什么时候应该关掉本地缓存</a></li>
 <li><a href="#%E7%AC%AC%E4%B8%89%E6%96%B9%E7%BC%93%E5%AD%98%E5%81%9A%E4%BA%8C%E7%BA%A7%E7%BC%93%E5%AD%98">第三方缓存做二级缓存</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
