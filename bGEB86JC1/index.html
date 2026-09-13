@@ -137,8 +137,10 @@
 <li>volatile-lfu：从所有配置了过期时间的键中驱逐使用频率最少的键</li>
 <li>allkeys-lfu：从所有键中驱逐使用频率最少的键</li>
 </ul>
+<p><img src="/post-assets/bGEB86JC1/02-redis-approx-lru.svg" alt="Redis 近似 LRU：从键空间中采样若干键，比较空闲时间后淘汰最久未使用的键"></p>
 <h2 id="lru算法实现">lru算法实现</h2>
 <h3 id="取巧算法">取巧算法</h3>
+<p>最简单的做法是直接复用 JDK 的 <code>LinkedHashMap</code>：构造时把 <code>accessOrder</code> 设为 <code>true</code>，它就会在每次 <code>get</code>/<code>put</code> 之后把被访问的节点移到链表尾部（即最近使用端），再重写 <code>removeEldestEntry</code>，让它在元素个数超过容量时返回 <code>true</code>，由 <code>LinkedHashMap</code> 自己淘汰链表头部那个最久未使用的节点。</p>
 <pre><code class="language-java">
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -167,6 +169,7 @@ class LRUCache&lt;K,V&gt; extends LinkedHashMap&lt;K,V&gt; {
 }
 </code></pre>
 <h3 id="数据结构实现">数据结构实现</h3>
+<p><img src="/post-assets/bGEB86JC1/01-lru-structure.svg" alt="LRU 缓存结构：HashMap 负责 O(1) 定位节点，双向链表维护从最近使用到最久未使用的顺序"></p>
 <pre><code class="language-java">
 import java.util.HashMap;
 import java.util.Map;
@@ -267,21 +270,20 @@ class LRUCacheDemo {
 
 }
 </code></pre>
+<p>需要自己控制淘汰细节时，更常见的写法是手写「HashMap + 双向链表」：HashMap 负责 O(1) 地由 key 定位到节点，双向链表负责维护访问顺序。读取或更新命中时，先把节点从链表中摘下再插到 head 之后，表示它刚刚被使用过；容量已满时删除 tail 的前驱节点，也就是最久未使用的那一个。上面的 <code>get</code> 与 <code>put</code> 都遵循这两步，因此每个操作都是 O(1)。</p>
+<p>需要注意的是，以上都是严格 LRU 的实现。Redis 为了省去维护全局链表的内存与开销，实际采用的是采样近似 LRU（见上文插图）：每次只随机抽取 <code>maxmemory-samples</code> 个键，比较它们的空闲时间后淘汰最久未使用的那个，用很小的代价逼近严格 LRU 的淘汰效果。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#redis%E5%86%85%E5%AD%98%E4%B8%8D%E8%B6%B3%E7%9A%84%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5">Redis内存不足的缓存淘汰策略</a>
 <ul>
+</ul>
+</li>
 <li>
-<ul>
-<li><a href="#redis%E5%86%85%E5%AD%98%E4%B8%8D%E8%B6%B3%E7%9A%84%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5">Redis内存不足的缓存淘汰策略</a></li>
-<li><a href="#lru%E7%AE%97%E6%B3%95%E5%AE%9E%E7%8E%B0">lru算法实现</a>
+<a href="#lru%E7%AE%97%E6%B3%95%E5%AE%9E%E7%8E%B0">lru算法实现</a>
 <ul>
 <li><a href="#%E5%8F%96%E5%B7%A7%E7%AE%97%E6%B3%95">取巧算法</a></li>
 <li><a href="#%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E5%AE%9E%E7%8E%B0">数据结构实现</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
