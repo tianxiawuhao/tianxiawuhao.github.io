@@ -125,8 +125,19 @@
           
           <img class="post-feature-header-image" src="/post-images/DseKIIHw3.png" alt="封面图">
           
-          <h2 id="环境安装">环境安装</h2>
-<p>开发环境要求： Jdk 1.11 版本 Postgresql 9 以上 Node.js Npm Maven 3.6 以上 Git 工具 Idea 开发工具 Redis</p>
+          <p>本文记录在 Windows 10 上从零编译 ThingsBoard 源码、直到 Maven 构建成功的完整过程，并整理了编译中最常见的一批报错与排查方法。整体流程如下：</p>
+<p><img src="/post-assets/DseKIIHw3/01-build-pipeline.svg" alt="ThingsBoard 源码编译流程：准备环境、克隆源码、配置 Maven 与 npm 镜像、根目录执行 mvn clean install，失败后清理缓存重试"></p>
+<h2 id="环境安装">环境安装</h2>
+<p>本教程使用的开发环境（Windows 10 64 位）：</p>
+<ul>
+<li>JDK 11（<strong>注意</strong>：不同分支要求的 JDK 版本不同，选分支前请先确认，文末最后一节给出了分界；JDK 版本不匹配会直接编译失败）</li>
+<li>PostgreSQL 9 以上</li>
+<li>Node.js、npm</li>
+<li>Maven 3.6 以上</li>
+<li>Git</li>
+<li>IDEA 开发工具</li>
+<li>Redis</li>
+</ul>
 <h3 id="jdk">JDK</h3>
 <p><strong>下载安装</strong></p>
 <p>JDK 官方下载地址： <a href="https://www.oracle.com/java/technologies/downloads/#java11-windows">Java Downloads | Oracle</a></p>
@@ -134,18 +145,17 @@
 <p><img src="/post-images/1638431548398.png" alt="" loading="lazy"><br>
 下载好了之后直接默认安装就行</p>
 <p><strong>免安装版本</strong></p>
-<p>下载jdk11<br>
-http://openjdk.java.net/install/index.html</p>
-<p>这个页面大部分都是linux系统的；</p>
+<p>下载 JDK 11：<a href="http://openjdk.java.net/install/index.html">openjdk.java.net/install</a>（该域名现已迁移到 openjdk.org，旧链接可能自动跳转）。</p>
+<p>这个页面大部分是 Linux 系统的安装说明；</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1638431591806.png" alt="" loading="lazy"></figure>
-<p>然后我们点击jdk.java.net ，接着我们选择下载Java SE 11；</p>
+<p>然后点击 jdk.java.net，接着选择下载 Java SE 11；</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1638431626019.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="3"><img src="/post-images/1638431650013.png" alt="" loading="lazy"></figure>
 <p>下好了后，我们得到这样的文件：openjdk-11+28_windows-x64_bin.zip，解压后得到：jdk-11这样的文件夹；将该文件夹放到你习惯的地方；</p>
 <p><strong>配置环境变量</strong></p>
-<p><strong>步骤 1：</strong> 在 JAVA_HOME 中增加 JDK 的安装地址：C:\Program Files\Java\jdk1.8.0_221 <img src="/post-images/1638431720261.png" alt="" loading="lazy"></p>
-<p><strong>步骤 2：</strong> 在 CLASSPATH 中增加 JDK 的安装地址中的文件：.;%JAVA_HOME%\lib;%JAVA_HOME%\lib\dt.jar;%JAVA_HOME%\lib\tools.jar <img src="/post-images/1638431747039.png" alt="" loading="lazy"></p>
-<p><strong>步骤 3：</strong> 在 Path 中增加 JDK 的地址：%JAVA_HOME%\bin;%JAVA_HOME%\jre\bin; <img src="/post-images/1638431804325.png" alt="" loading="lazy"></p>
+<p><strong>步骤 1：</strong> 新建系统变量 JAVA_HOME，值为 JDK 的安装目录（示例：<code>C:\Program Files\Java\jdk-11.0.13</code>，请按自己的实际目录填写；原文示例里的 jdk1.8.0_221 与前面安装的 JDK 11 对不上，照抄会导致编译失败） <img src="/post-images/1638431720261.png" alt="" loading="lazy"></p>
+<p><strong>步骤 2（可选）：</strong> 配置 CLASSPATH：<code>.;%JAVA_HOME%\lib;%JAVA_HOME%\lib\dt.jar;%JAVA_HOME%\lib\tools.jar</code>。<strong>提示：</strong>从 JDK 9 开始 <code>dt.jar</code>、<code>tools.jar</code> 已被移除，JDK 11 下这一步并非必需（Java 会自动查找 JDK 自带类库），此处仅为兼容旧教程保留。 <img src="/post-images/1638431747039.png" alt="" loading="lazy"></p>
+<p><strong>步骤 3：</strong> 在 Path 中增加 <code>%JAVA_HOME%\bin</code>。（JDK 9 及以后不再有独立的 <code>jre\bin</code> 目录，原文的 <code>%JAVA_HOME%\jre\bin;</code> 只在 JDK 8 下需要） <img src="/post-images/1638431804325.png" alt="" loading="lazy"></p>
 <p><strong>步骤 4</strong> 输入以下命令</p>
 <pre><code class="language-shell">java -version
 </code></pre>
@@ -157,12 +167,12 @@ http://openjdk.java.net/install/index.html</p>
 <p>步骤 2：下载到本地 <img src="/post-images/1638431943007.png" alt="" loading="lazy"></p>
 <p>步骤 3：配置环境变量 增加 MAVEN_HOME，即 maven 的地址：D:\tb\apache-maven-3.6.1-bin，请注意，如果直接解压，有可能会有两个 apache-maven-3.6.1-bin<img src="/post-images/1638432216067.png" alt="" loading="lazy"></p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1638432310973.png" alt="" loading="lazy"></figure>
-<p>MAVEN_OPTS，参数是 -Xms128m -Xmx1024m<img src="/post-images/1638432342300.png" alt="" loading="lazy"></p>
+<p>MAVEN_OPTS，参数是 <code>-Xms128m -Xmx1024m</code><img src="/post-images/1638432342300.png" alt="" loading="lazy"></p>
 <p>修改 Path，增加 Maven 的地址%MAVEN_HOME%\bin; <img src="/post-images/1638432408010.png" alt="" loading="lazy"></p>
-<p>测试 Maven 安装，打开命令行工具。使用命令 mvn -v，如果能出现以下提示，即安装成功 <img src="/post-images/1638432460487.png" alt="" loading="lazy"></p>
+<p>测试 Maven 安装，打开命令行工具。使用命令 <code>mvn -v</code>，如果能出现以下提示，即安装成功 <img src="/post-images/1638432460487.png" alt="" loading="lazy"></p>
 <h3 id="nodejs-安装">Nodejs 安装</h3>
 <p>步骤 1：下载 Nodejs 安装包，Nodejs 官网地址：https://nodejs.org/en/download/ <img src="/post-images/1638432643509.png" alt="" loading="lazy"></p>
-<p>步骤 2：安装完成后，使用命令查看 Nodejs 是否已经安装完成，能出现以下提示说明已经安装成功 !<img src="/post-images/1638432779272.png" alt="" loading="lazy"></p>
+<p>步骤 2：安装完成后，用 <code>node -v</code> 查看 Node.js 是否安装成功，出现版本号即安装完成：<img src="/post-images/1638432779272.png" alt="" loading="lazy"></p>
 <h3 id="安装-git">安装 git</h3>
 <p>步骤 1：下载 git 安装包，git 官网地址是：https://git-scm.com/download/win<img src="/post-images/1638433242163.png" alt="" loading="lazy"></p>
 <p>步骤 2：安装完成后，使用命令行测试 git <img src="/post-images/1638433294783.png" alt="" loading="lazy"></p>
@@ -187,8 +197,8 @@ npm install -g webpack
 <p>耐心等待一段时间后，看到以下界面就算下载成功 <img src="/post-images/1638433434959.png" alt="" loading="lazy"></p>
 <h3 id="切换-git-分支">切换 git 分支</h3>
 <p>默认下载的代码是 master 主分支的，我们开发需要切换到最新版本的分支。</p>
-<p>查看项目源码的所有分支，下载源码后，需要进入到 thingsboard 文件夹 <img src="/post-images/1638433484980.png" alt="" loading="lazy"></p>
-<p>发现最新发布的版本是 2.4，所以我这里选择 2.4，当然你可以根据自己的情况进行分支选择</p>
+<p>下载源码后，先进入 thingsboard 文件夹，再用 <code>git branch -a</code> 查看项目源码的所有分支 <img src="/post-images/1638433484980.png" alt="" loading="lazy"></p>
+<p>当时最新发布的版本是 2.4，所以这里选择 release-2.4；官方后续已发布 3.x 等更新的分支，你可以根据自己的情况选择（不同分支对 JDK、Node、Maven 的要求不同，请对照所选分支的说明）</p>
 <p>输入以下命令，即可切换至 2.4 的分支</p>
 <pre><code class="language-shell">git checkout release-2.4
 </code></pre>
@@ -196,8 +206,8 @@ npm install -g webpack
 <h2 id="准备工作">准备工作</h2>
 <h3 id="外网连接">外网连接</h3>
 <p>因为 TB 在编译过程中需要依赖很多国外的包，那么需要外网才能连接，有连接外网支持，可以到社区求助：https://www.iotschool.com/topics/node8</p>
-<h3 id="设置-maven-为淘宝镜像">设置 Maven 为淘宝镜像</h3>
-<p>工程是基于 Maven 管理，直接通过 idea open，之后会自动下载各种依赖包。依赖包的默认存储地址为：C:\Users\用户名.m2\repository，内容如下：</p>
+<h3 id="设置-maven-为淘宝镜像">设置 Maven 为国内镜像（阿里云）</h3>
+<p>工程是基于 Maven 管理，直接通过 idea open，之后会自动下载各种依赖包。依赖包的默认存储地址为 <code>C:\Users\你的用户名\.m2\repository</code>，内容如下：</p>
 <pre><code class="language-shell">$tree ~/.m2 -L 2
 /home/jay/.m2
 └── repository
@@ -208,7 +218,7 @@ npm install -g webpack
     ├── ch
     ...
 </code></pre>
-<p>一般情况下，使用官方镜像更新依赖包，网速不稳定，可将 Maven 镜像源设置为淘宝的，在 maven 安装包目录下找到 settings.xml 设置</p>
+<p>一般情况下，使用官方镜像更新依赖包时网速不稳定，可以把 Maven 镜像源换成国内的。settings.xml 有两个常见位置：全局配置在 Maven 安装目录的 <code>conf\settings.xml</code>，用户级配置在 <code>C:\Users\你的用户名\.m2\settings.xml</code>（只影响当前用户，推荐用后者）</p>
 <p>大概位置截图：</p>
 <figure data-type="image" tabindex="7"><img src="/post-images/1638433563017.png" alt="" loading="lazy"></figure>
 <p>把 settings.xml 里面内容设置成以下：</p>
@@ -217,19 +227,21 @@ npm install -g webpack
        &lt;!--This sends everything else to /public --&gt;
        &lt;id&gt;aliyun_nexus&lt;/id&gt;
        &lt;mirrorOf&gt;*,!maven_nexus_201&lt;/mirrorOf&gt; 
-       &lt;url&gt;http://maven.aliyun.com/nexus/content/groups/public/&lt;/url&gt;
+       &lt;url&gt;https://maven.aliyun.com/repository/public&lt;/url&gt;
    &lt;/mirror&gt;
 &lt;/mirrors&gt;
 </code></pre>
+<p><strong>提示：</strong>旧的 <code>http://maven.aliyun.com/nexus/content/groups/public/</code> 地址已不稳定，本文后面“Server Tool 编译失败”一节里的 <code>status code 502</code> 就来自它，请改用 <code>https://maven.aliyun.com/repository/public</code>。另外 <code>mirrorOf</code> 里的 <code>!maven_nexus_201</code> 只有在确实存在同名 repository 时才有意义，普通场景直接写 <code>*</code> 即可。</p>
 <p>不会设置的，可以参考这个文件：https://cdn.iotschool.com/iotschool/settings.xml</p>
 <p>thingsboard QQ 群也有这个资源：121202538</p>
-<h3 id="设置-npm-为淘宝镜像">设置 npm 为淘宝镜像</h3>
+<h3 id="设置-npm-为淘宝镜像">设置 npm 为国内镜像（npmmirror）</h3>
 <p>同上，网速不好 npm 过程中也会下载失败，这是导致很多同学 thingsboard 编译失败的主要原因，所以我们在进行编译之前，也将 npm 替换为淘宝镜像：</p>
-<pre><code class="language-shell">npm install -g mirror-config-china --registry=http://registry.npm.taobao.org        #使用淘宝镜像
+<pre><code class="language-shell">npm config set registry https://registry.npmmirror.com                              #设置国内镜像（原 registry.npm.taobao.org 已停止服务）
 npm config get registry                                                             #查询当前镜像
 npm config rm registry                                                              #删除自定义镜像，使用官方镜像
 npm info express
 </code></pre>
+<p><strong>提示：</strong>淘宝 npm 镜像已迁移到 <code>https://registry.npmmirror.com</code>；老域名 <code>registry.npm.taobao.org</code> 的证书已过期，继续使用会报 <code>certificate has expired</code>。</p>
 <h3 id="设置-idea-管理员启动">设置 IDEA 管理员启动</h3>
 <p>我本地开发环境编译项目使用 IDEA 工具进行编译，所以需要设置管理员启动，这样才有所有的权限执行编译命令。 步骤 1：点击 IDEA 图标右键，选择属性。<img src="/post-images/1638433591413.png" alt="" loading="lazy"></p>
 <p>步骤 2：点击兼容性 - 更改所有用户设置 - 以管理员身份运行此程序<img src="/post-images/1638433662301.png" alt="" loading="lazy"></p>
@@ -246,6 +258,7 @@ npm info express
 <figure data-type="image" tabindex="9"><img src="/post-images/1638433762968.png" alt="" loading="lazy"></figure>
 <h2 id="常见问题">常见问题</h2>
 <h3 id="pom包pkgname等标签未定义">pom包pkg.name等标签未定义</h3>
+<p>报错提示 <code>pkg.name</code> 等属性未定义时，可在 <code>pom.xml</code> 的 <code>&lt;properties&gt;</code> 中补充以下内容：</p>
 <pre><code class="language-xml">    &lt;properties&gt;
         &lt;pkg.name&gt;thingsboard&lt;/pkg.name&gt;
         &lt;main.dir&gt;${basedir}&lt;/main.dir&gt;
@@ -268,6 +281,7 @@ npm info express
 <p>每次编译失败进行二次编译时，要清理缓存，并杀死遗留进程 步骤 1：执行下面命令，杀死遗留进程</p>
 <pre><code class="language-shell">taskkill /f /im java.exe
 </code></pre>
+<p>该命令是 Windows 专用的，会结束所有 Java 进程（包括 IDEA 启动的进程），执行前请先保存工作。</p>
 <p>步骤 2：使用 IDEA Maven 工具进行清理 <img src="/post-images/1638433793132.png" alt="" loading="lazy"></p>
 <p><strong>温馨提示：要进行二次编译前，最好重启一次电脑！</strong></p>
 <h3 id="server-ui-编译失败">Server UI 编译失败</h3>
@@ -284,6 +298,7 @@ npm info express
    &lt;npmVersion&gt;6.12.1&lt;/npmVersion&gt;
 &lt;/configuration&gt;
 </code></pre>
+<p><strong>提示：</strong>不同分支在 <code>pom.xml</code> 里锁定的 Node、npm 版本不同，请以所选分支的配置为准，把这两个值改成与本机 <code>node -v</code>、<code>npm -v</code> 输出一致即可。</p>
 <p>需要修改的文件有三处，位置如下： <img src="/post-images/1638433897767.png" alt="" loading="lazy"></p>
 <h4 id="原因-2node-sass-下载失败">原因 2：node-sass 下载失败</h4>
 <p>编译 Server UI 时，会下载 node-sass 依赖，如果因为网络原因没有下载成功，也会编译失败。如果你是按照本教材一步一步来的，应该不会有问题，上面准备工作中，将 npm 镜像源切换为淘宝，那么下载会很快的。</p>
@@ -340,9 +355,9 @@ ent.mqttv3/1.1.0/org.eclipse.paho.client.mqttv3-1.1.0.pom with status code 502 -
 [ERROR] After correcting the problems, you can resume the build with the command
 [ERROR]   mvn &lt;goals&gt; -rf :js-executor
 </code></pre>
-<p>原因：本地缓存缺少 fetched-v10.15.3-linux-x64 和 fetched-v10.15.3-win-x64 这两个文件。</p>
-<p>解决方案： 步骤 1：下载这两个文件到本地，下载后记得重命名，下载地址：https://github.com/zeit/pkg-fetch/releases <img src="/post-images/1638434130104.png" alt="" loading="lazy"></p>
-<p>步骤 2: 将下载的两个文件放到：放到：C:\Users\你的用户名 \ .pkg-cache\v2.6。并将名字分别修改为：fetched-v10.15.3-linux-x64 和 fetched-v10.15.3-win-x64</p>
+<p>原因：本地缓存缺少 <code>fetched-v10.15.3-linux-x64</code> 和 <code>fetched-v10.15.3-win-x64</code> 这两个文件（pkg-fetch 会把 Node 运行时缓存到本地供打包使用）。</p>
+<p>解决方案： 步骤 1：下载这两个文件到本地，下载后记得重命名，下载地址：<a href="https://github.com/zeit/pkg-fetch/releases">github.com/zeit/pkg-fetch/releases</a>（该仓库已从 zeit 迁移到 vercel，旧地址会重定向） <img src="/post-images/1638434130104.png" alt="" loading="lazy"></p>
+<p>步骤 2：把下载的两个文件放到 <code>C:\Users\你的用户名\.pkg-cache\v2.6</code> 目录下，并分别重命名为 <code>fetched-v10.15.3-linux-x64</code> 和 <code>fetched-v10.15.3-win-x64</code>。</p>
 <p>参考：https://github.com/thingsboard/thingsboard/issues/2084</p>
 <h3 id="license-检查不通过">License 检查不通过</h3>
 <pre><code class="language-shell">[ERROR] Failed to execute goal com.mycila:license-maven-plugin:3.0:check (default) on project thingsboard: Some files do not have the expected license header -&gt; [Help 1]
@@ -351,12 +366,12 @@ ent.mqttv3/1.1.0/org.eclipse.paho.client.mqttv3-1.1.0.pom with status code 502 -
 <figure data-type="image" tabindex="14"><img src="/post-images/1638434154303.png" alt="" loading="lazy"></figure>
 <p>搜索 license-maven-plugin，将整个 plugin 都注释掉 <img src="/post-images/1638434302255.png" alt="" loading="lazy"></p>
 <h3 id="web-ui-编译失败">Web UI 编译失败</h3>
-<p>Web UI 编译失败请参考[Server UI 编译失败第一个原因](https://www.iotschool.com/wiki/tbinstall#Server Tool编译失败)</p>
+<p>Web UI 编译失败请参考上文 <a href="#server-ui-%E7%BC%96%E8%AF%91%E5%A4%B1%E8%B4%A5">Server UI 编译失败</a> 的第一个原因（node、npm 版本号不一致）。</p>
 <h3 id="mavencould-not-resolve-dependencies-for-project-orgthingsboardapplication">maven:Could not resolve dependencies for project org.thingsboard:application:</h3>
 <p>错误信息</p>
 <pre><code class="language-shell">[ERROR] Failed to execute goal on project application: Could not resolve dependencies for project org.thingsboard:application:jar:2.4.1: The following artifacts could not be resolved: org.thingsboard.rule-engine:rule-engine-components:jar:2.4.1, org.thingsboard:dao:jar:2.4.1: Could not find artifact org.thingsboard.rule-engine:rule-engine-components:jar:2.4.1 in jenkins (http://repo.jenkins-ci.org/releases) -&gt; [Help 1]
 </code></pre>
-<p>解决方案：根目录下去 maven 编译，不要在每个单独编译，否则不能自动解决依赖，如果你已经在子模块进行了编译，请回到根目录先 clean 一下，再重新编译。</p>
+<p>解决方案：请在根目录（父 pom 所在目录）执行 Maven 编译，不要在单个子模块里单独编译，否则无法自动解析聚合依赖；如果已经在子模块编译过，先回根目录 clean 再重新编译。</p>
 <h3 id="mavenfailed-to-delete-tb-http-transportrpm">maven:Failed to delete tb-http-transport.rpm</h3>
 <p>错误信息：</p>
 <pre><code class="language-shell">[ERROR] Failed to execute goal org.apache.maven.plugins:maven-clean-plugin:2.5:clean (default-clean) on project http: Failed to clean project: Failed to delete D:\my_project\thingsboard\transport\http\target\tb-http-transport.rpm -&gt; [Help 1]
@@ -370,7 +385,13 @@ npm ERR!     &lt;https://npm.community&gt;
 npm ERR! A complete log of this run can be found in:
 npm ERR!     C:\Users\yuren\AppData\Roaming\npm-cache\_logs\2019-11-06T10_55_28_258Z-debug.log
 </code></pre>
-<p>解决方案： 尝试 npm cache clean --force 后再次 npm install 无果； 尝试更换淘宝镜像源后再次 npm install 无果； 怀疑有些包下载需要翻墙，全局代理翻墙后问题依然存在； 参考网上关闭所有代理后问题依然存在； 通过 log 日志分析最后一个解包报错的地方，屏蔽需要的 material-design-icons，新 modules rxjs 仍然报错；</p>
+<p>解决方案（作者的排查过程，供参考）：</p>
+<ul>
+<li>执行 <code>npm cache clean --force</code> 后再次 <code>npm install</code>，无效；</li>
+<li>更换国内镜像源后再次 <code>npm install</code>，无效；</li>
+<li>怀疑部分包需要代理，全局代理后问题依旧；关闭所有代理后问题依旧；</li>
+<li>从日志定位到最后一个解包报错处，屏蔽 <code>material-design-icons</code>，新的模块 <code>rxjs</code> 仍然报错；</li>
+</ul>
 <pre><code class="language-shell">extract material-design-icons@3.0.1 extracted to node_modules\.staging\material-design-icons-61b4d55e (72881ms)
 extract rxjs@6.5.2 extracted to node_modules\.staging\rxjs-e901ba4c (24280ms)
 </code></pre>
@@ -395,16 +416,16 @@ npm ERR! enoent undefined ls-remote -h -t git://github.com/fabiobiondi/angular-
 [ERROR] No compiler is provided in this environment. Perhaps you are running on
 a JRE rather than a JDK?
 </code></pre>
-<p>需要在环境变量中设置 java，包含%JAVA_HOME%bin;%JAVA_HOME%lib;</p>
+<p>需要在环境变量中正确设置 Java：确认 <code>JAVA_HOME</code> 指向 JDK 安装目录（而不是 JRE），并把 <code>%JAVA_HOME%\bin</code> 加入 <code>Path</code>（JDK 9 及以上不需要再配置 <code>%JAVA_HOME%\lib</code>）。Maven 用到 JRE 或 <code>java</code> 命令指向 JRE 时就会出现这个报错。</p>
 <h3 id="failed-to-execute-goal-orgthingsboardgradle-maven-plugin1010invoke-default-on-project-http-orggradletoolingbuildexception-could-not-execute-build-using-gradle-distribution-httpsservicesgradleorgdistributionsgradle-63-binzip">Failed to execute goal org.thingsboard:gradle-maven-plugin:1.0.10:invoke (default) on project http: org.gradle.tooling.BuildException: Could not execute build using Gradle distribution 'https://services.gradle.org/distributions/gradle-6.3-bin.zip'.</h3>
+<p>该报错表示构建过程中无法使用指定的 Gradle 发行包（<code>gradle-6.3-bin.zip</code>），多数是下载失败导致的；可重试、配置代理，或预先手动下载该发行包后再编译。</p>
 <h3 id="failed-to-execute-goal-orgapachemavenpluginsmaven-compiler-plugin381compile-default-compile-on-project-rest-client-compilation-failure">Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.8.1:compile (default-compile) on project rest-client: Compilation failure</h3>
 <p>An unknown compilation problem occurred</p>
-<p>这个问题主要是jdk版本跟项目不一致导致的，如果项目的版本是大于(不含！)3.2.1，则需要JDK11，反之JDK8</p>
+<p>这个问题主要是 JDK 版本与项目不一致导致的：按原文结论，分支版本高于（不含）3.2.1 时需要 JDK 11，3.2.1 及以下用 JDK 8。注意这与教程开头用 JDK 11 编译 release-2.4 的做法存在出入，编译失败时请先确认所选分支要求的 JDK 版本。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E7%8E%AF%E5%A2%83%E5%AE%89%E8%A3%85">环境安装</a>
+<a href="#%E7%8E%AF%E5%A2%83%E5%AE%89%E8%A3%85">环境安装</a>
 <ul>
 <li><a href="#jdk">JDK</a></li>
 <li><a href="#%E5%AE%89%E8%A3%85-idea">安装 IDEA</a></li>
@@ -415,39 +436,36 @@ a JRE rather than a JDK?
 <li><a href="#%E5%AE%89%E8%A3%85-redis">安装 redis</a></li>
 </ul>
 </li>
-<li><a href="#%E5%85%8B%E9%9A%86-thingsboard-%E4%BB%A3%E7%A0%81">克隆 thingsboard 代码</a>
+<li>
+<a href="#%E5%85%8B%E9%9A%86-thingsboard-%E4%BB%A3%E7%A0%81">克隆 thingsboard 代码</a>
 <ul>
 <li><a href="#%E7%A1%AE%E5%AE%9A%E4%BB%A3%E7%A0%81%E5%AD%98%E6%94%BE%E4%BD%8D%E7%BD%AE">确定代码存放位置</a></li>
 <li><a href="#%E8%BE%93%E5%85%A5-git-%E5%91%BD%E4%BB%A4%E5%85%8B%E9%9A%86%E6%BA%90%E4%BB%A3%E7%A0%81">输入 git 命令克隆源代码</a></li>
 <li><a href="#%E5%88%87%E6%8D%A2-git-%E5%88%86%E6%94%AF">切换 git 分支</a></li>
 </ul>
 </li>
-<li><a href="#%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C">准备工作</a>
+<li>
+<a href="#%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C">准备工作</a>
 <ul>
 <li><a href="#%E5%A4%96%E7%BD%91%E8%BF%9E%E6%8E%A5">外网连接</a></li>
-<li><a href="#%E8%AE%BE%E7%BD%AE-maven-%E4%B8%BA%E6%B7%98%E5%AE%9D%E9%95%9C%E5%83%8F">设置 Maven 为淘宝镜像</a></li>
-<li><a href="#%E8%AE%BE%E7%BD%AE-npm-%E4%B8%BA%E6%B7%98%E5%AE%9D%E9%95%9C%E5%83%8F">设置 npm 为淘宝镜像</a></li>
+<li><a href="#%E8%AE%BE%E7%BD%AE-maven-%E4%B8%BA%E6%B7%98%E5%AE%9D%E9%95%9C%E5%83%8F">设置 Maven 为国内镜像（阿里云）</a></li>
+<li><a href="#%E8%AE%BE%E7%BD%AE-npm-%E4%B8%BA%E6%B7%98%E5%AE%9D%E9%95%9C%E5%83%8F">设置 npm 为国内镜像（npmmirror）</a></li>
 <li><a href="#%E8%AE%BE%E7%BD%AE-idea-%E7%AE%A1%E7%90%86%E5%91%98%E5%90%AF%E5%8A%A8">设置 IDEA 管理员启动</a></li>
 </ul>
 </li>
-<li><a href="#%E5%BC%80%E5%A7%8B%E7%BC%96%E8%AF%91">开始编译</a>
+<li>
+<a href="#%E5%BC%80%E5%A7%8B%E7%BC%96%E8%AF%91">开始编译</a>
 <ul>
 <li><a href="#%E6%B8%85%E7%90%86%E9%A1%B9%E7%9B%AE%E7%BC%96%E8%AF%91%E6%96%87%E4%BB%B6">清理项目编译文件</a></li>
 <li><a href="#%E8%BE%93%E5%85%A5%E7%BC%96%E8%AF%91%E5%91%BD%E4%BB%A4%E5%BC%80%E5%A7%8B%E7%BC%96%E8%AF%91">输入编译命令开始编译</a></li>
 </ul>
 </li>
-<li><a href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98">常见问题</a>
+<li>
+<a href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98">常见问题</a>
 <ul>
 <li><a href="#pom%E5%8C%85pkgname%E7%AD%89%E6%A0%87%E7%AD%BE%E6%9C%AA%E5%AE%9A%E4%B9%89">pom包pkg.name等标签未定义</a></li>
 <li><a href="#%E7%BC%93%E5%AD%98%E5%AF%BC%E8%87%B4%E7%BC%96%E8%AF%91%E5%A4%B1%E8%B4%A5">缓存导致编译失败</a></li>
-<li><a href="#server-ui-%E7%BC%96%E8%AF%91%E5%A4%B1%E8%B4%A5">Server UI 编译失败</a>
-<ul>
-<li><a href="#%E5%8E%9F%E5%9B%A0-1node-npm-%E7%89%88%E6%9C%AC%E5%8F%B7%E9%97%AE%E9%A2%98">原因 1：node、npm 版本号问题</a></li>
-<li><a href="#%E5%8E%9F%E5%9B%A0-2node-sass-%E4%B8%8B%E8%BD%BD%E5%A4%B1%E8%B4%A5">原因 2：node-sass 下载失败</a></li>
-<li><a href="#%E5%8E%9F%E5%9B%A0-3thingsboard-30-%E7%89%88%E6%9C%AC%E7%BC%96%E8%AF%91%E9%81%87%E5%88%B0%E7%9A%84%E9%97%AE%E9%A2%98">原因 3：Thingsboard 3.0 版本编译遇到的问题</a></li>
-<li><a href="#%E5%8E%9F%E5%9B%A0-4%E4%BA%8C%E6%AC%A1%E7%BC%96%E8%AF%91%E5%AF%BC%E8%87%B4%E6%AE%8B%E7%95%99%E8%BF%9B%E7%A8%8B">原因 4：二次编译导致残留进程</a></li>
-</ul>
-</li>
+<li><a href="#server-ui-%E7%BC%96%E8%AF%91%E5%A4%B1%E8%B4%A5">Server UI 编译失败</a></li>
 <li><a href="#server-tool-%E7%BC%96%E8%AF%91%E5%A4%B1%E8%B4%A5">Server Tool 编译失败</a></li>
 <li><a href="#javascript-executor-%E7%BC%96%E8%AF%91%E5%A4%B1%E8%B4%A5">JavaScript Executor 编译失败</a></li>
 <li><a href="#license-%E6%A3%80%E6%9F%A5%E4%B8%8D%E9%80%9A%E8%BF%87">License 检查不通过</a></li>
@@ -457,10 +475,8 @@ a JRE rather than a JDK?
 <li><a href="#npmnpmcb-never-called">npm:npm:cb() never called!</a></li>
 <li><a href="#npmnpm-err-path-git">npm:npm ERR! path git</a></li>
 <li><a href="#no-compiler-is-provided-in-this-environment">No compiler is provided in this environment</a></li>
-<li><a href="#failed-to-execute-goal-orgthingsboardgradle-maven-plugin1010invoke-default-on-project-http-orggradletoolingbuildexception-could-not-execute-build-using-gradle-distribution-httpsservicesgradleorgdistributionsgradle-63-binzip">Failed to execute goal org.thingsboard:gradle-maven-plugin:1.0.10:invoke (default) on project http: org.gradle.tooling.BuildException: Could not execute build using Gradle distribution 'https://services.gradle.org/distributions/gradle-6.3-bin.zip'.</a></li>
+<li><a href="#failed-to-execute-goal-orgthingsboardgradle-maven-plugin1010invoke-default-on-project-http-orggradletoolingbuildexception-could-not-execute-build-using-gradle-distribution-httpsservicesgradleorgdistributionsgradle-63-binzip">Failed to execute goal org.thingsboard:gradle-maven-plugin:1.0.10:invoke (default) on project http: org.gradle.tooling.BuildException: Could not execute build using Gradle distribution &#x27;https://services.gradle.org/distributions/gradle-6.3-bin.zip&#x27;.</a></li>
 <li><a href="#failed-to-execute-goal-orgapachemavenpluginsmaven-compiler-plugin381compile-default-compile-on-project-rest-client-compilation-failure">Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.8.1:compile (default-compile) on project rest-client: Compilation failure</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

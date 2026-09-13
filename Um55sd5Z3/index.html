@@ -125,8 +125,10 @@
           
           <img class="post-feature-header-image" src="/post-images/Um55sd5Z3.png" alt="封面图">
           
-          <h2 id="top命令详解">top命令详解</h2>
-<figure data-type="image" tabindex="1"><img src="/post-images/1631692082043.png" alt="" loading="lazy"></figure>
+          <p>服务器变慢时，凭感觉猜往往最费时间。下面按 CPU、内存、磁盘 IO、网络四个维度，整理常用的诊断命令与关键指标；先看整体排查路径，再逐个命令展开。</p>
+<p><img src="/post-assets/Um55sd5Z3/01-troubleshooting-map.svg" alt="服务器变慢的四维排查路径：CPU、内存、磁盘 IO、网络各自对应的命令与关键指标"></p>
+<h2 id="top命令详解">top命令详解</h2>
+<figure data-type="image" tabindex="1"><img src="/post-images/1631692082043.png" alt="top 命令输出示例：任务队列、进程、CPU、内存、Swap 与进程列表" loading="lazy"></figure>
 <p><strong>第一行，任务队列信息，同 uptime 命令的执行结果</strong></p>
 <blockquote>
 <p>系统时间：07:27:05</p>
@@ -134,7 +136,7 @@
 <p>当前登录用户： 3 user</p>
 <p>负载均衡(uptime) load average: 0.00, 0.00, 0.00</p>
 <p>average后面的三个数分别是1分钟、5分钟、15分钟的负载情况。</p>
-<p>load average数据是每隔5秒钟检查一次活跃的进程数，然后按特定算法计算出的数值。如果这个数除以逻辑 CPU 的数量，结果高于 5 的时候就表明系统在超负荷运转了。</p>
+<p>load average数据是每隔5秒钟检查一次活跃的进程数，然后按特定算法计算出的数值。判断时要先除以逻辑 CPU 核数：结果持续接近或超过 1，说明 CPU 已经跑满；长期大于 5 则属于严重超负荷。</p>
 </blockquote>
 <p><strong>第二行，Tasks — 任务（进程）</strong></p>
 <blockquote>
@@ -143,12 +145,13 @@
 <p><strong>第三行，cpu状态信息</strong></p>
 <blockquote>
 <p>0.0%us【user space】— 用户空间占用CPU的百分比。</p>
-<p>0.3%sy【sysctl】— 内核空间占用CPU的百分比。</p>
-<p>0.0%ni【】— 改变过优先级的进程占用CPU的百分比</p>
+<p>0.3%sy【system】— 内核空间占用CPU的百分比。</p>
+<p>0.0%ni【nice】— 改变过优先级的进程占用CPU的百分比</p>
 <p>99.7%id【idle】— 空闲 CPU 百分比</p>
 <p>0.0%wa【wait】— IO等待占用CPU的百分比</p>
 <p>0.0%hi【Hardware IRQ】— 硬中断占用CPU的百分比</p>
 <p>0.0%si【Software Interrupts】— 软中断占用CPU的百分比</p>
+<p>0.0%st【Steal】— 被虚拟机偷走的时间占CPU的百分比（运行在物理机上通常为 0）</p>
 </blockquote>
 <p><strong>第四行,内存状态</strong></p>
 <blockquote>
@@ -160,7 +163,7 @@
 </blockquote>
 <blockquote>
 <p>备注：</p>
-<p>可用内存=free + buffer + cached</p>
+<p>可用内存 ≈ free + buffers + cached（更准确的数值应看 free 命令输出的 available 列，见下文）</p>
 <p>对于内存监控，在top里我们要时刻监控第五行swap交换分区的used，如果这个数值在不断的变化，说明内核在不断进行内存和swap的数据交换，这是真正的内存不够用了。</p>
 <p>第四行中使用中的内存总量（used）指的是现在系统内核控制的内存数，</p>
 <p>第四行中空闲内存总量（free）是内核还未纳入其管控范围的数量。</p>
@@ -176,7 +179,7 @@ NI — nice值。负值表示高优先级，正值表示低优先级<br>
 VIRT — 进程使用的虚拟内存总量，单位kb。VIRT=SWAP+RES<br>
 RES — 进程使用的、未被换出的物理内存大小，单位kb。RES=CODE+DATA<br>
 SHR — 共享内存大小，单位kb<br>
-S —进程状态。D=不可中断的睡眠状态 R=运行 S=睡眠 T=跟踪/停止 Z=僵尸进程<br>
+S — 进程状态。D=不可中断的睡眠状态，R=运行，S=睡眠，T=跟踪/停止，Z=僵尸进程，I=空闲的内核线程<br>
 %CPU — 上次更新到现在的CPU时间占用百分比<br>
 %MEM — 进程使用的物理内存百分比<br>
 TIME+ — 进程使用的CPU时间总计，单位1/100秒<br>
@@ -184,8 +187,8 @@ COMMAND — 进程名称（命令名/命令行）</p>
 </blockquote>
 <p><strong>详解</strong></p>
 <blockquote>
-<p>**VIRT：virtual memory usage 虚拟内存<br>
-**1、进程“需要的”虚拟内存大小，包括进程使用的库、代码、数据等<br>
+<p><strong>VIRT：virtual memory usage 虚拟内存</strong><br>
+1、进程“需要的”虚拟内存大小，包括进程使用的库、代码、数据等<br>
 2、假如进程申请100m的内存，但实际只使用了10m，那么它会增长100m，而不是实际的使用量</p>
 <p><strong>RES：resident memory usage 常驻内存</strong><br>
 1、进程当前使用的内存大小，但不包括swap out<br>
@@ -211,7 +214,7 @@ M – 以内存占用率大小的顺序排列进程列表<br>
 h – 显示帮助<br>
 n – 设置在进程列表所显示进程的数量<br>
 q – 退出 top<br>
-s – 改变画面更新周期</p>
+1 – 展开/收起每个 CPU 核心的统计信息</p>
 </blockquote>
 <h2 id="vmstat命令详解">vmstat命令详解</h2>
 <p>vmstat命令是最常见的Linux/Unix监控工具，可以展现给定时间间隔的服务器的状态值,包括服务器的CPU使用率，内存使用，虚拟内存交换情况,IO读写情况。这也是我最喜爱的命令：一是 Linux/Unix 都支持，二是相比 top，我可以看到整个机器的 CPU、内存、IO 的使用情况，而不是单单看到各个进程的CPU使用率和内存使用率(使用场景不一样)。</p>
@@ -221,7 +224,7 @@ procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----
  r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa
  1  0      0 3498472 315836 3819540    0    0     0     1    2    0  0  0 100  0
 </code></pre>
-<p>2表示每个两秒采集一次服务器状态，1表示只采集一次。</p>
+<p>参数 2 表示每两秒采集一次服务器状态，1 表示只采集一次。</p>
 <p>实际上，在应用过程中，我们会在一段时间内一直监控，不想监控直接结束vmstat就行了,例如:</p>
 <pre><code class="language-text">root@ubuntu:~# vmstat 2  
 procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----
@@ -235,7 +238,7 @@ procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----
 <p>这表示vmstat每2秒采集数据，一直采集，直到我结束程序，这里采集了5次数据我就结束了程序。</p>
 <p><strong>参数详解</strong></p>
 <blockquote>
-<p><strong>r</strong> 表示运行队列(就是说多少个进程真的分配到CPU)，我测试的服务器目前CPU比较空闲，没什么程序在跑，当这个值超过了CPU数目，就会出现CPU瓶颈了。这个也和top的负载有关系，一般负载超过了3就比较高，超过了5就高，超过了10就不正常了，服务器的状态很危险。top的负载类似每秒的运行队列。如果运行队列过大，表示你的CPU很繁忙，一般会造成CPU使用率很高。</p>
+<p><strong>r</strong> 表示运行队列(就是说多少个进程真的分配到CPU)，我测试的服务器目前CPU比较空闲，没什么程序在跑，当这个值超过了CPU数目，就会出现CPU瓶颈了。这个也和top的负载有关系，一般负载超过了3就比较高，超过了5就高，超过了10就不正常了，服务器的状态很危险（这些经验值的前提是核数很少，实际判断仍要除以逻辑 CPU 核数）。top的负载类似每秒的运行队列。如果运行队列过大，表示你的CPU很繁忙，一般会造成CPU使用率很高。</p>
 <p><strong>b</strong> 表示阻塞的进程,这个不多说，进程阻塞，大家懂的。</p>
 <p><strong>swpd</strong> 虚拟内存已使用的大小，如果大于0，表示你的机器物理内存不足了，如果不是程序内存泄露的原因，那么你该升级内存了或者把耗内存的任务迁移到其他机器。</p>
 <p><strong>free</strong>  空闲的物理内存的大小，我的机器内存总共8G，剩余3415M。</p>
@@ -249,16 +252,16 @@ procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----
 <p><strong>cs</strong> 每秒上下文切换次数，例如我们调用系统函数，就要进行上下文切换，线程的切换，也要进程上下文切换，这个值要越小越好，太大了，要考虑调低线程或者进程的数目,例如在apache和nginx这种web服务器中，我们一般做性能测试时会进行几千并发甚至几万并发的测试，选择web服务器的进程可以由进程或者线程的峰值一直下调，压测，直到cs到一个比较小的值，这个进程和线程数就是比较合适的值了。系统调用也是，每次调用系统函数，我们的代码就会进入内核空间，导致上下文切换，这个是很耗资源，也要尽量避免频繁调用系统函数。上下文切换次数过多表示你的CPU大部分浪费在上下文切换，导致CPU干正经事的时间少了，CPU没有充分利用，是不可取的。</p>
 <p><strong>us</strong> 用户CPU时间，我曾经在一个做加密解密很频繁的服务器上，可以看到us接近100,r运行队列达到80(机器在做压力测试，性能表现不佳)。</p>
 <p><strong>sy</strong> 系统CPU时间，如果太高，表示系统调用时间长，例如是IO操作频繁。</p>
-<p><strong>id</strong> 空闲 CPU时间，一般来说，id + us + sy = 100,一般我认为id是空闲CPU使用率，us是用户CPU使用率，sy是系统CPU使用率。</p>
-<p><strong>wt</strong> 等待IO CPU时间。</p>
+<p><strong>id</strong> 空闲 CPU时间，us、sy、id、wa、st 之和为 100：id 是空闲 CPU 比例，us 是用户态比例，sy 是内核态比例；当 wa、st 为 0 时才近似有 id + us + sy = 100。
+<p><strong>wa</strong> 等待 IO 的 CPU 时间（iowait）。注意 vmstat 的列名是 wa，不是 wt。</p>
 </blockquote>
-<h2 id="pid命令详解">pid命令详解</h2>
+<h2 id="pidstat命令详解">pidstat命令详解</h2>
 <p>pidstat是sysstat工具的一个命令，用于监控全部或指定进程的cpu、内存、线程、设备IO等系统资源的占用情况。pidstat首次运行时显示自系统启动开始的各项统计信息，之后运行pidstat将显示自上次运行该命令以后的统计信息。用户可以通过指定统计的次数和时间来获得所需的统计信息。</p>
 <p>pidstat 的用法：</p>
 <pre><code class="language-text">pidstat [ 选项 ] [ &lt;时间间隔&gt; ] [ &lt;次数&gt; ]
 </code></pre>
 <p>如下图：</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1631692116794.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1631692116794.png" alt="pidstat 命令的用法与输出示例" loading="lazy"></figure>
 <p><strong>常用的参数：</strong></p>
 <ul>
 <li>-u：默认的参数，显示各个进程的cpu使用统计</li>
@@ -266,7 +269,7 @@ procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----
 <li>-d：显示各个进程的IO使用情况</li>
 <li>-p：指定进程号</li>
 <li>-w：显示每个进程的上下文切换情况</li>
-<li>-t：显示选择任务的线程的统计信息外的额外信息</li>
+<li>-t：同时显示与所选任务关联的线程的统计信息</li>
 <li>-T { TASK | CHILD | ALL }<br>
 这个选项指定了pidstat监控的。TASK表示报告独立的task，CHILD关键字表示报告进程下所有线程统计信息。ALL表示报告独立的task和task下面的所有线程。<br>
 注意：task和子线程的全局的统计信息和pidstat选项无关。这些统计信息不会对应到当前的统计间隔，这些统计信息只有在子线程kill或者完成的时候才会被收集。</li>
@@ -280,7 +283,7 @@ pidstat -u -p ALL
 </code></pre>
 <p>pidstat 和 pidstat -u -p ALL 是等效的。<br>
 pidstat 默认显示了所有进程的cpu使用率。</p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1631692161313.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1631692161313.png" alt="pidstat -u -p ALL 输出的各进程 CPU 使用统计" loading="lazy"></figure>
 <p><strong>参数详解</strong></p>
 <ul>
 <li>
@@ -307,15 +310,16 @@ pidstat 默认显示了所有进程的cpu使用率。</p>
 </ul>
 <h2 id="free命令详解">free命令详解</h2>
 <p>free 命令显示系统内存的使用情况，包括物理内存、交换内存(swap)和内核缓冲区内存。</p>
-<figure data-type="image" tabindex="4"><img src="/post-images/1631692175318.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1631692175318.png" alt="free 命令输出的内存与交换空间使用情况" loading="lazy"></figure>
 <p>如果加上 -h 选项，输出的结果会友好很多：</p>
-<figure data-type="image" tabindex="5"><img src="/post-images/1631692195242.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="/post-images/1631692195242.png" alt="free -h 以人类可读单位输出内存使用情况" loading="lazy"></figure>
 <p>有时我们需要持续的观察内存的状况，此时可以使用 -s 选项并指定间隔的秒数：</p>
 <pre><code class="language-bash">$ free -h -s 3
 </code></pre>
-<figure data-type="image" tabindex="6"><img src="/post-images/1631692210174.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="/post-images/1631692210174.png" alt="free -h -s 3 每 3 秒刷新一次内存使用情况" loading="lazy"></figure>
 <p>上面的命令每隔 3 秒输出一次内存的使用情况，直到你按下 ctrl + c。</p>
 <p>由于 free 命令本身比较简单，所以本文的重点会放在如何通过 free 命令了解系统当前的内存使用状况。</p>
+<p><img src="/post-assets/Um55sd5Z3/02-memory-metrics.svg" alt="Linux 内存口径示意：total 由 used、buff/cache、free 组成，available 约等于 free 加可回收的 buff/cache"></p>
 <p><strong>输出说明</strong><br>
 <strong>Mem</strong> 行(第二行)是内存的使用情况。<br>
 <strong>Swap</strong> 行(第三行)是交换空间的使用情况。<br>
@@ -331,23 +335,23 @@ pidstat 默认显示了所有进程的cpu使用率。</p>
 <pre><code class="language-text">df [选项]... [FILE]...
 </code></pre>
 <ul>
-<li>文件-a, --all 包含所有的具有 0 Blocks 的文件系统</li>
-<li>文件--block-size={SIZE} 使用 {SIZE} 大小的 Blocks</li>
-<li>文件-h, --human-readable 使用人类可读的格式(预设值是不加这个选项的...)</li>
-<li>文件-H, --si 很像 -h, 但是用 1000 为单位而不是用 1024</li>
-<li>文件-i, --inodes 列出 inode 资讯，不列出已使用 block</li>
-<li>文件-k, --kilobytes 就像是 --block-size=1024</li>
-<li>文件-l, --local 限制列出的文件结构</li>
-<li>文件-m, --megabytes 就像 --block-size=1048576</li>
-<li>文件--no-sync 取得资讯前不 sync (预设值)</li>
-<li>文件-P, --portability 使用 POSIX 输出格式</li>
-<li>文件--sync 在取得资讯前 sync</li>
-<li>文件-t, --type=TYPE 限制列出文件系统的 TYPE</li>
-<li>文件-T, --print-type 显示文件系统的形式</li>
-<li>文件-x, --exclude-type=TYPE 限制列出文件系统不要显示 TYPE</li>
-<li>文件-v (忽略)</li>
-<li>文件--help 显示这个帮手并且离开</li>
-<li>文件--version 输出版本资讯并且离开</li>
+<li>-a, --all 包含所有的具有 0 Blocks 的文件系统</li>
+<li>--block-size={SIZE} 使用 {SIZE} 大小的 Blocks</li>
+<li>-h, --human-readable 使用人类可读的格式(预设值是不加这个选项的...)</li>
+<li>-H, --si 很像 -h, 但是用 1000 为单位而不是用 1024</li>
+<li>-i, --inodes 列出 inode 资讯，不列出已使用 block</li>
+<li>-k, --kilobytes 就像是 --block-size=1024</li>
+<li>-l, --local 限制列出的文件结构</li>
+<li>-m, --megabytes 就像 --block-size=1048576</li>
+<li>--no-sync 取得资讯前不 sync (预设值)</li>
+<li>-P, --portability 使用 POSIX 输出格式</li>
+<li>--sync 在取得资讯前 sync</li>
+<li>-t, --type=TYPE 限制列出文件系统的 TYPE</li>
+<li>-T, --print-type 显示文件系统的形式</li>
+<li>-x, --exclude-type=TYPE 限制列出文件系统不要显示 TYPE</li>
+<li>-v (忽略)</li>
+<li>--help 显示这个帮手并且离开</li>
+<li>--version 输出版本资讯并且离开</li>
 </ul>
 <p><strong>实例</strong></p>
 <p>显示文件系统的磁盘使用情况统计：</p>
@@ -359,9 +363,8 @@ tmpfs             617620     888     616732     1%     /run
 none                5120       0     5120       0%     /run/lock 
 none             1544044     156     1543888    1%     /run/shm 
 </code></pre>
-<p>第一列指定文件系统的名称，第二列指定一个特定的文件系统1K-块1K是1024字节为单位的总内存。用和可用列正在使用中，分别指定的内存量。</p>
-<p>使用列指定使用的内存的百分比，而最后一栏&quot;安装在&quot;指定的文件系统的挂载点。</p>
-<p>df也可以显示磁盘使用的文件系统信息：</p>
+<p>第一列是文件系统名称；第二列 1K-blocks 是以 1K（1024 字节）为单位统计的总容量；Used、Available 分别是已使用和可用空间；Use% 是已用百分比；Mounted on 是挂载点。</p>
+<p>df 后面跟路径时，显示的是该路径所在文件系统的情况（下面例子中的 test 是当前目录下已存在的路径）：</p>
 <pre><code class="language-text"># df test 
 Filesystem     1K-blocks    Used      Available Use% Mounted on 
 /dev/sda6       29640780    4320600   23814492  16%       / 
@@ -396,11 +399,11 @@ none            5.0M     0   5.0M   0%     /run/lock
 none            1.5G  156K   1.5G   1%     /run/shm 
 </code></pre>
 <p>我们可以看到输出显示的数字形式的'G'（千兆字节），&quot;M&quot;（兆字节）和&quot;K&quot;（千字节）。</p>
-<p>这使输出容易阅读和理解，从而使显示可读的。请注意，第二列的名称也发生了变化，为了使显示可读的&quot;大小&quot;。</p>
+<p>容量以 G/M/K 显示，便于阅读；第二列的名称也从 1K-blocks 变成了 Size。</p>
 <h2 id="iostat命令详解">iostat命令详解</h2>
 <p>用法：iostat [ 选项 ] [ &lt;时间间隔&gt; [ &lt;次数&gt; ]]</p>
 <p>常用选项说明：</p>
-<pre><code class="language-yaml">-c：只显示系统CPU统计信息，即单独输出avg-cpu结果，不包括device结果
+<pre><code class="language-text">-c：只显示系统CPU统计信息，即单独输出avg-cpu结果，不包括device结果
 -d：单独输出Device结果，不包括cpu结果
 -k/-m：输出结果以kB/mB为单位，而不是以扇区数为单位
 -x:输出更详细的io设备统计信息
@@ -409,11 +412,11 @@ interval/count：每次输出间隔时间，count表示输出次数，不带coun
 <p>说明：更多选项使用使用man iostat查看</p>
 <p><strong>实例</strong></p>
 <p>1、iostat，结果为从系统开机到当前执行时刻的统计信息</p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1631692226555.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="/post-images/1631692226555.png" alt="iostat 命令输出：avg-cpu 与各磁盘设备的 IO 统计" loading="lazy"></figure>
 <p>输出含义：</p>
 <p>avg-cpu: 总体cpu使用情况统计信息，对于多核cpu，这里为所有cpu的平均值。重点关注iowait值，表示CPU用于等待io请求的完成时间。</p>
 <p>Device: 各磁盘设备的IO统计信息。各列含义如下：</p>
-<pre><code class="language-yaml">Device: 以sdX形式显示的设备名称
+<pre><code class="language-text">Device: 以sdX形式显示的设备名称
 tps: 每秒进程下发的IO读、写请求数量
 KB_read/s: 每秒从驱动器读入的数据量，单位为K。
 KB_wrtn/s: 每秒从驱动器写入的数据量，单位为K。
@@ -421,9 +424,9 @@ KB_read: 读入数据总量，单位为K。
 KB_wrtn: 写入数据总量，单位为K。
 </code></pre>
 <p>2、iostat -x -k -d 1 2。每隔1S输出磁盘IO的详细详细，总共采样2次。</p>
-<figure data-type="image" tabindex="8"><img src="/post-images/1631692235192.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="8"><img src="/post-images/1631692235192.png" alt="iostat -x -k -d 1 2 输出的磁盘 IO 详细统计" loading="lazy"></figure>
 <p>以上各列的含义如下：</p>
-<pre><code class="language-yaml">rrqm/s: 每秒对该设备的读请求被合并次数，文件系统会对读取同块(block)的请求进行合并
+<pre><code class="language-text">rrqm/s: 每秒对该设备的读请求被合并次数，文件系统会对读取同块(block)的请求进行合并
 wrqm/s: 每秒对该设备的写请求被合并次数
 r/s: 每秒完成的读次数
 w/s: 每秒完成的写次数
@@ -435,6 +438,7 @@ await: 平均每次IO请求等待时间(包括等待时间和处理时间，毫�
 svctm: 平均每次IO请求的处理时间(毫秒为单位)
 %util: 采用周期内用于IO操作的时间比率，即IO队列非空的时间比率
 </code></pre>
+<p>注意：svctm 的含义一直被官方提示“不要依赖”，新版 sysstat（如 RHEL 9 自带的版本）已直接移除该列；判断磁盘瓶颈请以 <code>await</code>、<code>avgqu-sz</code> 和 <code>%util</code> 为准。另外 %util 接近 100% 只说明设备队列一直非空，对 SSD、NVMe 等多队列设备并不等于“已经跑满”。</p>
 <p>重点关注参数</p>
 <blockquote>
 <p>1、iowait% 表示CPU等待IO时间占整个CPU周期的百分比，如果iowait值超过50%，或者明显大于%system、%user以及%idle，表示IO可能存在问题。</p>
@@ -448,6 +452,7 @@ svctm: 平均每次IO请求的处理时间(毫秒为单位)
 <p>下载</p>
 <pre><code class="language-shell">wget http://gael.roualland.free.fr/ifstat/ifstat-1.1.tar.gz
 </code></pre>
+<p>ifstat 1.1 是 2004 年的老版本，上面的下载地址可能已经失效；多数发行版的软件源都收录了它，可以直接安装，例如 <code>apt install ifstat</code>（Debian/Ubuntu）或 <code>yum install ifstat</code>（RHEL/CentOS）。</p>
 <p>编译安装</p>
 <pre><code class="language-shell">tar -zxvf ifstat-1.1.tar.gz
 cd ifstat-1.1
@@ -455,7 +460,7 @@ cd ifstat-1.1
 make
 make install # 默认会安装到/usr/local/bin/目录中
 </code></pre>
-<p><code>注释</code>：执行which ifstat输出/usr/local/bin/ifstat</p>
+<p><strong>注释</strong>：执行 <code>which ifstat</code> 输出 /usr/local/bin/ifstat。</p>
 <p>选项</p>
 <blockquote>
 <p>-l 监测环路网络接口（lo）。缺省情况下，ifstat监测活动的所有非环路网络接口。经使用发现，加上-l参数能监测所有的网络接口的信息，而不是只监测 lo的接口信息，也就是说，加上-l参数比不加-l参数会多一个lo接口的状态信息。<br>
@@ -504,18 +509,38 @@ HH:MM:ss   KB/s in  KB/s out   KB/s in  KB/s out   KB/s in  KB/s out   KB/s in  
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#top%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">top命令详解</a>
 <ul>
-<li>
-<ul>
-<li><a href="#top%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">top命令详解</a></li>
-<li><a href="#vmstat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">vmstat命令详解</a></li>
-<li><a href="#pid%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">pid命令详解</a></li>
-<li><a href="#free%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">free命令详解</a></li>
-<li><a href="#df%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">df命令详解</a></li>
-<li><a href="#iostat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">iostat命令详解</a></li>
-<li><a href="#ifstat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">ifstat命令详解</a></li>
 </ul>
 </li>
+<li>
+<a href="#vmstat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">vmstat命令详解</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#pidstat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">pidstat命令详解</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#free%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">free命令详解</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#df%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">df命令详解</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#iostat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">iostat命令详解</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ifstat%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3">ifstat命令详解</a>
+<ul>
 </ul>
 </li>
 </ul>
