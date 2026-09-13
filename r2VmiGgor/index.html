@@ -125,13 +125,12 @@
           
           <img class="post-feature-header-image" src="/post-images/r2VmiGgor.png" alt="封面图">
           
-          <h1 id="1clickhouse的安装">1.ClickHouse的安装</h1>
-<h2 id="11-准备工作">1.1    准备工作</h2>
+          <h1 id="第1章-clickhouse的安装">第1章 ClickHouse的安装</h1>
+<h2 id="11-准备工作">1.1 准备工作</h2>
 <p>下载RPM包:</p>
 <p><a href="https://repo.yandex.ru/clickhouse/rpm/stable/x86_64/">https://repo.yandex.ru/clickhouse/rpm/stable/x86_64/</a></p>
 <p>下载完毕如下:</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1638237245375.png" alt="" loading="lazy"></figure>
-<p></p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1638237245375.png" alt="ClickHouse RPM 安装包下载完成的文件列表" loading="lazy"></figure>
 <h3 id="111-确定防火墙处于关闭状态">1.1.1 确定防火墙处于关闭状态</h3>
 <p>相关命令:</p>
 <pre><code class="language-shell">sudo systemctl status firewalld
@@ -143,7 +142,7 @@ sudo systemctl stop firewalld
 sudo systemctl restart firewalld
 </code></pre>
 <h3 id="112-centos取消打开文件数限制">1.1.2 CentOS取消打开文件数限制</h3>
-<p>Ø 在 /etc/security/limits.conf文件的末尾加入以下内容</p>
+<p>在 /etc/security/limits.conf文件的末尾加入以下内容</p>
 <pre><code class="language-shell">vim /etc/security/limits.conf
 
 * soft nofile 65536
@@ -151,7 +150,7 @@ sudo systemctl restart firewalld
 * soft nproc 131072
 * hard nproc 131072
 </code></pre>
-<p>Ø 在/etc/security/limits.d/20-nproc.conf文件的末尾加入以下内容</p>
+<p>在/etc/security/limits.d/20-nproc.conf文件的末尾加入以下内容</p>
 <pre><code class="language-shell">vim /etc/security/limits.d/20-nproc.conf
 
 * soft nofile 65536
@@ -159,35 +158,42 @@ sudo systemctl restart firewalld
 * soft nproc 131072
 * hard nproc 131072
 </code></pre>
-<p>Ø 执行同步操作(同步到集群其他机器)</p>
+<p>执行同步操作(同步到集群其他机器)</p>
 <pre><code class="language-shell">xsync /etc/security/limits.conf
 xsync /etc/security/limits.d/20-nproc.conf
 </code></pre>
 <h3 id="113-安装依赖">1.1.3 安装依赖</h3>
 <pre><code class="language-shell">sudo yum install -y libtool
 </code></pre>
-<figure data-type="image" tabindex="2"><img src="/post-images/1638237268510.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1638237268510.png" alt="使用 yum 安装 libtool 依赖的输出" loading="lazy"></figure>
 <pre><code class="language-shell">sudo yum install -y *unixODBC*
 </code></pre>
-<figure data-type="image" tabindex="3"><img src="/post-images/1638237282605.png" alt="" loading="lazy"></figure>
-<p>同样在集群其他机器上执行以上操作</p>
+<figure data-type="image" tabindex="3"><img src="/post-images/1638237282605.png" alt="使用 yum 安装 unixODBC 依赖的输出" loading="lazy"></figure>
+<p>在集群的其他机器上同样执行以上两条安装命令。</p>
 <h3 id="114-centos取消selinux">1.1.4 CentOS取消SELINUX</h3>
 <p>SELINUX(美国开源的linux安全增强功能)</p>
-<p>Ø 修改/etc/selinux/config中的SELINUX=disabled</p>
+<p>修改/etc/selinux/config中的SELINUX=disabled</p>
 <pre><code class="language-shell">sudo vim /etc/selinux/config
 
 SELINUX=disabled
 </code></pre>
-<p>Ø 执行同步操作</p>
+<p>执行同步操作</p>
 <pre><code class="language-shell">sudo /home/atguigu/bin/xsync /etc/selinux/config
 </code></pre>
-<p>Ø 重启三台服务器</p>
+<p>重启三台服务器</p>
 <h3 id="115-将安装文件同步到其他两个服务器">1.1.5 将安装文件同步到其他两个服务器</h3>
-<h3 id="116-分别在三台机子上安装这4个rpm文件">1.1.6 分别在三台机子上安装这4个rpm文件</h3>
-<pre><code class="language-shell">sudo rpm -ivh *.rpm(提前把四个*.rpm放在一个目录下)
+<p>在 ck101 上把下载好的 RPM 安装包分发到 ck102、ck103。xsync 是集群中常用的分发脚本，对 rsync 做了封装，用法与 scp 类似：</p>
+<pre><code class="language-shell"># 把 /path/to/rpm 换成实际存放安装包的目录
+xsync /path/to/rpm/*.rpm
 </code></pre>
-<figure data-type="image" tabindex="4"><img src="/post-images/1638237307245.png" alt="" loading="lazy"></figure>
-<pre><code class="language-shell">sudo rpm -qa|grep clickhouse查看安装情况
+<p>分发完成后确认三台机器上的安装包完全一致，再进行下一步安装。</p>
+<h3 id="116-分别在三台机子上安装这4个rpm文件">1.1.6 分别在三台机子上安装这4个rpm文件</h3>
+<pre><code class="language-shell"># 提前把四个 rpm 包放到同一个目录下，在该目录中执行
+sudo rpm -ivh *.rpm
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="/post-images/1638237307245.png" alt="rpm -ivh 安装四个 ClickHouse RPM 包并查看安装结果" loading="lazy"></figure>
+<pre><code class="language-shell"># 查看安装情况
+sudo rpm -qa | grep clickhouse
 </code></pre>
 <h3 id="117-修改配置文件">1.1.7 修改配置文件</h3>
 <pre><code class="language-shell">vim /etc/clickhouse-server/config.xml
@@ -203,23 +209,64 @@ xsync /etc/clickhouse-server/config.xml
 <h3 id="119-三台机器上关闭开机自启">1.1.9 三台机器上关闭开机自启</h3>
 <pre><code class="language-shell">systemctl disable clickhouse-server
 </code></pre>
-<h3 id="1110-使用client连接server">1.1.10    使用client连接server</h3>
+<h3 id="1110-使用client连接server">1.1.10 使用client连接server</h3>
 <pre><code class="language-shell">clickhouse-client -m
 </code></pre>
 <p>ClickHouse 常用端口号：</p>
-<p><img src="/post-images/1638237372637.png" alt="" loading="lazy"><br>
-<img src="/post-images/1638237379416.png" alt="" loading="lazy"><br>
-<img src="/post-images/1638237384947.png" alt="" loading="lazy"><br>
-<img src="/post-images/1638237390491.png" alt="" loading="lazy"></p>
-<h1 id="第2章-副本">第2章  副本</h1>
+<table>
+<thead>
+<tr>
+<th>端口</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8123</td>
+<td>HTTP 接口，JDBC/ODBC、curl 等走这个端口</td>
+</tr>
+<tr>
+<td>9000</td>
+<td>原生 TCP 接口，clickhouse-client 与集群内部通信</td>
+</tr>
+<tr>
+<td>9004</td>
+<td>MySQL 兼容协议，可以用 MySQL 客户端连接</td>
+</tr>
+<tr>
+<td>9009</td>
+<td>副本之间传输数据（interserver HTTP）</td>
+</tr>
+<tr>
+<td>2181</td>
+<td>ZooKeeper 端口，副本与分布式 DDL 协调使用</td>
+</tr>
+</tbody>
+</table>
+<p>端口可以在 /etc/clickhouse-server/config.xml 中通过 &lt;http_port&gt;、&lt;tcp_port&gt; 等参数调整，实际以部署时的配置文件为准。</p>
+<p><img src="/post-images/1638237372637.png" alt="clickhouse-client 连接 ClickHouse Server 成功" loading="lazy"><br>
+<img src="/post-images/1638237379416.png" alt="clickhouse-client 中执行 SQL 查询的示例" loading="lazy"><br>
+<img src="/post-images/1638237384947.png" alt="ClickHouse 配置文件中的端口相关参数" loading="lazy"><br>
+<img src="/post-images/1638237390491.png" alt="ClickHouse 常用端口号说明" loading="lazy"></p>
+<h1 id="第2章-副本">第2章 副本</h1>
 <p>副本的目的主要是保障数据的高可用性，即使一台ClickHouse节点宕机，那么也可以从其他服务器获得相同的数据。</p>
-<h2 id="21-副本写入流程">2.1    副本写入流程</h2>
-<figure data-type="image" tabindex="5"><img src="/post-images/1638237403217.png" alt="" loading="lazy"></figure>
-<h2 id="22-配置步骤">2.2    配置步骤</h2>
-<p>Ø 启动zookeeper集群</p>
-<p>Ø 注意:服务器的hostname需要改成对应的ck101、ck102、ck103</p>
-<figure data-type="image" tabindex="6"><img src="/post-images/1638237417573.png" alt="" loading="lazy"></figure>
-<p>Ø 在 /etc/clickhouse-server/config.d 目录下创建一个名为 metrika.xml 的配置文件，内容如下：</p>
+<h2 id="21-副本写入流程">2.1 副本写入流程</h2>
+<p>ReplicatedMergeTree 的副本复制依赖 ZooKeeper 协调，一次写入大致经过以下步骤：</p>
+<ul>
+<li>客户端把数据写入某个副本的本地表；</li>
+<li>该副本把本次写入的日志（要写入的数据块信息）记录到 ZooKeeper 的 <code>/log</code> 路径下；</li>
+<li>同一分片的其它副本监听（轮询）<code>/log</code>，发现新日志后把对应的数据块拉取到本地并执行写入；</li>
+<li>写入完成后更新各自在 ZooKeeper 中的队列（<code>/replicas/{replica}/queue</code>）与日志指针，保证各副本数据一致。</li>
+</ul>
+<p>所以副本只保证数据一致，不负责同步表结构——每台机器都要自己建表。</p>
+<figure data-type="image" tabindex="5"><img src="/post-images/1638237403217.png" alt="ReplicatedMergeTree 副本写入流程图" loading="lazy"></figure>
+<h2 id="22-配置步骤">2.2 配置步骤</h2>
+<ul>
+<li>启动 ZooKeeper 集群（三台机器上分别执行 zkServer.sh start）。</li>
+<li>注意：服务器的 hostname 需要改成对应的 ck101、ck102、ck103。</li>
+</ul>
+<figure data-type="image" tabindex="6"><img src="/post-images/1638237417573.png" alt="把三台机器的 hostname 修改为 ck101、ck102、ck103" loading="lazy"></figure>
+<p>在 /etc/clickhouse-server/config.d 目录下创建一个名为 metrika.xml 的配置文件，内容如下：</p>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt;
 &lt;yandex&gt;
 	&lt;zookeeper-servers&gt;
@@ -238,29 +285,29 @@ xsync /etc/clickhouse-server/config.xml
 	&lt;/zookeeper-servers&gt;
 &lt;/yandex&gt;
 </code></pre>
-<p>Ø 同步到另外两个机器上</p>
+<p>同步到另外两个机器上</p>
 <pre><code class="language-shell">xsync /etc/clickhouse-server/config.d/metrika.xml
 </code></pre>
-<p>Ø 在 /etc/clickhouse-server/config.xml中增加</p>
+<p>在 /etc/clickhouse-server/config.xml中增加</p>
 <pre><code class="language-xml">&lt;zookeeper incl=&quot;zookeeper-servers&quot; optional=&quot;true&quot; /&gt;
 &lt;include_from&gt;/etc/clickhouse-server/config.d/metrika.xml&lt;/include_from&gt;
 </code></pre>
-<figure data-type="image" tabindex="7"><img src="/post-images/1638237432131.png" alt="" loading="lazy"></figure>
-<p>Ø 同步到另外两个机器上</p>
+<figure data-type="image" tabindex="7"><img src="/post-images/1638237432131.png" alt="config.xml 中引入 zookeeper 配置与 metrika.xml 的片段" loading="lazy"></figure>
+<p>同步到另外两个机器上</p>
 <pre><code class="language-shell">xsync /etc/clickhouse-server/config.xml
 </code></pre>
-<p>Ø 分别在另外两个机器上启动ClickHouse服务</p>
+<p>分别在另外两个机器上启动ClickHouse服务</p>
 <p>注意：因为修改了配置文件，如果以前启动了服务需要重启</p>
 <pre><code class="language-shell">systemctl start clickhouse-server
 </code></pre>
-<p>Ø 在另外两个机器上分别建表</p>
+<p>在另外两个机器上分别建表</p>
 <p><strong>副本只能同步数据，不能同步表结构，所以我们需要在每台机器上自己手动建表</strong></p>
 <p>Ck101</p>
 <pre><code class="language-sql">create table t_order_rep (
   id UInt32,
   sku_id String,
   total_amount Decimal(16,2),
-  create_time Datetime
+  create_time DateTime
  ) engine =ReplicatedMergeTree('/clickhouse/table/01/t_order_rep','rep_102')
   partition by toYYYYMMDD(create_time)
   primary key (id)
@@ -271,7 +318,7 @@ xsync /etc/clickhouse-server/config.xml
   id UInt32,
   sku_id String,
   total_amount Decimal(16,2),
-  create_time Datetime
+  create_time DateTime
  ) engine =ReplicatedMergeTree('/clickhouse/table/01/t_order_rep','rep_103')
   partition by toYYYYMMDD(create_time)
   primary key (id)
@@ -281,7 +328,7 @@ xsync /etc/clickhouse-server/config.xml
 <p>ReplicatedMergeTree 中，</p>
 <p><strong>第一个参数是</strong>分片的zk_path一般按照： /clickhouse/table/{shard}/{table_name} 的格式写，如果只有一个分片就写01即可。</p>
 <p><strong>第二个参数是</strong>副本名称，相同的分片副本名称不能相同。</p>
-<p>Ø 在ck101上执行insert语句</p>
+<p>在ck101上执行insert语句</p>
 <pre><code class="language-sql">insert into t_order_rep values
 (101,'sku_001',1000.00,'2020-06-01 12:00:00'),
 (102,'sku_002',2000.00,'2020-06-01 12:00:00'),
@@ -289,19 +336,34 @@ xsync /etc/clickhouse-server/config.xml
 (104,'sku_002',2000.00,'2020-06-01 12:00:00'),
 (105,'sku_003',600.00,'2020-06-02 12:00:00');
 </code></pre>
-<p>Ø 在<strong>ck102</strong>上执行select，可以查询出结果，说明副本配置正确</p>
-<h1 id="第3章-分片集群">第3章  分片集群</h1>
+<p>在<strong>ck102</strong>上执行select，可以查询出结果，说明副本配置正确</p>
+<h1 id="第3章-分片集群">第3章 分片集群</h1>
 <p>副本虽然能够提高数据的可用性，降低丢失风险，但是每台服务器实际上必须容纳全量数据，对数据的横向扩容没有解决。</p>
 <p>要解决数据水平切分的问题，需要引入分片的概念。通过分片把一份完整的数据进行切分，不同的分片分布到不同的节点上，再通过Distributed表引擎把数据拼接起来一同使用。</p>
 <p>Distributed 表引擎本身不存储数据，有点类似于 MyCat 之于 MySQL，成为一种中间件，通过分布式逻辑表来写入、分发、路由，从而操作多台节点上不同分片的分布式数据。</p>
 <p>注意：ClickHouse的集群是表级别的，实际企业中，大部分做了高可用，但是没有用分片，避免降低查询性能以及操作集群的复杂性。</p>
-<h2 id="31-集群写入流程3分片2副本共6个节点">3.1    集群写入流程（3分片2副本共6个节点）</h2>
-<figure data-type="image" tabindex="8"><img src="/post-images/1638237448353.png" alt="" loading="lazy"></figure>
-<h2 id="32-集群读取流程3分片2副本共6个节点">3.2    集群读取流程（3分片2副本共6个节点）</h2>
-<figure data-type="image" tabindex="9"><img src="/post-images/1638237458923.png" alt="" loading="lazy"></figure>
-<h2 id="33-配置三节点版本集群及副本">3.3    配置三节点版本集群及副本</h2>
-<figure data-type="image" tabindex="10"><img src="/post-images/1638237469738.png" alt="" loading="lazy"></figure>
+<h2 id="31-集群写入流程3分片2副本共6个节点">3.1 集群写入流程（3分片2副本共6个节点）</h2>
+<p>配置了 <code>internal_replication = true</code> 后，写入分布式表时每个目标分片只会选中一个副本落盘，再由副本机制同步给同分片的其它副本：</p>
+<ul>
+<li>客户端向 Distributed 表（示例中的 st_order_mt_all）执行 insert；</li>
+<li>Distributed 引擎按分片键（示例中为 hiveHash(sku_id)）计算每条数据属于哪个分片；</li>
+<li>引擎把数据路由到该分片的一个可用副本，分片的其它副本不重复写入；</li>
+<li>该副本写入本地表，并通过 ReplicatedMergeTree 把数据同步给同分片的其它副本。</li>
+</ul>
+<figure data-type="image" tabindex="8"><img src="/post-images/1638237448353.png" alt="3 分片 2 副本共 6 个节点的集群写入流程" loading="lazy"></figure>
+<h2 id="32-集群读取流程3分片2副本共6个节点">3.2 集群读取流程（3分片2副本共6个节点）</h2>
+<p>查询分布式表时，接收请求的节点充当协调者：</p>
+<ul>
+<li>Distributed 引擎把查询下发给所有分片，每个分片只挑一个可用副本；</li>
+<li>各副本在本地执行查询并返回局部结果；</li>
+<li>发起节点对结果做合并、排序、聚合，最终返回给客户端。</li>
+</ul>
+<p>数据被切分到多个分片后，单机数据量和查询压力都会下降，但跨分片的聚合与网络开销会随之增加，因此分片数量要结合实际查询模式来定。</p>
+<figure data-type="image" tabindex="9"><img src="/post-images/1638237458923.png" alt="3 分片 2 副本共 6 个节点的集群读取流程" loading="lazy"></figure>
+<h2 id="33-配置三节点版本集群及副本">3.3 配置三节点版本集群及副本</h2>
+<figure data-type="image" tabindex="10"><img src="/post-images/1638237469738.png" alt="三节点集群与副本的部署规划示意图" loading="lazy"></figure>
 <h3 id="331-集群及副本规划2个分片只有第一个分片有副本">3.3.1 集群及副本规划（2个分片，只有第一个分片有副本）</h3>
+<p>下面这张表是三台机器的宏（macros）配置：shard01 有两个副本 rep_1_1、rep_1_2，shard02 只有一个副本 rep_2_1。宏由各节点的 metrika-shard.xml 定义，建表语句里的 <code>{shard}</code>、<code>{replica}</code> 会替换成这里配置的值。</p>
 <table>
 <thead>
 <tr>
@@ -312,9 +374,9 @@ xsync /etc/clickhouse-server/config.xml
 </thead>
 <tbody>
 <tr>
-<td><macros>  <shard>01</shard>    <replica>rep_1_1</replica>  </macros></td>
-<td><macros>  <shard>01</shard>    <replica>rep_1_2</replica>  </macros></td>
-<td><macros>  <shard>02</shard>    <replica>rep_2_1</replica>  </macros></td>
+<td>&lt;macros&gt;&lt;shard&gt;01&lt;/shard&gt;&lt;replica&gt;rep_1_1&lt;/replica&gt;&lt;/macros&gt;</td>
+<td>&lt;macros&gt;&lt;shard&gt;01&lt;/shard&gt;&lt;replica&gt;rep_1_2&lt;/replica&gt;&lt;/macros&gt;</td>
+<td>&lt;macros&gt;&lt;shard&gt;02&lt;/shard&gt;&lt;replica&gt;rep_2_1&lt;/replica&gt;&lt;/macros&gt;</td>
 </tr>
 </tbody>
 </table>
@@ -348,15 +410,15 @@ xsync /etc/clickhouse-server/config.xml
 
     &lt;zookeeper-servers&gt;
         &lt;node index=&quot;1&quot;&gt;
-            &lt;host&gt; ck101&lt;/host&gt;
+            &lt;host&gt;ck101&lt;/host&gt;
             &lt;port&gt;2181&lt;/port&gt;
         &lt;/node&gt;
         &lt;node index=&quot;2&quot;&gt;
-            &lt;host&gt; ck102&lt;/host&gt;
+            &lt;host&gt;ck102&lt;/host&gt;
             &lt;port&gt;2181&lt;/port&gt;
         &lt;/node&gt;
         &lt;node index=&quot;3&quot;&gt;
-            &lt;host&gt; ck103&lt;/host&gt;
+            &lt;host&gt;ck103&lt;/host&gt;
             &lt;port&gt;2181&lt;/port&gt;
         &lt;/node&gt;
     &lt;/zookeeper-servers&gt;
@@ -367,21 +429,21 @@ xsync /etc/clickhouse-server/config.xml
     &lt;/macros&gt;
 &lt;/yandex&gt;
 </code></pre>
-<h4 id="2-将ck101的metrika-shardxml同步到102和103">(2) 将ck101的metrika-shard.xml同步到102和103</h4>
+<h4 id="2-将ck101的metrika-shardxml同步到ck102和ck103">(2) 将ck101的metrika-shard.xml同步到ck102和ck103</h4>
 <pre><code class="language-shell">xsync /etc/clickhouse-server/config.d/metrika-shard.xml
 </code></pre>
-<h4 id="3-修改102和103中metrika-shardxml宏的配置">(3) 修改102和103中metrika-shard.xml宏的配置</h4>
-<p>Ø <strong>102</strong></p>
+<h4 id="3-修改ck102和ck103中metrika-shardxml宏的配置">(3) 修改ck102和ck103中metrika-shard.xml宏的配置</h4>
+<p><strong>ck102</strong></p>
 <pre><code class="language-shell">vim /etc/clickhouse-server/config.d/metrika-shard.xml
 </code></pre>
-<figure data-type="image" tabindex="11"><img src="/post-images/1638237484666.png" alt="" loading="lazy"></figure>
-<p>Ø <strong>103</strong></p>
+<figure data-type="image" tabindex="11"><img src="/post-images/1638237484666.png" alt="ck102 的 metrika-shard.xml 宏配置（shard=01，replica=rep_1_2）" loading="lazy"></figure>
+<p><strong>ck103</strong></p>
 <pre><code class="language-shell">vim /etc/clickhouse-server/config.d/metrika-shard.xml
 </code></pre>
-<figure data-type="image" tabindex="12"><img src="/post-images/1638237492998.png" alt="" loading="lazy"></figure>
-<h4 id="4-在hadoop102上修改etcclickhouse-serverconfigxml">(4) 在hadoop102上修改/etc/clickhouse-server/config.xml</h4>
-<figure data-type="image" tabindex="13"><img src="/post-images/1638237502544.png" alt="" loading="lazy"></figure>
-<h4 id="5-同步etcclickhouse-serverconfigxml到103和104">(5) 同步/etc/clickhouse-server/config.xml到103和104</h4>
+<figure data-type="image" tabindex="12"><img src="/post-images/1638237492998.png" alt="ck103 的 metrika-shard.xml 宏配置（shard=02，replica=rep_2_1）" loading="lazy"></figure>
+<h4 id="4-在ck101上修改etcclickhouse-serverconfigxml">(4) 在ck101上修改/etc/clickhouse-server/config.xml</h4>
+<figure data-type="image" tabindex="13"><img src="/post-images/1638237502544.png" alt="ck101 的 config.xml 中配置 zookeeper 与 remote_servers" loading="lazy"></figure>
+<h4 id="5-同步etcclickhouse-serverconfigxml到ck102和ck103">(5) 同步/etc/clickhouse-server/config.xml到ck102和ck103</h4>
 <pre><code class="language-shell">sudo /home/atguigu/bin/xsync /etc/clickhouse-server/config.xml
 </code></pre>
 <h4 id="6-重启三台服务器上的clickhouse服务">(6) 重启三台服务器上的ClickHouse服务</h4>
@@ -390,32 +452,33 @@ systemctl start clickhouse-server
 systemctl status clickhouse-server
 </code></pre>
 <h4 id="7-在ck101上执行建表语句">(7) 在ck101上执行建表语句</h4>
-<p>Ø 会自动同步到ck102和ck103上</p>
-<p>Ø 集群名字要和配置文件中的一致</p>
-<p>Ø 分片和副本名称从配置文件的宏定义中获取</p>
+<p>会自动同步到ck102和ck103上</p>
+<p>集群名字要和配置文件中的一致</p>
+<p>分片和副本名称从配置文件的宏定义中获取</p>
 <pre><code class="language-sql">create table st_order_mt on cluster my_cluster (
   id UInt32,
   sku_id String,
   total_amount Decimal(16,2),
-  create_time Datetime
+  create_time DateTime
  ) engine =ReplicatedMergeTree('/clickhouse/tables/{shard}/st_order_mt','{replica}')
   partition by toYYYYMMDD(create_time)
   primary key (id)
   order by (id,sku_id);
 </code></pre>
 <p>可以到ck102和ck103上查看表是否创建成功</p>
-<h4 id="8-在ck101上创建distribute-分布式表">(8) 在ck101上创建Distribute 分布式表</h4>
+<h4 id="8-在ck101上创建distributed-分布式表">(8) 在ck101上创建Distributed 分布式表</h4>
 <pre><code class="language-sql">create table st_order_mt_all on cluster my_cluster
 (
   id UInt32,
   sku_id String,
   total_amount Decimal(16,2),
-  create_time Datetime
+  create_time DateTime
 )engine = Distributed(my_cluster,default, st_order_mt,hiveHash(sku_id));
 </code></pre>
 <p><strong>参数含义</strong></p>
 <p>    Distributed(集群名称，库名，本地表名，分片键)</p>
-<p>分片键必须是整型数字，所以用hiveHash函数转换，也可以rand()</p>
+<p>分片键需要是整型（或整型表达式），所以示例用 hiveHash(sku_id) 把字符串转成整数，也可以直接用 rand()。</p>
+<p>需要注意的是，hiveHash() 是 ClickHouse 为兼容 Hive 提供的函数，较新的版本更推荐使用 <code>cityHash64()</code>、<code>sipHash64()</code> 等哈希函数作为分片键。</p>
 <h4 id="9-在ck101上插入测试数据">(9) 在ck101上插入测试数据</h4>
 <pre><code class="language-sql">insert into st_order_mt_all values
 (201,'sku_001',1000.00,'2020-06-01 12:00:00') ,
@@ -424,44 +487,48 @@ systemctl status clickhouse-server
 (204,'sku_002',2000.00,'2020-06-01 12:00:00'),
 (205,'sku_003',600.00,'2020-06-02 12:00:00');
 </code></pre>
-<h4 id="10-通过查询分布式表和本地表观察输出结果">(10)   通过查询分布式表和本地表观察输出结果</h4>
-<p>Ø <strong>分布式表</strong></p>
+<h4 id="10-通过查询分布式表和本地表观察输出结果">(10) 通过查询分布式表和本地表观察输出结果</h4>
+<p><strong>分布式表</strong></p>
 <pre><code class="language-sql">SELECT *  FROM st_order_mt_all;
 </code></pre>
-<p>Ø <strong>本地表</strong></p>
+<p><strong>本地表</strong></p>
 <pre><code class="language-sql">select * from st_order_mt;
 </code></pre>
-<p>Ø 观察数据的分布</p>
+<p>观察数据的分布</p>
 <table>
 <thead>
 <tr>
-<th>st_order_mt_all</th>
-<th><img src="/post-images/1638237523851.png" alt="" loading="lazy"></th>
+<th>查询对象</th>
+<th>查询结果</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Ck101:  st_order_mt</td>
-<td><img src="/post-images/1638237534695.png" alt="" loading="lazy"></td>
+<td>分布式表 st_order_mt_all</td>
+<td><img src="/post-images/1638237523851.png" alt="分布式表 st_order_mt_all 的查询结果" loading="lazy"></td>
 </tr>
 <tr>
-<td>Ck102:  st_order_mt</td>
-<td><img src="/post-images/1638237544313.png" alt="" loading="lazy"></td>
+<td>ck101 本地表 st_order_mt</td>
+<td><img src="/post-images/1638237534695.png" alt="ck101 上本地表 st_order_mt 的查询结果" loading="lazy"></td>
 </tr>
 <tr>
-<td>Ck103:  st_order_mt</td>
-<td><img src="/post-images/1638237554783.png" alt="" loading="lazy"></td>
+<td>ck102 本地表 st_order_mt</td>
+<td><img src="/post-images/1638237544313.png" alt="ck102 上本地表 st_order_mt 的查询结果" loading="lazy"></td>
+</tr>
+<tr>
+<td>ck103 本地表 st_order_mt</td>
+<td><img src="/post-images/1638237554783.png" alt="ck103 上本地表 st_order_mt 的查询结果" loading="lazy"></td>
 </tr>
 </tbody>
 </table>
-<h1 id="第4章-版本信息">第4章  版本信息</h1>
+<h1 id="第4章-版本信息">第4章 版本信息</h1>
 <p>Clickhouse: clickhouse-21.9.4.35</p>
 <p>Zookeeper: zookeeper-3.4.6</p>
+<p>本文示例基于 ClickHouse 21.9 与 ZooKeeper 3.4.6 验证：副本与分片集群的核心概念、建表语法在新版本中仍然适用；从 21.12 起 ClickHouse 提供了内置的 ClickHouse Keeper，可以替代 ZooKeeper 承担协调工作。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li><a href="#1clickhouse%E7%9A%84%E5%AE%89%E8%A3%85">1.ClickHouse的安装</a>
-<ul>
-<li><a href="#11-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C">1.1    准备工作</a>
+<li>
+<a href="#11-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C">1.1 准备工作</a>
 <ul>
 <li><a href="#111-%E7%A1%AE%E5%AE%9A%E9%98%B2%E7%81%AB%E5%A2%99%E5%A4%84%E4%BA%8E%E5%85%B3%E9%97%AD%E7%8A%B6%E6%80%81">1.1.1 确定防火墙处于关闭状态</a></li>
 <li><a href="#112-centos%E5%8F%96%E6%B6%88%E6%89%93%E5%BC%80%E6%96%87%E4%BB%B6%E6%95%B0%E9%99%90%E5%88%B6">1.1.2 CentOS取消打开文件数限制</a></li>
@@ -472,43 +539,36 @@ systemctl status clickhouse-server
 <li><a href="#117-%E4%BF%AE%E6%94%B9%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">1.1.7 修改配置文件</a></li>
 <li><a href="#118-%E5%90%AF%E5%8A%A8server">1.1.8 启动Server</a></li>
 <li><a href="#119-%E4%B8%89%E5%8F%B0%E6%9C%BA%E5%99%A8%E4%B8%8A%E5%85%B3%E9%97%AD%E5%BC%80%E6%9C%BA%E8%87%AA%E5%90%AF">1.1.9 三台机器上关闭开机自启</a></li>
-<li><a href="#1110-%E4%BD%BF%E7%94%A8client%E8%BF%9E%E6%8E%A5server">1.1.10    使用client连接server</a></li>
+<li><a href="#1110-%E4%BD%BF%E7%94%A8client%E8%BF%9E%E6%8E%A5server">1.1.10 使用client连接server</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E7%AC%AC2%E7%AB%A0-%E5%89%AF%E6%9C%AC">第2章  副本</a>
+<li>
+<a href="#21-%E5%89%AF%E6%9C%AC%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B">2.1 副本写入流程</a>
 <ul>
-<li><a href="#21-%E5%89%AF%E6%9C%AC%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B">2.1    副本写入流程</a></li>
-<li><a href="#22-%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4">2.2    配置步骤</a></li>
 </ul>
 </li>
-<li><a href="#%E7%AC%AC3%E7%AB%A0-%E5%88%86%E7%89%87%E9%9B%86%E7%BE%A4">第3章  分片集群</a>
+<li>
+<a href="#22-%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4">2.2 配置步骤</a>
 <ul>
-<li><a href="#31-%E9%9B%86%E7%BE%A4%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B3%E5%88%86%E7%89%872%E5%89%AF%E6%9C%AC%E5%85%B16%E4%B8%AA%E8%8A%82%E7%82%B9">3.1    集群写入流程（3分片2副本共6个节点）</a></li>
-<li><a href="#32-%E9%9B%86%E7%BE%A4%E8%AF%BB%E5%8F%96%E6%B5%81%E7%A8%8B3%E5%88%86%E7%89%872%E5%89%AF%E6%9C%AC%E5%85%B16%E4%B8%AA%E8%8A%82%E7%82%B9">3.2    集群读取流程（3分片2副本共6个节点）</a></li>
-<li><a href="#33-%E9%85%8D%E7%BD%AE%E4%B8%89%E8%8A%82%E7%82%B9%E7%89%88%E6%9C%AC%E9%9B%86%E7%BE%A4%E5%8F%8A%E5%89%AF%E6%9C%AC">3.3    配置三节点版本集群及副本</a>
+</ul>
+</li>
+<li>
+<a href="#31-%E9%9B%86%E7%BE%A4%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B3%E5%88%86%E7%89%872%E5%89%AF%E6%9C%AC%E5%85%B16%E4%B8%AA%E8%8A%82%E7%82%B9">3.1 集群写入流程（3分片2副本共6个节点）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#32-%E9%9B%86%E7%BE%A4%E8%AF%BB%E5%8F%96%E6%B5%81%E7%A8%8B3%E5%88%86%E7%89%872%E5%89%AF%E6%9C%AC%E5%85%B16%E4%B8%AA%E8%8A%82%E7%82%B9">3.2 集群读取流程（3分片2副本共6个节点）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#33-%E9%85%8D%E7%BD%AE%E4%B8%89%E8%8A%82%E7%82%B9%E7%89%88%E6%9C%AC%E9%9B%86%E7%BE%A4%E5%8F%8A%E5%89%AF%E6%9C%AC">3.3 配置三节点版本集群及副本</a>
 <ul>
 <li><a href="#331-%E9%9B%86%E7%BE%A4%E5%8F%8A%E5%89%AF%E6%9C%AC%E8%A7%84%E5%88%922%E4%B8%AA%E5%88%86%E7%89%87%E5%8F%AA%E6%9C%89%E7%AC%AC%E4%B8%80%E4%B8%AA%E5%88%86%E7%89%87%E6%9C%89%E5%89%AF%E6%9C%AC">3.3.1 集群及副本规划（2个分片，只有第一个分片有副本）</a></li>
-<li><a href="#332-%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4">3.3.2 配置步骤</a>
-<ul>
-<li><a href="#1-%E5%9C%A8ck101%E7%9A%84etcclickhouse-serverconfigd%E7%9B%AE%E5%BD%95%E4%B8%8B%E5%88%9B%E5%BB%BAmetrika-shardxml%E6%96%87%E4%BB%B6">(1) 在ck101的/etc/clickhouse-server/config.d目录下创建metrika-shard.xml文件</a></li>
-<li><a href="#2-%E5%B0%86ck101%E7%9A%84metrika-shardxml%E5%90%8C%E6%AD%A5%E5%88%B0102%E5%92%8C103">(2) 将ck101的metrika-shard.xml同步到102和103</a></li>
-<li><a href="#3-%E4%BF%AE%E6%94%B9102%E5%92%8C103%E4%B8%ADmetrika-shardxml%E5%AE%8F%E7%9A%84%E9%85%8D%E7%BD%AE">(3) 修改102和103中metrika-shard.xml宏的配置</a></li>
-<li><a href="#4-%E5%9C%A8hadoop102%E4%B8%8A%E4%BF%AE%E6%94%B9etcclickhouse-serverconfigxml">(4) 在hadoop102上修改/etc/clickhouse-server/config.xml</a></li>
-<li><a href="#5-%E5%90%8C%E6%AD%A5etcclickhouse-serverconfigxml%E5%88%B0103%E5%92%8C104">(5) 同步/etc/clickhouse-server/config.xml到103和104</a></li>
-<li><a href="#6-%E9%87%8D%E5%90%AF%E4%B8%89%E5%8F%B0%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8A%E7%9A%84clickhouse%E6%9C%8D%E5%8A%A1">(6) 重启三台服务器上的ClickHouse服务</a></li>
-<li><a href="#7-%E5%9C%A8ck101%E4%B8%8A%E6%89%A7%E8%A1%8C%E5%BB%BA%E8%A1%A8%E8%AF%AD%E5%8F%A5">(7) 在ck101上执行建表语句</a></li>
-<li><a href="#8-%E5%9C%A8ck101%E4%B8%8A%E5%88%9B%E5%BB%BAdistribute-%E5%88%86%E5%B8%83%E5%BC%8F%E8%A1%A8">(8) 在ck101上创建Distribute 分布式表</a></li>
-<li><a href="#9-%E5%9C%A8ck101%E4%B8%8A%E6%8F%92%E5%85%A5%E6%B5%8B%E8%AF%95%E6%95%B0%E6%8D%AE">(9) 在ck101上插入测试数据</a></li>
-<li><a href="#10-%E9%80%9A%E8%BF%87%E6%9F%A5%E8%AF%A2%E5%88%86%E5%B8%83%E5%BC%8F%E8%A1%A8%E5%92%8C%E6%9C%AC%E5%9C%B0%E8%A1%A8%E8%A7%82%E5%AF%9F%E8%BE%93%E5%87%BA%E7%BB%93%E6%9E%9C">(10)   通过查询分布式表和本地表观察输出结果</a></li>
+<li><a href="#332-%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4">3.3.2 配置步骤</a></li>
 </ul>
 </li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#%E7%AC%AC4%E7%AB%A0-%E7%89%88%E6%9C%AC%E4%BF%A1%E6%81%AF">第4章  版本信息</a></li>
 </ul>
 </div>
           <hr />

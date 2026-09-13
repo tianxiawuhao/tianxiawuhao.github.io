@@ -127,7 +127,8 @@
           
           <h2 id="搭建-maven-工程-flinktutorial">搭建 maven 工程 FlinkTutorial</h2>
 <h3 id="pom-文件">pom 文件</h3>
-<pre><code class="language-java">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+<p>新建 Maven 工程后，只需要在 <code>pom.xml</code> 中引入 Flink 的依赖。下面的配置声明了 <code>flink-java</code> 与 <code>flink-streaming-java</code> 两个依赖，版本统一由 <code>flink.version</code> 属性管理（示例为 1.10.0）：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
 &lt;project xmlns=&quot;http://maven.apache.org/POM/4.0.0&quot;
          xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
          xsi:schemaLocation=&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;&gt;
@@ -197,15 +198,19 @@
       }
     }
 </code></pre>
-<p>实现的整个过程中分为以下几个步骤。<br>
-首先，我们需要创建 Flink 的上下文运行环境：<br>
-复制<code>ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();</code><br>
-然后，使用 fromElements 函数创建一个 DataSet 对象，该对象中包含了我们的输入，使用 FlatMap、GroupBy、SUM 函数进行转换。<br>
-最后，直接在控制台打印输出。<br>
-我们可以直接右键运行一下 main 方法，在控制台会出现我们打印的计算结果：<br>
-<img src="/post-images/1618469933995.png" alt="" loading="lazy"></p>
+<p>整个实现过程可以分为以下几个步骤。</p>
+<ol>
+<li>创建 Flink 批处理的上下文运行环境：<code>ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();</code></li>
+<li>使用 <code>fromElements</code> 函数创建 DataSet 对象，把待统计的文本作为输入。</li>
+<li>依次调用 <code>flatMap</code>、<code>groupBy</code>、<code>sum</code> 完成转换：先按空白字符拆词，再按单词分组，最后对计数求和。</li>
+<li>调用 <code>printToErr</code>，直接在控制台打印输出。</li>
+</ol>
+<p>整个数据流可以概括为下图：</p>
+<p><img src="/post-assets/pQQ9j5lFD/01-batch-wordcount-flow.svg" alt="Flink 批处理 WordCount 的执行流程：fromElements 构造 DataSet，经 flatMap 拆词、groupBy 分组、sum 求和，最后由 printToErr 输出"></p>
+<p>我们直接右键运行一下 main 方法，在控制台会出现打印的计算结果：</p>
+<p><img src="/post-images/1618469933995.png" alt="批处理 WordCount 的控制台输出结果" loading="lazy"></p>
 <h3 id="流处理-wordcount">流处理 wordcount</h3>
-<p>为了模仿一个流式计算环境，我们选择监听一个本地的 Socket 端口，并且使用 Flink 中的滚动窗口，每 5 秒打印一次计算结果。代码如下：</p>
+<p>为了模拟一个流式计算环境，我们选择监听本地的 Socket 端口，并使用 Flink 的滑动窗口，每秒输出一次最近 5 秒的统计结果。代码如下：</p>
 <pre><code class="language-java">public class StreamingJob {
 
     public static void main(String[] args) throws Exception {
@@ -263,15 +268,13 @@
 </code></pre>
 <p>整个流式计算的过程分为以下几步。</p>
 <p>首先创建一个流式计算环境：</p>
-<p>复制<code>StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();</code><br>
-然后进行监听本地 9000 端口，将接收的数据进行拆分、分组、窗口计算并且进行聚合输出。代码中使用了 Flink 的窗口函数，我们在后面的课程中将详细讲解。<br>
-<img src="/post-images/1618469926125.png" alt="" loading="lazy"><br>
-我们在本地使用 netcat 命令启动一个端口：</p>
+<p><code>StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();</code></p>
+<p>然后监听本地 9000 端口，把接收到的数据依次做拆分、分组、窗口计算和聚合输出。这里使用的是<strong>滑动窗口</strong>：<code>timeWindow(Time.seconds(5), Time.seconds(1))</code> 的第一个参数是窗口长度 5 秒，第二个参数是滑动步长 1 秒，因此每秒都会输出一次「最近 5 秒」的统计结果，相邻窗口之间相互重叠。窗口函数在后面的课程中会详细讲解。</p>
+<p><img src="/post-assets/pQQ9j5lFD/02-streaming-window-flow.svg" alt="流处理 WordCount 的处理链路与滑动窗口示意：socketTextStream 接入数据，flatMap 拆词，keyBy 分组，timeWindow 以 5 秒窗口、1 秒滑动聚合，reduce 后打印结果"></p>
+<p>我们在本地使用 netcat 命令启动一个端口：</p>
 <pre><code class="language-sh">nc -lk 9000
 </code></pre>
-<p>然后直接运行我们的 main 方法：<br>
-测试——在 linux 系统中用 netcat 命令进行发送测试。<br>
-在 nc 中输入：</p>
+<p>然后直接运行 main 方法。测试时，先在 Linux 系统中用 netcat 命令发送数据，在 nc 中输入：</p>
 <pre><code class="language-sh">$ nc -lk 9000
 Flink Flink Flink 
 Flink Spark Storm
@@ -281,17 +284,15 @@ Flink Spark Storm
 Spark : 1
 Storm : 1
 </code></pre>
+<p><img src="/post-images/1618469926125.png" alt="流处理 WordCount 运行结果截图" loading="lazy"></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E6%90%AD%E5%BB%BA-maven-%E5%B7%A5%E7%A8%8B-flinktutorial">搭建 maven 工程 FlinkTutorial</a>
+<a href="#%E6%90%AD%E5%BB%BA-maven-%E5%B7%A5%E7%A8%8B-flinktutorial">搭建 maven 工程 FlinkTutorial</a>
 <ul>
 <li><a href="#pom-%E6%96%87%E4%BB%B6">pom 文件</a></li>
 <li><a href="#%E6%89%B9%E5%A4%84%E7%90%86-wordcount">批处理 wordcount</a></li>
 <li><a href="#%E6%B5%81%E5%A4%84%E7%90%86-wordcount">流处理 wordcount</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

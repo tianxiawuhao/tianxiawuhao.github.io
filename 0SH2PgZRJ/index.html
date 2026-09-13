@@ -126,14 +126,16 @@
           <img class="post-feature-header-image" src="/post-images/0SH2PgZRJ.png" alt="封面图">
           
           <h2 id="GitLab 安装">GitLab 安装</h2>
+<p>GitLab 官方提供 gitlab/gitlab-ce 镜像，用容器部署最省事：先拉取镜像，再挂载配置、日志、数据三个目录启动容器。下面以 Windows 宿主机为例，Linux 上把挂载路径换成 /srv/gitlab/... 即可。</p>
 <h3 id="Docker 下载镜像">Docker 下载镜像</h3>
 <pre><code class="language-shell">docker pull gitlab/gitlab-ce:latest
 </code></pre>
 <h3 id="GitLab 容器部署">GitLab 容器部署</h3>
 <pre><code class="language-shell">docker run -d -p 8443:443 -p 80:80 -p 8022:22 --restart always --name gitlab -v C:\installation\gitlab\config:/etc/gitlab -v C:\installation\gitlab\logs:/var/log/gitlab -v C:\installation\gitlab\data:/var/opt/gitlab
 </code></pre>
+<p>端口映射依次是 8443→容器 443（HTTPS）、80→容器 80（HTTP）、8022→容器 22（SSH 克隆）；三个 -v 挂载分别保存配置、日志和仓库数据，容器重建后数据不会丢失。</p>
 <h3 id="修改配置">修改配置</h3>
-<pre><code class="language-shell">vi /etc/gitlab/gitlab.rb
+<pre><code class="language-shell">docker exec -it gitlab vi /etc/gitlab/gitlab.rb
 -------------------------------------------------
 # gitlab访问地址，可以写域名。如果端口不写的话默认为80端口
 external_url 'http://gitlab.test'
@@ -166,6 +168,10 @@ gitlab_rails['smtp_openssl_verify_mode'] = 'none'
 # 你的QQ邮箱（发送账号）
 gitlab_rails['gitlab_email_from'] = '********@qq.com'
 </code></pre>
+<p>修改完成后要让 GitLab 重新生成配置并重启相关服务，否则改动不会生效：</p>
+<pre><code class="language-shell">docker exec -it gitlab gitlab-ctl reconfigure
+</code></pre>
+<p>下面这一步直接编辑容器内的 gitlab.yml，属于不推荐的兜底做法：正常情况下只改 gitlab.rb 即可，因为再次执行 reconfigure 时 gitlab.yml 会依据 gitlab.rb 重新生成，手工改动会被覆盖。这里保留原作者的做法，供排查问题时参考。</p>
 <pre><code class="language-shell"># 修改http和ssh配置
 vi /opt/gitlab/embedded/service/gitlab-rails/config/gitlab.yml
 --------------------------------------------------------------
@@ -174,23 +180,34 @@ gitlab:
   port: 80 
   https: false
 </code></pre>
-<pre><code class="language-shell">#修改hosts
-c:\windows\system32\drivers\etc
+<pre><code class="language-shell"># 修改 hosts：Windows 为 c:\windows\system32\drivers\etc\hosts，Linux 为 /etc/hosts
 127.0.0.1 gitlab.test
 </code></pre>
+<p>如果 GitLab 部署在其他机器上，这里要写那台机器的 IP，而不是 127.0.0.1。</p>
 <h2 id="GitLab Runner 安装">GitLab Runner 安装</h2>
-<p>url 和 token 通过 GitLab 的 CI/CD 菜单项查看</p>
-<pre><code class="language-shell">docker exec -it gitlab-runner gitlab-runner register -n --url http://172.17.0.2/  --registration-token GR1348941smuNaFuN-Cf68ne2X-tP --executor docker  --description &quot;Docker Runner&quot; --docker-image=maven:latest --tag-list=&quot;dev-release&quot;
+<p>GitLab Runner 才是真正执行流水线作业的进程，单独用一个容器跑即可。它需要挂载 /var/run/docker.sock，才能在 docker executor 模式下创建构建容器：</p>
+<pre><code class="language-shell">docker run -d --name gitlab-runner --restart always -v /srv/gitlab-runner/config:/etc/gitlab-runner -v /var/run/docker.sock:/var/run/docker.sock gitlab/gitlab-runner:latest
 </code></pre>
+<h3 id="获取注册信息">获取注册信息</h3>
+<p>注册 Runner 需要两样东西：GitLab 的访问地址和注册令牌，在项目页面 Settings → CI/CD → Runners 中展开即可看到。注册令牌相当于 Runner 的准入凭证，不要提交到代码仓库。本文示例里 url 写的是 gitlab 容器在 docker0 网桥上的地址 172.17.0.2；如果 runner 容器能解析 gitlab.test，也可以直接写 http://gitlab.test/。</p>
 <h2 id="注册 Runner">注册 Runner</h2>
-<pre><code class="language-shell">docker exec -it gitlab-runner gitlab-runner register -n --url http://172.17.0.2/  --registration-token GR1348941smuNaFuN-Cf68ne2X-tP --executor docker  --description &quot;Docker Runner&quot; --docker-image=maven:latest --tag-list=&quot;allen-devolop-tag&quot; 
+<p>进入 runner 容器执行 register 完成注册。下面示例注册一个 docker executor、默认镜像 maven:latest、标签为 dev-release 的 Runner：</p>
+<pre><code class="language-shell">docker exec -it gitlab-runner gitlab-runner register -n --url http://172.17.0.2/ --registration-token &lt;你的注册令牌&gt; --executor docker --description &quot;Docker Runner&quot; --docker-image=maven:latest --tag-list=&quot;dev-release&quot;
 </code></pre>
+<p>需要第二个标签时再注册一次，只有 --tag-list 不同（示例中的 allen-devolop-tag）：</p>
+<pre><code class="language-shell">docker exec -it gitlab-runner gitlab-runner register -n --url http://172.17.0.2/ --registration-token &lt;你的注册令牌&gt; --executor docker --description &quot;Docker Runner&quot; --docker-image=maven:latest --tag-list=&quot;allen-devolop-tag&quot;
+</code></pre>
+<p>注意：GitLab 16.0 起注册令牌（registration token）已废弃，新版本要在 Settings → CI/CD → Runners 中新建 Runner，拿到 glrt- 开头的认证令牌后用 --token 注册；旧版本仍可使用上面的 --registration-token 方式。</p>
 <h2 id="项目添加gitlab-ciyml文件">项目添加 .gitlab-ci.yml 文件</h2>
-<pre><code class="language-java"># runner使用doker时指定镜像
+<p>下图是一条完整的流水线：开发者推送代码后，GitLab 读取仓库根目录下的 .gitlab-ci.yml 生成作业，已注册的 Runner 领取作业并按 stage 顺序执行，最后把构建出的镜像推送到 Harbor。</p>
+<p><img src="/post-assets/0SH2PgZRJ/01-ci-pipeline.svg" alt="GitLab 与 Runner 协作的 CI/CD 流水线示意图"></p>
+<pre><code class="language-yaml"># runner 使用 docker executor 时，指定作业运行的基础镜像
 image: maven:3.6.3-jdk-8
 
 # 定义缓存
 # 如果gitlab runner是shell或者docker，此缓存功能没有问题
+# 注意：.m2/repository 是相对项目目录的路径，需要在 MAVEN_OPTS 中设置
+# -Dmaven.repo.local=.m2/repository，Maven 才会真正使用这份缓存
 # 如果是k8s环境，要确保已经设置了分布式文件服务作为缓存
 cache:
   key: minio
@@ -254,6 +271,7 @@ make_image:
 <li>
 <a href="#GitLab%20Runner%20%E5%AE%89%E8%A3%85">GitLab Runner 安装</a>
 <ul>
+<li><a href="#%E8%8E%B7%E5%8F%96%E6%B3%A8%E5%86%8C%E4%BF%A1%E6%81%AF">获取注册信息</a></li>
 </ul>
 </li>
 <li>
