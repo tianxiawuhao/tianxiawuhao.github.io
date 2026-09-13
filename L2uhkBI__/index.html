@@ -170,7 +170,9 @@
 </tbody>
 </table>
 <p><strong>查找算法有七种，分别为：顺序查找、二分查找、插值查找、斐波那契查找、树表查找、分块查找、哈希查找。</strong><br>
-基于线性结构的查找，有两种最常见的查找方法：顺序查找和折半查找。</p>
+基于线性结构的查找，有两种最常见的查找方法：顺序查找和折半查找。下面这张对照表先把七种查找算法（树表查找再细分为二叉排序树、平衡二叉树、B 树 / B+ 树）的前提条件、复杂度与适用场景集中列出，后文每一节都可以回到这里对照：</p>
+<p><img src="/post-assets/L2uhkBI__/01-search-complexity.svg" alt="七大查找算法前提条件、复杂度与适用场景对照表"></p>
+<p>需要强调的是：<b>查找算法的效率取决于查找表的结构，而结构取决于「查得多还是改得多」</b>。静态查找表（查多改少）适合顺序表加二分、插值或斐波那契查找；动态查找表（频繁插入删除）适合树表或哈希表。选择算法前先确认前提条件：二分查找要求顺序存储且有序，哈希查找要求设计好哈希函数与冲突处理。</p>
 <p><strong>顺序查找</strong><br>
   顺序查找的特点是，用所给的关键字与线性表中各元素的关键字逐个进行比较，直到成功或失败。<br>
 <strong>折半查找</strong><br>
@@ -181,8 +183,8 @@
 <p><strong>基本思路</strong><br>
   从第一个元素m开始逐个与需要查找的元素x进行比较，当比较到元素值相同(即m=x)时返回元素m的下标，如果比较到最后都没有找到，则返回-1。<br>
 <strong>复杂度分析</strong><br>
-  查找成功时的平均查找长度为： ASL = 每个元素被查找的概率 * 总的元素的个数=1/n*(1+2+3+…+n) = (n+1)/2 ;<br>
-  当查找不成功时，需要n+1次比较，时间复杂度为O(n)，所以，顺序查找的时间复杂度为O(n)。<br>
+  以每个元素被查找概率相等为例，查找成功时的平均查找长度为 \(ASL = \frac{1}{n}(1+2+\cdots+n) = \frac{n+1}{2}\)，空间复杂度为 \(O(1)\)；<br>
+  当查找不成功时，不带哨兵需要比较 n 次，带哨兵需要比较 n+1 次，时间复杂度都是 \(O(n)\)，所以顺序查找的时间复杂度为 \(O(n)\)。<br>
 <strong>优缺点</strong><br>
   缺点：是当n 很大时，平均查找长度较大，效率低；<br>
   优点：是对表中数据元素的存储没有要求。另外，对于线性链表，只能进行顺序查找。</p>
@@ -243,6 +245,7 @@ public static int sequenceSearchPlus(int[] arr,int key){
 	return n;
 }
 </code></pre>
+<p><b>哨兵（sentinel）的作用：</b>把待查关键字预置到数组下标 0 之后，循环 <code>while (arr[n] != key) n--;</code> 一定会在下标 0 处停下，因此循环里不必再判断下标越界，每次比较由「比较下标 + 比较关键字」两次减少为一次。返回值减 1 是因为整个数组后移了一位；若返回 0，说明原数组中不存在该元素（对应结果 -1）。注意哨兵只适用于可写、且预留了位置的顺序表。</p>
 <p>测试结果为：</p>
 <blockquote>
 <p>要查找的元素,在数组中的下标是：2</p>
@@ -281,6 +284,9 @@ public static int sequenceSearchPlus(int[] arr,int key){
     return -1;
 }
 </code></pre>
+<p>上面用的是<b>闭区间</b>写法（<code>right = len - 1</code>，循环条件 <code>left &lt;= right</code>）。另一种常见写法是<b>半开区间</b> <code>[left, right)</code>：<code>right</code> 取 <code>len</code>、循环条件用 <code>left &lt; right</code>、收缩时写 <code>right = mid</code>。两种写法都正确，但循环条件、边界收缩方式、返回值必须严格配套，混用就会死循环或漏查。下图把两种写法并排列出，并给出最容易踩的三个坑：</p>
+<p><img src="/post-assets/L2uhkBI__/02-binary-search-bounds.svg" alt="二分查找闭区间与半开区间两种边界写法的对比"></p>
+<p>另外，取中点建议写成 <code>mid = left + (right - left) / 2</code> 或 <code>(left + right) &gt;&gt;&gt; 1</code>，避免 <code>left + right</code> 在极端情况下整数溢出。</p>
 <p><strong>递归法</strong>示例代码如下：</p>
 <pre><code class="language-java">static int binarySearch2(int array[],int left,int right,int target){
 	if(left&lt;=right){
@@ -316,6 +322,7 @@ public static int sequenceSearchPlus(int[] arr,int key){
 <p>查找最后一个小于等于给定值的元素。</p>
 </li>
 </ul>
+<p>这四个变体的代码都使用闭区间 <code>[low, high]</code>，中点用 <code>(low + high) &gt;&gt;&gt; 1</code>（无符号右移，避免溢出）。判断「第一个」要看 <code>mid == 0 || nums[mid-1] != val</code>，判断「最后一个」要看 <code>mid == n-1 || nums[mid+1] != val</code>；命中后不立即返回、而是继续向一侧收缩时，同样必须保证区间在缩小，否则就会死循环。</p>
 <p><strong>1、查找第一个值等于给定值的元素</strong></p>
 <pre><code class="language-java">public static int search(int[] nums, int val) {
     int n = nums.length;
@@ -411,52 +418,86 @@ public static int sequenceSearchPlus(int[] arr,int key){
   对于长度比较长、关键字分布又比较均匀的查找表来说，插值查找算法的平均性能比折半查找要好的多。反之，数组中如果分布非常不均匀，那么插值查找未必是很合适的选择。</p>
 <h3 id="32-插值查找实现">3.2 插值查找实现</h3>
 <p>上面的说法是总体介绍，落实到具体代码上的话，再慢慢分析。在二分查找中，mid的计算方式如下：</p>
-<p>​	    <img src="/post-images/1709120117621.png" alt="" loading="lazy"></p>
+<p>	    <img src="/post-images/1709120117621.png" alt="" loading="lazy"></p>
 <p>将low从分数中提取出来，mid的计算就变成了：</p>
-<p>​	  	<img src="/post-images/1709120146482.png" alt="" loading="lazy"><br>
+<p>	  	<img src="/post-images/1709120146482.png" alt="" loading="lazy"><br>
   在插值查找中，mid的计算方式转换成了：</p>
-<p>​		<img src="/post-images/1709120174223.png" alt="" loading="lazy"></p>
+<p>		<img src="/post-images/1709120174223.png" alt="" loading="lazy"></p>
 <p>有了上面的算术，就可以写代码了，迭代法插值查找示例代码如下：</p>
-<pre><code class="language-java">private static int insertSearch1(int arr[],int target){
-	/*初始化左右搜索边界*/
-    int left=0,right=arr.length-1;
-    int mid;
-    while(left&lt;=right){
-        mid=left+(target-arr[left])/(arr[right]-arr[left])*(right-left);
-        /*arr[mid]大于target，即要寻找的元素在左半边，所以需要设定右边界为mid-1，搜索左半边*/
-        if(target&lt;arr[mid]){
-            right=mid-1;
-        /*arr[mid]小于target，即要寻找的元素在右半边，所以需要设定左边界为mid+1，搜索右半边*/
-        }else if(target&gt;arr[mid]){
-            left=mid+1;
-        /*搜索到对应元素*/
-        }else if(target==arr[mid]){
+<pre><code class="language-java">/**
+ * @author wuhao
+ * @desc 插值查找（迭代 + 递归）
+ * 适用前提：有序、顺序存储、关键字近似均匀分布。
+ * 必须处理两个边界：target 落在 [arr[0], arr[n-1]] 之外时会出现区间外（甚至负数）的 mid；
+ * 区间首尾关键字相等时插值公式会除以 0。
+ */
+public class InsertSearch {
+    public static void main(String[] args) {
+        int[] arr = {1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29};
+        for (int target : new int[]{1, 19, 29, 0, 30, 12}) {
+            System.out.println("查找 " + target + " -&gt; 迭代 " + insertSearch1(arr, target)
+                    + "，递归 " + insertSearch2(arr, 0, arr.length - 1, target));
+        }
+        int[] same = {5, 5, 5, 5};
+        System.out.println("重复元素 {5,5,5,5} 查找 5 -&gt; " + insertSearch1(same, 5));
+    }
+
+    /** 迭代法 */
+    private static int insertSearch1(int[] arr, int target) {
+        if (arr.length == 0 || target &lt; arr[0] || target &gt; arr[arr.length - 1]) {
+            return -1;                                  // 边界保护，避免 mid 越界
+        }
+        int left = 0, right = arr.length - 1;
+        while (left &lt;= right) {
+            if (arr[left] == arr[right]) {              // 区间内关键字全部相同，退化为顺序比较
+                return arr[left] == target ? left : -1;
+            }
+            int mid = left + (target - arr[left]) / (arr[right] - arr[left]) * (right - left);
+            if (mid &lt; left) {                           // 分布不均匀时把 mid 夹回区间内
+                mid = left;
+            } else if (mid &gt; right) {
+                mid = right;
+            }
+            if (target &lt; arr[mid]) {
+                right = mid - 1;
+            } else if (target &gt; arr[mid]) {
+                left = mid + 1;
+            } else {
+                return mid;
+            }
+        }
+        return -1;
+    }
+
+    /** 递归法：公式与迭代一致，只是用参数传递区间 */
+    private static int insertSearch2(int[] arr, int left, int right, int target) {
+        if (arr.length == 0 || target &lt; arr[0] || target &gt; arr[arr.length - 1] || left &gt; right) {
+            return -1;
+        }
+        if (arr[left] == arr[right]) {
+            return arr[left] == target ? left : -1;
+        }
+        int mid = left + (target - arr[left]) / (arr[right] - arr[left]) * (right - left);
+        if (mid &lt; left) {
+            mid = left;
+        } else if (mid &gt; right) {
+            mid = right;
+        }
+        if (arr[mid] == target) {
             return mid;
+        } else if (arr[mid] &lt; target) {
+            return insertSearch2(arr, mid + 1, right, target);
+        } else {
+            return insertSearch2(arr, left, mid - 1, target);
         }
     }
-    /*搜索不到返回-1*/
-    return -1;
 }
+
 </code></pre>
-<p><strong>递归法</strong>插值查找示例代码如下：</p>
-<pre><code class="language-java">private static int insertSearch2(int array[],int left,int right,int target){
-	if(left&lt;=right){
-		int mid=left+(target-array[left])/(array[right]-array[left])*(right-left);
-		/*搜索到对应元素*/
-		if(array[mid]==target){
-			return mid;
-		}else if(array[mid]&lt;target){
-			/*array[mid]小于target，即要寻找的元素在右半边，所以需要设定左边界为mid+1，搜索右半边*/
-			return insertSearch2(array,mid+1,right,target);
-		}else{
-			/*array[mid]大于target，即要寻找的元素在左半边，所以需要设定右边界为mid-1，搜索左半边*/
-			return insertSearch2(array,left,mid-1,target);
-		}
-	}else{
-		return -1;
-	}
-}
+<p>递归写法的公式与迭代完全一致，只是用参数把区间传给下一层，完整代码见上面 <code>InsertSearch</code> 类中的 <code>insertSearch2</code> 方法。实现插值查找时必须处理两个边界：</p>
+<pre><code class="language-java">&lt;p&gt;① &lt;b&gt;越界&lt;/b&gt;：当 &lt;code&gt;target&lt;/code&gt; 落在 &lt;code&gt;[arr[0], arr[n-1]]&lt;/code&gt; 之外，或者关键字分布极不均匀时，插值公式可能算出区间外、甚至负数下标的 mid，必须先把 mid 夹回 &lt;code&gt;[left, right]&lt;/code&gt;（本文代码还加上了首尾范围检查），否则会抛 &lt;code&gt;ArrayIndexOutOfBoundsException&lt;/code&gt;；② &lt;b&gt;除零&lt;/b&gt;：当 &lt;code&gt;arr[right] == arr[left]&lt;/code&gt; 时公式会除以 0，此时区间内关键字全部相同，退化为顺序比较即可。&lt;/p&gt;
 </code></pre>
+<p><b>复杂度与适用条件：</b>当关键字在区间内近似均匀分布时，插值查找每次能把查找区间缩小到 \(\sqrt{n}\) 量级，平均时间复杂度为 \(O(\log\log n)\)，比二分查找更快；但若分布极不均匀（例如 \(\{1, 2, 3, \ldots, 10000, 10^9\}\)），mid 会剧烈偏向一端，最坏退化到 \(O(n)\)。因此它的适用前提比二分查找更严格：<b>有序、顺序存储、且关键字近似均匀分布</b>。</p>
 <h2 id="四-斐波那契查找">四、斐波那契查找</h2>
 <h3 id="41-斐波那契查找介绍">4.1 斐波那契查找介绍</h3>
 <p>和前面的二分查找、插值查找相比，斐波那契查找是类似的，不过换了一种寻找mid点的方法。顾名思义，该种查找方法中，使用到了斐波那契数列，斐波那契数列的形式是：1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89…….（从第三个数开始，后边每一个数都是前两个数的和）。</p>
@@ -492,12 +533,22 @@ if(mid &lt;= high){
 }
 </code></pre>
 <p>完整斐波那契查找示例代码如下：</p>
-<pre><code class="language-java">public class FibonacciSearch {
+<pre><code class="language-java">import java.util.Arrays;
+
+/**
+ * @author wuhao
+ * @desc 斐波那契查找
+ * 前提：有序、顺序存储。用斐波那契数列把区间分成 f[k-1]-1 与 f[k-2]-1 两段，
+ * 整个查找过程只用加减法，不需要乘除。
+ */
+public class FibonacciSearch {
     public static int FLENGTH = 20;
+
     public static void main(String[] args) {
-        int [] arr = {1,8,10,89,100,134};
-        int target = 89;
-        System.out.println(&quot;目标元素在数组中位置是：&quot; + fibSearch(arr, target));		
+        int[] arr = {1, 8, 10, 89, 100, 134};
+        for (int target : new int[]{1, 10, 89, 134, 0, 135}) {
+            System.out.println("查找 " + target + " -&gt; " + fibSearch(arr, target));
+        }
     }
 
     public static int[] fib() {
@@ -505,7 +556,7 @@ if(mid &lt;= high){
         f[0] = 1;
         f[1] = 1;
         for (int i = 2; i &lt; FLENGTH; i++) {
-            f[i] = f[i-1] + f[i-2];
+            f[i] = f[i - 1] + f[i - 2];
         }
         return f;
     }
@@ -513,45 +564,37 @@ if(mid &lt;= high){
     public static int fibSearch(int[] arr, int target) {
         int low = 0;
         int high = arr.length - 1;
-        int k = 0; 
-        int mid = 0; 
-        int f[] = fib();
-        /*获取最相邻的斐波那契数组中元素的值，该值略大于数组的长度*/
-        while(high &gt; f[k] - 1) {
+        int k = 0;
+        int mid;
+        int[] f = fib();
+        /* 取略大于数组长度的斐波那契数 f[k]，使 f[k]-1 &gt;= high */
+        while (high &gt; f[k] - 1) {
             k++;
         }
-        /*因为 f[k]值可能大于arr的长度。如果大于时，需要构造一个新的数组temp[]，将arr数组中的元素拷贝过去，不足的部分会使用0填充*/
-        int[] temp=Arrays.copyOf(arr, f[k]);
-        /*然后将temp后面填充的0，替换为最后一位数字
-	 *如将temp数组由{1,8,10,89,100,134,0,0}变换为{1,8,10,89,100,134,134,134}*/
-        for(int i = high + 1; i &lt; temp.length; i++) {
+        /* f[k] 可能大于数组长度，多出来的位置用最高位元素补齐，便于按斐波那契长度分割 */
+        int[] temp = Arrays.copyOf(arr, f[k]);
+        for (int i = high + 1; i &lt; temp.length; i++) {
             temp[i] = arr[high];
         }
 
-        while (low &lt;= high) { 
+        while (low &lt;= high) {
             mid = low + f[k - 1] - 1;
-            if(target &lt; temp[mid]) { 
+            if (target &lt; temp[mid]) {
                 high = mid - 1;
-                /*因为f[k]=f[k-1]+f[k-2]，所以k--就相当于取temp数组的左边部分*/
-                k--;
-            } else if ( target &gt; temp[mid]) { 
+                k--;                     // f[k] = f[k-1] + f[k-2]，取左半部分
+            } else if (target &gt; temp[mid]) {
                 low = mid + 1;
-                /*同理，f[k]=f[k-1]+f[k-2]，k -= 2就相当于取temp数组的右边部分*/
-                k -= 2;
+                k -= 2;                  // 取右半部分
             } else {
-                /*原arr数组中的值*/
-                if(mid &lt;= high){
-                    return mid;
-                    /*在temp中，扩展出来的高位的值*/
-                }else{
-                    return high;
-                }
+                return mid &lt;= high ? mid : high;   // 补位元素统一返回原数组最后一个下标
             }
         }
         return -1;
     }
 }
+
 </code></pre>
+<p><b>复杂度与特点：</b>斐波那契查找与二分查找同为 \(O(\log n)\)，但分割时只用加减法（<code>mid = low + f[k-1] - 1</code>），不需要乘除，因此在部分硬件上比依赖除法的二分查找更快；缺点是当 n 不满足斐波那契数时要补齐数组，实现也更复杂，一般场合仍优先使用二分查找。</p>
 <h2 id="五-树表查找">五、树表查找</h2>
 <p>基于树的查找方法是将待查表组织成特定的树结构，并在树结构的基础上实现查找的方法。</p>
 <h3 id="51-二叉树查找">5.1 二叉树查找</h3>
@@ -565,6 +608,7 @@ if(mid &lt;= high){
 <p>二叉排序树有不同的遍历方式，中序遍历的结果比较直观。二叉树示例：<br>
   <img src="/post-images/1709120223667.png" alt="" loading="lazy"><br>
   二叉树上中序遍历的方式是：左节点、根节点、右节点。该二叉树的遍历结果为：1、3、4、6、7、8、10、13、14。</p>
+<p><b>复杂度与特点：</b>当树高为 \(\log n\) 时，二叉排序树的查找、插入、删除平均时间复杂度都是 \(O(\log n)\)；中序遍历可以得到递增序列，因此它天然支持有序遍历和范围查询。但树形完全由插入顺序决定：依次插入有序序列会退化成单支树（等价于链表），查找退化为 \(O(n)\)。所以工程中更常用<b>平衡二叉树</b>或红黑树来保证树高始终是 \(O(\log n)\)。</p>
 <h4 id="512-二叉树查找实现">5.1.2 二叉树查找实现</h4>
 <p><strong>1、创建二叉树</strong><br>
 首先，要创建一个树的节点，节点中要有该节点储存的值，然后起左右子树。示例代码：</p>
@@ -577,103 +621,106 @@ if(mid &lt;= high){
     }
 }
 </code></pre>
-<p>接下来就要创建二叉排序树，创建二叉排序树是一个递归的过程，需要将序列中的值一个一个添加到二叉树中。方便起见，可以利用序列中第一个元素作为根节点，再持续添加节点，示例代码：</p>
+<p>接下来创建二叉排序树：以序列第一个元素作为根结点，再依次把后面的元素插入到合适的位置，示例代码：</p>
 <pre><code class="language-java">int[] array = {35,76,6,22,16,49,49,98,46,9,40};
 BinaryTree root = new BinaryTree(array[0]);
-for(int i = 1; i &lt; array.length; i++){
-    createBST(root, array[i]);
+for(int i = 1; i &amp;lt; array.length; i++){
+    root = insert(root, array[i]);   //插入后返回（可能被更新过的）子树根结点
 }
 </code></pre>
-<p>具体创建树的过程，就是一个不断与根节点比较，然后添加到左侧、右侧或不添加的过程。因为在二叉排序树中，不存在重复元素，有相等元素已经在树中时，直接忽略后续相等元素。示例代码：</p>
-<pre><code class="language-java">public static void createBST(BinaryTree root, int element){
-    BinaryTree newNode = new BinaryTree(element);
-    if(element &gt; root.value){
-        if(root.right == null)
-            root.right = newNode;
-        else
-            createBST(root.right, element);
-    }else if(element &lt; root.value){
-        if(root.left == null)
-            root.left = newNode;
-        else
-            createBST(root.left, element);
-    }else{
-        System.out.println(&quot;该节点&quot; + element + &quot;已存在&quot;);
-        return;
+<p>插入的过程就是不断与当前结点比较：比当前结点小就往左子树走，大就往右子树走，走到空位置就挂上新结点；二叉排序树中一般不存重复元素，遇到相等元素直接忽略。示例代码：</p>
+<pre><code class="language-java">public static BinaryTree insert(BinaryTree root, int element){
+    if(root == null){
+        return new BinaryTree(element);      //走到空位置，挂上新结点
     }
+    if(element &amp;lt; root.value){
+        root.left = insert(root.left, element);
+    }else if(element &amp;gt; root.value){
+        root.right = insert(root.right, element);
+    }else{
+        System.out.println(&amp;quot;该节点&amp;quot; + element + &amp;quot;已存在&amp;quot;);
+    }
+    return root;
 }
 </code></pre>
 <p><strong>2、二叉树查找</strong><br>
   查找元素是否在树中的过程，就是一个二分查找的过程，不过查找的对象从左右子序列转换成了左右子树而已。示例代码：</p>
-<pre><code class="language-java">public static void searchBST(BinaryTree root, int target, BinaryTree p){
+<pre><code class="language-java">public static void searchBST(BinaryTree root, int target){
     if(root == null){
-        System.out.println(&quot;查找&quot;+target+&quot;失败&quot;);
+        System.out.println(&amp;quot;查找&amp;quot;+target+&amp;quot;失败&amp;quot;);
     }else if(root.value == target){
-        System.out.println(&quot;查找&quot;+target+&quot;成功&quot;);
-    }else if(root.value &gt;= target){
-        searchBST(root.left, target, root);
-    }else{ 
-        searchBST(root.right, target, root);
+        System.out.println(&amp;quot;查找&amp;quot;+target+&amp;quot;成功&amp;quot;);
+    }else if(root.value &amp;gt; target){
+        searchBST(root.left, target);
+    }else{
+        searchBST(root.right, target);
     }
 }
 </code></pre>
-<p>完整示例代码：</p>
-<p>​</p>
+<p>完整示例代码（把结点类 <code>BinaryTree</code> 一起放在同一个文件里即可直接编译运行）：</p>
 <pre><code class="language-java">public class BinarySortTree {
     public static void main(String[] args) {
         int[] array = {35,76,6,22,16,49,49,98,46,9,40};
         BinaryTree root = new BinaryTree(array[0]);
         for(int i = 1; i &lt; array.length; i++){
-            createBST(root, array[i]);
+            root = insert(root, array[i]);
         }
-        System.out.println(&quot;中序遍历结果：&quot;);
+        System.out.println("中序遍历结果：");
         midOrderPrint(root);
         System.out.println();
-        searchBST(root, 22, null);
-        searchBST(root, 100, null);
+        searchBST(root, 22);
+        searchBST(root, 100);
     }
 
-    /*创建二叉排序树*/
-    public static void createBST(BinaryTree root, int element){
-        BinaryTree newNode = new BinaryTree(element);
-        if(element &gt; root.value){
-            if(root.right == null)
-                root.right = newNode;
-            else
-                createBST(root.right, element);
-        }else if(element &lt; root.value){
-            if(root.left == null)
-                root.left = newNode;
-            else
-                createBST(root.left, element);
-        }else{
-            System.out.println(&quot;该节点&quot; + element + &quot;已存在&quot;);
-            return;
+    /*插入：返回（可能被更新过的）子树根结点；遇到重复元素直接忽略*/
+    public static BinaryTree insert(BinaryTree root, int element){
+        if(root == null){
+            return new BinaryTree(element);      // 走到空位置，挂上新结点
         }
+        if(element &lt; root.value){
+            root.left = insert(root.left, element);
+        }else if(element &gt; root.value){
+            root.right = insert(root.right, element);
+        }else{
+            System.out.println("该节点" + element + "已存在");
+        }
+        return root;
     }
 
     /*二叉树中查找元素*/
-    public static void searchBST(BinaryTree root, int target, BinaryTree p){
+    public static void searchBST(BinaryTree root, int target){
         if(root == null){
-            System.out.println(&quot;查找&quot;+target+&quot;失败&quot;);
+            System.out.println("查找"+target+"失败");
         }else if(root.value == target){
-            System.out.println(&quot;查找&quot;+target+&quot;成功&quot;);
-        }else if(root.value &gt;= target){
-            searchBST(root.left, target, root);
-        }else{ 
-            searchBST(root.right, target, root);
+            System.out.println("查找"+target+"成功");
+        }else if(root.value &gt; target){
+            searchBST(root.left, target);
+        }else{
+            searchBST(root.right, target);
         }
     }
 
-    /*二叉树的中序遍历*/
+    /*二叉树的中序遍历：二叉排序树的中序序列一定递增*/
     public static void midOrderPrint(BinaryTree rt){
         if(rt != null){
             midOrderPrint(rt.left);
-            System.out.print(rt.value + &quot; &quot;);
-            midOrderPrint(rt.right);	
+            System.out.print(rt.value + " ");
+            midOrderPrint(rt.right);
         }
     }
 }
+
+/*树的结点，与 BinarySortTree 放在同一个文件里即可*/
+class BinaryTree {
+    int value;
+    BinaryTree left;
+    BinaryTree right;
+
+    public BinaryTree(int value){
+        this.value = value;
+    }
+}
+
 </code></pre>
 <p><strong>测试结果为：</strong></p>
 <blockquote>
@@ -683,6 +730,20 @@ for(int i = 1; i &lt; array.length; i++){
 查找22成功<br>
 查找100失败</p>
 </blockquote>
+<h3 id="52-平衡二叉树">5.2 平衡二叉树（AVL 树）</h3>
+<p>二叉排序树的性能取决于树高。如果插入序列本身有序，树会退化成单支树，查找退化为 \(O(n)\)，二叉排序树的优势就没了。为了把树高稳定控制在 \(O(\log n)\)，出现了<b>平衡二叉树</b>：在二叉排序树的基础上，要求任意结点的左右子树高度差（平衡因子 BF）的绝对值不超过 1。AVL 树是最早提出的平衡二叉树，查找、插入、删除的时间复杂度都是 \(O(\log n)\)。</p>
+<p>插入或删除结点后如果破坏了平衡，需要通过<b>旋转</b>恢复。失衡分为四种情况，对应四种旋转：</p>
+<ul>
+<li>LL 型（在左子树的左子树上插入）：对最小失衡子树的根做一次<b>右旋</b>；</li>
+<li>RR 型（在右子树的右子树上插入）：做一次<b>左旋</b>；</li>
+<li>LR 型（在左子树的右子树上插入）：先对左孩子左旋，再对根右旋；</li>
+<li>RL 型（在右子树的左子树上插入）：先对右孩子右旋，再对根左旋。</li>
+</ul>
+<p>因为 AVL 树要求严格平衡，插入删除时旋转比较频繁，适合<b>查找远多于插入删除</b>的场景；如果插入删除同样频繁，工程上更常用红黑树（近似平衡、旋转次数更少），例如 Java 的 <code>TreeMap</code> 以及 <code>HashMap</code> 中链表过长时树化的桶。</p>
+<h3 id="53-b树家族">5.3 B 树与 B+ 树（多路平衡查找树）</h3>
+<p>前面几种树都是二叉的，树高约为 \(\log_2 n\)。当数据量大到内存放不下、必须存放在磁盘上时，每访问一个结点就是一次磁盘 I/O，树高越小 I/O 次数越少。B 树的思想就是让每个结点存多个关键字、有多个孩子（m 阶 B 树每个结点最多 m 个孩子），把「二叉」变成「多路」，从而大幅降低树高。</p>
+<p>一棵 m 阶 B 树满足：每个结点最多有 m 个孩子；除根结点外，每个结点至少有 \(\lceil m/2 \rceil\) 个孩子；根结点至少有两个孩子（除非它同时是叶子）；所有叶子结点都在同一层。因此 B 树是自平衡的，查找、插入、删除的时间复杂度都是 \(O(\log n)\)。</p>
+<p>B+ 树是 B 树的变体，也是数据库索引（如 MySQL 的 InnoDB）最常用的结构：只有叶子结点存放数据或数据的地址，非叶子结点只存索引关键字；所有叶子结点按关键字大小用链表串起来。这样做的两个好处是：① 非叶子结点不存数据，同样大小的磁盘页可以放下更多关键字，树高更低、I/O 更少；② 叶子链表让<b>范围查询和排序遍历</b>非常高效。代价是等值查询也必须走到叶子结点，路径长度固定。</p>
 <h2 id="六-分块查找">六、分块查找</h2>
 <h3 id="61-分块查找介绍">6.1 分块查找介绍</h3>
 <p>分块查找，顾名思义，要先将所有元素按大小进行分块，然后在块内进行查找。在分块时，块内的元素不一定是有序的，只要一个块内的元素在同一区间就行。用较标准的语言描述是：算法的思想是将n个数据元素&quot;按块有序&quot;划分为m块（m≤n）。每一块中的结点不必有序，但块与块之间必须&quot;按块有序&quot;，且前一块中的最大元素小于后一块中的任意元素。</p>
@@ -797,7 +858,7 @@ return -1;
     }
 
 
-​	 
+	 
 
 	/*插入数据*/
 	public static boolean insertBlock(int key) {
@@ -865,6 +926,7 @@ return -1;
 303 301 302 0 0 0 0 0 0 0<br>
 元素106在列表中的索引为：5</p>
 </blockquote>
+<p><b>复杂度与适用条件：</b>设 n 个元素分成 b 块、每块长约 \(n/b\)，先查索引表、再在块内顺序查找，平均查找长度约为 \(\frac{b+1}{2}+\frac{n/b+1}{2}\)；当 \(b \approx \sqrt{n}\)（块长也约为 \(\sqrt{n}\)）时取到最小值，因此平均时间复杂度为 \(O(\sqrt{n})\)。分块查找不要求整表有序，只要求「块间有序、块内任意」，所以插入删除比二分查找容易，适合数据分块存储且需要频繁插入的场景；索引表本身有序时还可以用二分查找定位块，进一步降到 \(O(\log b + n/b)\)。（把 <code>Block</code> 类与 <code>BlockSearch</code> 放在同一个文件里即可编译运行。）</p>
 <h2 id="七-哈希查找">七、哈希查找</h2>
 <h3 id="71-哈希查找介绍">7.1 哈希查找介绍</h3>
 <p>要了解哈希查找，就要先了解一下哈希表和哈希函数。先看下标准的定义：哈希表，是根据关键值而直接进行访问的数据结构。也就是说，它通过把关键码值映射到表中一个位置来访问记录，以加快查找的速度。这个映射函数叫做散列函数，存放记录的数组叫做散列表（哈希表）。<br>
@@ -1028,64 +1090,79 @@ public static void insertHashTable(int[] hashTable, int target) {
 要查找的数据28<br>
 在哈希表中的位置是：2</p>
 </blockquote>
+<p><b>复杂度与适用条件：</b>哈希查找的平均时间复杂度是 \(O(1)\)——不经过比较，直接由关键字算出地址；但如果所有关键字都冲突到同一个地址，就退化成顺序查找，最坏为 \(O(n)\)。平均查找长度取决于装填因子 \(\alpha = n/m\)（元素个数 / 表长）：\(\alpha\) 越大冲突越多，开放定址法一般把 \(\alpha\) 控制在 0.75 以下，超过就扩容再散列。</p>
+<p>本文示例为了演示方便把表长取成 7、与元素个数相同（\(\alpha = 1\)），并且用 0 表示空位置，所以有两点局限：① 待查元素不能是 0，否则会被当成空位；② 查找一个不存在的元素时要绕行整张表才能确认失败，最坏退化为 \(O(n)\)。实际使用时表长应大于元素个数，或者改用拉链法（数组 + 链表 / 红黑树）。哈希查找适合等值查询、去重、缓存和字典（如 Java 的 <code>HashMap</code>），但不支持范围查询和按序输出。</p>
+<h2 id="八-小结">八、小结：如何选择查找算法</h2>
+<ul>
+<li>数据无序且规模很小：顺序查找，代码最简单，不需要任何预处理。</li>
+<li>数据有序、顺序存储、查多改少：二分查找；关键字近似均匀分布时用插值查找，只允许加减法时用斐波那契查找。</li>
+<li>数据分块存储、插入较频繁：分块查找，索引表 + 块内查找，平均 \(O(\sqrt{n})\)。</li>
+<li>频繁插入删除、只做等值查询：哈希查找，平均 \(O(1)\)，但不支持范围查询。</li>
+<li>频繁插入删除、还需要有序遍历或范围查询：平衡二叉树（AVL、红黑树），查找、插入、删除都是 \(O(\log n)\)。</li>
+<li>数据量大到内存放不下、需要按磁盘页读取：B 树 / B+ 树，多路平衡把树高压低，减少磁盘 I/O，这也是数据库索引的默认结构。</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%89%8D%E8%A8%80">前言</a>
 <ul>
-<li><a href="#%E5%89%8D%E8%A8%80">前言</a></li>
-<li><a href="#%E4%B8%80-%E9%A1%BA%E5%BA%8F%E6%9F%A5%E6%89%BE">一、顺序查找</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%80-%E9%A1%BA%E5%BA%8F%E6%9F%A5%E6%89%BE">一、顺序查找</a>
 <ul>
 <li><a href="#11-%E9%A1%BA%E5%BA%8F%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">1.1 顺序查找介绍</a></li>
 <li><a href="#12-%E9%A1%BA%E5%BA%8F%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">1.2 顺序查找实现</a></li>
 <li><a href="#13-%E9%A1%BA%E5%BA%8F%E6%9F%A5%E6%89%BE%E4%BC%98%E5%8C%96">1.3 顺序查找优化</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-%E4%BA%8C%E5%88%86%E6%9F%A5%E6%89%BE">二、二分查找</a>
+<li>
+<a href="#%E4%BA%8C-%E4%BA%8C%E5%88%86%E6%9F%A5%E6%89%BE">二、二分查找</a>
 <ul>
 <li><a href="#21-%E4%BA%8C%E5%88%86%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">2.1 二分查找介绍</a></li>
 <li><a href="#22-%E4%BA%8C%E5%88%86%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">2.2 二分查找实现</a></li>
 <li><a href="#23-%E4%BA%8C%E5%88%86%E6%9F%A5%E6%89%BE%E5%8F%98%E4%BD%93">2.3 二分查找变体</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-%E6%8F%92%E5%80%BC%E6%9F%A5%E6%89%BE">三、插值查找</a>
+<li>
+<a href="#%E4%B8%89-%E6%8F%92%E5%80%BC%E6%9F%A5%E6%89%BE">三、插值查找</a>
 <ul>
 <li><a href="#31-%E6%8F%92%E5%80%BC%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">3.1 插值查找介绍</a></li>
 <li><a href="#32-%E6%8F%92%E5%80%BC%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">3.2 插值查找实现</a></li>
 </ul>
 </li>
-<li><a href="#%E5%9B%9B-%E6%96%90%E6%B3%A2%E9%82%A3%E5%A5%91%E6%9F%A5%E6%89%BE">四、斐波那契查找</a>
+<li>
+<a href="#%E5%9B%9B-%E6%96%90%E6%B3%A2%E9%82%A3%E5%A5%91%E6%9F%A5%E6%89%BE">四、斐波那契查找</a>
 <ul>
 <li><a href="#41-%E6%96%90%E6%B3%A2%E9%82%A3%E5%A5%91%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">4.1 斐波那契查找介绍</a></li>
 <li><a href="#42-%E6%96%90%E6%B3%A2%E9%82%A3%E5%A5%91%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">4.2 斐波那契查找实现</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%94-%E6%A0%91%E8%A1%A8%E6%9F%A5%E6%89%BE">五、树表查找</a>
+<li>
+<a href="#%E4%BA%94-%E6%A0%91%E8%A1%A8%E6%9F%A5%E6%89%BE">五、树表查找</a>
 <ul>
-<li><a href="#51-%E4%BA%8C%E5%8F%89%E6%A0%91%E6%9F%A5%E6%89%BE">5.1 二叉树查找</a>
-<ul>
-<li><a href="#511-%E4%BA%8C%E5%8F%89%E6%8E%92%E5%BA%8F%E6%A0%91%E4%B8%AD%E5%BA%8F%E9%81%8D%E5%8E%86">5.1.1 二叉排序树中序遍历</a></li>
-<li><a href="#512-%E4%BA%8C%E5%8F%89%E6%A0%91%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">5.1.2 二叉树查找实现</a></li>
+<li><a href="#51-%E4%BA%8C%E5%8F%89%E6%A0%91%E6%9F%A5%E6%89%BE">5.1 二叉树查找</a></li>
+<li><a href="#52-%E5%B9%B3%E8%A1%A1%E4%BA%8C%E5%8F%89%E6%A0%91">5.2 平衡二叉树（AVL 树）</a></li>
+<li><a href="#53-b%E6%A0%91%E5%AE%B6%E6%97%8F">5.3 B 树与 B+ 树（多路平衡查找树）</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E5%85%AD-%E5%88%86%E5%9D%97%E6%9F%A5%E6%89%BE">六、分块查找</a>
+<li>
+<a href="#%E5%85%AD-%E5%88%86%E5%9D%97%E6%9F%A5%E6%89%BE">六、分块查找</a>
 <ul>
 <li><a href="#61-%E5%88%86%E5%9D%97%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">6.1 分块查找介绍</a></li>
 <li><a href="#62-%E5%88%86%E5%9D%97%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">6.2 分块查找实现</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%83-%E5%93%88%E5%B8%8C%E6%9F%A5%E6%89%BE">七、哈希查找</a>
+<li>
+<a href="#%E4%B8%83-%E5%93%88%E5%B8%8C%E6%9F%A5%E6%89%BE">七、哈希查找</a>
 <ul>
-<li><a href="#71-%E5%93%88%E5%B8%8C%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">7.1 哈希查找介绍</a>
-<ul>
-<li><a href="#711-%E6%9E%84%E9%80%A0%E5%93%88%E5%B8%8C%E8%A1%A8">7.1.1 构造哈希表</a></li>
-<li><a href="#712-%E8%A7%A3%E5%86%B3%E5%86%B2%E7%AA%81">7.1.2 解决冲突</a></li>
-</ul>
-</li>
+<li><a href="#71-%E5%93%88%E5%B8%8C%E6%9F%A5%E6%89%BE%E4%BB%8B%E7%BB%8D">7.1 哈希查找介绍</a></li>
 <li><a href="#72-%E5%93%88%E5%B8%8C%E6%9F%A5%E6%89%BE%E5%AE%9E%E7%8E%B0">7.2 哈希查找实现</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E5%85%AB-%E5%B0%8F%E7%BB%93">八、小结：如何选择查找算法</a>
+<ul>
 </ul>
 </li>
 </ul>

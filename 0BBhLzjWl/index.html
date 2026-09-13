@@ -127,12 +127,15 @@
           
           <img class="post-feature-header-image" src="/post-images/0BBhLzjWl.png" alt="封面图">
           
-          <p>八大排序，三大查找是《数据结构》当中非常基础的知识点，在这里为了复习顺带总结了一下常见的八种排序算法。</p>
-<p>常见的八大排序算法，它们之间的关系如下：</p>
+          <p>八大排序、三大查找是《数据结构》当中非常基础的知识点，这里为了复习顺带总结一下常见的八种排序算法。评价一个排序算法，通常看四个指标：时间复杂度（最好 / 平均 / 最坏）、空间复杂度（是否原地）、稳定性（相等元素的相对次序是否改变），以及适用场景（数据规模、初始有序程度、是数组还是链表）。</p>
+<p>按基本思想可以把它们分成五类：交换类（冒泡、快速）、插入类（直接插入、希尔）、选择类（简单选择、堆）、归并类（归并）、分配类（基数、计数）。常见的八大排序算法，它们之间的关系如下：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1619339616659.png" alt="" loading="lazy"></figure>
-<p>他们的性能比较：</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1619339624226.png" alt="" loading="lazy"></figure>
-<p>下面，利用 Java 分别将它们进行实现。</p>
+<p>它们的性能比较：</p>
+<figure data-type="image" tabindex="2"><img src="/post-images/1619339624226.png" alt="八大排序算法性能比较" loading="lazy"></figure>
+<p>下面这张对照表把八种排序（外加作为基数排序特例的计数排序）的关键指标集中列出，后文每一节都可以回到这里对照：</p>
+<p><img src="/post-assets/0BBhLzjWl/01-complexity-stability.svg" alt="八大排序算法时间复杂度、空间复杂度与稳定性对照表"></p>
+<p>表中「稳定」指排序前后相等元素的相对次序不变；「原地」指只使用 \(O(1)\) 的额外辅助空间。需要说明的是，希尔排序的时间复杂度与所选增量序列有关，表中给出的是常见增量序列下的量级；快速排序的最坏情况 \(O(n^2)\) 出现在每次划分都极不均衡时，例如对已经有序的序列固定取首元素作枢轴。</p>
+<p>下面，利用 Java 分别将它们进行实现。文中的 8 段代码都补全为可独立编译运行的类，输出为升序结果。</p>
 <h2 id="直接插入排序">直接插入排序</h2>
 <h3 id="算法思想">算法思想：</h3>
 <figure data-type="image" tabindex="3"><img src="/post-images/1619339633556.gif" alt="" loading="lazy"></figure>
@@ -142,7 +145,8 @@
 <li>第一层循环：遍历待比较的所有数组元素</li>
 <li>第二层循环：将本轮选择的元素(selected)与已经排好序的元素(ordered)相比较。</li>
 </ol>
-<p>如果：selected &lt; ordered，那么将二者交换</p>
+<p>如果 selected &lt; ordered，就把 selected 向前挪一位，直到找到不大于它的元素为止。代码中用「先保存待插入元素、再把较大的元素整体后移、最后落位」代替反复交换，可以减少赋值次数。</p>
+<p><b>复杂度与特点：</b>最好情况是序列已经有序，内层循环每次只比较一次就退出，时间复杂度 \(O(n)\)；最坏情况是序列完全逆序，比较和移动次数约为 \(n^2/2\)，时间复杂度 \(O(n^2)\)；平均同样为 \(O(n^2)\)。辅助空间 \(O(1)\)，是原地排序；只有当 \(arr[j] &gt; temp\) 时才后移，相等元素不会被跨越，因此是<b>稳定</b>排序。它适合数据量较小或序列基本有序的场景，很多标准库的排序在区间足够小时也会切换成插入排序。</p>
 <h3 id="代码实现">代码实现</h3>
 <pre><code class="language-java">package sort;
 
@@ -186,7 +190,8 @@ public class DirectInsertionSort {
 <h2 id="希尔排序">希尔排序</h2>
 <h3 id="算法思想-2">算法思想：</h3>
 <figure data-type="image" tabindex="4"><img src="/post-images/1619339644637.png" alt="" loading="lazy"></figure>
-<p>希尔排序的算法思想：将待排序数组按照步长gap进行分组，然后将每组的元素利用直接插入排序的方法进行排序；每次将gap折半减小，循环上述操作；当gap=1时，利用直接插入，完成排序。</p>
+<p>希尔排序（缩小增量排序）的算法思想：将待排序数组按照步长 gap 分组，把下标相差 gap 的元素看作同一组，对每组先用直接插入排序排好；然后不断缩小 gap（常见做法是折半），当 gap = 1 时再做一次完整的直接插入排序，排序完成。</p>
+<p>gap 较大时元素可以一次跨越多步移动，序列的「逆序度」迅速下降；等到 gap = 1 时序列已经接近有序，插入排序接近 \(O(n)\)。这就是希尔排序比直接插入排序快的原因。</p>
 <p>同样的：从上面的描述中我们可以发现：希尔排序的总体实现应该由三个循环完成：</p>
 <ol>
 <li>第一层循环：将gap依次折半，对序列进行分组，直到gap=1</li>
@@ -199,45 +204,39 @@ import java.util.Arrays;
 
 /**
  * @author wuhao
- * @desc 希尔排序
+ * @desc 希尔排序（缩小增量排序）
  * @date 2020-12-02 15:20:43
- * 希尔排序的算法思想：将待排序数组按照步长gap进行分组，然后将每组的元素利用直接插入排序的方法进行排序；每次将gap折半减小，循环上述操作；当gap=1时，利用直接插入，完成排序。
- * 同样的：从上面的描述中我们可以发现：希尔排序的总体实现应该由三个循环完成：
- * 第一层循环：将gap依次折半，对序列进行分组，直到gap=1
- * 第二、三层循环：也即直接插入排序所需要的两次循环。具体描述见上。
+ * 希尔排序的算法思想：将待排序数组按照步长 gap 分组，对每组使用直接插入排序；
+ * 每趟把 gap 折半，直到 gap = 1 时再做一次完整的直接插入排序。
+ * gap &gt; 1 时元素可以按大步长移动，序列的"逆序度"快速下降，
+ * 最后一趟 gap = 1 时序列已接近有序，插入排序接近 O(n)。
  */
 public class HillSort {
     public static void main(String[] args) {
         int[] arr = {12, 32, 22, 7, 48, 3, 5, 6, 8, 24};
         shellSort(arr);
+        System.out.println(Arrays.toString(arr));
     }
 
     private static void shellSort(int[] arr) {
-        for (int step = arr.length / 2; step &gt; 0; step /= 2) {
-//            for (int i = step; i &lt; arr.length; i++) {
-//                int temp = arr[i];
-//                int j;
-//                for (j = i - step; j &gt;= 0 &amp;&amp; arr[j] &gt; temp; j -= step) {
-//                    arr[j + step] = arr[j];
-//                }
-//                arr[j + step] = temp;
-//            }
-            for (int i = step; i &lt; arr.length; i++) {
-                int k=i;
-                for (int j = i-step; j &gt;=0 &amp;&amp; arr[j] &gt; arr[k]; j -= step,k -=step) {
-                   int temp = arr[j];
-                    arr[j]= arr[k];
-                    arr[k]=temp;
+        // gap 依次折半：n/2, n/4, ... , 1
+        for (int gap = arr.length / 2; gap &gt; 0; gap /= 2) {
+            // 对每个分组做直接插入排序：组内相邻元素下标相差 gap
+            for (int i = gap; i &lt; arr.length; i++) {
+                int temp = arr[i];
+                int j = i - gap;
+                while (j &gt;= 0 &amp;&amp; arr[j] &gt; temp) {
+                    arr[j + gap] = arr[j];
+                    j -= gap;
                 }
+                arr[j + gap] = temp;
             }
         }
-
-        System.out.println(Arrays.toString(arr));
-
     }
 }
 
 </code></pre>
+<p><b>复杂度与特点：</b>无论初始序列如何，比较次数都固定为 \(n(n-1)/2\)，所以最好、最坏、平均时间复杂度都是 \(O(n^2)\)；但每趟最多只交换一次，交换次数上界为 \(n-1\)，因此当「交换」的代价远大于「比较」时比冒泡排序划算。辅助空间 \(O(1)\)，是原地排序。它是<b>不稳定</b>的：例如 \([5, 5, 2]\)，第一趟把最小的 2 与第一个 5 交换，两个 5 的相对次序就被破坏了。</p>
 <h2 id="简单选择排序">简单选择排序</h2>
 <h3 id="算法思想-3">算法思想</h3>
 <figure data-type="image" tabindex="5"><img src="/post-images/1619339776440.gif" alt="" loading="lazy"></figure>
@@ -293,16 +292,16 @@ public class SimpleSelectionSort {
     }
 }
 </code></pre>
+<p><b>复杂度与特点：</b>建堆的时间复杂度是 \(O(n)\)（不是 \(O(n\log n)\)，因为越靠下的结点下沉层数越少），之后每趟取出堆顶并恢复堆性质需要 \(O(\log n)\)，共 \(n-1\) 趟，所以最好、最坏、平均时间复杂度都是 \(O(n\log n)\)。辅助空间 \(O(1)\)，是原地排序。堆排序<b>不稳定</b>：堆顶与堆尾交换会把相等元素甩到很远的位置。它适合「既要原地、又要求最坏情况有保障」的场景，也常用于求前 K 大 / 前 K 小元素和优先队列。</p>
 <h2 id="堆排序">堆排序</h2>
 <h3 id="堆的概念">堆的概念</h3>
-<p>堆：本质是一种数组对象。特别重要的一点性质：<b>任意的叶子节点小于（或大于）它所有的父节点</b>。对此，又分为大顶堆和小顶堆，大顶堆要求节点的元素都要大于其孩子，小顶堆要求节点元素都小于其左右孩子，两者对左右孩子的大小关系不做任何要求。</p>
+<p>堆：本质是一种用数组存储的完全二叉树。它的关键性质是<b>父结点与孩子结点之间的大小关系</b>：大顶堆中任意结点的值都不小于其左右孩子的值，小顶堆中任意结点的值都不大于其左右孩子的值。注意方向是「父结点大于 / 小于孩子」，而不是「叶子小于父结点」；堆只约束父子关系，对左右孩子之间的大小不做任何要求。</p>
+<p>用数组存储完全二叉树时，下标之间有固定关系（以下标 0 为根）：结点 i 的左孩子是 \(2i+1\)、右孩子是 \(2i+2\)，父结点是 \((i-1)/2\)；最后一个非叶子结点的下标是 \(n/2-1\)。把结点「下沉」时，只需和较大的那个孩子比较即可。</p>
 <p>利用堆排序，就是基于大顶堆或者小顶堆的一种排序方法。下面，我们通过大顶堆来实现。</p>
 <h3 id="基本思想">基本思想：</h3>
 <p>堆排序可以按照以下步骤来完成：</p>
-<figure data-type="image" tabindex="6"><img src="/post-images/1619339787440.png" alt="" loading="lazy"></figure>
-<p>构建大顶堆.png</p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1619339794481.png" alt="" loading="lazy"></figure>
-<p>Paste_Image.png</p>
+<figure data-type="image" tabindex="6"><img src="/post-images/1619339787440.png" alt="堆排序的整体步骤" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="/post-images/1619339794481.png" alt="大顶堆的构建与调整过程" loading="lazy"></figure>
 <ol>
 <li>构建初始堆，将待排序列构成一个大顶堆(或者小顶堆)，升序大顶堆，降序小顶堆；</li>
 <li>将堆顶元素与堆尾元素交换，并断开(从待排序列中移除)堆尾元素。</li>
@@ -316,15 +315,11 @@ import java.util.Arrays;
 
 /**
  * @author wuhao
- * @desc 堆排序
+ * @desc 堆排序（升序用大顶堆）
  * @date 2020-12-04 09:13:58
- * 堆排序可以按照以下步骤来完成：
- * 首先将序列构建称为大顶堆；
- * （这样满足了大顶堆那条性质：位于根节点的元素一定是当前序列的最大值）
- * 取出当前大顶堆的根节点，将其与序列末尾元素进行交换；
- * （此时：序列末尾的元素为已排序的最大值；由于交换了元素，当前位于根节点的堆并不一定满足大顶堆的性质）
- * 对交换后的n-1个序列元素进行调整，使其满足大顶堆的性质；
- * 重复2.3步骤，直至堆中只有1个元素为止
+ * 1. 建堆：从最后一个非叶子结点 n/2 - 1 开始，自下而上依次下沉，时间复杂度 O(n)；
+ * 2. 排序：把堆顶（当前最大值）与堆尾交换，堆的有效长度减一，再让堆顶下沉恢复堆性质，重复 n-1 次。
+ * 下标关系（0 基）：结点 i 的左孩子 2i+1，右孩子 2i+2，父结点 (i-1)/2。
  */
 public class HeapSort {
     public static void main(String[] args) {
@@ -334,117 +329,53 @@ public class HeapSort {
     }
 
     private static void heapSort(int[] a) {
-        // 首先需要创建根堆
-        for (int i = a.length / 2; i &gt;= 0; i--) { // 从最后一个非终端结点开始，然后一次--
-            HeapAdjust(a, i, a.length);
+        int n = a.length;
+        // 建堆：从最后一个非叶子结点开始，自下而上依次下沉
+        for (int i = n / 2 - 1; i &gt;= 0; i--) {
+            siftDown(a, i, n);
         }
-
-        for (int i = a.length - 1; i &gt; 0; --i) {// 这个循环是把最大值a[0]放到末尾 ，
+        // 排序：堆顶与堆尾交换，有效长度减一，再只对堆顶做一次下沉
+        for (int i = n - 1; i &gt; 0; i--) {
             int temp = a[0];
-            a[0] = a[i]; // 此时i代表最后一个元素
+            a[0] = a[i];
             a[i] = temp;
-            HeapAdjust(a, 0, i );
+            siftDown(a, 0, i);
         }
     }
 
-    // 调整堆
-    private static void HeapAdjust(int[] a, int parent, int m) {// parent代表当前 m代表最后
-        int temp = a[parent]; // 先把a[parent]的值赋给temp保存起来
-        for (int j = 2 * parent; j &lt; m; j *= 2) {
-            if (j+1 &lt; m &amp;&amp; a[j] &lt; a[j + 1]) { // 判断是a[parent]大还是a[j + 1]大，如果a[j + 1]大 就++j，把j换成当前最大
-                j++;
+    /**
+     * 下沉：把 a[parent] 调整到合适位置，length 是当前堆的有效长度
+     */
+    private static void siftDown(int[] a, int parent, int length) {
+        int temp = a[parent];          // 先保存待调整的结点
+        int child = 2 * parent + 1;    // 左孩子
+        while (child &lt; length) {
+            // 右孩子存在且比左孩子大，就选右孩子
+            if (child + 1 &lt; length &amp;&amp; a[child] &lt; a[child + 1]) {
+                child++;
             }
-            if (temp &gt;= a[j]) { // 如果temp中比最大值还大，代表本身就是一个根堆，break
-                break;// 如果大于，就代表当前为大跟对，退出
+            // 父结点已经不小于较大的孩子，堆性质满足，直接结束
+            if (temp &gt;= a[child]) {
+                break;
             }
-            a[parent] = a[j];// 否则就把最大给[parent]
-            parent = j;// 然后把最大下标给parent，继续循环,检查是否因为调整根堆而破坏了子树
+            a[parent] = a[child];      // 孩子上移
+            parent = child;            // 继续向下检查被破坏的子树
+            child = 2 * parent + 1;
         }
-        a[parent] = temp;
+        a[parent] = temp;              // 放到最终位置
     }
-
-    /**
-     * 创建堆，
-     * @param arr 待排序列
-     */
-//    private static void heapSort(int[] arr) {
-//        //创建堆
-//        for (int i = (arr.length - 1) / 2; i &gt;= 0; i--) {
-//            //从第一个非叶子结点从下至上，从右至左调整结构
-//            adjustHeap(arr, i, arr.length);
-//        }
-//
-//        //调整堆结构+交换堆顶元素与末尾元素
-//        for (int i = arr.length - 1; i &gt; 0; i--) {
-//            //将堆顶元素与末尾元素进行交换
-//            int temp = arr[i];
-//            arr[i] = arr[0];
-//            arr[0] = temp;
-//
-//            //重新对堆进行调整
-//            adjustHeap(arr, 0, i);
-//        }
-//    }
-
-    /**
-     * 调整堆
-     * @param arr 待排序列
-     * @param parent 父节点
-     * @param length 待排序列尾元素索引
-     */
-//    private static void adjustHeap(int[] arr, int parent, int length) {
-//        //将temp作为父节点
-//        int temp = arr[parent];
-//        //左孩子
-//        int lChild = 2 * parent + 1;
-//
-//        while (lChild &lt; length) {
-//            //右孩子
-//            int rChild = lChild + 1;
-//            // 如果有右孩子结点，并且右孩子结点的值大于左孩子结点，则选取右孩子结点
-//            if (rChild &lt; length &amp;&amp; arr[lChild] &lt; arr[rChild]) {
-//                lChild++;
-//            }
-//
-//            // 如果父结点的值已经大于孩子结点的值，则直接结束
-//            if (temp &gt;= arr[lChild]) {
-//                break;
-//            }
-//
-//            // 把孩子结点的值赋给父结点
-//            arr[parent] = arr[lChild];
-//
-//            //选取孩子结点的左孩子结点,继续向下筛选
-//            parent = lChild;
-//            lChild = 2 * lChild + 1;
-//        }
-//        arr[parent] = temp;
-//    }
-
 }
 
 </code></pre>
 <h2 id="冒泡排序">冒泡排序</h2>
 <h3 id="基本思想-2">基本思想</h3>
 <figure data-type="image" tabindex="8"><img src="/post-images/1619339811436.gif" alt="" loading="lazy"></figure>
-<p>冒泡排序思路比较简单：</p>
-<ul>
-<li>
+<p>冒泡排序的思路比较简单：反复比较相邻的两个元素，若前者大于后者就交换，每一趟结束后当前未排序部分的最大值会「冒」到末尾。</p>
 <ol>
-<li>将序列当中的左右元素，依次比较，保证右边的元素始终大于左边的元素；</li>
+<li>从序列头部开始，依次比较相邻的两个元素，保证右边的元素不小于左边的元素；一趟结束后，序列最后一个元素一定是当前未排序部分的最大值。</li>
+<li>对剩下的 n-1 个元素重复步骤 1，直到所有元素有序。</li>
+<li>长度为 n 的序列最多需要 n-1 趟。如果某一趟没有发生任何交换，说明序列已经有序，可以提前结束——这正是冒泡排序最好情况为 \(O(n)\) 的原因。</li>
 </ol>
-</li>
-</ul>
-<p>（ 第一轮结束后，序列最后一个元素一定是当前序列的最大值；）</p>
-<ul>
-<li>
-<ol>
-<li>对序列当中剩下的n-1个元素再次执行步骤1。</li>
-<li>对于长度为n的序列，一共需要执行n-1轮比较</li>
-</ol>
-</li>
-</ul>
-<p>（利用while循环可以减少执行次数）</p>
 <h3 id="代码实现-5">代码实现</h3>
 <pre><code class="language-java">package sort;
 
@@ -452,61 +383,58 @@ import java.util.Arrays;
 
 /**
  * @author wuhao
- * @desc 冒泡排序
+ * @desc 冒泡排序（相邻比较 + 提前退出优化）
  * @date 2020-12-02 16:34:57
- * 冒泡排序思路比较简单：
- * 将序列当中的左右元素，依次比较，保证右边的元素始终大于左边的元素；
- * （ 第一轮结束后，序列最后一个元素一定是当前序列的最大值；）
- * 对序列当中剩下的n-1个元素再次执行步骤1。
- * 对于长度为n的序列，一共需要执行n-1轮比较
- * （利用while循环可以减少执行次数）
+ * 冒泡排序思路：每一趟从左到右依次比较相邻的两个元素，逆序就交换，
+ * 一趟结束后当前未排序部分的最大值会"冒"到末尾；
+ * 如果某一趟没有发生任何交换，说明序列已经有序，可以直接退出，此时最好情况为 O(n)。
  */
 public class BubbleSort {
     public static void main(String[] args) {
         int[] arr = {12, 32, 22, 7, 48};
         bubbleSort(arr);
+        System.out.println(Arrays.toString(arr));
     }
 
     private static void bubbleSort(int[] arr) {
-        for (int i = 0; i &lt; arr.length; i++) {
-            for (int j = 0; j &lt; i; j++) {
-                if (arr[i] &lt; arr[j]) {
-                    int temp=arr[j];
-                    arr[j]=arr[i];
-                    arr[i]=temp;
+        for (int i = 0; i &lt; arr.length - 1; i++) {      // 最多 n-1 趟
+            boolean swapped = false;
+            // 每趟只比较到 n-1-i，后面 i 个元素已经有序
+            for (int j = 0; j &lt; arr.length - 1 - i; j++) {
+                if (arr[j] &gt; arr[j + 1]) {              // 相邻比较，逆序则交换
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    swapped = true;
                 }
             }
+            if (!swapped) {                             // 本趟无交换，已经有序
+                break;
+            }
         }
-        System.out.println(Arrays.toString(arr));
     }
 }
 
 </code></pre>
+<p><b>复杂度与特点：</b>平均和最好情况下，每次划分都能把区间大致均分，递归深度 \(\log n\)，时间复杂度 \(O(n\log n)\)；最坏情况（例如对有序序列固定取首元素作枢轴）退化为 \(O(n^2)\)。辅助空间来自递归栈，平均 \(O(\log n)\)、最坏 \(O(n)\)。它是原地排序，但<b>不稳定</b>：划分时的远距离交换会改变相等元素的相对次序。由于常数因子小、缓存友好，它通常是实际最快的比较排序，也是 Java 中 <code>Arrays.sort(int[])</code> 的基础。</p>
 <h2 id="快速排序">快速排序</h2>
 <h3 id="算法思想-4">算法思想：</h3>
 <figure data-type="image" tabindex="9"><img src="/post-images/1619339820307.gif" alt="" loading="lazy"></figure>
-<p>快速排序的基本思想：挖坑填数+分治法</p>
-<ul>
-<li>
+<p>快速排序的基本思想：挖坑填数 + 分治法。</p>
 <ol>
-<li>从序列当中选择一个基准数(pivot)</li>
+<li>从当前区间中选择一个基准数（pivot），这里取区间第一个数；</li>
+<li><code>j</code> 从右往左找比基准小的数，把它填到左边的坑里；<code>i</code> 从左往右找比基准大的数，把它填到右边的坑里；</li>
+<li>当 <code>i == j</code> 时把基准数填回该位置，此时基准左侧都不大于它、右侧都不小于它；</li>
+<li>对左右两个子区间重复以上过程，直到子区间只剩一个元素（递归出口）。</li>
 </ol>
-</li>
-</ul>
-<p>在这里我们选择序列当中第一个数为基准数</p>
-<ul>
-<li>
-<ol>
-<li>将序列当中的所有数依次遍历，比基准数大的位于其右侧，比基准数小的位于其左侧</li>
-<li>重复步骤a.b，直到所有子集当中只有一个元素为止。</li>
-</ol>
-</li>
-</ul>
-<p>用伪代码描述如下：</p>
-<p>1．i =L; j = R; 将基准数挖出形成第一个坑a[i]。</p>
-<p>2．j--由后向前找比它小的数，找到后挖出此数填前一个坑a[i]中。</p>
-<p>3．i++由前向后找比它大的数，找到后也挖出此数填到前一个坑a[j]中。</p>
-<p>4．再重复执行2，3二步，直到i==j，将基准数填入a[i]中</p>
+<p>用伪代码描述如下（下标从 0 开始，区间记作 [left, right]）：</p>
+<p>1. i = left; j = right; 把基准数挖出，a[i] 成为第一个坑；</p>
+<p>2. j 由后向前找比基准小的数，找到后把它填入 a[i]，a[j] 成为新坑；</p>
+<p>3. i 由前向后找比基准大的数，找到后把它填入 a[j]，a[i] 成为新坑；</p>
+<p>4. 重复 2、3 两步，直到 i == j，把基准数填入 a[i]，返回 i 作为划分点。</p>
+<p>下面是一次划分的完整过程示意：</p>
+<p><img src="/post-assets/0BBhLzjWl/02-quick-partition.svg" alt="快速排序一趟划分（挖坑填数）的过程示意"></p>
+<p><b>枢轴选择与最坏情况：</b>固定取区间首元素作枢轴时，如果序列本身已经有序或完全逆序，每次划分只能分出一个元素，递归深度退化为 n，时间复杂度退化为 \(O(n^2)\)。常见改进有三数取中（取首、中、尾三个数的中位数作枢轴）、随机选取枢轴，以及小区间切换插入排序。另外，递归实现的最坏栈深度是 \(O(n)\)，可以改用显式栈的非递归写法，或者先递归较短的一侧、另一侧循环处理，把栈深度控制在 \(O(\log n)\)。</p>
 <h3 id="代码实现-6">代码实现：</h3>
 <pre><code class="language-java">package sort;
 
@@ -515,163 +443,98 @@ import java.util.Stack;
 
 /**
  * @author wuhao
- * @desc 快速排序
+ * @desc 快速排序（挖坑填数 + 分治）
  * @date 2020-12-02 17:08:57
- * 快速排序的基本思想：挖坑填数+分治法
- * 从序列当中选择一个基准数(pivot)
- * 在这里我们选择序列当中第一个数为基准数
- * 将序列当中的所有数依次遍历，比基准数大的位于其右侧，比基准数小的位于其左侧
- * 重复步骤a.b，直到所有子集当中只有一个元素为止。
- * 用伪代码描述如下：
- * 1．i =L; j = R; 将基准数挖出形成第一个坑a[i]。
- * 2．j--由后向前找比它小的数，找到后挖出此数填前一个坑a[i]中。
- * 3．i++由前向后找比它大的数，找到后也挖出此数填到前一个坑a[j]中。
- * 4．再重复执行2，3二步，直到i==j，将基准数填入a[i]中
+ * 快速排序的基本思想：挖坑填数 + 分治。
+ * 1. 从序列当中选择一个基准数(pivot)，这里取区间第一个数；
+ * 2. j 从右往左找比基准小的数填左坑，i 从左往右找比基准大的数填右坑；
+ * 3. i == j 时把基准填回该位置，此时左侧都不大于基准，右侧都不小于基准；
+ * 4. 对左右两个子区间重复以上过程，直到子区间只剩一个元素。
  */
 public class QuickSort {
     public static void main(String[] args) {
         int[] arr = {12, 32, 22, 7, 48, 3, 35, 6, 8, 42};
-//        quickSort(arr, 0, arr.length - 1);
-        System.out.println(Arrays.toString(arr));
+        int[] copy = arr.clone();
 
-        /*-----------非递归实现----------*/
-        sort(arr, 0, arr.length - 1);
-        System.out.println(Arrays.toString(arr));
+        quickSort(arr, 0, arr.length - 1);
+        System.out.println("递归：" + Arrays.toString(arr));
+
+        quickSortByStack(copy, 0, copy.length - 1);
+        System.out.println("非递归：" + Arrays.toString(copy));
     }
 
+    /** 递归实现 */
     private static void quickSort(int[] arr, int left, int right) {
-        if (left &gt; right) {
+        if (left &gt;= right) {                 // 区间为空或只有一个元素
             return;
         }
-        // base中存放基准数
-        int base = arr[left];
+        int pivot = partition(arr, left, right);
+        quickSort(arr, left, pivot - 1);
+        quickSort(arr, pivot + 1, right);
+    }
+
+    /** 一趟划分：挖坑填数，返回基准最终所在的下标 */
+    private static int partition(int[] arr, int left, int right) {
+        int base = arr[left];                // 挖出基准，a[left] 成为第一个坑
         int i = left, j = right;
-        while (i != j) {
-            // 顺序很重要，先从右边开始往左找，直到找到比base值小的数
-            while (arr[j] &gt;= base &amp;&amp; i &lt; j) {
+        while (i &lt; j) {
+            // 先从右往左找比 base 小的数
+            while (i &lt; j &amp;&amp; arr[j] &gt;= base) {
                 j--;
             }
-
-            // 再从左往右边找，直到找到比base值大的数
-            while (arr[i] &lt;= base &amp;&amp; i &lt; j) {
+            if (i &lt; j) {
+                arr[i] = arr[j];             // 填左坑，a[j] 成为新坑
+            }
+            // 再从左往右找比 base 大的数
+            while (i &lt; j &amp;&amp; arr[i] &lt;= base) {
                 i++;
             }
-
-            // 上面的循环结束表示找到了位置或者(i&gt;=j)了，交换两个数在数组中的位置
             if (i &lt; j) {
-                int tmp = arr[i];
-                arr[i] = arr[j];
-                arr[j] = tmp;
+                arr[j] = arr[i];             // 填右坑，a[i] 成为新坑
             }
         }
-        // 将基准数放到中间的位置（基准数归位）
-        arr[left] = arr[i];
-        arr[i] = base;
-
-        // 递归，继续向基准的左右两边执行和上面同样的操作
-        // i的索引处为上面已确定好的基准值的位置，无需再处理
-        quickSort(arr, left, i - 1);
-        quickSort(arr, i + 1, right);
-
+        arr[i] = base;                       // i == j，基准填回最后一个坑
+        return i;
     }
 
-
-    /*-----------------------------非递归实现------------------------------*/
-    public static void sort(int[] arr, int left, int right) {
-        int privot, top, last;
-        Stack&lt;Integer&gt; s = new Stack&lt;&gt;();
-        privot = QuickSort(arr, left, right);
-        if (privot &gt; left + 1) {
-            s.push(left);
-            s.push(privot - 1);
-
-        }
-        if (privot &lt; right - 1) {
-            s.push(privot + 1);
-            s.push(right);
-        }
-        while (!s.empty()) {
-            top = s.pop();
-            last = s.pop();
-            privot = QuickSort(arr, last, top);
-            if (privot &gt; last + 1) {
-                s.push(last);
-                s.push(privot - 1);
+    /** 非递归实现：用栈保存待处理区间，避免递归过深时栈溢出 */
+    private static void quickSortByStack(int[] arr, int left, int right) {
+        Stack&lt;Integer&gt; stack = new Stack&lt;&gt;();
+        stack.push(left);
+        stack.push(right);
+        while (!stack.isEmpty()) {
+            int r = stack.pop();
+            int l = stack.pop();
+            if (l &gt;= r) {
+                continue;
             }
-            if (privot &lt; top - 1) {
-                //System.out.println(top);
-                s.push(privot + 1);
-                s.push(top);
-            }
+            int pivot = partition(arr, l, r);
+            stack.push(l);
+            stack.push(pivot - 1);
+            stack.push(pivot + 1);
+            stack.push(r);
         }
-    }
-
-    public static int QuickSort(int[] arr, int left, int right) {
-        int privot = left;
-        while (left &lt; right) {
-            while ((arr[privot] &lt; arr[right]) &amp; left &lt; right) {
-                right--;
-            }
-            int temp = arr[privot];
-            arr[privot] = arr[right];
-            arr[right] = temp;
-            privot = right;
-
-            while ((arr[privot] &gt; arr[left]) &amp; left &lt; right) {
-                left++;
-            }
-            temp = arr[privot];
-            arr[privot] = arr[left];
-            arr[left] = temp;
-            privot = left;
-        }
-        return privot;
     }
 }
 
 </code></pre>
+<p><b>复杂度与特点：</b>递归深度为 \(\log n\)，每层合并的总代价是 \(O(n)\)，所以最好、最坏、平均时间复杂度都是 \(O(n\log n)\)，性能非常稳定。辅助数组需要 \(O(n)\) 空间，属于非原地排序；但合并时「小于号优先取左段」，相等元素不会跨越，因此它是<b>稳定</b>的。归并排序不需要随机访问，很适合链表排序，也是外部排序（大文件多路归并）的基础。</p>
 <h2 id="归并排序">归并排序</h2>
 <h3 id="算法思想-5">算法思想：</h3>
 <figure data-type="image" tabindex="10"><img src="/post-images/1619339833766.png" alt="" loading="lazy"></figure>
-<ul>
-<li>
+<p>归并排序是建立在归并操作上的一种有效的排序算法，它是<b>分治法（Divide and Conquer）</b>的典型应用。它的基本操作是：把待排序列不断折半拆分，直到每个子序列只有一个元素（单个元素天然有序），再把这些有序子序列两两合并，最终得到完全有序的序列。</p>
 <ol>
-<li>归并排序是建立在归并操作上的一种有效的排序算法，该算法是采用0的一个典型的应用。它的基本操作是：将已有的子序列合并，达到完全有序的序列；即先使每个子序列有序，再使子序列段间有序。</li>
-<li>归并排序其实要做两件事：</li>
+<li><b>分解</b>：把当前区间折半拆成左右两段，递归处理；</li>
+<li><b>合并</b>：把两个相邻且各自有序的子序列合并成一个有序序列。</li>
 </ol>
-</li>
-<li>
-<ul>
-<li>分解----将序列每次折半拆分</li>
-<li>合并----将划分后的序列段两两排序合并</li>
-</ul>
-</li>
-</ul>
-<p>因此，归并排序实际上就是两个操作，拆分+合并</p>
-<ul>
-<li>
+<p>因此，归并排序实际上就是两个操作：拆分 + 合并。</p>
+<p><b>如何合并？</b>设 L[first...mid] 为第一段、L[mid+1...last] 为第二段，且两段都已有序，现在要把它们合并成 L[first...last] 且仍然有序。</p>
 <ol>
-<li>如何合并？</li>
+<li>用两个指针分别指向两段的开头，依次比较，把较小的元素放入临时数组 temp[]；</li>
+<li>当某一段的元素全部取完后，把另一段剩下的元素依次复制到 temp[]；</li>
+<li>最后把 temp[] 中的元素复制回 L[first...last]，此时该区间有序。</li>
 </ol>
-</li>
-</ul>
-<p>L[first...mid]为第一段，L[mid+1...last]为第二段，并且两端已经有序，现在我们要将两端合成达到L[first...last]并且也有序。</p>
-<ul>
-<li>
-<ul>
-<li>首先依次从第一段与第二段中取出元素比较，将较小的元素赋值给temp[]</li>
-<li>重复执行上一步，当某一段赋值结束，则将另一段剩下的元素赋值给temp[]</li>
-<li>此时将temp[]中的元素复制给L[]，则得到的L[first...last]有序</li>
-</ul>
-</li>
-<li>
-<ol>
-<li>如何分解？</li>
-</ol>
-</li>
-</ul>
-<p>在这里，我们采用递归的方法，首先将待排序列分成A,B两组；然后重复对A、B序列</p>
-<p>分组；直到分组后组内只有一个元素，此时我们认为组内所有元素有序，则分组结束。</p>
+<p><b>如何分解？</b>这里采用递归的方法：把待排序列分成 A、B 两组，再分别对 A、B 重复分组，直到每组只剩一个元素，此时认为组内所有元素有序，分解结束。</p>
 <h3 id="代码实现-7">代码实现</h3>
 <pre><code class="language-java">package sort;
 
@@ -736,19 +599,18 @@ public class MergeSort {
 }
 
 </code></pre>
+<p><b>复杂度与特点：</b>每一趟分配与收集都要处理全部 n 个元素并遍历 k 个桶，共 d 趟（d 为最大值的位数），所以时间复杂度为 \(O(d(n+k))\)；当 d 为常数、k 也不大时接近线性 \(O(n)\)，这也是它快的原因。辅助空间为桶和临时数组，\(O(n+k)\)，属于非原地排序。基数排序<b>稳定</b>（前提是每一位的收集都保持稳定），但它只在关键字能按位拆分时可用。</p>
 <h2 id="基数排序">基数排序</h2>
 <h3 id="算法思想-6">算法思想</h3>
 <figure data-type="image" tabindex="11"><img src="/post-images/1619339840696.gif" alt="" loading="lazy"></figure>
-<ul>
-<li>
+<p>基数排序通过序列中各个元素的值，对 N 个元素进行若干趟「分配」与「收集」来实现排序。</p>
 <ol>
-<li>基数排序：通过序列中各个元素的值，对排序的N个元素进行若干趟的“分配”与“收集”来实现排序。</li>
+<li><b>分配</b>：取出 L[i] 中的元素，确定它当前位（第一趟是个位）上的数字，按该数字把它放入序号相同的桶中；</li>
+<li><b>收集</b>：所有元素都分配完后，按桶的序号从小到大依次把元素收集起来，形成新的待排序列 L[]；</li>
+<li>对新形成的序列 L[] 重复「分配 + 收集」，依次处理十位、百位……直到最高位处理完毕，排序结束。</li>
 </ol>
-</li>
-</ul>
-<p>分配：我们将L[i]中的元素取出，首先确定其个位上的数字，根据该数字分配到与之序号相同的桶中</p>
-<p>收集：当序列中所有的元素都分配到对应的桶中，再按照顺序依次将桶中的元素收集形成新的一个待排序列L[ ]</p>
-<p>对新形成的序列L[]重复执行分配和收集元素中的十位、百位...直到分配完该序列中的最高位，则排序结束</p>
+<p>基数排序<b>必须稳定</b>：每一位的收集顺序都依赖上一趟的相对次序，只有稳定地收集，高位排好的顺序才不会被破坏。以非负整数的 LSD（最低位优先）为例，先按个位分桶收集，再按十位、百位依次进行，若干趟之后整个序列有序。</p>
+<p><b>适用条件：</b>基数排序只适合关键字可以「按位拆分」、且每一位取值范围有限的数据，最典型的是非负整数，也可以是定长字符串或日期。它不进行比较，因此不受比较排序 \(O(n\log n)\) 下界的限制；但如果数据值域跨度极大（例如只有两个数却相差 \(10^9\)），位数 d 很大，反而比快速排序慢。对负数需要先统一加上偏移量，或者单独处理符号位。</p>
 <h3 id="代码实现-8">代码实现</h3>
 <pre><code class="language-java">package sort;
 
@@ -815,9 +677,15 @@ public class BaseSort {
 }
 </code></pre>
 <h2 id="后记">后记</h2>
-<p>写完之后运行了一下时间比较：</p>
-<p>从运行结果上来看，堆排序、归并排序、基数排序是真的快。</p>
-<p>对于快速排序迭代深度超过的问题，可以将考虑将快排通过非递归的方式进行实现。</p>
+<p>写完之后运行了一下时间比较，从结果上来看，堆排序、归并排序、基数排序都很快，与上面的复杂度分析一致。对于快速排序递归深度过深的问题，可以考虑把它改写成非递归（用显式栈保存待处理区间）的形式，本文的示例代码已经给出了两种写法，实测输出一致。</p>
+<p><b>实际选型时的建议：</b></p>
+<ul>
+<li>数据量很小（几十个元素以内）或序列基本有序：直接用插入排序，常数小、实现简单。</li>
+<li>要求稳定、且可以接受 \(O(n)\) 的额外空间：选归并排序；对链表排序时它几乎是首选。</li>
+<li>要求原地、且最坏情况也要有保障：选堆排序；只要求平均最快、不介意最坏 \(O(n^2)\)：选快速排序。</li>
+<li>关键字是小范围整数：计数排序最快；位数不多的非负整数：基数排序。</li>
+<li>工程中一般不自己手写排序：Java 的 <code>Arrays.sort(int[])</code> 使用双轴快速排序，<code>Arrays.sort(Object[])</code> 与 <code>Collections.sort</code> 使用 TimSort（归并 + 插入，稳定排序）。</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
