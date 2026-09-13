@@ -318,6 +318,7 @@
 <li>收到 TC 的分支提交请求，把请求放入一个异步任务的队列中，马上返回提交成功的结果给 TC。</li>
 <li>异步任务阶段的分支提交请求将异步和批量地删除相应 UNDO_LOG 记录。</li>
 </ol>
+<p><img src="/post-assets/XFKzbOO8H/05-at-phase-two-mechanism.svg" alt="AT 模式一阶段本地事务与二阶段提交/回滚的工作机制"></p>
 <h3 id="tp-角色与全局事务流程">TP 角色与全局事务流程</h3>
 <p>Seata 的全局事务由三个角色协作完成，三者通过长连接交换 RPC 消息：</p>
 <ul>
@@ -336,11 +337,11 @@
 <p><strong>3. 其他高频问题</strong></p>
 <ul>
 <li>表必须有主键：AT 依赖主键定位前后镜像，无主键的表无法生成可用的回滚语句。</li>
-<li>后镜像的定位：对 <code>update ... where 非主键条件</code>，Seata 需要能唯一确定被修改的行，否则回滚范围可能扩大。</li>
+<li>全局锁粒度：全局锁的锁键取自更新条件里的主键（或唯一索引）。对 <code>update ... where 非主键条件</code>，Seata 提取不到行级锁键，锁键会退化为表名，导致该表的写操作互斥、并发度下降，因此更新条件应尽量带上主键或唯一索引。</li>
 <li>全局锁重试：拿不到全局锁时默认按 <code>client.rm.lock.retry-interval</code>（默认 10 ms）重试 <code>client.rm.lock.retry-times</code>（默认 30 次），超出后回滚本地事务并释放本地锁，避免长时间占用连接。</li>
 <li>读隔离：只有 <code>SELECT ... FOR UPDATE</code> 会被代理并申请全局锁，普通 <code>SELECT</code> 读到的是未提交数据，对账、金额类场景要自行加锁读取。</li>
 <li>undo_log 表：需要业务库提前建表并授权；<code>client.undo.log-table</code> 可改名，<code>client.undo.data-validation</code> 控制是否做镜像校验。</li>
-<li>TC 高可用：单机 file 存储模式仅适合开发环境，生产环境应使用 <code>db</code> 或 <code>redis</code> 存储模式部署 TC 集群。</li>
+<li>TC 高可用：单机 <code>file</code> 存储模式仅适合开发环境，生产环境应使用 <code>db</code> 存储模式部署 TC 集群（Seata 1.5+ 另提供 <code>raft</code> 高可用模式；早期版本的 <code>redis</code> 存储模式已在新版本中移除）。</li>
 </ul>
 <p>核心配置示例（<code>file.conf</code> / <code>registry.conf</code> 可被 application.yml 覆盖）：</p>
 <pre><code class="language-yaml">seata:
@@ -370,6 +371,7 @@
   registry:
     type: file
 </code></pre>
+<p><img src="/post-assets/XFKzbOO8H/04-at-rollback-pitfalls.svg" alt="AT 回滚的异常场景：脏写校验、空回滚、悬挂与防悬挂设计"></p>
 <h3 id="事务模式对比">事务模式对比：AT / TCC / SAGA / XA</h3>
 <p>四种模式解决的是不同约束下的问题，选择依据主要是「一致性强度、业务改造成本、资源是否支持事务型」：</p>
 <table>
@@ -427,7 +429,7 @@
 </tr>
 </tbody>
 </table>
-<p><img src="/post-assets/XFKzbOO8H/04-at-rollback-pitfalls.svg" alt="AT 回滚的异常场景：脏写校验、空回滚、悬挂与防悬挂设计"></p>
+<p><img src="/post-assets/XFKzbOO8H/06-transaction-mode-selection.svg" alt="Seata 四种事务模式（AT / TCC / SAGA / XA）的选型要点对比"></p>
 <h3 id="与其他最终一致方案的关系">与其他最终一致方案的关系</h3>
 <ul>
 <li><strong>本地消息表</strong>：业务与消息记录写在同一个本地事务里，再由定时任务投递消息。实现简单、不依赖 TC，但需要自己处理投递重试、幂等与消息堆积，且没有全局锁和统一回滚视图。</li>
@@ -497,7 +499,7 @@ CREATE TABLE `undo_log` (
 <li>二阶段 commit 或 rollback 行为</li>
 </ul>
 <figure data-type="image" tabindex="5"><img src="/post-images/1659011856143.png" alt="" loading="lazy"></figure>
-<p>根据两阶段行为模式的不同，我们将分支事务划分为 <strong>「Automatic (Branch) Transaction Mode」</strong> 和 <strong>「Manual (Branch) Transaction Mode」</strong>.</p>
+<p>根据两阶段行为模式的不同，我们将分支事务划分为 <strong>「Automatic (Branch) Transaction Mode」</strong> 和 <strong>「Manual (Branch) Transaction Mode」</strong>。</p>
 <p><strong>AT 模式</strong>是 Automatic (Branch) Transaction Mode 的缩写，基于 <strong>「支持本地 ACID 事务」</strong> 的 <strong>「关系型数据库」</strong>，由 Seata 自动完成 SQL 解析、前后镜像记录与反向补偿，业务代码几乎零侵入：</p>
 <ul>
 <li>一阶段 prepare 行为：在本地事务中，一并提交业务数据更新和相应回滚日志记录。</li>
@@ -511,6 +513,7 @@ CREATE TABLE `undo_log` (
 <li>二阶段 rollback 行为：调用 <strong>「自定义」</strong> 的 rollback 逻辑。</li>
 </ul>
 <p>所谓 TCC 模式，是指支持把 <strong>「自定义」</strong> 的分支事务纳入到全局事务的管理中。</p>
+<p>也就是说，TCC 把 AT 中由框架自动完成的一阶段 prepare 与二阶段 commit / rollback，改由业务实现为三个显式接口：Try（一阶段资源检查与预留）、Confirm（二阶段确认，真正提交预留资源）、Cancel（二阶段取消，释放预留资源）。三者都必须幂等，并配合事务控制表解决空回滚与悬挂问题（见上文「常见坑与配置要点」）。</p>
 <h2 id="saga-模式">Saga 模式</h2>
 <p>Saga 模式是 Seata 提供的长事务解决方案，在 Saga 模式中，业务流程中每个参与者都提交本地事务，当出现某一个参与者失败则补偿前面已经成功的参与者，一阶段正向服务和二阶段补偿服务都由业务开发实现。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1659011864916.png" alt="" loading="lazy"></figure>

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="480" viewBox="0 0 900 480"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Seata AT 模式一阶段与二阶段工作机制</title>
+  <rect width="900" height="480" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">AT 模式：一阶段本地事务与二阶段补偿</text>
+
+  <rect x="30" y="55" width="400" height="392" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="230" y="80" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">一阶段：业务数据与回滚日志同一本地事务</text>
+
+  <rect x="50" y="95" width="360" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="230" y="121" font-size="12" fill="#1f2b38" text-anchor="middle">解析 SQL：类型 / 表 / WHERE 条件</text>
+  <line x1="230" y1="137" x2="230" y2="151" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="50" y="153" width="360" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="230" y="179" font-size="12" fill="#1f2b38" text-anchor="middle">查询前镜像 beforeImage（按条件定位）</text>
+  <line x1="230" y1="195" x2="230" y2="209" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="50" y="211" width="360" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="230" y="237" font-size="12" fill="#1f2b38" text-anchor="middle">执行业务 SQL，更新业务数据</text>
+  <line x1="230" y1="253" x2="230" y2="267" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="50" y="269" width="360" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="230" y="295" font-size="12" fill="#1f2b38" text-anchor="middle">查询后镜像 afterImage（按主键定位）</text>
+  <line x1="230" y1="311" x2="230" y2="325" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="50" y="327" width="360" height="42" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="230" y="353" font-size="12" fill="#1f2b38" text-anchor="middle">写入 undo_log，申请该行全局锁</text>
+  <line x1="230" y1="369" x2="230" y2="383" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="50" y="385" width="360" height="42" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="230" y="411" font-size="12" fill="#1f2b38" text-anchor="middle">本地提交，释放本地锁并上报 TC</text>
+
+  <rect x="470" y="55" width="400" height="392" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="670" y="80" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">二阶段：TC 驱动分支提交或回滚</text>
+
+  <rect x="490" y="105" width="360" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="670" y="132" font-size="12" fill="#1f2b38" text-anchor="middle">分支提交：入异步队列后立即返回 TC</text>
+  <line x1="670" y1="149" x2="670" y2="167" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="490" y="169" width="360" height="44" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="670" y="196" font-size="12" fill="#1f2b38" text-anchor="middle">异步批量删除 undo_log 记录</text>
+
+  <rect x="490" y="245" width="360" height="44" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="670" y="272" font-size="12" fill="#1f2b38" text-anchor="middle">分支回滚：校验后镜像，防止脏写</text>
+  <line x1="670" y1="289" x2="670" y2="307" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="490" y="309" width="360" height="44" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="670" y="336" font-size="12" fill="#1f2b38" text-anchor="middle">按前镜像生成反向补偿 SQL 并提交</text>
+  <line x1="670" y1="353" x2="670" y2="371" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="490" y="373" width="360" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="670" y="400" font-size="12" fill="#1f2b38" text-anchor="middle">补偿失败则按策略重试直至成功</text>
+</svg>
