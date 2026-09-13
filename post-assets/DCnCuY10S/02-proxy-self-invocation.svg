@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="ar2" markerWidth="10" markerHeight="10" refX="9" refY="3.2" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3.2 L0,6.4 z" fill="#5b6b7c"/>
+    </marker>
+    <marker id="ar2b" markerWidth="10" markerHeight="10" refX="9" refY="3.2" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3.2 L0,6.4 z" fill="#2f6fd0"/>
+    </marker>
+    <marker id="ar2r" markerWidth="10" markerHeight="10" refX="9" refY="3.2" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3.2 L0,6.4 z" fill="#e08a1e"/>
+    </marker>
+  </defs>
+  <rect width="900" height="470" fill="#ffffff"/>
+  <text x="450" y="32" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">代理调用链：从外部调用到目标方法，及自调用如何绕过它</text>
+
+  <!-- external call path -->
+  <rect x="40" y="62" width="820" height="128" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="62" y="87" font-size="13" font-weight="700" fill="#5b6b7c">① 外部调用：每一层代理都会先走完自己的切面链，再转发给目标</text>
+
+  <rect x="60" y="106" width="164" height="62" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="142" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">调用方 call()</text>
+  <text x="142" y="152" text-anchor="middle" font-size="11" fill="#5b6b7c">通过被注入的代理引用</text>
+
+  <line x1="224" y1="137" x2="270" y2="137" stroke="#2f6fd0" stroke-width="1.6" marker-end="url(#ar2b)"/>
+
+  <rect x="276" y="106" width="180" height="62" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="366" y="128" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">代理对象 Proxy</text>
+  <text x="366" y="147" text-anchor="middle" font-size="11" fill="#5b6b7c">JdkDynamicAopProxy /</text>
+  <text x="366" y="162" text-anchor="middle" font-size="11" fill="#5b6b7c">CglibAopProxy</text>
+
+  <line x1="456" y1="137" x2="502" y2="137" stroke="#2f6fd0" stroke-width="1.6" marker-end="url(#ar2b)"/>
+
+  <rect x="508" y="106" width="180" height="62" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="598" y="128" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">ReflectiveMethodInvocation</text>
+  <text x="598" y="147" text-anchor="middle" font-size="11" fill="#5b6b7c">按 order 排序的</text>
+  <text x="598" y="162" text-anchor="middle" font-size="11" fill="#5b6b7c">MethodInterceptor 链</text>
+
+  <line x1="688" y1="137" x2="734" y2="137" stroke="#2f6fd0" stroke-width="1.6" marker-end="url(#ar2b)"/>
+
+  <rect x="740" y="106" width="100" height="62" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="790" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">目标方法</text>
+  <text x="790" y="152" text-anchor="middle" font-size="11" fill="#5b6b7c">target.a()</text>
+
+  <!-- self invocation -->
+  <rect x="40" y="206" width="820" height="136" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="62" y="231" font-size="13" font-weight="700" fill="#1f2b38">② 自调用：目标对象内部的 this.b() 不经过任何代理</text>
+
+  <rect x="60" y="248" width="150" height="62" rx="8" fill="#ffffff" stroke="#e08a1e"/>
+  <text x="135" y="272" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">call() → proxy.a()</text>
+  <text x="135" y="292" text-anchor="middle" font-size="11" fill="#5b6b7c">代理切面生效</text>
+
+  <line x1="210" y1="279" x2="256" y2="279" stroke="#e08a1e" stroke-width="1.6" marker-end="url(#ar2r)"/>
+
+  <rect x="262" y="248" width="150" height="62" rx="8" fill="#ffffff" stroke="#e08a1e"/>
+  <text x="337" y="272" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">target.a()</text>
+  <text x="337" y="292" text-anchor="middle" font-size="11" fill="#5b6b7c">已进入真实对象</text>
+
+  <text x="62" y="322" font-size="12" fill="#5b6b7c">b() 上的事务、日志、鉴权全部失效；事务尤其危险：a() 内 b() 的写操作不在同一事务边界里。</text>
+  <rect x="508" y="248" width="332" height="62" rx="8" fill="#ffffff" stroke="#e08a1e"/>
+  <text x="528" y="272" font-size="11.5" fill="#1f2b38">this.b() 直接进入真实对象，代理被跳过</text>
+  <text x="528" y="292" font-size="11.5" fill="#1f2b38">→ 代理链上的切面一个都不会触发</text>
+
+  <!-- solutions -->
+  <rect x="40" y="358" width="820" height="88" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="62" y="383" font-size="13" font-weight="700" fill="#1f2b38">③ 三种解法：都必须让调用重新穿过代理</text>
+  <text x="62" y="406" font-size="12" fill="#1f2b38">AopContext.currentProxy()　暴露当前代理（需 @EnableAspectJAutoProxy(exposeProxy = true)），再调 ((X)b).b()</text>
+  <text x="62" y="424" font-size="12" fill="#1f2b38">注入自身　@Autowired 自己（或 ObjectProvider / ApplicationContext.getBean），从容器拿到的引用天然是代理</text>
+  <text x="62" y="442" font-size="12" fill="#1f2b38">AspectJ 编译期/加载期织入　把通知织进字节码本身，不存在代理边界，自调用也生效（需 aspectj-maven-plugin 或 -javaagent）</text>
+</svg>

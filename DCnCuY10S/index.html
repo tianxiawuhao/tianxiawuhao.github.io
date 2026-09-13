@@ -125,7 +125,18 @@
           
           <img class="post-feature-header-image" src="/post-images/DCnCuY10S.png" alt="封面图">
           
-          <p>切面链实现</p>
+          <p>业务代码里最容易被写死的，是「上传前记日志、上传前鉴权、上传后清理」这类横切逻辑。把它们逐个 <code>if</code> 进业务方法，改一次需求就要动所有入口。更干净的做法是把手写的切面串成一条链：每个切面只管自己的事，调用完 <code>chain.next()</code> 把控制权交出去，业务逻辑作为链尾的回调被包在最里面。本文先讲清这套 <strong>切面链</strong> 的实现，再对照 Spring AOP 的 <strong>Advisor 匹配与排序</strong>、动态代理的选择条件，以及自调用绕过代理这类真实踩坑点。</p>
+
+<h2 id="一-切面链要解决什么问题">一、切面链要解决什么问题</h2>
+<p>目标很朴素：一个服务方法被调用时，允许任意多个「切面」按顺序插手，且插手的数量和顺序可以在运行时增删。为此需要三个角色：</p>
+<ul>
+<li><strong>切面接口</strong>：约定切面如何被调用，以及如何把调用继续向下传递；</li>
+<li><strong>切面链</strong>：持有切面集合的迭代器，负责「把请求交给下一个切面」；</li>
+<li><strong>链尾回调</strong>：真正的业务逻辑，链走完后执行。</li>
+</ul>
+<p>这三者构成的其实是责任链模式的一个变体：与前缀式责任链不同的是，这里的每个切面在调用 <code>chain.next()</code> 之后还能继续执行代码，因此它天然具备「环绕通知」的能力 —— <code>next()</code> 之前是前置逻辑，<code>next()</code> 之后是后置逻辑。</p>
+
+<h2 id="二-切面接口的设计">二、切面接口的设计</h2>
 <pre><code class="language-java">/**
  * 服务切面接口，用来干预服务
  */
@@ -140,6 +151,9 @@ public interface ServiceAspect {
     }
 }
 </code></pre>
+<p>关键点在于 <code>serviceAround</code> 是一个 <code>default</code> 方法，默认实现就是「我什么都不做，直接交给下一个」。这样只关心部分逻辑的切面不必实现全部方法，接口后续新增能力也不会立刻打破已有实现类。</p>
+
+<h2 id="三-切面链的实现">三、切面链的实现</h2>
 <pre><code class="language-java">/**
  * 服务的切面调用链
  */
@@ -168,6 +182,10 @@ public class ServiceAspectChain {
     }
 
 </code></pre>
+<p>这里有两个细节值得说明。<strong>第一，<code>ServiceAspectChain</code> 只持有一个 <code>Iterator&lt;ServiceAspect&gt;</code>，链的推进状态就藏在这个迭代器里</strong>：<code>next()</code> 每被调用一次就前进一格，走不动时执行 <code>callback</code>。这意味着链是<strong>一次性</strong>的，同一个实例第二次 <code>next()</code> 会直接掉到业务回调，前面所有切面都被跳过。所以正确用法是每次服务调用都 <code>new</code> 一条链，而切面对象本身做成无状态单例，这与 Spring 中 <code>@Aspect</code> 默认 singleton 的约束是同一个道理。</p>
+<p><strong>第二，数据只能顺着 <code>ServiceInfo</code> 或显式上下文传递</strong>。<code>LogServiceAspect</code> 在调用前后打印日志时，接收的是链传递下来的同一个 <code>serviceInfo</code>，切面无法把自己的临时状态挂在链上并指望下一个切面读到 —— 链里只有迭代器和回调两个字段，没有请求级状态槽。这既避免了并发串数据，也限制了下游切面对参数的重写能力：想改参数，只能在 <code>next()</code> 之前构造新的 <code>serviceInfo</code> 传入。</p>
+
+<h2 id="四-链尾回调与业务侧用法">四、链尾回调与业务侧用法</h2>
 <pre><code class="language-java">/**
  * 切面调用链结束回调
  */
@@ -184,6 +202,9 @@ new ServiceAspectChain(aspectList,(_serviceInfo) -&gt; {
     return _serviceInfo;
 }).next(serviceInfo);
 </code></pre>
+<p>业务侧只认识两件事：切面列表和「真正的活儿」。把业务逻辑写成 lambda 传给 <code>ServiceAspectChain</code>，再调用一次 <code>next()</code> 启动整条链，调用方完全不需要知道中间有几个切面。</p>
+
+<h2 id="五-一个具体切面-日志">五、一个具体切面：日志</h2>
 <pre><code class="language-java">/**
  * 接口实现,使用切面打印日志
  */
@@ -201,6 +222,31 @@ public class LogServiceAspect implements ServiceAspect {
 
 }
 </code></pre>
+<h2 id="六-两处容易忽略的实现缺陷">六、两处容易忽略的实现缺陷</h2>
+<p>上面两段代码直接抄进项目是编译不过的，问题出在两个很小的地方。</p>
+<p><strong>其一是多余的右花括号。</strong><code>ServiceAspectChain</code> 类体内已经用 <code>next()</code> 方法的右括号收尾，末尾又多出一个 <code>}</code>，编译器会直接报「class, interface, or enum expected」。删掉即可。</p>
+<p><strong>其二是大小写不一致。</strong><code>ServiceAspect</code> 接口和链中声明的返回类型都是 <code>ServiceInfo</code>，而 <code>LogServiceAspect</code> 的实现签名写成了小写的 <code>serviceInfo</code>。Java 是大小写敏感的语言，这既不是合法的返回类型，也不构成对接口方法的重写 —— 即使补上 <code>@Override</code>，编译期就会失败。修正后的实现如下：</p>
+<pre><code class="language-java">/**
+ * 接口实现,使用切面打印日志（修正版）
+ */
+@Slf4j
+@Component
+public class LogServiceAspect implements ServiceAspect {
+
+    @Override
+    public ServiceInfo serviceAround(ServiceAspectChain chain, ServiceInfo serviceInfo) {
+        log.info("上传文件 before -&gt; {}", serviceInfo);
+        // 关键：把控制权交给下一个切面，返回值可能已被下游改写
+        ServiceInfo result = chain.next(serviceInfo);
+        log.info("上传文件 after -&gt; {}", result);
+        return result;
+    }
+}
+</code></pre>
+<p>这里刻意把返回值单独接收再打印，而不是像原实现那样把 <code>chain.next()</code> 的结果重新赋给入参 <code>serviceInfo</code>。两者行为一致，但复用入参名会让「前置日志打印的是入参、后置日志打印的是返回值」这一事实变得难以察觉，排障时容易误判。</p>
+
+<h2 id="七-运行时增删切面与顺序">七、运行时增删切面与顺序</h2>
+<p>切面列表用 <code>CopyOnWriteArrayList</code> 承载，是为了让「服务调用正在遍历切面」与「配置中心热更新增删切面」这两件事可以并发进行而不抛 <code>ConcurrentModificationException</code>。它的语义是写时复制：每次增删都复制整个数组，读操作无锁。切面的数量通常是十几个量级、变更频率极低，这个取舍完全合理；反过来，如果把它用在频繁写入的场景，复制开销就会失控。</p>
 <pre><code class="language-java">{
     //获得切面 List
     List&lt;ServiceAspect&gt; list = new CopyOnWriteArrayList&lt;&gt;();
@@ -216,28 +262,144 @@ public class LogServiceAspect implements ServiceAspect {
     list.removeIf(item -&gt; item instanceof LogServiceAspect);
 }
 </code></pre>
+<p>需要明确的是：<strong>这份列表的插入顺序就是切面的执行顺序，且没有任何排序机制。</strong>谁先被 <code>add</code>，谁就在链的最外层，它的前置逻辑最先执行、后置逻辑最后执行。这在只有日志切面时无所谓，一旦混入鉴权、事务、幂等、限流，顺序就变成了正确性问题 —— 这正是下一节 Spring AOP 用 <code>@Order</code> 显式表达的东西。</p>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/GEPNPC2k-/"><span class="pn-label">← 上一篇</span><span class="pn-title">Java实现License授权许可和验证</span></a>
-      <a class="next-post" href="/vU42syr2A/"><span class="pn-label">下一篇 →</span><span class="pn-title">发布JAR包到远程中央仓库</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
+<h2 id="八-对照-spring-aop-的切面链">八、对照 Spring AOP 的切面链</h2>
+<p>手写切面链是「把切面集合按顺序串起来」，Spring AOP 做的是同一件事，只是链的构建被拆成了两个阶段：<strong>先按切点匹配筛选，再按优先级排序</strong>。</p>
+<p><strong>阶段一：匹配。</strong>容器启动时，Spring 为每个候选 Bean 找出所有可用的 Advisor（可以理解为「切点 + 通知」的组合）。Advisor 的 <code>getPointcut()</code> 决定它是否作用于当前类、当前方法，<code>getAdvice()</code> 才是真正要执行的通知。方法级匹配的判定大致是：类匹配（<code>ClassFilter.matches</code>）与当前是否处于代理创建阶段，再逐层叠加方法匹配（<code>MethodMatcher.matches</code>）。运行时匹配（<code>isRuntime()</code> 为真）的切点无法在启动期定论，Enter 每次调用都需要重新判断，性能更差，因此能静态匹配就不要写成依赖参数的动态匹配。</p>
+<p><strong>阶段二：排序。</strong>筛选出的 Advisor 会被整理成一条通知链，顺序由 <code>@Order</code>（或实现 <code>Ordered</code> / <code>PriorityOrdered</code>）决定，<strong>数值越小越靠外</strong>。Spring 自己注册的事务通知 <code>BeanFactoryTransactionAttributeSourceAdvisor</code> 默认顺序是 <code>Ordered.LOWEST_PRECEDENCE</code>，也就是最内层 —— 这一点在第九节会成为一个具体的坑。</p>
+<p><img src="/post-assets/DCnCuY10S/01-aspect-chain.svg" alt="切面链示意：请求按注册顺序下行经过各切面，响应沿原路回溯返回"></p>
+<p>上图的回溯路径解释了一个常被忽略的事实：<strong>切面的进入顺序与退出顺序严格相反</strong>。这也决定了资源释放必须写在 <code>finally</code> 里，而不是写在 <code>chain.next()</code> 之后的普通语句里 —— 一旦下游抛异常，后者根本不会被执行。</p>
 
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+<h2 id="九-jdk-动态代理与-cglib-的选择条件">九、JDK 动态代理与 CGLIB 的选择条件</h2>
+<p>切面链再完美，也得有东西把方法调用拦下来，这就是代理。<code>DefaultAopProxyFactory</code> 的规则可以概括为一句话：<strong>目标类实现了接口就优先用 JDK 动态代理，否则回退到 CGLIB</strong>，并且从 Spring 4.x 起 CGLIB 代理不再要求目标类有默认构造函数（objenesis 负责实例化）。<code>proxyTargetClass = true</code> 则强制走 CGLIB。</p>
+<p>两者的能力边界差别很大：JDK 动态代理基于接口生成实现类，代理对象与目标对象是<strong>兄弟关系</strong>，只能通过接口类型引用，因此注入时必须按接口注入，注入实现类会报类型不匹配；CGLIB 通过继承目标类生成子类，代理对象是目标类的子类型，可以按类注入，但代价是<strong>不能代理 final 类，也不能代理 final 方法</strong> —— final 方法无法被覆写，通知会静默失效，既不报错也不生效。</p>
+<p>还有两个容易混淆的限制：一是 <code>private</code> 方法与 <code>static</code> 方法都不在代理范围内；二是<strong>自调用（this 调用）不经过代理</strong>。原因很直接：代理对象持有的只是目标对象引用，外部调用先进代理，但目标对象内部执行 <code>this.b()</code> 时，<code>this</code> 就是真实对象自己，JVM 直接在虚方法表里解析，代理没有任何介入机会。表现上就是 <code>a()</code> 上的事务、日志生效，<code>a()</code> 内部调用的 <code>b()</code> 上同样的注解却完全失效。</p>
+<p><img src="/post-assets/DCnCuY10S/02-proxy-self-invocation.svg" alt="代理调用链示意：外部调用经过代理与通知链到达目标方法，自调用则直接进入真实对象绕过代理"></p>
+<p>解法有三种，思路都是「让调用重新穿过代理」：</p>
+<ul>
+<li><strong>AopContext.currentProxy()</strong>：需要开启 <code>@EnableAspectJAutoProxy(exposeProxy = true)</code>，代理会把自身放入 <code>AopContext</code> 的 ThreadLocal，代码里用 <code>((XxxService) AopContext.currentProxy()).b()</code> 调用。缺点是业务代码绑定了 Spring API，且该调用栈必须仍处于代理内部。</li>
+<li><strong>注入自身</strong>：<code>@Autowired</code> 注入自己（或注入 <code>ObjectProvider&lt;Self&gt;</code>），容器给出的是代理而非 <code>this</code>，调用它即可。这是侵入性最低的写法，但要注意 <code>@Lazy</code> 兜底循环依赖。</li>
+<li><strong>AspectJ 编译期 / 加载期织入</strong>：通知直接织进字节码，不存在代理边界，自调用同样生效，连 <code>private</code> 方法也能被通知。代价是引入 aspectj-maven-plugin 或 <code>-javaagent</code>，构建链路更重。</li>
+</ul>
+<p>顺带澄清一个常见误解：<code>@Transactional</code> 失效时，人们首先怀疑「是不是没用 CGLIB」，实际上<strong>默认代理模式下自调用导致的失效占比远高于 final 类</strong>。排查时先用 <code>AopUtils.isAopProxy(bean)</code> 与断点确认拿到的引用到底是不是代理，比盲目切换 <code>proxyTargetClass</code> 有效得多。</p>
+
+<h2 id="十-around-中-proceed-的语义">十、@Around 中 proceed 的语义</h2>
+<p>回到切面链，<code>chain.next()</code> 与 Spring <code>@Around</code> 中的 <code>ProceedingJoinPoint.proceed()</code> 是同一个东西：<strong>它既是「执行下一个切面或目标方法」的开关，也是这条链上唯一的返回值出口</strong>。</p>
+<p>由此派生三条必须记住的规则：</p>
+<ul>
+<li><strong>不调用 <code>proceed()</code> 就等于短路。</strong>目标方法不会执行，可以返回默认值、缓存值或直接抛异常。限流、幂等、缓存命中都靠这个特性实现，但用得不当会造成「业务没跑却没报错」的诡异现象。</li>
+<li><strong>调用多次 <code>proceed()</code> 会重复执行目标方法。</strong>带参数重试时要特别小心：重试次数与事务、幂等性叠加后极易造成重复写库。</li>
+<li><strong>返回值的取舍权在切面手里。</strong><code>proceed()</code> 的返回值如果被丢弃、被包装或返回 <code>null</code>，调用方拿到的就是切面给的版本，而非目标方法的真实结果。这与前面手写链中「把 <code>chain.next()</code> 结果重新赋给入参」的写法风险一致。</li>
+</ul>
+<pre><code class="language-java">@Slf4j
+@Aspect
+@Component
+public class UploadLogAspect {
+
+    @Around("execution(* com.example.service.UploadService.upload(..))")
+    public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        long start = System.currentTimeMillis();
+        try {
+            Object result = pjp.proceed();      // 下行：进入下一个切面/目标方法
+            log.info("upload ok, cost={}ms", System.currentTimeMillis() - start);
+            return result;                      // 必须是 proceed 的返回值
+        } catch (Throwable e) {
+            log.error("upload failed, cost={}ms", System.currentTimeMillis() - start, e);
+            throw e;                            // 不要吞异常，否则事务回滚判定会失真
+        } finally {
+            // 释放型逻辑放这里：无论正常返回还是抛异常都会执行
+            MDC.clear();
+        }
+    }
+}
+</code></pre>
+<p>关于异常传播，务必记住两点。<strong>一是不要为了「日志好看」而 <code>catch (Exception e) { return null; }</code></strong>：异常被吞掉后，<code>@Transactional</code> 认为方法正常返回，会提交事务，本该回滚的脏数据就落库了；同时调用方拿到 <code>null</code>，错误在更远的地方才暴露，排查成本成倍增加。<strong>二是 <code>finally</code> 里不要 <code>return</code> 或抛异常</strong>，它会覆盖 <code>try</code> 中的返回值与异常，让真正的失败原因彻底消失。</p>
+
+<h2 id="十一-事务切面与自定义切面的顺序坑">十一、事务切面与自定义切面的顺序坑</h2>
+<p>顺序问题的核心只有一条：<strong>值越小越靠外，越靠外的切面前置逻辑越先执行、后置逻辑越后执行</strong>。据此可以推导出几个典型场景的正确排法：</p>
+<ul>
+<li><strong>事务要包住业务，也要包住自定义切面里的写操作</strong>：事务通知在最内层（默认就是如此），意味着自定义切面若在 <code>proceed()</code> 之后写库，这次写入其实已经跑出了事务边界，不会被回滚。要让它进事务，就得把自定义切面排在事务之外 —— 但这会带来新问题：切面自身抛异常时事务无法感知。</li>
+<li><strong>鉴权与限流必须在事务之外</strong>：否则校验失败也开了事务，白白占用连接；更重要的是，鉴权异常如果发生在事务内部，可能触发一次无意义的回滚流程。</li>
+<li><strong>缓存切面的顺序最讲究</strong>：读缓存应在事务之外，避免为了命中缓存去开事务；而缓存失效（删除缓存）若要和数据库写保持一致，就必须处于同一个事务边界内，或改用先提交后删除 + 延迟双删等补偿策略。</li>
+</ul>
+<p>实践中还有两个高频坑。其一，<strong>用 <code>@Order</code> 排自定义切面时不写数值</strong>，默认是 <code>Ordered.LOWEST_PRECEDENCE</code>，与事务通知同层，此时先后顺序取决于 Advisor 的注册顺序，在不同 Spring 版本或不同配置下可能变化。其二，<strong>同一个切面类里多个 <code>@Around</code> 方法之间没有可依赖的顺序</strong>，需要明确先后时应当拆成多个 <code>@Aspect</code> 类并显式标注 <code>@Order</code>。</p>
+<p>最后提示一个排查技巧：拿不准实际顺序时，不要靠猜。在切面入口打印一次日志，或直接调试 <code>ReflectiveMethodInvocation</code> 的 <code>interceptorsAndDynamicMethodMatchers</code> 字段，就能看到这条链上真实的 Advisor 排列。</p>
+
+<h2 id="十二-小结">十二、小结</h2>
+<ul>
+<li>手写切面链的本质是责任链 + 链尾回调，<code>chain.next()</code> 兼具「下行的开关」和「返回值的唯一出口」两重语义。</li>
+<li>链的推进状态在迭代器里，链必须一次一建；切面本身应保持无状态。</li>
+<li>列表的插入顺序就是执行顺序，手写链没有排序机制，顺序即正确性。</li>
+<li>Spring AOP 把这件事规范化为「Advisor 匹配 → 按 <code>@Order</code> 排序 → 代理拦截」，值越小越靠外。</li>
+<li>有接口优先 JDK 动态代理，否则 CGLIB；final 类、final 方法、private 方法、static 方法都不在代理范围内。</li>
+<li>自调用绕过代理是最高频的失效原因，解法是 AopContext、注入自身或 AspectJ 织入。</li>
+<li>环绕通知中异常要原样抛出，释放逻辑写进 <code>finally</code>，顺序拿不准就用日志验证而不是猜。</li>
+</ul>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#%E4%B8%80-%E5%88%87%E9%9D%A2%E9%93%BE%E8%A6%81%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98">一、切面链要解决什么问题</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-%E5%88%87%E9%9D%A2%E6%8E%A5%E5%8F%A3%E7%9A%84%E8%AE%BE%E8%AE%A1">二、切面接口的设计</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E5%88%87%E9%9D%A2%E9%93%BE%E7%9A%84%E5%AE%9E%E7%8E%B0">三、切面链的实现</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E9%93%BE%E5%B0%BE%E5%9B%9E%E8%B0%83%E4%B8%8E%E4%B8%9A%E5%8A%A1%E4%BE%A7%E7%94%A8%E6%B3%95">四、链尾回调与业务侧用法</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E4%B8%80%E4%B8%AA%E5%85%B7%E4%BD%93%E5%88%87%E9%9D%A2-%E6%97%A5%E5%BF%97">五、一个具体切面：日志</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-%E4%B8%A4%E5%A4%84%E5%AE%B9%E6%98%93%E5%BF%BD%E7%95%A5%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%BC%BA%E9%99%B7">六、两处容易忽略的实现缺陷</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-%E8%BF%90%E8%A1%8C%E6%97%B6%E5%A2%9E%E5%88%A0%E5%88%87%E9%9D%A2%E4%B8%8E%E9%A1%BA%E5%BA%8F">七、运行时增删切面与顺序</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AB-%E5%AF%B9%E7%85%A7-spring-aop-%E7%9A%84%E5%88%87%E9%9D%A2%E9%93%BE">八、对照 Spring AOP 的切面链</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B9%9D-jdk-%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%8E-cglib-%E7%9A%84%E9%80%89%E6%8B%A9%E6%9D%A1%E4%BB%B6">九、JDK 动态代理与 CGLIB 的选择条件</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81-around-%E4%B8%AD-proceed-%E7%9A%84%E8%AF%AD%E4%B9%89">十、@Around 中 proceed 的语义</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%B8%80-%E4%BA%8B%E5%8A%A1%E5%88%87%E9%9D%A2%E4%B8%8E%E8%87%AA%E5%AE%9A%E4%B9%89%E5%88%87%E9%9D%A2%E7%9A%84%E9%A1%BA%E5%BA%8F%E5%9D%91">十一、事务切面与自定义切面的顺序坑</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%BA%8C-%E5%B0%8F%E7%BB%93">十二、小结</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">
