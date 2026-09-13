@@ -124,7 +124,6 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/hIydIZSN1.png" alt="封面图">
-          </img>
           
           <h2 id="modelmapperxml">ModelMapper.xml</h2>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
@@ -222,6 +221,13 @@
     &lt;/select&gt;
 &lt;/mapper&gt;
 </code></pre>
+<p>这段 Mapper 同时用到了两种级联写法：<strong>嵌套结果</strong>（在 resultMap 里直接写关联对象的列映射）与<strong>嵌套查询</strong>（在 <code>association</code> / <code>collection</code> 上写 <code>select</code> 引用子语句）。<code>BaseResultInstanceMap</code> 通过 <code>extends="BaseResultMap"</code> 继承基础字段映射，再补上 DTO 独有字段——这是避免重复写几十个 <code>&lt;result&gt;</code> 的常用手法。</p>
+<ul>
+<li><strong>嵌套结果</strong>：一条 join SQL 返回宽结果集，MyBatis 按 <code>&lt;id&gt;</code> 把同一主键的重复行折叠成嵌套对象，总 SQL 数 = 1，与返回行数无关；代价是结果集变宽、<code>DISTINCT</code> 开销上升。</li>
+<li><strong>嵌套查询</strong>：主查询返回 N 行，每行触发一次子查询，总 SQL 数 = 1 + N，也就是常说的 <strong>N+1 问题</strong>；好处是 SQL 简单、可复用、能按需延迟加载。</li>
+<li><strong>多参数传递</strong>：<code>column="{equipmentModelMark=equipment_model_mark,customerId=customer_id}"</code> 这种复合写法用于把主查询的多个列传给子语句，子语句用 <code>@Param</code> 接收。</li>
+</ul>
+<p><img src="/post-assets/hIydIZSN1/01-cascade-path-compare.svg" alt="嵌套结果与嵌套查询的执行路径对比"></p>
 <h2 id="modelmapper">ModelMapper</h2>
 <pre><code class="language-java">@Repository
 public interface ModelMapper extends BaseMapper&lt;Model&gt; {
@@ -262,13 +268,36 @@ public class ModelDTO extends Model {
     private String topic;
 }
 </code></pre>
+<h2 id="n1问题与优化建议">N+1 问题与优化建议</h2>
+<p>本例的 <code>selectInstanceList</code> 一次返回多行模型，而每个模型又通过三个子语句取图片与实例数（<code>getEquipmentPicture</code>、<code>getCustomerInstanceNumber</code>、<code>getEquipmentPictures</code>），因此 SQL 次数 = 1 + 3N。模型数量一多，数据库连接与网络往返会迅速放大，这是级联查询最主要的性能风险。</p>
+<p><img src="/post-assets/hIydIZSN1/02-n-plus-one-count.svg" alt="N+1 查询次数示意"></p>
+<ul>
+<li><strong>能一次 join 就一次 join</strong>：关联层级少、结果集可控时优先用嵌套结果；此时 <code>&lt;id&gt;</code> 标签必须写对，否则 MyBatis 无法正确折叠嵌套对象。</li>
+<li><strong>必须用子查询时</strong>：给 <code>association</code> / <code>collection</code> 加 <code>fetchType="lazy"</code>，并确认 <code>lazyLoadingEnabled</code> 配置生效，避免不访问也触发查询。</li>
+<li><strong>批量取数</strong>：把逐行子查询改成「按 id 集合一次 <code>IN</code> 查询」，再在 Java 侧按 id 分组拼装，是解决 N+1 最通用的办法。</li>
+<li><strong>警惕递归</strong>：两个 resultMap 互相引用（A 查 B、B 又查 A）会造成无限递归或栈溢出，可用 <code>fetchType="lazy"</code> 或拆成两次查询打断环。</li>
+<li><strong>分页与 DISTINCT 同时用要验证</strong>：join + distinct 会让结果集变宽，分页条数与 count 语句需要单独核对。</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#modelmapperxml">ModelMapper.xml</a>
 <ul>
-<li><a href="#modelmapperxml">ModelMapper.xml</a></li>
-<li><a href="#modelmapper">ModelMapper</a></li>
-<li><a href="#modeldto">ModelDTO</a></li>
+</ul>
+</li>
+<li>
+<a href="#modelmapper">ModelMapper</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#modeldto">ModelDTO</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#n1%E9%97%AE%E9%A2%98%E4%B8%8E%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE">N+1 问题与优化建议</a>
+<ul>
 </ul>
 </li>
 </ul>
