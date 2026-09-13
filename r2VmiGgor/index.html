@@ -127,7 +127,7 @@
           
           <h1 id="第1章-clickhouse的安装">第1章 ClickHouse的安装</h1>
 <h2 id="11-准备工作">1.1 准备工作</h2>
-<p>下载RPM包:</p>
+<p>下载 RPM 包：</p>
 <p><a href="https://repo.yandex.ru/clickhouse/rpm/stable/x86_64/">https://repo.yandex.ru/clickhouse/rpm/stable/x86_64/</a></p>
 <p>下载完毕如下:</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1638237245375.png" alt="ClickHouse RPM 安装包下载完成的文件列表" loading="lazy"></figure>
@@ -288,7 +288,7 @@ xsync /etc/clickhouse-server/config.xml
 <p>同步到另外两个机器上</p>
 <pre><code class="language-shell">xsync /etc/clickhouse-server/config.d/metrika.xml
 </code></pre>
-<p>在 /etc/clickhouse-server/config.xml中增加</p>
+<p>在 /etc/clickhouse-server/config.xml 中增加以下内容：</p>
 <pre><code class="language-xml">&lt;zookeeper incl=&quot;zookeeper-servers&quot; optional=&quot;true&quot; /&gt;
 &lt;include_from&gt;/etc/clickhouse-server/config.d/metrika.xml&lt;/include_from&gt;
 </code></pre>
@@ -342,6 +342,7 @@ xsync /etc/clickhouse-server/config.xml
 <p>要解决数据水平切分的问题，需要引入分片的概念。通过分片把一份完整的数据进行切分，不同的分片分布到不同的节点上，再通过Distributed表引擎把数据拼接起来一同使用。</p>
 <p>Distributed 表引擎本身不存储数据，有点类似于 MyCat 之于 MySQL，成为一种中间件，通过分布式逻辑表来写入、分发、路由，从而操作多台节点上不同分片的分布式数据。</p>
 <p>注意：ClickHouse的集群是表级别的，实际企业中，大部分做了高可用，但是没有用分片，避免降低查询性能以及操作集群的复杂性。</p>
+<p><img src="/post-assets/r2VmiGgor/01-replica-vs-shard.svg" alt="副本与分片的区别：副本每台存全量数据，分片把数据切分到不同节点"></p>
 <h2 id="31-集群写入流程3分片2副本共6个节点">3.1 集群写入流程（3分片2副本共6个节点）</h2>
 <p>配置了 <code>internal_replication = true</code> 后，写入分布式表时每个目标分片只会选中一个副本落盘，再由副本机制同步给同分片的其它副本：</p>
 <ul>
@@ -364,6 +365,7 @@ xsync /etc/clickhouse-server/config.xml
 <figure data-type="image" tabindex="10"><img src="/post-images/1638237469738.png" alt="三节点集群与副本的部署规划示意图" loading="lazy"></figure>
 <h3 id="331-集群及副本规划2个分片只有第一个分片有副本">3.3.1 集群及副本规划（2个分片，只有第一个分片有副本）</h3>
 <p>下面这张表是三台机器的宏（macros）配置：shard01 有两个副本 rep_1_1、rep_1_2，shard02 只有一个副本 rep_2_1。宏由各节点的 metrika-shard.xml 定义，建表语句里的 <code>{shard}</code>、<code>{replica}</code> 会替换成这里配置的值。</p>
+<p><img src="/post-assets/r2VmiGgor/02-ck-cluster-topology.svg" alt="三节点两分片集群拓扑：客户端经分布式表路由到 shard01 的两个副本与 shard02，ZooKeeper 负责协调"></p>
 <table>
 <thead>
 <tr>
