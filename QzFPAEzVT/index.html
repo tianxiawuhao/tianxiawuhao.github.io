@@ -156,11 +156,15 @@
 <h2 id="使用场景重点">使用场景（重点）</h2>
 <h3 id="where">where</h3>
 <figure data-type="image" tabindex="1"><img src="/post-images/1620897817779.png" alt="" loading="lazy"></figure>
-<p>上图中，根据id查询记录，因为id字段仅建立了主键索引，因此此SQL执行可选的索引只有主键索引，如果有多个，最终会选一个较优的作为检索的依据。</p>
-<p>-- 增加一个没有建立索引的字段 <code>alter table innodb1 add sex char(1);</code></p>
-<p>-- 按sex检索时可选的索引为null <code>EXPLAIN SELECT * from innodb1 where sex='男';</code></p>
+<p>上图中，根据 id 查询记录，因为 id 字段仅建立了主键索引，因此这条 SQL 可选的索引只有主键索引；如果候选索引有多个，优化器最终会选一个代价较小的作为检索依据。</p>
+<p>为便于对比，我们先给表增加一个没有建立索引的字段：</p>
+<pre><code class="language-mysql">-- 增加一个没有建立索引的字段
+alter table innodb1 add sex char(1);
+
+-- 按 sex 检索，此时执行计划中可选的索引为 NULL
+EXPLAIN SELECT * from innodb1 where sex='男';</code></pre>
 <figure data-type="image" tabindex="2"><img src="/post-images/1620897795644.png" alt="" loading="lazy"></figure>
-<p>可以尝试在一个字段未建立索引时，根据该字段查询的效率，然后对该字段建立索引<code>alter table 表名 add index(字段名)</code>，同样的SQL执行的效率，你会发现查询效率会有明显的提升（数据量越大越明显）。</p>
+<p>可以先用上面的方式观察字段未建立索引时的查询效率，再为该字段建立索引 <code>alter table 表名 add index(字段名)</code>，然后执行同样的 SQL，你会发现查询效率有明显提升（数据量越大越明显）。</p>
 <h3 id="order-by">order by</h3>
 <p>当我们使用order by将查询结果按照某个字段排序时，如果该字段没有建立索引，那么执行计划会将查询出的所有数据使用外部排序（将数据从硬盘分批读取到内存使用内部排序，最后合并排序结果），这个操作是很影响性能的，因为需要将查询涉及到的所有数据从磁盘中读到内存（如果单条数据过大或者数据量过多都会降低效率），更无论读到内存之后的排序了。</p>
 <p>但是如果我们对该字段建立索引<code>alter table 表名 add index(字段名)</code>，那么由于索引本身是有序的，因此直接按照索引的顺序和映射关系逐条取出数据即可。而且如果分页的，那么只用<strong>取出索引表某个范围内的索引对应的数据</strong>，而不用像上述那<strong>取出所有数据</strong>进行排序再返回某个范围内的数据。（从磁盘取数据是最影响性能的）</p>
@@ -192,16 +196,20 @@
 <li>使用短索引，如果对长字符串列进行索引，应该指定一个前缀长度，这样能够节省大量索引空间</li>
 <li>不要过度索引。索引需要额外的磁盘空间，并降低写操作的性能。在修改表内容的时候，索引会进行更新甚至重构，索引列越多，这个时间就会越长。所以只保持需要的索引有利于查询即可。</li>
 </ol>
-<h2 id="创建索引的原则重中之重">创建索引的原则（重中之重）</h2>
-<p>索引虽好，但也不是无限制的使用，最好符合一下几个原则</p>
-<p>1） 最左前缀匹配原则，组合索引非常重要的原则，mysql会一直向右匹配直到遇到范围查询<code>(&gt;、&lt;、between、like)</code>就停止匹配，比如<code>a = 1 and b = 2 and c &gt; 3 and d = 4</code> 如果建立(a,b,c,d)顺序的索引，d是用不到索引的，如果建立(a,b,d,c)的索引则都可以用到，a,b,d的顺序可以任意调整。</p>
-<p>2）较频繁作为查询条件的字段才去创建索引</p>
-<p>3）更新频繁字段不适合创建索引</p>
-<p>4）若是不能有效区分数据的列不适合做索引列(如性别，男女未知，最多也就三种，区分度实在太低)</p>
-<p>5）尽量的扩展索引，不要新建索引。比如表中已经有a的索引，现在要加(a,b)的索引，那么只需要修改原来的索引即可。</p>
-<p>6）定义有外键的数据列一定要建立索引。</p>
-<p>7）对于那些查询中很少涉及的列，重复值比较多的列不要建立索引。</p>
-<p>8）对于定义为text、image和bit的数据类型的列不要建立索引。</p>
+<h2 id="最左前缀">最左前缀原则</h2>
+<p>索引虽好，但也不是无限制地使用，最好符合以下几个原则。</p>
+<ol>
+<li><strong>最左前缀匹配原则</strong>，这是组合索引非常重要的原则：MySQL 会一直向右匹配直到遇到范围查询（<code>&gt;</code>、<code>&lt;</code>、<code>between</code>、<code>like</code>）就停止匹配。例如 <code>a = 1 and b = 2 and c &gt; 3 and d = 4</code>，如果建立 <code>(a,b,c,d)</code> 顺序的索引，则 <code>d</code> 用不到索引；如果建立 <code>(a,b,d,c)</code> 的索引则都可以用到，其中 <code>a,b,d</code> 的顺序可以任意调整。</li>
+<li>较频繁作为查询条件的字段才去创建索引。</li>
+<li>更新频繁的字段不适合创建索引。</li>
+<li>不能有效区分数据的列不适合做索引列（如性别，男女未知，最多也就三种，区分度实在太低）。</li>
+<li>尽量扩展索引，不要新建索引。比如表中已经有 <code>a</code> 的索引，现在要加 <code>(a,b)</code> 的索引，那么只需要修改原来的索引即可。</li>
+<li>定义有外键的数据列一定要建立索引（InnoDB 在创建外键时会自动为子表的引用列创建索引，无需手工重复添加）。</li>
+<li>对于那些查询中很少涉及的列、重复值比较多的列不要建立索引。</li>
+<li>对于定义为 <code>text</code>、<code>image</code> 和 <code>bit</code> 的数据类型的列尽量不要直接建立 B+ 树索引，这类大字段会使索引体积急剧膨胀；<code>text</code> 等文本列应改用前缀索引或全文索引。</li>
+</ol>
+<p>下图用一棵二叉判定树说明最左前缀：联合索引按 <code>(a,b,c,d)</code> 的顺序排列，只有沿着最左侧的 <code>a</code> 才能逐级向右匹配，一旦遇到范围条件就停止，右侧字段只能退化为过滤条件。</p>
+<p><img src="/post-assets/QzFPAEzVT/01-leftmost-prefix.svg" alt="最左前缀匹配示意图：联合索引按a、b、c逐级匹配，遇到范围条件后右侧字段不再使用索引"></p>
 <h2 id="创建索引的三种方式">创建索引的三种方式</h2>
 <ol>
 <li>
@@ -214,7 +222,7 @@
 	information text,
 	KEY NAME ( first_name, last_name ),
 	FULLTEXT KEY ( information ),
-UNIQUE KEY ( id_card ) 
+	UNIQUE KEY ( id_card )
 );
 </code></pre>
 </li>
@@ -281,19 +289,22 @@ drop PRIMARY KEY
 <li>=和in可以乱序，比如a = 1 and b = 2 and c = 3 建立(a,b,c)索引可以任意顺序，mysql的查询优化器会帮你优化成索引可以识别的形式</li>
 </ul>
 <h2 id="索引算法">索引算法</h2>
-<p>索引算法有 BTree算法和Hash算法</p>
+<p>索引算法有 BTree 算法和 Hash 算法。</p>
 <h3 id="btree算法">BTree算法</h3>
-<p>BTree是最常用的mysql数据库索引算法，也是mysql默认的算法。因为它不仅可以被用在<code>=</code>,<code>&gt;</code>,<code>&gt;=</code>,<code>&lt;</code>,<code>&lt;=</code>和<code>between</code>这些比较操作符上，而且还可以用于<code>like</code>操作符，只要它的查询条件是一个不以通配符开头的常量， 例如：</p>
-<p>-- 只要它的查询条件是一个不以通配符开头的常量 <code>select * from user where name like 'jack%'; </code></p>
-<p>-- 如果一通配符开头，或者没有使用常量，则不会使用索引，例如： <code>select * from user where name like '%jack';</code></p>
+<p>BTree 是最常用的 MySQL 索引算法，也是 InnoDB 的默认算法。因为它不仅可以被用在 <code>=</code>、<code>&gt;</code>、<code>&gt;=</code>、<code>&lt;</code>、<code>&lt;=</code> 和 <code>between</code> 这些比较操作符上，而且还可以用于 <code>like</code> 操作符——只要查询条件是一个不以通配符开头的常量：</p>
+<pre><code class="language-mysql">-- 以常量开头，可以使用索引
+select * from user where name like 'jack%';
+
+-- 以通配符开头，或者不是常量，则无法使用索引
+select * from user where name like '%jack';</code></pre>
 <h3 id="hash算法">Hash算法</h3>
-<p>Hash Hash索引只能用于对等比较，例如<code>=</code>,<code>&lt;=&gt;（相当于=）</code>操作符。由于是一次定位数据，不像BTree索引需要从根节点到枝节点，最后才能访问到页节点这样多次IO访问，所以检索效率远高于BTree索引。</p>
+<p>Hash 索引只能用于对等比较，例如 <code>=</code>、<code>&lt;=&gt;</code>（相当于 <code>=</code>）操作符。由于它是一次定位数据，不像 BTree 索引需要从根节点到枝节点、最后才能访问到叶节点这样多次 IO 访问，所以检索效率远高于 BTree 索引。</p>
 <h2 id="索引的数据结构b树hash">索引的数据结构（b树，hash）</h2>
-<p>索引的数据结构和具体存储引擎的实现有关，在MySQL中使用较多的索引有<strong>Hash索引</strong>，<strong>B+树索引</strong>等，而我们经常使用的InnoDB存储引擎的默认索引实现为：B+树索引。对于哈希索引来说，底层的数据结构就是哈希表，因此在绝大多数需求为单条记录查询的时候，可以选择哈希索引，查询性能最快；其余大部分场景，建议选择BTree索引。</p>
+<p>索引的数据结构和具体的存储引擎实现有关，在 MySQL 中使用较多的索引有 <strong>Hash 索引</strong>、<strong>B+ 树索引</strong>等，而我们经常使用的 InnoDB 存储引擎的默认索引实现为 B+ 树索引。对于哈希索引来说，底层的数据结构就是哈希表，因此在绝大多数需求为单条记录等值查询的场景下可以选择哈希索引，查询性能最快；其余大部分场景，建议选择 BTree 索引。</p>
 <ol>
 <li>
 <p>B树索引</p>
-<p>mysql通过存储引擎取数据，基本上90%的人用的就是InnoDB了，按照实现方式分，InnoDB的索引类型目前只有两种：BTREE（B树）索引和HASH索引。B树索引是Mysql数据库中使用最频繁的索引类型，基本所有存储引擎都支持BTree索引。通常我们说的索引不出意外指的就是（B树）索引（实际是用B+树实现的，因为在查看表索引时<code>SHOW INDEX FROM &lt;表名&gt; [ FROM &lt;数据库名&gt;]</code>，mysql一律打印BTREE，所以简称为B树索引）</p>
+<p>MySQL 通过存储引擎取数据，基本上 90% 的人用的就是 InnoDB，按照实现方式分，InnoDB 的索引类型目前只有两种：BTREE（B 树）索引和 HASH 索引。B 树索引是 MySQL 数据库中使用最频繁的索引类型，基本所有存储引擎都支持 BTree 索引。通常我们说的索引，不出意外指的就是（B 树）索引（实际是用 B+ 树实现的，因为在查看表索引时执行 <code>SHOW INDEX FROM &lt;表名&gt; [ FROM &lt;数据库名&gt; ]</code>，MySQL 一律打印 BTREE，所以简称为 B 树索引）。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1620984450233.png" alt="" loading="lazy"></figure>
 <p><strong>查询方式：</strong></p>
 <p>主键索引区:PI(关联保存的数据的地址)按主键查询,</p>
@@ -313,29 +324,28 @@ drop PRIMARY KEY
 <figure data-type="image" tabindex="5"><img src="/post-images/1620897738341.webp" alt="" loading="lazy"></figure>
 <h2 id="b树和b树的区别">B树和B+树的区别</h2>
 <ul>
-<li>在B树中，你可以将键和值存放在内部节点和叶子节点；但在B+树中，内部节点都是键，没有值，叶子节点同时存放键和值。</li>
-<li>B+树的叶子节点有一条链相连，而B树的叶子节点各自独立。</li>
+<li>在 B 树中，键和值可以存放在内部节点和叶子节点；但在 B+ 树中，内部节点只存键、不存值，叶子节点才同时存放键和值。</li>
+<li>B+ 树的叶子节点之间有一条链相连，而 B 树的叶子节点各自独立。</li>
 </ul>
 <figure data-type="image" tabindex="6"><img src="/post-images/1620897723431.jpeg" alt="" loading="lazy"></figure>
+<p>下面这张图进一步对比两种树的结构差异：B 树的每个节点都同时携带键与数据（或行指针），命中即返回；B+ 树只有叶子节点存放数据，内部节点纯粹是索引，且所有叶子节点通过双向链表串成一条有序链。</p>
+<p><img src="/post-assets/QzFPAEzVT/02-btree-vs-bplus.svg" alt="B树与B+树结构对比：B树内部节点同时存放键与数据，B+树内部节点只存键、叶子节点存放数据并用链表相连"></p>
 <h3 id="使用b树的好处">使用B树的好处</h3>
 <p>B树可以在内部节点同时存储键和值，因此，把频繁访问的数据放在靠近根节点的地方将会大大提高热点数据的查询效率。这种特性使得B树在特定数据重复多次查询的场景中更加高效。</p>
 <h3 id="使用b树的好处-2">使用B+树的好处</h3>
 <p>由于B+树的内部节点只存放键，不存放值，因此，一次读取，可以在内存页中获取更多的键，有利于更快地缩小查找范围。 B+树的叶节点由一条链相连，因此，当需要进行一次全数据遍历的时候，B+树只需要使用O(logN)时间找到最小的一个节点，然后通过链进行O(N)的顺序遍历即可。而B树则需要对树的每一层进行遍历，这会需要更多的内存置换次数，因此也就需要花费更多的时间</p>
 <h2 id="hash索引和b树对比">Hash索引和B+树对比</h2>
-<p>首先要知道Hash索引和B+树索引的底层实现原理：</p>
-<p>hash索引底层就是hash表，进行查找时，调用一次hash函数就可以获取到相应的键值，之后进行回表查询获得实际数据。B+树底层实现是多路平衡查找树。对于每一次的查询都是从根节点出发，查找到叶子节点方可以获得所查键值，然后根据查询判断是否需要回表查询数据。</p>
-<p>那么可以看出他们有以下的不同：</p>
+<p>首先要知道 Hash 索引和 B+ 树索引的底层实现原理：</p>
+<p>Hash 索引底层就是 Hash 表，进行查找时调用一次 Hash 函数就可以获取到相应的键值，之后按行指针回表读取实际数据。B+ 树底层实现是多路平衡查找树，每一次查询都从根节点出发，查找到叶子节点才可以获得所查键值，然后根据查询判断是否需要回表查询数据。</p>
+<p>那么可以看出它们有以下的不同：</p>
 <ul>
-<li>hash索引进行等值查询更快(一般情况下)，但是却无法进行范围查询。</li>
+<li>Hash 索引进行等值查询更快（一般情况下），但是却无法进行范围查询。因为在 Hash 索引中经过 Hash 函数建立索引之后，索引的顺序与原顺序无法保持一致，不能支持范围查询；而 B+ 树的所有节点皆遵循（左节点小于父节点，右节点大于父节点，多叉树也类似）的规律，天然支持范围查询。</li>
+<li>Hash 索引不支持使用索引进行排序，原理同上。</li>
+<li>Hash 索引不支持模糊查询以及多列索引的最左前缀匹配。原理也是因为 Hash 函数的不可预测，<code>AAAA</code> 和 <code>AAAAB</code> 的索引没有相关性。</li>
+<li>Hash 索引在符合条件时同样可以避免回表：InnoDB 的自适应哈希索引、Memory 引擎的哈希索引都直接记录了行数据的位置，无需再回表。但 InnoDB 无法人为创建哈希索引，而 B+ 树在符合某些条件（聚簇索引、覆盖索引等）的时候可以只通过索引完成查询。</li>
+<li>Hash 索引虽然在等值查询上较快，但是不稳定，性能不可预测：当某个键值存在大量重复的时候，发生 Hash 碰撞，此时效率可能极差。而 B+ 树的查询效率比较稳定，对于所有的查询都是从根节点到叶子节点，且树的高度较低。</li>
 </ul>
-<p>因为在hash索引中经过hash函数建立索引之后，索引的顺序与原顺序无法保持一致，不能支持范围查询。而B+树的的所有节点皆遵循(左节点小于父节点，右节点大于父节点，多叉树也类似)，天然支持范围。</p>
-<ul>
-<li>hash索引不支持使用索引进行排序，原理同上。</li>
-<li>hash索引不支持模糊查询以及多列索引的最左前缀匹配。原理也是因为hash函数的不可预测。AAAA和AAAAB的索引没有相关性。</li>
-<li>hash索引任何时候都避免不了回表查询数据，而B+树在符合某些条件(聚簇索引，覆盖索引等)的时候可以只通过索引完成查询。</li>
-<li>hash索引虽然在等值查询上较快，但是不稳定。性能不可预测，当某个键值存在大量重复的时候，发生hash碰撞，此时效率可能极差。而B+树的查询效率比较稳定，对于所有的查询都是从根节点到叶子节点，且树的高度较低。</li>
-</ul>
-<p>因此，在大多数情况下，直接选择B+树索引可以获得稳定且较好的查询速度。而不需要使用hash索引。</p>
+<p>因此，在大多数情况下，直接选择 B+ 树索引可以获得稳定且较好的查询速度，而不需要使用 Hash 索引。</p>
 <h2 id="数据库为什么使用b树而不是b树">数据库为什么使用B+树而不是B树</h2>
 <ul>
 <li>B树只适合随机检索，而B+树同时支持随机检索和顺序检索；</li>
@@ -373,18 +383,24 @@ drop PRIMARY KEY
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E7%B4%A2%E5%BC%95">索引</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#%E7%B4%A2%E5%BC%95%E7%9A%84%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86">索引的基本原理</a>
 <ul>
-<li><a href="#%E7%B4%A2%E5%BC%95">索引</a></li>
-<li><a href="#%E7%B4%A2%E5%BC%95%E7%9A%84%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86">索引的基本原理</a></li>
-<li><a href="#%E7%B4%A2%E5%BC%95%E4%BC%98%E7%BC%BA%E7%82%B9">索引优缺点</a>
+</ul>
+</li>
+<li>
+<a href="#%E7%B4%A2%E5%BC%95%E4%BC%98%E7%BC%BA%E7%82%B9">索引优缺点</a>
 <ul>
 <li><a href="#%E4%BC%98%E7%82%B9">优点</a></li>
 <li><a href="#%E7%BC%BA%E7%82%B9">缺点</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF%E9%87%8D%E7%82%B9">使用场景（重点）</a>
+<li>
+<a href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF%E9%87%8D%E7%82%B9">使用场景（重点）</a>
 <ul>
 <li><a href="#where">where</a></li>
 <li><a href="#order-by">order by</a></li>
@@ -392,37 +408,103 @@ drop PRIMARY KEY
 <li><a href="#%E7%B4%A2%E5%BC%95%E8%A6%86%E7%9B%96">索引覆盖</a></li>
 </ul>
 </li>
-<li><a href="#%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B">索引类型</a></li>
-<li><a href="#%E7%B4%A2%E5%BC%95%E8%AE%BE%E8%AE%A1%E7%9A%84%E5%8E%9F%E5%88%99">索引设计的原则</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E7%9A%84%E5%8E%9F%E5%88%99%E9%87%8D%E4%B8%AD%E4%B9%8B%E9%87%8D">创建索引的原则（重中之重）</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E7%9A%84%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F">创建索引的三种方式</a></li>
-<li><a href="#%E5%88%A0%E9%99%A4%E7%B4%A2%E5%BC%95">删除索引</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E6%97%B6%E9%9C%80%E8%A6%81%E6%B3%A8%E6%84%8F%E4%BB%80%E4%B9%88">创建索引时需要注意什么？</a></li>
-<li><a href="#%E4%BD%BF%E7%94%A8%E7%B4%A2%E5%BC%95%E6%9F%A5%E8%AF%A2%E4%B8%80%E5%AE%9A%E8%83%BD%E6%8F%90%E9%AB%98%E6%9F%A5%E8%AF%A2%E7%9A%84%E6%80%A7%E8%83%BD%E5%90%97%E4%B8%BA%E4%BB%80%E4%B9%88">使用索引查询一定能提高查询的性能吗？为什么</a></li>
-<li><a href="#%E7%99%BE%E4%B8%87%E7%BA%A7%E5%88%AB%E6%88%96%E4%BB%A5%E4%B8%8A%E7%9A%84%E6%95%B0%E6%8D%AE%E5%A6%82%E4%BD%95%E5%88%A0%E9%99%A4">百万级别或以上的数据如何删除</a></li>
-<li><a href="#%E5%89%8D%E7%BC%80%E7%B4%A2%E5%BC%95">前缀索引</a></li>
-<li><a href="#%E4%BB%80%E4%B9%88%E6%98%AF%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8E%9F%E5%88%99%E4%BB%80%E4%B9%88%E6%98%AF%E6%9C%80%E5%B7%A6%E5%8C%B9%E9%85%8D%E5%8E%9F%E5%88%99">什么是最左前缀原则？什么是最左匹配原则</a></li>
-<li><a href="#%E7%B4%A2%E5%BC%95%E7%AE%97%E6%B3%95">索引算法</a>
+<li>
+<a href="#%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B">索引类型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E7%B4%A2%E5%BC%95%E8%AE%BE%E8%AE%A1%E7%9A%84%E5%8E%9F%E5%88%99">索引设计的原则</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80">最左前缀原则</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E7%9A%84%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F">创建索引的三种方式</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%A0%E9%99%A4%E7%B4%A2%E5%BC%95">删除索引</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E6%97%B6%E9%9C%80%E8%A6%81%E6%B3%A8%E6%84%8F%E4%BB%80%E4%B9%88">创建索引时需要注意什么？</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BD%BF%E7%94%A8%E7%B4%A2%E5%BC%95%E6%9F%A5%E8%AF%A2%E4%B8%80%E5%AE%9A%E8%83%BD%E6%8F%90%E9%AB%98%E6%9F%A5%E8%AF%A2%E7%9A%84%E6%80%A7%E8%83%BD%E5%90%97%E4%B8%BA%E4%BB%80%E4%B9%88">使用索引查询一定能提高查询的性能吗？为什么</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E7%99%BE%E4%B8%87%E7%BA%A7%E5%88%AB%E6%88%96%E4%BB%A5%E4%B8%8A%E7%9A%84%E6%95%B0%E6%8D%AE%E5%A6%82%E4%BD%95%E5%88%A0%E9%99%A4">百万级别或以上的数据如何删除</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%89%8D%E7%BC%80%E7%B4%A2%E5%BC%95">前缀索引</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BB%80%E4%B9%88%E6%98%AF%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8E%9F%E5%88%99%E4%BB%80%E4%B9%88%E6%98%AF%E6%9C%80%E5%B7%A6%E5%8C%B9%E9%85%8D%E5%8E%9F%E5%88%99">什么是最左前缀原则？什么是最左匹配原则</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E7%B4%A2%E5%BC%95%E7%AE%97%E6%B3%95">索引算法</a>
 <ul>
 <li><a href="#btree%E7%AE%97%E6%B3%95">BTree算法</a></li>
 <li><a href="#hash%E7%AE%97%E6%B3%95">Hash算法</a></li>
 </ul>
 </li>
-<li><a href="#%E7%B4%A2%E5%BC%95%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84b%E6%A0%91hash">索引的数据结构（b树，hash）</a></li>
-<li><a href="#b%E6%A0%91%E5%92%8Cb%E6%A0%91%E7%9A%84%E5%8C%BA%E5%88%AB">B树和B+树的区别</a>
+<li>
+<a href="#%E7%B4%A2%E5%BC%95%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84b%E6%A0%91hash">索引的数据结构（b树，hash）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#b%E6%A0%91%E5%92%8Cb%E6%A0%91%E7%9A%84%E5%8C%BA%E5%88%AB">B树和B+树的区别</a>
 <ul>
 <li><a href="#%E4%BD%BF%E7%94%A8b%E6%A0%91%E7%9A%84%E5%A5%BD%E5%A4%84">使用B树的好处</a></li>
 <li><a href="#%E4%BD%BF%E7%94%A8b%E6%A0%91%E7%9A%84%E5%A5%BD%E5%A4%84-2">使用B+树的好处</a></li>
 </ul>
 </li>
-<li><a href="#hash%E7%B4%A2%E5%BC%95%E5%92%8Cb%E6%A0%91%E5%AF%B9%E6%AF%94">Hash索引和B+树对比</a></li>
-<li><a href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%BF%E7%94%A8b%E6%A0%91%E8%80%8C%E4%B8%8D%E6%98%AFb%E6%A0%91">数据库为什么使用B+树而不是B树</a></li>
-<li><a href="#b%E6%A0%91%E5%9C%A8%E6%BB%A1%E8%B6%B3%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E5%92%8C%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%E7%9A%84%E6%97%B6%E5%80%99%E4%B8%8D%E9%9C%80%E8%A6%81%E5%9B%9E%E8%A1%A8%E6%9F%A5%E8%AF%A2%E6%95%B0%E6%8D%AE">B+树在满足聚簇索引和覆盖索引的时候不需要回表查询数据</a></li>
-<li><a href="#%E4%BB%80%E4%B9%88%E6%98%AF%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%BD%95%E6%97%B6%E4%BD%BF%E7%94%A8%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%8E%E9%9D%9E%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95">什么是聚簇索引？何时使用聚簇索引与非聚簇索引</a></li>
-<li><a href="#%E9%9D%9E%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%80%E5%AE%9A%E4%BC%9A%E5%9B%9E%E8%A1%A8%E6%9F%A5%E8%AF%A2%E5%90%97">非聚簇索引一定会回表查询吗？</a></li>
-<li><a href="#%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95">联合索引</a></li>
+<li>
+<a href="#hash%E7%B4%A2%E5%BC%95%E5%92%8Cb%E6%A0%91%E5%AF%B9%E6%AF%94">Hash索引和B+树对比</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%BF%E7%94%A8b%E6%A0%91%E8%80%8C%E4%B8%8D%E6%98%AFb%E6%A0%91">数据库为什么使用B+树而不是B树</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#b%E6%A0%91%E5%9C%A8%E6%BB%A1%E8%B6%B3%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E5%92%8C%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%E7%9A%84%E6%97%B6%E5%80%99%E4%B8%8D%E9%9C%80%E8%A6%81%E5%9B%9E%E8%A1%A8%E6%9F%A5%E8%AF%A2%E6%95%B0%E6%8D%AE">B+树在满足聚簇索引和覆盖索引的时候不需要回表查询数据</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BB%80%E4%B9%88%E6%98%AF%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%BD%95%E6%97%B6%E4%BD%BF%E7%94%A8%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%8E%E9%9D%9E%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95">什么是聚簇索引？何时使用聚簇索引与非聚簇索引</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%9D%9E%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%80%E5%AE%9A%E4%BC%9A%E5%9B%9E%E8%A1%A8%E6%9F%A5%E8%AF%A2%E5%90%97">非聚簇索引一定会回表查询吗？</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95">联合索引</a>
+<ul>
 </ul>
 </li>
 </ul>
