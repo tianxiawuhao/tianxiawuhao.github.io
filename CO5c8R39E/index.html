@@ -127,13 +127,14 @@
           
           <img class="post-feature-header-image" src="/post-images/CO5c8R39E.png" alt="封面图">
           
-          <p>静态代理、JDK动态代理以及CGLIB动态代理<br>
-代理模式是java中最常用的设计模式之一，尤其是在spring框架中广泛应用。对于java的代理模式，一般可分为：静态代理、动态代理、以及CGLIB实现动态代理。<br>
-对于上述三种代理模式，分别进行说明。</p>
+          <p>本文介绍 Java 中三种常见的代理实现方式：静态代理、JDK 动态代理以及 CGLIB 动态代理。</p>
+<p>代理模式是 Java 中最常用的设计模式之一，在 Spring 框架中应用尤为广泛，例如声明式事务、缓存、AOP 切面等底层都依赖代理实现。按照代理类产生时机的不同，Java 代理一般分为静态代理与动态代理，动态代理又分为 JDK 动态代理和 CGLIB 动态代理。</p>
+<p>下面分别对这三种代理方式进行说明，并在开头给出对比。</p>
+<p><img src="/post-assets/CO5c8R39E/01-proxy-compare.svg" alt="Java 三种代理方式对比：静态代理、JDK 动态代理与 CGLIB 动态代理"></p>
 <h2 id="静态代理">静态代理</h2>
 <p>静态代理其实就是在程序运行之前，提前写好被代理方法的代理类，编译后运行。在程序运行之前，class已经存在。<br>
 下面我们实现一个静态代理demo:</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1634527030816.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1634527030816.png" alt="静态代理：目标接口、实现类与手写代理类的关系图" loading="lazy"></figure>
 <p>定义一个接口Target</p>
 <pre><code class="language-java">package com.test.proxy;
 
@@ -203,7 +204,7 @@ execute</p>
 <h2 id="动态代理">动态代理</h2>
 <h3 id="jdk代理">jdk代理</h3>
 <p>动态代理主要是通过反射机制，在运行时动态生成所需代理的 class。</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1634527039701.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1634527039701.png" alt="JDK 动态代理：Proxy 生成的代理对象与 InvocationHandler 的调用关系图" loading="lazy"></figure>
 <p>接口</p>
 <pre><code class="language-java">package com.test.dynamic;
 
@@ -270,15 +271,15 @@ public class DynamicProxyTest {
 </code></pre>
 <p>运行结果：</p>
 <blockquote>
-<p><mark><mark><mark><mark>before</mark></mark></mark></mark>==<br>
+<p>========before==========<br>
 TargetImpl execute！<br>
-<mark><mark><mark><mark>after</mark></mark></mark></mark>===<br>
+========after===========<br>
 execute</p>
 </blockquote>
 <p>无论是动态代理还是静态代理，都需要定义接口，然后才能实现代理功能。这同样存在局限性，因此，为了解决这个问题，出现了第三种代理方式：cglib代理。</p>
 <h3 id="cglib代理">cglib代理</h3>
 <p>CGLib采用了非常底层的字节码技术，其原理是通过字节码技术为一个类创建子类，并在子类中采用方法拦截的技术拦截所有父类方法的调用，顺势织入横切逻辑。JDK动态代理与CGLib动态代理均是实现Spring AOP的基础。</p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1634527048720.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1634527048720.png" alt="CGLIB 动态代理：Enhancer 生成目标类的子类并拦截父类方法示意图" loading="lazy"></figure>
 <p>目标类</p>
 <pre><code class="language-java">package com.test.cglib;
 
@@ -307,7 +308,7 @@ public class MyMethodInterceptor implements MethodInterceptor{
         System.out.println(&quot;&gt;&gt;&gt;&gt;MethodInterceptor start...&quot;);
         Object result = proxy.invokeSuper(obj,args);
         System.out.println(&quot;&gt;&gt;&gt;&gt;MethodInterceptor ending...&quot;);
-        return &quot;result&quot;;
+        return result;
     }
 
 }
@@ -337,15 +338,15 @@ public class CglibTest {
 
 }
 </code></pre>
-<p>执行结果:</p>
-<hr>
+<p>执行结果：</p>
 <blockquote>
-<p>MethodInterceptor start...<br>
+<p>&gt;&gt;&gt;&gt;MethodInterceptor start...<br>
 -----------test------------<br>
-MethodInterceptor ending...<br>
-result</p>
+&gt;&gt;&gt;&gt;MethodInterceptor ending...<br>
+-----------test------------</p>
 </blockquote>
-<p>代理对象的生成过程由Enhancer类实现，大概步骤如下：</p>
+<p>需要注意的是，CGLIB 通过继承目标类来实现代理，因此无法代理 final 类以及 final、private 方法；同时它需要额外引入 CGLIB（或 Spring 内嵌的 ASM）相关依赖。JDK 动态代理则只要求目标类实现接口。Spring AOP 的选择策略是：目标对象实现了接口时可以用 JDK 动态代理，没有接口时使用 CGLIB；从 Spring Boot 2.x 开始，spring.aop.proxy-target-class 默认为 true，即统一使用 CGLIB 代理。</p>
+<p>代理对象的生成过程由 Enhancer 类实现，大概步骤如下：</p>
 <ol>
 <li>生成代理类Class的二进制字节码；</li>
 <li>通过Class.forName加载二进制字节码，生成Class对象；</li>
@@ -354,14 +355,15 @@ result</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86">静态代理</a>
 <ul>
-<li><a href="#%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86">静态代理</a></li>
-<li><a href="#%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86">动态代理</a>
+</ul>
+</li>
+<li>
+<a href="#%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86">动态代理</a>
 <ul>
 <li><a href="#jdk%E4%BB%A3%E7%90%86">jdk代理</a></li>
 <li><a href="#cglib%E4%BB%A3%E7%90%86">cglib代理</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

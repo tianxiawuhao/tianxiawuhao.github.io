@@ -36,7 +36,10 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
   <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
-<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
 
 <body>
   <!-- Navigation -->
@@ -124,48 +127,58 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/cFQZiMqpR.png" alt="封面图">
-          
-          <p>在策略梯度中加入基线（Baseline）可以降低方差，让策略函数收敛更快。本文使用带基线的策略梯度来学习策略网络。</p>
-<p>首先来回顾一下策略梯度：</p>
-<figure data-type="image" tabindex="1"><img src="https://pic4.zhimg.com/80/v2-c6a4f45683125517cd66291e96154b23_720w.webp" alt="img" loading="lazy"></figure>
-<h2 id="一-基准baseline">一、基准（Baseline）</h2>
-<p>采用基线（记为 b）可以降低方差、加快收敛。b 可以是任意数，但不能依赖于动作 A。</p>
-<p>接下来证明baseline的理论性质：</p>
-<figure data-type="image" tabindex="2"><img src="https://pic4.zhimg.com/80/v2-0f537b5816ce9cffbeda2dc09b59984f_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里可以发现：当 b 与动作 A 无关时，这一项等于 0</p>
-<figure data-type="image" tabindex="3"><img src="https://pic2.zhimg.com/80/v2-0485faf6c1e3df7dd262b0572abbecc5_720w.webp" alt="img" loading="lazy"></figure>
-<p>那么我们就得到了策略梯度的baseline形式：</p>
-<figure data-type="image" tabindex="4"><img src="https://pic1.zhimg.com/80/v2-8e18e2a7b06c89d3f7cfdb7c7a5bf6d0_720w.webp" alt="img" loading="lazy"></figure>
-<p>b 不会影响策略梯度的期望，但会影响蒙特卡洛近似的结果。若 b 的取值接近动作价值 Qπ（实践中常取状态价值 Vπ 作为基线），则蒙特卡洛近似的方差会降低，收敛更快。</p>
-<h2 id="二-蒙特卡洛近似monte-carlo-approximation">二、蒙特卡洛近似（Monte Carlo Approximation）</h2>
-<p>这个公式，就是我们刚刚推导出的带基线的策略梯度公式：</p>
-<figure data-type="image" tabindex="5"><img src="https://pic1.zhimg.com/80/v2-3b57a1488e92f3122df1596a551082ac_720w.webp" alt="img" loading="lazy"></figure>
-<p>因此，我们把期望内部的部分记为 g(A_t)：根据策略 π 随机抽样一个动作 a_t，即可得到 g(a_t) 的观测值。</p>
-<figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-421ba93de4c1b32693ef6fd711c120bd_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里的g(at)是关于策略梯度的一个无偏估计：</p>
-<figure data-type="image" tabindex="7"><img src="https://pic2.zhimg.com/80/v2-768bf4c4a9eba2237b80585c9bf7ca35_720w.webp" alt="img" loading="lazy"></figure>
-<p>由此得到一个随机的策略梯度，并采用随机梯度上升来更新参数、逼近最优策略</p>
-<figure data-type="image" tabindex="8"><img src="https://pic2.zhimg.com/80/v2-2e3e757a1790207b6998bdd3e8da7dbd_720w.webp" alt="img" loading="lazy"></figure>
-<p>前面证明了 baseline 不会改变期望 E[g(A_t)]，但上式表明 b 会影响它的蒙特卡洛近似——即实际观测到的 g(a_t)。因此，选择合适的 b 可以减小方差并加速收敛。</p>
-<figure data-type="image" tabindex="9"><img src="https://pic3.zhimg.com/80/v2-c1eda404f4e325d95c751a639f268d22_720w.webp" alt="img" loading="lazy"></figure>
-<h2 id="三-基准的选择choice-of-baseline">三、基准的选择（Choice of Baseline）</h2>
-<h3 id="1choice-1b-0">1）Choice 1：b = 0</h3>
-<figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-064bff5a25e311604ade8663ad54b70a_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="2choice-2b-vπst">2）Choice 2：b = Vπ(st)</h3>
-<figure data-type="image" tabindex="11"><img src="https://pic2.zhimg.com/80/v2-532052ded868ad89fe96e7c13667d409_720w.webp" alt="img" loading="lazy"></figure>
-<hr>
-
+          <p>在策略梯度中加入<strong>基线（Baseline）</strong>可以降低方差、加快收敛，是 REINFORCE 走向 Actor-Critic 的关键一步。本文按王树森《深度强化学习》课程笔记整理。</p>
+<h2 id="一-策略梯度回顾">一、策略梯度回顾</h2>
+<p>对离散动作空间，策略梯度定理为</p>
+<div class="math-block">\[\nabla_\theta J(\theta) = \mathbb{E}_{A\sim\pi(\cdot\mid s;\theta)}\Big[\nabla_\theta \ln \pi(A\mid s;\theta)\cdot Q_\pi(s,A)\Big]\]</div>
+<p>其中 \(Q_\pi(s,a)\) 是动作价值函数，用来给动作打分；梯度按「动作有多好」加权。</p>
+<h2 id="二-引入基准baseline">二、引入基准（Baseline）</h2>
+<p>取任意<strong>不依赖动作 \(A\)</strong> 的量 \(b\)（常数、状态价值 \(V_\pi(s)\)、回报均值都可以），把它从 \(Q_\pi\) 中减去：</p>
+<div class="math-block">\[\nabla_\theta J(\theta) = \mathbb{E}\Big[\nabla_\theta \ln \pi(A\mid s;\theta)\cdot\big(Q_\pi(s,A)-b\big)\Big]\]</div>
+<p>减掉 \(b\) 为什么不会改变梯度？因为当 \(b\) 与动作 \(A\) 无关时</p>
+<div class="math-block">\[\mathbb{E}\Big[\nabla_\theta \ln \pi(A\mid s;\theta)\cdot b\Big] = b\sum_a \nabla_\theta \pi(a\mid s;\theta) = b\,\nabla_\theta \underbrace{\sum_a \pi(a\mid s;\theta)}_{=1} = 0\]</div>
+<p>所以带基线的策略梯度仍然是<strong>无偏</strong>的，改变的是它的<strong>方差</strong>。</p>
+<h2 id="三-蒙特卡洛近似">三、蒙特卡洛近似</h2>
+<p>期望无法直接计算，改为按策略 \(\pi\) 采样动作 \(a_t\)：</p>
+<div class="math-block">\[g(a_t) = \nabla_\theta \ln \pi(a_t\mid s_t;\theta)\cdot\big(Q_\pi(s_t,a_t)-b\big)\]</div>
+<p>\(g(a_t)\) 是策略梯度的无偏估计，用随机梯度上升更新参数：\(\theta \leftarrow \theta + \alpha\,g(a_t)\)。\(b\) 不影响期望，却直接影响每次观测到的 \(g(a_t)\) 的大小——这正是方差差异的来源。</p>
+<h2 id="四-为什么取-v-作基线">四、为什么取 \(V_\pi(s)\) 作基线</h2>
+<p>若取 \(b = V_\pi(s)\)，括号内就是<strong>优势函数</strong>：</p>
+<div class="math-block">\[A_\pi(s,a) = Q_\pi(s,a) - V_\pi(s)\]</div>
+<p>它衡量「这个动作比平均水平好多少」：优于平均为正、劣于平均为负，符号有区分度，数值更接近 0，方差明显小于直接用 \(Q_\pi\)。</p>
+<p><img src="/post-assets/cFQZiMqpR/01-baseline-variance.svg" alt="基线如何降低策略梯度估计的方差"></p>
+<h2 id="五-实践要点">五、实践要点</h2>
+<ul>
+<li><strong>取值自由度</strong>：只要与动作无关，\(b\) 可以是任意数；实践中常用 \(V_\pi(s)\)，也可用常数或一个 batch 的平均回报。</li>
+<li><strong>只降方差、不改期望</strong>：\(Q_\pi\) 与 \(Q_\pi-V_\pi\) 期望相同，但后者更接近 0，蒙特卡洛近似更稳定、收敛更快。</li>
+<li><strong>与 Actor-Critic 衔接</strong>：用 Critic 网络 \(v(s;w)\) 近似 \(V_\pi\)，就得到带基线的策略梯度（A2C）形式；基线越准，方差越小。</li>
+<li><strong>常见误区</strong>：基线不能依赖动作，否则期望不再是原来的梯度；基线本身不必很准，有偏的 \(V\) 依然能降低方差。</li>
+</ul>
+<p>延伸阅读：Actor-Critic（笔记4）、蒙特卡洛（笔记3 与笔记5 相关推导）。</p>
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6%E5%9B%9E%E9%A1%BE">一、策略梯度回顾</a>
 <ul>
-<li><a href="#%E4%B8%80-%E5%9F%BA%E5%87%86baseline">一、基准（Baseline）</a></li>
-<li><a href="#%E4%BA%8C-%E8%92%99%E7%89%B9%E5%8D%A1%E6%B4%9B%E8%BF%91%E4%BC%BCmonte-carlo-approximation">二、蒙特卡洛近似（Monte Carlo Approximation）</a></li>
-<li><a href="#%E4%B8%89-%E5%9F%BA%E5%87%86%E7%9A%84%E9%80%89%E6%8B%A9choice-of-baseline">三、基准的选择（Choice of Baseline）</a>
-<ul>
-<li><a href="#1choice-1b-0">1）Choice 1：b = 0</a></li>
-<li><a href="#2choice-2b-v%CF%80st">2）Choice 2：b = Vπ(st)</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-%E5%BC%95%E5%85%A5%E5%9F%BA%E5%87%86baseline">二、引入基准（Baseline）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E8%92%99%E7%89%B9%E5%8D%A1%E6%B4%9B%E8%BF%91%E4%BC%BC">三、蒙特卡洛近似</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%96-v-%E4%BD%9C%E5%9F%BA%E7%BA%BF">四、为什么取 \(V_\pi(s)\) 作基线</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E5%AE%9E%E8%B7%B5%E8%A6%81%E7%82%B9">五、实践要点</a>
+<ul>
 </ul>
 </li>
 </ul>
@@ -263,6 +276,18 @@
   <script src="/media/scripts/tocScript.js"></script>
 
 <script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "\\(", right: "\\)", display: false}, {left: "\\[", right: "\\]", display: true}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+
 </body>
 
 </html>
