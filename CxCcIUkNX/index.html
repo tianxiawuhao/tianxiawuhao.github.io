@@ -205,19 +205,19 @@ class Bank{
     }
 </code></pre>
 <p>初始化默认使用非公平锁</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1634801159801.png" alt="" loading="lazy"></figure>
-<figure data-type="image" tabindex="2"><img src="/post-images/1634801206315.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1634801159801.png" alt="ReentrantLock 无参构造方法源码：默认创建 NonfairSync（非公平锁）" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1634801206315.png" alt="ReentrantLock 带 fair 参数的构造方法源码：为 true 用 FairSync，否则用 NonfairSync" loading="lazy"></figure>
 <p>公平锁和非公平锁继承自 AbstractQueuedSynchronizer（抽象的队列式同步器，AQS 定义了一套多线程访问共享资源的同步器框架）</p>
 <p>AQS框架</p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1634801241636.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1634801241636.png" alt="AQS 框架结构图：state 同步状态、CLH 同步队列与独占/共享获取方式" loading="lazy"></figure>
 <ul>
 <li>NonfairSync的类继承关系<br>
-<img src="/post-images/1634801286878.png" alt="" loading="lazy"></li>
+<img src="/post-images/1634801286878.png" alt="NonfairSync 的类继承关系：NonfairSync → Sync → AbstractQueuedSynchronizer → AbstractOwnableSynchronizer" loading="lazy"></li>
 <li>FairSync的类继承关系<br>
-<img src="/post-images/1634801320830.png" alt="" loading="lazy"></li>
+<img src="/post-images/1634801320830.png" alt="FairSync 的类继承关系：FairSync → Sync → AbstractQueuedSynchronizer → AbstractOwnableSynchronizer" loading="lazy"></li>
 </ul>
 <p>下面以非公平锁为例</p>
-<figure data-type="image" tabindex="4"><img src="/post-images/1634801531856.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1634801531856.png" alt="非公平锁加锁入口 lock() 方法源码截图" loading="lazy"></figure>
 <pre><code class="language-java">/**
  * Performs lock.  Try immediate barge, backing up to normal
  * acquire on failure.
@@ -232,17 +232,20 @@ final void lock() {
 }
 
 </code></pre>
+<blockquote>
+<p>先厘清三个名字：<code>state</code> 是 AQS 的同步状态字段，ReentrantLock 用它记录锁被重入的次数；<code>compareAndSetState()</code>、<code>setExclusiveOwnerThread()</code> 都是 AQS 提供的方法。ReentrantLock 本身不直接实现这些逻辑，而是通过内部类 Sync 及其子类 NonfairSync、FairSync 继承 AQS 来复用它们。</p>
+</blockquote>
 <p>加锁时调用 lock 方法，首先判断 AQS 中的 state 参数是否被标记，尝试以 CAS 方式将 AQS 中的 state 从 0 更新为 1，成功则将当前线程赋予 AQS</p>
-<figure data-type="image" tabindex="5"><img src="/post-images/1634801522921.png" alt="" loading="lazy"></figure>
-<figure data-type="image" tabindex="6"><img src="/post-images/1634801553641.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="/post-images/1634801522921.png" alt="AQS 中 state 字段与 exclusiveOwnerThread 持有线程字段说明" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="/post-images/1634801553641.png" alt="setExclusiveOwnerThread 设置当前锁持有线程的源码截图" loading="lazy"></figure>
 <p>失败则调用AQS类的acquire(1)方法</p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1634801668520.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="/post-images/1634801668520.png" alt="AQS 的 acquire(int arg) 方法源码截图" loading="lazy"></figure>
 <pre><code class="language-java">//非公平模式下尝试获取锁的方法
 protected final boolean tryAcquire(int acquires) {
     return nonfairTryAcquire(acquires);
 }
 </code></pre>
-<figure data-type="image" tabindex="8"><img src="/post-images/1634801709991.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="8"><img src="/post-images/1634801709991.png" alt="NonfairSync 的 tryAcquire 调用 nonfairTryAcquire 的源码截图" loading="lazy"></figure>
 <pre><code class="language-java">/**
  * Performs non-fair tryLock.  tryAcquire is implemented in
  * subclasses, but both need nonfair try for trylock method.
@@ -266,12 +269,12 @@ final boolean nonfairTryAcquire(int acquires) {
     return false;     //走到这里说明尝试获取锁失败
 }
 </code></pre>
-<p>这是非公平模式下获取锁的通用方法。它囊括了当前线程在尝试获取锁时的所有可能情况：</p>
-<ul>
-<li>1.当前锁未被任何线程持有(state=0),则以cas方式获取锁,若获取成功则设置exclusiveOwnerThread为当前线程,然后返回成功的结果；若cas失败,说明在得到state=0和cas获取锁之间有其他线程已经获取了锁,返回失败结果。</li>
-<li>2.若锁已经被当前线程获取(state&gt;0,exclusiveOwnerThread为当前线程),则将锁的重入次数加1(state+1),然后返回成功结果。因为该线程之前已经获得了锁,所以这个累加操作不用同步。</li>
-<li>3.若当前锁已经被其他线程持有(state&gt;0,exclusiveOwnerThread不为当前线程),则直接返回失败结果</li>
-</ul>
+<p>这是非公平模式下获取锁的通用方法，它囊括了当前线程尝试获取锁时的所有可能情况：</p>
+<ol>
+<li>当前锁未被任何线程持有(state=0),则以cas方式获取锁,若获取成功则设置exclusiveOwnerThread为当前线程,然后返回成功的结果；若cas失败,说明在得到state=0和cas获取锁之间有其他线程已经获取了锁,返回失败结果。</li>
+<li>若锁已经被当前线程获取(state&gt;0,exclusiveOwnerThread为当前线程),则将锁的重入次数加1(state+1),然后返回成功结果。因为该线程之前已经获得了锁,所以这个累加操作不用同步。</li>
+<li>若当前锁已经被其他线程持有(state&gt;0,exclusiveOwnerThread不为当前线程),则直接返回失败结果。</li>
+</ol>
 <p>因为我们用state来统计锁被线程重入的次数,所以当前线程尝试获取锁的操作是否成功可以简化为:state值是否成功累加1,是则尝试获取锁成功,否则尝试获取锁失败。</p>
 <p>其实这里还可以思考一个问题:nonfairTryAcquire已经实现了一个囊括所有可能情况的尝试获取锁的方式,为何在刚进入lock方法时还要通过compareAndSetState(0, 1)去获取锁,毕竟后者只有在锁未被任何线程持有时才能执行成功,我们完全可以把compareAndSetState(0, 1)去掉,对最后的结果不会有任何影响。这种在进行通用逻辑处理之前针对某些特殊情况提前进行处理的方式在后面还会看到,一个直观的想法就是它能提升性能，而代价是牺牲一定的代码简洁性。</p>
 <p>退回到上层的acquire方法,</p>
@@ -290,7 +293,7 @@ final boolean nonfairTryAcquire(int acquires) {
  * @return the new node
  */
 private Node addWaiter(Node mode) {
-    Node node = new Node(Thread.currentThread(), mode);//首先创建一个新节点,并将当前线程实例封装在内部,mode这里为null
+    Node node = new Node(Thread.currentThread(), mode);//首先创建一个新节点,并将当前线程实例封装在内部,此处mode为Node.EXCLUSIVE(独占模式)
     // Try the fast path of enq; backup to full enq on failure
     Node pred = tail;
     if (pred != null) {
@@ -348,10 +351,9 @@ private final boolean compareAndSetTail(Node expect, Node update) {
     return unsafe.compareAndSwapObject(this, tailOffset, expect, update);
 }
 </code></pre>
-<p>外层的for循环保证了所有获取锁失败的线程经过失败重试后最后都能加入同步队列。因为AQS的同步队列是不带哨兵结点的,故当队列为空时要进行特殊处理,这部分在if分句中。注意当前线程所在的结点不能直接插入<br>
-空队列,因为阻塞的线程是由前驱结点进行唤醒的。故先要插入一个结点作为队列首元素,当锁释放时由它来唤醒后面被阻塞的线程,从逻辑上这个队列首元素也可以表示当前正获取锁的线程,虽然并不一定真实持有其线程实例。</p>
+<p>外层的for循环保证了所有获取锁失败的线程经过失败重试后最后都能加入同步队列。因为AQS的同步队列使用的是虚拟头结点(不存放真实等待线程),故当队列为空时要进行特殊处理,这部分在if分句中。注意当前线程所在的结点不能直接插入空队列,因为阻塞的线程是由前驱结点进行唤醒的。故先要插入一个结点作为队列首元素,当锁释放时由它来唤醒后面被阻塞的线程,从逻辑上这个队列首元素可以表示当前正获取锁的线程(虽然它只是一个不持有线程实例的虚拟结点),直到它真正获取到锁后才成为持有锁的线程结点。</p>
 <p>首先通过new Node()创建一个空结点，然后以CAS方式让头指针指向该结点(该结点并非当前线程所在的结点),若该操作成功,则将尾指针也指向该结点。这部分的操作流程可以用下图表示<br>
-<img src="/post-images/1634801748941.png" alt="" loading="lazy"></p>
+<img src="/post-images/1634801748941.png" alt="enq 方法中队列为空时先构造虚拟头结点并以 CAS 设置 head 的流程图" loading="lazy"></p>
 <p>当队列不为空,则执行通用的入队逻辑,这部分在else分句中</p>
 <pre><code class="language-java">else {  //队列不为空
     node.prev = t;
@@ -361,19 +363,19 @@ private final boolean compareAndSetTail(Node expect, Node update) {
     }
 </code></pre>
 <p>首先当前线程所在的结点的前向指针pre指向当前线程认为的尾结点,源码中用t表示。然后以CAS的方式将尾指针指向当前结点,该操作仅当tail=t,即尾指针在进行CAS前未改变时成功。若CAS执行成功,则将原尾结点的后向指针next指向新的尾结点。整个过程如下图所示</p>
-<figure data-type="image" tabindex="9"><img src="/post-images/1634801777081.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="9"><img src="/post-images/1634801777081.png" alt="队列不为空时的入队过程示意图：node.prev 指向原尾结点、CAS 更新 tail、原尾结点 next 指向新结点" loading="lazy"></figure>
 <p>整个入队的过程并不复杂,是典型的CAS加失败重试的乐观锁策略。其中只有更新头指针和更新尾指针这两步进行了CAS同步,可以预见高并发场景下性能是非常好的。但是本着质疑精神我们不禁会思考下这么做真的线程安全吗？<br>
-<img src="/post-images/1634801800984.png" alt="" loading="lazy"></p>
+<img src="/post-images/1634801800984.png" alt="入队三步操作编号示意图（1 设置 prev、2 CAS tail、3 设置 next）" loading="lazy"></p>
 <ul>
 <li>1.队列为空的情况:<br>
 因为队列为空,故head=tail=null,假设线程执行2成功,则在其执行3之前,因为tail=null,其他进入该方法的线程因为head不为null将在2处不停的失败,所以3即使没有同步也不会有线程安全问题。</li>
 <li>2.队列不为空的情况:<br>
 假设线程执行5成功,则此时4的操作必然也是正确的(当前结点的prev指针确实指向了队列尾结点,换句话说tail指针没有改变,如若不然5必然执行失败),又因为4执行成功,当前节点在队列中的次序已经确定了,所以6何时执行对线程安全不会有任何影响,比如下面这种情况</li>
 </ul>
-<figure data-type="image" tabindex="10"><img src="/post-images/1634801836174.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="10"><img src="/post-images/1634801836174.png" alt="结点入队次序确定后 next 指针延迟赋值的并发场景示意图" loading="lazy"></figure>
 <p>为了确保真的理解了它,可以思考这个问题:把enq方法图中的4放到5之后,整个入队的过程还线程安全吗？</p>
 <p>到这为止,获取锁失败的线程加入同步队列的逻辑就结束了。但是线程加入同步队列后会做什么我们并不清楚,这部分在acquireQueued方法中</p>
-<figure data-type="image" tabindex="11"><img src="/post-images/1634801857466.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="/post-images/1634801857466.png" alt="线程入队后进入 acquireQueued 循环等待的流程示意图" loading="lazy"></figure>
 <p>acquireQueued方法的源码</p>
 <pre><code class="language-java">/**
  * Acquires in exclusive uninterruptible mode for thread already in
@@ -483,14 +485,15 @@ private final boolean parkAndCheckInterrupt() {
 </ul>
 </blockquote>
 <p>下面通过一张流程图来说明线程从加入同步队列到成功获取锁的过程<br>
-<img src="/post-images/1634801891432.png" alt="" loading="lazy"></p>
+<img src="/post-images/1634801891432.png" alt="线程从加入同步队列到成功获取锁的完整流程图" loading="lazy"></p>
 <p>概括的说,线程在同步队列中会尝试获取锁,失败则被阻塞,被唤醒后会不停的重复这个过程,直到线程真正持有了锁,并将自身结点置于队列头部。</p>
 <p>ReentrantLock非公平模式下的加锁流程如下<br>
-<img src="/post-images/1634801907228.png" alt="" loading="lazy"></p>
+<img src="/post-images/1634801907228.png" alt="ReentrantLock 非公平模式下加锁流程总览图" loading="lazy"></p>
+<p><img src="/post-assets/CxCcIUkNX/01-lock-acquire-flow.svg" alt="ReentrantLock 非公平模式加锁流程图：CAS 抢占、tryAcquire 重试、入队与 park 阻塞、被唤醒后重新检查"></p>
 <h3 id="解锁">解锁</h3>
 <p>解锁源码如下：</p>
-<figure data-type="image" tabindex="12"><img src="/post-images/1634801926669.png" alt="" loading="lazy"></figure>
-<figure data-type="image" tabindex="13"><img src="/post-images/1634801941512.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="12"><img src="/post-images/1634801926669.png" alt="unlock() 方法源码截图" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="/post-images/1634801941512.png" alt="AQS 的 release(int arg) 方法源码截图" loading="lazy"></figure>
 <pre><code class="language-java">public void unlock() {
     sync.release(1);  
 }
@@ -506,7 +509,7 @@ public final boolean release(int arg) {
 }
 </code></pre>
 <p>正确找到sync的实现类,找到真正的入口方法,主要内容都在一个if语句中,先看下判断条件tryRelease方法</p>
-<figure data-type="image" tabindex="14"><img src="/post-images/1634801958450.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="14"><img src="/post-images/1634801958450.png" alt="Sync 的 tryRelease(int releases) 方法源码截图" loading="lazy"></figure>
 <pre><code class="language-java">protected final boolean tryRelease(int releases) {
     int c = getState() - releases; //计算待更新的state值
     if (Thread.currentThread() != getExclusiveOwnerThread())
@@ -527,7 +530,7 @@ public final boolean release(int arg) {
 <li>h.waitStatus != 0是为了防止队列中虽有线程,但该线程还未阻塞,由前面的分析知,线程在阻塞自己前必须设置前驱结点的状态为SIGNAL,否则它不会阻塞自己。</li>
 </ul>
 <p>接下来就是唤醒线程的操作,unparkSuccessor(h)源码如下</p>
-<figure data-type="image" tabindex="15"><img src="/post-images/1634801976600.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="15"><img src="/post-images/1634801976600.png" alt="unparkSuccessor(Node node) 方法源码截图" loading="lazy"></figure>
 <pre><code class="language-java">private void unparkSuccessor(Node node) {
     /*
      * If status is negative (i.e., possibly needing signal) try
@@ -557,15 +560,18 @@ public final boolean release(int arg) {
 </code></pre>
 <p>一般情况下只要唤醒后继结点的线程就行了,但是后继结点可能已经取消等待,所以从队列尾部往前回溯,找到离头结点最近的正常结点,并唤醒其线程。</p>
 <p><strong>解锁流程源码总结</strong></p>
-<figure data-type="image" tabindex="16"><img src="/post-images/1634801989557.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="/post-images/1634801989557.png" alt="解锁流程源码总结图" loading="lazy"></figure>
 <h2 id="公平锁相比非公平锁的不同">公平锁相比非公平锁的不同</h2>
+<p>非公平锁在加锁时先直接尝试一次 CAS 抢锁，抢不到才进入同步队列排队；公平锁则先检查队列中是否有前驱节点，有就乖乖排队。下面的状态图对比了两者在同一时刻的加锁决策差异。</p>
+<p><img src="/post-assets/CxCcIUkNX/28-nonfair-lock-state.svg" alt="非公平锁加锁时的状态判定与插队路径"></p>
+<p><img src="/post-assets/CxCcIUkNX/29-fair-vs-nonfair.svg" alt="公平锁与非公平锁的加锁流程对比"></p>
 <p>公平锁模式下,对锁的获取有严格的条件限制。在同步队列有线程等待的情况下,所有线程在获取锁前必须先加入同步队列。队列中的线程按加入队列的先后次序获得锁。<br>
 从公平锁加锁的入口开始,<br>
-<img src="/post-images/1634802000468.png" alt="" loading="lazy"></p>
+<img src="/post-images/1634802000468.png" alt="公平锁 FairSync 的 lock() 入口代码截图：直接调用 acquire(1)，没有非重入式抢占" loading="lazy"></p>
 <p>对比非公平锁,少了非重入式获取锁的方法,这是第一个不同点</p>
 <p>接着看获取锁的通用方法tryAcquire(),该方法在线程未进入队列,加入队列阻塞前和阻塞后被唤醒时都会执行。<br>
-<img src="/post-images/1634802012961.png" alt="" loading="lazy"></p>
-<p>在真正CAS获取锁之前加了判断,内容如下</p>
+<img src="/post-images/1634802012961.png" alt="公平锁 tryAcquire 中先调用 hasQueuedPredecessors() 判断队列中是否有更早的等待线程" loading="lazy"></p>
+<p>在真正 CAS 获取锁之前增加了判断，内容如下</p>
 <pre><code class="language-java">public final boolean hasQueuedPredecessors() {
     // The correctness of this depends on head being initialized
     // before tail and on head.next being accurate if the current
@@ -598,17 +604,17 @@ public final boolean release(int arg) {
 <li>第二次是在进入同步队列前,包含所有情况的获取锁的方式。</li>
 </ul>
 <p>只有这两次获取锁都失败后,线程才会构造结点并加入同步队列等待。而线程释放锁时是先释放锁(修改state值),然后才唤醒后继结点的线程的。试想下这种情况,线程A已经释放锁,但还没来得及唤醒后继线程C,而这时另一个线程B刚好尝试获取锁,此时锁恰好不被任何线程持有,它将成功获取锁而不用加入队列等待。线程C被唤醒尝试获取锁,而此时锁已经被线程B抢占,故而其获取失败并继续在队列中等待。整个过程如下图所示<br>
-<img src="/post-images/1634802025981.png" alt="" loading="lazy"></p>
-<p>如果以线程第一次尝试获取锁到最后成功获取锁的次序来看,非公平锁确实很不公平。因为在队列中等待很久的线程相比还未进入队列等待的线程并没有优先权,甚至竞争也处于劣势:在队列中的线程要等待其他线程唤醒,在获取锁之前还要检查前驱结点是否为头结点。在锁竞争激烈的情况下,在队列中等待的线程可能迟迟竞争不到锁。这也就非公平在高并发情况下会出现的饥饿问题。那我们再开发中为什么大多使用会导致饥饿的非公平锁？很简单,因为它性能好啊。</p>
+<img src="/post-images/1634802025981.png" alt="线程 A 释放锁后线程 B 抢占、线程 C 被唤醒后获取锁失败的时序示意图" loading="lazy"></p>
+<p>如果以线程第一次尝试获取锁到最后成功获取锁的次序来看,非公平锁确实很不公平。因为在队列中等待很久的线程相比还未进入队列等待的线程并没有优先权,甚至竞争也处于劣势:在队列中的线程要等待其他线程唤醒,在获取锁之前还要检查前驱结点是否为头结点。在锁竞争激烈的情况下,在队列中等待的线程可能迟迟竞争不到锁。这也就是非公平锁在高并发情况下会出现的饥饿问题。那我们在开发中为什么大多使用会导致饥饿的非公平锁？很简单,因为它性能好啊。</p>
 <h3 id="为什么非公平锁性能好">为什么非公平锁性能好</h3>
 <p>非公平锁对锁的竞争是抢占式的(队列中线程除外),线程在进入等待队列前可以进行两次尝试,这大大增加了获取锁的机会。这种好处体现在两个方面:</p>
 <ul>
 <li>1.线程不必加入等待队列就可以获得锁,不仅免去了构造结点并加入队列的繁琐操作,同时也节省了线程阻塞唤醒的开销,线程阻塞和唤醒涉及到线程上下文的切换和操作系统的系统调用,是非常耗时的。在高并发情况下,如果线程持有锁的时间非常短,短到线程入队阻塞的过程超过线程持有并释放锁的时间开销,那么这种抢占式特性对并发性能的提升会更加明显。</li>
 <li>2.减少CAS竞争。如果线程必须要加入阻塞队列才能获取锁,那入队时CAS竞争将变得异常激烈,CAS操作虽然不会导致失败线程挂起,但不断失败重试导致的对CPU的浪费也不能忽视。除此之外,加锁流程中至少有两处通过将某些特殊情况提前来减少CAS操作的竞争,增加并发情况下的性能。一处就是获取锁时将非重入的情况提前,如下图所示<br>
-<img src="/post-images/1634802037809.png" alt="" loading="lazy"></li>
+<img src="/post-images/1634802037809.png" alt="非公平锁在 tryAcquire 中把非重入获取锁的情况提前处理的代码截图" loading="lazy"></li>
 </ul>
 <p>另一处就是入队的操作,将同步队列非空的情况提前处理<br>
-<img src="/post-images/1634802048793.png" alt="" loading="lazy"></p>
+<img src="/post-images/1634802048793.png" alt="入队前先处理同步队列非空情况的代码截图" loading="lazy"></p>
 <p>这两部分的代码在之后的通用逻辑处理中都有,很显然属于重复代码,但因为避免了执行无意义的流程代码,比如for循环,获取同步状态等,高并发场景下也能减少CAS竞争失败的可能。</p>
 <h2 id="读写锁reentrantreadwritelock">读写锁ReentrantReadWriteLock</h2>
 <p>首先明确一下，不是说 ReentrantLock 不好，只是 ReentrantLock 某些时候有局限。如果使用 ReentrantLock，可能本身是为了防止线程 A 在写数据、线程 B 在读数据造成的数据不一致，但这样，如果线程 C 在读数据、线程 D 也在读数据，读数据是不会改变数据的，没有必要加锁，但是还是加锁了，降低了程序的性能。因为这个，才诞生了读写锁 ReadWriteLock。</p>
@@ -616,28 +622,41 @@ public final boolean release(int arg) {
 <p>而读写锁有以下三个重要的特性：</p>
 <p>（1）公平选择性：支持非公平（默认）和公平的锁获取方式，吞吐量还是非公平优于公平。</p>
 <p>（2）重进入：读锁和写锁都支持线程重进入。</p>
+<p>（3）锁降级：遵循获取写锁、获取读锁再释放写锁的次序，写锁能够降级成为读锁；反过来，读锁不能升级为写锁。</p>
+<h3 id="读写状态的设计">读写状态的设计</h3>
+<p>读写锁需要在同一个同步状态上同时表达"读锁被多少线程持有"和"写锁被重入了几次"，它选择把 AQS 的 32 位 <code>state</code> 拆成两半：高 16 位记录读锁的持有总数（含读锁重入），低 16 位记录写锁的重入次数。</p>
+<ul>
+<li>获取写锁：<code>state</code> 加 1，相当于低 16 位加 1；只有低 16 位为 0（当前没有写锁）且高 16 位也为 0 时才能成功，因为写锁与读锁互斥。</li>
+<li>获取读锁：<code>state</code> 加 <code>1 &lt;&lt; 16</code>，相当于高 16 位加 1；只要当前没有写锁被其他线程持有，多个读线程可以同时成功，所以读锁是共享的。</li>
+<li>每一半的最大值都是 65535：读锁持有数或写锁重入次数超过该值都会抛出 <code>Error</code>，这也是读写锁重入次数的上限。</li>
+</ul>
+<p>正因为读锁与写锁共用同一个 <code>state</code>，读锁才不支持升级为写锁：如果两个线程同时持有读锁又都想升级，它们会互相等待对方释放读锁，从而形成死锁。</p>
+<p><img src="/post-assets/CxCcIUkNX/02-readwrite-state-split.svg" alt="ReentrantReadWriteLock 把 32 位 state 拆成高 16 位读锁计数与低 16 位写锁重入次数的示意图"></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#reentrantlock%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">ReentrantLock源码解析</a>
+<a href="#reentrantlock%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">ReentrantLock源码解析</a>
 <ul>
 <li><a href="#%E5%8A%A0%E9%94%81">加锁</a></li>
 <li><a href="#%E8%A7%A3%E9%94%81">解锁</a></li>
 </ul>
 </li>
-<li><a href="#%E5%85%AC%E5%B9%B3%E9%94%81%E7%9B%B8%E6%AF%94%E9%9D%9E%E5%85%AC%E5%B9%B3%E9%94%81%E7%9A%84%E4%B8%8D%E5%90%8C">公平锁相比非公平锁的不同</a></li>
-<li><a href="#%E4%B8%80%E4%BA%9B%E7%96%91%E9%97%AE%E7%9A%84%E8%A7%A3%E7%AD%94">一些疑问的解答</a>
+<li>
+<a href="#%E5%85%AC%E5%B9%B3%E9%94%81%E7%9B%B8%E6%AF%94%E9%9D%9E%E5%85%AC%E5%B9%B3%E9%94%81%E7%9A%84%E4%B8%8D%E5%90%8C">公平锁相比非公平锁的不同</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%80%E4%BA%9B%E7%96%91%E9%97%AE%E7%9A%84%E8%A7%A3%E7%AD%94">一些疑问的解答</a>
 <ul>
 <li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E5%9F%BA%E4%BA%8Efifo%E7%9A%84%E5%90%8C%E6%AD%A5%E9%98%9F%E5%88%97%E5%8F%AF%E4%BB%A5%E5%AE%9E%E7%8E%B0%E9%9D%9E%E5%85%AC%E5%B9%B3%E9%94%81">为什么基于FIFO的同步队列可以实现非公平锁？</a></li>
 <li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9D%9E%E5%85%AC%E5%B9%B3%E9%94%81%E6%80%A7%E8%83%BD%E5%A5%BD">为什么非公平锁性能好</a></li>
 </ul>
 </li>
-<li><a href="#%E8%AF%BB%E5%86%99%E9%94%81reentrantreadwritelock">读写锁ReentrantReadWriteLock</a></li>
-</ul>
-</li>
+<li>
+<a href="#%E8%AF%BB%E5%86%99%E9%94%81reentrantreadwritelock">读写锁ReentrantReadWriteLock</a>
+<ul>
+<li><a href="#%E8%AF%BB%E5%86%99%E7%8A%B6%E6%80%81%E7%9A%84%E8%AE%BE%E8%AE%A1">读写状态的设计</a></li>
 </ul>
 </li>
 </ul>

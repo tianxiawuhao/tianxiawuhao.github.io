@@ -137,10 +137,10 @@
 </ul>
 <h3 id="2-数据卷分类">2、数据卷分类</h3>
 <p>数据卷的实现方式很多，可通过 kubectl explain 查看当前版本支持的所有类型（多达 30 种）。</p>
-<pre><code class="language-shell">kubectl explain pod.spec.volumes
+<pre><code class="language-bash">kubectl explain pod.spec.volumes
 </code></pre>
 <p>但是我们大概可以粗分为以下三大类：</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1636079774456510.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1636079774456510.png" alt="K8s 数据卷按用途划分的三大类：配置信息、临时存储、持久化存储" loading="lazy"></figure>
 <blockquote>
 <ul>
 <li>配置信息：像独立的键值对文件一样，把文件中的键值对挂载到容器内；</li>
@@ -151,13 +151,13 @@
 <hr>
 <h2 id="二-nfs网络文件系统的安装与调试">二、NFS 网络文件系统的安装与调试</h2>
 <p>NFS（Network File System）即网络文件系统，允许网络中的计算机共享资源。把 NFS 主机分享的目录挂载到本地客户端后，客户端应用可以透明地读写远端 NFS 服务器上的文件，看起来就像访问本地文件一样。</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1636080279415407.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1636080279415407.png" alt="NFS 客户端通过 RPC 访问 NFS 服务器共享目录的 C/S 架构示意图" loading="lazy"></figure>
 <p>NFS设计成C/S架构，通过RPC远程过程调用的方式实现数据同步！</p>
 <h3 id="1-在master节点安装nfs-server当然其他节点也可以"><strong>1、在Master节点安装NFS Server（当然，其他节点也可以）</strong></h3>
-<pre><code class="language-shell">yum install -y nfs-utils
+<pre><code class="language-bash">yum install -y nfs-utils
  
-#执行命令 vi /etc/exports，创建 exports 文件，文件内容如下：
-echo &quot;/nfs/data/ *(insecure,rw,sync,no_root_squash)&quot; &gt; /etc/exports
+#创建并写入 exports 文件（也可以先 vi /etc/exports 手工编辑），内容为：
+echo &quot;/nfs/data *(insecure,rw,sync,no_root_squash)&quot; &gt; /etc/exports
  
 # 执行以下命令，启动 nfs 服务;创建共享目录
 mkdir -p /nfs/data
@@ -173,7 +173,7 @@ exportfs -r
 ## 说明已经nfs-server服务已经启动，生效
 </code></pre>
 <h3 id="2-在我们两台需要共享nfs-server的机器上安装nfs-client"><strong>2、在我们两台需要共享nfs server的机器上，安装NFS Client</strong></h3>
-<pre><code class="language-shell">yum install -y nfs-utils
+<pre><code class="language-bash">yum install -y nfs-utils
  
 #执行以下命令检查 nfs 服务器端是否有设置共享目录
 # showmount -e $(nfs服务器的IP)
@@ -185,11 +185,11 @@ Export list for 192.168.56.20
 #执行以下命令挂载 nfs 服务器上的共享目录到本机路径 /root/nfsmount
 mkdir /root/nfsmount
  
-# mount -t nfs $(nfs服务器的IP):/root/nfs_root /root/nfsmount
+# 挂载格式：mount -t nfs &lt;nfs服务器IP&gt;:&lt;共享目录&gt; &lt;本机挂载点&gt;
 mount -t nfs 192.168.56.20:/nfs/data /root/nfsmount
 </code></pre>
 <h3 id="3-测试nfs服务是否在3台服务器上已经生效"><strong>3、测试NFS服务是否在3台服务器上已经生效</strong></h3>
-<pre><code class="language-shell">#1、 client节点执行命令，看本地的文件系统列表：
+<pre><code class="language-bash">#1、 client节点执行命令，看本地的文件系统列表：
 [root@k8s-02 ~]# df -Th
 Filesystem              Type      Size  Used Avail Use% Mounted on
 devtmpfs                devtmpfs  1.9G     0  1.9G   0% /dev
@@ -204,19 +204,19 @@ tmpfs                   tmpfs     379M     0  379M   0% /run/user/0
 #2、在server上目录种创建文件aaa.txt
 #3、在clinet上目录中创建文件bbb.txt
 </code></pre>
-<figure data-type="image" tabindex="3"><img src="/post-images/1636082103160000.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1636082103160000.png" alt="三台主机上 NFS 共享目录内文件实时同步的验证截图" loading="lazy"></figure>
 <p>可以看到，3台主机上对应的文件已经立即得到了同步！</p>
 <h3 id="4-补充有时候我们即使安装了nfs-utils依然无法使用showmount-e-ip">4、补充：有时候即使安装了 nfs-utils，依然无法使用 showmount -e ip</h3>
 <p>我们可以直接在客户端配置fstab挂载：</p>
-<pre><code class="language-shell">vi /etc/fstab
+<pre><code class="language-bash">vi /etc/fstab
 ##追加nfs master的信息
 10.130.59.50:/nfs/data  /nfs/data                  nfs     defaults     0 0
 </code></pre>
 <p>执行以下命令，让修改后的fstab生效：</p>
-<pre><code class="language-shell">mount -a
+<pre><code class="language-bash">mount -a
 </code></pre>
 <p>之后查看：</p>
-<pre><code class="language-shell">df -Th
+<pre><code class="language-bash">df -Th
 ##存在以下行：
 10.130.59.50:/nfs/data nfs4       50G  4.4G   46G   9% /nfs/data
 </code></pre>
@@ -244,7 +244,7 @@ spec:
       server: 192.168.56.20
 </code></pre>
 <h3 id="2-执行此yaml文件部署一台nginx"><strong>2、执行此yaml文件，部署一台nginx：</strong></h3>
-<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f nginxnfs.yaml 
+<pre><code class="language-bash">[root@k8s-01 mytest]# kubectl apply -f nginxnfs.yaml 
 pod/vol-nfs created
  
 [root@k8s-01 mytest]# kubectl get pod -n mytest -owide
@@ -252,18 +252,19 @@ NAME      READY   STATUS    RESTARTS   AGE   IP               NODE     NOMINATED
 vol-nfs   1/1     Running   0          68s   10.244.165.226   k8s-03   &lt;none&gt;           &lt;none&gt;
 </code></pre>
 <h3 id="3-nfs-server的对应目录下创建一个indexhtml文件然后访问"><strong>3、nfs server的对应目录下，创建一个index.html文件，然后访问：</strong></h3>
-<pre><code class="language-shell">[root@k8s-01 mytest]# echo 12345 &gt; /nfs/data/index.html
+<pre><code class="language-bash">[root@k8s-01 mytest]# echo 12345 &gt; /nfs/data/index.html
 [root@k8s-01 mytest]# curl 10.244.165.226
 12345
 </code></pre>
-<p>可以看到，明明部署在 k8s-03 节点上的 Pod，依然可以正常挂载使用 k8s-01 节点上的文件系统。</p>
+<p>可以看到，明明部署在 k8s-03 节点上的 Pod，依然可以正常挂载使用 k8s-01 节点上的文件系统。这种写法是在 Pod 的 <code>volumes</code> 里直接写 <code>nfs</code>，跳过了 PV/PVC 这一层，只适合快速验证；生产环境更推荐下面介绍的 PV + PVC 方式，把存储细节与业务 yaml 解耦。</p>
+<p>另外注意：上例中的 curl 访问的是 <code>vol-nfs</code> 这个 Pod 的 IP，与本小节 Nginx 示例中创建的 <code>mypvc-nginx</code> Pod 并不是同一个，实际测试时请以 <code>kubectl get pod -o wide</code> 输出的 IP 为准。</p>
 <hr>
 <h2 id="四-pv-pvc-storageclass的基础知识">四、PV、PVC、StorageClass 的基础知识</h2>
 <blockquote>
 <p><strong>背景：为什么要把一个存储事情分成这么多层？如此复杂？</strong></p>
 <p>答：<strong>存储的管理</strong>是一个与<strong>计算实例的管理</strong>完全不同的问题。</p>
 <p>因为部署 Pod 的 yaml 一般由开发人员编写，而我们并不清楚以后部署的服务器是什么情况、支持哪些文件存储方式，所以 Pod 无法一次性地完成所有事情。</p>
-<figure data-type="image" tabindex="4"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20211105/1636098068554379.png" alt="image.png" loading="lazy"></figure>
+<p><img src="/post-assets/Ija68kq2u/01-pv-pvc-sc.svg" alt="K8s 存储分层示意图：Pod 引用 PVC，PVC 绑定 PV，PV 落地到 NFS 或云盘，无可用 PV 时由 StorageClass 动态创建"></p>
 <p>有了 PV（Persistent Volume）和 PVC（Persistent Volume Claim）后，运维人员可以提前准备很多 PV；我们在部署 Pod 的 yaml 文件中只需声明一个 PVC（对 PV 的申请），K8s 就能自动为 Pod 匹配可用的 PV。</p>
 <ul>
 <li><strong>程序员：</strong>只需负责编写 Pod + PVC 的 yaml 文件；</li>
@@ -326,11 +327,12 @@ spec:
     path: /nfs/data/three
 </code></pre>
 <p>应用此yaml文件后，将产生3个pv存储卷：</p>
-<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f mypv.yaml 
+<pre><code class="language-bash">[root@k8s-01 mytest]# kubectl apply -f mypv.yaml 
 persistentvolume/mypv-10m created
 persistentvolume/mypv-20m created
 persistentvolume/mypv-50m created
-[root@k8s-01 mytest]# kubectl get pv -n mytest 
+[root@k8s-01 mytest]# kubectl get pv   # PV 是集群级资源，不受 namespace 限制，无需 -n
+
 NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS     REASON   AGE
 mypv-10m   10m        RWO            Retain           Available           my-nfs-storage            11s
 mypv-20m   20m        RWO            Retain           Available           my-nfs-storage            11s
@@ -363,7 +365,7 @@ mypv-50m   50m        RWO            Retain           Available           my-nfs
 </li>
 <li>
 <p>Delete — 诸如 AWS EBS、GCE PD、Azure Disk 或 OpenStack Cinder 卷这类关联存储资产也被删除；</p>
-<p>目前仅 NFS 和 HostPath 支持回收（Recycle，新版本中已逐步废弃）；AWS EBS、GCE PD、Azure Disk 和 Cinder 卷支持删除（Delete）——PV 会随底层存储资产一起被删除。</p>
+<p>需要特别说明：Recycle 回收策略自 Kubernetes 1.23 起被标记废弃，并在后续版本中被移除，新集群不要再用；现在只用 Retain 和 Delete 两种。AWS EBS、GCE PD、Azure Disk 和 Cinder 这类云盘卷支持 Delete——PV 会随底层存储资产一起被删除。</p>
 </li>
 </ul>
 </li>
@@ -387,7 +389,7 @@ mypv-50m   50m        RWO            Retain           Available           my-nfs
 </ul>
 </li>
 <li>
-<p><strong><img src="/post-images/1636102583137121.png" alt="image.png" loading="lazy"></strong></p>
+<p><strong><img src="/post-images/1636102583137121.png" alt="kubectl get pv 输出中各列含义说明图" loading="lazy"></strong></p>
 </li>
 </ul>
 </blockquote>
@@ -402,7 +404,7 @@ metadata:
   labels:
     app: nginx-pvc
 spec:
-  storageClassName: my-nfs-storage #必须与PV的该项对应，K8s将会从该SC对应的pv资源种为我们匹配合适的资源
+  storageClassName: my-nfs-storage #必须与PV的该项对应，K8s 将会从该 StorageClass 对应的 PV 资源中为我们匹配合适的资源
   accessModes:
     - ReadWriteOnce
   resources:
@@ -410,12 +412,13 @@ spec:
       storage: 15m #我故意写的15m，看看K8s是否会帮我们挑选一个最合适的PV资源
 </code></pre>
 <p>我们应用此yaml文件后，查看pvc和pv的状态：</p>
-<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f mypvc.yaml 
+<pre><code class="language-bash">[root@k8s-01 mytest]# kubectl apply -f mypvc.yaml 
 persistentvolumeclaim/mypvc created
 [root@k8s-01 mytest]# kubectl get pvc -n mytest 
 NAME    STATUS   VOLUME     CAPACITY   ACCESS MODES   STORAGECLASS     AGE
 mypvc   Bound    mypv-20m   20m        RWO            my-nfs-storage   14s
-[root@k8s-01 mytest]# kubectl get pv -n mytest 
+[root@k8s-01 mytest]# kubectl get pv   # PV 是集群级资源，不受 namespace 限制，无需 -n
+
 NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM          STORAGECLASS     REASON   AGE
 mypv-10m   10m        RWO            Retain           Available                  my-nfs-storage            2m36s
 mypv-20m   20m        RWO            Retain           Bound       mytest/mypvc   my-nfs-storage            2m36s
@@ -454,7 +457,7 @@ spec:
   restartPolicy: Always
 </code></pre>
 <p>应用此 yaml 后，对应的 nginx 即可被创建；再到对应的 two 文件夹中创建 index.html，即可看到效果：</p>
-<pre><code class="language-shell">[[root@k8s-01 mytest]# kubectl get all -n mytest
+<pre><code class="language-bash">[[root@k8s-01 mytest]# kubectl get all -n mytest
 NAME              READY   STATUS    RESTARTS   AGE
 pod/mypvc-nginx   1/1     Running   0          3m55s
 pod/vol-nfs       1/1     Running   0          5h25m
@@ -478,14 +481,15 @@ mypvc-nginx
 </li>
 </ul>
 </blockquote>
-<figure data-type="image" tabindex="5"><img src="/post-images/1636102814567874.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="/post-images/1636102814567874.png" alt="Pod 通过 PVC 申请，由 StorageClass 与 provisioner 完成 PV 供应的示意图" loading="lazy"></figure>
 <hr>
 <h2 id="五-借助nfs存储服务实现一个动态供应案例">五、借助 NFS 存储服务实现一个动态供应案例</h2>
 <p>再来回顾一下”动态供应“的流程：（其中重点就是：当没有合适的PV时候，K8s会获取StorageClass信息，帮我们创建合适的PV资源）</p>
-<figure data-type="image" tabindex="6"><img src="/post-images/1636103246534625.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="/post-images/1636103246534625.png" alt="动态供应流程回顾图：PVC 无可用 PV 时由 StorageClass 创建 PV" loading="lazy"></figure>
+<p><img src="/post-assets/Ija68kq2u/02-dynamic-provisioning-flow.svg" alt="NFS 动态供应流程图：创建 PVC、PVC Pending、StorageClass 调用 provisioner、在 NFS 共享目录建子目录、自动创建并绑定 PV、Pod 挂载"></p>
 <h3 id="1-参考-nfs-subdir-external-provisioner-动态供应的文档创建yaml"><strong>1、参考 nfs-subdir-external-provisioner 动态供应的文档创建yaml</strong></h3>
 <p>官方文档地址：https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner</p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1636103528321198.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="/post-images/1636103528321198.png" alt="nfs-subdir-external-provisioner 仓库中需要部署的三个 yaml 文件截图" loading="lazy"></figure>
 <p>我们把这三个文件写在同一个 pvc-provisioner.yaml 文件中，便于移植：</p>
 <pre><code class="language-yaml">apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -607,7 +611,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 </code></pre>
 <h3 id="2-执行上面的yaml文件"><strong>2、执行上面的yaml文件：</strong></h3>
-<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f pvc-provisioner.yaml 
+<pre><code class="language-bash">[root@k8s-01 mytest]# kubectl apply -f pvc-provisioner.yaml 
 storageclass.storage.k8s.io/managed-nfs-storage created
 deployment.apps/nfs-client-provisioner created
 serviceaccount/nfs-client-provisioner created
@@ -626,12 +630,12 @@ managed-nfs-storage (default)   k8s-sigs.io/nfs-subdir-external-provisioner   De
 <ul>
 <li>通过 kubectl edit 命令修改：</li>
 </ul>
-<pre><code class="language-shell">kubectl edit sc managed-nfs-storage
+<pre><code class="language-bash">kubectl edit sc managed-nfs-storage
 </code></pre>
 <ul>
 <li>通过 kubectl patch 命令修改：</li>
 </ul>
-<pre><code class="language-shell">kubectl patch storageclass managed-nfs-storage -p '{&quot;metadata&quot;: {&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;true&quot;}}}'
+<pre><code class="language-bash">kubectl patch storageclass managed-nfs-storage -p '{&quot;metadata&quot;: {&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;true&quot;}}}'
 </code></pre>
 <h3 id="3-创建一个pod-pvc使用上面的-sc-完成动态供应"><strong>3、创建一个Pod + PVC，使用上面的 SC 完成动态供应</strong></h3>
 <pre><code class="language-yaml">apiVersion: v1
@@ -678,7 +682,7 @@ spec:
       storage: 30m #待会看看是不是会自动创建一个30m的PV资源
 </code></pre>
 <p>应用该yaml后，看看是否自动创建了一个30m的PV资源：</p>
-<pre><code class="language-shell">[root@k8s-01 mytest]# kubectl apply -f auto-pv-nginx.yaml 
+<pre><code class="language-bash">[root@k8s-01 mytest]# kubectl apply -f auto-pv-nginx.yaml 
 pod/auto-pv-nginx created
 persistentvolumeclaim/auto-pvc created
 [root@k8s-01 mytest]# kubectl get pv
@@ -689,7 +693,7 @@ mypv-50m                                   50m        RWO            Retain     
 pvc-b7ecbdff-89f4-4135-91b9-cf8d227ce86f   30m        RWO            Delete           Bound       mytest/auto-pvc   managed-nfs-storage            26s
 </code></pre>
 <h3 id="4-我们将刚刚部署的测试用的pod和pvc删除检验该sc的回收策略"><strong>4、我们将刚刚部署的测试用的pod和pvc删除，检验该SC的回收策略？</strong></h3>
-<pre><code class="language-shell">[root@k8s-01 mytest]# ls /nfs/data/
+<pre><code class="language-bash">[root@k8s-01 mytest]# ls /nfs/data/
 aaa.txt  bbb.txt  index.html  mytest-auto-pvc-pvc-b7ecbdff-89f4-4135-91b9-cf8d227ce86f  one  three  two
 [root@k8s-01 mytest]# kubectl delete -f auto-pv-nginx.yaml 
 pod &quot;auto-pv-nginx&quot; deleted
@@ -700,8 +704,8 @@ aaa.txt  archived-mytest-auto-pvc-pvc-b7ecbdff-89f4-4135-91b9-cf8d227ce86f  bbb.
 <blockquote>
 <p>上面的现象足以证明：</p>
 <ul>
-<li>我们通过这个 StorageClass 创建出来的 PV，其回收策略为 DELETE（PVC 被删除时，PV 也被删除）</li>
-<li>但是虽然PV被删除了，但是删除前，该SC帮我们做了数据备份；（原文件夹前增加了archived-前缀）—— archiveOnDelete 字段为true</li>
+<li>由该 StorageClass 动态创建出来的 PV，其回收策略为 Delete——PVC 被删除时 PV 对象也随之被删除</li>
+<li>虽然 PV 对象被删除了，但删除前 provisioner 帮我们保留了数据：原文件夹被重命名为 archived- 前缀，没有真正丢数据——这正是 <code>archiveOnDelete: &quot;true&quot;</code> 的作用</li>
 </ul>
 </blockquote>
 

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>读写锁的 state 高低 16 位设计</title>
+  <rect width="900" height="400" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">ReentrantReadWriteLock：32 位 state 的高低 16 位划分</text>
+
+  <text x="210" y="78" text-anchor="middle" font-size="12" fill="#1f2b38">高 16 位 = 读锁持有总数（共享）</text>
+  <text x="660" y="78" text-anchor="middle" font-size="12" fill="#1f2b38">低 16 位 = 写锁重入次数（独占）</text>
+
+  <line x1="210" y1="86" x2="210" y2="102" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="660" y1="86" x2="660" y2="102" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="60" y="105" width="780" height="110" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <rect x="70" y="115" width="380" height="90" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <rect x="450" y="115" width="380" height="90" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+
+  <line x1="450" y1="115" x2="450" y2="205" stroke="#1f2b38" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="450" y="130" text-anchor="middle" font-size="11" fill="#1f2b38">bit 15</text>
+
+  <text x="260" y="153" text-anchor="middle" font-size="13" fill="#1f2b38">读锁计数（读锁重入也计入这里）</text>
+  <text x="260" y="177" text-anchor="middle" font-size="12" fill="#2e9e5b">多个读线程共享，互不阻塞</text>
+  <text x="260" y="197" text-anchor="middle" font-size="11" fill="#5b6b7c">获取读锁：CAS 对高 16 位加 1</text>
+
+  <text x="640" y="153" text-anchor="middle" font-size="13" fill="#1f2b38">写锁重入次数</text>
+  <text x="640" y="177" text-anchor="middle" font-size="12" fill="#2f6fd0">同一时刻只能被一个线程持有</text>
+  <text x="640" y="197" text-anchor="middle" font-size="11" fill="#5b6b7c">获取写锁：CAS 对低 16 位加 1</text>
+
+  <text x="60" y="243" font-size="11" fill="#5b6b7c">bit 31</text>
+  <text x="840" y="243" text-anchor="end" font-size="11" fill="#5b6b7c">bit 0</text>
+
+  <rect x="60" y="262" width="240" height="52" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="180" y="284" text-anchor="middle" font-size="12" fill="#1f2b38">读读不互斥</text>
+  <text x="180" y="303" text-anchor="middle" font-size="12" fill="#1f2b38">读锁之间可并发</text>
+
+  <rect x="330" y="262" width="240" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="450" y="284" text-anchor="middle" font-size="12" fill="#1f2b38">读写/写读/写写互斥</text>
+  <text x="450" y="303" text-anchor="middle" font-size="12" fill="#1f2b38">写锁是独占的</text>
+
+  <rect x="600" y="262" width="240" height="52" rx="8" fill="#f7f9fc" stroke="#7a5bd0" stroke-width="1.4"/>
+  <text x="720" y="284" text-anchor="middle" font-size="12" fill="#1f2b38">锁降级</text>
+  <text x="720" y="303" text-anchor="middle" font-size="12" fill="#1f2b38">持有写锁可再获取读锁</text>
+
+  <text x="450" y="355" text-anchor="middle" font-size="11" fill="#5b6b7c">读写计数各自上限为 65535：读锁超过该值或写锁重入超过该值都会抛 Error</text>
+  <text x="450" y="378" text-anchor="middle" font-size="11" fill="#5b6b7c">读锁不支持升级为写锁（写锁必须等所有读锁释放）</text>
+</svg>
