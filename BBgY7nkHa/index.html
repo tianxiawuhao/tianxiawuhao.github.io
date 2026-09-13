@@ -125,9 +125,10 @@
           
           <img class="post-feature-header-image" src="/post-images/BBgY7nkHa.png" alt="封面图">
           
-          <p>ClickHouse 很多大厂都在用，本篇主要使用Docker进行安装</p>
+          <p>ClickHouse 很多大厂都在用，本篇主要使用 Docker 进行安装。整体思路是：先在宿主机准备数据、配置、日志三类目录，拉取镜像启动一个临时容器，从临时容器里把配置文件导出到宿主机并修改账号密码，最后停掉临时容器，用挂载宿主目录的方式正式启动服务。</p>
+<p><img src="/post-assets/BBgY7nkHa/01-deploy-flow.svg" alt="Docker 部署 ClickHouse 整体流程：建目录、拉取镜像、启动临时容器、复制配置文件、停止并删除临时容器、挂载启动正式容器"></p>
 <h2 id="安装配置">安装配置</h2>
-<p>创建目录并更改权限</p>
+<p>创建目录并更改权限。示例按 Linux 宿主机写成 <code>/app/cloud/clickhouse</code>，而下文复制配置文件与挂载时沿用了 Windows 路径 <code>D:/clickhouse</code>，两者表示的是同一个宿主目录，实际执行时统一成其中一个即可。</p>
 <pre><code class="language-shell">mkdir -p /app/cloud/clickhouse/data
 mkdir -p /app/cloud/clickhouse/conf
 mkdir -p /app/cloud/clickhouse/log
@@ -198,30 +199,61 @@ docker cp clickhouse-server:/etc/clickhouse-server/users.xml D:/clickhouse/conf/
 &lt;/yandex&gt;
 </code></pre>
 <h2 id="创建容器">创建容器</h2>
-<pre><code class="language-shell">docker run -d --name=clickhouse-server -p 8123:8123 -p 9009:9009 -p 9000:9000 --ulimit nofile=262144:262144 -v D:/clickhouse/data:/var/lib/clickhouse:rw -v D:/clickhouse/conf/config.xml:/etc/clickhouse-server/config.xml -v D:/clickhouse/conf/users.xml:/etc/clickhouse-server/users.xml -v D:/clickhouse/log:/var/log/clickhouse-server:rw yandex/clickhouse-server
+<pre><code class="language-shell">docker run -d --name=clickhouse-server -p 8123:8123 -p 9009:9009 -p 9000:9000 --ulimit nofile=262144:262144 -v D:/clickhouse/data:/var/lib/clickhouse:rw -v D:/clickhouse/conf/config.xml:/etc/clickhouse-server/config.xml -v D:/clickhouse/conf/users.xml:/etc/clickhouse-server/users.xml -v D:/clickhouse/log:/var/log/clickhouse-server:rw yandex/clickhouse-server:20.3.5.21
 </code></pre>
+<p>上面四条 <code>-v</code> 参数把宿主目录与容器内路径一一对应起来，这样容器重建后数据、配置和日志都不会丢失：</p>
+<p><img src="/post-assets/BBgY7nkHa/02-volume-mount.svg" alt="宿主机目录与容器内路径的挂载对应关系：data 对应 /var/lib/clickhouse，config.xml 与 users.xml 对应 /etc/clickhouse-server，log 对应 /var/log/clickhouse-server"></p>
+<p>注意：<code>yandex/clickhouse-server</code> 是旧镜像名，官方新镜像已迁移为 <code>clickhouse/clickhouse-server</code>；继续使用旧镜像时，请像上面的 <code>docker run</code> 一样显式带上版本标签，避免拉到与配置文件不兼容的版本。</p>
 <h2 id="操作">操作</h2>
 <ol>
-<li>docker exec -it docker-clickhouse /bin/bash 进入容器</li>
+<li><code>docker exec -it clickhouse-server /bin/bash</code> 进入容器（容器名取自上面 <code>--name=clickhouse-server</code>）</li>
 <li>clickhouse-client 进入clickhouse命令行</li>
 </ol>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AE">安装配置</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AE">安装配置</a></li>
-<li><a href="#%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F">拉取镜像</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E4%B8%B4%E6%97%B6%E5%AE%B9%E5%99%A8">创建临时容器</a></li>
-<li><a href="#%E5%A4%8D%E5%88%B6%E4%B8%B4%E6%97%B6%E5%AE%B9%E5%99%A8%E5%86%85%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E5%88%B0%E5%AE%BF%E4%B8%BB%E6%9C%BA">复制临时容器内配置文件到宿主机</a></li>
-<li><a href="#%E5%81%9C%E6%8E%89%E4%B8%B4%E6%97%B6%E5%AE%B9%E5%99%A8">停掉临时容器</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BAdefault%E8%B4%A6%E5%8F%B7%E5%AF%86%E7%A0%81">创建default账号密码</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BAroot%E8%B4%A6%E5%8F%B7%E5%AF%86%E7%A0%81">创建root账号密码</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E5%AE%B9%E5%99%A8">创建容器</a></li>
-<li><a href="#%E6%93%8D%E4%BD%9C">操作</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F">拉取镜像</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BA%E4%B8%B4%E6%97%B6%E5%AE%B9%E5%99%A8">创建临时容器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%A4%8D%E5%88%B6%E4%B8%B4%E6%97%B6%E5%AE%B9%E5%99%A8%E5%86%85%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E5%88%B0%E5%AE%BF%E4%B8%BB%E6%9C%BA">复制临时容器内配置文件到宿主机</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%81%9C%E6%8E%89%E4%B8%B4%E6%97%B6%E5%AE%B9%E5%99%A8">停掉临时容器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BAdefault%E8%B4%A6%E5%8F%B7%E5%AF%86%E7%A0%81">创建default账号密码</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BAroot%E8%B4%A6%E5%8F%B7%E5%AF%86%E7%A0%81">创建root账号密码</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BA%E5%AE%B9%E5%99%A8">创建容器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%93%8D%E4%BD%9C">操作</a>
+<ul>
 </ul>
 </li>
 </ul>

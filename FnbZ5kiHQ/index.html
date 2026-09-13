@@ -135,14 +135,15 @@
 <ol>
 <li>CountWindow： 按照指定的数据条数生成一个 Window， 与时间无关。</li>
 <li>TimeWindow： 按照时间生成 Window。<br>
-对于 TimeWindow， 可以根据窗口实现原理的不同分成三类： <code>滚动窗口（ TumblingWindow）</code> 、 <code>滑动窗口（ Sliding Window）</code>、 <code>和会话窗口（ Session Window）</code> 。</li>
+对于 TimeWindow， 可以根据窗口实现原理的不同分成三类： <code>滚动窗口（Tumbling Window）</code>、<code>滑动窗口（Sliding Window）</code> 和 <code>会话窗口（Session Window）</code>。</li>
 </ol>
+<p><img src="/post-assets/FnbZ5kiHQ/01-window-taxonomy.svg" alt="Flink Window 分类总览：CountWindow 按元素条数触发，TimeWindow 按时间划分为滚动、滑动、会话三类"></p>
 <h4 id="滚动窗口tumbling-windows">滚动窗口（Tumbling Windows）</h4>
 <p>将数据依据固定的窗口长度对数据进行切片。<br>
 特点： <code>时间对齐</code>， <code>窗口长度固定</code>， <code>没有重叠</code>。</p>
 <p style="text-indent:2em">滚动窗口分配器将每个元素分配到一个指定窗口大小的窗口中， 滚动窗口有一个固定的大小， 并且不会出现重叠。 例如： 如果你指定了一个 5 分钟大小的滚动窗
 口， 窗口的创建如下图所示：</p>
-<p><img src="/post-images/1618471104246.png" alt="" loading="lazy"><br>
+<p><img src="/post-images/1618471104246.png" alt="滚动窗口示意图：窗口长度固定且不重叠" loading="lazy"><br>
 图 滚动窗口<br>
 适用场景： 适合做 BI 统计等（ 做每个时间段的聚合计算） 。</p>
 <h4 id="滑动窗口sliding-windows">滑动窗口（Sliding Windows）</h4>
@@ -151,7 +152,7 @@
 <p style="text-indent:2em">滑动窗口分配器将元素分配到固定长度的窗口中， 与滚动窗口类似， 窗口的大小由窗口大小参数来配置， 另一个窗口滑动参数控制滑动窗口开始的频率。 因此，
 滑动窗口如果滑动参数小于窗口大小的话， 窗口是可以重叠的， 在这种情况下元素会被分配到多个窗口中。</p>
 <p style="text-indent:2em">例如， 你有 10 分钟的窗口和 5 分钟的滑动， 那么每个窗口中 5 分钟的窗口里包含着上个 10 分钟产生的数据， 如下图所示：</p>
-<p><img src="/post-images/1618471120950.png" alt="" loading="lazy"><br>
+<p><img src="/post-images/1618471120950.png" alt="滑动窗口示意图：窗口长度 10 分钟、滑动 5 分钟，相邻窗口存在重叠" loading="lazy"><br>
 图 滑动窗口<br>
 适用场景： 对最近一个时间段内的统计（ 求某接口最近 5min 的失败率来决定是<br>
 否要报警） 。</p>
@@ -162,7 +163,7 @@
 闭。 一个 session 窗口通过一个 session 间隔来配置， 这个 session 间隔定义了非活跃
 周期的长度， 当这个非活跃周期产生， 那么当前的 session 将关闭并且后续的元素将
 被分配到新的 session 窗口中去。</p>
-<p><img src="/post-images/1618471406934.png" alt="" loading="lazy"><br>
+<p><img src="/post-images/1618471406934.png" alt="会话窗口示意图：按非活跃间隔切分窗口，时间无对齐" loading="lazy"><br>
 图 会话窗口</p>
 <h2 id="window-api">Window API</h2>
 <h3 id="timewindow">TimeWindow</h3>
@@ -195,7 +196,7 @@ public class TimeWindow_Tumbling {
 }
 </code></pre>
 <ol start="2">
-<li>滑动窗口（SlidingEventTimeWindows）<br>
+<li>滑动窗口（默认 Processing Time 下对应 SlidingProcessingTimeWindows，事件时间下为 SlidingEventTimeWindows）<br>
 滑动窗口和滚动窗口的函数名是完全一致的， 只是在传参数时需要传入两个参<br>
 数， 一个是 window_size， 一个是 sliding_size。下面代码中的 sliding_size 设置为了 5s， 也就是说， 每 5s 就计算输出结果一次，每一次计算的 window 范围是 15s 内的所有元素。<br>
 时间间隔可以通过 Time.milliseconds(x)， Time.seconds(x)， Time.minutes(x)等其<br>
@@ -222,8 +223,7 @@ public class TimeWindow_Sliding {
 </code></pre>
 <h3 id="countwindow">CountWindow</h3>
 <p style="text-indent:2em">CountWindow 根据窗口中相同 key 元素的数量来触发执行， 执行时只计算元素数量达到窗口大小的 key 对应的结果。</p>
-注意： CountWindow 的 window_size 指的是相同 Key 的元素的个数， 不是输入
-的所有元素的总数。
+<p>注意：CountWindow 的 window_size 指的是相同 Key 的元素的个数，而不是输入的所有元素的总数。</p>
 <p>1 滚动窗口</p>
 <p style="text-indent:2em">默认的 CountWindow 是一个滚动窗口， 只需要指定窗口大小即可， 当元素数量达到窗口大小时， 就会触发窗口的执行。</p>
 <pre><code class="language-java">import com.tan.flink.bean.SensorReading;
@@ -276,6 +276,8 @@ ReduceFunction, AggregateFunction。</li>
 先把窗口所有数据收集起来， 等到计算的时候会遍历所有数据。<br>
 ProcessWindowFunction 就是一个全窗口函数。</li>
 </ol>
+<p>两类函数的执行方式差别很大：增量聚合函数每来一条数据就更新一次累加状态，只保留一份中间结果；全窗口函数则先把窗口内数据缓存下来，触发时才遍历全部数据。因此前者更省内存，后者能拿到窗口元信息和全部原始数据。</p>
+<p><img src="/post-assets/FnbZ5kiHQ/02-window-function-compare.svg" alt="增量聚合函数与全窗口函数对比：前者逐条更新累加状态，后者缓存窗口内全部数据并在触发时遍历计算"></p>
 <h3 id="其它可选-api">其它可选 API</h3>
 <ol>
 <li>trigger() —— 触发器<br>
@@ -285,31 +287,23 @@ ProcessWindowFunction 就是一个全窗口函数。</li>
 <li>sideOutputLateData() —— 将迟到的数据放入侧输出流</li>
 <li>getSideOutput() —— 获取侧输出</li>
 </ol>
-<figure data-type="image" tabindex="1"><img src="/post-images/1618472074436.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1618472074436.png" alt="窗口其它可选 API 示意图" loading="lazy"></figure>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#window">Window</a>
+<a href="#window">Window</a>
 <ul>
 <li><a href="#window-%E6%A6%82%E8%BF%B0">Window 概述</a></li>
-<li><a href="#window-%E7%B1%BB%E5%9E%8B">Window 类型</a>
-<ul>
-<li><a href="#%E6%BB%9A%E5%8A%A8%E7%AA%97%E5%8F%A3tumbling-windows">滚动窗口（Tumbling Windows）</a></li>
-<li><a href="#%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3sliding-windows">滑动窗口（Sliding Windows）</a></li>
-<li><a href="#%E4%BC%9A%E8%AF%9D%E7%AA%97%E5%8F%A3session-windows">会话窗口（Session Windows）</a></li>
+<li><a href="#window-%E7%B1%BB%E5%9E%8B">Window 类型</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#window-api">Window API</a>
+<li>
+<a href="#window-api">Window API</a>
 <ul>
 <li><a href="#timewindow">TimeWindow</a></li>
 <li><a href="#countwindow">CountWindow</a></li>
 <li><a href="#window-function">window function</a></li>
 <li><a href="#%E5%85%B6%E5%AE%83%E5%8F%AF%E9%80%89-api">其它可选 API</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
