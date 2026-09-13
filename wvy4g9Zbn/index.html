@@ -127,80 +127,45 @@
           
           <img class="post-feature-header-image" src="/post-images/wvy4g9Zbn.png" alt="封面图">
           
-          <p>Reactor有三种模式：</p>
-<ol>
-<li>单reactor单线程工作原理图</li>
-</ol>
+          <h2 id="reactor-的三种模式">Reactor 的三种模式</h2>
+<p>Reactor 有三种线程模型，区别在于「谁负责监听与分发事件」以及「业务处理是否与事件处理共用一个线程」。先看三者的整体对比：</p>
+<p><img src="/post-assets/wvy4g9Zbn/01-reactor-models.svg" alt="Reactor 三种线程模型对比：单 Reactor 单线程、单 Reactor 多线程、主从 Reactor 多线程"></p>
+<h3 id="单-reactor-单线程">1. 单 Reactor 单线程</h3>
 <figure data-type="image" tabindex="1"><img src="/post-images/1636082432432.jfif" alt="" loading="lazy"></figure>
-<blockquote>
 <p>dispatch 与 handler 在同一个线程中处理，Redis 就是采用这种模式。</p>
-</blockquote>
-<ol>
-<li>单reactor多线程工作原理图</li>
-</ol>
+<h3 id="单-reactor-多线程">2. 单 Reactor 多线程</h3>
 <figure data-type="image" tabindex="2"><img src="/post-images/1656503549678.png" alt="" loading="lazy"></figure>
-<blockquote>
-<p>（1） reactor对象通过select监控客户端请求事件，收到事件后，通过dispatch进行分发</p>
-</blockquote>
-<blockquote>
-<p>（2）如果建立连接请求，则由Acceptor通过accept处理连接请求，然后创建一个Handler对象处理完成连接后的各种事件</p>
-</blockquote>
-<blockquote>
+<p>（1）Reactor 对象通过 select 监控客户端请求事件，收到事件后，通过 dispatch 进行分发</p>
+<p>（2）如果建立连接请求，则由Acceptor 通过 accept 处理连接请求，然后创建一个Handler对象处理完成连接后的各种事件</p>
 <p>（3）如果不是连接请求，则由reactor分发调用连接对应的Handler来处理</p>
-</blockquote>
-<blockquote>
-<p>（4）Handler只负责响应事件，不做具体的业务处理， 通过read读取数据后分发给后面的work线程池中的某个线程。</p>
-</blockquote>
-<blockquote>
-<p>（5）work线程池会分配一个独立的线程完成真正的业务 ，并将处理完的业务结果返回给Handler</p>
-</blockquote>
-<blockquote>
-<p>（6）Handler收到响应结果后，通过send将结果返回给client</p>
-</blockquote>
-<p>优点：</p>
-<blockquote>
-<p>（1） 可以充分利用多核cpu的处理能力</p>
-</blockquote>
-<blockquote>
-<p>（2）多线程数据共享和访问比较复杂；reactor 处理了所有的事件监听和响应，而且是在单线程中运行，在高并发场景下容易出现性能瓶颈。</p>
-</blockquote>
-<ol>
-<li>主从reactor多线程工作原理图</li>
-</ol>
+<p>（4）Handler只负责响应事件，不做具体的业务处理， 通过read读取数据后分发给后面的worker 线程池中的某个线程。</p>
+<p>（5）worker 线程池会分配一个独立的线程完成真正的业务 ，并将处理完的业务结果返回给Handler</p>
+<p>（6）Handler 收到响应结果后，通过 send 将结果返回给 client</p>
+<p><strong>优点：</strong>可以充分利用多核 CPU 的处理能力。</p>
+<p><strong>缺点：</strong>多线程间的数据共享和访问比较复杂；Reactor 承担了所有事件的监听与响应，且运行在单线程中，高并发场景下容易出现性能瓶颈。</p>
+<h3 id="主从-reactor-多线程">3. 主从 Reactor 多线程</h3>
 <figure data-type="image" tabindex="3"><img src="/post-images/1656503563223.png" alt="" loading="lazy"></figure>
-<blockquote>
 <p>（1）Reactor主线程MainReactor对象通过select监听连接事件，收到连接事件后，通过Acceptor处理连接事件</p>
-</blockquote>
-<blockquote>
-<p>（2）当Acceptor处理连接事件后，MainReactor将连接分配给SubReactor,</p>
-</blockquote>
-<blockquote>
+<p>（2）当Acceptor处理连接事件后，MainReactor将连接分配给 SubReactor。</p>
 <p>（3）SubReactor将连接加入到连接监听队列进行监听，并创建Handler进行各种事件处理</p>
-</blockquote>
-<blockquote>
-<p>（4）当有新的事件发生时， subreactor就会调用对应的handler处理，</p>
-</blockquote>
-<blockquote>
+<p>（4）当有新的事件发生时，SubReactor 就会调用对应的 Handler 处理。</p>
 <p>（5）handler通过read读取数据后，分发给后面的worker线程处理</p>
-</blockquote>
-<blockquote>
-<p>（6）worker线程池会分配独立的worker线程进行业务处理，并返回结果</p>
-</blockquote>
-<blockquote>
+<p>（6）worker 线程池会分配独立的 worker 线程进行业务处理，并返回结果</p>
 <p>（7）handler收到响应结果后，再通过send将结果返回给client</p>
-</blockquote>
 <p><img src="/post-images/1632970988216.jpg" alt="" loading="lazy"><br>
 <img src="/post-images/1632970993792.jpg" alt="" loading="lazy"></p>
-<p>实现Reactor模式我们需要实现以下几个类：</p>
+<h2 id="java-实现-reactor-模式">Java 实现 Reactor 模式</h2>
+<p>下面用一个示例把上述组件串起来。代码按类拆分展示，省略了同包内其他类的 import，其中 <code>@Data</code>、<code>@Getter</code>、<code>@Setter</code> 来自 Lombok 依赖；先看各组件的职责：</p>
 <p><strong>InputSource:</strong> 外部输入类，用来表示需要reactor去处理的原始对象</p>
-<p><strong>Event</strong>: reactor模式的事件类，可以理解为将输入原始对象根据不同状态包装成一个事件类，reactor模式里处理的斗士event事件对象</p>
-<p><strong>EventType</strong>: 枚举类型表示事件的不同类型</p>
-<p><strong>EventHandler</strong>: 处理事件的抽象类，里面包含了不同事件处理器的公共逻辑和公共对象</p>
-<p><strong>AcceptEventHandler\ReadEventhandler等</strong>: 继承自EventHandler的具体事件处理器的实现类，一般根据事件不同的状态来定义不同的处理器</p>
-<p><strong>Dispatcher</strong>: 事件分发器，整个reactor模式解决的主要问题就是在接收到任务后根据分发器快速进行分发给相应的事件处理器，不需要从开始状态就阻塞</p>
-<p><strong>Selector</strong>: 事件轮循选择器，selector主要实现了轮循队列中的事件状态，取出当前能够处理的状态</p>
-<p><strong>Acceptor</strong>:reactor的事件接收类，负责初始化selector和接收缓冲队列</p>
-<p><strong>Server</strong>:负责启动reactor服务并启动相关服务接收请求</p>
+<p><strong>Event：</strong>reactor模式的事件类，可以理解为将输入原始对象根据不同状态包装成一个事件类，reactor模式里处理的都是 event 事件对象</p>
+<p><strong>EventType：</strong>枚举类型表示事件的不同类型</p>
+<p><strong>EventHandler：</strong>处理事件的抽象类，里面包含了不同事件处理器的公共逻辑和公共对象</p>
+<p><strong>AcceptEventHandler / ReadEventHandler 等：</strong>继承自EventHandler的具体事件处理器的实现类，一般根据事件不同的状态来定义不同的处理器</p>
+<p><strong>Dispatcher：</strong>事件分发器，整个reactor模式解决的主要问题就是在接收到任务后根据分发器快速进行分发给相应的事件处理器，不需要从开始状态就阻塞</p>
+<p><strong>Selector：</strong>事件轮循选择器，selector主要实现了轮循队列中的事件状态，取出当前能够处理的状态</p>
+<p><strong>Acceptor：</strong>reactor的事件接收类，负责初始化selector和接收缓冲队列</p>
+<p><strong>Server：</strong>负责启动reactor服务并启动相关服务接收请求</p>
+<p><img src="/post-assets/wvy4g9Zbn/02-event-dispatch-flow.svg" alt="Reactor 事件分发流程：Selector 轮循就绪事件，Dispatcher 按 EventType 分发到 EventHandler，业务交由 Worker 线程池"></p>
 <p><strong>InputSource.java</strong></p>
 <pre><code class="language-java">import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -424,27 +389,30 @@ public class Acceptor implements Runnable{
 }
 </code></pre>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/b3vVP1a3A/"><span class="pn-label">← 上一篇</span><span class="pn-title">netty异步任务调度 ( TaskQueue | ScheduleTaskQueue | SocketChannel 管理 )</span></a>
-      <a class="next-post" href="/0wQHSTDWt/"><span class="pn-label">下一篇 →</span><span class="pn-title">saiku自动对接kylin</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
+<h2 id="小结">小结</h2>
+<p>Reactor 模式的核心是把「等待事件」与「处理事件」解耦：Selector 负责轮循就绪事件，Dispatcher 按事件类型把事件交给对应的 EventHandler，业务逻辑则交给 Worker 线程池。单 Reactor 单线程实现最简单，但无法利用多核，业务一旦阻塞事件循环就会整体停摆；单 Reactor 多线程把业务处理移出 Reactor 线程；主从 Reactor 多线程再把连接建立与读写事件拆到不同的 Reactor 上，是应对高并发连接的常见选择。Netty 的 EventLoop、EventLoopGroup 与 ChannelHandler 体系，可以看作这一模型的生产级实现。</p>
 
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#reactor-%E7%9A%84%E4%B8%89%E7%A7%8D%E6%A8%A1%E5%BC%8F">Reactor 的三种模式</a>
+<ul>
+<li><a href="#%E5%8D%95-reactor-%E5%8D%95%E7%BA%BF%E7%A8%8B">1. 单 Reactor 单线程</a></li>
+<li><a href="#%E5%8D%95-reactor-%E5%A4%9A%E7%BA%BF%E7%A8%8B">2. 单 Reactor 多线程</a></li>
+<li><a href="#%E4%B8%BB%E4%BB%8E-reactor-%E5%A4%9A%E7%BA%BF%E7%A8%8B">3. 主从 Reactor 多线程</a></li>
+</ul>
+</li>
+<li>
+<a href="#java-%E5%AE%9E%E7%8E%B0-reactor-%E6%A8%A1%E5%BC%8F">Java 实现 Reactor 模式</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B0%8F%E7%BB%93">小结</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">
