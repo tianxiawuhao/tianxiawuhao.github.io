@@ -124,21 +124,297 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/Rz0qPOGXr.png" alt="封面图">
-          
-          <h2 id="初始化选举">初始化选举</h2>
-<figure data-type="image" tabindex="1"><img src="/post-images/1634890367738.png" alt="" loading="lazy"></figure>
+<blockquote>
+<p>ZooKeeper 是一个典型的 CP 系统：只要集群里还有过半节点存活，它就能选出一个唯一的 Leader，对外提供一致的读写服务。而“这个 Leader 是怎么选出来的”，正是本文要讲清楚的过程。</p>
+</blockquote>
+<h2 id="一-zookeeper-集群中的三种角色">一、ZooKeeper 集群中的三种角色</h2>
+<p>ZooKeeper 集群里的服务器按职责分为三种角色，理解它们之前先分清两个概念：</p>
+<ul>
+<li>
+<p><strong>participant（参与投票的机器）</strong>：Leader 和 Follower，它们既参与 Leader 选举，也参与写请求的过半确认；</p>
+</li>
+<li>
+<p><strong>Observer（观察者）</strong>：只同步 Leader 的数据、只处理读请求，<strong>不参与投票</strong>，也不计入写请求的 quorum。</p>
+</li>
+</ul>
+<ul>
+<li>
+<p><strong>Leader（主）</strong>：集群中唯一的写入口，负责发起事务提案（proposal）、协调写请求的过半确认与提交，同时也处理读请求；</p>
+</li>
+<li>
+<p><strong>Follower（从，参与投票）</strong>：接收客户端写请求并转发给 Leader、参与写请求的过半确认（ACK）、参与 Leader 选举投票，同时可以处理读请求；</p>
+</li>
+<li>
+<p><strong>Observer（从，不参与投票）</strong>：从 ZooKeeper 3.3.0 引入，功能与 Follower 类似，但不投票、不被计入 quorum。它的价值在于可以线性扩容读吞吐，而不降低写吞吐 —— participant 越多，一个写请求要收集的 ACK 越多，写性能越差。</p>
+</li>
+</ul>
+<p>因此在 <code>zoo.cfg</code> 里，Observer 需要在配置行末尾加上 <code>:observer</code>：</p>
+<pre><code class="language-properties">tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir=/data/zookeeper
+clientPort=2181
+# server.myid=host:通信端口(2888):选举端口(3888)[:observer]
+server.1=192.168.1.11:2888:3888
+server.2=192.168.1.12:2888:3888
+server.3=192.168.1.13:2888:3888
+server.4=192.168.1.14:2888:3888:observer
+</code></pre>
+<p>上面这个集群有 3 个 participant 和 1 个 Observer，quorum = 3 ÷ 2 + 1 = 2。</p>
+<p>生产环境推荐部署奇数台 participant，原因是 n 台能容忍的故障数只有 \(f = \lfloor n/2 \rfloor\)：3 台容忍 1 台，5 台容忍 2 台；而 4 台和 3 台一样只能容忍 1 台，多出来的那台只增加成本，并不提升容错。</p>
+<h2 id="二-zab-协议与-zxid">二、ZAB 协议与 ZXID</h2>
+<h3 id="1-zab-的两种运行模式">1、ZAB 的两种运行模式</h3>
+<p>ZooKeeper 的一致性由 <strong>ZAB（ZooKeeper Atomic Broadcast，ZooKeeper 原子广播协议）</strong> 保证。它并不是 Paxos 的直接实现，而是为 ZooKeeper 量身定制的主备式原子广播协议，分为两个模式：</p>
+<ul>
+<li>
+<p><strong>崩溃恢复（Recovery）</strong>：集群启动或 Leader 崩溃时进入。先选出新 Leader，再由新 Leader 与各 Follower 做数据同步，保证“已提交的事务不丢、未提交的事务不对外可见”；</p>
+</li>
+<li>
+<p><strong>消息广播（Broadcast）</strong>：Leader 正常工作时进入。Leader 把写请求封装成 proposal，按 ZXID 顺序广播给所有 Follower，收到过半 ACK 后再广播 commit，各服务器按同一顺序提交事务 —— 这就是“原子广播”的含义：要么全部提交，要么全部不提交，且顺序一致。</p>
+</li>
+</ul>
+<h3 id="2-zxid-的结构-epoch-与-counter">2、ZXID 的结构：epoch 与 counter</h3>
+<p>ZAB 用 <strong>ZXID（ZooKeeper Transaction ID）</strong> 给每一个事务编号。它是一个 64 位整数，由两部分拼成：</p>
+<div class="math-block">\[ \text{ZXID} = (\text{epoch} \ll 32) \;|\; \text{counter} \]</div>
+<ul>
+<li>
+<p><strong>高 32 位 epoch（纪元，也叫任期）</strong>：Leader 的“任期号”。每选出一任新 Leader，epoch 就加 1，可以理解为“第几届”；</p>
+</li>
+<li>
+<p><strong>低 32 位 counter（事务计数器）</strong>：Leader 在本届任期内每处理一个写请求，counter 加 1，从 0 开始。</p>
+</li>
+</ul>
+<p>这样设计的好处是：比较两个 ZXID 就能同时比出“事务产生于哪一任 Leader”和“同一任内的先后顺序”。例如 <code>(1, 15)</code> 一定小于 <code>(2, 0)</code> —— 换过 Leader 之后，新纪元的事务排在旧纪元之后。这也是选举时要“优先选数据最新的节点”的判据。</p>
+<h2 id="三-服务器的四种状态">三、服务器的四种状态</h2>
+<p>每台 ZooKeeper 服务器在任意时刻都处于四种状态之一（源码里对应 <code>ServerState</code> 枚举）：</p>
+<ul>
+<li>
+<p><code>LOOKING</code>：正在寻找 Leader，也就是“正在选举”，此时服务器<strong>不对外提供读写服务</strong>；</p>
+</li>
+<li>
+<p><code>LEADING</code>：当前服务器就是 Leader，负责提案与提交；</p>
+</li>
+<li>
+<p><code>FOLLOWING</code>：当前服务器是 Follower，参与投票与写请求的过半确认；</p>
+</li>
+<li>
+<p><code>OBSERVING</code>：当前服务器是 Observer，只同步数据、只处理读请求，不投票。</p>
+</li>
+</ul>
+<p>状态之间如何流转，可以看下面这张状态机图：</p>
+<p><img src="/post-assets/Rz0qPOGXr/01-zk-election-state-machine.svg" alt="ZooKeeper 服务器状态机：LOOKING 表示选举中，胜出为 LEADING、败选为 FOLLOWING、Observer 进入 OBSERVING；心跳超时或失去过半联系则退回 LOOKING"></p>
+<h2 id="四-fast-leader-election-选举流程">四、Fast Leader Election 选举流程</h2>
+<p>ZooKeeper 历史上有过三种选举算法：<code>LeaderElection</code>、<code>AuthFastLeaderElection</code> 和 <code>FastLeaderElection</code>。3.4.0 之后默认且推荐的是 <strong>Fast Leader Election（FLE）</strong>：它改用 TCP 传递选票（旧算法基于 UDP 广播），并把“投票 + 计票”分散到每台服务器上各自完成，收敛更快。</p>
+<h3 id="1-选票的三要素">1、选票的三要素</h3>
+<p>每台服务器投出的票，核心是三个字段：</p>
+<ul>
+<li>
+<p><code>epoch</code>：该服务器认可的 Leader 纪元（源码里叫 peerEpoch），也就是它本地最新事务的 ZXID 高 32 位；</p>
+</li>
+<li>
+<p><code>zxid</code>：该服务器本地最新的 ZXID，代表“我的数据有多新”；</p>
+</li>
+<li>
+<p><code>sid</code>：服务器的 myid（即 <code>server.N</code> 里的 N），在数据一样新时用来做最终裁决。</p>
+</li>
+</ul>
+<p>选票还带有一个 <code>electionEpoch</code>（本轮选举的逻辑时钟）：每发起一轮新选举它就自增，服务器只比较<strong>同一轮</strong>内的票，避免把上一轮的选票当成有效票。</p>
+<h3 id="2-pk-规则-谁更适合当-leader">2、PK 规则：谁更适合当 Leader</h3>
+<p>收到别人的票时，按下面的顺序逐级比较，先分出胜负就结束（对应源码里的 <code>totalOrderPredicate</code>）：</p>
+<ol>
+<li>
+<p>先比 <code>epoch</code>：纪元大的胜 —— 新 Leader 的数据一定比旧 Leader 新；</p>
+</li>
+<li>
+<p>再比 <code>zxid</code>：epoch 相同时，ZXID 大的胜 —— 数据更新的节点优先，保证已经提交的事务不丢；</p>
+</li>
+<li>
+<p>最后比 <code>sid</code>：epoch 与 zxid 都相同时，myid 大的胜 —— 纯粹为了打破平局，让选举一定能收敛。</p>
+</li>
+</ol>
+<blockquote>
+<p>一句话记忆：<strong>先比届（epoch），再比新旧（zxid），最后比编号（sid）</strong>。注意 ZXID 的高 32 位本来就是 epoch，所以“数据新的优先”天然包含了“任期新的优先”。</p>
+</blockquote>
+<h3 id="3-过半机制与-quorum">3、过半机制与 quorum</h3>
+<p>选举不是“谁的票多谁赢”，而是要<strong>超过半数</strong>：</p>
+<ul>
+<li>
+<p>quorum = participant 数量 ÷ 2 + 1（<strong>Observer 不计入</strong>）。3 台需要 2 票，4 台需要 3 票，5 台需要 3 票；</p>
+</li>
+<li>
+<p>任何一台服务器一旦统计到某位候选人的票数达到 quorum，就可以确定结果：胜出者若是自己 → <code>LEADING</code>，否则 → <code>FOLLOWING</code>，Observer → <code>OBSERVING</code>；</p>
+</li>
+<li>
+<p>过半机制同时保证了<strong>唯一性</strong>：两个“过半”的集合必然相交，而相交的节点在同一轮选举里只投一票、只认可一个 Leader，因此不可能同时出现两个拿到过半票的 Leader。</p>
+</li>
+</ul>
+<h3 id="4-完整的选举流程">4、完整的选举流程</h3>
+<p>把上面的规则串起来，一次 FLE 选举的完整过程如下图：</p>
+<p><img src="/post-assets/Rz0qPOGXr/02-zk-fast-leader-election.svg" alt="Fast Leader Election 投票流程：三台服务器各自广播选票，按 epoch、zxid、sid 逐级比较并改票，得票达到 quorum 的节点当选 Leader"></p>
+<ol>
+<li>
+<p><strong>进入 LOOKING</strong>：服务器自增本地的 <code>electionEpoch</code>，先投自己一票，然后把选票<strong>广播给所有 participant</strong>（不是只发给某一台）；</p>
+</li>
+<li>
+<p><strong>收票并 PK</strong>：每台服务器把收到的票与自己的票按上述规则比较。对方更优 → 改投对方，并把新票再广播一轮；对方更差 → 把自己的票回发给对方，提示对方改票；</p>
+</li>
+<li>
+<p><strong>计票</strong>：每台服务器在本地统计收到的票，某位候选人达到 quorum 即定局；</p>
+</li>
+<li>
+<p><strong>切换状态</strong>：胜出者进入 <code>LEADING</code>，其余 participant 进入 <code>FOLLOWING</code>，Observer 进入 <code>OBSERVING</code>；</p>
+</li>
+<li>
+<p><strong>数据同步</strong>：Follower 与 Leader 建立连接并比对 ZXID，按差异走 <code>DIFF</code>（增量同步）、<code>SNAP</code>（全量快照）或 <code>TRUNC</code>（回滚多余事务），同步完成后集群进入消息广播模式，恢复对外服务。</p>
+</li>
+</ol>
+<h2 id="初始化选举">初始化选举</h2>
+<p>集群<strong>第一次启动</strong>时，所有服务器都没有 Leader，全部处于 <code>LOOKING</code>，每台机器的 epoch 和 zxid 取自自己的数据文件：</p>
+<ul>
+<li>
+<p>如果是全新集群（磁盘上没有历史事务），三台服务器的选票都是 <code>(0, 0, myid)</code>，epoch 与 zxid 完全相同，于是按 <code>sid</code> 决胜 —— <strong>myid 最大的机器当选 Leader</strong>；</p>
+</li>
+<li>
+<p>如果某台机器的数据目录被清空后重启，它会带着更小的 zxid 参与选举，就不会被选为 Leader，从而避免“数据最旧的机器当上 Leader”造成数据回退。</p>
+</li>
+</ul>
+<p>所以初始化选举时经常能看到“myid 最大的节点成为 Leader”，但这不是规则，只是全新集群下 epoch 与 zxid 相同时的兜底结果。</p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1634890367738.png" alt="初始化选举：集群首次启动时所有服务器处于 LOOKING，广播选票后得票过半者当选 Leader" loading="lazy"></figure>
 <h2 id="运行期间选举">运行期间选举</h2>
-<figure data-type="image" tabindex="2"><img src="/post-images/1634890194753.png" alt="" loading="lazy"></figure>
+<p>集群正常运行期间，Leader 会周期性向 Follower 发送 ping 心跳。出现下面任一情况，都会触发新一轮选举：</p>
+<ul>
+<li>
+<p><strong>Leader 崩溃或网络中断</strong>：Follower 在 <code>syncLimit × tickTime</code> 内没有收到 Leader 的心跳，就认为 Leader 已死，状态从 <code>FOLLOWING</code> 退回 <code>LOOKING</code>；</p>
+</li>
+<li>
+<p><strong>Leader 失去过半 Follower 的联系</strong>：Leader 发现自己无法与过半 participant 通信时，也会主动退位进入 <code>LOOKING</code> —— 少数派分区里的旧 Leader 不会继续提供服务，这是避免脑裂的关键；</p>
+</li>
+<li>
+<p><strong>Leader 进程重启或被 kill</strong>：等价于第一种情况；</p>
+</li>
+<li>
+<p><strong>集群扩缩容</strong>：动态配置变更（reconfig）时会重新走一次选举流程。</p>
+</li>
+</ul>
+<p>运行期间选出的 Leader 不一定和上一任相同：只有“数据最新（epoch、zxid 最大）”的节点才最可能在 PK 中胜出。选举期间集群<strong>整体不可用</strong>（写请求无法处理，读请求也会被拒绝或阻塞），所以选举的收敛速度直接决定了故障恢复时间。</p>
+<figure data-type="image" tabindex="2"><img src="/post-images/1634890194753.png" alt="运行期间选举：Leader 失联后 Follower 心跳超时进入 LOOKING，重新投票选出数据最新的节点作为新 Leader" loading="lazy"></figure>
+<h2 id="五-与-paxos-和-raft-的对比">五、与 Paxos 和 Raft 的对比</h2>
+<ul>
+<li>
+<p><strong>与 Paxos 的关系</strong>：Paxos 是通用的一致性算法，理论上对等、去中心化，任何节点都能提案；ZAB 是专为 ZooKeeper 设计的主备式原子广播协议，<strong>必须有 Leader</strong>，强调的是“全序广播” —— 所有事务按 Leader 决定的顺序被各节点提交，而不是单次共识。两者都以“半数以上”作为安全边界，也都用类似 epoch/ballot 的编号区分任期。</p>
+</li>
+<li>
+<p><strong>与 Raft 的关系</strong>：Raft 采用强 Leader + 随机选举超时，选举时通过“候选人日志至少和自己一样新”的规则保证安全，日志允许先冲突、再被覆盖；ZAB 的 FLE 与 Raft 选举思想非常接近（epoch 类似 term，zxid 类似日志的 index+term，同样过半 + 日志新旧优先），区别在于 ZAB 有独立的崩溃恢复阶段（DIFF/SNAP/TRUNC 数据同步），并且 ZooKeeper 引入了不参与投票的 Observer 角色。</p>
+</li>
+<li>
+<p><strong>共同点</strong>：三者都是 CP 系统，都靠“过半”保证同一任期内只有一个 Leader、已提交的事务不会丢失；失去多数派时都无法继续提供写服务。</p>
+</li>
+</ul>
+<h2 id="六-常见问题">六、常见问题</h2>
+<h3 id="1-脑裂问题">1、脑裂问题（split brain）</h3>
+<p>脑裂指集群中同时出现两个“自认为自己是 Leader”的节点。ZooKeeper 通过两点避免脑裂造成数据不一致：</p>
+<ul>
+<li>
+<p>选举必须拿到<strong>过半票</strong>，两个过半集合必然相交，而相交的节点在同一轮里只投一票；</p>
+</li>
+<li>
+<p>失去多数派联系的旧 Leader 会主动退位回到 <code>LOOKING</code>，不再接受写请求。</p>
+</li>
+</ul>
+<p>所以 ZooKeeper 不会出现双写，代价是：少数派分区里的节点会一直处于 LOOKING 且无法提供服务，必须等网络恢复后重新选出 Leader。这也是 ZooKeeper 集群至少需要 3 台、且跨机房部署时要保证网络质量的原因。</p>
+<h3 id="2-选举风暴">2、选举风暴</h3>
+<p>如果可用的 participant 数量长期不足 quorum（例如 3 台挂了 2 台），剩下的节点会不断发起新一轮选举（<code>electionEpoch</code> 持续自增），表现为 CPU 飙高、日志刷屏、客户端大面积超时 —— 这就是选举风暴。缓解办法：</p>
+<ul>
+<li>
+<p>按 \(2f+1\) 规划 participant 数量（3 台容忍 1 台、5 台容忍 2 台），不要用 2 台或 4 台凑数；</p>
+</li>
+<li>
+<p>读多写少的场景用 <strong>Observer</strong> 扩容，而不是盲目增加 participant（增加 participant 会拖慢写请求）；</p>
+</li>
+<li>
+<p>合理设置 <code>tickTime</code> 与 <code>syncLimit</code>：太小会把网络抖动误判成 Leader 宕机，太大又会拉长故障发现时间；</p>
+</li>
+<li>
+<p>跨机房部署时优先把多数派放在同一机房，避免选举端口（3888）抖动引发反复选举。</p>
+</li>
+</ul>
+<p>排查时可以用四字命令观察集群状态（ZooKeeper 3.5 起需要在 <code>zoo.cfg</code> 中配置 <code>4lw.commands.whitelist</code> 才能使用）：</p>
+<pre><code class="language-bash"># 查看当前角色（Leader/Follower/Observer）与 ZXID
+echo srvr | nc 127.0.0.1 2181
+# 查看集群整体状态，确认谁在 LEADING
+echo stat | nc 127.0.0.1 2181
+</code></pre>
+<h2 id="小结">小结</h2>
+<ul>
+<li>
+<p>角色：Leader 是唯一写入口，Follower 参与投票，Observer 只读不投票；quorum 只统计 participant；</p>
+</li>
+<li>
+<p>ZXID = epoch（第几任 Leader）+ counter（任内第几个事务），ZXID 越大代表数据越新；</p>
+</li>
+<li>
+<p>状态机：LOOKING → LEADING / FOLLOWING / OBSERVING，心跳超时或失去过半联系就退回 LOOKING；</p>
+</li>
+<li>
+<p>FLE 选举：广播选票 (epoch, zxid, sid)，按 epoch → zxid → sid 逐级 PK，得票达到 quorum 者当选；</p>
+</li>
+<li>
+<p>过半机制是 ZAB 安全性的根基：它同时保证 Leader 唯一、已提交事务不丢、脑裂不产生双写。</p>
+</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-zookeeper-%E9%9B%86%E7%BE%A4%E4%B8%AD%E7%9A%84%E4%B8%89%E7%A7%8D%E8%A7%92%E8%89%B2">一、ZooKeeper 集群中的三种角色</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E9%80%89%E4%B8%BE">初始化选举</a></li>
-<li><a href="#%E8%BF%90%E8%A1%8C%E6%9C%9F%E9%97%B4%E9%80%89%E4%B8%BE">运行期间选举</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-zab-%E5%8D%8F%E8%AE%AE%E4%B8%8E-zxid">二、ZAB 协议与 ZXID</a>
+<ul>
+<li><a href="#1-zab-%E7%9A%84%E4%B8%A4%E7%A7%8D%E8%BF%90%E8%A1%8C%E6%A8%A1%E5%BC%8F">1、ZAB 的两种运行模式</a></li>
+<li><a href="#2-zxid-%E7%9A%84%E7%BB%93%E6%9E%84-epoch-%E4%B8%8E-counter">2、ZXID 的结构：epoch 与 counter</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E5%9B%9B%E7%A7%8D%E7%8A%B6%E6%80%81">三、服务器的四种状态</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-fast-leader-election-%E9%80%89%E4%B8%BE%E6%B5%81%E7%A8%8B">四、Fast Leader Election 选举流程</a>
+<ul>
+<li><a href="#1-%E9%80%89%E7%A5%A8%E7%9A%84%E4%B8%89%E8%A6%81%E7%B4%A0">1、选票的三要素</a></li>
+<li><a href="#2-pk-%E8%A7%84%E5%88%99-%E8%B0%81%E6%9B%B4%E9%80%82%E5%90%88%E5%BD%93-leader">2、PK 规则：谁更适合当 Leader</a></li>
+<li><a href="#3-%E8%BF%87%E5%8D%8A%E6%9C%BA%E5%88%B6%E4%B8%8E-quorum">3、过半机制与 quorum</a></li>
+<li><a href="#4-%E5%AE%8C%E6%95%B4%E7%9A%84%E9%80%89%E4%B8%BE%E6%B5%81%E7%A8%8B">4、完整的选举流程</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E9%80%89%E4%B8%BE">初始化选举</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%BF%90%E8%A1%8C%E6%9C%9F%E9%97%B4%E9%80%89%E4%B8%BE">运行期间选举</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E4%B8%8E-paxos-%E5%92%8C-raft-%E7%9A%84%E5%AF%B9%E6%AF%94">五、与 Paxos 和 Raft 的对比</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98">六、常见问题</a>
+<ul>
+<li><a href="#1-%E8%84%91%E8%A3%82%E9%97%AE%E9%A2%98">1、脑裂问题（split brain）</a></li>
+<li><a href="#2-%E9%80%89%E4%B8%BE%E9%A3%8E%E6%9A%B4">2、选举风暴</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%B0%8F%E7%BB%93">小结</a>
+<ul>
 </ul>
 </li>
 </ul>

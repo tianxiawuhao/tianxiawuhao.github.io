@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540" viewBox="0 0 900 540" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+<title>G 的调度循环与 work stealing 工作窃取</title>
+<rect width="900" height="540" fill="#ffffff"/>
+<defs>
+<marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker>
+<marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e08a1e"/></marker>
+</defs>
+<text x="450" y="28" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">G 的调度循环与 work stealing（工作窃取）</text>
+<rect x="40" y="64" width="390" height="54" rx="8" fill="#eef4ff" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="54" y="88" font-size="11.5" fill="#1f2b38">1  M 与某个 P 一一绑定，进入调度循环 schedule()</text>
+<text x="54" y="106" font-size="11" fill="#5b6b7c">一个 M 同一时刻只服务一个 P，P 决定并行度</text>
+<path d="M 235 118 L 235 130" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="40" y="134" width="390" height="54" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="54" y="158" font-size="11.5" fill="#1f2b38">2  先取 P 的本地队列 runq（无锁，取栈顶最快）</text>
+<text x="54" y="176" font-size="11" fill="#5b6b7c">绝大多数调度在这一步就结束了，开销极小</text>
+<path d="M 235 188 L 235 200" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="40" y="204" width="390" height="54" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="54" y="228" font-size="11.5" fill="#1f2b38">3  本地为空 → 查全局队列（加锁，每 61 次调度优先一次）</text>
+<text x="54" y="246" font-size="11" fill="#5b6b7c">优先一次是为了防止全局队列里的 G 被饿死</text>
+<path d="M 235 258 L 235 270" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="40" y="274" width="390" height="54" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="54" y="298" font-size="11.5" fill="#1f2b38">4  仍为空 → netpoll 取就绪的网络 G，再为空才去偷</text>
+<text x="54" y="316" font-size="11" fill="#5b6b7c">偷之前还要看有没有 GC 等待执行，避免白抢</text>
+<path d="M 235 328 L 235 340" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="40" y="344" width="390" height="54" rx="8" fill="#eef4ff" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="54" y="368" font-size="11.5" fill="#1f2b38">5  执行 G；G 结束或被抢占后回到步骤 2</text>
+<text x="54" y="386" font-size="11" fill="#5b6b7c">M 与 P 始终不分离，直到进入系统调用</text>
+<path d="M 40 371 L 22 371 L 22 91 L 40 91" fill="none" stroke="#2f6fd0" stroke-width="1.6" marker-end="url(#ah2)"/>
+<text x="16" y="231" font-size="11" fill="#2f6fd0" text-anchor="middle" transform="rotate(-90 16 231)">调度循环</text>
+<rect x="460" y="110" width="170" height="190" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+<rect x="460" y="110" width="170" height="30" rx="8" fill="#eef4ff" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="545" y="130" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">P0 本地队列已空</text>
+<rect x="480" y="170" width="130" height="60" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="545" y="195" font-size="11.5" fill="#5b6b7c" text-anchor="middle">queue empty</text>
+<text x="545" y="215" font-size="11.5" fill="#5b6b7c" text-anchor="middle">无 G 可运行</text>
+<text x="545" y="270" font-size="11.5" fill="#e08a1e" text-anchor="middle">触发 work stealing</text>
+<rect x="700" y="110" width="180" height="190" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+<rect x="700" y="110" width="180" height="30" rx="8" fill="#eef4ff" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="790" y="130" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">P1 本地队列（有活）</text>
+<rect x="712" y="152" width="76" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="750" y="171" font-size="11.5" fill="#1f2b38" text-anchor="middle">G1</text>
+<rect x="800" y="152" width="76" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="838" y="171" font-size="11.5" fill="#1f2b38" text-anchor="middle">G2</text>
+<rect x="712" y="186" width="76" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="750" y="205" font-size="11.5" fill="#1f2b38" text-anchor="middle">G3</text>
+<rect x="800" y="186" width="76" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="838" y="205" font-size="11.5" fill="#1f2b38" text-anchor="middle">G4</text>
+<rect x="712" y="220" width="76" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="750" y="239" font-size="11.5" fill="#1f2b38" text-anchor="middle">G5</text>
+<rect x="800" y="220" width="76" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="838" y="239" font-size="11.5" fill="#1f2b38" text-anchor="middle">G6</text>
+<text x="790" y="270" font-size="11.5" fill="#5b6b7c" text-anchor="middle">被偷走队列尾部的一半</text>
+<rect x="460" y="286" width="420" height="40" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+<text x="670" y="311" font-size="11.5" fill="#1f2b38" text-anchor="middle">偷取用 CAS 无锁完成，被偷的 P 不必加锁配合</text>
+<path d="M 700 190 L 638 190" stroke="#e08a1e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ah3)"/>
+<text x="668" y="176" font-size="11" fill="#e08a1e" text-anchor="middle">偷一半</text>
+<rect x="20" y="420" width="860" height="46" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+<text x="40" y="449" font-size="11.5" fill="#1f2b38">只有 G 阻塞在系统调用 / channel / 锁上时，M 才会与 P 解绑（hand off）；解绑后 P 立刻被其他 M 接管，不浪费 P</text>
+<rect x="20" y="478" width="860" height="48" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="40" y="499" font-size="11.5" fill="#1f2b38">Go 1.14 起支持基于信号的异步抢占：sysmon 发现某个 G 连续运行超过 10ms 就发 SIGURG 打断它，</text>
+<text x="40" y="517" font-size="11.5" fill="#1f2b38">死循环也无法长期独占 P（Go 1.2～1.13 只能靠函数调用时的栈检查做协作式抢占）。</text>
+</svg>

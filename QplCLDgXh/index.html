@@ -150,7 +150,7 @@
 </li>
 </ul>
 </blockquote>
-<figure data-type="image" tabindex="1"><img src="/post-images/1694400211648228.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1694400211648228.png" alt="单进程时代：任务只能串行执行，某个任务阻塞就白白浪费大量 CPU 时间" loading="lazy"></figure>
 <p>那么能不能由多个进程（在宏观角度）一起来执行多个任务呢？—— 并发</p>
 <h3 id="2-多进程多线程时代有了调度器需求">2、多进程/多线程时代有了调度器需求：</h3>
 <p>Linux操作系统底层基础知识扫盲</p>
@@ -192,10 +192,10 @@
 </ul>
 </li>
 </ul>
-<figure data-type="image" tabindex="2"><img src="/post-images/1694401084514128.png" alt="" loading="lazy"></figure>
-<p>对 Linux 而言，线程本质上是轻量级进程，线程调度也就是进程调度；而在 Java 中，一个用户态线程对应一个内核态线程</p>
+<figure data-type="image" tabindex="2"><img src="/post-images/1694401084514128.png" alt="Linux 进程调度策略：非抢占与抢占、CFS 完全公平调度、实时调度 SCHED_RR 与 SCHED_FIFO" loading="lazy"></figure>
+<p>对 Linux 而言，线程本质上是轻量级进程，线程调度也就是进程调度；而在 Java 中，传统的平台线程是 <code>1:1</code> 对应一个内核态线程（Java 21 起的虚拟线程改为 <code>M:N</code>，详见后文对比）</p>
 <p>但新的问题就又出现了，进程拥有太多的资源，进程的创建、切换、销毁，都会占用很长的时间，CPU虽然利用起来了，但如果进程过多，CPU有很大的一部分都被用来进行进程调度和进程（线程）切换了。</p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1694402124299030.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1694402124299030.png" alt="进程与线程数量过多时，CPU 大量时间被消耗在调度和上下文切换上" loading="lazy"></figure>
 <h3 id="3-协程来再次提高cpu利用率减少进程切换">3、协程来再次提高CPU利用率（减少进程切换）：</h3>
 <blockquote>
 <p>多进程、多线程已经提高了系统的并发能力，但是在当今互联网高并发场景下，为每个任务都创建一个线程是很不现实的：</p>
@@ -204,10 +204,10 @@
 <p>会消耗大量的内存：</p>
 </li>
 <li>
-<p>进程：进程虚拟内存（<code>4GB = 1GB内核空间 + 3GB用户空间</code>）</p>
+<p>进程：每个进程都有独立的虚拟地址空间，32 位系统上通常是 <code>4GB = 1GB 内核空间 + 3GB 用户空间</code>，64 位系统则大得多；</p>
 </li>
 <li>
-<p>线程：每个线程启动前后，会消耗<code>2MB</code>左右的内存；</p>
+<p>线程：每条线程都要独占一份栈空间（Linux 默认 <code>8MB</code> 左右，Java 线程默认 <code>1MB</code> 左右），线程一多内存先撑不住；</p>
 </li>
 <li>
 <p>大量的进程/线程调度浪费CPU资源：</p>
@@ -215,7 +215,7 @@
 </ul>
 </blockquote>
 <p><strong>最早的协程模型是 1:1：一个用户态协程对应一个内核态线程，即协程与线程一一绑定：</strong></p>
-<p><img src="C:\Users\admin\Desktop\md\1694402835194916.png" style="zoom:50%;" /><img src="C:\Users\admin\Desktop\md\1694402878556958.png" style="zoom:50%;" /></p>
+<p>1:1 模型下协程与内核线程一一绑定，协程的创建、切换、销毁都要经过内核，开销并不比线程小，因此无法支撑海量并发。</p>
 <p><strong>思考：既然一个协程(co-routine)可以绑定一个线程(thread)，那么能不能将多个协程(co-routine)同时绑定到一个线程(thread)上呢？</strong></p>
 <blockquote>
 <p>于是就有了 线程:协程 = <code>1:N</code> 模型：</p>
@@ -228,15 +228,15 @@
 </li>
 </ul>
 </blockquote>
-<figure data-type="image" tabindex="4"><img src="/post-images/1694403114496699.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1694403114496699.png" alt="线程与协程 1:N 模型：多个协程绑定在同一条线程上，一个协程阻塞就拖垮整条线程" loading="lazy"></figure>
 <p><strong>思考：我们可否让一个用户程序的多个协程，通过协程调度器，同时绑定到多个内核线程上呢？</strong></p>
 <blockquote>
 <p>于是，就有了我们最终的 线程:协程 = <code>M:N</code> 模型：</p>
 </blockquote>
-<figure data-type="image" tabindex="5"><img src="/post-images/1694403682792883.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="/post-images/1694403682792883.png" alt="线程与协程 M:N 模型：协程调度器把大量协程复用到多个内核线程上" loading="lazy"></figure>
 <p><strong>此 <code>M:N</code> 模型克服了以上 <code>1:1</code>，<code>1:N</code> 两种模型的缺点，但是实现也变得更加的复杂，压力给到“协程调度器”！</strong></p>
 <h3 id="4-golang中的协程goroutine">4、Golang中的协程Goroutine：</h3>
-<p>Go中，协程被称为<code>goroutine</code>，它非常轻量，一个<code>goroutine</code>只占大概<code>4KB</code>，并且这<code>4KB</code>就足够<code>goroutine</code>运行完，这就能在有限的内存空间内支持大量<code>goroutine</code>，支持了更多的并发。</p>
+<p>Go 中，协程被称为 <code>goroutine</code>，它非常轻量：初始栈只有几 KB（<code>4KB</code>～<code>8KB</code>，随 Go 版本变化），这点栈空间通常就足够它跑完，因此同样的内存可以放下几十万个 <code>goroutine</code>，并发规模自然更大。</p>
 <p>虽然一个<code>goroutine</code>的栈只占几KB，但实际是可伸缩的，如果需要更多内容，runtime会自动为<code>goroutine</code>分配。</p>
 <blockquote>
 <p>Goroutine特点：</p>
@@ -253,11 +253,11 @@
 <blockquote>
 <p>Go 中出现过两种协程调度器模型：<code>GM</code> 和 <code>GMP</code>；</p>
 <p>在 Go 1.1 版本之前使用的是 GM 模型，但由于 GM 模型性能不佳、饱受诟病，官方随后改进了调度器，形成了我们现在使用的 GMP 模型；</p>
-<p>网上关于GM 和GMP的对比介绍文章也很多，随便贴一个：GM到GMP，Golang经历了什么？</p>
+<p>下面按 GM → GMP 的顺序，把这次演进完整展开。</p>
 </blockquote>
 <h3 id="1-简单快速地认识下-gm-模型">1、简单快速地认识下 GM 模型：</h3>
 <p><strong>GM模型中的G全称为Goroutine协程，M全称为Machine内核级线程！</strong></p>
-<figure data-type="image" tabindex="6"><img src="/post-images/1694410174636362.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="/post-images/1694410174636362.png" alt="GM 模型：多个 M 线程争抢一把互斥锁，从同一个全局 G 队列中取 G" loading="lazy"></figure>
 <p>根据上图。我们很容易知道，M 线程无论执行还是放回 G，都必须访问全局 G 队列；由于 M 有多个，而多线程访问同一资源需要加锁保证安全，因此全局 G 队列受互斥锁保护。</p>
 <p>显然，<strong>这种模型有很严重的缺点：</strong></p>
 <blockquote>
@@ -274,9 +274,9 @@
 </ul>
 </blockquote>
 <h3 id="2-重点学习下-gmp-模型">2、重点学习下 GMP 模型：</h3>
-<p><strong>G全称为Goroutine协程，M全称为Machine内核级线程，P全称为Processor协程运行所需的资源！</strong></p>
+<p><strong>G 全称为 Goroutine（用户态协程），M 全称为 Machine（内核级线程），P 全称为 Processor（逻辑处理器，代表运行 Go 代码所需的上下文与资源）。</strong></p>
 <p>它在 GM 模型的基础上增加了一个 P 层，下面来看它是如何设计的：</p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1694411337563637.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="/post-images/1694411337563637.png" alt="GMP 模型：M 绑定 P，P 持有本地 G 队列，取不到时再回退到全局队列" loading="lazy"></figure>
 <ul>
 <li>
 <p>M 列表：Go 程序启动时会设置 M 的最大数量，默认上限为 10000，但内核很难创建如此多的线程，因此实际 M 的数量通常受内核限制；也可以通过 runtime/debug 中的 <code>SetMaxThreads</code> 手动设置上限；</p>
@@ -292,15 +292,16 @@
 线程M想要运行协程G，都是找P索要，一个P一次只能提供一个G协程任务；整个程序最终的协程并行度，其实就是P的数量，即<code>GOMAXPROCS</code>设置的值！</p>
 </li>
 <li>
-<p>本地队列优先：当队列<code>P1</code>中的<code>G1</code>在运行过程中新建<code>G2</code>时，<code>G2</code>优先存放到<code>P1</code>的本地队列中，如果队列满了，则会把<code>P1</code>队列中一半的G移动到全局队列中；</p>
+<p>本地队列优先：当 <code>P1</code> 中的 <code>G1</code> 运行过程中新建 <code>G2</code> 时，<code>G2</code> 优先放入 <code>P1</code> 的本地队列；如果本地队列已满（超过 256 个），就把本地队列中一半的 G 连同新 G 一起搬到全局队列（runtime 中的 <code>runqputslow</code>）；</p>
 </li>
 <li>
-<p>工作窃取机制：如果 P 的本地队列为空，它会先从全局队列获取 G；若全局队列中也没有 G，则会尝试从其他 P 中偷取一半的 G；</p>
+<p>工作窃取机制（work stealing）：如果 P 的本地队列为空，会先去全局队列取 G；全局队列也空了，再从其他 P 的本地队列<strong>尾部</strong>偷走一半 G，整个偷取用 <code>CAS</code> 完成，被偷的 P 不需要加锁配合；</p>
 </li>
 <li>
-<p>M通过P获得G的优先级顺序：本地队列（无锁）-&gt;全局队列（锁）-&gt;<code>netpoll</code>事件-&gt;去其他队列里偷（<code>CAS</code>，无锁）</p>
+<p>M 通过 P 获得 G 的优先级顺序：本地队列（无锁）-&gt;全局队列（加锁）-&gt;<code>netpoll</code> 就绪的网络 G-&gt;去其他 P 的队列里偷（<code>CAS</code>，无锁）。为了保证公平，每 61 次调度会先检查一次全局队列，避免其中的 G 被饿死；</p>
 </li>
 </ul>
+<p><img src="/post-assets/QplCLDgXh/01-gmp-structure.svg" alt="GMP 模型结构：G 是用户态协程，M 是内核线程，P 是持有本地队列的逻辑处理器，M 与 P 一一绑定后才执行 G"></p>
 <h3 id="3-gmp调度器的设计策略详解">3、GMP调度器的设计策略详解：</h3>
 <ul>
 <li>
@@ -308,11 +309,11 @@
 <ul>
 <li>
 <p>work stealing机制：工作窃取机制，上面已经讲解了；</p>
-<figure data-type="image" tabindex="8"><img src="/post-images/1694412904109844.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="8"><img src="/post-images/1694412904109844.png" alt="work stealing：本地队列为空的 P 从其他 P 的本地队列尾部偷走一半 G" loading="lazy"></figure>
 </li>
 <li>
 <p>hand off 机制：当 M 因 G 发起系统调用（如读写磁盘）而阻塞时，它会释放绑定的 P，把 P 转交给其他空闲的 M 继续执行任务；</p>
-<figure data-type="image" tabindex="9"><img src="/post-images/1694412793594699.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="9"><img src="/post-images/1694412793594699.png" alt="hand off：M 因系统调用阻塞时释放 P，把 P 交给其他 M 继续执行剩余的 G" loading="lazy"></figure>
 </li>
 </ul>
 </li>
@@ -323,9 +324,14 @@
 </ul>
 </li>
 <li>
-<p>抢占：</p>
+<p>抢占（协作式 + 异步抢占）：</p>
 <ul>
-<li>现在的调度器几乎都是抢占式的（Go 1.14 起基于信号实现真正的抢占式调度）。</li>
+<li>
+<p>Go 1.2 起是<strong>协作式抢占</strong>：<code>sysmon</code> 监控到某个 G 连续运行超过 10ms，就把它的 <code>stackguard0</code> 标记为“需要抢占”，G 在下次函数调用做栈检查时才让出 CPU —— 如果它一直跑没有函数调用的死循环，就抢不动；</p>
+</li>
+<li>
+<p>Go 1.14 起加入<strong>基于信号的异步抢占</strong>：<code>sysmon</code> 向目标 M 发送 <code>SIGURG</code> 信号，runtime 的信号处理函数直接把 G 挂起并回到调度循环，死循环、长时间 GC 扫描等场景都能被抢占，STW 时间也从“等一个 G 跑完”降到微秒级。</p>
+</li>
 </ul>
 </li>
 <li>
@@ -336,8 +342,9 @@
 </ul>
 </li>
 </ul>
+<p><img src="/post-assets/QplCLDgXh/02-scheduling-loop-work-stealing.svg" alt="调度循环与 work stealing：M 绑定 P 后按本地队列、全局队列、netpoll、窃取的顺序取 G，本地为空的 P 从其他 P 偷一半 G"></p>
 <h3 id="4-通过go-func-启动一个goroutine的过程详解">4、通过go func() 启动一个goroutine的过程详解：</h3>
-<figure data-type="image" tabindex="10"><img src="/post-images/1694418639551655.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="10"><img src="/post-images/1694418639551655.png" alt="go func() 创建 goroutine：新 G 优先进入 P 的本地队列，再由绑定 P 的 M 取出执行" loading="lazy"></figure>
 <blockquote>
 <p>在Golang中想创建一个goroutine协程非常容易，只需要在 func() 方法调用前，加上 go 关键字即可；</p>
 <p>新创建的goroutine会优先保存在P的本地队列中，如果本地队列满了，则会放在全局队列中；</p>
@@ -350,7 +357,7 @@
 <h3 id="5-p-和-m-的数量问题">5、P 和 M 的数量问题？</h3>
 <ul>
 <li>
-<p>P的数量：由启动时环境变量<code>$GOMAXPROCS</code>或者是由runtime的方法<code>GOMAXPROCS()</code>决定，这意味着在程序执行的任意时刻都只有<code>$GOMAXPROCS</code>个<code>goroutine</code>在同时运行；</p>
+<p>P 的数量：由启动时的环境变量 <code>GOMAXPROCS</code> 或 <code>runtime.GOMAXPROCS()</code> 决定（Go 1.5 起默认等于 CPU 逻辑核数，Go 1.5 之前默认为 1），这意味着程序执行的任意时刻最多只有 <code>GOMAXPROCS</code> 个 <code>goroutine</code> 真正并行运行；</p>
 </li>
 <li>
 <p>M的数量：</p>
@@ -374,11 +381,31 @@
 <p>M何时被创建（懒汉）：没有足够的M来关联P并运行其中的可运行的G；比如所有的M此时都阻塞住了，而P中还有很多就绪任务，就会去寻找空闲的M，而没有空闲的，就会去创建新的M。</p>
 </li>
 </ul>
+<h3 id="7-与-java-线程模型的区别">7、与 Java 线程模型的区别：</h3>
+<blockquote>
+<p>把 Go 的调度器和 Java 放在一起看，区别一目了然：</p>
+</blockquote>
+<ul>
+<li>
+<p>线程与调度层次：Java 的 <code>Thread</code>（平台线程）是 <code>1:1</code> 模型，一条 Java 线程对应一条 OS 内核线程，创建、切换、销毁都由内核完成；goroutine 是 <code>M:N</code> 模型，几十万个 G 复用少量 M，切换在用户态由 runtime 完成，不需要陷入内核。</p>
+</li>
+<li>
+<p>栈与内存：Java 线程的栈大小在创建时固定（<code>-Xss</code>，64 位 Linux 默认 1MB 左右），线程数一多内存就被吃满；goroutine 的栈只有几 KB 且可动态伸缩，所以“开一个协程”的成本远低于“开一条线程”。</p>
+</li>
+<li>
+<p>谁来抢占：Go 1.14 起 runtime 通过 <code>SIGURG</code> 信号做<strong>异步抢占</strong>，用户代码不配合也能被打断；Java 21 引入的虚拟线程同样是 <code>M:N</code>，但它是<strong>协作式</strong>的 —— 只有在阻塞、<code>park</code> 等挂起点才会让出载体线程，纯计算的死循环仍会占住载体线程。</p>
+</li>
+<li>
+<p>阻塞处理：Java 平台线程一旦阻塞在 I/O 上，对应的内核线程也被占住（虚拟线程则由 JVM 在阻塞时把它从载体线程上卸载）；Go 依赖 <code>netpoll</code> + hand off，把网络 I/O 的 G 挂到 epoll 上，M 不会被拖住。</p>
+</li>
+<li>
+<p>并行度控制：Java 的并行度由线程池大小和 CPU 核数共同决定，需要自己调参；Go 只需要设置 <code>GOMAXPROCS</code>，P 的数量就决定了同时运行的 G 的上限。</p>
+</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E4%B8%80-golang%E5%8D%8F%E7%A8%8B%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E7%94%B1%E6%9D%A5">一、Golang协程调度器的由来</a>
+<a href="#%E4%B8%80-golang%E5%8D%8F%E7%A8%8B%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E7%94%B1%E6%9D%A5">一、Golang协程调度器的由来</a>
 <ul>
 <li><a href="#1-%E5%8D%95%E8%BF%9B%E7%A8%8B%E6%97%B6%E4%BB%A3%E4%B8%8D%E9%9C%80%E8%A6%81%E8%B0%83%E5%BA%A6%E5%99%A8">1、单进程时代不需要调度器：</a></li>
 <li><a href="#2-%E5%A4%9A%E8%BF%9B%E7%A8%8B%E5%A4%9A%E7%BA%BF%E7%A8%8B%E6%97%B6%E4%BB%A3%E6%9C%89%E4%BA%86%E8%B0%83%E5%BA%A6%E5%99%A8%E9%9C%80%E6%B1%82">2、多进程/多线程时代有了调度器需求：</a></li>
@@ -386,7 +413,8 @@
 <li><a href="#4-golang%E4%B8%AD%E7%9A%84%E5%8D%8F%E7%A8%8Bgoroutine">4、Golang中的协程Goroutine：</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-goroutine%E5%8D%8F%E7%A8%8B%E8%B0%83%E5%BA%A6%E5%99%A8">二、Goroutine协程调度器</a>
+<li>
+<a href="#%E4%BA%8C-goroutine%E5%8D%8F%E7%A8%8B%E8%B0%83%E5%BA%A6%E5%99%A8">二、Goroutine协程调度器</a>
 <ul>
 <li><a href="#1-%E7%AE%80%E5%8D%95%E5%BF%AB%E9%80%9F%E5%9C%B0%E8%AE%A4%E8%AF%86%E4%B8%8B-gm-%E6%A8%A1%E5%9E%8B">1、简单快速地认识下 GM 模型：</a></li>
 <li><a href="#2-%E9%87%8D%E7%82%B9%E5%AD%A6%E4%B9%A0%E4%B8%8B-gmp-%E6%A8%A1%E5%9E%8B">2、重点学习下 GMP 模型：</a></li>
@@ -394,8 +422,7 @@
 <li><a href="#4-%E9%80%9A%E8%BF%87go-func-%E5%90%AF%E5%8A%A8%E4%B8%80%E4%B8%AAgoroutine%E7%9A%84%E8%BF%87%E7%A8%8B%E8%AF%A6%E8%A7%A3">4、通过go func() 启动一个goroutine的过程详解：</a></li>
 <li><a href="#5-p-%E5%92%8C-m-%E7%9A%84%E6%95%B0%E9%87%8F%E9%97%AE%E9%A2%98">5、P 和 M 的数量问题？</a></li>
 <li><a href="#6-p-%E5%92%8C-m-%E4%BD%95%E6%97%B6%E8%A2%AB%E5%88%9B%E5%BB%BA">6、P 和 M 何时被创建？</a></li>
-</ul>
-</li>
+<li><a href="#7-%E4%B8%8E-java-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B%E7%9A%84%E5%8C%BA%E5%88%AB">7、与 Java 线程模型的区别：</a></li>
 </ul>
 </li>
 </ul>
