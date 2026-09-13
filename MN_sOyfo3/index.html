@@ -127,9 +127,18 @@
           
           <img class="post-feature-header-image" src="/post-images/MN_sOyfo3.png" alt="封面图">
           
-          <h2 id="1-安装jdk">1、安装JDK</h2>
+          <p>Jenkins 是最常用的持续集成 / 持续交付（CI/CD）工具之一，一般单独部署在一台构建机上。下面记录在 CentOS 上通过 yum 源安装 Jenkins 的完整过程：装 JDK、添加官方源、修改端口、启动服务，最后解锁并完成初始化配置。</p>
+
+<h2 id="1-安装jdk">1、安装JDK</h2>
+<p>Jenkins 是 Java 应用，必须先有可用的 Java 运行时：</p>
 <pre><code class="language-shell">yum install -y java
 </code></pre>
+<p>这条命令安装的是 OpenJDK 运行时，只包含 <code>java</code>，不含编译器 <code>javac</code>。如果后续需要在构建任务里编译 Java 代码，建议改装开发包（例如 <code>java-11-openjdk-devel</code>）。安装完成后确认版本，避免 JDK 版本与 Jenkins 要求不匹配：</p>
+<pre><code class="language-shell">java -version
+</code></pre>
+
+<p><img src="/post-assets/MN_sOyfo3/01-install-flow.svg" alt="Jenkins 通过 yum 安装的部署流程图"></p>
+
 <h2 id="2-安装jenkins">2、安装jenkins</h2>
 <p><strong>添加Jenkins库到yum库，Jenkins将从这里下载安装。</strong></p>
 <pre><code class="language-shell">wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
@@ -140,7 +149,10 @@ yum install -y jenkins
 或
 yum install jenkins -y --nogpgcheck
 </code></pre>
+<p>三条命令各做一件事：把 yum 源定义文件写到 <code>/etc/yum.repos.d/jenkins.repo</code>，导入仓库签名公钥，然后安装 <code>jenkins</code> 包。少了导入公钥这一步，<code>yum install</code> 会因 GPG 校验失败而中断；<code>--nogpgcheck</code> 是校验失败时的兜底写法，它会跳过签名校验，安全性更低，不建议长期使用。</p>
+
 <h2 id="3-修改jenkins端口">3、修改jenkins端口</h2>
+<p>先确认装上的版本，再看这个包到底放了哪些文件：</p>
 <pre><code class="language-text">[root@tools ~]# rpm -qa | grep jenkins
 jenkins-2.340-1.1.noarch
 </code></pre>
@@ -158,17 +170,26 @@ jenkins-2.340-1.1.noarch
 /var/lib/jenkins
 /var/log/jenkins
 </code></pre>
-<pre><code class="language-properties">[root@tools ~]# vim /usr/lib/systemd/system/jenkins.service
-vi /etc/sysconfig/jenkins
+<p>Jenkins 的监听端口来自环境变量 <code>JENKINS_PORT</code>：旧版本把它放在 <code>/etc/sysconfig/jenkins</code> 里，新版本的服务单元则可能直接用它自己的一份环境变量指定。两处都值得看一眼，改完记得让 systemd 重新加载：</p>
+<pre><code class="language-properties">[root@tools ~]# vi /etc/sysconfig/jenkins
 
-找到修改端口号：
-JENKINS_PORT=“9000” #此端口不冲突可以不修改
+# 找到端口号并修改；此端口不冲突可以不修改
+JENKINS_PORT="9000"
 </code></pre>
+<pre><code class="language-bash">systemctl daemon-reload
+</code></pre>
+
+<p><img src="/post-assets/MN_sOyfo3/02-config-paths.svg" alt="Jenkins 服务单元与配置文件、目录的对应关系图"></p>
+
 <h2 id="4-启动jenkins">4、启动jenkins</h2>
 <pre><code class="language-bash">systemctl start jenkins.service
+systemctl enable jenkins.service
 </code></pre>
+<p>用下面的命令确认服务已经起来、端口已经监听（<code>netstat</code> 在新版发行版中已废弃，习惯上也可以用 <code>ss -nultp</code> 代替）：</p>
 <pre><code class="language-text">[root@tools ~]# netstat -nultp
 </code></pre>
+<p>端口出现 LISTEN 行且进程名为 java，就说明服务已经就绪；没有输出则先看 <code>systemctl status jenkins</code> 与 <code>/var/log/jenkins/jenkins.log</code>，常见原因是 JDK 版本不满足该 Jenkins 版本的要求或端口被占用。接下来按下面的顺序完成首次初始化：</p>
+<p><img src="/post-assets/MN_sOyfo3/03-startup-sequence.svg" alt="Jenkins 从启动服务到完成初始化的状态顺序图"></p>
 <blockquote>
 <p>安装成功后Jenkins将作为一个守护进程随系统启动<br>
 系统会创建一个“jenkins”用户来允许这个服务，如果改变服务所有者，同时需要修改/var/log/jenkins, /var/lib/jenkins, 和/var/cache/jenkins的所有者<br>
@@ -177,23 +198,38 @@ JENKINS_PORT=“9000” #此端口不冲突可以不修改
 Jenkins的RPM仓库配置被加到/etc/yum.repos.d/jenkins.repo</p>
 </blockquote>
 <h2 id="5-打开jenkins">5、打开jenkins</h2>
-<p>在浏览器中访问 http://192.168.3.200:9000/<br>
-首次进入会要求输入初始密码</p>
-<p>初始密码在：/var/lib/jenkins/secrets/initialAdminPassword</p>
-<p>重置密码：admin/admin</p>
+<p>在浏览器中访问 <code>http://192.168.3.200:9000/</code>（把 IP 换成实际服务器地址），首次进入会要求输入初始密码。</p>
+<p>初始密码在 <code>/var/lib/jenkins/secrets/initialAdminPassword</code>，可以直接在服务器上打印出来：</p>
+<p><img src="/post-assets/MN_sOyfo3/04-user-ownership.svg" alt="jenkins 服务用户与 /var/lib、/var/log、/var/cache 三个目录的属主关系图"></p>
+<pre><code class="language-bash">cat /var/lib/jenkins/secrets/initialAdminPassword
+</code></pre>
+<p>粘贴密码解锁后，按提示安装推荐插件并创建管理员账号，初始化就完成了。</p>
+<p>如果忘了管理员密码，可以在 Jenkins 的「系统管理 → 管理用户」里重置；旧版本的默认账号密码是 admin/admin，仅适合本地测试，生产环境务必改掉。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#1-%E5%AE%89%E8%A3%85jdk">1、安装JDK</a>
 <ul>
-<li>
-<ul>
-<li><a href="#1-%E5%AE%89%E8%A3%85jdk">1、安装JDK</a></li>
-<li><a href="#2-%E5%AE%89%E8%A3%85jenkins">2、安装jenkins</a></li>
-<li><a href="#3-%E4%BF%AE%E6%94%B9jenkins%E7%AB%AF%E5%8F%A3">3、修改jenkins端口</a></li>
-<li><a href="#4-%E5%90%AF%E5%8A%A8jenkins">4、启动jenkins</a></li>
-<li><a href="#5-%E6%89%93%E5%BC%80jenkins">5、打开jenkins</a></li>
 </ul>
 </li>
+<li>
+<a href="#2-%E5%AE%89%E8%A3%85jenkins">2、安装jenkins</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#3-%E4%BF%AE%E6%94%B9jenkins%E7%AB%AF%E5%8F%A3">3、修改jenkins端口</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#4-%E5%90%AF%E5%8A%A8jenkins">4、启动jenkins</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#5-%E6%89%93%E5%BC%80jenkins">5、打开jenkins</a>
+<ul>
 </ul>
 </li>
 </ul>
