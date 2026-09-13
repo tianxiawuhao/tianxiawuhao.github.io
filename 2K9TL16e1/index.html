@@ -124,65 +124,76 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/2K9TL16e1.png" alt="封面图">
+<p>本文记录在 Docker 中安装 Elasticsearch 2.4.4，并用 head 插件查看集群状态的完整过程。</p>
+<p>注意：2.4.4 是 2016 年的版本，只适合学习验证。新版本（7.x/8.x）的插件安装命令已改为 <code>elasticsearch-plugin</code>，head 这类站点插件也不再被支持，官方推荐用 Kibana 或独立部署的 head 服务。</p>
+<figure data-type="image" tabindex="10"><img src="/post-assets/2K9TL16e1/01-es-install-flow.svg" alt="Docker 安装 Elasticsearch 与 head 插件的流程" loading="lazy"></figure>
           
-          <pre><code class="language-shell">docker search elasticsearch
+          <h2 id="一搜索并拉取镜像">一、搜索并拉取镜像</h2>
+<pre><code class="language-shell">docker search elasticsearch
 </code></pre>
-<figure data-type="image" tabindex="1"><img src="/post-images/1641958220593.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1641958220593.png" alt="docker search 搜索 elasticsearch 镜像的结果" loading="lazy"></figure>
 <p>选择一个版本，拉取镜像</p>
 <pre><code class="language-shell">docker pull elasticsearch:2.4.4
 </code></pre>
-<figure data-type="image" tabindex="2"><img src="/post-images/1641958232628.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1641958232628.png" alt="docker pull 拉取镜像的过程" loading="lazy"></figure>
 <p>查看镜像</p>
 <pre><code class="language-shell">docker images
 </code></pre>
-<figure data-type="image" tabindex="3"><img src="/post-images/1641958242342.png" alt="" loading="lazy"></figure>
-<p>通过镜像，启动一个容器，并将9200和9300端口映射到本机</p>
+<figure data-type="image" tabindex="3"><img src="/post-images/1641958242342.png" alt="docker images 查看本地镜像" loading="lazy"></figure>
+<h2 id="二启动容器">二、启动容器</h2>
+<p>通过镜像启动一个容器，把 9200（HTTP 服务）和 9300（节点间通信）端口映射到本机，并用 ES_JAVA_OPTS 限制堆内存。</p>
 <pre><code class="language-shell">docker run -d -p 9200:9200 -p 9300:9300 -e ES_JAVA_OPTS=&quot;-Xms512m -Xmx512m&quot; --name elasticsearch elasticsearch:2.4.4
 </code></pre>
-<figure data-type="image" tabindex="4"><img src="/post-images/1641958249892.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1641958249892.png" alt="docker run 启动 elasticsearch 容器" loading="lazy"></figure>
 <p>查看已启动容器</p>
 <pre><code class="language-shell">docker ps
 </code></pre>
+<h2 id="三验证安装">三、验证安装</h2>
 <p>访问以下地址验证是否安装成功：</p>
-<p>http://localhost:9200/</p>
-<figure data-type="image" tabindex="5"><img src="/post-images/1641958263133.png" alt="" loading="lazy"></figure>
-<p>安装插件前，先进入容器：</p>
-<pre><code class="language-shell">docker exec -it 4d34fbf944a5 /bin/bash
+<p><code>http://localhost:9200/</code></p>
+<figure data-type="image" tabindex="5"><img src="/post-images/1641958263133.png" alt="访问 9200 端口返回的 JSON 信息" loading="lazy"></figure>
+<h2 id="四安装-head-插件">四、安装 head 插件</h2>
+<p>安装插件前先进入容器，容器名就是启动时指定的 elasticsearch：</p>
+<pre><code class="language-shell">docker exec -it elasticsearch /bin/bash
 </code></pre>
-<figure data-type="image" tabindex="6"><img src="/post-images/1641958286588.png" alt="" loading="lazy"></figure>
-<p>进入容器bin目录，并执行安装插件命令：</p>
-<pre><code class="language-shell">cd bin ls
+<figure data-type="image" tabindex="6"><img src="/post-images/1641958286588.png" alt="docker exec 进入容器" loading="lazy"></figure>
+<p>进入容器的 bin 目录查看内容，再执行安装插件命令：</p>
+<pre><code class="language-shell">cd bin
+ls
 </code></pre>
-<figure data-type="image" tabindex="7"><img src="/post-images/1641958295695.png" alt="" loading="lazy"></figure>
-<pre><code class="language-shell"> plugin install mobz/elasticsearch-head /**（低版本执行命令有所不同）**/ plugin -install mobz/elasticsearch-head
+<figure data-type="image" tabindex="7"><img src="/post-images/1641958295695.png" alt="容器内 bin 目录的内容" loading="lazy"></figure>
+<pre><code class="language-shell">plugin install mobz/elasticsearch-head
+# 1.x 版本的命令为：plugin -install mobz/elasticsearch-head
 </code></pre>
-<figure data-type="image" tabindex="8"><img src="/post-images/1641958307262.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="8"><img src="/post-images/1641958307262.png" alt="安装 head 插件的执行过程" loading="lazy"></figure>
 <p>访问：</p>
-<p>http://localhost:9200/_plugin/head/</p>
-<figure data-type="image" tabindex="9"><img src="/post-images/1641958315308.png" alt="" loading="lazy"></figure>
+<p><code>http://localhost:9200/_plugin/head/</code></p>
+<figure data-type="image" tabindex="9"><img src="/post-images/1641958315308.png" alt="head 插件页面" loading="lazy"></figure>
 <p>插件安装成功</p>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/KW_02xshc/"><span class="pn-label">← 上一篇</span><span class="pn-title">docker 宿主机定时清除容器的运行日志</span></a>
-      <a class="next-post" href="/yIe_yl-14/"><span class="pn-label">下一篇 →</span><span class="pn-title">使用docker搭建FastDFS文件系统</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
-
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#%E4%B8%80%E6%90%9C%E7%B4%A2%E5%B9%B6%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F">一、搜索并拉取镜像</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C%E5%90%AF%E5%8A%A8%E5%AE%B9%E5%99%A8">二、启动容器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89%E9%AA%8C%E8%AF%81%E5%AE%89%E8%A3%85">三、验证安装</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B%E5%AE%89%E8%A3%85-head-%E6%8F%92%E4%BB%B6">四、安装 head 插件</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">

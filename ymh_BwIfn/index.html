@@ -127,44 +127,37 @@
           
           <img class="post-feature-header-image" src="/post-images/ymh_BwIfn.png" alt="封面图">
           
-          <h2 id="jenkins配置">Jenkins配置</h2>
+          <p>本文记录如何把 GitLab 与 Jenkins 关联起来：向 GitLab 推送代码后由 Webhook 通知 Jenkins，从而自动触发构建。</p>
+<figure data-type="image" tabindex="8"><img src="/post-assets/ymh_BwIfn/01-webhook-flow.svg" alt="GitLab 提交代码自动触发 Jenkins 构建的流程图" loading="lazy"></figure>
+<h2 id="jenkins-配置">Jenkins 配置</h2>
 <h3 id="插件安装">插件安装</h3>
-<p>系统管理 → 插件管理 → 可选插件 → 搜索要安装的插件（gitlab hook-plugin 和 gitlab-plugin）<br>
-如果找不到上面两个插件，安装gitlab和gitlab hook即可</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1655527394729.gif" alt="" loading="lazy"></figure>
+<p>系统管理 → 插件管理 → 可选插件 → 搜索要安装的插件（gitlab-plugin 和 gitlab hook-plugin）。如果找不到上面两个插件，安装 gitlab 和 gitlab hook 即可。</p>
+<p>注意：<code>gitlab hook-plugin</code> 已废弃，目前的集成能力由 <code>gitlab-plugin</code> 提供。安装后在任务配置中勾选 “Build when a change is pushed to GitLab”，页面会给出 GitLab CI Service URL 和 Secret token，把它们填到 GitLab 的 Webhooks 中即可。</p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1655527394729.gif" alt="在 Jenkins 中安装 GitLab 相关插件的动图" loading="lazy"></figure>
 <h3 id="创建测试项目">创建测试项目</h3>
-<figure data-type="image" tabindex="2"><img src="/post-images/1655527415958.gif" alt="" loading="lazy"></figure>
-<h3 id="gitlab配置">gitlab配置</h3>
-<p>打开要关联 Jenkins 项目的设置选项，找到 Webhooks 选项，把 Jenkins 中的项目触发器 URL 以及 Secret token 配置到 GitLab 的 Webhooks 选项中。</p>
+<figure data-type="image" tabindex="2"><img src="/post-images/1655527415958.gif" alt="创建测试项目并配置触发器的动图" loading="lazy"></figure>
+<h3 id="gitlab-配置">GitLab 配置</h3>
+<p>打开要关联 Jenkins 项目的设置选项，找到 Webhooks 选项，把 Jenkins 中的项目触发器 URL 以及 Secret token 配置到 GitLab 的 Webhooks 选项中。URL 填 Jenkins 给出的触发器地址，Secret token 必须与 Jenkins 任务里的一致，否则请求会被拒绝。</p>
 <p>URL</p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1655527426929.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1655527426929.png" alt="Jenkins 任务中给出的 GitLab 触发器 URL" loading="lazy"></figure>
 <p>Secret token</p>
-<figure data-type="image" tabindex="4"><img src="/post-images/1655527439844.gif" alt="" loading="lazy"></figure>
-<figure data-type="image" tabindex="5"><img src="/post-images/1655527449909.gif" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1655527439844.gif" alt="在 GitLab 中添加 Webhook 并填写 URL 的动图" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="/post-images/1655527449909.gif" alt="在 GitLab 中填写 Secret token 的动图" loading="lazy"></figure>
 <h3 id="验证效果">验证效果</h3>
-<p>我们测试下点击刚刚关联的构建动作，Jenkins会不会自动构建<br>
-当出现请求状态码200的时候证明我们的关联动作已经执行</p>
-<figure data-type="image" tabindex="6"><img src="/post-images/1655527459975.png" alt="" loading="lazy"></figure>
+<p>在 GitLab 的 Webhook 列表中点击 Test，测试 Jenkins 会不会自动构建。返回 HTTP 200 说明这次 Webhook 调用已经被 Jenkins 成功接收。</p>
+<figure data-type="image" tabindex="6"><img src="/post-images/1655527459975.png" alt="Webhook 测试返回 HTTP 200" loading="lazy"></figure>
 <p>下面我们去到Jenkins中看下是否有构建历史</p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1655527466575.png" alt="" loading="lazy"></figure>
-<p>再试下手动push代码到gitlab会不会触发Jenkins的构建任务<br>
-手动去到服务器上向远程gitlab分支推送文件</p>
+<figure data-type="image" tabindex="7"><img src="/post-images/1655527466575.png" alt="Jenkins 中新增的构建历史" loading="lazy"></figure>
+<p>再手动 push 代码到 GitLab，验证是否会自动触发 Jenkins 的构建任务：在服务器上向远程 GitLab 分支推送文件，如果 Jenkins 的构建历史中出现了这次 push 触发的构建记录，就说明 Webhook 已经生效。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#jenkins%E9%85%8D%E7%BD%AE">Jenkins配置</a>
+<a href="#jenkins-%E9%85%8D%E7%BD%AE">Jenkins 配置</a>
 <ul>
 <li><a href="#%E6%8F%92%E4%BB%B6%E5%AE%89%E8%A3%85">插件安装</a></li>
 <li><a href="#%E5%88%9B%E5%BB%BA%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE">创建测试项目</a></li>
-<li><a href="#gitlab%E9%85%8D%E7%BD%AE">gitlab配置</a></li>
+<li><a href="#gitlab-%E9%85%8D%E7%BD%AE">GitLab 配置</a></li>
 <li><a href="#%E9%AA%8C%E8%AF%81%E6%95%88%E6%9E%9C">验证效果</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
