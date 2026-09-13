@@ -125,7 +125,30 @@
           
           <img class="post-feature-header-image" src="/post-images/OxvAGnY87.png" alt="封面图">
           
-          <p><strong>controller.java.vm</strong></p>
+          <p>easeCode 是一套面向 Spring Boot 工程的代码生成平台：读取数据库表结构，把表名、列名、类型、注释等元数据交给模板引擎，一次性产出 Controller、Service、Mapper、Entity 及配套的查询对象与 XML 映射。生成件并不直接落进工程目录，而是先在服务端内存里渲染，供开发者在线预览，确认后再打包下载，由使用者自行放入工程。本文按「元数据 → 模板 → 产物」的顺序，把整条链路里的模板配置与运行时支撑代码完整记录一遍，重点是可复用的工程约定：类名怎么来、字段怎么映射、分页与条件查询怎么写、异常与响应体怎么统一。</p>
+
+          <p>需要先明确一点：模板文件（<code>.vm</code>）用的是 <strong>Apache Velocity</strong> 语法，<code>#foreach</code>、<code>#if</code>、<code>#set</code> 与 <code>$!{...}</code> 都出自 Velocity；Freemarker 是另一种可选的模板引擎，语法写成 <code>&lt;#list&gt;</code> 那一套，<strong>两套模板不能混用</strong>，同一个模板目录里只应存在一种后缀。下面的模板与工具类方法（<code>$tool</code>、<code>$callback</code>）都取自 MyBatis-Plus 代码生成器的 Velocity 模板上下文，理解这一点，后文的变量名就不会显得突兀。</p>
+
+          <p><img src="/post-assets/OxvAGnY87/01-codegen-pipeline.svg" alt="easeCode 代码生成链路图：元数据采集、模板渲染、产物分层落盘与预览下载"></p>
+
+          <h2 id="一-元数据与模板变量">一、元数据与模板变量</h2>
+
+          <p>整条链路的输入不是「表名」，而是一个已经解析好的元数据对象 <code>TableInfo</code>。生成器先连库读取 <code>information_schema</code>，把每张表组装成 <code>TableInfo</code>，再交给模板渲染；模板里出现的所有变量最终都落在它身上：</p>
+
+          <ul>
+            <li><code>tableInfo.name</code>：表名转成的驼峰类名，如 <code>sys_user</code> → <code>SysUser</code>，用于拼类名、变量名；</li>
+            <li><code>tableInfo.comment</code>：表注释，写进类注释与 Swagger 描述；</li>
+            <li><code>tableInfo.obj.name</code>：数据库里的原始表名，只在直接拼 SQL 时使用，不能拿驼峰名代替；</li>
+            <li><code>tableInfo.pkColumn</code>：主键列集合，取第 0 个作为唯一主键，<code>pk.name</code> 是属性名，<code>pk.shortType</code> 是简类名；</li>
+            <li><code>tableInfo.fullColumn</code>：全部列；<code>tableInfo.otherColumn</code>：排除主键后的列，批量插入与更新时用它，避免误改主键；</li>
+            <li><code>tableInfo.savePath</code> 与 <code>tableInfo.savePackageName</code>：输出根目录与基础包名，决定文件落在哪、<code>package</code> 语句写什么。</li>
+          </ul>
+
+          <p>列级别上，<code>column.name</code> 是驼峰属性名，<code>column.obj.name</code> 是原始列名，<code>column.type</code> 是全限定类型名，<code>column.shortType</code> 是简类名，<code>column.ext.jdbcType</code> 供 XML 映射使用。<strong>这四个名字分工明确，混用是最常见的出错点</strong>：判断类型要用 <code>shortType</code> 或用 <code>$tool.getClsNameByFullName($column.type)</code> 转一道，写 SQL 一律用 <code>obj.name</code>。</p>
+
+          <p><img src="/post-assets/OxvAGnY87/02-metadata-template-mapping.svg" alt="元数据 TableInfo 字段、Velocity 模板语法与最终代码产物的映射结构图"></p>
+
+          <h3 id="controller-java-vm">controller.java.vm</h3>
 <pre><code class="language-java">##定义初始变量
 #set($tableName = $tool.append($tableInfo.name, &quot;Controller&quot;))
 ##设置回调
@@ -252,7 +275,14 @@ public class $!{tableName} {
 
 }
 </code></pre>
-<p><strong>service.java.vm</strong></p>
+
+<p>这段 Controller 模板里有一处接口自洽性问题，照原样保留、未作修改：<code>queryById</code> 的参数标注了 <code>@PathVariable("id")</code>，但方法上的 <code>@GetMapping(value = "/queryByOne")</code> 路径中并没有 <code>{id}</code> 占位符，Spring 在处理该请求时取不到名为 <code>id</code> 的路径变量，会直接抛出异常；要么把路径改成 <code>/queryByOne/{id}</code>，要么把参数改为按查询参数绑定的写法。相邻的 <code>deleteById</code> 未加 <code>@PathVariable</code>，参数会被当作普通请求参数（<code>?id=...</code>）绑定，两道接口的参数传递方式因此并不一致。这条只作为二次开发时的核对点记录，详见文末日志中的「建议未改」。</p>
+
+<h2 id="二-服务层模板">二、服务层模板</h2>
+
+<p>Service 拆成接口与实现两个模板，两者的文件名与包路径由开头的三行固定结构决定：<code>#set($tableName = $tool.append($tableInfo.name, "Service"))</code> 拼类名，<code>$!callback.setFileName(...)</code> 定文件名，<code>$!callback.setSavePath(...)</code> 定输出目录。接口只声明 <code>queryByList</code> 与 <code>queryByPage</code> 两个方法，其余单表增删改查全部继承自 MyBatis-Plus 的 <code>IService</code>，这是这套模板最省代码的地方——不需要为每张表重写基础 CRUD。</p>
+
+<h3 id="service-java-vm">service.java.vm</h3>
 <pre><code class="language-java">##定义初始变量
 #set($tableName = $tool.append($tableInfo.name, &quot;Service&quot;))
 ##设置回调
@@ -296,7 +326,11 @@ public interface $!{tableName} extends IService&lt;$!{tableInfo.name}&gt;{
     PageInfo&lt;$!{tableInfo.name}&gt; queryByPage($!{tableInfo.name}TO $!{tool.firstLowerCase($tableInfo.name)});
 }
 </code></pre>
-<p><strong>serviceImpl.java.vm</strong></p>
+
+<h3 id="serviceimpl-java-vm">serviceImpl.java.vm</h3>
+
+<p>实现类的关键是 <code>getWrapper</code>：它用 <code>#foreach</code> 遍历全部列，逐列生成一个 <code>eq</code> 条件。字符串列用 <code>StringUtils.hasLength(...)</code> 判空，其它类型用 <code>Objects.nonNull(...)</code> 判断，两者都把「有值才拼条件」这个语义交给 MyBatis-Plus 的条件重载完成，不会出现 <code>where 1=1 and ...</code> 之外的脏条件。需要留意的两点写在后面的「建议未改」里：<code>getWrapper</code> 的返回类型是裸的 <code>LambdaQueryWrapper</code>，以及 <code>queryByPage</code> 用 <code>BeanUtils.copyProperties</code> 把 TO 拷进 Builder 出来的空实体时，<code>page</code> 与 <code>size</code> 这两个分页字段也会被一起拷进去。</p>
+
 <pre><code class="language-java">##定义初始变量
 #set($tableName = $tool.append($tableInfo.name, &quot;ServiceImpl&quot;))
 ##设置回调
@@ -377,7 +411,15 @@ public class $!{tableName} extends ServiceImpl&lt;$!{tableInfo.name}Mapper, $!{t
     }
 }
 </code></pre>
-<p><strong>mapper.java.vm</strong></p>
+
+<h2 id="三-mapper-层接口与-xml-映射">三、Mapper 层：接口与 XML 映射</h2>
+
+<p>Mapper 层由两个模板承担：一个生成 Java 接口，一个生成 XML 映射文件。接口继承 MyBatis-Plus 的 <code>BaseMapper</code>，只拿到单条 SQL 的通用能力；XML 里则手写了三处 MyBatis-Plus 覆盖不到的场景——批量插入、批量更新（依赖 <code>allowMultiQueries=true</code>）以及一个显式列清单的查询。<code>&lt;resultMap&gt;</code> 用 <code>#foreach</code> 遍历全列生成 <code>property/column/jdbcType</code> 映射，这正是 <code>column.ext.jdbcType</code> 唯一的用武之地。</p>
+
+<h3 id="mapper-java-vm-mapper-xml">mapper.java.vm（产物为 Mapper XML）</h3>
+
+<p>这个模板的文件名与产物类型不一致：名字叫 <code>mapper.java.vm</code>，内容却是标准的 MyBatis XML，<code>#save</code> 的回调把文件保存为 <code>$tool.append($tableInfo.name, "Mapper.xml")</code>，落到 <code>$modulePath/src/main/resources/mapper</code> 下。文件名沿用了旧命名，落地文件仍然是 <code>XxxMapper.xml</code>，阅读与二次开发时按后者理解即可。</p>
+
 <pre><code class="language-java">##引入mybatis支持
 $!{mybatisSupport.vm}
 
@@ -441,7 +483,8 @@ $!callback.setSavePath($tool.append($modulePath, &quot;/src/main/resources/mappe
     &lt;/update&gt;
 &lt;/mapper&gt;
 </code></pre>
-<p><strong>dao.java.vm</strong></p>
+
+<h3 id="dao-java-vm">dao.java.vm</h3>
 <pre><code class="language-java">##定义初始变量
 #set($tableName = $tool.append($tableInfo.name, &quot;Mapper&quot;))
 ##设置回调
@@ -471,7 +514,15 @@ import java.util.List;
 public interface $!{tableInfo.name}Mapper extends BaseMapper&lt;$!{tableInfo.name}&gt;{
 }
 </code></pre>
-<p><strong>entity.java.vm</strong></p>
+
+<h2 id="四-实体与传输对象">四、实体与传输对象</h2>
+
+<p>三个实体模板共用同一套骨架：<code>$!{define.vm}</code> 引入宏定义，<code>$!{autoImport.vm}</code> 引入默认导入，<code>#tableComment(...)</code> 生成类注释，最后 <code>#foreach($column in $tableInfo.fullColumn)</code> 逐列展开属性。区别只在回调与包后缀：实体落在 <code>/entity</code>，TO 落在 <code>/entity/to</code> 并继承 <code>SearchPage</code> 承载分页参数，VO 落在 <code>/entity/vo</code>。这三个 <code>#save</code> 与 <code>#setPackageSuffix</code> 的取值必须与 Service、Controller 模板里的 <code>import</code> 语句一致，否则生成出来的工程编译不过——这是改动模板时最先要核对的地方。</p>
+
+<h3 id="entity-java-vm">entity.java.vm</h3>
+
+<p>实体模板里有两处需要特别说明。<code>@Table(name = "$!{tool.hump2Underline($tableInfo.name)}")</code> 把类名还原成下划线表名，路径正确；但紧随其后的 <code>schema = "$!{tableInfo.comment}"</code> 把<strong>表注释</strong>当成了 <strong>schema 名</strong>，而 JPA 的 <code>schema</code> 属性期望的是数据库 schema（如 <code>public</code>），不是中文描述，实际依赖 <code>ddl-auto: update</code> 时可能生成出带中文 schema 的语句。此处判定为模板笔误，未改动代码，仅记录在日志里。另一处是列宽：<code>@Column</code> 里的 <code>columnDefinition</code> 把 <code>String</code> 一律写成 <code>varchar(255)</code>，<code>Double</code> 写成 <code>double(5, 3)</code>，并没有读取元数据里的真实长度与精度，因此实体注解只适合做 DDL 参考，不能当成表结构的来源。</p>
+
 <pre><code class="language-java">##引入宏定义
 $!{define.vm}
 
@@ -544,7 +595,11 @@ public class $!{tableInfo.name} implements Serializable {
 #end
 }
 </code></pre>
-<p><strong>entityTO.java.vm</strong></p>
+
+<h3 id="entityto-java-vm">entityTO.java.vm</h3>
+
+<p>TO（Transfer Object）是查询入参：它继承 <code>SearchPage</code>，于是天然带上 <code>page</code> 与 <code>size</code>，Service 实现里的 <code>getPage()</code>、<code>getSize()</code> 才成立。TO 里的主键只保留 <code>@TableId</code> 注解而不带 <code>@Id</code>、<code>@GeneratedValue</code>，因为它不参与 JPA 持久化，只是一个可供条件拼装的载体。</p>
+
 <pre><code class="language-java">##引入宏定义
 $!{define.vm}
 
@@ -589,7 +644,8 @@ public class $!{tableInfo.name}TO extends SearchPage implements Serializable {
 #end
 }
 </code></pre>
-<p><strong>entityVO.java.vm</strong></p>
+
+<h3 id="entityvo-java-vm">entityVO.java.vm</h3>
 <pre><code class="language-java">##引入宏定义
 $!{define.vm}
 
@@ -633,7 +689,12 @@ public class $!{tableInfo.name}VO implements Serializable {
 #end
 }
 </code></pre>
-<p><strong>APIResponse</strong></p>
+
+<h2 id="五-统一响应体与错误码">五、统一响应体与错误码</h2>
+
+<p>Controller 里每个方法都返回 <code>APIResponse</code>，这是接口层的统一出口：<code>code</code> 表示业务结果，<code>data</code> 承载数据，<code>msg</code> 支持带占位符的国际化式消息——<code>getMsg()</code> 在 <code>args</code> 非空时用 <code>StrUtil.format(msg, args)</code> 现场格式化，因此错误码里的文案可以写成模板，调用处只传参数。不过要注意，<code>APIResponse</code> 引用的是 <code>io.swagger.annotations</code>（Swagger 2 的包名），而 Controller 模板用的是 <code>io.swagger.v3.oas.annotations</code>（OpenAPI 3），两套注解包不能同时生效，迁移时应把这里的 <code>@ApiModel</code>/<code>@ApiModelProperty</code> 一并换成 v3 注解。</p>
+
+<h3 id="apiresponse">APIResponse</h3>
 <pre><code class="language-java">import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.annotations.ApiModel;
@@ -822,7 +883,12 @@ public enum ResponseCode implements IResponseCode {
     }
 }
 </code></pre>
-<p><strong>SearchPage</strong></p>
+
+<h2 id="六-分页对象">六、分页对象</h2>
+
+<p>分页参数与分页结果分别由 <code>SearchPage</code> 和 <code>PageInfo</code> 承担。前者是入参基类，只有 <code>page</code> 与 <code>size</code> 两个字段，默认 <code>size = 10</code>；后者把 MyBatis-Plus 的 <code>Page</code> 转成前端友好的结构，保留 <code>total</code>、<code>list</code>、<code>pageNum</code>、<code>pageSize</code>，并额外算出 <code>startRow</code>、<code>endRow</code>。要注意 <code>endRow</code> 的算法是 <code>total / pageSize</code>，得到的是总页数而不是结束行号，命名与语义并不吻合；前端若按字面意思当成「结束行」使用会算错。这个命名问题属于既有接口约定，改动会影响调用方，因此保留原样，仅在此说明。</p>
+
+<h3 id="searchpage">SearchPage</h3>
 <pre><code class="language-java">import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -881,8 +947,12 @@ public class PageInfo&lt;T&gt;{
     }
 }
 </code></pre>
-<p><strong>xml</strong></p>
-<pre><code class="language-xml">spring:
+
+<h2 id="七-运行时配置">七、运行时配置</h2>
+
+<p>生成件要跑起来，还需要应用侧的 JPA 配置配合。开发阶段通常打开 SQL 打印并把 <code>ddl-auto</code> 设为 <code>update</code>，让实体注解能反推表结构；由于上文提到的 <code>@Table</code> 注解里 <code>schema</code> 取值来自表注释，这项配置在真实环境务必确认生成的 DDL 是否符合预期，正式环境建议改为 <code>validate</code> 或 <code>none</code>，由 DBA 维护的表结构说了算。</p>
+
+<pre><code class="language-yaml">spring:
   jpa:
     hibernate:
       ddl-auto: update
@@ -893,27 +963,54 @@ public class PageInfo&lt;T&gt;{
           auto: update
 </code></pre>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/DfTPV-OWf/"><span class="pn-label">← 上一篇</span><span class="pn-title">Gitlab的手动安装</span></a>
-      <a class="next-post" href="/GEPNPC2k-/"><span class="pn-label">下一篇 →</span><span class="pn-title">Java实现License授权许可和验证</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
-
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#%E4%B8%80-%E5%85%83%E6%95%B0%E6%8D%AE%E4%B8%8E%E6%A8%A1%E6%9D%BF%E5%8F%98%E9%87%8F">一、元数据与模板变量</a>
+<ul>
+<li><a href="#controller-java-vm">controller.java.vm</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-%E6%9C%8D%E5%8A%A1%E5%B1%82%E6%A8%A1%E6%9D%BF">二、服务层模板</a>
+<ul>
+<li><a href="#service-java-vm">service.java.vm</a></li>
+<li><a href="#serviceimpl-java-vm">serviceImpl.java.vm</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-mapper-%E5%B1%82%E6%8E%A5%E5%8F%A3%E4%B8%8E-xml-%E6%98%A0%E5%B0%84">三、Mapper 层：接口与 XML 映射</a>
+<ul>
+<li><a href="#mapper-java-vm-mapper-xml">mapper.java.vm（产物为 Mapper XML）</a></li>
+<li><a href="#dao-java-vm">dao.java.vm</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E5%AE%9E%E4%BD%93%E4%B8%8E%E4%BC%A0%E8%BE%93%E5%AF%B9%E8%B1%A1">四、实体与传输对象</a>
+<ul>
+<li><a href="#entity-java-vm">entity.java.vm</a></li>
+<li><a href="#entityto-java-vm">entityTO.java.vm</a></li>
+<li><a href="#entityvo-java-vm">entityVO.java.vm</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E7%BB%9F%E4%B8%80%E5%93%8D%E5%BA%94%E4%BD%93%E4%B8%8E%E9%94%99%E8%AF%AF%E7%A0%81">五、统一响应体与错误码</a>
+<ul>
+<li><a href="#apiresponse">APIResponse</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-%E5%88%86%E9%A1%B5%E5%AF%B9%E8%B1%A1">六、分页对象</a>
+<ul>
+<li><a href="#searchpage">SearchPage</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-%E8%BF%90%E8%A1%8C%E6%97%B6%E9%85%8D%E7%BD%AE">七、运行时配置</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">
