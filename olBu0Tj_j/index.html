@@ -146,11 +146,11 @@
 <ul>
 <li><strong>消息顺序</strong>：发送到队列的消息，消费时是否可以保证消费的顺序，比如A先下单，B后下单，应该是A先去扣库存，B再去扣，顺序不能反。</li>
 <li><strong>消息路由</strong>：根据路由规则，只订阅匹配路由规则的消息，比如有A/B两者规则的消息，消费者可以只订阅A消息，B消息不会消费。</li>
-<li>消息可靠性：是否会存在丢消息的情况，比如有A/B两个消息，最后只有B消息能消费，A消息丢失。</li>
+<li><strong>消息可靠性</strong>：是否会存在丢消息的情况，比如有A/B两个消息，最后只有B消息能消费，A消息丢失。</li>
 <li><strong>消息时序</strong>：主要包括“消息存活时间”和“延迟/预定的消息”，“消息存活时间”表示生产者可以对消息设置TTL，如果超过该TTL，消息会自动消失；“延迟/预定的消息”指的是可以延迟或者预订消费消息，比如延时5分钟，那么消息会5分钟后才能让消费者消费，时间未到的话，是不能消费的。</li>
 <li><strong>消息留存</strong>：消息消费成功后，是否还会继续保留在消息队列。</li>
 <li><strong>容错性</strong>：当一条消息消费失败后，是否有一些机制，保证这条消息是一种能成功，比如异步第三方退款消息，需要保证这条消息消费掉，才能确定给用户退款成功，所以必须保证这条消息消费成功的准确性。</li>
-<li><strong>伸缩</strong>：当消息队列性能有问题，比如消费太慢，是否可以快速支持库容；当消费队列过多，浪费系统资源，是否可以支持缩容。</li>
+<li><strong>伸缩</strong>：当消息队列性能有问题，比如消费太慢，是否可以快速支持扩容；当消费队列过多，浪费系统资源，是否可以支持缩容。</li>
 <li><strong>吞吐量</strong>：支持的最高并发数。</li>
 </ul>
 <h2 id="2-rabbitmq-原理初探">2. RabbitMQ 原理初探</h2>
@@ -164,7 +164,7 @@
 <li>Channel：信道，消息读写等操作在信道中进行。客户端可以建立多个信道，每个信道代表一个会话任务。</li>
 <li>Message：消息，应用程序和服务器之间传送的数据，消息可以非常简单，也可以很复杂。由Properties和Body组成。Properties为外包装，可以对消息进行修饰，比如消息的优先级、延迟等高级特性；Body就是消息体内容。</li>
 <li>Virtual Host：虚拟主机，用于逻辑隔离。一个虚拟主机里面可以有若干个Exchange和Queue，同一个虚拟主机里面不能有相同名称的Exchange或Queue。</li>
-<li>Exchange：交换器，接收消息，按照路由规则将消息路由到一个或者多个队列。如果路由不到，或者返回给生产者，或者直接丢弃。RabbitMQ常用的交换器常用类型有direct、topic、fanout、headers四种，后面详细介绍。</li>
+<li>Exchange：交换器，接收消息，按照路由规则将消息路由到一个或者多个队列。如果路由不到，或者返回给生产者，或者直接丢弃。RabbitMQ 常用的交换器类型有 direct、topic、fanout、headers 四种，后面详细介绍。</li>
 <li>Binding：绑定，交换器和消息队列之间的虚拟连接，绑定中可以包含一个或者多个RoutingKey。</li>
 <li>RoutingKey：路由键，生产者将消息发送给交换器的时候，会发送一个RoutingKey，用来指定路由规则，这样交换器就知道把消息发送到哪个队列。路由键通常为一个“.”分割的字符串，例如“com.rabbitmq”。</li>
 <li>Queue：消息队列，用来保存消息，供消费者消费。</li>
@@ -181,9 +181,9 @@
 </ol>
 <figure data-type="image" tabindex="4"><img src="/post-images/1657628882128.png" alt="" loading="lazy"></figure>
 <h3 id="23-常用交换器">2.3 常用交换器</h3>
-<p>RabbitMQ常用的交换器类型有direct、topic、fanout、headers四种：</p>
+<p>RabbitMQ 常用的交换器类型有 direct、topic、fanout、headers 四种：</p>
 <ul>
-<li>Direct Exchange：见文知意，直连交换机意思是此交换机需要绑定一个队列，要求该消息与一个特定的路由键完全匹配。简单点说就是一对一的，点对点的发送。</li>
+<li>Direct Exchange：顾名思义，直连交换机意思是此交换机需要绑定一个队列，要求该消息与一个特定的路由键完全匹配。简单点说就是一对一的，点对点的发送。</li>
 </ul>
 <figure data-type="image" tabindex="5"><img src="/post-images/1657628894550.png" alt="" loading="lazy"></figure>
 <ul>
@@ -192,12 +192,12 @@
 <figure data-type="image" tabindex="6"><img src="/post-images/1657628908018.png" alt="" loading="lazy"></figure>
 <ul>
 <li>
-<p>Topic Exchange：直接翻译的话叫做主题交换机，如果从用法上面翻译可能叫通配符交换机会更加贴切。这种交换机是使用通配符去匹配，路由到对应的队列。通配符有两种：&quot;*&quot; 、 &quot;#&quot;。需要注意的是通配符前面必须要加上&quot;.&quot;符号。</p>
+<p>Topic Exchange：直接翻译的话叫做主题交换机，如果从用法上面翻译可能叫通配符交换机会更加贴切。这种交换机是使用通配符去匹配，路由到对应的队列。通配符有两种：&quot;*&quot; 、 &quot;#&quot;。需要注意的是通配符必须单独占一个词，因此要用 &quot;.&quot; 与其他词分隔，例如 a.*、rabbit.#。</p>
 </li>
 <li>
 <ul>
 <li>*符号：有且只匹配一个词。比如 a.*可以匹配到&quot;a.b&quot;、&quot;a.c&quot;，但是匹配不了&quot;a.b.c&quot;。</li>
-<li>#符号：匹配一个或多个词。比如&quot;rabbit.#&quot;既可以匹配到&quot;rabbit.a.b&quot;、&quot;rabbit.a&quot;，也可以匹配到&quot;rabbit.a.b.c&quot;。</li>
+<li>#符号：匹配零个或多个词，例如 &quot;rabbit.#&quot; 也能匹配 &quot;rabbit&quot; 本身。比如&quot;rabbit.#&quot;既可以匹配到&quot;rabbit.a.b&quot;、&quot;rabbit.a&quot;，也可以匹配到&quot;rabbit.a.b.c&quot;。</li>
 </ul>
 </li>
 </ul>
@@ -223,6 +223,7 @@
 <blockquote>
 <p>所以，到这里小伙伴们就可以看到 RabbitMQ的不足：由于master queue单节点，导致性能瓶颈，吞吐量受限。虽然为了提高性能，内部使用了Erlang这个语言实现，但是终究摆脱不了架构设计上的致命缺陷。</p>
 </blockquote>
+<p>补充：这段描述对应的是经典镜像队列（classic mirrored queue）方案。RabbitMQ 3.8 引入了基于 Raft 的仲裁队列（Quorum Queue），经典镜像队列自 3.9 起已被标记为废弃，新版本中应优先使用 Quorum Queue 来实现队列高可用。</p>
 <h3 id="25-高级特性">2.5 高级特性</h3>
 <h4 id="251-过期时间">2.5.1 过期时间</h4>
 <p>Time To Live，也就是生存时间，是一条消息在队列中的最大存活时间，单位是毫秒，下面看看RabbitMQ过期时间特性：</p>
@@ -240,7 +241,7 @@
 <p>消息确认机制是RabbitMQ消息可靠性投递的基础，只要设置autoAck参数为false，消费者就有足够的时间处理消息，不用担心处理消息的过程中消费者进程挂掉后消息丢失的问题。</p>
 <h4 id="253-持久化">2.5.3 持久化</h4>
 <p>消息的可靠性是RabbitMQ的一大特色，那么RabbitMQ是如何保证消息可靠性的呢？答案就是消息持久化。持久化可以防止在异常情况下丢失数据。RabbitMQ的持久化分为三个部分：交换器持久化、队列持久化和消息的持久化。</p>
-<p>交换器持久化可以通过在声明队列时将durable参数设置为true。如果交换器不设置持久化，那么在RabbitMQ服务重启之后，相关的交换器元数据会丢失，不过消息不会丢失，只是不能将消息发送到这个交换器了。</p>
+<p>交换器持久化可以在声明交换器时将 durable 参数设置为 true（对应 <code>channel.exchangeDeclare</code> 的 durable 参数）。如果交换器不设置持久化，那么在RabbitMQ服务重启之后，相关的交换器元数据会丢失，不过消息不会丢失，只是不能将消息发送到这个交换器了。</p>
 <p>队列的持久化能保证其本身的元数据不会因异常情况而丢失，但是不能保证内部所存储的消息不会丢失。要确保消息不会丢失，需要将其设置为持久化。队列的持久化可以通过在声明队列时将durable参数设置为true。</p>
 <p>设置了队列和消息的持久化，当RabbitMQ服务重启之后，消息依然存在。如果只设置队列持久化或者消息持久化，重启之后消息都会消失。</p>
 <p>当然，也可以将所有的消息都设置为持久化，但是这样做会影响RabbitMQ的性能，因为磁盘的写入速度比内存的写入要慢得多。</p>
@@ -271,16 +272,16 @@
 <li><strong>消息回溯（不支持）</strong>：因为消息不支持永久保存，所以自然就不支持回溯。</li>
 <li><strong>高吞吐（中等）</strong>：因为所有的请求的执行，最后都是在master queue，它的这个设计，导致单机性能达不到十万级的标准。</li>
 </ul>
-<h2 id="3-rabbitmq环境搭建">3. RabbitMQ环境搭建</h2>
+<h2 id="3-rabbitmq-环境搭建">3. RabbitMQ 环境搭建</h2>
 <p>因为我用的是Mac，所以直接可以参考官网：</p>
 <blockquote>
 <p>https://www.rabbitmq.com/install-homebrew.html</p>
 </blockquote>
 <p>需要注意的是，一定需要先执行：</p>
-<pre><code class="language-shell">brew update
+<pre><code class="language-bash">brew update
 </code></pre>
 <p>然后再执行：</p>
-<pre><code class="language-shell">brew install rabbitmq
+<pre><code class="language-bash">brew install rabbitmq
 </code></pre>
 <blockquote>
 <p>之前没有执行brew update，直接执行brew install rabbitmq时，会报各种各样奇怪的错误，其中“403 Forbidde”居多。</p>
@@ -290,22 +291,22 @@
 <p>最后执行成功的输出如下：</p>
 <figure data-type="image" tabindex="13"><img src="/post-images/1657629007811.png" alt="" loading="lazy"></figure>
 <p>启动服务：</p>
-<pre><code class="language-shell"># 启动方式1：后台启动
+<pre><code class="language-bash"># 启动方式1：后台启动
 brew services start rabbitmq
 # 启动方式2：当前窗口启动
 cd /usr/local/Cellar/rabbitmq/3.8.19
 rabbitmq-server
 </code></pre>
 <p>在浏览器输入：</p>
-<pre><code class="language-java">http://localhost:15672/
+<pre><code class="language-text">http://localhost:15672/
 </code></pre>
 <p>会出现RabbitMQ后台管理界面（用户名和密码都为guest）：</p>
 <figure data-type="image" tabindex="14"><img src="/post-images/1657629021755.png" alt="" loading="lazy"></figure>
 <p>通过brew安装，一行命令搞定，真香！</p>
-<h2 id="4-rabbitmq测试">4. RabbitMQ测试</h2>
+<h2 id="4-rabbitmq-测试">4. RabbitMQ 测试</h2>
 <h3 id="41-添加账号">4.1 添加账号</h3>
 <p>首先得启动mq</p>
-<pre><code class="language-java">## 添加账号
+<pre><code class="language-bash">## 添加账号
 ./rabbitmqctl add_user admin admin
 ## 添加访问权限
 ./rabbitmqctl set_permissions -p &quot;/&quot; admin &quot;.*&quot; &quot;.*&quot; &quot;.*&quot;
@@ -314,7 +315,7 @@ rabbitmq-server
 </code></pre>
 <h3 id="42-编码实测">4.2 编码实测</h3>
 <p>因为代码中引入了java 8的特性，pom引入依赖：</p>
-<pre><code class="language-java">&lt;dependency&gt;
+<pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.rabbitmq&lt;/groupId&gt;
     &lt;artifactId&gt;amqp-client&lt;/artifactId&gt;
     &lt;version&gt;5.5.1&lt;/version&gt;
@@ -331,6 +332,7 @@ rabbitmq-server
     &lt;/plugin&gt;
 &lt;/plugins&gt;
 </code></pre>
+<p>另外，示例中使用了 <code>@Test</code> 注解，需要在 pom 中补充 JUnit 依赖；片段里的 <code>&lt;plugins&gt;</code> 节点也应放在 <code>&lt;build&gt;</code> 之内才能生效。</p>
 <p>开始写代码：</p>
 <pre><code class="language-java">public class RabbitMqTest {
     //消息队列名称
@@ -376,7 +378,7 @@ rabbitmq-server
         final Channel channel = connection.createChannel();
         //消息队列
         channel.queueDeclare(QUEUE_NAME, true, false, false, null);
-        System.out.println(&quot;[*] Waiting for message. To exist press CTRL+C&quot;);
+        System.out.println(&quot;[*] Waiting for message. To exit press CTRL+C&quot;);
 
         DeliverCallback deliverCallback = (consumerTag, delivery) -&gt; {
             String message = new String(delivery.getBody(), &quot;UTF-8&quot;);
@@ -387,7 +389,7 @@ rabbitmq-server
 }
 </code></pre>
 <p>执行send()后控制台输出：</p>
-<pre><code class="language-java">[x] Sent 'Hello World RabbitMQ count: 0'
+<pre><code class="language-text">[x] Sent 'Hello World RabbitMQ count: 0'
 [x] Sent 'Hello World RabbitMQ count: 1'
 [x] Sent 'Hello World RabbitMQ count: 2'
 [x] Sent 'Hello World RabbitMQ count: 3'
@@ -451,7 +453,7 @@ rabbitmq-server
         channel.queueDeclare(queue, true, false, false, null);
         //绑定队列到交换机
         channel.queueBind(queue, exchange, routingKey);
-        System.out.println(&quot;[*] Waiting for message. To exist press CTRL+C&quot;);
+        System.out.println(&quot;[*] Waiting for message. To exit press CTRL+C&quot;);
 
         Consumer consumer = new DefaultConsumer(channel) {
             @Override
@@ -525,7 +527,7 @@ rabbitmq-server
 }
 </code></pre>
 <p>执行后的输出：</p>
-<pre><code class="language-java">[*] Waiting for message. To exist press CTRL+C
+<pre><code class="language-text">[*] Waiting for message. To exit press CTRL+C
  [x] Received 'hello &gt;&gt;&gt; 0
  [x] Done
  [x] Received 'hello &gt;&gt;&gt; 3
@@ -534,14 +536,14 @@ rabbitmq-server
  [x] Done
  [x] Received 'hello &gt;&gt;&gt; 9
  [x] Done
-[*] Waiting for message. To exist press CTRL+C
+[*] Waiting for message. To exit press CTRL+C
  [x] Received 'hello &gt;&gt;&gt; 1
  [x] Done
  [x] Received 'hello &gt;&gt;&gt; 4
  [x] Done
  [x] Received 'hello &gt;&gt;&gt; 7
  [x] Done
-[*] Waiting for message. To exist press CTRL+C
+[*] Waiting for message. To exit press CTRL+C
  [x] Received 'hello &gt;&gt;&gt; 2
  [x] Done
  [x] Received 'hello &gt;&gt;&gt; 5
@@ -763,14 +765,14 @@ Queue.DeclareOk queueDeclare(String queue, boolean durable, boolean exclusive, b
 <h4 id="612-autodeleted">6.1.2 autoDeleted</h4>
 <p>自动删除，如果该队列没有任何订阅的消费者的话，该队列会被自动删除。这种队列适用于临时队列。</p>
 <p>当一个Queue被设置为自动删除时，当消费者断掉之后，queue会被删除，这个主要针对的是一些不是特别重要的数据，不希望出现消息积累的情况。</p>
-<h4 id="613-小节">6.1.3 小节</h4>
+<h4 id="613-小结">6.1.3 小结</h4>
 <ul>
-<li>当一个Queue已经声明好了之后，不能更新durable或者autoDelted值；当需要修改时，需要先删除再重新声明</li>
-<li>消费的Queue声明应该和投递的Queue声明的 durable,autoDelted属性一致，否则会报错</li>
+<li>当一个Queue已经声明好了之后，不能更新durable或者autoDeleted值；当需要修改时，需要先删除再重新声明</li>
+<li>消费的Queue声明应该和投递的Queue声明的 durable,autoDeleted属性一致，否则会报错</li>
 <li>对于重要的数据，一般设置 durable=true, autoDeleted=false</li>
 <li>对于设置 autoDeleted=true 的队列，当没有消费者之后，队列会自动被删除</li>
 </ul>
-<h3 id="64-ack">6.2 ACK</h3>
+<h3 id="62-ack">6.2 ACK</h3>
 <p>执行一个任务可能需要花费几秒钟，你可能会担心如果一个消费者在执行任务过程中挂掉了。一旦RabbitMQ将消息分发给了消费者，就会从内存中删除。在这种情况下，如果正在执行任务的消费者宕机，会丢失正在处理的消息和分发给这个消费者但尚未处理的消息。</p>
 <p>但是，我们不想丢失任何任务，如果有一个消费者挂掉了，那么我们应该将分发给它的任务交付给另一个消费者去处理。</p>
 <p>为了确保消息不会丢失，RabbitMQ支持消息应答。消费者发送一个消息应答，告诉RabbitMQ这个消息已经接收并且处理完毕了。RabbitMQ就可以删除它了。</p>
@@ -795,69 +797,50 @@ channel.basicConsume(queue, false, consumer);
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#1-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">1. 消息队列</a>
 <ul>
-<li><a href="#1-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">1. 消息队列</a>
-<ul>
-<li><a href="#11-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E6%A8%A1%E5%BC%8F">1.1 消息队列模式</a>
-<ul>
-<li><a href="#111-%E7%82%B9%E5%AF%B9%E7%82%B9%E6%A8%A1%E5%BC%8F">1.1.1 点对点模式</a></li>
-<li><a href="#112-%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E6%A8%A1%E5%BC%8F">1.1.2 发布/订阅模式</a></li>
-</ul>
-</li>
+<li><a href="#11-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E6%A8%A1%E5%BC%8F">1.1 消息队列模式</a></li>
 <li><a href="#12-%E8%A1%A1%E9%87%8F%E6%A0%87%E5%87%86">1.2 衡量标准</a></li>
 </ul>
 </li>
-<li><a href="#2-rabbitmq-%E5%8E%9F%E7%90%86%E5%88%9D%E6%8E%A2">2. RabbitMQ 原理初探</a>
+<li>
+<a href="#2-rabbitmq-%E5%8E%9F%E7%90%86%E5%88%9D%E6%8E%A2">2. RabbitMQ 原理初探</a>
 <ul>
 <li><a href="#21-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5">2.1 基本概念</a></li>
 <li><a href="#22-%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">2.2 工作原理</a></li>
 <li><a href="#23-%E5%B8%B8%E7%94%A8%E4%BA%A4%E6%8D%A2%E5%99%A8">2.3 常用交换器</a></li>
 <li><a href="#24-%E6%B6%88%E8%B4%B9%E5%8E%9F%E7%90%86">2.4 消费原理</a></li>
-<li><a href="#25-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7">2.5 高级特性</a>
-<ul>
-<li><a href="#251-%E8%BF%87%E6%9C%9F%E6%97%B6%E9%97%B4">2.5.1 过期时间</a></li>
-<li><a href="#252-%E6%B6%88%E6%81%AF%E7%A1%AE%E8%AE%A4">2.5.2 消息确认</a></li>
-<li><a href="#253-%E6%8C%81%E4%B9%85%E5%8C%96">2.5.3 持久化</a></li>
-<li><a href="#254-%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97">2.5.4 死信队列</a></li>
-<li><a href="#255-%E5%BB%B6%E8%BF%9F%E9%98%9F%E5%88%97">2.5.5 延迟队列</a></li>
-</ul>
-</li>
+<li><a href="#25-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7">2.5 高级特性</a></li>
 <li><a href="#26-%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90">2.6 特性分析</a></li>
 </ul>
 </li>
-<li><a href="#3-rabbitmq%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA">3. RabbitMQ环境搭建</a></li>
-<li><a href="#4-rabbitmq%E6%B5%8B%E8%AF%95">4. RabbitMQ测试</a>
+<li>
+<a href="#3-rabbitmq-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA">3. RabbitMQ 环境搭建</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#4-rabbitmq-%E6%B5%8B%E8%AF%95">4. RabbitMQ 测试</a>
 <ul>
 <li><a href="#41-%E6%B7%BB%E5%8A%A0%E8%B4%A6%E5%8F%B7">4.1 添加账号</a></li>
 <li><a href="#42-%E7%BC%96%E7%A0%81%E5%AE%9E%E6%B5%8B">4.2 编码实测</a></li>
 </ul>
 </li>
-<li><a href="#5-%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8%E5%A7%BF%E5%8A%BF">5. 基本使用姿势</a>
+<li>
+<a href="#5-%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8%E5%A7%BF%E5%8A%BF">5. 基本使用姿势</a>
 <ul>
 <li><a href="#51-%E5%85%AC%E5%85%B1%E4%BB%A3%E7%A0%81%E5%B0%81%E8%A3%85">5.1 公共代码封装</a></li>
-<li><a href="#52-direct%E6%96%B9%E5%BC%8F">5.2 Direct方式</a>
-<ul>
-<li><a href="#521-direct%E7%A4%BA%E4%BE%8B">5.2.1 Direct示例</a></li>
-<li><a href="#522-%E9%97%AE%E9%A2%98%E6%8E%A2%E8%AE%A8">5.2.2 问题探讨</a></li>
-</ul>
-</li>
+<li><a href="#52-direct%E6%96%B9%E5%BC%8F">5.2 Direct方式</a></li>
 <li><a href="#53-fanout%E6%96%B9%E5%BC%8F%E6%8C%87%E5%AE%9A%E9%98%9F%E5%88%97">5.3 Fanout方式（指定队列）</a></li>
 <li><a href="#54-fanout%E6%96%B9%E5%BC%8F%E9%9A%8F%E6%9C%BA%E8%8E%B7%E5%8F%96%E9%98%9F%E5%88%97">5.4 Fanout方式（随机获取队列）</a></li>
 <li><a href="#55-topic%E6%96%B9%E5%BC%8F">5.5 Topic方式</a></li>
 </ul>
 </li>
-<li><a href="#6-rabbitmq-%E8%BF%9B%E9%98%B6">6. RabbitMQ 进阶</a>
+<li>
+<a href="#6-rabbitmq-%E8%BF%9B%E9%98%B6">6. RabbitMQ 进阶</a>
 <ul>
-<li><a href="#61-durable-%E5%92%8C-autodeleted">6.1 durable 和 autoDeleted</a>
-<ul>
-<li><a href="#611-durable">6.1.1 durable</a></li>
-<li><a href="#612-autodeleted">6.1.2 autoDeleted</a></li>
-<li><a href="#613-%E5%B0%8F%E8%8A%82">6.1.3 小节</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#64-ack">6.2 ACK</a></li>
+<li><a href="#61-durable-%E5%92%8C-autodeleted">6.1 durable 和 autoDeleted</a></li>
+<li><a href="#62-ack">6.2 ACK</a></li>
 </ul>
 </li>
 </ul>
