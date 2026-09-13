@@ -126,16 +126,21 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/ZsckGVdlz.png" alt="封面图">
-          </img>
           
+          <p>JWT（JSON Web Token）是目前前后端分离项目里最常用的无状态登录凭证：服务端签发一个字符串，客户端每次请求带上它，服务端只校验签名就能确认身份，不需要在服务端保存会话。本文用一个最小可运行的例子走通「签发 → 解析 → 校验」，并说明签名算法、过期与刷新、无状态登出以及常见安全坑。</p>
+
+          <p><img src="/post-assets/ZsckGVdlz/01-jwt-structure.svg" alt="JWT 三段结构（header/payload/signature）与校验流程示意图"></p>
+
           <h2 id="springboot-jwt实现">SpringBoot  JWT实现</h2>
-<p>（这里只是实现了 JWT 签发与校验，没有生成证书，安全性有限；证书安全验证可参考<a href="https://tinaxiawuhao.github.io/post/wWtT_Oc9B/">Spring Security JWT</a>）</p>
+<p>（这里只实现 JWT 的签发与校验，没有配置非对称密钥与证书，安全性有限；证书方式的安全验证可参考<a href="https://tinaxiawuhao.github.io/post/wWtT_Oc9B/">Spring Security JWT</a>）</p>
+<p>引入 JJWT 依赖（0.6.0 是较老的版本，若使用 0.11.x 及以上，API 有变化，见下文说明）：</p>
 <pre><code class="language-java">&lt;dependency&gt;
     &lt;groupId&gt;io.jsonwebtoken&lt;/groupId&gt;
     &lt;artifactId&gt;jjwt&lt;/artifactId&gt;
     &lt;version&gt;0.6.0&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
+<p>签发 token：</p>
 <pre><code class="language-java">import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -158,6 +163,18 @@ public class CreateJwtTest3 {
     }
 }
 </code></pre>
+<p>典型输出如下（iat / exp 与签名会随运行时间变化）：</p>
+<pre><code class="language-text">eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4ODgiLCJzdWIiOiLlsI_nmb0iLCJpYXQiOjE1NjExMDE3MzIsImV4cCI6MTU2MTEwMTc5MSwicm9sZXMiOiJhZG1pbiIsImxvZ28iOiJsb2dvLnBuZyJ9.5iVVdTw747L3ScHeCqle-bwj3cezK8NnE7VilQWOr8Y
+
+id:888
+subject:小白
+roles:admin
+logo:logo.png
+签发时间:2019-06-21 05:22:12
+过期时间:2019-06-21 05:23:11
+当前时间:2019-06-21 05:22:30
+</code></pre>
+<p>解析并校验 token：</p>
 <pre><code class="language-java">import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.apache.commons.lang3.time.DateFormatUtils;
@@ -178,15 +195,111 @@ public class ParseJwtTest {
     }
 }
 </code></pre>
+<p>如果 token 已过期或签名不匹配，parseClaimsJws() 会分别抛出 ExpiredJwtException、SignatureException，所以实际项目中不要让它冒泡成 500，而应捕获后统一返回 401。</p>
+<h2 id="jwt-结构">JWT 结构：三段各是什么</h2>
+<p>一个 JWT 就是两个圆点分隔的三段字符串：<code>header.payload.signature</code>。</p>
+<ol>
+<li><strong>Header（头部）</strong>：一个 JSON，声明签名算法 alg（如 HS256）和类型 typ（固定 JWT）。它经 Base64Url 编码后成为第一段。</li>
+<li><strong>Payload（载荷）</strong>：存放声明的 JSON。标准声明有 iss（签发者）、sub（主体）、aud（接收方）、exp（过期时间）、nbf（生效时间）、iat（签发时间）、jti（唯一编号）；其余是业务自定义 claim，例如上面的 roles、logo。它同样只做 Base64Url 编码，成为第二段。</li>
+<li><strong>Signature（签名）</strong>：用服务端持有的密钥对「第一段 + . + 第二段」计算 HMAC 得到，成为第三段。签名保证 header 与 payload 没有被篡改，服务端也就能在不查库的情况下信任里面的内容。</li>
+</ol>
+<p>这里最重要的一个认知是：<strong>Base64Url 是编码而不是加密</strong>。把 payload 段贴到任意 Base64 解码工具里，就能原样读出明文。所以绝对不要在 payload 里放密码、手机号、身份证号等敏感信息；JWT 只用来传递身份标识和授权信息，不用于传递机密数据。</p>
+<p>另外要注意 payload 的体积：token 会随着每次请求放在 Header 里，claim 放得越多，请求头越大，还会推高带宽与解析开销，因此只放必要字段。</p>
+<h2 id="签名算法与密钥">签名算法与密钥长度</h2>
+<p>示例用的是 HS256，即 HMAC-SHA256：签发与校验使用同一把对称密钥，实现简单、性能好，适合单体应用和内部服务。与之对应的还有 RS256/ES256 这类非对称算法——私钥签发、公钥校验，适合多服务共享校验能力的场景（各服务只持有公钥，泄露公钥不影响签发安全），代价是密钥管理与实现更复杂。</p>
+<p>关于 HS256 的密钥，有两点经常被忽略：</p>
+<ul>
+<li><strong>长度</strong>：HS256 的输出是 256 bit，密钥强度不应低于摘要长度，业界建议至少 256 bit（32 字节）的高熵随机值。示例里的 <code>&quot;itcast&quot;</code> 只有 6 个字节，属于教学用弱密钥，放到线上可被离线暴力破解——攻击者拿到一个合法 token 后，可以不断猜测密钥重算签名，猜中即可伪造任意身份的 token。</li>
+<li><strong>存放</strong>：密钥必须来自配置中心或环境变量，绝不能硬编码在源码里并提交到代码仓库；不同环境（开发/测试/生产）要使用不同密钥，并支持轮换（可同时接受新旧密钥一段时间）。</li>
+</ul>
+<p>生成一把合规密钥可以用 JDK 自带工具：</p>
+<pre><code class="language-bash"># 生成 32 字节（256 bit）随机密钥并做 Base64 编码
+openssl rand -base64 32
+# 或者用 JDK 的 KeyGenerator
+# KeyGenerator gen = KeyGenerator.getInstance(&quot;HmacSHA256&quot;); gen.init(256); gen.generateKey();
+</code></pre>
+<p>如果使用 JJWT 0.11.x 及以上版本，API 已调整（密钥不再接受裸字符串）：</p>
+<pre><code class="language-java">import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+
+import java.security.Key;
+import java.util.Date;
+
+// 从配置读取密钥字符串，再转成 Key（HS256 要求 &gt;= 32 字节）
+Key key = Keys.hmacShaKeyFor(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+String token = Jwts.builder()
+        .setSubject(&quot;xiaobai&quot;)
+        .setId(&quot;888&quot;)
+        .claim(&quot;roles&quot;, &quot;admin&quot;)
+        .setIssuedAt(new Date())
+        .setExpiration(new Date(System.currentTimeMillis() + 60 * 1000))
+        .signWith(key, SignatureAlgorithm.HS256)
+        .compact();
+
+// 校验
+Date exp = Jwts.parserBuilder().setSigningKey(key).build()
+        .parseClaimsJws(token).getBody().getExpiration();
+</code></pre>
+<h2 id="过期与刷新">过期时间与刷新策略</h2>
+<p>JWT 一旦签发，服务端不再保存它的状态，因此 <strong>过期时间必须设置</strong>：不设 exp 的 token 等于永久通行证，一旦泄露就无法收回。示例把过期时间设为 1 分钟只是方便观察过期行为，生产环境通常采取「双 token」策略：</p>
+<ul>
+<li><strong>accessToken</strong>：有效期短（如 15～30 分钟），随每次业务请求发送，只放在内存里。</li>
+<li><strong>refreshToken</strong>：有效期长（如 7～30 天），只在调用刷新接口时使用，由服务端保存（Redis 或数据库），可随时吊销。</li>
+</ul>
+<p>accessToken 过期后，客户端拿 refreshToken 换新的 accessToken；refreshToken 也过期或校验失败时，才要求用户重新登录。刷新接口要限制调用频率、校验客户端信息（设备/IP 异常时拒绝），并且每次刷新可以轮换 refreshToken，降低被盗用后的风险。</p>
+<p>时间字段上还有两个细节：exp、nbf、iat 都是「秒级」时间戳（JJWT 会按秒写入），与 Java 的毫秒时间要换算；服务端校验 exp 时应允许少量时钟偏差（比如 60 秒），避免多实例部署时因机器时钟不同步误判过期。</p>
+<h2 id="无状态登出">无状态登出难题</h2>
+<p>传统 Session 方案中，服务端删掉 Session 就等于用户登出；而 JWT 是无状态的，服务端手里没有可删的东西——只要 token 还在有效期内且签名正确，它就一直是合法的。这就是 JWT 的登出难题，常见处理方式有：</p>
+<ol>
+<li><strong>客户端删除 token</strong>：最简单，能应付普通登出，但无法阻止已泄露 token 在过期前继续使用。</li>
+<li><strong>短有效期 + 刷新令牌</strong>：把 accessToken 有效期压到很短，登出时吊销服务端的 refreshToken，冲击面被限制在几分钟内。</li>
+<li><strong>黑名单</strong>：登出时把该 token 的 jti（或整个 token 的哈希）写入 Redis，过期时间设为 token 剩余有效期，校验时先查黑名单。代价是重新引入了状态存储，但存储量小、且能自动过期。</li>
+<li><strong>版本号/时间戳校验</strong>：用户表记录一个 tokenVersion 或「密码修改时间」，签发时写进 claim；校验时与库中值比对，不相等即失效。这样「修改密码后强制下线所有设备」也一并解决了。</li>
+</ol>
+<p>选哪种取决于业务对「即时失效」的要求：后台管理系统建议黑名单或版本号方案，普通前台应用用短有效期 + 吊销 refreshToken 通常够用。</p>
+<h2 id="安全坑">常见安全坑</h2>
+<ol>
+<li><strong>alg=none</strong>：伪造者把 header 的 alg 改成 none，并去掉签名段。如果服务端解析时「按 token 自报的算法」验证，或对 none 分支不做校验，就能伪造任意用户。必须使用算法白名单，只接受服务端配置的算法，并在校验时显式指定 key。JJWT 0.9.0 之后在这类攻击上已做了防护，但自研解析逻辑仍极易踩坑。</li>
+<li><strong>密钥硬编码</strong>：把密钥写在源码里随仓库泄露，等于把签发权交给所有人。务必改用配置中心/环境变量，并定期轮换。</li>
+<li><strong>payload 放敏感信息</strong>：前面强调过，Base64Url 可逆，payload 对任何拿到 token 的人都是明文。</li>
+<li><strong>缺少校验</strong>：只调用 <code>Jwts.parser().parse(token)</code> 而不校验签名，或自己 base64 解码后直接读 claim，都等于没有验证；必须走 parseClaimsJws() 这类会验签并检查 exp 的接口。</li>
+<li><strong>把 token 放在 URL 里</strong>：URL 会被浏览器历史、Nginx access_log、Referer 记录，推荐放在 <code>Authorization: Bearer &lt;token&gt;</code> 请求头。</li>
+<li><strong>storage 选择</strong>：localStorage 便于前端使用但存在 XSS 窃取风险，HttpOnly Cookie 能防 XSS 读取却要额外处理 CSRF，需结合前端部署方式权衡。</li>
+<li><strong>泄露的 token 无法吊销</strong>：见上一节的登出难题，短有效期 + refreshToken 吊销是最低成本的兜底。</li>
+</ol>
+<p>小结：JWT 解决的是「无状态校验」的问题，它本身不做加密、不负责吊销。把签名算法、密钥长度与保管、过期与刷新、登出补偿这四件事处理好，再避开上面的常见坑，才算把 JWT 用对。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#springboot-jwt%E5%AE%9E%E7%8E%B0">SpringBoot JWT实现</a>
 <ul>
-<li>
-<ul>
-<li><a href="#springboot-jwt%E5%AE%9E%E7%8E%B0">SpringBoot  JWT实现</a></li>
 </ul>
 </li>
+<li>
+<a href="#jwt-%E7%BB%93%E6%9E%84">JWT 结构：三段各是什么</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E7%AD%BE%E5%90%8D%E7%AE%97%E6%B3%95%E4%B8%8E%E5%AF%86%E9%92%A5">签名算法与密钥长度</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%BF%87%E6%9C%9F%E4%B8%8E%E5%88%B7%E6%96%B0">过期时间与刷新策略</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%97%A0%E7%8A%B6%E6%80%81%E7%99%BB%E5%87%BA">无状态登出难题</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%AE%89%E5%85%A8%E5%9D%91">常见安全坑</a>
+<ul>
 </ul>
 </li>
 </ul>

@@ -124,12 +124,15 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/GALzQf_b-.png" alt="封面图">
-          </img>
           
+          <p>在单线程里，ArrayList、HashSet、HashMap 用起来都很顺手；一旦多个线程同时读写，它们就可能抛异常、丢数据，甚至让 CPU 打满。下面分别看 List、Set、Map 的问题根因与解决方案。</p>
+
+          <p><img src="/post-assets/GALzQf_b-/01-collection-thread-safe-options.svg" alt="Java 集合线程安全方案对比：Vector、synchronized 包装、CopyOnWriteArrayList、ConcurrentHashMap、ConcurrentSkipListMap 的锁粒度与适用场景"></p>
+
           <h2 id="list">List</h2>
-<p>ArrayList不是线程安全类，在多线程同时写的情况下，会抛出java.util.ConcurrentModificationException异常。</p>
+<p>ArrayList 不是线程安全类，在多线程同时写的情况下，可能抛出 java.util.ConcurrentModificationException 异常。下面这段代码可以稳定复现：多个线程一边 add，一边 println(list) 触发迭代输出。</p>
 <pre><code class="language-java">private static void listNotSafe() {
-    List&lt;String&gt; list=new ArrayList&lt;&gt;();
+    List&lt;String&gt; list = new ArrayList&lt;&gt;();
     for (int i = 1; i &lt;= 30; i++) {
         new Thread(() -&gt; {
             list.add(UUID.randomUUID().toString().substring(0, 8));
@@ -138,13 +141,35 @@
     }
 }
 </code></pre>
-<p>解决方法：</p>
+<p>典型输出（线程名与异常出现的时机不固定，多次运行结果不同，也可能只丢失元素而不抛异常）：</p>
+<pre><code class="language-text">3	[5f2b1c7a]
+1	[9c0d4e6b, 5f2b1c7a]
+Exception in thread &quot;7&quot; java.util.ConcurrentModificationException
+	at java.base/java.util.ArrayList$Itr.checkForComodification(ArrayList.java:1013)
+	at java.base/java.util.ArrayList$Itr.next(ArrayList.java:963)
+	at java.base/java.util.AbstractCollection.toString(AbstractCollection.java:456)
+7	[9c0d4e6b, 5f2b1c7a, a71e0f34]
+</code></pre>
+<p>为什么会这样？根因有三处：</p>
 <ol>
-<li>使用Vector（ArrayList所有方法加synchronized，太重）。</li>
-<li>使用 Collections.synchronizedSet() 转换成线程安全类。</li>
-<li>使用 java.util.concurrent.CopyOnWriteArrayList（推荐）。<br>
-CopyOnWriteArrayList这是JUC的类，通过写时复制来实现读写分离。比如其add()方法，就是先复制一个新数组，长度为原数组长度+1，然后将新数组最后一个元素设为添加的元素。</li>
+<li><strong>modCount 版本号与 fail-fast 迭代器。</strong>ArrayList 内部维护 modCount，记录结构性修改次数；迭代器创建时把它保存为 expectedModCount，每次 next() 前调用 checkForComodification() 比较，一旦发现被别人改过就立刻抛 ConcurrentModificationException。这就是上面堆栈里出现的检查方法。它只是「快速失败」，用于尽早暴露问题，本身并不能保证线程安全。</li>
+<li><strong>add() 的 size 自增不是原子操作。</strong>add() 会先 elementData[size] = e，再 size = size + 1。两个线程可能读到相同的 size，后写入的把先写入的覆盖掉，最终数组里元素个数少于 add 的次数——这正是「丢数据」的由来。</li>
+<li><strong>扩容与数据搬运不安全。</strong>数组容量不足时调用 grow()，先算出新容量并 Arrays.copyOf 出新数组，再赋值给 elementData。多个线程同时扩容时，各自基于自己读到的旧数组复制，后设置的那个数组会覆盖前一个，期间写入的元素就消失了。同理，HashMap 在 JDK 7 的并发扩容中，头插法会让链表成环，后续 get() 落到环上就出现 CPU 100% 的死循环；JDK 8 改为尾插法后成环问题消失，但并发 put 仍然会覆盖丢数据。</li>
 </ol>
+<p>解决方法有三种：</p>
+<ol>
+<li><strong>使用 Vector。</strong>Vector 把几乎所有方法都标了 synchronized，单次操作安全，但所有线程抢同一把锁、锁粒度最粗，性能差，属于遗留类，新代码不推荐。</li>
+<li><strong>使用 Collections.synchronizedList() 转换。</strong>它返回一个 SynchronizedList 包装类，内部方法用 synchronized (mutex) 加锁，改造存量代码成本最低。代价是：遍历时仍然要自己加锁，否则依旧可能抛 ConcurrentModificationException。
+<pre><code class="language-java">List&lt;String&gt; list = Collections.synchronizedList(new ArrayList&lt;&gt;());
+// 遍历必须手动同步
+synchronized (list) {
+    for (String s : list) {
+        System.out.println(s);
+    }
+}
+</code></pre>
+</li>
+<li><strong>使用 java.util.concurrent.CopyOnWriteArrayList（推荐）。</strong>这是 JUC 的类，通过写时复制实现读写分离：写操作先加锁，复制出一个新数组，在新数组上修改，最后把引用指向新数组；读操作直接读当前引用，完全不加锁。其 add() 源码如下：
 <pre><code class="language-java">public boolean add(E e) {
     final ReentrantLock lock = this.lock;
     lock.lock();
@@ -152,7 +177,7 @@ CopyOnWriteArrayList这是JUC的类，通过写时复制来实现读写分离。
         //得到旧数组
         Object[] elements = getArray();
         int len = elements.length;
-        //复制新数组
+        //复制新数组，长度 +1
         Object[] newElements = Arrays.copyOf(elements, len + 1);
         //设置新元素
         newElements[len] = e;
@@ -162,23 +187,34 @@ CopyOnWriteArrayList这是JUC的类，通过写时复制来实现读写分离。
     } finally {
         lock.unlock();
     }
-}
-</code></pre>
+}</code></pre>
+</li>
+</ol>
+<p>因此 CopyOnWriteArrayList 读多写少时非常划算，但每次写都要复制整个数组，内存占用和写开销都大；而且迭代器拿到的是创建那一刻的数组快照，属于弱一致（weakly consistent），迭代期间看不到新加入的元素，也不会抛 ConcurrentModificationException。</p>
 <h2 id="set">Set</h2>
-<p>跟 List 类似，HashSet 和 TreeSet 都不是线程安全的，与之对应的有 CopyOnWriteArraySet 这个线程安全类。这个类底层维护了一个 CopyOnWriteArrayList 数组。</p>
+<p>跟 List 类似，HashSet 和 TreeSet 都不是线程安全的，与之对应的有 CopyOnWriteArraySet。这个类底层维护了一个 CopyOnWriteArrayList，所有能力都委托给它：</p>
 <pre><code class="language-java">private final CopyOnWriteArrayList&lt;E&gt; al;
 public CopyOnWriteArraySet() {
     al = new CopyOnWriteArrayList&lt;E&gt;();
 }
 </code></pre>
-<p>使用 Collections.synchronizedSet() 转换成线程安全类。</p>
-<p>HashSet和HashMap<br>
-HashSet底层是用HashMap实现的。既然是用HashMap实现的，那HashMap.put()需要传两个参数，而HashSet.add()只传一个参数，这是为什么？实际上HashSet.add()就是调用的HashMap.put()，只不过Value被写死了，是一个private static final Object对象。</p>
+<p>由于底层是数组，add() 需要遍历已有元素判重，因此它只适合元素数量较小的场景；元素很多时，add 的 O(n) 判重会拖慢写入。</p>
+<p>也可以使用 Collections.synchronizedSet() 转换成线程安全类，取舍与 synchronizedList 相同：单次操作安全，复合操作和遍历仍需自行加锁。</p>
+<p>说到 Set 就离不开 HashMap：HashSet 底层是用 HashMap 实现的。既然 HashMap.put() 需要传两个参数，而 HashSet.add() 只传一个参数，这是为什么？实际上 HashSet.add() 就是调用 HashMap.put()，只不过 Value 被写死了，是一个 private static final Object 常量对象：</p>
+<pre><code class="language-java">private static final Object PRESENT = new Object();
+
+public boolean add(E e) {
+    return map.put(e, PRESENT) == null;
+}
+</code></pre>
+<p>所以 Set 的元素全部存放在 HashMap 的 key 上，只用 key 承载数据、value 只是一个占位符，这也解释了为什么 HashSet 同样受 HashMap 线程安全问题的影响。</p>
 <h2 id="map">Map</h2>
-<p>HashMap 不是线程安全的，Hashtable 是线程安全的，但是跟 Vector 类似，太重量级。所以并发场景下应使用 ConcurrentHashMap，它通过更细粒度的并发控制来提升性能。</p>
-<p>关于集合安全类</p>
+<p>HashMap 不是线程安全的，Hashtable 是线程安全的，但是跟 Vector 类似，所有方法都用同一把锁，太重量级。所以并发场景下应使用 ConcurrentHashMap，它通过更细粒度的并发控制来提升性能：JDK 8 之后放弃了 JDK 7 的分段锁（Segment），改为 CAS + synchronized 只锁当前桶，读操作基本无锁，并发度大幅提升。</p>
+<p>使用 ConcurrentHashMap 时有两个容易踩的点：一是不允许 null 键和 null 值，否则抛 NullPointerException，迁移老代码时要注意；二是 size()、isEmpty() 返回的是瞬时估计值，不能拿它做「先判断再操作」的依据。此外，ConcurrentHashMap 的迭代器是弱一致的，遍历过程中不会抛 ConcurrentModificationException，但也可能看到或看不到并发修改的部分结果。</p>
+<p>如果需要按 key 排序的并发 Map，TreeMap 没有对应线程安全实现，应该用 ConcurrentSkipListMap：它基于跳表（SkipList）实现，读操作无锁，写操作平均 O(log n)，天然支持有序遍历、范围查询（subMap、headMap、tailMap）以及 ceilingKey、floorKey 等导航方法。</p>
 <pre><code class="language-java">import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -221,19 +257,50 @@ public class ContainerNotSafeDemo {
             }, String.valueOf(i)).start();
         }
     }
+
+    // 有序并发 Map：需要按 key 排序时用它替代 TreeMap
+    private static void sortedMap() {
+        Map&lt;String, String&gt; map = new ConcurrentSkipListMap&lt;&gt;();
+        map.put(&quot;b&quot;, &quot;2&quot;);
+        map.put(&quot;a&quot;, &quot;1&quot;);
+        System.out.println(map); // {a=1, b=2}
+    }
 }
 </code></pre>
+<h2 id="compound-ops">线程安全集合的复合操作陷阱</h2>
+<p>换用线程安全集合只解决了「单次操作原子性」，并不等于整段业务逻辑安全。经典的反例是「先判断再操作」：</p>
+<pre><code class="language-java">// 错误：check-then-act，两步之间存在竞态窗口
+if (!map.containsKey(key)) {
+    map.put(key, value);   // 两个线程可能同时判断为 false，后写入的覆盖先写入的
+}
+
+// 正确：使用 ConcurrentHashMap 提供的原子复合方法
+map.putIfAbsent(key, value);
+map.computeIfAbsent(key, k -&gt; loadFromDb(k));
+map.merge(key, 1L, Long::sum);
+</code></pre>
+<p>同理，对 CopyOnWriteArrayList 做「存在就更新、不存在就新增」这类逻辑，也需要在外部加锁，或者干脆改用 ConcurrentHashMap 承载。再如「遍历时删除元素」，即使集合本身线程安全，也应该用迭代器的 remove()，或者收集待删除元素后统一处理，不要在增强 for 循环里直接调用集合的 remove()。</p>
+<p>一句话总结取舍：读多写少用 CopyOnWriteArrayList / CopyOnWriteArraySet；高并发键值场景用 ConcurrentHashMap；需要有序并发用 ConcurrentSkipListMap；改造老代码、并发量不大时用 Collections.synchronizedXxx，但一定要记得给遍历和复合操作补上同步。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#list">List</a>
 <ul>
-<li>
-<ul>
-<li><a href="#list">List</a></li>
-<li><a href="#set">Set</a></li>
-<li><a href="#map">Map</a></li>
 </ul>
 </li>
+<li>
+<a href="#set">Set</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#map">Map</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#compound-ops">线程安全集合的复合操作陷阱</a>
+<ul>
 </ul>
 </li>
 </ul>

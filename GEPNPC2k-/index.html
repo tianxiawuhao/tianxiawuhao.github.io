@@ -126,16 +126,20 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/GEPNPC2k-.png" alt="封面图">
-          </img>
           
           <h2 id="sec-truelicense">TrueLicense</h2>
-<p>TrueLicense 是一个开源的证书管理引擎。使用场景：项目交付客户后，用签名保证客户不能随意使用软件。它默认校验开始/结束时间，也可扩展增加 MAC 地址等校验（FTP 校验未尝试）。本 demo 详细介绍的是本地校验。License 授权机制的原理： 生成密钥对，方法有很多。我们使用trueLicense来做软件产品的保护，我们主要使用它的LicenseManager类来生成证书文件、安装证书文件、验证证书文件.</p>
+<p>TrueLicense 是一个开源的证书管理引擎，使用场景是：软件交付给客户之后，用数字签名保证授权不被随意复制和篡改。它默认只校验证书的开始/结束时间，也可以扩展增加 MAC 地址、CPU 序列号等硬件校验（本文不涉及 FTP 方式的远程校验，介绍的是本地校验方案）。</p>
+<p>我们用到的核心是它的 <code>LicenseManager</code> 类，它负责三件事：<strong>生成证书文件、安装证书文件、验证证书文件</strong>。</p>
+<p>不过要先明确一个前提：<strong>License 机制防的是守规矩的客户，而不是铁了心破解的人</strong>。它能有效阻止客户私自延长有效期、把软件拷到未授权的机器上运行；但一旦私钥泄露，或者攻击者直接在字节码层面绕过校验，这套机制就失效了。因此校验逻辑要尽量收敛、集中，必要时配合代码混淆。</p>
 <h2 id="sec-theory">原理</h2>
 <ul>
-<li>首先需要生成密钥对，方法有很多，JDK中提供的KeyTool即可生成。</li>
-<li>授权者保留私钥，使用私钥对包含授权信息（如截止日期，MAC地址等）的license进行数字签名。</li>
-<li>公钥交给使用者（放在验证的代码中使用），用于验证license是否符合使用条件。</li>
+<li>首先需要生成密钥对，方法有很多，JDK 自带的 <code>keytool</code> 即可完成。</li>
+<li>授权者保留私钥，使用私钥对包含授权信息（如截止日期、MAC 地址等）的 license 进行<strong>数字签名</strong>。这里必须区分清楚：<strong>签名不是加密</strong>，签名只保证内容完整、来源可信，并不会隐藏内容本身。</li>
+<li>公钥随程序交付给使用者（放在验证的代码中使用），用于验证签名确由对应私钥签发，并校验有效期、机器码等授权条件。</li>
+<li>使用者拿不到私钥，因此无法伪造或篡改授权信息，这就是整套 License 机制的安全边界。</li>
 </ul>
+<p><img src="/post-assets/GEPNPC2k-/01-license-issue-verify-sequence.svg" alt="License 签发、分发与校验时序图：发布方用私钥签名生成 license.lic，使用方用公钥验签并校验有效期与机器码"></p>
+<p>上图把整条链路串了起来：左侧是发布方（离线环境、持有私钥），右侧是使用方（客户服务器、只有公钥）。有两点需要特别注意：一是<strong>私钥只用于签名，绝不随程序交付</strong>；二是使用方拿到的是 license.lic 与 publicCerts.store，验签失败、已过期或机器码不匹配时都应当直接抛异常拒绝启动，而不是只打一行日志继续运行。</p>
 <h2 id="sec-keytool">使用 Keytool 命令生成密钥对</h2>
 <blockquote>
 <p>Keytool 是一个 Java 数据证书管理工具，它把密钥（key）和证书（certificates）存放在一个称为 keystore 的文件中。keystore 里包含两种数据：<br>
@@ -145,37 +149,52 @@
 <p>在接触代码前，我们先来大概熟悉下密钥生成的流程吧</p>
 <ul>
 <li>
-<p>首先要用<code>KeyTool</code>工具来生成私钥库：（-alias别名 –validity 3650表示10年有效）</p>
-<pre><code class="language-shell"> keytool -genkey -alias privatekey -keystore privateKeys.store -keysize 1024 -validity 3650 -storepass &quot;XXXX&quot; -keypass &quot;XXXX&quot; -dname &quot;CN=test, OU=test, O=Space, L=SH, ST=SH, C=CN&quot;
+<p>首先用 JDK 自带的 <code>keytool</code> 生成私钥库（<code>-alias</code> 是别名，<code>-validity 3650</code> 表示 10 年有效）：</p>
+<pre><code class="language-shell">keytool -genkeypair -alias privatekey -keystore privateKeys.store -keysize 2048 -validity 3650 -storepass &quot;pri2022key&quot; -keypass &quot;pri2022key&quot; -dname &quot;CN=test, OU=test, O=Space, L=SH, ST=SH, C=CN&quot;
 </code></pre>
+
 <blockquote>
-<p>这里密码我使用XXXX<br>
-注意！！！默认的密码策略是6位数字与字母，如果不遵守会报错</p>
-<p>这个时候，会在打开命令行的地方创建出一个文件，privateKeys.store</p>
+<p>几个容易踩的坑：</p>
+<p>1. keytool 的默认密码策略要求口令<strong>至少 6 位</strong>，并且要求字母与数字组合，不满足会直接报错；示例中的口令请务必替换成自己的强口令。<br>
+2. <code>-genkey</code> 在 JDK 9 之后已被标记为废弃，建议改用 <code>-genkeypair</code>。<br>
+3. JDK 9 起默认密钥库类型为 PKCS12，而 PKCS12 不支持 <code>-storepass</code> 与 <code>-keypass</code> 取不同值，此时 keytool 会给出警告并把密钥口令对齐为库口令；若确实需要两个口令不同，请显式指定 <code>-storetype JKS</code>。<br>
+4. 密钥长度建议 <strong>2048 位及以上</strong>，1024 位 RSA 已不再被认为是安全的。</p>
+<p>执行成功后，会在当前命令行所在目录生成 privateKeys.store。</p>
 </blockquote>
 </li>
 <li>
 <p>然后把私钥库内的证书导出到一个文件当中：</p>
-<pre><code class="language-shell">keytool -export -alias privatekey -file certfile.cer -keystore privateKeys.store
+<pre><code class="language-shell">keytool -export -alias privatekey -file certfile.cer -keystore privateKeys.store -storepass &quot;pri2022key&quot;
 </code></pre>
+
 <blockquote>
-<p>生成 certfile.cer（证书）文件，导入公钥库之后，这个 cer 文件就没用了</p>
+<p>生成 certfile.cer（证书）文件，它只包含公钥、不包含私钥，导入公钥库之后这个 cer 文件就没用了。</p>
 </blockquote>
 </li>
 <li>
 <p>然后再把这个证书文件导入到公钥库：</p>
-<pre><code class="language-shell">keytool -import -alias publiccert -file certfile.cer -keystore publicCerts.store
+<pre><code class="language-shell">keytool -import -alias publiccert -file certfile.cer -keystore publicCerts.store -storepass &quot;pri2022key&quot; -noprompt
 </code></pre>
+
 <blockquote>
-<p>生成 publicCerts.store</p>
+<p>生成 publicCerts.store。如果不加 <code>-storepass</code>，keytool 会交互式要求设置新库口令；加上 <code>-noprompt</code> 则跳过“是否信任该证书”的确认。</p>
+<p><strong>关于口令一致性（重要）</strong>：本文示例中，<code>LicenseCreator</code> 与 <code>LicenseVerify</code> 都用 <code>storePass</code> 构造 <code>DefaultCipherParam</code>，而这个口令正是 license.lic 外层 PBE 保护所使用的口令，因此<strong>公钥库口令必须与生成端使用的 storePass 完全一致</strong>，否则客户端安装证书时会直接解密失败。把公钥库口令与私钥库口令设成同一个值并不理想，生产环境更推荐在 <code>License</code> / <code>LicenseVerify</code> 中额外引入一个独立的 cipherPass 字段，让“库口令”和“license 保护口令”解耦。</p>
 </blockquote>
 </li>
 </ul>
-<pre><code class="language-text">privateKeys.keystore：私钥，这个我们自己留着，不能泄露给别人。
-publicCerts.keystore：公钥，这个给客户用的。在我们程序里面就是用他配合license进行授权信息的校验的。
-certfile.cer：这个文件没啥用，可以删掉。
+<pre><code class="language-text">privateKeys.store：私钥库，签发方自己留着，绝不能泄露或随产品交付。
+publicCerts.store：公钥库，交付给客户，程序用它配合 license 完成验签与授权信息校验。
+certfile.cer：中间产物，导入公钥库之后即可删除。
 </code></pre>
-<p>最后自行将生成文件<code>privateKeys.store</code>、<code>publicCerts.store</code>拷贝出来备用。</p>
+<p>最后把生成的文件 <code>privateKeys.store</code>、<code>publicCerts.store</code> 拷贝到各自的部署目录备用。</p>
+<p><strong>私钥库的安全保管建议</strong>（这一条比代码本身更重要）：</p>
+<ul>
+<li>私钥库只保存在签发环境，尽量放在离线机器或加密磁盘上，不要提交到 Git、不要打进安装包；一旦随产品发出，整套授权体系即告失效。</li>
+<li>库口令与私钥口令不要硬编码在代码或 yml 中，改用环境变量、启动参数或密钥管理服务注入，并限制文件权限（如 600）。</li>
+<li>私钥库与口令分开存放、分别备份，签发用的机器不要用于日常办公和上网。</li>
+<li>若怀疑私钥泄露，无法只更换公钥——必须重新生成密钥对，并对所有已发出的 license 重新签发。</li>
+<li>公钥库的完整性同样需要保护：客户端应防止 publicCerts.store 被替换，否则攻击者可以用自己的密钥对伪造一整套 license 与公钥。</li>
+</ul>
 <h2 id="sec-gen-code">实现代码 - 证书生成</h2>
 <p><strong>maven依赖</strong></p>
 <pre><code class="language-xml">&lt;!--truelicense 依赖--&gt;
@@ -186,6 +205,7 @@ certfile.cer：这个文件没啥用，可以删掉。
     &lt;version&gt;1.33&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
+<p>除了 <code>truelicense-core</code>，示例代码还用到了 <code>lombok</code>（<code>@Data</code>）和 <code>log4j2</code>，请一并加入依赖；不想用 log4j2 的话也可以换成 slf4j 或 <code>java.util.logging</code>。</p>
 <p>首先从整个流程上来讲，现在这步是证书生成，证书生成需要私钥库和证书参数<br>
 在这个引擎中，公/私钥库默认是存储在项目中的。<strong>但是，我们实际生产环境中，都是将配置文件等脱离项目部署的</strong>，所以我们需要重写它获取公/私钥库的地方。<br>
 <code>CustomKeyStoreParam.java</code></p>
@@ -247,7 +267,7 @@ public class CustomKeyStoreParam extends AbstractKeyStoreParam {
     }
 }
 </code></pre>
-<p>证书参数可以放在配置文件里，也可以写成类，本示例用的是类的方式</p>
+<p>证书参数可以放在配置文件里，也可以写成类，本示例用的是类的方式。注意 <code>ResourceUtils.getFile()</code> 只能解析文件系统路径（支持 <code>file:</code> 前缀），不支持 <code>classpath:</code>，这正是为了把密钥库移出项目而特意重写的。</p>
 <p><code>License.java</code></p>
 <pre><code class="language-java">import lombok.Data;
 
@@ -324,13 +344,30 @@ public class License implements Serializable {
 
 </code></pre>
 <p>其中的扩展参数类</p>
-<pre><code class="language-java">/**
- * 自定义需要校验的License参数，可以增加一些额外需要校验的参数，比如项目信息，ip地址信息等等，待完善
+<pre><code class="language-java">import java.io.Serializable;
+
+/**
+ * 自定义需要校验的 License 参数，可以增加额外需要校验的内容，比如项目信息、IP 地址、机器码等等
+ * 注意：该对象会被 XMLEncoder 序列化写进 license 文件，因此必须是标准 JavaBean
+ * （提供无参构造方法与 getter/setter），并建议实现 Serializable。
  */
-public class LicenseExtraModel {
+public class LicenseExtraModel implements Serializable {
 
-    // 这里可以添加一些往外的自定义信息，比如我们可以增加项目验证，客户电脑sn码的验证等等
+    private static final long serialVersionUID = 1L;
 
+    /**
+     * 机器码：由 MAC 地址、CPU 序列号、主板序列号等硬件信息组合后哈希得到。
+     * 采集逻辑与操作系统相关，需要自行实现，注意同一台机器每次采集结果必须稳定。
+     */
+    private String machineCode;
+
+    public String getMachineCode() {
+        return machineCode;
+    }
+
+    public void setMachineCode(String machineCode) {
+        this.machineCode = machineCode;
+    }
 }
 </code></pre>
 <p>由于引擎默认只验证有效期，当需要自定义校验逻辑时，可以写一个继承 LicenseManager 的自定义证书管理器。<br>
@@ -432,11 +469,22 @@ public class CustomLicenseManager extends LicenseManager {
      */
     @Override
     protected synchronized void validate(final LicenseContent content) throws LicenseContentException {
-        //1. 首先调用父类的validate方法
+        // 1. 首先调用父类的validate方法，校验有效期（notBefore / notAfter）
         super.validate(content);
-        //2. 然后校验自定义的License参数，去校验我们的license信息
-//        LicenseExtraModel expectedCheckModel = (LicenseExtraModel) content.getExtra();
-        // 做我们自定义的校验
+        // 2. 再校验自定义的 License 参数，例如机器码绑定
+        Object extra = content.getExtra();
+        if (!(extra instanceof LicenseExtraModel)) {
+            return; // 未启用扩展校验
+        }
+        LicenseExtraModel expected = (LicenseExtraModel) extra;
+        if (expected.getMachineCode() == null || expected.getMachineCode().isEmpty()) {
+            return;
+        }
+        // 需自行实现：采集本机 MAC / CPU 序列号 / 主板序列号并做哈希
+        String actual = MachineCodeUtils.getMachineCode();
+        if (!expected.getMachineCode().equals(actual)) {
+            throw new LicenseContentException(&quot;License 未授权当前主机：机器码不匹配&quot;);
+        }
     }
 
 
@@ -517,7 +565,8 @@ public class LicenseCreator {
     private LicenseParam initLicenseParam() {
         Preferences preferences = Preferences.userNodeForPackage(LicenseCreator.class);
 
-        //设置对证书内容加密的秘钥
+        // 设置 license 文件的保护口令：它并不是对授权内容“加密”，只是给 license.lic 外层加一层
+        // PBE 保护；真正的防篡改由私钥签名保证。验证端必须使用同一个口令才能解开。
         CipherParam cipherParam = new DefaultCipherParam(license.getStorePass());
 
         KeyStoreParam privateStoreParam = new CustomKeyStoreParam(LicenseCreator.class, 
@@ -558,20 +607,23 @@ public class LicenseCreator {
 
 }
 </code></pre>
+<p>到这里签发端的代码就齐了。生成的 license.lic 内部结构，以及客户端的校验决策流程，如下图所示：</p>
+<p><img src="/post-assets/GEPNPC2k-/02-license-structure-and-decision.svg" alt="许可文件结构（license.lic 容器、证书条目、LicenseContent 正文、extra 扩展信息与 signature 签名值）与校验决策流程（是否已安装、公钥验签、有效期、机器码逐级判断）"></p>
+<p>左侧是 license.lic 的逻辑结构：外层由 <code>CipherParam</code> 提供的口令做 PBE 保护（只能防误改，不能防破解），内层依次是证书条目、序列化后的 <code>LicenseContent</code> 正文、<code>extra</code> 扩展信息和 <code>signature</code> 签名值。右侧是客户端校验的四道串行关卡：是否已安装 → 公钥验签是否通过 → 当前时间是否落在有效期内 → <code>extra</code> 中的机器码是否与当前主机一致。任何一关失败都应直接拒绝启动。</p>
 <h2 id="sec-gen-test">测试 - 证书生成</h2>
-<p>环境工具类都准备好了，接下来直接开始测试，看看能否生成</p>
+<p>环境工具类都准备好了，接下来直接开始测试，看看能否生成（片段省略了 <code>java.util.Calendar</code>、<code>java.util.Date</code> 等 import，实际运行需要补全）。</p>
 <pre><code class="language-java">@Test
 void generateLicense() {
     // 生成license需要的一些参数
     License param = new License();
     // 证书授权主体
     param.setSubject(&quot;licenseTest&quot;);
-    // 私钥别名
-    param.setPrivateAlias(&quot;privateKey&quot;);
+    // 私钥别名，与 keytool -genkeypair 时的 -alias 保持一致
+    param.setPrivateAlias(&quot;privatekey&quot;);
     // 私钥密码（需要妥善保管，不能让使用者知道）
-    param.setKeyPass(&quot;xxxx&quot;);
+    param.setKeyPass(&quot;pri2022key&quot;);
     // 访问私钥库的密码
-    param.setStorePass(&quot;xxxx&quot;);
+    param.setStorePass(&quot;pri2022key&quot;);
     // 证书存储地址
     param.setLicensePath(&quot;E:\\license2\\license.lic&quot;);
     // 私钥库所在地址
@@ -660,6 +712,7 @@ public class LicenseVerify {
         try {
             Preferences preferences = Preferences.userNodeForPackage(LicenseVerify.class);
 
+            // 该口令用于解密 license.lic 外层的 PBE 保护，必须与生成端的 storePass 一致
             CipherParam cipherParam = new DefaultCipherParam(storePass);
 
             KeyStoreParam publicStoreParam = new CustomKeyStoreParam(LicenseVerify.class,
@@ -704,22 +757,33 @@ public class LicenseVerify {
             licenseManager.verify();
             return true;
         } catch (Exception e) {
+            // 失败原因（未安装、签名无效、已过期、机器码不匹配等）都在异常里，务必记录
+            logger.error("License 校验失败", e);
             return false;
         }
     }
 
 }
 </code></pre>
+<p>关于<strong>有效期</strong>与<strong>防篡改</strong>，有三点需要澄清：</p>
+<ul>
+<li><strong>防篡改靠签名，不靠加密</strong>。license 的内容（含有效期、机器码）是明文可读的，但任何改动都会导致验签失败，客户端无法通过编辑文件来延长授权。</li>
+<li><strong>有效期依赖本地系统时间</strong>。用户把机器时间改回授权期内，父类的 <code>validate()</code> 是拦不住的。安全性要求高时，应叠加服务端时间校验、记录“最后运行时间”并在检测到时间回拨时告警，或者引入在线激活与心跳校验。</li>
+<li><strong>机器码校验要放在 <code>validate()</code> 中并抛异常</strong>。校验不通过必须让启动失败（例如抛出异常终止 Spring 容器的启动），只记录日志然后继续运行等于没有校验。</li>
+</ul>
 <p>前面提过：除了项目本身的许多配置文件外，一般还需要把公钥库、私钥库以及验证所需的参数，放到服务器上单独的路径下</p>
 <p><code>application.yml</code></p>
-<pre><code class="language-xml">#License相关配置
+<pre><code class="language-yaml"># License 相关配置
 license:
- subject: licenseTest #主体 - 注意主体要与生成证书的主体一致一致，不然验证通过不了
- publicAlias: publicCert #公钥别称
- storePass: 123456q #访问公钥的密码
- licensePath: E:\license2\license.lic #license位置
- publicKeysStorePath: E:\license\publicCerts.store #公钥位置
+  subject: licenseTest        # 主体，必须与生成证书时的 subject 完全一致，否则校验不通过
+  publicAlias: publiccert     # 公钥别名，对应 keytool -import 时使用的 -alias
+  storePass: pri2022key       # 公钥库口令；同时用于解密 license.lic，需与生成端 storePass 相同
+  licensePath: E:\license2\license.lic                # license 文件位置
+  publicKeysStorePath: E:\license\publicCerts.store   # 公钥库位置
 </code></pre>
+<blockquote>
+<p>这里的 <code>publicAlias</code> 要与导入公钥时使用的 <code>-alias</code> 写法保持一致（keystore 别名本身大小写不敏感，但统一写法可以避免困惑）；<code>subject</code> 则必须与生成端 <code>param.setSubject(...)</code> 的值一致，否则会因为主体不匹配而校验失败。</p>
+</blockquote>
 <p>这些参数代码获取如下</p>
 <p><code>LicenseConfig.java</code></p>
 <pre><code class="language-java">import lombok.Data;
@@ -779,21 +843,42 @@ public class LicenseVerifyTest {
     
     @Test
     public void licenseVerify() {
-       System.out.println(&quot;licese是否有效：&quot; + licenseVerify.verify());
+       System.out.println(&quot;license 是否有效：&quot; + licenseVerify.verify());
     }
 
 }
 </code></pre>
+<p>最后再强调三点：<strong>一是「签名」不是「加密」</strong>，license 内容本身是明文可读的，安全性来自私钥签名不可伪造，而不是把内容藏起来；<strong>二是私钥库与口令必须留在签发方</strong>，一旦泄露只能更换密钥对并重新签发全部 license；<strong>三是校验失败必须让程序起不来</strong>，同时把失败原因写进日志，方便现场排查是过期、换了机器还是公钥库被替换。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#sec-truelicense">TrueLicense</a>
 <ul>
-<li><a href="#sec-truelicense">TrueLicense</a></li>
-<li><a href="#sec-theory">原理</a></li>
-<li><a href="#sec-keytool">使用 Keytool 命令生成密钥对</a></li>
-<li><a href="#sec-gen-code">实现代码 - 证书生成</a></li>
-<li><a href="#sec-gen-test">测试 - 证书生成</a></li>
-<li><a href="#sec-verify">代码实现 - 证书安装和校验</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec-theory">原理</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-keytool">使用 Keytool 命令生成密钥对</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-gen-code">实现代码 - 证书生成</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-gen-test">测试 - 证书生成</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-verify">代码实现 - 证书安装和校验</a>
+<ul>
 </ul>
 </li>
 </ul>
