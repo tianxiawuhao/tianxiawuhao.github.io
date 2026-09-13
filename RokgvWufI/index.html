@@ -128,10 +128,11 @@
           <h2 id="一文彻底弄懂ctxclose和ctxchannelclose的区别">一文彻底弄懂ctx.close()和ctx.channel().close()的区别</h2>
 <p><strong>先说结论：</strong></p>
 <ul>
-<li><strong>ctx.close()：只会从当前处理器（BHandler）出发，向前寻找出站 Handler，并调用它们的 close() 方法；</strong></li>
-<li><strong>ctx.channel().close()：将从整个 pipeline 的 tail 尾部向前寻找所有出站 Handler，并调用它们的 close() 方法！</strong></li>
+<li><strong>ctx.close()：只会从当前处理器（BHandler）出发，朝 head 方向（prev）寻找出站 Handler，并调用它们的 close() 方法；</strong></li>
+<li><strong>ctx.channel().close()：将从整个 pipeline 的 tail 尾部朝 head 方向寻找所有出站 Handler（包括当前 Handler 自身），并调用它们的 close() 方法！</strong></li>
 </ul>
 <hr>
+<p><img src="/post-assets/RokgvWufI/01-close-scope.svg" alt="ctx.close() 与 ctx.channel().close() 的遍历范围对比图"></p>
 <h3 id="ch1-编写测试代码">一、编写测试代码</h3>
 <p><strong>1、需要引入的依赖：</strong></p>
 <pre><code class="language-xml">&lt;dependency&gt;
@@ -201,7 +202,7 @@ public class ZidanHandler extends ChannelDuplexHandler {
 <hr>
 <h3 id="ch2-启动项目进行测试">二、启动项目进行测试</h3>
 <p><strong>1、项目启动后，我们使用本地的telnet命令作为客户端进行交互：</strong></p>
-<pre><code class="language-yaml">C:\Users\admin&gt;telnet localhost 8090
+<pre><code class="language-text">C:\Users\admin&gt;telnet localhost 8090
  
 # 重点，进入telnet窗口后，我们需要按下 Ctrl + ]键
 欢迎使用 Microsoft Telnet Client
@@ -216,8 +217,8 @@ Microsoft Telnet&gt;
 <figure data-type="image" tabindex="2"><img src="/post-images/1689127898845898.png" alt="1689127898845898.png" loading="lazy"></figure>
 <p><strong>4、根据现象得出结论：</strong></p>
 <ul>
-<li><strong>ctx.close()：只会从当前处理器（BHandler）出发，向前寻找出站 Handler，并调用它们的 close() 方法；</strong></li>
-<li><strong>ctx.channel().close()：将从整个 pipeline 的 tail 尾部向前寻找所有出站 Handler，并调用它们的 close() 方法！</strong></li>
+<li><strong>ctx.close()：只会从当前处理器（BHandler）出发，朝 head 方向（prev）寻找出站 Handler，并调用它们的 close() 方法；</strong></li>
+<li><strong>ctx.channel().close()：将从整个 pipeline 的 tail 尾部朝 head 方向寻找所有出站 Handler（包括当前 Handler 自身），并调用它们的 close() 方法！</strong></li>
 </ul>
 <hr>
 <h3 id="ch3-通过源码分析原因">三、通过源码分析原因</h3>
@@ -263,19 +264,25 @@ Microsoft Telnet&gt;
     }
 }
 </code></pre>
-<p><strong>2、ctx.channel().close() 的源码：</strong></p>
-<pre><code class="language-java">public abstract class AbstractChannel extends DefaultAttributeMap implements Channel {
+<p><strong>2、ctx.channel().close() 的源码（分两步：Channel 委托给 pipeline，pipeline 再从 tail 出发）：</strong></p>
+<pre><code class="language-java">// 第一步：AbstractChannel 把 close 委托给 pipeline
+public abstract class AbstractChannel extends DefaultAttributeMap implements Channel {
+    @Override
     public ChannelFuture close() {
-        return this.pipeline.close();
-    }
-     
-    public final ChannelFuture close() {
-        // 其实到这里已经很清晰了，从当前整个pipeline中的tail尾节点开始，向前寻找出站handler，
-        // 并执行他们的close()方法
-        return this.tail.close();
+        return pipeline.close();
     }
 }
 </code></pre>
+<pre><code class="language-java">// 第二步：DefaultChannelPipeline 从整个 pipeline 的 tail 尾节点开始，向前寻找出站 handler，
+// 并执行它们的 close() 方法
+public class DefaultChannelPipeline implements ChannelPipeline {
+    @Override
+    public final ChannelFuture close() {
+        return tail.close();
+    }
+}
+</code></pre>
+<p>需要注意：<code>ctx.close()</code> 并不是「不关闭连接」。close 事件同样会沿出站方向一路传播到 head，由 head 内部的 unsafe 真正关闭 Channel；两者的差别只在于途中会调用哪些出站 Handler 的 <code>close()</code>。所以在 B 中调用 <code>ctx.close()</code> 时，只有 A（以及 encoder）能感知到这次 close，C 不会收到通知。</p>
 <hr>
 <h3 id="ch4-总结">四、总结</h3>
 <p><strong>1、那么我们何时使用ctx.close()，又何时使用ctx.channel().close()方法呢：</strong></p>
@@ -296,15 +303,12 @@ Microsoft Telnet&gt;
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E4%B8%80%E6%96%87%E5%BD%BB%E5%BA%95%E5%BC%84%E6%87%82ctxclose%E5%92%8Cctxchannelclose%E7%9A%84%E5%8C%BA%E5%88%AB">一文彻底弄懂ctx.close()和ctx.channel().close()的区别</a>
+<a href="#%E4%B8%80%E6%96%87%E5%BD%BB%E5%BA%95%E5%BC%84%E6%87%82ctxclose%E5%92%8Cctxchannelclose%E7%9A%84%E5%8C%BA%E5%88%AB">一文彻底弄懂ctx.close()和ctx.channel().close()的区别</a>
 <ul>
 <li><a href="#ch1-%E7%BC%96%E5%86%99%E6%B5%8B%E8%AF%95%E4%BB%A3%E7%A0%81">一、编写测试代码</a></li>
 <li><a href="#ch2-%E5%90%AF%E5%8A%A8%E9%A1%B9%E7%9B%AE%E8%BF%9B%E8%A1%8C%E6%B5%8B%E8%AF%95">二、启动项目进行测试</a></li>
 <li><a href="#ch3-%E9%80%9A%E8%BF%87%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%8E%9F%E5%9B%A0">三、通过源码分析原因</a></li>
 <li><a href="#ch4-%E6%80%BB%E7%BB%93">四、总结</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
