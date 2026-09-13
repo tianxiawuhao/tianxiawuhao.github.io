@@ -127,17 +127,19 @@
           
           <h2 id="一-ceph基础简介"><strong>一、Ceph基础简介</strong></h2>
 <blockquote>
-<p>NFS 存储方式只能用于开发测试，生产环境绝不能使用，所以我们选择 Ceph。</p>
+<p>NFS 简单够用，但缺少多副本与故障域概念，规模一大就容易成为单点，所以生产环境更适合 Ceph 这类分布式存储。本文先在已有的 Kubernetes 集群上用 Rook 部署 Ceph，再补充 cephadm（裸机）方式，以及存储池、PG、CRUSH 的调优要点与常见告警处理。</p>
 </blockquote>
 <h3 id="1-ceph简介"><strong>1、Ceph简介</strong></h3>
-<p>Ceph 是一个为优秀性能、可靠性与可扩展性而设计的统一<a href="https://baike.baidu.com/item/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/1250388?fromModule=lemma_inlink">分布式文件系统</a>。</p>
+<p>Ceph 是一个为优秀性能、可靠性与可扩展性而设计的统一<a href="https://baike.baidu.com/item/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/1250388?fromModule=lemma_inlink">分布式文件系统</a>。它在一套 RADOS 集群之上同时提供三种接口：对象存储（RGW，兼容 S3/Swift）、块存储（RBD）和文件系统（CephFS），没有单点，可横向扩展到数千个 OSD。</p>
+<p>本文涉及的版本：Rook <strong>v1.11.2</strong>，对应 Ceph <strong>Quincy 17.2.x</strong>（默认守护进程镜像 <code>quay.io/ceph/ceph:v17.2.5</code>）。Rook 的每个大版本会绑定一个 Ceph 版本——v1.6/v1.7 对应 Pacific 16.2.x，v1.11 对应 Quincy 17.2.x，v1.13 及以后对应 Reef 18.2.x，升级 Rook 前务必确认目标 Ceph 版本。</p>
 <h3 id="2-ceph集群的安装方式选择"><strong>2、Ceph集群的安装方式选择</strong></h3>
-<p>官方安装文档：https://docs.ceph.com/en/pacific/install</p>
+<p>官方安装文档：<a href="https://docs.ceph.com/en/quincy/install/">https://docs.ceph.com/en/quincy/install/</a>（原文链接指向 Pacific，本文按 Quincy 17.2.x 编写；换版本时把 URL 里的代号改成 reef、squid 即可）。</p>
 <ul>
-<li>Cephadm安装（推荐）：</li>
-<li>Rook 安装（推荐）：用 Rook 部署一套能管理 Ceph 集群的系统，一步到位！<a href="https://www.rook.io/docs/rook/v1.7/quickstart.html">Rook 官网</a></li>
-<li>其他方式（手动-不推荐）</li>
+<li><strong>Cephadm 安装（官方推荐）</strong>：Ceph Octopus（15.2.1）起内置的部署工具，通过 SSH 与容器管理 mon/mgr/osd/mds 等守护进程，适合裸机或虚机环境，命令形如 <code>cephadm bootstrap --mon-ip &lt;ip&gt;</code>、<code>ceph orch apply osd --all-available-devices</code>。</li>
+<li><strong>Rook 安装（Kubernetes 环境推荐）</strong>：把 Ceph 变成 Kubernetes 的原生扩展（CRD + Operator），一步到位。<a href="https://www.rook.io/docs/rook/v1.7/quickstart.html">Rook 官网</a>（该链接指向 v1.7 文档，请按所用版本切换，例如 <code>https://rook.io/docs/rook/v1.11/</code>）。</li>
+<li>其他方式（手动部署，以及已停止维护的 ceph-deploy）：不推荐。</li>
 </ul>
+<p>选型建议：在 Kubernetes 集群内提供存储用 Rook；独立存储集群或已有物理机用 cephadm。两者底层是同一套 Ceph 守护进程与 CRUSH 算法，运维命令（<code>ceph -s</code>、<code>ceph osd tree</code> 等）完全通用。</p>
 <h3 id="3-rook简介httpswwwrookiodocsrookv17quickstarthtml"><strong>3、Rook 简介</strong></h3>
 <ul>
 <li>Rook：存储编排系统；</li>
@@ -147,6 +149,75 @@
 <figure data-type="image" tabindex="1"><img src="/post-images/1637113940473631.png" alt="image.png" loading="lazy"></figure>
 <p>Rook的架构设计：</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1637113988125733.png" alt="image.png" loading="lazy"></figure>
+<h3 id="4-ceph集群的角色monmgrdsdosd"><strong>4、Ceph 集群的角色（mon / mgr / mds / osd / rgw）</strong></h3>
+<p>Ceph 集群没有中心节点，各守护进程（daemon）地位平等。先把角色分清楚，后面看 <code>ceph -s</code>、排障才不会晕：</p>
+<table>
+<thead>
+<tr><th>角色</th><th>作用</th><th>数量与高可用</th></tr>
+</thead>
+<tbody>
+<tr><td>MON（Monitor）</td><td>用 Paxos 维护 cluster map（mon map、osd map、pg map、crush map），是集群的共识中心</td><td>必须 3 或 5 个（奇数）组成 quorum，存活数少于半数时集群不可用</td></tr>
+<tr><td>MGR（Manager）</td><td>采集指标，提供 Dashboard（8443）与 Prometheus exporter（9283），并承载 balancer、pg_autoscaler 等模块</td><td>至少 1 个 active，建议再配 1 个 standby 实现自动接管</td></tr>
+<tr><td>OSD（Object Storage Daemon）</td><td>真正存放数据：一块磁盘对应一个 OSD，负责读写、复制、恢复与心跳</td><td>每块盘 1 个，通常至少 3 个，单盘故障靠副本或纠删码恢复</td></tr>
+<tr><td>MDS（Metadata Server）</td><td>只有 CephFS 需要，负责目录树、文件元数据与分布式锁</td><td>active + standby；块存储与对象存储不需要 MDS</td></tr>
+<tr><td>RGW（RADOS Gateway）</td><td>提供 S3/Swift 兼容的对象存储网关</td><td>无状态，可多实例加负载均衡</td></tr>
+</tbody>
+</table>
+<p>下图是各角色在数据路径中的位置，以及对象如何经 PG 落到不同主机的 OSD 上：</p>
+<p><img src="/post-assets/nfaGbmKb_/01-ceph-role-architecture.svg" alt="Ceph 集群角色与 RADOS 数据分布示意图"></p>
+
+<h3 id="5-数据分布poolpg与crush"><strong>5、数据分布：Pool、PG 与 CRUSH</strong></h3>
+<p>Ceph 的寻址过程是「对象 → 归置组（PG）→ OSD 集合」，全程由 CRUSH 算法计算，不需要中心元数据服务器：</p>
+<ul>
+<li><strong>Pool（存储池）</strong>：逻辑隔离单元，决定副本数（size）或纠删码参数、故障域（failureDomain）与 PG 数量；RBD、CephFS、RGW 的数据最终都写在自己的池里。</li>
+<li><strong>PG（Placement Group，归置组）</strong>：对象的聚合单位，用 <code>hash(对象名) % pg_num</code> 决定对象属于哪个 PG。PG 是数据分布与恢复的最小粒度，它的多个副本必须落在不同故障域。</li>
+<li><strong>CRUSH</strong>：以 cluster map 为输入，把 PG 映射到一组 OSD，并保证同一 PG 的副本或分片分散在不同 host（或 rack）；扩容时只迁移必要的数据。故障域层级越粗（rack &gt; host &gt; osd）容错能力越强，但对节点数量要求也越高。</li>
+</ul>
+<p>下图对比副本池（replicated，size=3）与纠删码池（erasure coded，k=4 m=2）的数据摆放与容量开销：</p>
+<p><img src="/post-assets/nfaGbmKb_/02-crush-failure-domain.svg" alt="Ceph 副本与纠删码的故障域分布与容量开销对比图"></p>
+<p>经验值：故障域选 <code>host</code> 时，3 副本至少需要 3 台主机；PG 总数按「(OSD 总数 × 100) ÷ 副本数」估算并向上取到 2 的幂，让每个 OSD 承载 100 个左右的 PG。Quincy 起可以交给 PG 自动扩缩器（<code>pg_autoscale_mode</code>）管理。</p>
+
+<h3 id="6-cephadm安装裸机虚拟机场景"><strong>6、cephadm 安装（裸机 / 虚拟机场景）</strong></h3>
+<p>没有 Kubernetes，或者希望存储与业务集群解耦时，用官方 cephadm 部署。下面以 Quincy 17.2.x、三台节点 <code>node1/node2/node3</code> 为例：</p>
+<pre><code class="language-shell"># 1. 在 node1 安装 cephadm 与 ceph 客户端
+curl --silent --remote-name --location https://github.com/ceph/ceph/raw/quincy/src/cephadm/cephadm
+chmod +x cephadm
+./cephadm add-repo --release quincy
+./cephadm install
+
+# 2. 引导首个 MON（自动在本机部署 mon + mgr，并生成 /etc/ceph/ceph.conf）
+cephadm bootstrap --mon-ip 192.168.40.11 \
+  --initial-dashboard-user admin --initial-dashboard-password 'ChangeMe_123'
+ceph -s
+
+# 3. 把 node2/node3 纳入集群（需要 root 免密或已分发公钥）
+ssh-copy-id -f -i /etc/ceph/ceph.pub root@192.168.40.12
+ssh-copy-id -f -i /etc/ceph/ceph.pub root@192.168.40.13
+ceph orch host add node2 192.168.40.12
+ceph orch host add node3 192.168.40.13
+ceph orch host label add node2 osd &amp;&amp; ceph orch host label add node3 osd
+
+# 4. 把 MON 补到 3 个、MGR 补到 2 个，避免单点
+ceph orch apply mon --placement=&quot;3 node1 node2 node3&quot;
+ceph orch apply mgr --placement=&quot;2 node1 node2&quot;
+
+# 5. 用裸盘创建 OSD（BlueStore；设备必须未分区、未格式化）
+ceph orch device ls --wide
+ceph orch apply osd --all-available-devices
+# 也可以精确指定：ceph orch daemon add osd node2:/dev/vdb
+</code></pre>
+<p>需要 CephFS 时直接创建文件系统，cephadm 会自动建好元数据池、数据池并部署 MDS：</p>
+<pre><code class="language-shell">ceph fs volume create myfs
+ceph orch apply mds myfs --placement=&quot;2 node1 node2&quot;
+ceph fs status
+</code></pre>
+<p>查看服务与设备状态：</p>
+<pre><code class="language-shell">ceph orch ls        # 各服务的期望数量与实际数量
+ceph orch ps        # 各守护进程状态
+ceph orch device ls # 可用设备（Available 才算可用）
+</code></pre>
+<p>cephadm 与 Rook 的对应关系：MON/MGR/OSD/MDS 完全相同，区别只在编排层——cephadm 用 <code>ceph orch</code> 命令，Rook 用 CRD 与 Operator。</p>
+
 <hr>
 <h2 id="二-rookceph的安装"><strong>二、Rook+Ceph的安装</strong></h2>
 <h3 id="1-查看前提条件硬件要求"><strong>1、查看前提条件——硬件要求</strong></h3>
@@ -155,7 +226,7 @@
 <li>Raw partitions (no formatted filesystem)；原始分区，无格式化文件系统</li>
 </ul>
 <blockquote>
-<p>意思是不要使用系统里已用过的磁盘，最好准备几块干净的磁盘；因为 Ceph 底层有自带的文件系统（基于 LVM2 的可扩展文件系统）。</p>
+<p>意思是不要用系统盘或已有数据的盘：现代 Ceph 默认的存储后端是 <strong>BlueStore</strong>，它直接接管整块裸设备（raw device），数据不再经过本地文件系统；只有已被淘汰的 FileStore 才依赖 XFS/ext4 + LVM。Rook/Ceph 会拒绝使用带分区表或文件系统签名的设备，所以要准备未分区、未格式化的干净磁盘（可用 <code>wipefs -a</code> 清除残留签名）。</p>
 </blockquote>
 <pre><code class="language-shell">fdisk -l 
 找到自己挂载的磁盘
@@ -169,11 +240,15 @@ vda
 vdb    swap   YUNIFYSWAP 48eb1df6-1663-4a52-ab30-040d552c2d76 
 vdc    #没有任何文件系统的干净磁盘，可用
  
-#云厂商都这么磁盘清0
-dd if=/dev/zero of=/dev/vdc bs=1M status=progress
+# 云厂商的云盘首次挂载常带残留签名，清掉即可；设备名务必核对，写错盘会直接毁数据
+lsblk -f /dev/vdc
+wipefs -a /dev/vdc      # 清除残留的分区表/文件系统签名，Rook 才会把它识别为 Available
+# 也可以用 Ceph 自带工具彻底清盘（会销毁该盘所有数据）：
+# ceph-volume lvm zap /dev/vdc --destroy
 </code></pre>
-<h3 id="2-升级内核"><strong>2、升级内核</strong></h3>
+<h3 id="2-升级内核"><strong>2、升级内核（可选）</strong></h3>
 <p>升级内核（可选） 如果你将使用 Ceph 共享文件系统（CephFS）来创建卷（Volumes），则 rook 官方建议使用至少 4.17 版本的 Linux 内核。如果你使用的内核版本低于 4.17，则请求的 Persistent Volume Claim（PVC）大小将不会被强制执行。存储配额（Storage quotas）只能在较新的内核上得到强制执行。</p>
+<p>版本提示：本节的操作系统是 CentOS 7（内核 3.10），而 CentOS 7 已于 2024-06-30 停止维护，当时 elrepo 的 kernel-ml 是 6.2.9。新环境建议直接用 Rocky/AlmaLinux 9（内核 5.14）或 Ubuntu 22.04（内核 5.15），可以省掉这一步。</p>
 <p>在 Kubernetes 中，PVC 用于向存储系统请求指定大小的存储空间。如果请求的 PVC 大小无法得到强制执行，则无法保证所请求的存储空间大小。由于存储配额在较旧的内核上无法得到强制执行，因此在使用 CephFS 创建卷时，如果使用较旧的内核版本，则可能无法正确地管理和分配存储空间。因此，rook 官方建议使用至少 4.17 版本的内核。</p>
 <p>在所有k8s节点升级内核，之前忘记考虑这个事情，以后得提前升级好内核再搭建k8s集群，这种情况下升级内核，很难保证不会对k8s集群带来直接影响。注意了，生产环境可不能这么玩，得提前做好规划和准备。</p>
 <p>我的centos7内核当前版本：</p>
@@ -199,19 +274,24 @@ kubectl get pod -n kube-system
 <pre><code class="language-shell">git clone --single-branch --branch v1.11.2 https://github.com/rook/rook.git
 cd rook/deploy/examples
 </code></pre>
+<p>注意示例目录随版本变化：Rook v1.6 及更早版本在 <code>cluster/examples/kubernetes/ceph</code>，v1.7 起改为 <code>deploy/examples</code>。v1.11.2 对应 Ceph Quincy 17.2.x，默认守护进程镜像为 <code>quay.io/ceph/ceph:v17.2.5</code>。</p>
 <h3 id="4-修改安装operatoryaml"><strong>4、修改安装operator.yaml：</strong></h3>
 <p>把文件中的默认镜像修改为自己的：</p>
-<pre><code class="language-yaml">##首先把ceph镜像换成我们自己的
-rook/ceph:v1.6.3   换成  xxxx/rook-ceph:v1.6.3
- 
-## 建议修改以下的东西。在operator.yaml里面
-ROOK_CSI_CEPH_IMAGE: &quot;xxxx/cephcsi:v3.3.1&quot;
-ROOK_CSI_REGISTRAR_IMAGE: &quot;xxxx/csi-node-driver-registrar:v2.0.1&quot;
-ROOK_CSI_RESIZER_IMAGE: &quot;xxxx/csi-resizer:v1.0.1&quot;
-ROOK_CSI_PROVISIONER_IMAGE: &quot;xxxx/csi-provisioner:v2.0.4&quot;
-ROOK_CSI_SNAPSHOTTER_IMAGE: &quot;xxxx/csi-snapshotter:v4.0.0&quot;
-ROOK_CSI_ATTACHER_IMAGE: &quot;xxxx/csi-attacher:v3.0.2&quot;
+<pre><code class="language-yaml">## operator 自身镜像（v1.11.2 分支中为 quay.io/rook/ceph:v1.11.2），换成自己的私有仓库
+#    image: quay.io/rook/ceph:v1.11.2  -&gt;  image: registry.example.com/rook/ceph:v1.11.2
+
+## Ceph 守护进程镜像（Rook v1.11.2 默认 Quincy；也可在 cluster.yaml 的 spec.cephVersion 指定）
+ROOK_CEPH_IMAGE: &quot;registry.example.com/ceph/ceph:v17.2.5&quot;
+
+## CSI 组件镜像：以下为 v1.11.2 的 operator.yaml 默认值，务必以仓库该分支实际值为准
+ROOK_CSI_CEPH_IMAGE: &quot;registry.example.com/cephcsi/cephcsi:v3.8.0&quot;
+ROOK_CSI_REGISTRAR_IMAGE: &quot;registry.example.com/sig-storage/csi-node-driver-registrar:v2.7.0&quot;
+ROOK_CSI_RESIZER_IMAGE: &quot;registry.example.com/sig-storage/csi-resizer:v1.7.0&quot;
+ROOK_CSI_PROVISIONER_IMAGE: &quot;registry.example.com/sig-storage/csi-provisioner:v3.4.0&quot;
+ROOK_CSI_SNAPSHOTTER_IMAGE: &quot;registry.example.com/sig-storage/csi-snapshotter:v6.2.1&quot;
+ROOK_CSI_ATTACHER_IMAGE: &quot;registry.example.com/sig-storage/csi-attacher:v4.2.0&quot;
 </code></pre>
+<p>特别注意：原文这里的 <code>rook/ceph:v1.6.3</code>、<code>cephcsi:v3.3.1</code>、<code>csi-*:v2.x</code> 是 Rook v1.6 时代的标签，与上面 clone 的 <code>v1.11.2</code> 分支并不匹配，混用会出现 CSI 版本不符、<code>csi-provisioner</code> 启动失败等问题。正确做法是：打开所用分支里的 <code>operator.yaml</code>，把镜像<strong>仓库前缀</strong>替换成自己的私有仓库，标签保持原值不动。</p>
 <p><strong>安装operator：</strong></p>
 <pre><code class="language-shell">kubectl create -f crds.yaml -f common.yaml -f operator.yaml
 # 在继续操作之前，验证 rook-ceph-operator 是否正常运行
@@ -220,28 +300,31 @@ kubectl get pod -n rook-ceph
 </code></pre>
 <h3 id="5-修改-clusteryaml中的集群信息"><strong>5、修改 cluster.yaml中的集群信息：</strong></h3>
 <p>因为默认会使用所有节点；如果不想使用所有节点，则需要做以下修改：</p>
-<pre><code class="language-yaml"> storage: # cluster level storage configuration and selection
-#   resources   生产环境尽量配置大一点，测试环境不用动。
-#   useAllNodes: false   是否用所有节点      默认用所有
-#   useAllDevices: false   是否用所有设备    默认用所有
-    useAllNodes: false
-    useAllDevices: false
+<pre><code class="language-yaml">  storage: # cluster level storage configuration and selection
+  # resources: 生产环境尽量配大一点，测试环境用默认值即可
+    useAllNodes: false       # 不使用所有节点
+    useAllDevices: false     # 不使用所有设备
     config:
-      osdsPerDevice: &quot;3&quot; #每个设备osd数量
+      osdsPerDevice: &quot;1&quot;    # 每块设备创建的 OSD 数量：机械盘/SATA SSD 建议 1，NVMe 可用 2
+      # metadataDevice: &quot;nvme0n1&quot;   # 可选：把 BlueStore 的 RocksDB/WAL 单独放到 NVMe
     nodes:
-    - name: &quot;k8s-node3&quot;
-      devices: 
+    - name: &quot;k8s-a-node01&quot;   # 必须是 kubectl get nodes 里的节点名，不能写 IP
+      devices:
       - name: &quot;vdc&quot;
-    - name: &quot;k8s-node1&quot;
-      devices: 
+    - name: &quot;k8s-a-node02&quot;
+      devices:
       - name: &quot;vdc&quot;
-    - name: &quot;k8s-node2&quot;
-      devices: 
+    - name: &quot;k8s-a-node03&quot;
+      devices:
       - name: &quot;vdc&quot;
+    # 设备较多时更推荐用过滤器：
+    # deviceFilter: &quot;^vd[b-z]$&quot;
 </code></pre>
+<p>要点：<code>nodes[].name</code> 必须与 <code>kubectl get nodes</code> 的节点名完全一致——原文这里写的是 <code>k8s-node1</code>，而验证输出里是 <code>k8s-a-node01</code>，不一致会导致 OSD 准备作业找不到节点；<code>devices[].name</code> 用短名 <code>vdc</code> 或 <code>/dev/vdc</code> 都可以；<code>osdsPerDevice</code> 大于 1 会在同一块盘上创建多个 OSD，只有高性能 NVMe 才建议这么做。Rook 会先在每个节点跑一次 <code>rook-ceph-osd-prepare-&lt;node&gt;</code> Job，成功（Completed）后才创建对应的 OSD Pod。</p>
 <h3 id="6-正式安装集群"><strong>6、正式安装集群：</strong></h3>
 <pre><code class="language-shell">kubectl apply -f cluster.yaml
 </code></pre>
+<p>如果 OSD 迟迟不出来，先看准备作业的日志：<code>kubectl -n rook-ceph logs job/rook-ceph-osd-prepare-&lt;node&gt;</code>。常见原因是设备名写错、磁盘上仍有残留文件系统签名（<code>wipefs -a</code> 后重试），或者 cluster.yaml 里的节点名与集群实际节点名不一致。</p>
 <p>漫长等待，部署成功后的pod数量：</p>
 <pre><code class="language-shell">[root@master01 examples]# kubectl get pod -n rook-ceph 
 NAME                                               READY   STATUS      RESTARTS   AGE    IP             NODE     
@@ -273,10 +356,16 @@ rook-ceph-osd-prepare-node2-646sj                  0/1     Completed   0        
 <pre><code class="language-shell">kubectl create -f toolbox.yaml
 kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
 # 进去之后就可以执行各种命令了：
-ceph status
+ceph -s                # 集群总览（等价于 ceph status）
+ceph health detail     # 健康告警明细，排障第一步
+ceph osd tree          # CRUSH 层级：host 下的 OSD 与权重
+ceph osd df tree       # 每个 OSD 的容量使用率
 ceph osd status
-ceph df
+ceph df                # 池级别的容量与对象数
+ceph osd pool autoscale-status   # PG 数量与自动扩缩建议
 rados df
+ceph versions          # 各守护进程的 Ceph 版本
+ceph osd metadata 0 | grep -i objectstore   # 确认后端是 bluestore
 # 看看我的
 [root@k8s-a-master examples]kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
 bash-4.4$ ceph -s
@@ -301,14 +390,39 @@ ID  HOST           USED  AVAIL  WR OPS  WR DATA  RD OPS  RD DATA  STATE
  1  k8s-a-node03  20.9M   999G      0        0       0        0   exists,up  
  2  k8s-a-node01  23.8M   999G      0        0       0        0   exists,up  
 </code></pre>
-<p>每个 OSD 都有一个状态，可以是以下几种之一：</p>
+<p><code>ceph osd status</code> 里的状态要分三个维度理解，它们经常被混淆：</p>
 <ul>
-<li>up：表示该 OSD 正常运行，并且可以处理数据请求。</li>
-<li>down：表示该 OSD 当前无法运行或不可用，可能由于硬件故障或软件问题。</li>
-<li>out：表示该 OSD 不参与数据存储或恢复，这通常是由于管理员手动将其标记为不可用。</li>
-<li>exists：表示该 OSD 配置存在，但尚未启动或加入集群。</li>
+<li><strong>up / down</strong>：守护进程维度。up 表示 OSD 进程正常、能与 MON 保持心跳；down 表示进程不可用（宕机、磁盘故障或网络不通）。</li>
+<li><strong>in / out</strong>：CRUSH 维度。in 表示该 OSD 参与数据分布；out 表示已被移出 CRUSH，数据会向其他 OSD 回填，常用于下线维护。</li>
+<li><strong>exists</strong>：该 OSD 已在 osd map 中注册（配置存在），与是否正在运行无关，正常输出常见 <code>exists,up</code>。</li>
 </ul>
-<h3 id="8-确保mgr-dashboard这个service是可以访问的"><strong>8、确保mgr-dashboard这个service是可以访问的</strong></h3>
+<p>组合起来看：<code>down,in</code> 说明进程挂了但 CRUSH 仍认为它该存数据，PG 会降级（degraded）；<code>up,out</code> 通常是维护中的正常状态；<code>exists,down,out</code> 一般是被手动剔除的盘。</p>
+<h3 id="8-健康检查与常见告警处理"><strong>8、健康检查与常见告警处理</strong></h3>
+<p>日常巡检最少看三条命令：<code>ceph -s</code> 看总体健康，<code>ceph health detail</code> 看告警明细，<code>ceph osd df tree</code> 看容量水位。</p>
+<pre><code class="language-shell">ceph -s
+ceph health detail
+ceph osd df tree
+ceph osd pool autoscale-status
+ceph pg dump_stuck inactive    # 检查卡住的 PG
+ceph time-sync-status          # MON 之间的时间偏差
+</code></pre>
+<p><code>ceph -s</code> 的 health 一行有三种结果：<code>HEALTH_OK</code>、<code>HEALTH_WARN</code>（带告警但可继续服务，需要处理）和 <code>HEALTH_ERR</code>（存在数据丢失风险，必须优先处理）。常见告警与处理办法：</p>
+<table>
+<thead>
+<tr><th>告警</th><th>含义</th><th>处理办法</th></tr>
+</thead>
+<tbody>
+<tr><td>clock skew detected</td><td>MON 节点之间时间偏差过大（默认超过 0.05 s 告警），会导致 MON 选举异常甚至失去 quorum</td><td>所有节点启用时间同步：<code>yum install -y chrony</code>，<code>systemctl enable --now chronyd</code>，再用 <code>chronyc sources -v</code> 与 <code>ceph time-sync-status</code> 复核</td></tr>
+<tr><td>osd.X is down / N osds down</td><td>OSD 进程停止，对应 PG 降级；若同一 PG 的其他副本也异常，PG 会进入 inactive</td><td>物理机看 <code>systemctl status ceph-osd@X</code> 与 <code>journalctl -u ceph-osd@X</code>；Rook 环境看 <code>kubectl -n rook-ceph get pod -l app=rook-ceph-osd</code> 与 <code>describe pod</code>。确认盘或节点无法恢复后，依次执行 <code>ceph osd out X</code>、<code>ceph osd crush remove osd.X</code>、<code>ceph auth del osd.X</code>、<code>ceph osd rm X</code></td></tr>
+<tr><td>PGs are degraded / inactive / undersized</td><td>副本数不足或 PG 选不出主，常见于 OSD down、故障域配置不当</td><td>先 <code>ceph pg dump_stuck inactive</code> 定位，再恢复 OSD 或补节点；用 <code>ceph osd pool get &lt;pool&gt; size</code> 与 <code>min_size</code> 校验池参数</td></tr>
+<tr><td>pool(s) have no replicas configured</td><td>池副本数为 1，没有任何冗余</td><td><code>ceph osd pool set &lt;pool&gt; size 3</code>（<code>min_size</code> 保持 2）</td></tr>
+<tr><td>OSD(s) near full / full</td><td>容量超过 nearfull（默认 85%）或 full（默认 95%），full 之后集群会拒绝写入</td><td>扩容 OSD 或清理数据；紧急时可 <code>ceph osd set-nearfull-ratio 0.9</code> 临时缓解，但不建议长期使用</td></tr>
+<tr><td>mons are allowing insecure global_id reclaim</td><td>MON 仍接受旧客户端的不安全重连，属于兼容性告警</td><td>确认客户端版本较新后执行 <code>ceph config set mon auth_allow_insecure_global_id_reclaim false</code></td></tr>
+<tr><td>application not enabled on pool</td><td>池没有声明用途，新版本 Ceph 会告警</td><td><code>ceph osd pool application enable &lt;pool&gt; rbd</code>（CephFS 用 <code>cephfs</code>，对象存储用 <code>rgw</code>）</td></tr>
+</tbody>
+</table>
+<p>维护窗口内的常见做法：先 <code>ceph osd set noout</code> 再重启 OSD，避免大规模回填；维护结束后 <code>ceph osd unset noout</code>。排查 OSD 是否可安全销毁，用 <code>ceph osd safe-to-destroy &lt;id&gt;</code>。</p>
+<h3 id="8-确保mgr-dashboard这个service是可以访问的"><strong>9、确保 mgr-dashboard 这个 Service 可以访问</strong></h3>
 <pre><code class="language-shell">[root@master ceph]# kubectl get svc -n rook-ceph
 NAME                       TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
 csi-cephfsplugin-metrics   ClusterIP   10.233.24.242   &lt;none&gt;        8080/TCP,8081/TCP   129m
@@ -330,7 +444,7 @@ rook-ceph-mon-d            ClusterIP   10.233.58.171   &lt;none&gt;        6789/
 <p>rook-ceph-mon：是 Ceph Monitor 进程的 Kubernetes 服务。Ceph Monitor 是 Ceph 集群的核心组件之一，负责维护 Ceph 集群的状态、拓扑结构、数据分布等信息，是 Ceph 集群的管理节点。</p>
 </li>
 </ul>
-<h3 id="9-使用-nodeport-类型的service暴露dashboard-dashboard-external-httpsyaml"><strong>9、使用 NodePort 类型的 Service 暴露 dashboard（dashboard-external-https.yaml）</strong></h3>
+<h3 id="9-使用-nodeport-类型的service暴露dashboard-dashboard-external-httpsyaml"><strong>10、用 NodePort 类型的 Service 暴露 Dashboard（dashboard-external-https.yaml）</strong></h3>
 <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -351,7 +465,7 @@ spec:
   sessionAffinity: None
   type: NodePort
 </code></pre>
-<h3 id="10-创建后nodeport类的svc后查看"><strong>10、创建 NodePort 类型的 svc 后查看</strong></h3>
+<h3 id="10-创建后nodeport类的svc后查看"><strong>11、创建 NodePort 类型的 svc 后查看</strong></h3>
 <pre><code class="language-shell">[root@k8s-a-master examples]# kubectl get svc -n rook-ceph
 NAME                                     TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
 rook-ceph-mgr                            ClusterIP   10.96.58.93      &lt;none&gt;        9283/TCP            28m
@@ -371,7 +485,75 @@ JXr&quot;@`8)_?]7%GwP,(C^
 <p>后台如图：</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1637129649467923.png" alt="image.png" loading="lazy"></figure>
 <p>登录后，在右上角修改一下默认密码。</p>
-<h3 id="2-创建存储池storageclassblock-cephyaml用于块存储的storageclass"><strong>2、创建存储池+StorageClass——block-ceph.yaml——用于块存储的StorageClass</strong></h3>
+<h3 id="2-存储池pg数与crush故障域"><strong>2、存储池、PG 数与 CRUSH 故障域</strong></h3>
+<p>Rook 用 CRD 声明存储池，池的 <code>pg_num</code>/<code>pgp_num</code> 由 Operator 按规模自动设置；如果直接用 <code>ceph</code> 命令建池，就要自己算 PG 数量。</p>
+<pre><code class="language-shell"># 手工建一个副本池（在 toolbox 里执行）
+ceph osd pool create mypool 128 128          # pg_num / pgp_num，先建同值避免二次迁移
+ceph osd pool application enable mypool rbd  # 声明用途：rbd / cephfs / rgw
+ceph osd pool set mypool size 3              # 副本数
+ceph osd pool set mypool min_size 2          # 最小可写副本数，低于它池会停止写入
+ceph osd pool set mypool pg_autoscale_mode on
+
+# 调整 PG 数量：先扩 pg_num，确认回填完成后再同步 pgp_num
+ceph osd pool set mypool pg_num 256
+ceph osd pool set mypool pgp_num 256
+ceph osd pool get mypool all
+ceph osd pool autoscale-status
+</code></pre>
+<p>PG 总数按「(OSD 总数 × 100) ÷ 副本数」估算，再向上取到 2 的幂：例如 6 个 OSD、3 副本约需 200 个 PG，取 256。PG 太少会导致单个 OSD 压力不均、恢复慢；PG 太多会加重 MON 与内存负担。</p>
+<p>CRUSH 故障域决定副本落在哪一层级。默认故障域是 <code>host</code>，即同一个 PG 的副本分散到不同主机；如果机架之间独立供电和联网，建议把故障域提升到 <code>rack</code>，先给主机打上机架标签：</p>
+<pre><code class="language-shell">ceph osd crush add-bucket rack1 rack        # 建机架
+ceph osd crush add-bucket rack2 rack
+ceph osd crush move node1 rack=rack1        # 主机移入机架
+ceph osd crush move node2 rack=rack1
+ceph osd crush move node3 rack=rack2
+ceph osd crush move rack1 root=default
+ceph osd crush move rack2 root=default
+
+# 按设备类型或故障域建规则，再让池使用它
+ceph osd crush rule create-replicated hdd-rule default host hdd
+ceph osd pool set mypool crush_rule hdd-rule
+ceph osd crush rule dump                    # 查看规则细节
+ceph osd tree                               # 查看当前层级与权重
+</code></pre>
+<p>注意：故障域越粗容错越强，但门槛越高——3 副本加 <code>rack</code> 故障域至少需要 3 个机架，否则 PG 会长期处于 undersized。</p>
+
+<h3 id="3-副本池与纠删码池"><strong>3、副本池与纠删码池（replicated vs erasure coded）</strong></h3>
+<p>副本池实现简单、恢复快，缺点是容量开销大（3 副本只有 1/3 可用率）。纠删码池用 <code>k</code> 个数据块加 <code>m</code> 个校验块，容量开销为 <code>(k+m)/k</code>，适合对象存储、大文件等顺序读写场景。</p>
+<table>
+<thead>
+<tr><th>对比项</th><th>副本池 replicated</th><th>纠删码池 erasure coded</th></tr>
+</thead>
+<tbody>
+<tr><td>容量开销</td><td>size=3 时为 3×（可用率约 33%）</td><td>k=4、m=2 时为 1.5×（可用率约 67%）</td></tr>
+<tr><td>容错能力</td><td>可容忍 size-1 个故障域失效</td><td>可容忍 m 个分片或故障域失效</td></tr>
+<tr><td>适用场景</td><td>RBD 块存储、CephFS 元数据池、小 IO</td><td>对象存储、大文件、冷数据、顺序读写</td></tr>
+<tr><td>恢复代价</td><td>整副本复制，恢复快</td><td>需要读 k 块解码，CPU 与网络开销更高</td></tr>
+</tbody>
+</table>
+<p>用 Rook CRD 声明纠删码池：</p>
+<pre><code class="language-yaml">apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: ec-pool
+  namespace: rook-ceph
+spec:
+  failureDomain: host      # 分片分布在不同主机
+  erasureCoded:
+    dataChunks: 4          # k
+    codingChunks: 2        # m
+</code></pre>
+<p>等价的命令行方式：</p>
+<pre><code class="language-shell">ceph osd erasure-code-profile set myprofile k=4 m=2 crush-failure-domain=host
+ceph osd erasure-code-profile get myprofile
+ceph osd pool create ecpool 64 64 erasure myprofile
+ceph osd pool application enable ecpool rgw
+
+# 若要在纠删码池上跑 RBD，需要 BlueStore 并开启覆盖写
+ceph osd pool set ecpool allow_ec_overwrites true
+</code></pre>
+<p>注意两点：纠删码池不能存放 RBD 的元数据，RBD 场景通常是「副本池存元数据 + 纠删码池存数据」，生产上更常见的做法是 RBD 直接用副本池；CephFS 的数据池可以用纠删码，但元数据池必须是副本池（Rook 的 CephFilesystem 中 <code>metadataPool</code> 只能使用 replication）。</p>
+<h3 id="2-创建存储池storageclassblock-cephyaml用于块存储的storageclass"><strong>4、创建存储池+StorageClass——block-ceph.yaml——用于块存储的StorageClass</strong></h3>
 <pre><code class="language-yaml">apiVersion: ceph.rook.io/v1
 kind: CephBlockPool
 metadata:
@@ -431,7 +613,8 @@ parameters:
 reclaimPolicy: Delete
 allowVolumeExpansion: true
 </code></pre>
-<h3 id="3-创建存储池storageclasscephfs-cephyaml用于共享文件存储的storageclass"><strong>3、创建存储池+StorageClass——cephfs-ceph.yaml（用于共享文件存储的 StorageClass）</strong></h3>
+<p>参数说明：<code>failureDomain: host</code> 表示同一个 PG 的两个副本落在不同主机；<code>size: 2</code> 只能容忍 1 台主机故障，3 节点以上的生产集群建议改为 <code>size: 3</code>。Rook 默认 <code>requireSafeReplicaSize: true</code>，会拒绝创建副本数为 1 的池。</p>
+<h3 id="3-创建存储池storageclasscephfs-cephyaml用于共享文件存储的storageclass"><strong>5、创建存储池+StorageClass——cephfs-ceph.yaml（用于共享文件存储的 StorageClass）</strong></h3>
 <pre><code class="language-yaml">apiVersion: ceph.rook.io/v1
 kind: CephFilesystem
 metadata:
@@ -563,7 +746,8 @@ allowVolumeExpansion: true
 </code></pre>
 <p>上面两个 StorageClass 都创建完成后，可以在后台的存储池中看到：</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1637131207171094.png" alt="image.png" loading="lazy"></figure>
-<h3 id="4-当storageclass都准备好之后我们就可以查看到了"><strong>4、当StorageClass都准备好之后，我们就可以查看到了：</strong></h3>
+<p>说明：CephFS 的元数据池必须是副本池，数据池可以使用纠删码；<code>activeCount: 1</code> 表示 1 个 active MDS，<code>activeStandby: true</code> 会额外起一个热备 MDS，故障切换更快，代价是多占一份资源。</p>
+<h3 id="4-当storageclass都准备好之后我们就可以查看到了"><strong>6、当 StorageClass 都准备好之后，就可以查看到了</strong></h3>
 <pre><code class="language-shell">[root@master ceph]# kubectl get sc -A
 NAME              PROVISIONER                     RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
 local (default)   openebs.io/local                Delete          WaitForFirstConsumer   false                  24h
@@ -575,36 +759,41 @@ rook-cephfs       rook-ceph.cephfs.csi.ceph.com   Delete          Immediate     
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-ceph%E5%9F%BA%E7%A1%80%E7%AE%80%E4%BB%8B">一、Ceph基础简介</a>
 <ul>
-<li><a href="#%E4%B8%80-ceph%E5%9F%BA%E7%A1%80%E7%AE%80%E4%BB%8B"><strong>一、Ceph基础简介</strong></a>
-<ul>
-<li><a href="#1-ceph%E7%AE%80%E4%BB%8B"><strong>1、Ceph简介</strong></a></li>
-<li><a href="#2-ceph%E9%9B%86%E7%BE%A4%E7%9A%84%E5%AE%89%E8%A3%85%E6%96%B9%E5%BC%8F%E9%80%89%E6%8B%A9"><strong>2、Ceph集群的安装方式选择</strong></a></li>
+<li><a href="#1-ceph%E7%AE%80%E4%BB%8B">1、Ceph简介</a></li>
+<li><a href="#2-ceph%E9%9B%86%E7%BE%A4%E7%9A%84%E5%AE%89%E8%A3%85%E6%96%B9%E5%BC%8F%E9%80%89%E6%8B%A9">2、Ceph集群的安装方式选择</a></li>
 <li><a href="#3-rook%E7%AE%80%E4%BB%8Bhttpswwwrookiodocsrookv17quickstarthtml">3、Rook 简介</a></li>
+<li><a href="#4-ceph%E9%9B%86%E7%BE%A4%E7%9A%84%E8%A7%92%E8%89%B2monmgrdsdosd">4、Ceph 集群的角色（mon / mgr / mds / osd / rgw）</a></li>
+<li><a href="#5-%E6%95%B0%E6%8D%AE%E5%88%86%E5%B8%83poolpg%E4%B8%8Ecrush">5、数据分布：Pool、PG 与 CRUSH</a></li>
+<li><a href="#6-cephadm%E5%AE%89%E8%A3%85%E8%A3%B8%E6%9C%BA%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%9C%BA%E6%99%AF">6、cephadm 安装（裸机 / 虚拟机场景）</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-rookceph%E7%9A%84%E5%AE%89%E8%A3%85"><strong>二、Rook+Ceph的安装</strong></a>
+<li>
+<a href="#%E4%BA%8C-rookceph%E7%9A%84%E5%AE%89%E8%A3%85">二、Rook+Ceph的安装</a>
 <ul>
-<li><a href="#1-%E6%9F%A5%E7%9C%8B%E5%89%8D%E6%8F%90%E6%9D%A1%E4%BB%B6%E7%A1%AC%E4%BB%B6%E8%A6%81%E6%B1%82"><strong>1、查看前提条件——硬件要求</strong></a></li>
-<li><a href="#2-%E5%8D%87%E7%BA%A7%E5%86%85%E6%A0%B8"><strong>2、升级内核</strong></a></li>
-<li><a href="#3-%E5%85%8B%E9%9A%86rook%E7%9A%84git%E4%BB%93%E5%BA%93%E4%BB%A3%E7%A0%81"><strong>3、克隆Rook的git仓库代码</strong></a></li>
-<li><a href="#4-%E4%BF%AE%E6%94%B9%E5%AE%89%E8%A3%85operatoryaml"><strong>4、修改安装operator.yaml：</strong></a></li>
-<li><a href="#5-%E4%BF%AE%E6%94%B9-clusteryaml%E4%B8%AD%E7%9A%84%E9%9B%86%E7%BE%A4%E4%BF%A1%E6%81%AF"><strong>5、修改 cluster.yaml中的集群信息：</strong></a></li>
-<li><a href="#6-%E6%AD%A3%E5%BC%8F%E5%AE%89%E8%A3%85%E9%9B%86%E7%BE%A4"><strong>6、正式安装集群：</strong></a></li>
-<li><a href="#7-%E9%AA%8C%E8%AF%81ceph%E9%9B%86%E7%BE%A4"><strong>7、验证ceph集群</strong></a></li>
-<li><a href="#8-%E7%A1%AE%E4%BF%9Dmgr-dashboard%E8%BF%99%E4%B8%AAservice%E6%98%AF%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE%E7%9A%84"><strong>8、确保mgr-dashboard这个service是可以访问的</strong></a></li>
-<li><a href="#9-%E4%BD%BF%E7%94%A8-nodeport-%E7%B1%BB%E5%9E%8B%E7%9A%84service%E6%9A%B4%E9%9C%B2dashboard-dashboard-external-httpsyaml"><strong>9、使用 NodePort 类型的 Service 暴露 dashboard</strong></a></li>
-<li><a href="#10-%E5%88%9B%E5%BB%BA%E5%90%8Enodeport%E7%B1%BB%E7%9A%84svc%E5%90%8E%E6%9F%A5%E7%9C%8B"><strong>10、创建 NodePort 类型的 svc 后查看</strong></a></li>
+<li><a href="#1-%E6%9F%A5%E7%9C%8B%E5%89%8D%E6%8F%90%E6%9D%A1%E4%BB%B6%E7%A1%AC%E4%BB%B6%E8%A6%81%E6%B1%82">1、查看前提条件——硬件要求</a></li>
+<li><a href="#2-%E5%8D%87%E7%BA%A7%E5%86%85%E6%A0%B8">2、升级内核（可选）</a></li>
+<li><a href="#3-%E5%85%8B%E9%9A%86rook%E7%9A%84git%E4%BB%93%E5%BA%93%E4%BB%A3%E7%A0%81">3、克隆Rook的git仓库代码</a></li>
+<li><a href="#4-%E4%BF%AE%E6%94%B9%E5%AE%89%E8%A3%85operatoryaml">4、修改安装operator.yaml：</a></li>
+<li><a href="#5-%E4%BF%AE%E6%94%B9-clusteryaml%E4%B8%AD%E7%9A%84%E9%9B%86%E7%BE%A4%E4%BF%A1%E6%81%AF">5、修改 cluster.yaml中的集群信息：</a></li>
+<li><a href="#6-%E6%AD%A3%E5%BC%8F%E5%AE%89%E8%A3%85%E9%9B%86%E7%BE%A4">6、正式安装集群：</a></li>
+<li><a href="#7-%E9%AA%8C%E8%AF%81ceph%E9%9B%86%E7%BE%A4">7、验证ceph集群</a></li>
+<li><a href="#8-%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E4%B8%8E%E5%B8%B8%E8%A7%81%E5%91%8A%E8%AD%A6%E5%A4%84%E7%90%86">8、健康检查与常见告警处理</a></li>
+<li><a href="#8-%E7%A1%AE%E4%BF%9Dmgr-dashboard%E8%BF%99%E4%B8%AAservice%E6%98%AF%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE%E7%9A%84">9、确保 mgr-dashboard 这个 Service 可以访问</a></li>
+<li><a href="#9-%E4%BD%BF%E7%94%A8-nodeport-%E7%B1%BB%E5%9E%8B%E7%9A%84service%E6%9A%B4%E9%9C%B2dashboard-dashboard-external-httpsyaml">10、用 NodePort 类型的 Service 暴露 Dashboard（dashboard-external-https.yaml）</a></li>
+<li><a href="#10-%E5%88%9B%E5%BB%BA%E5%90%8Enodeport%E7%B1%BB%E7%9A%84svc%E5%90%8E%E6%9F%A5%E7%9C%8B">11、创建 NodePort 类型的 svc 后查看</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-ceph%E7%9A%84%E5%90%8E%E7%BB%AD%E4%BD%BF%E7%94%A8"><strong>三、Ceph的后续使用</strong></a>
+<li>
+<a href="#%E4%B8%89-ceph%E7%9A%84%E5%90%8E%E7%BB%AD%E4%BD%BF%E7%94%A8">三、Ceph的后续使用</a>
 <ul>
-<li><a href="#1-%E8%8E%B7%E5%8F%96ceph%E5%90%8E%E5%8F%B0%E7%9A%84%E9%BB%98%E8%AE%A4%E8%AE%BF%E9%97%AE%E5%AF%86%E7%A0%81"><strong>1、获取Ceph后台的默认访问密码：</strong></a></li>
-<li><a href="#2-%E5%88%9B%E5%BB%BA%E5%AD%98%E5%82%A8%E6%B1%A0storageclassblock-cephyaml%E7%94%A8%E4%BA%8E%E5%9D%97%E5%AD%98%E5%82%A8%E7%9A%84storageclass"><strong>2、创建存储池+StorageClass——block-ceph.yaml——用于块存储的StorageClass</strong></a></li>
-<li><a href="#3-%E5%88%9B%E5%BB%BA%E5%AD%98%E5%82%A8%E6%B1%A0storageclasscephfs-cephyaml%E7%94%A8%E4%BA%8E%E5%85%B1%E4%BA%AB%E6%96%87%E4%BB%B6%E5%AD%98%E5%82%A8%E7%9A%84storageclass"><strong>3、创建存储池+StorageClass——cephfs-ceph.yaml（用于共享文件存储）</strong></a></li>
-<li><a href="#4-%E5%BD%93storageclass%E9%83%BD%E5%87%86%E5%A4%87%E5%A5%BD%E4%B9%8B%E5%90%8E%E6%88%91%E4%BB%AC%E5%B0%B1%E5%8F%AF%E4%BB%A5%E6%9F%A5%E7%9C%8B%E5%88%B0%E4%BA%86"><strong>4、当StorageClass都准备好之后，我们就可以查看到了：</strong></a></li>
-</ul>
-</li>
+<li><a href="#1-%E8%8E%B7%E5%8F%96ceph%E5%90%8E%E5%8F%B0%E7%9A%84%E9%BB%98%E8%AE%A4%E8%AE%BF%E9%97%AE%E5%AF%86%E7%A0%81">1、获取Ceph后台的默认访问密码：</a></li>
+<li><a href="#2-%E5%AD%98%E5%82%A8%E6%B1%A0pg%E6%95%B0%E4%B8%8Ecrush%E6%95%85%E9%9A%9C%E5%9F%9F">2、存储池、PG 数与 CRUSH 故障域</a></li>
+<li><a href="#3-%E5%89%AF%E6%9C%AC%E6%B1%A0%E4%B8%8E%E7%BA%A0%E5%88%A0%E7%A0%81%E6%B1%A0">3、副本池与纠删码池（replicated vs erasure coded）</a></li>
+<li><a href="#2-%E5%88%9B%E5%BB%BA%E5%AD%98%E5%82%A8%E6%B1%A0storageclassblock-cephyaml%E7%94%A8%E4%BA%8E%E5%9D%97%E5%AD%98%E5%82%A8%E7%9A%84storageclass">4、创建存储池+StorageClass——block-ceph.yaml——用于块存储的StorageClass</a></li>
+<li><a href="#3-%E5%88%9B%E5%BB%BA%E5%AD%98%E5%82%A8%E6%B1%A0storageclasscephfs-cephyaml%E7%94%A8%E4%BA%8E%E5%85%B1%E4%BA%AB%E6%96%87%E4%BB%B6%E5%AD%98%E5%82%A8%E7%9A%84storageclass">5、创建存储池+StorageClass——cephfs-ceph.yaml（用于共享文件存储的 StorageClass）</a></li>
+<li><a href="#4-%E5%BD%93storageclass%E9%83%BD%E5%87%86%E5%A4%87%E5%A5%BD%E4%B9%8B%E5%90%8E%E6%88%91%E4%BB%AC%E5%B0%B1%E5%8F%AF%E4%BB%A5%E6%9F%A5%E7%9C%8B%E5%88%B0%E4%BA%86">6、当 StorageClass 都准备好之后，就可以查看到了</a></li>
 </ul>
 </li>
 </ul>

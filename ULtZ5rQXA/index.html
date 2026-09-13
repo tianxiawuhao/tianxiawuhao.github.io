@@ -125,11 +125,38 @@
           
           <img class="post-feature-header-image" src="/post-images/ULtZ5rQXA.png" alt="封面图">
           
-          <p><strong>在 Kubernetes 上安装 KubeSphere 3.2.1，您的 Kubernetes 版本必须为：1.19.x、1.20.x、1.21.x 或 1.22.x（实验性支持）</strong></p>
+          <p><strong>在已有的 Kubernetes 集群上安装 KubeSphere 3.2.1，Kubernetes 版本必须为 1.19.x、1.20.x、1.21.x 或 1.22.x（1.22 为实验性支持）。</strong>版本不匹配是安装失败最常见的原因，动手前先用 <code>kubectl version --short</code> 确认服务端版本（<code>Server Version</code> 一行）。</p>
+<p>KubeSphere 3.x 各版本与 Kubernetes 的兼容关系如下，可按集群版本选择安装包（版本仍在演进，以<a href="https://kubesphere.io/zh/docs/installing-on-kubernetes/introduction/overview/">官方文档</a>为准）：</p>
+<table>
+<thead>
+<tr><th>KubeSphere</th><th>支持的 Kubernetes</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>3.0.x</td><td>1.15.x – 1.18.x</td><td>已停止维护</td></tr>
+<tr><td>3.1.x</td><td>1.17.x – 1.20.x</td><td>开始支持多集群</td></tr>
+<tr><td>3.2.x</td><td>1.19.x – 1.22.x</td><td>1.22 为实验性支持，本文使用的版本</td></tr>
+<tr><td>3.3.x</td><td>1.20.x – 1.24.x</td><td>支持 Kubernetes 1.24</td></tr>
+<tr><td>3.4.x</td><td>1.21.x – 1.26.x</td><td>3.x 系列最后一个版本</td></tr>
+</tbody>
+</table>
+<p>KubeSphere 4.x 改为 LuBan 架构（按需安装扩展组件），不再使用本文的 ks-installer 方式，安装方法不通用。</p>
+<p>除版本兼容外，安装前还需要满足以下前置条件：</p>
+<ul>
+<li>集群至少有 1 个 master 和 1 个可调度节点，建议 4 核 8 GB 以上（最小化安装大约需要 6 GB 可用内存）；</li>
+<li><strong>已存在默认 StorageClass</strong>：KubeSphere 的 Redis、OpenLDAP、MinIO、Prometheus 等组件都要申请 PVC，否则 Pod 会一直 Pending；</li>
+<li>有可用的 metrics-server（3.x 的 HPA 和部分监控页面依赖它），或在安装时打开 <code>metrics_server.enabled</code>；</li>
+<li>所有节点时间同步正常（chronyd/ntpd），否则 etcd 选主与证书校验会异常；</li>
+<li>节点能拉取 Docker Hub、GitHub 上的镜像，离线环境需先导入镜像并配置 <code>local_registry</code>；</li>
+<li>执行 kubectl 的账号具备 cluster-admin 权限。</li>
+</ul>
+<p>下图给出 KubeSphere 的分层结构：控制面组件、可插拔组件与底层 Kubernetes 集群之间的关系。</p>
+<p><img src="/post-assets/ULtZ5rQXA/01-kubesphere-architecture.svg" alt="KubeSphere 架构与组件分层示意图"></p>
 <h2 id="1-搭建nfs作为默认sc主节点作为服务器主节点操作">1 搭建 NFS 作为默认 SC（主节点作为服务器，主节点操作）</h2>
+<p>KubeSphere 安装过程需要动态供应 PVC，所以先把 NFS 做成集群的默认 StorageClass。NFS 方案简单、足够用于测试；生产环境建议改用 Ceph RBD、OpenEBS 等具备多副本能力的存储。本节命令在 master 节点执行。</p>
 <h3 id="11-配置nfs服务器">1.1   配置NFS服务器</h3>
 <pre><code class="language-shell">yum install -y nfs-utils rpcbind  &amp;&amp; echo &quot;/nfs *(insecure,rw,sync,no_root_squash)&quot; &gt; /etc/exports
 </code></pre>
+<p>说明：<code>/nfs *(insecure,rw,sync,no_root_squash)</code> 对所有网段开放且不压缩 root 权限，只适合内网测试；生产建议限定网段并收敛权限，例如 <code>/nfs 192.168.40.0/24(rw,sync,no_root_squash)</code>，改完执行 <code>exportfs -r</code> 重新加载导出列表。</p>
 <h3 id="12-创建nfs服务器目录">1.2   创建nfs服务器目录</h3>
 <pre><code class="language-shell">mkdir -p /nfs
 </code></pre>
@@ -174,7 +201,8 @@ spec:
 </code></pre>
 <p>这里需要注意的是，必须等所有的状态为 Running 才能进行下一步操作。</p>
 <h2 id="2-搭建nfs-clientnode节点操作">2   搭建NFS-Client（node节点操作）</h2>
-<p>服务器端防火墙开放111、662、875、892、2049的 tcp / udp 允许，否则远端客户无法连接。</p>
+<p>这一步只用于验证节点能否访问 NFS 共享，<strong>并不是安装 KubeSphere 的必需步骤</strong>——动态供应由集群内的 nfs-client-provisioner 完成，它自己会挂载 NFS。下面的命令在 node 节点执行。</p>
+<p>NFS 服务端至少要放行 111（rpcbind）与 2049（nfsd）的 TCP/UDP；mountd、rquotad、statd 在 CentOS 7 上默认使用随机端口，先用 <code>rpcinfo -p 192.168.40.131</code> 查出实际端口再放行，否则客户端 <code>showmount</code> 会一直超时。</p>
 <h3 id="21-安装客户端工具">2.1  安装客户端工具</h3>
 <pre><code class="language-shell">yum install -y nfs-utils rpcbind
 showmount -e 192.168.40.131
@@ -311,6 +339,7 @@ spec:
 # 如果报错：查看报错信息，这个命令：
 kubectl describe pod xxx -n kube-system
 </code></pre>
+<p>注意：<code>provisioner: storage.pri/nfs</code> 必须与 Deployment 中 <code>PROVISIONER_NAME</code> 的值完全一致，否则 StorageClass 会一直处于 no-provisioner 状态，PVC 无法绑定。</p>
 <h4 id="315-创建storageclassmaster节点操作">3.1.5   创建storageclass（master节点操作）</h4>
 <pre><code class="language-yaml">vim storageclass-nfs.yaml
  
@@ -419,7 +448,7 @@ spec:
         emptyDir: {}
       containers:
       - name: metrics-server
-        image: mirrorgooglecontainers/metrics-server-amd64:v0.3.6
+        image: registry.k8s.io/metrics-server/metrics-server:v0.6.1
         imagePullPolicy: IfNotPresent
         args:
           - --cert-dir=/tmp
@@ -488,6 +517,7 @@ subjects:
   name: metrics-server
   namespace: kube-system
 </code></pre>
+<p>版本说明：原文使用 <code>mirrorgooglecontainers/metrics-server-amd64:v0.3.6</code>，该镜像仓库已停止维护，v0.3.6 在 Kubernetes 1.20+ 上常报 <code>unable to fully scrape metrics</code> 或证书错误。上面已改为官方镜像 <code>registry.k8s.io/metrics-server/metrics-server:v0.6.1</code>（v0.6.x 支持 Kubernetes 1.19–1.24）。另外注意：KubeSphere 3.2.1 自身也能部署 metrics-server（<code>spec.metrics_server.enabled: true</code>），两者只需保留一个，重复部署会因 APIService <code>v1beta1.metrics.k8s.io</code> 冲突导致 <code>kubectl top</code> 报错。</p>
 <h3 id="43-应用该文件pod">4.3  应用该文件pod</h3>
 <pre><code class="language-shell">kubectl apply -f metrics-server.yaml
 </code></pre>
@@ -496,18 +526,22 @@ subjects:
 </code></pre>
 <h3 id="45-查看系统的监控状态">4.5  查看系统的监控状态</h3>
 <pre><code class="language-shell">kubectl top nodes
- 
-如果运行kubectl top nodes这个命令，爆metrics not available yet 这个命令还没有用，那就稍等一会，就能用了
+kubectl top pods -A
 </code></pre>
-<p>这里，kubesphere3.0的前置环境全部结束。</p>
-<h2 id="5-安装kubesphere-v300">5 安装kubesphere v3.0.0</h2>
-<h3 id="51-文档地址">5.1 文档地址</h3>
-<pre><code class="language-shell">https://kubesphere.com.cn/
+<p>如果提示 <code>error: Metrics API not available</code> 或 <code>metrics not available yet</code>，说明 metrics-server 刚启动、还没采集到数据，等 30~60 秒后重试即可。若长时间不可用，按下面三步排查：</p>
+<pre><code class="language-shell">kubectl -n kube-system get pod -l k8s-app=metrics-server
+kubectl -n kube-system logs deploy/metrics-server --tail=50
+kubectl get apiservice v1beta1.metrics.k8s.io -o yaml
 </code></pre>
-<h3 id="152-部署文档地址">5.2 部署文档地址</h3>
-<pre><code class="language-shell">https://kubesphere.com.cn/docs/quick-start/minimal-kubesphere-on-k8s/
-</code></pre>
+<p>到这里，KubeSphere 3.2.1 的前置环境（默认 StorageClass + metrics-server）就准备完成了。</p>
+<h2 id="5-安装kubesphere-v300">5 安装 KubeSphere v3.2.1（ks-installer 方式）</h2>
+<h3 id="51-文档地址">5.1 官方文档地址</h3>
+<p>官网：<a href="https://kubesphere.io/zh/">https://kubesphere.io/zh/</a>。旧域名 kubesphere.com.cn 已停止更新，会跳转到新站。</p>
+<h3 id="152-部署文档地址">5.2 部署文档地址（ks-installer）</h3>
+<p>在已有 Kubernetes 上最小化安装：<a href="https://kubesphere.io/zh/docs/installing-on-kubernetes/introduction/overview/">https://kubesphere.io/zh/docs/installing-on-kubernetes/introduction/overview/</a></p>
 <h3 id="153-安装步骤说明master节点">5.3 安装步骤说明（master 节点操作）</h3>
+<p>整个安装过程可以概括为下面八步：左列是主线步骤，右列是离线环境要点与常见失败点。</p>
+<p><img src="/post-assets/ULtZ5rQXA/02-install-flow.svg" alt="KubeSphere 3.2.1 最小化安装流程图"></p>
 <h4 id="1531-安装集群配置文件">5.3.1 安装集群配置文件</h4>
 <h5 id="15311-准备配置文件cluster-configurationyaml">5.3.1.1     准备配置文件cluster-configuration.yaml</h5>
 <pre><code class="language-shell">vim cluster-configuration.yaml
@@ -523,14 +557,14 @@ metadata:
     version: v3.2.1
 spec:
   persistence:
-    storageClass: &quot;&quot;        # If there is no default StorageClass in your cluster, you need to specify an existing StorageClass here.
+    storageClass: &quot;storage-nfs&quot;   # 已设置默认 SC 时可留空；若集群没有默认 SC，必须填已有 StorageClass 的名称
   authentication:
     jwtSecret: &quot;&quot;           # Keep the jwtSecret consistent with the Host Cluster. Retrieve the jwtSecret by executing &quot;kubectl -n kubesphere-system get cm kubesphere-config -o yaml | grep -v &quot;apiVersion&quot; | grep jwtSecret&quot; on the Host Cluster.
   local_registry: &quot;&quot;        # Add your private registry address if it is needed.
   # dev_tag: &quot;&quot;               # Add your kubesphere image tag you want to install, by default it's same as ks-install release version.
   etcd:
     monitoring: false       # Enable or disable etcd monitoring dashboard installation. You have to create a Secret for etcd before you enable it.
-    endpointIps: localhost  # etcd cluster EndpointIps. It can be a bunch of IPs here.
+    endpointIps: 192.168.40.131  # etcd 集群地址，单 master 填本机 IP，多 master 用逗号分隔
     port: 2379              # etcd port.
     tlsEnable: true
   common:
@@ -616,7 +650,7 @@ spec:
       replicas: 2
       # resources: {}
   metrics_server:                    # (CPU: 56 m, Memory: 44.35 MiB) It enables HPA (Horizontal Pod Autoscaler).
-    enabled: false                   # Enable or disable metrics-server.
+    enabled: false                   # 本文已单独部署 metrics-server v0.6.1，这里保持 false；未单独部署则改为 true
   monitoring:
     storageClass: &quot;&quot;                 # If there is an independent StorageClass you need for Prometheus, you can specify it here. The default StorageClass is used by default.
     # kube_rbac_proxy:
@@ -689,7 +723,7 @@ spec:
         tolerations: []
 
 </code></pre>
-<p>endpointIps: 192.168.40.131：master节点的地址。</p>
+<p>几个关键字段：<code>persistence.storageClass</code> 填第 1 节创建的 <code>storage-nfs</code>（若已设为默认类也可留空）；<code>etcd.endpointIps</code> 填 master 节点 IP，多 master 用逗号分隔；<code>etcd.monitoring</code> 打开前必须先创建 etcd 证书 Secret，否则 ks-installer 会报错；<code>authentication.jwtSecret</code> 只在接入多集群时使用，需要与 host 集群保持一致。</p>
 <h5 id="15313-准备配置文件kubesphere-installeryaml">5.3.1.3     准备配置文件kubesphere-installer.yaml</h5>
 <pre><code class="language-shell">vim kubesphere-installer.yaml
 </code></pre>
@@ -1010,22 +1044,138 @@ kubectl apply -f https://github.com/kubesphere/ks-installer/releases/download/v3
    
 kubectl apply -f https://github.com/kubesphere/ks-installer/releases/download/v3.2.1/cluster-configuration.yaml
 </code></pre>
+<p>顺序不能颠倒：先应用 <code>kubesphere-installer.yaml</code>（包含 CRD、命名空间、RBAC 与 ks-installer Deployment），再应用 <code>cluster-configuration.yaml</code>；否则会因为 CRD <code>ClusterConfiguration</code> 尚未创建而报 <code>no matches for kind</code>。</p>
 <h5 id="15316-监控安装的日志信息">5.3.1.6     监控安装的日志信息</h5>
 <pre><code class="language-shell">kubectl logs -n kubesphere-system $(kubectl get pod -n kubesphere-system -l app=ks-install -o jsonpath='{.items[0].metadata.name}') -f
+# 也可以直接看 Deployment（Pod 重建后名字会变）
+kubectl -n kubesphere-system logs deploy/ks-installer -f --tail=200
 </code></pre>
+<p>日志里会依次出现 <code>Installation is in progress</code>、各组件 chart 的部署记录，最后是 <code>Installation is successful</code>。如果中途出现 <code>Failed to apply ... timeout</code>，多半是镜像拉取慢或 PVC 未就绪，处理完会自动重试。</p>
 <h5 id="15317-查看pod启动状态信息">5.3.1.7     查看pod启动状态信息</h5>
 <pre><code class="language-shell">kubectl get pods -A
 </code></pre>
 <p>需要等待漫长的时间。</p>
-<h3 id="154-访问验证是否安装成功">5.4 访问验证是否安装成功</h3>
-<p>访问地址：</p>
-<p>http://192.168.40.131:30880/login</p>
-<p>帐号：admin</p>
-<p>密码：P@88w0rd</p>
-<h3 id="155-harbor目录下重新启动harbor">5.5 Harbor 目录下重新启动 Harbor</h3>
-<pre><code class="language-shell">docker-compose stop
-docker-compose up -d
+<h3 id="54-可插拔组件装什么占多少资源">5.4  可插拔组件：装什么、占多少资源</h3>
+<p>KubeSphere 采用可插拔架构，上面的 <code>cluster-configuration.yaml</code> 就是组件总开关。<strong>安装完成后依然可以随时开关</strong>：直接编辑 ClusterConfiguration 资源，ks-installer 会监听到变化并自动部署或清理对应组件，不需要重装 KubeSphere。</p>
+<pre><code class="language-shell">kubectl -n kubesphere-system edit cc ks-installer
+# 例如把 logging.enabled 改成 true，保存退出后观察安装日志
+kubectl -n kubesphere-system logs deploy/ks-installer -f --tail=100
 </code></pre>
+<table>
+<thead>
+<tr><th>组件</th><th>配置项</th><th>默认</th><th>依赖 / 资源</th></tr>
+</thead>
+<tbody>
+<tr><td>监控（Prometheus + Grafana）</td><td>monitoring</td><td>开启</td><td>需要默认 SC 存放 TSDB，约 2 核 4 GB</td></tr>
+<tr><td>日志（Elasticsearch + Fluent Bit）</td><td>logging</td><td>关闭</td><td>需要 SC 和足够磁盘，约 57 m CPU / 2.76 GB 内存</td></tr>
+<tr><td>事件 / 审计</td><td>events / auditing</td><td>关闭</td><td>依赖内置或外部 Elasticsearch</td></tr>
+<tr><td>告警 / 通知</td><td>alerting</td><td>关闭</td><td>依赖 Thanos Ruler 与通知渠道，约 0.1 核 100 MiB</td></tr>
+<tr><td>DevOps（Jenkins）</td><td>devops</td><td>关闭</td><td>需要 8 GiB PVC，约 0.47 核 8.6 GB</td></tr>
+<tr><td>服务网格（Istio）</td><td>servicemesh</td><td>关闭</td><td>约 0.3 核 300 MiB</td></tr>
+<tr><td>应用商店（OpenPitrix）</td><td>openpitrix</td><td>关闭</td><td>依赖 MySQL、MinIO 等</td></tr>
+<tr><td>网络策略 / Pod IP 池</td><td>network.networkpolicy、network.ippool</td><td>关闭</td><td>需要 Calico 等支持 NetworkPolicy 的 CNI</td></tr>
+<tr><td>KubeEdge 边缘节点</td><td>kubeedge</td><td>关闭</td><td>必须填写 cloudHub.advertiseAddress，否则 CloudCore 无法工作</td></tr>
+</tbody>
+</table>
+<p>建议按需开启：全开对 4 核 8 GB 的测试集群几乎必然 OOM 或 PVC 不足。开启 <code>logging</code>、<code>events</code>、<code>auditing</code> 前先确认 Elasticsearch 的存储与内存。另外 <code>logging.containerruntime</code> 要按集群实际容器运行时填写（<code>docker</code> 或 <code>containerd</code>），填错会导致采集不到容器日志。</p>
+
+<h3 id="55-离线air-gap安装">5.5  离线（air-gap）安装</h3>
+<p>内网环境访问不了 Docker Hub 与 charts.kubesphere.io，需要先把镜像和制品拿到本地，再用 <code>local_registry</code> 让 ks-installer 从私有仓库拉取镜像。</p>
+<p>方式一：已有 Kubernetes 集群，只用 ks-installer 安装 KubeSphere。</p>
+<pre><code class="language-shell"># 1. 联网机器上拉取并导出镜像（完整镜像清单见 ks-installer 对应版本的 images 列表）
+docker pull kubesphere/ks-installer:v3.2.1
+docker pull kubesphere/ks-apiserver:v3.2.1
+# ks-console、ks-controller-manager、minio、redis、openldap、prometheus 系列、elasticsearch 等按需拉取
+docker save -o ks-images.tar kubesphere/ks-installer:v3.2.1 kubesphere/ks-apiserver:v3.2.1
+
+# 2. 导入内网私有仓库
+docker load -i ks-images.tar
+docker tag kubesphere/ks-apiserver:v3.2.1 registry.example.com/kubesphere/ks-apiserver:v3.2.1
+docker push registry.example.com/kubesphere/ks-apiserver:v3.2.1
+</code></pre>
+<p>然后在 <code>cluster-configuration.yaml</code> 里把 <code>spec.local_registry</code> 指向私有仓库地址（不要带 <code>https://</code>），再应用该文件，ks-installer 会自动为所有组件镜像加上这个前缀。</p>
+<pre><code class="language-yaml">spec:
+  local_registry: &quot;registry.example.com/kubesphere&quot;
+</code></pre>
+<p>如果私有仓库使用自签证书，还要给节点上的 Docker/containerd 配置 <code>insecure-registries</code> 或导入 CA 证书，否则 ks-installer 会报 <code>x509: certificate signed by unknown authority</code>。方式二是用 KubeKey 导出制品，见下一节。</p>
+
+<h3 id="56-用kubekey最小化安装">5.6  用 KubeKey 最小化安装（一体化部署 Kubernetes + KubeSphere）</h3>
+<p>如果还没有 Kubernetes 集群，或者希望 k8s 与 KubeSphere 一次装好，用官方工具 <strong>KubeKey</strong>（<code>kk</code>）最省事：它会自动处理容器运行时、CNI、默认 StorageClass 等前置条件。</p>
+<pre><code class="language-shell"># 1. 下载 KubeKey（版本号以官方最新为准）
+curl -sfL https://get-kk.kubesphere.io | VERSION=v3.0.0 sh -
+chmod +x kk
+
+# 2. 生成配置文件：Kubernetes v1.22.12 + KubeSphere v3.2.1
+./kk create config --with-kubernetes v1.22.12 --with-kubesphere v3.2.1 -f config-sample.yaml
+
+# 3. 按实际环境编辑 config-sample.yaml（hosts、network、storage、registry）
+vi config-sample.yaml
+
+# 4. 一键安装（加 -v 输出详细日志）
+./kk create cluster -f config-sample.yaml
+</code></pre>
+<p>也可以不生成配置文件，直接单机试装：</p>
+<pre><code class="language-shell">./kk create cluster --with-kubernetes v1.22.12 --with-kubesphere v3.2.1
+</code></pre>
+<p>几点提醒：</p>
+<ul>
+<li><code>config-sample.yaml</code> 中的 <code>spec.hosts</code> 要写清每台机器的 IP、用户名、密码或密钥，多节点时用 <code>roleGroups</code> 区分 etcd/master/worker；</li>
+<li>KubeKey 默认会给集群装一个 local 卷的默认 StorageClass，生产上建议换成 Ceph RBD 等支持多副本的存储；</li>
+<li>离线安装用 <code>./kk artifact export -m manifest-sample.yaml -o kubesphere-artifact.tar.gz</code> 导出制品，拷进内网后 <code>./kk artifact image push -f config-sample.yaml -a kubesphere-artifact.tar.gz</code> 推送镜像，再 <code>./kk create cluster -f config-sample.yaml -a kubesphere-artifact.tar.gz</code> 安装；</li>
+<li>安装结束后 KubeKey 会打印控制台地址与默认账号 <code>admin / P@88w0rd</code>。</li>
+</ul>
+
+<h3 id="57-多集群与企业空间租户">5.7  多集群与企业空间（租户）</h3>
+<p>上面安装的是单集群模式（<code>multicluster.clusterRole: none</code>）。KubeSphere 从 3.1 起支持多集群管理，由 <strong>Host 集群</strong>统一纳管多个 <strong>Member 集群</strong>，切换方式就是改 <code>clusterRole</code>：</p>
+<pre><code class="language-yaml">spec:
+  multicluster:
+    clusterRole: host    # host（主集群，承载多集群控制面）| member（成员集群）| none（单集群）
+</code></pre>
+<p>把 host 集群改为 <code>host</code> 后，ks-installer 会部署多集群控制面（tower、agent 等）。随后在控制台「集群管理 → 添加集群」下载成员集群的部署文件，在成员集群执行即可接入。接入时注意：</p>
+<ul>
+<li>成员集群的 <code>authentication.jwtSecret</code> 需与 host 集群保持一致；</li>
+<li>host 集群的 ks-apiserver 地址必须能被成员集群访问（通常通过代理或 NodePort 暴露）；</li>
+<li>所有集群时间同步，否则 agent 证书校验失败，成员集群会一直显示「异常」。</li>
+</ul>
+<pre><code class="language-shell">kubectl -n kubesphere-system get cm kubesphere-config -o yaml | grep -v &quot;apiVersion&quot; | grep jwtSecret
+</code></pre>
+<p>租户模型是「企业空间（Workspace）→ 项目（Namespace）」两级：企业空间是资源与权限的隔离单元，项目对应 Kubernetes 命名空间；用户与角色（platform-admin、workspace-admin、project-admin 等）按层级授权。多集群场景下，一个企业空间可以跨集群分配项目，实现「一个租户、多集群资源」。</p>
+
+<h3 id="58-常见安装失败排查">5.8  常见安装失败排查</h3>
+<table>
+<thead>
+<tr><th>现象</th><th>常见原因</th><th>处理办法</th></tr>
+</thead>
+<tbody>
+<tr><td>ks-installer Pod 一直 ImagePullBackOff / ErrImagePull</td><td>拉不到 Docker Hub 镜像，或离线环境未导入镜像</td><td>配置 <code>local_registry</code>，或把镜像导入内网仓库；用 <code>kubectl -n kubesphere-system describe pod &lt;pod&gt;</code> 看具体报错</td></tr>
+<tr><td>apply 时报 <code>no matches for kind ClusterConfiguration</code></td><td>先应用了 cluster-configuration.yaml，CRD 还没创建</td><td>先 <code>kubectl apply -f kubesphere-installer.yaml</code>，再应用 cluster-configuration.yaml</td></tr>
+<tr><td>日志停在 PVC Pending / <code>no persistent volumes available</code></td><td>没有默认 StorageClass，或 NFS 不可写</td><td><code>kubectl get sc</code> 确认 default 标记；用 <code>kubectl get pvc -A</code> 与 <code>describe pvc</code> 定位；检查 NFS 导出与权限</td></tr>
+<tr><td>控制台 <code>http://IP:30880</code> 打不开</td><td>ks-console 未就绪、NodePort 未生效、防火墙或端口占用</td><td><code>kubectl -n kubesphere-system get svc ks-console</code> 确认 30880 映射；放行端口；查看 console Pod 是否 Running</td></tr>
+<tr><td>开启 etcd 监控后安装失败</td><td>缺少 etcd 证书 Secret</td><td>先在 <code>kubesphere-monitoring-system</code> 创建 <code>etcd-certs</code> Secret，再打开 <code>etcd.monitoring</code></td></tr>
+<tr><td>提示 chart 拉取失败或超时</td><td>访问不了 charts.kubesphere.io 与镜像仓库</td><td>改用离线方式导入制品，或配置镜像代理</td></tr>
+<tr><td>节点 NotReady、etcd 频繁选主</td><td>节点时间不同步、内核参数或磁盘 IO 异常</td><td>启用 chronyd；检查 <code>dmesg</code> 与磁盘；必要时调整 <code>vm.swappiness</code>、关闭 swap</td></tr>
+<tr><td>提示 Kubernetes 版本不受支持</td><td>集群版本不在支持矩阵内</td><td>对照文首兼容表升级集群，或改用对应的 KubeSphere 版本</td></tr>
+<tr><td>组件开启后 Pod 一直 Pending / OOMKilled</td><td>节点资源不足</td><td>扩容节点，或按需关闭 logging、devops 等高消耗组件</td></tr>
+</tbody>
+</table>
+<p>排查顺序建议：先看 <code>kubectl -n kubesphere-system get pod</code>，再看 <code>kubectl -n kubesphere-system logs deploy/ks-installer --tail=200</code>，最后看具体组件 Pod 的 <code>describe</code> 与日志。多数问题都能在这三步内定位。</p>
+
+<h3 id="154-访问验证是否安装成功">5.9 访问验证是否安装成功</h3>
+<p>安装完成后访问控制台：</p>
+<pre><code class="language-text">http://192.168.40.131:30880/login
+帐号：admin
+密码：P@88w0rd
+</code></pre>
+<p>KubeSphere 3.2.1 的默认账号是 <code>admin</code>、默认密码是 <code>P@88w0rd</code>，首次登录会强制修改密码。如果控制台打不开，先确认 <code>ks-console</code> Pod 是 Running、Service 是否已分配 30880 端口。</p>
+<p>登录后可以在「集群管理 → 系统组件」查看各组件状态，也可以打开「监控告警」「应用负载」等页面，确认可插拔组件是否生效。</p>
+<h3 id="155-harbor目录下重新启动harbor">5.10 Harbor 目录下重新启动 Harbor</h3>
+<p>安装 KubeSphere 的过程中会重启 Docker/containerd，用 docker-compose 启动的 Harbor 容器可能没跟着起来，导致后续 push/pull 镜像失败。进入 Harbor 安装目录（例如 <code>/opt/harbor</code>）重启即可：</p>
+<pre><code class="language-shell">cd /opt/harbor    # 换成自己的 Harbor 安装目录
+docker compose down
+docker compose up -d
+# Harbor 2.x 使用 Compose V2 插件 docker compose；老环境仍是 docker-compose up -d
+</code></pre>
+<p>启动后用 <code>docker login</code> 验证仓库可用，并确认节点 Docker 的 <code>insecure-registries</code> 中已加入该仓库地址。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
@@ -1063,13 +1213,18 @@ docker-compose up -d
 </ul>
 </li>
 <li>
-<a href="#5-%E5%AE%89%E8%A3%85kubesphere-v300">5 安装kubesphere v3.0.0</a>
+<a href="#5-%E5%AE%89%E8%A3%85kubesphere-v300">5 安装 KubeSphere v3.2.1（ks-installer 方式）</a>
 <ul>
-<li><a href="#51-%E6%96%87%E6%A1%A3%E5%9C%B0%E5%9D%80">5.1 文档地址</a></li>
-<li><a href="#152-%E9%83%A8%E7%BD%B2%E6%96%87%E6%A1%A3%E5%9C%B0%E5%9D%80">5.2 部署文档地址</a></li>
+<li><a href="#51-%E6%96%87%E6%A1%A3%E5%9C%B0%E5%9D%80">5.1 官方文档地址</a></li>
+<li><a href="#152-%E9%83%A8%E7%BD%B2%E6%96%87%E6%A1%A3%E5%9C%B0%E5%9D%80">5.2 部署文档地址（ks-installer）</a></li>
 <li><a href="#153-%E5%AE%89%E8%A3%85%E6%AD%A5%E9%AA%A4%E8%AF%B4%E6%98%8Emaster%E8%8A%82%E7%82%B9">5.3 安装步骤说明（master 节点操作）</a></li>
-<li><a href="#154-%E8%AE%BF%E9%97%AE%E9%AA%8C%E8%AF%81%E6%98%AF%E5%90%A6%E5%AE%89%E8%A3%85%E6%88%90%E5%8A%9F">5.4 访问验证是否安装成功</a></li>
-<li><a href="#155-harbor%E7%9B%AE%E5%BD%95%E4%B8%8B%E9%87%8D%E6%96%B0%E5%90%AF%E5%8A%A8harbor">5.5 Harbor 目录下重新启动 Harbor</a></li>
+<li><a href="#54-%E5%8F%AF%E6%8F%92%E6%8B%94%E7%BB%84%E4%BB%B6%E8%A3%85%E4%BB%80%E4%B9%88%E5%8D%A0%E5%A4%9A%E5%B0%91%E8%B5%84%E6%BA%90">5.4 可插拔组件：装什么、占多少资源</a></li>
+<li><a href="#55-%E7%A6%BB%E7%BA%BFair-gap%E5%AE%89%E8%A3%85">5.5 离线（air-gap）安装</a></li>
+<li><a href="#56-%E7%94%A8kubekey%E6%9C%80%E5%B0%8F%E5%8C%96%E5%AE%89%E8%A3%85">5.6 用 KubeKey 最小化安装（一体化部署 Kubernetes + KubeSphere）</a></li>
+<li><a href="#57-%E5%A4%9A%E9%9B%86%E7%BE%A4%E4%B8%8E%E4%BC%81%E4%B8%9A%E7%A9%BA%E9%97%B4%E7%A7%9F%E6%88%B7">5.7 多集群与企业空间（租户）</a></li>
+<li><a href="#58-%E5%B8%B8%E8%A7%81%E5%AE%89%E8%A3%85%E5%A4%B1%E8%B4%A5%E6%8E%92%E6%9F%A5">5.8 常见安装失败排查</a></li>
+<li><a href="#154-%E8%AE%BF%E9%97%AE%E9%AA%8C%E8%AF%81%E6%98%AF%E5%90%A6%E5%AE%89%E8%A3%85%E6%88%90%E5%8A%9F">5.9 访问验证是否安装成功</a></li>
+<li><a href="#155-harbor%E7%9B%AE%E5%BD%95%E4%B8%8B%E9%87%8D%E6%96%B0%E5%90%AF%E5%8A%A8harbor">5.10 Harbor 目录下重新启动 Harbor</a></li>
 </ul>
 </li>
 </ul>
