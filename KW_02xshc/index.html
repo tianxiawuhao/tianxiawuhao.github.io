@@ -125,58 +125,73 @@
           
           <img class="post-feature-header-image" src="/post-images/KW_02xshc.png" alt="封面图">
           
-          <p>一般docker容器都是最小化安装，不仅如此系统定时器相关的服务也不存在，自己去安装也很麻烦，故此直接使用宿主机的定时器即可。</p>
+          <p>一般 docker 容器都是最小化安装，systemd、cron 这类定时任务服务通常并不存在，自己去安装也很麻烦。所以更省事的做法是：清理脚本写在容器里，定时触发交给宿主机的定时器。</p>
 <h2 id="一-在容器中编写清除日志脚本">一、在容器中编写清除日志脚本</h2>
-<p>这一部分不论你是把定时器加在宿主机上还是容器中，都必须去做：</p>
+<p>这一部分不论你是把定时器加在宿主机上还是容器中，都必须去做：先把清理脚本在容器里准备好。</p>
 <p>网上随意一搜就可以看到如下的删除模板：</p>
 <pre><code class="language-shell">find 对应目录 -mtime +天数 -name &quot;文件名&quot; -exec rm -rf {} \;
 </code></pre>
-<p>因为本人的日志目录层级比较深，所以改良如下：</p>
-<pre><code class="language-shell">1. -- /opt/auto-del-log.sh 
-2. \#!/bin/sh
-3. find /home/schedule_log/ -mtime -5 -type f -iname &quot;*.log&quot; -exec rm -rf {} \;
+<p>这里要特别留意 <code>-mtime +天数</code> 的正负号：<code>+5</code> 表示「修改时间在 5 天以前」，<code>-5</code> 表示「最近 5 天以内」，两者含义正好相反。写错的话会把最新日志删掉，而老日志却越积越多。</p>
+<p>因为本人的日志目录层级比较深，所以改良如下，脚本放在容器的 <code>/opt/auto-del-log.sh</code>：</p>
+<pre><code class="language-shell">#!/bin/sh
+find /home/schedule_log/ -mtime +5 -type f -iname &quot;*.log&quot; -exec rm -rf {} \;
 </code></pre>
-<p>一定记得加可执行权限</p>
-<pre><code class="language-shell">chmod +777 /opt/auto-del-log.sh
+<p>脚本里 <code>-type f</code> 只匹配普通文件，避免误伤同名目录；<code>-iname</code> 忽略文件名大小写；<code>-mtime +5</code> 只挑选 5 天以前修改过的日志。</p>
+<p><img src="/post-assets/KW_02xshc/01-cleanup-flow.svg" alt="宿主机定时清理容器日志的整体流程"></p>
+<p>一定记得加可执行权限：</p>
+<pre><code class="language-shell">chmod +x /opt/auto-del-log.sh
 </code></pre>
-<p>后面经过验证 其实效果是一样的! 重点就是你要去验证你的脚本有没有效果！你可以这样直接输入验证</p>
-<pre><code class="language-shell">1. find /home/schedule_log/  -type f -iname &quot;*.log&quot;
-2. 或者
-3. find /home/schedule_log/  -name &quot;*.log&quot;
+<p>原文此处写的是 <code>chmod +777</code>。GNU chmod 确实能接受这种写法并得到 777 权限，但清理脚本只需要执行权限，向所有用户放开读写并没有必要，因此这里改为 <code>chmod +x</code>。</p>
+<p>脚本写好后，重点是要先验证它有没有效果，不要直接挂定时任务。可以先用「只查不删」的方式确认匹配结果正是你要删的文件：</p>
+<pre><code class="language-shell">find /home/schedule_log/ -type f -iname &quot;*.log&quot;
+# 或者
+find /home/schedule_log/ -name &quot;*.log&quot;
 </code></pre>
-<p>如果能查出你想删除的文件那么后面就可以开始套模板了。</p>
-<pre><code class="language-shell">-mtime：标准语句写法；
-+30：查找30天前的文件，这里用数字代表天数；
-&quot;*.log&quot;：希望查找的数据类型，&quot;*.jpg&quot;表示查找扩展名为jpg的所有文件，&quot;*&quot;表示查找所有文件，这个可以灵活运用，举一反三；
--exec：固定写法；
-rm -rf：强制删除文件，包括目录；
-{} \; ：固定写法，一对大括号+空格+\+; 
+<p>无论用 <code>-iname</code> 还是 <code>-name</code>，只要能查出你想删除的文件，效果就达到了，这时再套用带 <code>-exec rm -rf</code> 的模板。</p>
+<p><img src="/post-assets/KW_02xshc/02-mtime-window.svg" alt="-mtime 加号与减号的时间窗口对比"></p>
+<p>各参数含义如下：</p>
+<pre><code class="language-text">-mtime：按修改时间筛选，标准写法为 -mtime +天数 或 -mtime -天数；
++30：查找 30 天以前修改过的文件，数字代表天数；
+&quot;*.log&quot;：希望查找的数据类型，&quot;*.jpg&quot; 表示查找扩展名为 jpg 的所有文件，&quot;*&quot; 表示查找所有文件，可以灵活运用、举一反三；
+-type f：只匹配普通文件，不匹配目录；
+-exec：固定写法，后面跟要执行的命令；
+rm -rf：强制删除文件，包括目录（-r 递归，-f 不再询问）；
+{} \;：固定写法，{} 代表 find 找到的每个文件，\; 表示命令结束，分号需要转义。
 </code></pre>
 <h2 id="二-宿主机加入定时器">二、宿主机加入定时器</h2>
-<p>使用docker exec 命令校验之前写的脚本是否有效 如下：</p>
+<p>先用 docker exec 命令校验之前写的脚本是否有效，在宿主机上执行：</p>
 <pre><code class="language-shell">docker exec -it tomcat8002 /opt/auto-del-log.sh
-tomcat8002 ： 容器名称或者ID
-/opt/auto-del-log.sh :脚本在容器中的位置
+# tomcat8002：容器名称或者 ID
+# /opt/auto-del-log.sh：脚本在容器中的位置
 </code></pre>
-<p>如果此命令有效那么就可以编辑定时器了 本人采用的是centos7 具体可以参看网上介绍的挺全的一篇博客如下： <a href="https://blog.csdn.net/xudailong_blog/article/details/79303785">centos7 linux定时任务详解</a></p>
+<p>如果此命令有效，那么就可以编辑定时器了。本人采用的是 CentOS 7，具体可以参看网上介绍得挺全的一篇博客：<a href="https://blog.csdn.net/xudailong_blog/article/details/79303785">centos7 linux定时任务详解</a></p>
 <pre><code class="language-shell">crontab -e
-02 4 * * *  docker exec -it tomcat8002 /opt/auto-del-log.sh
+# 每天 04:02 执行一次清理
+02 4 * * *  docker exec tomcat8002 /opt/auto-del-log.sh
 </code></pre>
-<p>接下来就OK啦！</p>
+<p>注意写进 crontab 时要<strong>去掉 <code>-it</code></strong>：<code>-t</code> 只用于交互式执行时分配终端，而 cron 运行环境没有 TTY，带上它会报 <code>the input device is not a TTY</code>，任务就静默失败了。</p>
+<p>另外 cron 的 PATH 与登录 shell 不同，命令尽量写绝对路径；必要时可在 crontab 里显式设置 PATH，或把整条命令包进一个用绝对路径调用的脚本再交给 cron。</p>
+<h2 id="三-几个容易踩的坑">三、几个容易踩的坑</h2>
+<p>第一，删除文件不等于立刻释放磁盘空间。如果日志文件仍被容器内的进程打开着，<code>rm</code> 只是删掉了目录项，空间要等该进程关闭文件或重启后才会真正归还。对于长期运行、持续写日志的进程，清空文件内容往往比删除文件更稳妥，例如：</p>
+<pre><code class="language-shell">find /home/schedule_log/ -mtime +5 -type f -iname &quot;*.log&quot; -exec truncate -s 0 {} \;
+</code></pre>
+<p>第二，先确认日志目录的挂载方式。如果日志目录是通过 volume 挂载到宿主机的，也可以直接在宿主机上清理，省掉 <code>docker exec</code> 这一层，但要注意容器内路径与宿主机路径的对应关系。</p>
+<p>第三，脚本务必先手动执行一遍再交给 cron。定时任务没有输出，排查时可查看 <code>/var/log/cron</code>，cron 的执行结果默认以邮件形式投递给 root，也可在 <code>/var/spool/mail/root</code> 中查看。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E5%9C%A8%E5%AE%B9%E5%99%A8%E4%B8%AD%E7%BC%96%E5%86%99%E6%B8%85%E9%99%A4%E6%97%A5%E5%BF%97%E8%84%9A%E6%9C%AC">一、在容器中编写清除日志脚本</a>
 <ul>
-<li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E4%B8%80-%E5%9C%A8%E5%AE%B9%E5%99%A8%E4%B8%AD%E7%BC%96%E5%86%99%E6%B8%85%E9%99%A4%E6%97%A5%E5%BF%97%E8%84%9A%E6%9C%AC">一、在容器中编写清除日志脚本</a></li>
-<li><a href="#%E4%BA%8C-%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%8A%A0%E5%85%A5%E5%AE%9A%E6%97%B6%E5%99%A8">二、宿主机加入定时器</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%8A%A0%E5%85%A5%E5%AE%9A%E6%97%B6%E5%99%A8">二、宿主机加入定时器</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E4%B8%89-%E5%87%A0%E4%B8%AA%E5%AE%B9%E6%98%93%E8%B8%A9%E7%9A%84%E5%9D%91">三、几个容易踩的坑</a>
+<ul>
 </ul>
 </li>
 </ul>
