@@ -130,19 +130,24 @@
 <p>CountDownLatch（也叫闭锁）是一个同步协助类，允许一个或多个线程等待，直到其他线程完成操作集。</p>
 </blockquote>
 <p>CountDownLatch 使用给定的计数值（count）初始化。await 方法会阻塞直到当前的计数值（count）由于 countDown 方法的调用达到 0，count 为 0 之后所有等待的线程都会被释放，并且随后对await方法的调用都会立即返回。</p>
+<p>整体流程如下图所示：等待线程在 <code>await()</code> 上阻塞，工作线程每完成一个任务就调用一次 <code>countDown()</code>，计数减到 0 时所有等待线程被一次性释放。</p>
+<p><img src="/post-assets/bPYM5y-vS/01-countdownlatch-flow.svg" alt="CountDownLatch 计数递减到 0 后释放所有等待线程"></p>
 <h3 id="构造方法">构造方法</h3>
 <pre><code class="language-java">//参数count为计数值
-public CountDownLatch(int count) {}; 
+public CountDownLatch(int count) {}
 </code></pre>
 <h3 id="常用方法">常用方法</h3>
 <pre><code class="language-java">// 调用 await() 方法的线程会被挂起，它会等待直到 count 值为 0 才继续执行
-public void await() throws InterruptedException {};
+public void await() throws InterruptedException {}
 
 // 和 await() 类似，若等待 timeout 时长后，count 值还是没有变为 0，不再等待，继续执行
-public boolean await(long timeout, TimeUnit unit) throws InterruptedException {};
+public boolean await(long timeout, TimeUnit unit) throws InterruptedException {}
 
 // 会将 count 减 1，直至为 0
-public void countDown() {};
+public void countDown() {}
+
+// 返回当前计数，常用于调试或监控
+public long getCount() {}
 </code></pre>
 <h3 id="使用案例">使用案例</h3>
 <blockquote>
@@ -199,7 +204,7 @@ import java.util.concurrent.CountDownLatch;
 public class CountDownLatchTest3 {
 
     //用于聚合所有的统计指标
-    private static Map map = new ConcurrentHashMap();
+    private static Map&lt;String, Integer&gt; map = new ConcurrentHashMap&lt;&gt;();
     //创建计数器，这里需要统计4个指标
     private static CountDownLatch countDownLatch = new CountDownLatch(4);
 
@@ -296,8 +301,9 @@ public CyclicBarrier(int parties, Runnable barrierAction)
 // BrokenBarrierException 表示栅栏已经被破坏，破坏的原因可能是其中一个线程 await() 时被中断或者超时
 public int await() throws InterruptedException, BrokenBarrierException
     
-public int await(long timeout, TimeUnit unit) throws InterruptedException, B
-rokenBarrierException, TimeoutException
+public int await(long timeout, TimeUnit unit)
+        throws InterruptedException, BrokenBarrierException,
+               TimeoutException
     
 //循环 通过reset()方法可以进行重置
 public void reset()
@@ -337,6 +343,7 @@ public class CyclicBarrierTest {
     }
 }
 </code></pre>
+<p>上面创建的是 <code>CyclicBarrier(3)</code>，却启动了 5 个线程：前 3 个线程到达屏障后被一起放行，剩下的 2 个线程继续等待下一轮凑满 3 个再一起执行，这正是 <code>Cyclic</code>（可循环）的含义。</p>
 <p><strong>应用场景</strong><br>
 可以用于多线程计算数据，最后合并计算结果的场景。</p>
 <pre><code class="language-java">import java.util.Set;
@@ -401,7 +408,7 @@ Semaphore(int permits)
 Semaphore(int permits, boolean fair)   
 </code></pre>
 <blockquote>
-<p>permits 表示许可证的数量（资源数），就好比一个学生可以占用 3 个打饭窗口。<br>
+<p>permits 表示许可证的数量（资源数）：上面例子里有 3 个打饭窗口，permits 就是 3；每次 <code>acquire()</code> 拿走一个许可，<code>release()</code> 归还一个许可。<br>
 fair 表示公平性，如果这个设为 true 的话，下次执行的线程会是等待最久的线程。</p>
 </blockquote>
 <h3 id="常用方法-3">常用方法</h3>
@@ -421,7 +428,7 @@ release()：表示释放许可。<br>
 int availablePermits()：返回此信号量中当前可用的许可证数。<br>
 int getQueueLength()：返回正在等待获取许可证的线程数。<br>
 boolean hasQueuedThreads()：是否有线程正在等待获取许可证。<br>
-void reducePermit(int reduction)：减少 reduction 个许可证。<br>
+void reducePermits(int reduction)：减少 reduction 个许可证。<br>
 Collection getQueuedThreads()：返回所有等待获取许可证的线程集合。</p>
 </blockquote>
 <h3 id="使用案例-3">使用案例</h3>
@@ -439,17 +446,23 @@ public class SemaphoreTest {
                 @Override
                 public void run() {
                     // 占用窗口，加锁
+                    boolean acquired = false;
                     try {
                         windows.acquire();
+                        acquired = true;
                         System.out.println(Thread.currentThread().getName() + &quot;：开始购票&quot;);
                         // 买票
                         Thread.sleep(5000);
                         System.out.println(Thread.currentThread().getName() + &quot;：购票成功&quot;);
                     } catch (InterruptedException e) {
+                        // 恢复中断标记，避免中断信号被吞掉
+                        Thread.currentThread().interrupt();
                         e.printStackTrace();
                     } finally {
-                        // 释放许可，释放窗口
-                        windows.release();
+                        // 只有确实拿到许可才释放，否则会凭空多出许可
+                        if (acquired) {
+                            windows.release();
+                        }
                     }
                 }
             }, &quot;Thread&quot; + i).start();
@@ -468,7 +481,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-public class SemaphoneTest2 {
+public class SemaphoreTest2 {
 
     /**
      * 实现一个同时只能处理5个请求的限流器
@@ -486,29 +499,35 @@ public class SemaphoneTest2 {
      * 模拟执行方法
      */
     public static void exec() {
+        boolean acquired = false;
         try {
             semaphore.acquire(1);
+            acquired = true;
             // 模拟真实方法执行
             System.out.println(&quot;执行exec方法&quot;);
             Thread.sleep(2000);
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            // 恢复中断标记，交由上层决定是否退出
+            Thread.currentThread().interrupt();
             e.printStackTrace();
         } finally {
-            semaphore.release(1);
+            if (acquired) {
+                semaphore.release(1);
+            }
         }
     }
 
     public static void main(String[] args) throws InterruptedException {
-        {
-            for (;;) {
-                Thread.sleep(100);
-                // 模拟请求以10个/s的速度
-                executor.execute(() -&gt; exec());
-            }
+        // 模拟请求以 10 个/s 的速度持续到来
+        while (true) {
+            executor.execute(() -&gt; exec());
+            Thread.sleep(100);
         }
     }
 }
 </code></pre>
+<p>三者的核心差异可以归纳为下面这张对比图。</p>
+<p><img src="/post-assets/bPYM5y-vS/02-three-tools-compare.svg" alt="CountDownLatch、CyclicBarrier、Semaphore 的语义、复用性、底层实现与典型场景对比"></p>
 <h2 id="总结">总结</h2>
 <h3 id="1-countdownlatch-cyclicbarrier-semaphore的区别">1、CountDownLatch、CyclicBarrier、Semaphore的区别</h3>
 <p><code>CountDownLatch</code> 和 <code>CyclicBarrier</code> 都能够实现线程之间的等待，只不过它们侧重点不同：</p>
@@ -523,46 +542,42 @@ public class SemaphoneTest2 {
 <h3 id="3-cyclicbarrier-与-countdownlatch-区别">3、CyclicBarrier 与 CountDownLatch 区别</h3>
 <p><code>CountDownLatch</code>的计数器只能使用一次，而<code>CyclicBarrier</code>的计数器可以使用reset()方法重置。所以<code>CyclicBarrier</code>能处理更为复杂的业务场景，比如如果计算发生错误，可以重置计数器，并让线程们重新执行一次。<br>
 <code>CyclicBarrier</code>还提供<code>getNumberWaiting</code>(可以获得CyclicBarrier阻塞的线程数量)、<code>isBroken</code>(用来知道阻塞的线程是否被中断)等方法。<br>
-<code>CountDownLatch</code>会阻塞主线程，<code>CyclicBarrier</code>不会阻塞主线程，只会阻塞子线程。<br>
+严格来说，阻塞哪条线程取决于在哪条线程上调用 <code>await()</code>：<code>CountDownLatch</code> 的常见用法是主线程等待多个子线程（主线程被阻塞），<code>CyclicBarrier</code> 的常见用法是一组子线程互相等待；如果主线程也调用了 <code>await()</code>，它同样会被阻塞。<br>
 <code>CountDownLatch</code>和<code>CyclicBarrier</code>都能够实现线程之间的等待，只不过它们侧重点不同。<code>CountDownLatch</code>一般用于一个或多个线程，等待其他线程执行完任务后，再执行。<code>CyclicBarrier</code>一般用于一组线程互相等待至某个状态，然后这一组线程再同时执行。<br>
 <code>CyclicBarrier</code> 还可以提供一个 <code>barrierAction</code>，合并多线程计算结果。<br>
-<code>CyclicBarrier</code>是通过<code>ReentrantLock</code>的&quot;独占锁&quot;和<code>Conditon</code>来实现一组线程的阻塞唤醒的，而<code>CountDownLatch</code>则是通过<code>AQS</code>的“共享锁”实现。</p>
+<code>CyclicBarrier</code>是通过<code>ReentrantLock</code>的&quot;独占锁&quot;和<code>Condition</code>来实现一组线程的阻塞唤醒的，而<code>CountDownLatch</code>则是通过<code>AQS</code>的“共享锁”实现。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#countdownlatch">CountDownLatch</a>
+<a href="#countdownlatch">CountDownLatch</a>
 <ul>
 <li><a href="#%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95">构造方法</a></li>
 <li><a href="#%E5%B8%B8%E7%94%A8%E6%96%B9%E6%B3%95">常用方法</a></li>
 <li><a href="#%E4%BD%BF%E7%94%A8%E6%A1%88%E4%BE%8B">使用案例</a></li>
 </ul>
 </li>
-<li><a href="#cylicbarrier">CyclicBarrier</a>
+<li>
+<a href="#cylicbarrier">CyclicBarrier</a>
 <ul>
 <li><a href="#%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95-2">构造方法</a></li>
 <li><a href="#%E5%B8%B8%E7%94%A8%E6%96%B9%E6%B3%95-2">常用方法</a></li>
 <li><a href="#%E4%BD%BF%E7%94%A8%E6%A1%88%E4%BE%8B-2">使用案例</a></li>
 </ul>
 </li>
-<li><a href="#semaphore">Semaphore</a>
+<li>
+<a href="#semaphore">Semaphore</a>
 <ul>
 <li><a href="#%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95-3">构造方法</a></li>
 <li><a href="#%E5%B8%B8%E7%94%A8%E6%96%B9%E6%B3%95-3">常用方法</a></li>
 <li><a href="#%E4%BD%BF%E7%94%A8%E6%A1%88%E4%BE%8B-3">使用案例</a></li>
 </ul>
 </li>
-<li><a href="#%E6%80%BB%E7%BB%93">总结</a>
+<li>
+<a href="#%E6%80%BB%E7%BB%93">总结</a>
 <ul>
 <li><a href="#1-countdownlatch-cyclicbarrier-semaphore%E7%9A%84%E5%8C%BA%E5%88%AB">1、CountDownLatch、CyclicBarrier、Semaphore的区别</a></li>
 <li><a href="#2-countdownlatch-%E4%B8%8E-threadjoin-%E7%9A%84%E5%8C%BA%E5%88%AB">2、CountDownLatch 与 Thread.join 的区别</a></li>
 <li><a href="#3-cyclicbarrier-%E4%B8%8E-countdownlatch-%E5%8C%BA%E5%88%AB">3、CyclicBarrier 与 CountDownLatch 区别</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

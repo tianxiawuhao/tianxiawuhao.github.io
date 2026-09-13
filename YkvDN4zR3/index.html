@@ -178,7 +178,7 @@ public @interface SpringBootApplication {
 </code></pre>
 <p><code>@SpringBootApplication</code>：包含了<code>@SpringBootConfiguration</code>（打开是<code>@Configuration</code>），<code>@EnableAutoConfiguration</code>，<code>@ComponentScan</code>注解。<br>
 <strong>@Configuration</strong><br>
-JavaConfig形式的Spring Ioc容器的配置类使用的那个<code>@Configuration</code>，SpringBoot社区推荐使用基于JavaConfig的配置形式，所以，这里的启动类标注了@Configuration之后，本身其实也是一个IoC容器的配置类。<br>
+<code>@SpringBootConfiguration</code> 内部就是 <code>@Configuration</code>，它是 JavaConfig 形式配置类的标志注解。Spring Boot 推荐使用基于 JavaConfig 的配置方式，所以启动类标注 <code>@Configuration</code> 之后，它本身也是一个 IoC 容器的配置类。<br>
 对比一下传统XML方式和config配置方式的区别：<br>
 XML声明和定义配置方式：</p>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
@@ -200,9 +200,10 @@ XML声明和定义配置方式：</p>
 <pre><code class="language-java">@Configuration
 public class DruidConfiguration {    
     @Bean
-    public FilterRegistrationBean statFilter(){
+    public FilterRegistrationBean&lt;WebStatFilter&gt; statFilter() {
         //创建过滤器
-        FilterRegistrationBean filterRegistrationBean = new FilterRegistrationBean(new WebStatFilter());
+        FilterRegistrationBean&lt;WebStatFilter&gt; filterRegistrationBean =
+                new FilterRegistrationBean&lt;&gt;(new WebStatFilter());
         //设置过滤器过滤路径
         filterRegistrationBean.addUrlPatterns(&quot;/*&quot;);
         //忽略过滤的形式
@@ -214,7 +215,7 @@ public class DruidConfiguration {
 <p>任何一个标注了<code>@Configuration</code>的Java类定义都是一个JavaConfig配置类。<br>
 任何一个标注了<code>@Bean</code>的方法，其返回值将作为一个bean定义注册到Spring的IoC容器，方法名将默认成该bean定义的id。<br>
 <strong>@ComponentScan</strong><br>
-<code>@ComponentScan</code>对应XML配置中的元素，<code>@ComponentScan</code>的功能其实就是自动扫描并加载符合条件的组件（比如<code>@Component</code>和<code>@Repository</code>等）或者bean定义，最终将这些bean定义加载到IoC容器中。<br>
+<code>@ComponentScan</code> 对应 XML 配置中的 <code>&lt;context:component-scan&gt;</code> 元素，<code>@ComponentScan</code>的功能其实就是自动扫描并加载符合条件的组件（比如<code>@Component</code>和<code>@Repository</code>等）或者bean定义，最终将这些bean定义加载到IoC容器中。<br>
 我们可以通过basePackages等属性来细粒度的定制<code>@ComponentScan</code>自动扫描的范围，如果不指定，则默认Spring框架实现会从声明@ComponentScan所在类的package进行扫描。<br>
 注：所以SpringBoot的启动类最好是放在root package下，因为默认不指定basePackages。<br>
 <strong>@EnableAutoConfiguration</strong><br>
@@ -233,9 +234,15 @@ public @interface EnableAutoConfiguration {
     String[] excludeName() default {};
 }
 </code></pre>
-<p>里面最关键的是<code>@Import(EnableAutoConfigurationImportSelector.class)</code>，借助EnableAutoConfigurationImportSelector，<code>@EnableAutoConfiguration</code>可以帮助SpringBoot应用将所有符合条件的<code>@Configuration</code>配置都加载到当前SpringBoot创建并使用的IoC容器。该配置模块的主要使用到了SpringFactoriesLoader。</p>
+<p>里面最关键的是 <code>@Import(EnableAutoConfigurationImportSelector.class)</code>，借助 <code>EnableAutoConfigurationImportSelector</code>，<code>@EnableAutoConfiguration</code> 可以帮助 Spring Boot 应用把所有符合条件的 <code>@Configuration</code> 配置加载到当前 Spring Boot 创建并使用的 IoC 容器，这一过程主要依赖 <code>SpringFactoriesLoader</code>。</p>
+<blockquote>
+<p><strong>版本提示</strong>：<code>EnableAutoConfigurationImportSelector</code> 是 Spring Boot 1.x 早期的类名，从 1.5 起已被 <code>AutoConfigurationImportSelector</code> 取代（旧类先标记废弃、2.0 中移除）。本文源码片段沿用旧名，与后文 <code>AutoConfigurationImportSelector</code> 对照理解即可。</p>
+</blockquote>
 <h3 id="springfactoriesloader详解">SpringFactoriesLoader详解</h3>
-<p>SpringFactoriesLoader为Spring工厂加载器，该对象提供了loadFactoryNames方法，入参为factoryClass和classLoader即需要传入工厂类名称和对应的类加载器，方法会根据指定的 classLoader，加载该类加载器搜索路径下的指定文件，即 spring.factories 文件，传入的工厂类为接口，而文件中对应的类则是接口的实现类，或最终作为实现类。</p>
+<p>整个自动装配的调用链路可以概括为下面这张图。</p>
+<p><img src="/post-assets/YkvDN4zR3/01-autoconfig-flow.svg" alt="Spring Boot 自动装配的调用链路：从 @SpringBootApplication 到 IoC 容器完成装配"></p>
+<p>下面这段源码由反编译工具导出，变量名如 <code>var5</code>、<code>var8</code> 属于反编译产物，不影响逻辑理解。</p>
+<p>SpringFactoriesLoader 为 Spring 工厂加载器，该对象提供了 loadFactoryNames 方法，入参为factoryClass和classLoader即需要传入工厂类名称和对应的类加载器，方法会根据指定的 classLoader，加载该类加载器搜索路径下的指定文件，即 spring.factories 文件，传入的工厂类为接口，而文件中对应的类则是接口的实现类，或最终作为实现类。</p>
 <pre><code class="language-java">public abstract class SpringFactoriesLoader {
     private static final Log logger = LogFactory.getLog(SpringFactoriesLoader.class);
     public static final String FACTORIES_RESOURCE_LOCATION = &quot;META-INF/spring.factories&quot;;
@@ -303,9 +310,12 @@ public @interface EnableAutoConfiguration {
     }
 }
 </code></pre>
+<blockquote>
+<p><strong>过时写法</strong>：<code>META-INF/spring.factories</code> 是 Spring Boot 2.6 及以前的自动配置注册方式。从 2.7 起自动配置改由 <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code> 声明（每行一个配置类全限定名），3.0 起不再支持用 spring.factories 注册自动配置；spring.factories 仍用于其它扩展点（如 <code>ApplicationContextInitializer</code>、<code>EnvironmentPostProcessor</code>）。</p>
+</blockquote>
 <p>所以文件中一般为如下图这种一对多的类名集合，获取到这些实现类的类名后，loadFactoryNames方法返回类名集合，方法调用方得到这些集合后，再通过反射获取这些类的类对象、构造方法，最终生成实例。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1621306254228.webp" alt="" loading="lazy"></figure>
-<p>下图有助于我们形象理解自动配置流程（盗个图）</p>
+<p>下图有助于形象理解自动配置的整体流程。</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1621306269634.webp" alt="" loading="lazy"></figure>
 <h3 id="autoconfigurationimportselector">AutoConfigurationImportSelector</h3>
 <p>继续上面讲的AutoConfigurationImportSelector.class。该类主要关注selectImports方法</p>
@@ -331,7 +341,7 @@ public @interface EnableAutoConfiguration {
     }
 }
 </code></pre>
-<p>该方法在springboot启动流程——bean实例化前被执行，返回要实例化的类信息列表。如果获取到类信息，spring可以通过类加载器将类加载到jvm中，现在我们已经通过spring-boot的starter依赖方式依赖了我们需要的组件，那么这些组件的类信息在select方法中就可以被获取到。</p>
+<p>该方法在 Spring Boot 启动的配置类解析阶段（<code>ConfigurationClassPostProcessor</code> 解析 <code>@Configuration</code>、注册 BeanDefinition 时）被调用，早于 bean 的实例化，返回的是需要导入的配置类名列表。拿到类名后，Spring 通过类加载器把类加载到 JVM；只要以 starter 方式引入了组件，这些组件的配置类就能在 <code>selectImports</code> 中被收集到。</p>
 <pre><code class="language-java">protected List&lt;String&gt; getCandidateConfigurations(AnnotationMetadata metadata, AnnotationAttributes attributes) {
     List&lt;String&gt; configurations = SpringFactoriesLoader.loadFactoryNames(this.getSpringFactoriesLoaderFactoryClass(), this.getBeanClassLoader());
     Assert.notEmpty(configurations, &quot;No auto configuration classes found in META-INF/spring.factories. If you are using a custom packaging, make sure that file is correct.&quot;);
@@ -361,9 +371,13 @@ public @interface EnableAutoConfiguration {
 </code></pre>
 <p>自动配置器会根据传入的 factoryClass.getName()，到项目系统路径下所有的 spring.factories 文件中找到相应的 key，从而加载里面的类。我们就选取这个mybatis-spring-boot-autoconfigure下的spring.factories文件</p>
 <h3 id="auto-configure">Auto Configure</h3>
-<p>org.springframework.boot.autoconfigure.EnableAutoConfiguration=<br>
-org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration<br>
-进入org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration中，又是一堆注解</p>
+<p>该文件的内容形如（key 为固定值，value 是一组配置类全限定名）：</p>
+<pre><code class="language-properties">org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration
+</code></pre>
+<p>进入 <code>org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration</code> 中，又是一堆注解：</p>
+<p>这些注解里，<code>@Conditional</code> 系列负责判断配置类最终是否生效：</p>
+<p><img src="/post-assets/YkvDN4zR3/02-conditional-decision.svg" alt="@Conditional 系列条件注解决定配置类是否生效的判断流程"></p>
 <pre><code class="language-java">@org.springframework.context.annotation.Configuration
 @ConditionalOnClass({SqlSessionFactory.class, SqlSessionFactoryBean.class})
 @ConditionalOnBean({DataSource.class})
@@ -379,35 +393,30 @@ public class MybatisAutoConfiguration
   private final List&lt;ConfigurationCustomizer&gt; configurationCustomizers;
 </code></pre>
 <ol>
-<li><code>@Configuration</code>是一个通过注解标注的springBean，</li>
+<li><code>@Configuration</code> 标注的类是一个 JavaConfig 形式的配置类，它本身也会被注册为容器中的一个 bean；</li>
 <li><code>@ConditionalOnClass({ SqlSessionFactory.class, SqlSessionFactoryBean.class})</code>这个注解的意思是：当存在SqlSessionFactory.class, SqlSessionFactoryBean.class这两个类时才解析MybatisAutoConfiguration配置类,否则不解析这一个配置类。我们需要mybatis为我们返回会话对象，就必须有会话工厂相关类</li>
-<li><code>@CondtionalOnBean(DataSource.class)</code>只处理已经被声明为bean的dataSource</li>
+<li><code>@ConditionalOnBean(DataSource.class)</code> 只处理已经被声明为 bean 的 dataSource</li>
 <li><code>@ConditionalOnMissingBean(MapperFactoryBean.class)</code> 的意思是：如果容器中不存在该 bean，则执行当前配置创建并注入；否则不执行。以上配置可以保证 sqlSessionFactory、sqlSessionTemplate、dataSource 等 MyBatis 所需的组件均可被自动配置，<code>@Configuration</code>注解已经提供了Spring的上下文环境，所以以上组件的配置方式与Spring启动时通过mybatis.xml文件进行配置起到一个效果。</li>
 </ol>
 <p>只要一个基于SpringBoot项目的类路径下存在SqlSessionFactory.class, SqlSessionFactoryBean.class，并且容器中已经注册了dataSourceBean，就可以触发自动化配置。也就是说，只要在 Maven 项目中加入 MyBatis 所需的若干依赖，即可触发自动配置；但若引入 MyBatis 原生依赖，每集成一个功能都要去修改其自动化配置类，那就得不到开箱即用的效果了。所以Spring-boot为我们提供了统一的starter可以直接配置好相关的类，触发自动配置所需的依赖(mybatis)如下：</p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.mybatis.spring.boot&lt;/groupId&gt;
     &lt;artifactId&gt;mybatis-spring-boot-starter&lt;/artifactId&gt;
+&lt;!-- 使用 spring-boot-starter-parent 时 version 可省略，由父 POM 统一管理 --&gt;
 &lt;/dependency&gt;
 </code></pre>
 <p>因为maven依赖的传递性，我们只要依赖starter就可以依赖到所有需要自动配置的类，实现开箱即用的功能。也体现出Springboot简化了Spring框架带来的大量XML配置以及复杂的依赖管理，让开发人员可以更加关注业务逻辑的开发。<br>
-再贴个盗的图SpringBoot的启动结构图</p>
+最后看一下 Spring Boot 的启动结构。</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1621306299869.webp" alt="" loading="lazy"></figure>
+<p>小结：Spring Boot 自动装配 = <code>@EnableAutoConfiguration</code> 导入 <code>AutoConfigurationImportSelector</code>，由 <code>SpringFactoriesLoader</code> 读取注册文件得到候选配置类，再经 <code>@Conditional</code> 系列条件过滤后注册为 bean；starter 只是把自动配置所需的依赖打包在一起，从而做到开箱即用。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#springboot%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE">SpringBoot自动配置</a>
+<a href="#springboot%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE">SpringBoot自动配置</a>
 <ul>
 <li><a href="#springfactoriesloader%E8%AF%A6%E8%A7%A3">SpringFactoriesLoader详解</a></li>
 <li><a href="#autoconfigurationimportselector">AutoConfigurationImportSelector</a></li>
 <li><a href="#auto-configure">Auto Configure</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
