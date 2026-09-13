@@ -36,7 +36,10 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
   <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
-<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
 
 <body>
   <!-- Navigation -->
@@ -124,75 +127,121 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/IGO_-1Id1.png" alt="封面图">
-          
-          <h2 id="一-深度q网络deep-q-network-dqn">一、深度Q网络（Deep Q-Network DQN）</h2>
-<h3 id="1近似q函数approximate-the-q-function">1）近似Q函数（Approximate the Q* Function）</h3>
-<p>可以把 Q*(s,a) 看作一位“先知”：它能告诉 Agent 在状态 s 下如何选择最好的动作 a；但真正的 Q*(s,a) 我们并不知道，因此需要用一个函数去近似它。</p>
-<p>DQN 是一种价值学习方法：利用神经网络（Neural Network，NN）去近似 Q*(s,a)，记作 Q(s,a;w)。</p>
-<figure data-type="image" tabindex="1"><img src="https://pic4.zhimg.com/80/v2-6a6577b722a95433c1f42574fba0286f_720w.webp" alt="img" loading="lazy"></figure>
-<p>对于不同问题，DQN也许不一样，以超级玛丽为例：</p>
-<figure data-type="image" tabindex="2"><img src="https://pic2.zhimg.com/80/v2-447ae08144ded2fd6967cab64206384d_720w.webp" alt="img" loading="lazy"></figure>
-<p>DQN 训练 Agent 时的一条 trajectory 如下图所示：</p>
-<figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-97d40954aa482dbbc359bdedcec86084_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="2-时序差分方法temporal-difference-learning-td-learning">2）时序差分方法（Temporal Difference Learning TD-Learning）</h3>
-<p><strong>重要 · 重要 · 非常重要</strong></p>
-<p>以我自己的理解复述王树森老师的例子：从纽约到亚特兰大，模型 Q(w) 预测耗时为 1000 分钟，而这个模型一开始是随机的。</p>
-<p>那么如何更新模型，使模型的预测值变得越来越准确？</p>
-<p>①首先做出一个预测：q=Q(w) → q=1000</p>
-<p>②完成这段路程得到真实值y：y=860</p>
-<p>这时，产生了一个偏差（q-y）</p>
-<p>记损失 Loss 为 L = ½·(q−y)²。前面的 1/2 只是为求导方便：常数缩放不会改变最优点（Loss 乘同一常数后，梯度同向缩放，最优参数 w 不变）。</p>
-<p>为了使预测值尽可能逼近真实值，需要让 Loss 取到最小值，因此引入 L 对 w 的梯度（Gradient），即求偏导；利用偏微分的链式法则，可推导出 L 对 w 的梯度表达式，如下图所示：</p>
-<figure data-type="image" tabindex="4"><img src="https://pic3.zhimg.com/80/v2-0d235e526592ad647fd8d51caf10113a_720w.webp" alt="img" loading="lazy"></figure>
-<p>这样，我们在进行参数更新时，采用梯度下降算法（Gradient Descent）即可使参数w不断接近真实值对应的参数w*。</p>
-<p>而当无法到达目的地、拿不到整段路程的真实值时，就可以利用 TD 算法来更新模型参数。</p>
-<p>假设我们从纽约向亚特兰大出发，途中经过华盛顿，但在华盛顿停住不再前进，那么此时就不能再用整条路程的真实值来更新预测值了。</p>
-<p>因此，这里采用 TD 算法。</p>
-<p>我们已知模型做出一个预测：q=Q(w) → q=1000</p>
-<p>我们从纽约走到华盛顿后停住，于是得到纽约到华盛顿的真实值：y1 = 300</p>
-<p>而从华盛顿到亚特兰大有一个模型预测值：q1=Q(w1)→q=600</p>
-<p>此时定义 <strong>TD target</strong> 为 y = y1 + q1 = 900。这个 TD target 比原来的模型预测值 1000 更加可靠。</p>
-<p>记损失为 L = ½·(q−y)²，定义 <strong>TD error</strong> 为 δ = q−y = 1000−900；也可以理解为：模型对纽约到华盛顿的预测值为 400，真实值为 300，故 δ = 400−300 = 100。</p>
-<p>类似地，我们可以得到Loss Function关于w的一个函数，对w求梯度，得到Loss的最小值对应的w用于更新参数（采用梯度下降方法Gradient Descent）</p>
-<figure data-type="image" tabindex="5"><img src="https://pic1.zhimg.com/80/v2-9693763347535be662c8baa936e6ac28_720w.webp" alt="img" loading="lazy"></figure>
-<p>我们必须使 TD error 尽可能小；当 TD error = 0 时，就得到了最优的模型。</p>
-<h2 id="二-td-learningdqn">二、TD Learning+DQN</h2>
-<h3 id="如何将td算法用于学习dqn">如何将TD算法用于学习DQN</h3>
-<p>对于上述例子，我们有了这样的方程</p>
-<figure data-type="image" tabindex="6"><img src="https://pic1.zhimg.com/80/v2-cda9bc9264bee5558d4aa893d2ff7540_720w.webp" alt="img" loading="lazy"></figure>
-<p>类似地，在深度强化学习中，有如下方程，即是用TD算法学习DQN的方程：</p>
-<figure data-type="image" tabindex="7"><img src="https://pic4.zhimg.com/80/v2-e93be1035a0e8ac6ddacfdfdd061dbdb_720w.webp" alt="img" loading="lazy"></figure>
-<p>其中，方程左边是DQN在t时刻对状态和动作（st，at）进行的一次估计；等式右边是在t时刻真实观测到的奖励，以及DQN在t+1时刻对于状态和动作（st+1,at+1）进行的一次估计。</p>
-<p>推导如下：</p>
-<figure data-type="image" tabindex="8"><img src="https://pic4.zhimg.com/80/v2-ba749dfd78b60249c64c3c2e2e390933_720w.webp" alt="img" loading="lazy"></figure>
-<p>因此，将TD算法与DQN结合：</p>
-<figure data-type="image" tabindex="9"><img src="https://pic2.zhimg.com/80/v2-b76b8252d86785f467b5c79fc8fe84b5_720w.webp" alt="img" loading="lazy"></figure>
-<p>等式左边可以认为是模型对于时刻t关于参数w的预测值（Prediction）；右边则是真实值+模型对于时刻t+1关于参数w的预测值，和式记为TD target。</p>
-<p>个人理解，这是一个贝尔曼方程，具体可以参照<a href="https://zhuanlan.zhihu.com/p/35261164">忆臻：马尔科夫决策过程之Bellman Equation（贝尔曼方程）</a></p>
-<figure data-type="image" tabindex="10"><img src="https://pic2.zhimg.com/80/v2-27e4b15f2041bc48d2cef844117712f5_720w.webp" alt="img" loading="lazy"></figure>
-<h2 id="三-总结summary">三、总结（Summary）</h2>
-<p>直接附图：</p>
-<figure data-type="image" tabindex="11"><img src="https://pic3.zhimg.com/80/v2-33bcc1788e524ba09cbeea6b2a0dad8a_720w.webp" alt="img" loading="lazy"></figure>
-<p>TD算法用于学习DQN的一次迭代：</p>
-<figure data-type="image" tabindex="12"><img src="https://pic4.zhimg.com/80/v2-fb8da7b417ef1d2f6d0988e318130d9b_720w.webp" alt="img" loading="lazy"></figure>
-<p>多次进行迭代，最后就可以将TD error逐渐减小；换句话说，模型预测值越来越接近TD target。</p>
+<p><a href="/D4PTCIT2N/">上一篇笔记</a>给出了最优动作价值函数 \(Q^\star(s,a)\)：它表示在状态 \(s\) 下执行动作 \(a\)、之后一直采取最优决策，平均能拿到多少回报。这一篇要解决的问题是：<strong>当状态空间大到无法列表时，怎么把 \(Q^\star\) 学出来</strong>——答案是深度 Q 网络（DQN）加时序差分（TD）学习。</p>
+<h2 id="sec1-dqn">一、深度Q网络（Deep Q-Network, DQN）</h2>
+<h3 id="sub1-qstar">1）最优动作价值函数与最大化</h3>
+<p>先复习 \(Q^\star\) 的定义：在所有策略中，令动作价值函数达到最大的那一个，</p>
+<div class="math-block">\[ Q^\star(s,a)=\max_{\pi}Q_\pi(s,a), \]</div>
+<p>它的取值与策略 \(\pi\) 无关。把 \(Q^\star(s,a)\) 看作一位「先知」：它能告诉 Agent 在状态 \(s\) 下每个动作究竟有多好，因此只要在每个状态对动作<strong>取最大</strong>，就得到了最优策略：</p>
+<div class="math-block">\[ a^\star=\arg\max_{a\in\mathcal{A}}Q^\star(s,a). \]</div>
+<p>这是价值学习的全部秘密：<strong>不需要显式地学一个策略函数</strong>，学出 \(Q^\star\) 之后，「比大小」就等价于最优决策。问题在于，真正的 \(Q^\star\) 我们并不知道，只能去近似它。</p>
+<h3 id="sub1-approx">2）用神经网络近似 Q* 函数</h3>
+<p>DQN 的做法是：用一个神经网络（Neural Network，NN）去近似 \(Q^\star(s,a)\)，记作</p>
+<div class="math-block">\[ Q(s,a;w)\;\approx\;Q^\star(s,a), \]</div>
+<p>其中 \(w\) 是网络的参数。网络结构有两种常见设计：</p>
+<ul>
+<li><strong>输入状态、输出所有动作的 Q 值</strong>：网络输出一个与动作空间等长的向量，第 \(i\) 个分量就是 \(Q(s,a_i;w)\)。决策时取 \(\arg\max\)，一次前向计算就能得到最优动作，这也是 DQN 论文里的做法。</li>
+<li><strong>输入状态与动作、输出一个实数</strong>：即 \(Q(s,a;w)\) 直接对一对 \((s,a)\) 打分，与<a href="/UWk0iL6Ex/">笔记4：Actor-Critic</a>中 Critic 的结构相同。</li>
+</ul>
+<p>两者的区别只在于「谁来枚举动作」：前者由网络一次性枚举，后者需要外部把候选动作逐个送入网络。</p>
+<h3 id="sub1-mario">3）以超级玛丽为例</h3>
+<p>对于不同的问题，DQN 的具体结构也许不一样。以超级玛丽为例：输入是游戏的一帧画面（状态 \(s\)），先经卷积层提取特征，再由全连接层输出一个长度等于动作个数的向量，每个分量对应「向左、向右、跳跃」等动作的 \(Q(s,a;w)\)，Agent 选择其中数值最大的动作执行。训练 DQN 用的数据，就是 Agent 与环境交互得到的一条或多条 trajectory：\(s_0,a_0,r_0,s_1,a_1,r_1,\dots\)。</p>
+<h2 id="sec2-td">二、时序差分（TD）学习</h2>
+<p>接下来的问题是怎么训练这个网络，也就是怎么调整参数 \(w\)。王树森老师用「从纽约到亚特兰大」的行程打比方，非常直观。</p>
+<h3 id="sub2-ny">1）已知真实结果时：直接做梯度下降</h3>
+<p>假设模型 \(Q(w)\) 预测从纽约到亚特兰大需要 \(q=Q(w)=1000\) 分钟，而模型一开始是随机的，这个预测当然不准。走完全程后我们拿到真实值 \(y=860\) 分钟，于是产生了一个偏差 \(q-y\)。定义损失函数为</p>
+<div class="math-block">\[ L(w)=\tfrac12\big(q-y\big)^{2}. \]</div>
+<p>前面的 \(\tfrac12\) 只是为求导方便：常数缩放不会改变最优点（Loss 乘同一常数后，梯度同向缩放，最优参数 \(w\) 不变）。对 \(w\) 求梯度，由链式法则得</p>
+<div class="math-block">\[ \frac{\partial L}{\partial w}=(q-y)\,\frac{\partial Q(w)}{\partial w}, \]</div>
+<p>再用梯度下降（Gradient Descent）更新参数 \(w\leftarrow w-\alpha\frac{\partial L}{\partial w}\)，模型的预测就会不断逼近真实值。注意这里的 \(y\) 必须是<strong>真实观测到的结果</strong>。</p>
+<h3 id="sub2-td">2）拿不到最终真实值时：TD 学习</h3>
+<p>现实中往往走不完全程。假设我们从纽约出发，走到华盛顿就停住了，那么整段行程的真实值拿不到，无法直接做上面的更新。TD 算法（Temporal Difference Learning）的思路是：<strong>用「已走完的一段的真实值 + 剩余一段的模型预测」来代替整段真实值</strong>。</p>
+<p>具体地：模型预测纽约到亚特兰大 \(q=Q(w)=1000\) 分钟；从纽约到华盛顿的真实值 \(y_1=300\) 分钟（这段已经走完，是观测到的）；从华盛顿到亚特兰大还有一个模型预测 \(q_1=Q(w)=600\) 分钟。于是定义</p>
+<div class="math-block">\[ y=y_1+q_1=300+600=900, \]</div>
+<p>这个 \(y\) 称为 <strong>TD 目标（TD target）</strong>。它比原来的模型预测 \(1000\) 更可靠，因为它用一段真实值纠正了模型。用 \(y\) 替代前面式子里的真实值 \(y\)，就得到</p>
+<div class="math-block">\[ \delta=q-y=1000-900=100,\qquad L(w)=\tfrac12\big(q-y\big)^{2},\qquad \frac{\partial L}{\partial w}=(q-y)\frac{\partial Q(w)}{\partial w}, \]</div>
+<p>其中 \(\delta=q-y\) 称为 <strong>TD 误差（TD error）</strong>。也可以换个角度理解同一个数：模型对「纽约到华盛顿」这一段的预测是 \(1000-600=400\) 分钟，真实值是 \(300\) 分钟，于是 \(\delta=400-300=100\)——两种算法得到同一个 \(100\)，但 TD 只需要一段真实的奖励和一个网络预测，不必等整段行程结束。</p>
+<p>用梯度下降更新 \(w\) 之后，新的预测会让 TD 误差变小。我们必须使 TD 误差尽可能小；当 \(\delta=0\) 时，模型在「自洽」的意义上就是最优的：它的预测与「真实奖励 + 自己的预测」完全一致。</p>
+<h3 id="sub2-vs-mc">3）TD 与蒙特卡洛的区别</h3>
+<p>上面「等整段真实值」的做法就是蒙特卡洛（MC）：用一条完整轨迹的真实回报作为目标，无偏但必须等回合结束、方差大。TD 则用<strong>自举（bootstrap）</strong>——把模型自己的预测 \(q_1\) 塞进目标里，因此只要一步转移就能更新，方差小、可以在线学习，代价是引入了偏差。两者的偏差-方差权衡与多步折中（n 步回报）在<a href="/syanmQ0CA/">笔记5：蒙特卡洛算法</a>中有完整讨论，这里不再展开。</p>
+<h2 id="sec3-td-dqn">三、TD Learning + DQN</h2>
+<h3 id="sub3-equation">1）用 TD 学习 DQN 的方程</h3>
+<p>把上面的行程例子换成强化学习，就得到用 TD 算法学习 DQN 的方程：\(t\) 时刻的预测值要用 \(t\) 时刻的奖励加上 \(t+1\) 时刻的预测值来纠正。由于 DQN 学的是最优动作价值函数，\(t+1\) 时刻的预测应对动作取最大（而不是用某个具体动作 \(a_{t+1}\) 的取值）：</p>
+<div class="math-block">\[ \underbrace{Q(s_t,a_t;w)}_{\text{预测}}\;\approx\;\underbrace{r_t+\gamma\max_{a}Q(s_{t+1},a;w)}_{\text{TD 目标}},\qquad \gamma\in[0,1]. \]</div>
+<p>等式左边是 DQN 在 \(t\) 时刻对状态动作对 \((s_t,a_t)\) 的一次估计；等式右边是 \(t\) 时刻真实观测到的奖励 \(r_t\)，加上 DQN 在 \(t+1\) 时刻对 \((s_{t+1},\cdot)\) 的估计再对动作取最大，\(\gamma\) 是折扣因子。与上一篇的折扣回报一致：\(\gamma\) 越接近 1，越看重长远收益。</p>
+<p>这实际上是<strong>最优贝尔曼方程（Bellman Optimality Equation）</strong>的样本形式：</p>
+<div class="math-block">\[ Q^\star(s,a)=\mathbb{E}\Big[r+\gamma\max_{a'}Q^\star(s',a')\;\Big|\;s,a\Big]. \]</div>
+<p>把期望换成一次观测，并把 \(Q^\star\) 换成网络 \(Q(s,a;w)\)，就得到了 DQN 的 TD 目标。训练时把它当作回归目标：</p>
+<div class="math-block">\[ y_t=r_t+\gamma\max_{a}Q(s_{t+1},a;w),\qquad \delta_t=Q(s_t,a_t;w)-y_t,\qquad L(w)=\tfrac12\,\delta_t^{2},\qquad \frac{\partial L}{\partial w}=\delta_t\,\frac{\partial Q(s_t,a_t;w)}{\partial w}. \]</div>
+<p>再用梯度下降 \(w\leftarrow w-\alpha\,\delta_t\,\partial Q/\partial w\) 更新参数。多次迭代后 TD 误差逐渐减小，模型预测值就越来越接近 TD 目标。</p>
+<h3 id="sub3-target-net">2）为什么需要目标网络（Target Network）</h3>
+<p>上面的式子里有一个隐患：TD 目标 \(y_t\) 中也含有 \(w\)。更新 \(w\) 会同时移动「预测」与「目标」，相当于<strong>自己追自己</strong>——目标不断变化，训练容易震荡甚至发散。</p>
+<p>解决办法是引入<strong>目标网络（Target Network）</strong>：复制一份结构相同、参数记作 \(w^{-}\) 的网络，专门用来算 TD 目标，</p>
+<div class="math-block">\[ y_t=r_t+\gamma\max_{a}Q(s_{t+1},a;w^{-}), \]</div>
+<p>求梯度时只对 \(w\) 求导，\(w^{-}\) 视为常数；每隔 \(C\) 步再把当前参数同步过去（硬更新 \(w^{-}\leftarrow w\)），或者用 Polyak 平均做软更新：</p>
+<div class="math-block">\[ w^{-}\leftarrow\tau w+(1-\tau)w^{-},\qquad \tau\ll 1. \]</div>
+<p>这样 TD 目标在一段时间内保持稳定，训练更容易收敛。代价是目标「滞后」于最新参数，会带来一点偏差，但只要同步周期不太长就可以接受。</p>
+<p>与目标网络配套的另一个工程要点是<strong>经验回放（Replay Buffer）</strong>：把交互得到的 \((s_t,a_t,r_t,s_{t+1})\) 存进缓冲区，训练时随机采样一批。因为 \(Q^\star\) 的定义里对动作取了 \(\max\)、目标与行为策略无关，DQN 属于 <strong>off-policy</strong> 算法，可以反复使用旧数据（详见<a href="/D4PTCIT2N/">笔记1：基本概念</a>中的 on-policy 与 off-policy）。随机采样还能打破相邻样本之间的强相关性，让训练更稳定。</p>
+<p><img src="/post-assets/IGO_-1Id1/01-dqn-td-loop.svg" alt="DQN 的 TD 学习回路：DQN 网络给出预测 q 与决策 argmax，损失用 δ=q−y 做梯度下降更新 w；经验回放提供样本，目标网络用参数 w⁻ 算出 TD 目标 y=r+γ·max Q(s′,a;w⁻)，并每隔 C 步同步一次参数"></p>
+<h3 id="sub3-iteration">3）DQN 的一次完整迭代</h3>
+<table>
+<thead>
+<tr><th>步骤</th><th>做什么</th></tr>
+</thead>
+<tbody>
+<tr><td>① 收集数据</td><td>用行为策略（如 \(\varepsilon\)-greedy 的 \(Q(s,a;w)\)）与环境交互，得到 \((s_t,a_t,r_t,s_{t+1})\)，存入经验回放</td></tr>
+<tr><td>② 采样</td><td>从经验回放中随机抽取一批 transition</td></tr>
+<tr><td>③ 算目标</td><td>用目标网络计算 \(y_t=r_t+\gamma\max_{a}Q(s_{t+1},a;w^{-})\)</td></tr>
+<tr><td>④ 更新网络</td><td>算 \(\delta_t=Q(s_t,a_t;w)-y_t\)，用梯度下降更新 \(w\)</td></tr>
+<tr><td>⑤ 同步目标</td><td>每隔 \(C\) 步令 \(w^{-}\leftarrow w\)（或每步按 \(\tau\) 做软更新）</td></tr>
+</tbody>
+</table>
+<p>决策时不再需要目标网络和经验回放：只要把状态送入 DQN，取输出向量中最大的分量对应的动作即可，即 \(a_t=\arg\max_{a}Q(s_t,a;w)\)。</p>
+<h3 id="sub3-max-bias">4）最大化带来的偏差与改进方向</h3>
+<p>注意 TD 目标里出现了 \(\max\)。用同一个网络既挑选动作、又评价动作，会让估计值系统性偏高（maximization bias）：即使每个动作的估计都是无偏的，它们的最大值也会高估真实的最大值。</p>
+<p><strong>Double DQN</strong> 的修正办法是把「挑动作」和「评价动作」分开：用当前网络挑出动作，再用目标网络评价它，</p>
+<div class="math-block">\[ a^\star=\arg\max_{a}Q(s_{t+1},a;w),\qquad y_t=r_t+\gamma\,Q(s_{t+1},a^\star;w^{-}). \]</div>
+<p>这样目标不再总是取到被高估的那一项，缓解了高估问题。类似地，Dueling DQN、优先经验回放（Prioritized Replay）等改进都建立在本文这套「TD 学习 + 目标网络 + 经验回放」的框架之上。</p>
+<h2 id="sec4-summary">四、总结（Summary）</h2>
+<ul>
+<li><strong>目标</strong>：DQN 用神经网络 \(Q(s,a;w)\) 近似最优动作价值函数 \(Q^\star(s,a)\)；因为 \(Q^\star\) 与策略无关，决策就是对动作取最大 \(a=\arg\max_a Q(s,a;w)\)。</li>
+<li><strong>TD 学习</strong>：拿不到最终真实值时，用「一段真实奖励 + 一段模型预测」构造 TD 目标 \(y\)，用 TD 误差 \(\delta=q-y\) 构造损失 \(L=\tfrac12\delta^{2}\)，再做梯度下降。它不需要等回合结束，可以边交互边学习。</li>
+<li><strong>DQN 的 TD 目标</strong>：\(y_t=r_t+\gamma\max_a Q(s_{t+1},a;w^{-})\)，这正是最优贝尔曼方程 \(Q^\star(s,a)=\mathbb{E}[r+\gamma\max_{a'}Q^\star(s',a')]\) 的样本形式；目标中的 \(\max\) 正是「最优」二字的来源。</li>
+<li><strong>目标网络</strong>：用参数为 \(w^{-}\) 的旧网络计算 \(y_t\)，每隔若干步才同步一次，避免「自己追自己」造成的震荡，让训练更稳定（代价是目标略有滞后）。</li>
+<li><strong>off-policy</strong>：目标与行为策略无关，因此可以配合经验回放反复使用旧数据、把探索与利用分开设计。</li>
+<li><strong>实践要点</strong>：用 \(\varepsilon\)-greedy 保证探索、用 Double DQN 缓解 \(\max\) 带来的高估，是 DQN 落地时最常见的两项补充。</li>
+</ul>
+
+<hr>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<a href="#%E4%B8%80-%E6%B7%B1%E5%BA%A6q%E7%BD%91%E7%BB%9Cdeep-q-network-dqn">一、深度Q网络（Deep Q-Network DQN）</a>
+<a href="#sec1-dqn">一、深度Q网络（Deep Q-Network, DQN）</a>
 <ul>
-<li><a href="#1%E8%BF%91%E4%BC%BCq%E5%87%BD%E6%95%B0approximate-the-q-function">1）近似Q函数（Approximate the Q* Function）</a></li>
-<li><a href="#2-%E6%97%B6%E5%BA%8F%E5%B7%AE%E5%88%86%E6%96%B9%E6%B3%95temporal-difference-learning-td-learning">2）时序差分方法（Temporal Difference Learning TD-Learning）</a></li>
+<li><a href="#sub1-qstar">1）最优动作价值函数与最大化</a></li>
+<li><a href="#sub1-approx">2）用神经网络近似 Q* 函数</a></li>
+<li><a href="#sub1-mario">3）以超级玛丽为例</a></li>
 </ul>
 </li>
 <li>
-<a href="#%E4%BA%8C-td-learningdqn">二、TD Learning+DQN</a>
+<a href="#sec2-td">二、时序差分（TD）学习</a>
 <ul>
-<li><a href="#%E5%A6%82%E4%BD%95%E5%B0%86td%E7%AE%97%E6%B3%95%E7%94%A8%E4%BA%8E%E5%AD%A6%E4%B9%A0dqn">如何将TD算法用于学习DQN</a></li>
+<li><a href="#sub2-ny">1）已知真实结果时：直接做梯度下降</a></li>
+<li><a href="#sub2-td">2）拿不到最终真实值时：TD 学习</a></li>
+<li><a href="#sub2-vs-mc">3）TD 与蒙特卡洛的区别</a></li>
 </ul>
 </li>
 <li>
-<a href="#%E4%B8%89-%E6%80%BB%E7%BB%93summary">三、总结（Summary）</a>
+<a href="#sec3-td-dqn">三、TD Learning + DQN</a>
+<ul>
+<li><a href="#sub3-equation">1）用 TD 学习 DQN 的方程</a></li>
+<li><a href="#sub3-target-net">2）为什么需要目标网络（Target Network）</a></li>
+<li><a href="#sub3-iteration">3）DQN 的一次完整迭代</a></li>
+<li><a href="#sub3-max-bias">4）最大化带来的偏差与改进方向</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec4-summary">四、总结（Summary）</a>
 <ul>
 </ul>
 </li>
@@ -290,7 +339,17 @@
   
   <script src="/media/scripts/tocScript.js"></script>
 
-<script src="/media/scripts/site.js"></script>
+<script src="/media/scripts/site.js"></script><script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "\\(", right: "\\)", display: false}, {left: "\\[", right: "\\]", display: true}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
 </body>
 
 </html>

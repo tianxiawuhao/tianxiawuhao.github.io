@@ -36,7 +36,10 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
   <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
-<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
 
 <body>
   <!-- Navigation -->
@@ -124,83 +127,126 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/UWk0iL6Ex.png" alt="封面图">
-          
-          <p>Actor-Critic方法，是策略学习和价值学习结合的一种方法。</p>
-<p>Actor是策略网络，用来控制Agent运动，可以看做“运动员”。</p>
-<p>Critic是价值网络，用来给动作打分，可以看做“裁判”。</p>
-<figure data-type="image" tabindex="1"><img src="https://pic1.zhimg.com/80/v2-307ee4710d0b11ca06b020f7a40afc28_720w.webp" alt="img" loading="lazy"></figure>
-<h2 id="一-价值网络和策略网络value-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</h2>
-<p>首先回顾状态价值函数Vπ(s)，它是动作状态函数Qπ(s,a)的数学期望，如果动作是离散的，那么它是由策略函数π(a|s)作为权重系数，和动作价值函数Qπ(s,a)[可以评价动作的好坏程度]相乘并对a做求和得到。如果动作是连续的，那么就要对a求积分。</p>
-<p><strong>① Policy network（Actor）</strong>：控制 Agent 运动，即在某一状态 s 做出动作 a。</p>
-<p>我们利用策略网络π(a|s;θ)来近似策略函数π(a|s)，θ是一个可训练的神经网络参数。</p>
-<p><strong>② Value network（Critic）</strong>：不控制 Agent 运动，仅给 Agent 打分。</p>
-<p>我们利用价值网络q(s,a;w)来近似价值函数Qπ(s,a)，w 是一个可训练的神经网络参数。</p>
-<figure data-type="image" tabindex="2"><img src="https://pic4.zhimg.com/80/v2-1d777e4ca0d687837a46bdfcc86f1663_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="1策略网络policy-networkactor">1）策略网络（Policy Network）（Actor）</h3>
-<p>以超级玛丽为例：</p>
-<p>该网络有一个输入：状态s</p>
-<p>将超级玛丽的一帧画面传输到策略网络中，即输入一个状态s。</p>
-<p>价值网络中包含：一个卷积层，将一帧画面变成特征向量；全连接层，将特征向量转变为相对于动作空间（Action Space）中元素个数对应的向量；再采用 Softmax 激活函数，将其转换为各动作概率求和为 1 的值，即策略的概率分布。</p>
-<figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-8535085bc52a8a9500f72d711ced5220_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="2价值网络value-networkcritic">2）价值网络（Value Network）（Critic）</h3>
-<p>以超级玛丽为例：</p>
-<p>该网络有两个输入：状态s和动作a</p>
-<p>将超级玛丽的一帧画面传输到价值网络中，即输入一个状态s；以及策略网络（Actor）做出的一个动作a传入到价值网络中，即输入一个动作a。对于离散动作而言，这里可以采用独热编码（one-hot encoding），具体可以参考<a href="https://zhuanlan.zhihu.com/p/474234821">学习笔记 | 独热编码(One-Hot Encoding)</a>，这里不再对独热编码进行过多介绍。</p>
-<p>对于两个不同的输入，处理方法如下：</p>
-<p>针对于状态s，采用一个卷积层，从输入中提取特征，获得一个状态特征向量</p>
-<p>针对于动作a，采用一个全连接层，从输入中提取特征，获得一个动作特征向量</p>
-<p>然后将两个特征向量进行拼接，得到一个更高维的特征向量，再通过一个全连接层输出一个实数q(s,a;w)，即Critic对于Agent处于状态s下做出动作a的评价。</p>
-<figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-a5344bd46cff01b68e06314bb30d8bd1_720w.webp" alt="img" loading="lazy"></figure>
-<p>值得一提的是，价值网络和策略网络中的参数是可以共享的；当然，其中的参数也可以各自独立。</p>
-<p>同时训练价值网络和策略网络，就是 Actor-Critic Method（AC Method）。</p>
-<h2 id="二-训练神经网络train-the-neural-network">二、训练神经网络（Train the Neural Network）</h2>
-<p>因此，我们可以用策略网络和价值网络来近似状态价值函数。</p>
-<p>针对于两个网络的参数θ和w，我们的更新方法是不一样的：</p>
-<p>对于θ，它是策略网络的参数。我们更新参数θ是为了让状态价值函数V(s;θ,w)的值增加，V(s;θ,w)是对策略π和状态s的评价。如果固定状态s，那么V(s;θ,w)越大，意味着策略π越好；同理，如果固定策略π，V(s;θ,w)越大，则状态s越好。</p>
-<p>对于w，它是价值网络的参数。我们更新参数w是为了让价值网络对于动作的打分更精准，从而更好地估计未来奖励的总和。它相当于是裁判，一开始并没有打分能力，因此在初始阶段，Critic的打分都是瞎猜的，它会通过环境给的奖励Reward来更新w，最后Critic的打分会越来越精准。</p>
-<figure data-type="image" tabindex="5"><img src="https://pic4.zhimg.com/80/v2-0e1df9491a20914809366f441fdd2b53_720w.webp" alt="img" loading="lazy"></figure>
-<p>利用如下五个步骤来对两个神经网络做一次更新：</p>
-<figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-a86048ee7d13168bdb37c84aec417945_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="1-使用时序差分算法更新价值网络qupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</h3>
-<p>用 TD 算法更新价值网络 q 时，需要先获取 Actor 在 t 时刻与 t+1 时刻的状态 s_t、s_{t+1} 及动作 a_t、ã_{t+1}，此时 Critic 的参数为 w_t。由此得到 TD target y_t；结合 t 时刻的观测值即可写出 Loss L(w)（通常取 δ_t²/2 的形式），再用梯度下降（Gradient Descent）更新 Critic 的参数，得到 w_{t+1}。需要注意的是，Agent 并不会真正执行 ã_{t+1} 这个动作，它只是供 Critic 做 TD 参数更新使用的。</p>
-<p>直接附图：</p>
-<figure data-type="image" tabindex="7"><img src="https://pic2.zhimg.com/80/v2-3d0c7377e346ce2a56cff226fa4b912d_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="2使用策略梯度更新策略网络πupdate-policy-network-π-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</h3>
-<p>首先回顾一下策略梯度：</p>
-<p>策略梯度是对某个函数 g(A,θ) 关于 A 求期望。因为按策略随机抽取得到的单个 g(a_t,θ) 是整体期望的无偏估计，所以这里使用蒙特卡洛近似。</p>
-<figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-f97f15bbc5b5c39a687d08fcd722b63c_720w.webp" alt="img" loading="lazy"></figure>
-<p>根据策略 π 对动作 a 做一次随机抽样，然后对该样本做一次随机梯度上升（Stochastic Gradient Ascent，SGA）来更新 θ，得到 θ_{t+1}。</p>
-<figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-5e17c6dfe8d7afe44950bd9bea8a32b8_720w.webp" alt="img" loading="lazy"></figure>
-<p>AC方法的整体流程和对应关系：</p>
-<figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-9c0bad295340d7057cbd037b7400c93a_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="3算法总结summary-of-algorithm">3）算法总结（Summary of Algorithm）</h3>
-<p>直接上图，非常清晰：</p>
-<figure data-type="image" tabindex="11"><img src="https://pic1.zhimg.com/80/v2-db8d172e038bf40ed57a750cc2d30d80_720w.webp" alt="img" loading="lazy"></figure>
-<p>值得注意的是，在论文和教科书中，最后一步往往不使用 q_t，而采用 TD error δ_t。使用δt叫做基线策略梯度（Policy Gradient with Baseline），其效果更好。好的baseline可以降低方差，使算法收敛更快。</p>
-<p>Baseline：任何接近qt的数都可以是baseline，但它不能是at的函数，即不与at存在映射关系。</p>
-<h2 id="三-总结summary">三、总结（Summary）</h2>
-<figure data-type="image" tabindex="12"><img src="https://pic3.zhimg.com/80/v2-68d72b2c946eb65e90bb9d1a1ff46fda_720w.webp" alt="img" loading="lazy"></figure>
-<figure data-type="image" tabindex="13"><img src="https://pic4.zhimg.com/80/v2-453074af0ddabd665db4f010a2b3a03b_720w.webp" alt="img" loading="lazy"></figure>
-<figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-b3f9b7c10dd7bc2af18fef010cd93170_720w.webp" alt="img" loading="lazy"></figure>
+<p>Actor-Critic（简称 AC）把<a href="/0gyURSJ-J/">策略学习（Policy-Based Learning）</a>和<a href="/IGO_-1Id1/">价值学习（Value-Based Learning）</a>结合起来：用一个神经网络决定动作，用另一个神经网络给动作打分，两者互相依赖、同时训练。</p>
+<p>Actor 是<strong>策略网络</strong>，用来控制 Agent 运动，可以看做「运动员」；Critic 是<strong>价值网络</strong>，用来给动作打分，可以看做「裁判」。运动员依据裁判的评分改进动作，裁判则根据环境返回的奖励修正自己的判断。</p>
+<h2 id="sec1-two-networks">一、价值网络和策略网络（Value Network and Policy Network）</h2>
+<p>先回顾状态价值函数 \(V_\pi(s)\)：它是对动作价值函数 \(Q_\pi(s,a)\) 关于动作的加权平均，权重由策略 \(\pi(a\mid s)\) 给出。动作离散时，\(V_\pi(s)=\sum_{a\in\mathcal{A}}\pi(a\mid s)\,Q_\pi(s,a)\)；动作连续时，\(V_\pi(s)=\int_{\mathcal{A}}\pi(a\mid s)\,Q_\pi(s,a)\,\mathrm{d}a\)。</p>
+<p>固定状态 \(s\) 时，\(V_\pi(s)\) 越大说明策略 \(\pi\) 越好；固定策略 \(\pi\) 时，\(V_\pi(s)\) 越大说明状态 \(s\) 越有利。AC 方法用两个神经网络分别近似策略 \(\pi\) 与动作价值 \(Q_\pi\)，从而在<strong>没有环境模型</strong>的情况下也能估计并改进策略。</p>
+<h3 id="sub1-policy-net">1）策略网络（Policy Network）（Actor）</h3>
+<p>用策略网络 \(\pi(a\mid s;\theta)\) 近似策略函数 \(\pi(a\mid s)\)，\(\theta\) 是一个可训练的神经网络参数。</p>
+<p>以超级玛丽为例，该网络只有<strong>一个输入：状态 \(s\)</strong>，也就是游戏的一帧画面。网络内部依次做两件事：</p>
+<ul>
+<li>用卷积层把一帧画面变成特征向量；</li>
+<li>用全连接层把特征向量变成与动作空间（Action Space）中元素个数相同的向量，再经 Softmax 激活函数归一化，得到各动作概率之和为 1 的策略分布 \(\pi(a\mid s;\theta)\)。</li>
+</ul>
+<p>动作离散时，网络输出的每个分量就是「在该状态下选择某个动作」的概率，例如向左、向右、向上、跳跃各占多少；动作连续时，网络通常输出高斯分布的均值与标准差，再从该分布中采样。要注意策略网络<strong>只负责产生动作</strong>，它自己并不知道动作是好是坏——判断好坏是 Critic 的工作。</p>
+<h3 id="sub1-value-net">2）价值网络（Value Network）（Critic）</h3>
+<p>用价值网络 \(q(s,a;w)\) 近似动作价值函数 \(Q_\pi(s,a)\)，\(w\) 是一个可训练的神经网络参数。</p>
+<p>还是以超级玛丽为例，该网络有<strong>两个输入：状态 \(s\) 和动作 \(a\)</strong>。状态 \(s\) 是一帧画面，动作 \(a\) 是策略网络刚刚做出的选择（离散动作可用独热编码 One-Hot Encoding 表示）。两个输入的处理方式不同：</p>
+<ul>
+<li>状态 \(s\)：用卷积层提取特征，得到<strong>状态特征向量</strong>；</li>
+<li>动作 \(a\)：用全连接层提取特征，得到<strong>动作特征向量</strong>。</li>
+</ul>
+<p>把两个特征向量拼接成一个更高维的向量，再经一个全连接层输出一个实数 \(q(s,a;w)\)，它就是 Critic 对「在状态 \(s\) 下执行动作 \(a\)」这一选择的打分。</p>
+<p>需要区分的是：这里的 \(q(s,a;w)\) 评估的是<strong>当前策略</strong> \(\pi\) 的动作价值 \(Q_\pi\)，而不是最优动作价值 \(Q^\star\)。后者是 DQN 的学习目标，两者的差别见<a href="/IGO_-1Id1/">笔记2：价值学习</a>。</p>
+<h3 id="sub1-share">3）两个网络的关系与参数共享</h3>
+<p>把两个网络接在一起，就得到状态价值函数的一个参数化近似：</p>
+<div class="math-block">\[ V_\pi(s)\;\approx\;V(s;\theta,w)=\sum_{a}\pi(a\mid s;\theta)\,q(s,a;w). \]</div>
+<p>也就是说，Actor 给出「每个动作有多大概率被选中」，Critic 给出「每个动作值多少分」，两者的加权和就是对当前状态的价值估计。</p>
+<p>价值网络和策略网络中的参数是可以共享的（例如共用同一个卷积主干，最后再分出两个头），也可以各自独立；共享时两个网络的梯度会叠加在一起。无论是否共享，<strong>同时训练价值网络和策略网络</strong>，就是 Actor-Critic Method（AC Method）。</p>
+<p><img src="/post-assets/UWk0iL6Ex/01-ac-loop.svg" alt="Actor-Critic 结构与训练回路：Actor 策略网络根据状态 s 采样动作 a，环境执行后返回奖励 r 与新状态 s′；Critic 价值网络对状态动作对打分，用 TD 目标更新参数 w，并把 TD 误差 δ 交给 Actor 做策略梯度上升以更新 θ"></p>
+<h2 id="sec2-train">二、训练神经网络（Train the Neural Network）</h2>
+<p>两个网络的参数 \(\theta\) 与 \(w\)，更新目标并不一样：</p>
+<ul>
+<li>更新 \(\theta\) 是为了让状态价值 \(V(s;\theta,w)\) 变大。\(V(s;\theta,w)\) 是对策略和状态的评价：固定状态 \(s\) 时它越大说明策略越好，固定策略 \(\pi\) 时它越大说明状态 \(s\) 越有利。让 \(\theta\) 沿着 \(V\) 的梯度方向上升，就是让 Actor 变强。</li>
+<li>更新 \(w\) 是为了让 Critic 的打分更精准，从而更好地估计未来奖励的总和。Critic 相当于裁判，一开始并没有打分能力，初始阶段的打分都是瞎猜的；它靠环境给的奖励 \(r\) 不断修正 \(w\)，打分才会越来越准。</li>
+</ul>
+<p>一次完整的更新包含五个步骤：</p>
+<ol>
+<li>观测当前状态 \(s_t\)，用策略网络采样动作 \(a_t\sim\pi(\cdot\mid s_t;\theta_t)\) 并执行；</li>
+<li>环境返回奖励 \(r_t\) 和新状态 \(s_{t+1}\)；</li>
+<li>用策略网络在 \(s_{t+1}\) 处再采样一个动作 \(\tilde a_{t+1}\sim\pi(\cdot\mid s_{t+1};\theta_t)\)，它<strong>只用于构造 TD 目标，Agent 不会真正执行它</strong>；</li>
+<li>用 TD 算法更新价值网络：\(w_t\to w_{t+1}\)；</li>
+<li>用策略梯度（带 baseline）更新策略网络：\(\theta_t\to\theta_{t+1}\)。</li>
+</ol>
+<p>注意第 3、4、5 步用到的都是<strong>更新前</strong>的参数 \(w_t,\theta_t\)；\(\theta\) 与 \(w\) 可以在同一次迭代里一起更新。</p>
+<h3 id="sub2-td">1）使用时序差分算法更新价值网络q（Update Value Network q Using TD）</h3>
+<p>用 TD 算法更新价值网络 \(q\) 时，先获取 Actor 在 \(t\) 时刻与 \(t+1\) 时刻的状态 \(s_t,s_{t+1}\)、动作 \(a_t\) 以及采样动作 \(\tilde a_{t+1}\)，此时 Critic 的参数为 \(w_t\)。TD 目标（TD target）为</p>
+<div class="math-block">\[ y_t=r_t+\gamma\,q(s_{t+1},\tilde a_{t+1};w_t), \]</div>
+<p>它用「立即奖励 + 折扣后的下一步打分」来近似 \(t\) 时刻的真实回报。把 \(q(s_t,a_t;w)\) 与 \(y_t\) 的差距写成损失函数（通常取平方误差的一半）：</p>
+<div class="math-block">\[ L(w)=\tfrac12\big[q(s_t,a_t;w)-y_t\big]^2,\qquad \frac{\partial L(w)}{\partial w}=\big(q(s_t,a_t;w)-y_t\big)\frac{\partial q(s_t,a_t;w)}{\partial w}. \]</div>
+<p>再做一步梯度下降，就得到新的参数 \(w_{t+1}\)：</p>
+<div class="math-block">\[ w_{t+1}=w_t-\alpha\,\delta_t\,\frac{\partial q(s_t,a_t;w_t)}{\partial w},\qquad \delta_t=q(s_t,a_t;w_t)-y_t. \]</div>
+<p>其中 \(\alpha\) 是学习率，\(\delta_t\) 称为<strong>时序差分误差（TD error）</strong>：\(\delta_t>0\) 表示 Critic 的打分高于 TD 目标（高估了），\(\delta_t<0\) 表示低估了。不同教材对 \(\delta_t\) 的符号约定可能相反，本文统一采用上式。</p>
+<p>\(\tilde a_{t+1}\) 只是为了凑出 TD 目标而采样的一次动作，环境不会真的执行它。这也是 AC 与<a href="/syanmQ0CA/">蒙特卡洛方法</a>的重要差别：TD 只需要一步转移就能更新，不必等回合结束，代价是自举（bootstrap）带来了偏差——MC 与 TD 的偏差-方差权衡见<a href="/syanmQ0CA/">笔记5</a>。</p>
+<h3 id="sub2-pg">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</h3>
+<p>策略网络的目标是让 \(V(s;\theta,w)\) 变大，因此需要 \(V\) 关于 \(\theta\) 的梯度。由策略梯度定理：</p>
+<div class="math-block">\[ \frac{\partial V(s;\theta)}{\partial\theta}=\mathbb{E}_{A\sim\pi(\cdot\mid s;\theta)}\left[\frac{\partial\ln\pi(A\mid s;\theta)}{\partial\theta}\,Q_\pi(s,A)\right]. \]</div>
+<p>等式右边是关于动作 \(A\) 的期望，而 \(Q_\pi\) 是未知的——这正好可以用 Critic 的打分 \(q(s_t,a_t;w)\) 来代替。按策略 \(\pi\) 随机抽取一个动作 \(a_t\)，单个 \(g(a_t,\theta)\) 就是整体期望的无偏估计，这里用的是蒙特卡洛近似：</p>
+<div class="math-block">\[ g(a_t,\theta_t)=\frac{\partial\ln\pi(a_t\mid s_t;\theta_t)}{\partial\theta}\,q(s_t,a_t;w_t). \]</div>
+<p>然后对该样本做一次随机梯度上升（Stochastic Gradient Ascent，SGA）来更新 \(\theta\)，得到 \(\theta_{t+1}\)：</p>
+<div class="math-block">\[ \theta_{t+1}=\theta_t+\beta\,q(s_t,a_t;w_t)\,\frac{\partial\ln\pi(a_t\mid s_t;\theta_t)}{\partial\theta}, \]</div>
+<p>其中 \(\beta\) 是策略网络的学习率。直观理解：如果 Critic 给 \(a_t\) 的打分 \(q_t>0\)，就提高在 \(s_t\) 下选择 \(a_t\) 的概率；如果打分为负，就降低这个概率。</p>
+<p>与 REINFORCE 一类纯策略梯度方法相比，AC 的梯度权重来自 Critic 的打分而不是一整条回合的真实回报，因此每走一步就能更新一次；代价是 Critic 的估计带有偏差，策略梯度也随之有偏。这一点在<a href="/0gyURSJ-J/">笔记3：策略学习</a>中已经讨论过。</p>
+<h3 id="sub2-baseline">3）带 baseline 的策略梯度：优势函数与 A2C</h3>
+<p>直接用 \(q_t\) 当权重有一个问题：它的尺度依赖环境与回合长度，方差较大。可以在权重里减去一个只与状态有关的量 \(b(s)\)（称为 <strong>baseline</strong>），它<strong>不会改变梯度的期望</strong>：</p>
+<div class="math-block">\[ \mathbb{E}_{A\sim\pi}\left[\frac{\partial\ln\pi(A\mid s;\theta)}{\partial\theta}\,b(s)\right]=b(s)\sum_{a}\frac{\partial\pi(a\mid s;\theta)}{\partial\theta}=b(s)\frac{\partial}{\partial\theta}\left(\sum_{a}\pi(a\mid s;\theta)\right)=0, \]</div>
+<p>因为策略分布的概率之和恒为 1，它对 \(\theta\) 的导数恒为 0。最好的 baseline 就是状态价值函数本身，即 \(b(s)=V_\pi(s)\)——问题在于它同样未知，而 Critic 恰好能给出它的估计。减掉 baseline 之后，权重剩下的部分正是<strong>优势函数（Advantage Function）</strong>：</p>
+<div class="math-block">\[ A_\pi(s,a)=Q_\pi(s,a)-V_\pi(s), \]</div>
+<p>它衡量「在状态 \(s\) 下选择动作 \(a\)，比按当前策略随机选动作平均好多少」。Critic 还能免费给出优势的估计——TD 误差 \(\delta_t\) 就是优势的一个单步估计：</p>
+<div class="math-block">\[ A_\pi(s_t,a_t)\;\approx\;\delta_t=q(s_t,a_t;w_t)-\big(r_t+\gamma\,q(s_{t+1},\tilde a_{t+1};w_t)\big). \]</div>
+<p>于是策略网络的更新变成</p>
+<div class="math-block">\[ \theta_{t+1}=\theta_t+\beta\,\delta_t\,\frac{\partial\ln\pi(a_t\mid s_t;\theta_t)}{\partial\theta}, \]</div>
+<p>这就是<strong>基线策略梯度（Policy Gradient with Baseline）</strong>，文献里也常称为 <strong>A2C（Advantage Actor-Critic）</strong>：Actor 用优势 \(\delta_t\) 加权，Critic 用 TD 误差更新，两个网络共用同一个误差信号，实现上非常紧凑。相比直接用 \(q_t\)，\(\delta_t\) 的数值范围小得多，方差更低、收敛更快也更稳。</p>
+<p>使用 baseline 有一条硬性约束：<strong>baseline 不能是 \(a_t\) 的函数</strong>，即不能与 \(a_t\) 存在映射关系。否则上式中的期望不再为 0，梯度就会产生偏差。换句话说，任何接近 \(q_t\)、但不由 \(a_t\) 决定的数，都可以拿来当 baseline。</p>
+<p>实践中还会把 \(\delta_t\) 推广为多步回报或 GAE（Generalized Advantage Estimation），进一步平衡偏差与方差；A3C 则用多个并行的 Agent 异步收集数据，把这一思路推向工程实现。</p>
+<h3 id="sub2-summary">4）算法总结（Summary of Algorithm）</h3>
+<p>把上面的流程整理成一张表，四个环节依次执行、循环往复：</p>
+<table>
+<thead>
+<tr><th>环节</th><th>做什么</th><th>用到的信号</th></tr>
+</thead>
+<tbody>
+<tr><td>Actor 决策</td><td>观测状态 \(s_t\)，按 \(\pi(\cdot\mid s_t;\theta_t)\) 采样动作 \(a_t\) 并执行</td><td>\(\theta_t\)</td></tr>
+<tr><td>环境反馈</td><td>获得奖励 \(r_t\) 与新状态 \(s_{t+1}\)，并采样 \(\tilde a_{t+1}\)（不执行）</td><td>\(r_t,\ s_{t+1}\)</td></tr>
+<tr><td>Critic 更新</td><td>用 TD 目标 \(y_t=r_t+\gamma\,q(s_{t+1},\tilde a_{t+1};w_t)\) 算出 \(\delta_t\)，梯度下降更新 \(w\)</td><td>\(y_t,\ q(s_t,a_t;w_t)\)</td></tr>
+<tr><td>Actor 更新</td><td>用带 baseline 的策略梯度 \(\theta_{t+1}=\theta_t+\beta\,\delta_t\,\nabla_\theta\ln\pi(a_t\mid s_t;\theta_t)\) 更新 \(\theta\)</td><td>\(\delta_t\)</td></tr>
+</tbody>
+</table>
+<p>AC 是 <strong>on-policy</strong> 算法：与环境交互、用来采样动作的策略，正是当前正在训练的策略 \(\pi(\cdot\mid\cdot;\theta_t)\)。因此每一步收集到的 \((s_t,a_t,r_t,s_{t+1})\) 只能用来更新这一步的参数，不能像 DQN 那样存进经验回放反复使用。on-policy 与 off-policy 的区别见<a href="/syanmQ0CA/">笔记5</a>与<a href="/IGO_-1Id1/">笔记2</a>。</p>
+<h2 id="sec3-summary">三、总结（Summary）</h2>
+<ul>
+<li><strong>两个网络、两个角色</strong>：Actor 是策略网络 \(\pi(a\mid s;\theta)\)，负责决策；Critic 是价值网络 \(q(s,a;w)\)，负责打分。同时训练两者就是 Actor-Critic 方法。</li>
+<li><strong>Critic 用 TD 学习</strong>：以 \(y_t=r_t+\gamma\,q(s_{t+1},\tilde a_{t+1};w_t)\) 为目标做梯度下降，误差为 \(\delta_t=q(s_t,a_t;w_t)-y_t\)。它只需一步转移、可以边交互边更新，代价是自举带来的偏差。</li>
+<li><strong>Actor 用带 baseline 的策略梯度学习</strong>：权重从 \(q_t\) 换成 \(\delta_t\) 之后，等价于用优势函数 \(A_\pi(s,a)=Q_\pi(s,a)-V_\pi(s)\) 加权，这就是 A2C；baseline 必须与 \(a_t\) 无关，梯度才无偏。</li>
+<li><strong>baseline 的作用</strong>：不改变梯度的期望（因而不引入偏差），却能显著降低方差，让算法收敛更快、更稳定。</li>
+<li><strong>on-policy</strong>：数据由当前策略产生、用完即弃，这与 DQN 的 off-policy 经验回放形成对比。AC 的优点是单步更新、方差较小；主要代价是 Critic 的偏差会传导给 Actor，且对学习率等超参数比较敏感。</li>
+</ul>
+<p>把几篇笔记串起来看：<a href="/0gyURSJ-J/">笔记3</a>给出策略梯度，<a href="/syanmQ0CA/">笔记5</a>讨论用整条回合的真实回报做蒙特卡洛估计，本篇则用 Critic 的 TD 估计替换真实回报，完成「策略学习 + 价值学习」的合流。后续的 A3C、PPO 等算法都建立在这一框架之上。</p>
+
 <hr>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#sec1-two-networks">一、价值网络和策略网络（Value Network and Policy Network）</a>
 <ul>
-<li><a href="#%E4%B8%80-%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9C%E5%92%8C%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cvalue-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</a>
-<ul>
-<li><a href="#1%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cpolicy-networkactor">1）策略网络（Policy Network）（Actor）</a></li>
-<li><a href="#2%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9Cvalue-networkcritic">2）价值网络（Value Network）（Critic）</a></li>
+<li><a href="#sub1-policy-net">1）策略网络（Policy Network）（Actor）</a></li>
+<li><a href="#sub1-value-net">2）价值网络（Value Network）（Critic）</a></li>
+<li><a href="#sub1-share">3）两个网络的关系与参数共享</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-%E8%AE%AD%E7%BB%83%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9Ctrain-the-neural-network">二、训练神经网络（Train the Neural Network）</a>
+<li>
+<a href="#sec2-train">二、训练神经网络（Train the Neural Network）</a>
 <ul>
-<li><a href="#1-%E4%BD%BF%E7%94%A8%E6%97%B6%E5%BA%8F%E5%B7%AE%E5%88%86%E7%AE%97%E6%B3%95%E6%9B%B4%E6%96%B0%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9Cqupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</a></li>
-<li><a href="#2%E4%BD%BF%E7%94%A8%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6%E6%9B%B4%E6%96%B0%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9C%CF%80update-policy-network-%CF%80-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</a></li>
-<li><a href="#3%E7%AE%97%E6%B3%95%E6%80%BB%E7%BB%93summary-of-algorithm">3）算法总结（Summary of Algorithm）</a></li>
+<li><a href="#sub2-td">1）使用时序差分算法更新价值网络q（Update Value Network q Using TD）</a></li>
+<li><a href="#sub2-pg">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</a></li>
+<li><a href="#sub2-baseline">3）带 baseline 的策略梯度：优势函数与 A2C</a></li>
+<li><a href="#sub2-summary">4）算法总结（Summary of Algorithm）</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-%E6%80%BB%E7%BB%93summary">三、总结（Summary）</a></li>
+<li>
+<a href="#sec3-summary">三、总结（Summary）</a>
+<ul>
 </ul>
 </li>
 </ul>
@@ -297,7 +343,17 @@
   
   <script src="/media/scripts/tocScript.js"></script>
 
-<script src="/media/scripts/site.js"></script>
+<script src="/media/scripts/site.js"></script><script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "\\(", right: "\\)", display: false}, {left: "\\[", right: "\\]", display: true}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
 </body>
 
 </html>
