@@ -136,7 +136,7 @@
 <p><strong>数据保存在文件</strong></p>
 <p>优点： 数据永久保存</p>
 <p>缺点：1）速度比内存操作慢，频繁的IO操作。</p>
-<p>			2）查询数据不方便</p>
+<p>2）查询数据不方便</p>
 </li>
 <li>
 <p><strong>数据保存在数据库</strong></p>
@@ -168,11 +168,11 @@
 </ol>
 <p>在设计数据库结构的时候，要尽量遵守三范式，如果不遵守，必须有足够的理由。比如性能。事实上我们经常会为了性能而妥协数据库的设计。</p>
 <h2 id="mysql有关权限的表">mysql有关权限的表</h2>
-<p>MySQL服务器通过权限表来控制用户对数据库的访问，权限表存放在mysql数据库里，由mysql_install_db脚本初始化。这些权限表分别为 user、db、table_priv、columns_priv 和 host。下面分别介绍一下这些表的结构和内容：</p>
+<p>MySQL服务器通过权限表来控制用户对数据库的访问，权限表存放在mysql数据库里，由mysql_install_db脚本初始化。这些权限表分别为 user、db、tables_priv、columns_priv 和 host。下面分别介绍一下这些表的结构和内容：</p>
 <ul>
 <li>user权限表：记录允许连接到服务器的用户帐号信息，里面的权限是全局级的。</li>
 <li>db权限表：记录各个帐号在各个数据库上的操作权限。</li>
-<li>table_priv权限表：记录数据表级的操作权限。</li>
+<li>tables_priv权限表：记录数据表级的操作权限。</li>
 <li>columns_priv权限表：记录数据列级的操作权限。</li>
 <li>host权限表：配合db权限表对给定主机上数据库级操作权限作更细致的控制。这个权限表不受GRANT和REVOKE语句的影响。</li>
 </ul>
@@ -242,7 +242,7 @@
 <tr>
 <td></td>
 <td>date</td>
-<td>YYYY-MM-DD 1000-01-01~9999-12-3</td>
+<td>YYYY-MM-DD 1000-01-01~9999-12-31</td>
 </tr>
 <tr>
 <td></td>
@@ -277,7 +277,7 @@
 <tr>
 <td></td>
 <td>MEDIUMBLOB</td>
-<td>允许长度0~167772150字节</td>
+<td>允许长度0~16777215字节</td>
 </tr>
 <tr>
 <td></td>
@@ -297,7 +297,7 @@
 <tr>
 <td></td>
 <td>MEDIUMTEXT</td>
-<td>允许长度0~167772150字节</td>
+<td>允许长度0~16777215字节</td>
 </tr>
 <tr>
 <td></td>
@@ -332,7 +332,7 @@
 <p>3、字符串类型，包括VARCHAR、CHAR、TEXT、BLOB</p>
 <p>VARCHAR用于存储可变长字符串，它比定长类型更节省空间。</p>
 <p>VARCHAR使用额外1或2个字节存储字符串长度。列长度小于255字节时，使用1字节表示，否则使用2字节表示。</p>
-<p>VARCHAR存储的内容超出设置的长度时，内容会被截断。</p>
+<p>VARCHAR存储的内容超出设置的长度时，非严格模式下会被截断并给出警告，严格模式（STRICT_TRANS_TABLES）下则直接报错。</p>
 <p>CHAR是定长的，根据定义的字符串长度分配足够的空间。</p>
 <p>CHAR会根据需要使用空格进行填充方便比较。</p>
 <p>CHAR适合存储很短的字符串，或者所有值都接近同一个长度。</p>
@@ -354,7 +354,7 @@
 <li>
 <p>5、日期和时间类型，尽量使用timestamp，空间效率高于datetime，</p>
 <p>用整数保存时间戳通常不方便处理。</p>
-<p>如果需要存储微妙，可以使用bigint存储。</p>
+<p>如果需要存储微秒：MySQL 5.6.4 以前只能用bigint保存整数时间戳；5.6.4 起 DATETIME(N)、TIMESTAMP(N)（N 取 0~6）已支持小数秒，可直接保存微秒精度。</p>
 </li>
 </ul>
 <h2 id="mysql存储引擎">MySQL存储引擎</h2>
@@ -364,7 +364,7 @@
 <p>常用的存储引擎有以下：</p>
 <ul>
 <li><strong>Innodb引擎</strong>：Innodb引擎提供了对数据库ACID事务的支持。并且还提供了行级锁和外键的约束。它的设计的目标就是处理大数据容量的数据库系统。</li>
-<li><strong>MyIASM引擎</strong>(原本Mysql的默认引擎)：不提供事务的支持，也不支持行级锁和外键。</li>
+<li><strong>MyISAM引擎</strong>(原本Mysql的默认引擎)：不提供事务的支持，也不支持行级锁和外键。</li>
 <li><strong>MEMORY引擎</strong>：所有的数据都在内存中，数据的处理速度快，但是安全性不高。</li>
 </ul>
 <h3 id="myisam与innodb区别">MyISAM与InnoDB区别</h3>
@@ -440,12 +440,12 @@
 <tr>
 <td>哈希索引</td>
 <td>不支持</td>
-<td>支持</td>
+<td>支持（自适应哈希索引，由 InnoDB 自动建立）</td>
 </tr>
 <tr>
 <td>全文索引</td>
 <td>支持</td>
-<td>不支持</td>
+<td>支持（MySQL 5.6 起 InnoDB 也支持全文索引）</td>
 </tr>
 </tbody>
 </table>
@@ -456,6 +456,7 @@
 <li>MyISAM索引的叶子节点存储的是行数据地址，需要再寻址一次才能得到数据。</li>
 <li>InnoDB非主键索引的叶子节点存储的是主键和其他带索引的列数据，因此查询时做到覆盖索引会非常高效。</li>
 </ul>
+<p><img src="/post-assets/Nq-4WaiGL/02-clustered-vs-secondary-index.svg" alt="InnoDB 聚簇索引与 MyISAM 非聚簇索引结构对比图"></p>
 <h3 id="innodb引擎的4大特性">InnoDB引擎的4大特性</h3>
 <ul>
 <li>
@@ -492,18 +493,18 @@ innodb_change_buffer_max_size，默认是25%，即缓冲池的1/4。最大可设
 内存中的doublewrite buffer,大小2M。<br>
 物理磁盘上共享表空间中连续的128个页，即2个区（extend），大小同样为2M。</p>
 <p>对缓冲池的脏页进行刷新时，不是直接写磁盘，而是会通过memcpy()函数将脏页先复制到内存中的doublewrite buffer，之后通过doublewrite 再分两次，每次1M顺序地写入共享表空间的物理磁盘上，在这个过程中，因为doublewrite页是连续的，因此这个过程是顺序写的，开销并不是很大。在完成doublewrite页的写入后，再将doublewrite buffer 中的页写入各个 表空间文件中，此时的写入则是离散的。如果操作系统在将页写入磁盘的过程中发生了崩溃，在恢复过程中，innodb可以从共享表空间中的doublewrite中找到该页的一个副本，将其复制到表空间文件，再应用重做日志。</p>
-<figure data-type="image" tabindex="1"><img src="https://img2018.cnblogs.com/blog/1626822/201903/1626822-20190314095034387-1992982436.png" alt="img" loading="lazy"></figure>
+<p><img src="/post-assets/Nq-4WaiGL/01-innodb-doublewrite.svg" alt="InnoDB doublewrite（二次写）写入路径与崩溃恢复流程图"></p>
 </li>
 <li>
 <p>自适应哈希索引(ahi)</p>
-<p>Adaptive Hash index属性使得InnoDB更像是内存数据库。该属性通过innodb_adapitve_hash_index开启，也可以通过—skip-innodb_adaptive_hash_index参数</p>
+<p>Adaptive Hash index属性使得InnoDB更像是内存数据库。该属性通过innodb_adaptive_hash_index开启，也可以通过 --skip-innodb-adaptive-hash-index 参数</p>
 <p>Innodb存储引擎会监控对表上二级索引的查找，如果发现某二级索引被频繁访问，二级索引成为热数据，建立哈希索引可以带来速度的提升</p>
 <p>经常访问的二级索引数据会自动被生成到hash索引里面去(最近连续被访问三次的数据)，自适应哈希索引通过缓冲池的B+树构造而来，因此建立的速度很快。<br>
 哈希（hash）是一种非常快的等值查找方法，在一般情况下这种查找的时间复杂度为O(1),即一般仅需要一次查找就能定位数据。而B+树的查找次数，取决于B+树的高度，在生产环境中，B+树的高度一般3-4层，故需要3-4次的查询。</p>
 <p>innodb会监控对表上个索引页的查询。如果观察到建立哈希索引可以带来速度提升，则自动建立哈希索引，称之为自适应哈希索引（Adaptive Hash Index，AHI）。<br>
 AHI有一个要求，就是对这个页的连续访问模式必须是一样的。<br>
 例如对于（a,b）访问模式情况：</p>
-<pre><code class="language-sh">where a = xxx
+<pre><code class="language-bash">where a = xxx
 where a = xxx and b = xxx
 </code></pre>
 <p><strong>特点</strong><br>
@@ -517,13 +518,13 @@ where a = xxx and b = xxx
 </li>
 <li>
 <p>预读(read ahead)</p>
-<p>InnoDB使用两种预读算法来提高I/O性能：线性预读（linear read-ahead）和随机预读（randomread-ahead）<br>
+<p>InnoDB使用两种预读算法来提高I/O性能：线性预读（linear read-ahead）和随机预读（random read-ahead）<br>
 为了区分这两种预读的方式，我们可以把线性预读放到以extent为单位，而随机预读放到以extent中的page为单位。线性预读着眼于将下一个extent提前读取到buffer pool中，而随机预读着眼于将当前extent中的剩余的page提前读取到buffer pool中。</p>
 <p><strong>线性预读（linear read-ahead）</strong></p>
 <p>线性预读方式有一个很重要的变量控制是否将下一个extent预读到buffer pool中，通过使用配置参数innodb_read_ahead_threshold，可以控制Innodb执行预读操作的时间。如果一个extent中的被顺序读取的page超过或者等于该参数变量时，Innodb将会异步的将下一个extent读取到buffer pool中，innodb_read_ahead_threshold可以设置为0-64的任何值，默认值为56，值越高，访问模式检查越严格<br>
 例如，如果将值设置为48，则InnoDB只有在顺序访问当前extent中的48个pages时才触发线性预读请求，将下一个extent读到内存中。如果值为8，InnoDB触发异步预读，即使程序段中只有8页被顺序访问。你可以在MySQL配置文件中设置此参数的值，或者使用SET GLOBAL需要该SUPER权限的命令动态更改该参数。<br>
 在没有该变量之前，当访问到extent的最后一个page的时候，Innodb会决定是否将下一个extent放入到buffer pool中。</p>
-<p><strong>随机预读（randomread-ahead）</strong></p>
+<p><strong>随机预读（random read-ahead）</strong></p>
 <p>随机预读方式则是表示当同一个extent中的一些page在buffer pool中发现时，Innodb会将该extent中的剩余page一并读到buffer pool中，由于随机预读方式给Innodb code带来了一些不必要的复杂性，同时在性能也存在不稳定性，在5.5中已经将这种预读方式废弃。要启用此功能，请将配置变量设置innodb_random_read_ahead为ON。</p>
 </li>
 </ul>
@@ -539,6 +540,7 @@ where a = xxx and b = xxx
 <p>客户端用一个单独的数据包将查询请求发送给服务器，所以当查询语句很长的时候，需要设置max_allowed_packet参数。但是需要注意的是，如果查询实在是太大，服务端会拒绝接收更多数据并抛出异常。</p>
 <p>与之相反的是，服务器响应给用户的数据通常会很多，由多个数据包组成。但是当服务器响应客户端请求时，客户端必须完整的接收整个返回结果，而不能简单的只取前面几条结果，然后让服务器停止发送。因而在实际开发中，尽量保持查询简单且只返回必需的数据，减小通信间数据包的大小和数量是一个非常好的习惯，这也是查询中尽量避免使用SELECT *以及加上LIMIT限制的原因之一。</p>
 <h3 id="查询缓存">查询缓存</h3>
+<p><strong>注意：</strong>查询缓存自 MySQL 5.7.20 起被标记为废弃，并在 MySQL 8.0 中被彻底移除（相关系统变量以及 SQL_CACHE / SQL_NO_CACHE 提示一并取消）。下面这段内容针对 5.7 及更早版本，使用 8.0 及以上版本时可跳过。</p>
 <p>在解析一个查询语句前，如果查询缓存是打开的，那么MySQL会检查这个查询语句是否命中查询缓存中的数据。如果当前查询恰好命中查询缓存，在检查一次用户权限后直接返回缓存中的结果。这种情况下，查询不会被解析，也不会生成执行计划，更不会执行。</p>
 <p>MySQL将缓存存放在一个引用表（类似于HashMap的数据结构）中，通过哈希值索引，这个哈希值通过查询本身、当前要查询的数据库、客户端协议版本号等一些可能影响结果的信息计算得来。所以两个查询在任何字符上的不同（例如：空格、注释），都会导致缓存不会命中。</p>
 <p>如果查询中包含任何用户自定义函数、存储函数、用户变量、临时表、mysql库中的系统表，其查询结果都不会被缓存。比如函数NOW()或者CURRENT_DATE()会因为不同的查询时间，返回不同的查询结果，再比如包含CURRENT_USER或者CONNECION_ID()的查询语句会因为不同的用户而返回不同的结果，将这样的查询结果缓存起来没有任何的意义。</p>
@@ -558,17 +560,42 @@ where a = xxx and b = xxx
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BD%BF%E7%94%A8%E6%95%B0%E6%8D%AE%E5%BA%93">为什么要使用数据库</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#sql">SQL</a>
 <ul>
-<li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BD%BF%E7%94%A8%E6%95%B0%E6%8D%AE%E5%BA%93">为什么要使用数据库</a></li>
-<li><a href="#sql">SQL</a></li>
-<li><a href="#mysql">MySQL</a></li>
-<li><a href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%89%E5%A4%A7%E8%8C%83%E5%BC%8F%E6%98%AF%E4%BB%80%E4%B9%88">数据库三大范式是什么</a></li>
-<li><a href="#mysql%E6%9C%89%E5%85%B3%E6%9D%83%E9%99%90%E7%9A%84%E8%A1%A8">mysql有关权限的表</a></li>
-<li><a href="#mysql%E7%9A%84binlog%E6%9C%89%E5%87%A0%E7%A7%8D%E5%BD%95%E5%85%A5%E6%A0%BC%E5%BC%8F%E5%88%86%E5%88%AB%E6%9C%89%E4%BB%80%E4%B9%88%E5%8C%BA%E5%88%AB">MySQL的binlog有几种录入格式？分别有什么区别？</a></li>
-<li><a href="#%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">数据类型</a></li>
-<li><a href="#mysql%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E">MySQL存储引擎</a>
+</ul>
+</li>
+<li>
+<a href="#mysql">MySQL</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%89%E5%A4%A7%E8%8C%83%E5%BC%8F%E6%98%AF%E4%BB%80%E4%B9%88">数据库三大范式是什么</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mysql%E6%9C%89%E5%85%B3%E6%9D%83%E9%99%90%E7%9A%84%E8%A1%A8">mysql有关权限的表</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mysql%E7%9A%84binlog%E6%9C%89%E5%87%A0%E7%A7%8D%E5%BD%95%E5%85%A5%E6%A0%BC%E5%BC%8F%E5%88%86%E5%88%AB%E6%9C%89%E4%BB%80%E4%B9%88%E5%8C%BA%E5%88%AB">MySQL的binlog有几种录入格式？分别有什么区别？</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">数据类型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mysql%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E">MySQL存储引擎</a>
 <ul>
 <li><a href="#myisam%E4%B8%8Einnodb%E5%8C%BA%E5%88%AB">MyISAM与InnoDB区别</a></li>
 <li><a href="#myisam%E7%B4%A2%E5%BC%95%E4%B8%8Einnodb%E7%B4%A2%E5%BC%95%E7%9A%84%E5%8C%BA%E5%88%AB">MyISAM索引与InnoDB索引的区别？</a></li>
@@ -576,7 +603,8 @@ where a = xxx and b = xxx
 <li><a href="#%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E%E9%80%89%E6%8B%A9">存储引擎选择</a></li>
 </ul>
 </li>
-<li><a href="#mysql%E6%9F%A5%E8%AF%A2%E8%BF%87%E7%A8%8B">MySQL查询过程</a>
+<li>
+<a href="#mysql%E6%9F%A5%E8%AF%A2%E8%BF%87%E7%A8%8B">MySQL查询过程</a>
 <ul>
 <li><a href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%9C%8D%E5%8A%A1%E7%AB%AF%E9%80%9A%E4%BF%A1%E5%8D%8F%E8%AE%AE">客户端/服务端通信协议</a></li>
 <li><a href="#%E6%9F%A5%E8%AF%A2%E7%BC%93%E5%AD%98">查询缓存</a></li>
@@ -584,10 +612,6 @@ where a = xxx and b = xxx
 <li><a href="#%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96">查询优化</a></li>
 <li><a href="#%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C%E5%BC%95%E6%93%8E">查询执行引擎</a></li>
 <li><a href="#%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C%E7%BB%99%E5%AE%A2%E6%88%B7%E7%AB%AF">返回结果给客户端</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
