@@ -135,7 +135,7 @@
 <p>②Agent与环境交互获得了一个新的状态st+1并且获得了一个奖励rt</p>
 <p>③此时，我们得到了TD Target yt</p>
 <p>④继而写出TD error δt</p>
-<p>目标是让 q_t 接近 y_t，即让 TD error δ_t 尽量小</p>
+<p>训练的目标就是让 q_t = Q(s_t, a_t; w) 尽量接近 TD Target y_t，即让 TD error δ_t 尽量小</p>
 <figure data-type="image" tabindex="2"><img src="https://pic2.zhimg.com/80/v2-d0b2447748aabef6b0c7190ee5198075_720w.webp" alt="img" loading="lazy"></figure>
 <p>因此TD算法就是寻找一个神经网络参数w使损失函数（Loss Function）L(w)尽可能的小</p>
 <p>⑤采用梯度下降来使wt不断逼近w*</p>
@@ -143,7 +143,7 @@
 <p>(s_t, a_t, r_t, s_{t+1}) 是一个四元组，称为 transition，可以看作一条训练数据。传统算法用完该数据后就将其丢弃、不再使用，这对 DQN 的训练效果并不好。</p>
 <h2 id="二-为什么要使用经验回放why-use-the-experience-replay">二、为什么要使用经验回放（Why use the Experience Replay）</h2>
 <p>为什么要使用经验回放？其实就是在对比：不使用经验回放有哪些缺点、使用经验回放有哪些优点。</p>
-<h3 id="1缺点一浪费经验shortcoming-1watse-of-experience">1）缺点一：浪费经验（Shortcoming 1：Watse of Experience）</h3>
+<h3 id="1缺点一浪费经验shortcoming-1waste-of-experience">1）缺点一：浪费经验（Shortcoming 1: Waste of Experience）</h3>
 <p>传统的TD算法每次仅使用一个transition，使用完后就丢掉，不再使用，这会造成浪费</p>
 <figure data-type="image" tabindex="4"><img src="https://pic3.zhimg.com/80/v2-bcb050d92dadc5ab9ffe82ce419bc1be_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="2缺点二关联性更新shortcoming-2correlated-updates">2）缺点二：关联性更新（Shortcoming 2：Correlated Updates）</h3>
@@ -153,13 +153,14 @@
 <h3 id="1回放缓冲区replay-buffer">1）回放缓冲区（Replay Buffer）</h3>
 <p>我们在使用完一个transition时，会把一个transition放入一个队列里，这个队列被称之为回放缓冲区（Replay Buffer），它的容量是一个超参数（Hyper Parameter）n，Replay Buffer可以存储n条transitions。</p>
 <figure data-type="image" tabindex="6"><img src="https://pic3.zhimg.com/80/v2-861b7f0cbf6e5474c38eea3227e4a922_720w.webp" alt="img" loading="lazy"></figure>
-<p>如果Replay Buffer满了，那么新来的transition会替代老的transition</p>
+<p>如果 Replay Buffer 满了，那么新来的 transition 会替代最旧的 transition。整个训练流程可以概括为：Agent 与环境交互产生 transition，存入回放缓冲区，再从缓冲区中抽样用于更新价值网络。</p>
+<p><img src="/post-assets/BOSW3NMIw/01-experience-replay-flow.svg" alt="经验回放训练流程：transition 存入回放缓冲区，再随机抽取 mini-batch 用 SGD 更新 DQN"></p>
 <figure data-type="image" tabindex="7"><img src="https://pic3.zhimg.com/80/v2-56b90fc27bfb9551be8f3444209c7e12_720w.webp" alt="img" loading="lazy"></figure>
 <h3 id="2td算法中经验回放td-with-experience-replay">2）TD算法中经验回放（TD with Experience Replay）</h3>
 <p>我们通过找到神经网络参数w来最小化损失函数Loss Function。</p>
 <p>我们使用随机梯度下降（Stochastic Gradient Descent，SGD）来最小化损失函数：从 buffer 中随机抽取一条 transition (s_i, a_i, r_i, s_{i+1})，计算 TD error δ_i 与随机梯度 g_i，再用随机梯度下降调整参数 w。</p>
 <figure data-type="image" tabindex="8"><img src="https://pic4.zhimg.com/80/v2-d8d679c323d90c8d228f381764a0d61f_720w.webp" alt="img" loading="lazy"></figure>
-<p>值得一提的是，实践中，通常使用mini-batch SGD,即每次抽取多个transitions，算出多个随机梯度，利用这多个随机梯度的平均来更新神经网络参数w。</p>
+<p>值得一提的是，实践中，通常使用 mini-batch SGD，即每次抽取多条 transition，算出多个随机梯度，利用这多个随机梯度的平均来更新神经网络参数w。</p>
 <h3 id="3经验回放的优势benefits-of-experience-replay">3）经验回放的优势（Benefits of Experience Replay）</h3>
 <p>①打破了经验的相关性</p>
 <p>②重复利用过去的经验</p>
@@ -185,8 +186,9 @@
 <p>TD算法采用SGD来更新神经网络参数w，α是学习率。</p>
 <p>如果做均匀抽样，那么所有的transitions的学习率α都相同；如果做非均匀抽样，那么就要根据每个transition的重要性来调整学习率。</p>
 <figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-efb63f6770e232d2b88064e9fcc76cd8_720w.webp" alt="img" loading="lazy"></figure>
-<p>如果一个 transition 的抽样概率 p_t 较大，那么对它的学习率就应调小。可以采用下图中圈出的方法自适应调整学习率因子：p_t 越大，学习率就越小。</p>
+<p>如果一个 transition 的抽样概率 p_t 较大，说明它会被反复抽到；如果仍用相同的学习率 α，它的梯度就会过度影响参数更新。因此要按 p_t 自适应地缩放学习率：p_t 越大，学习率 α_i 就越小；p_t 越小，学习率 α_i 就越大，以此补偿非均匀抽样带来的偏差。</p>
 <figure data-type="image" tabindex="15"><img src="https://pic1.zhimg.com/80/v2-3e7b274a69d2157b01e74cab043465d4_720w.webp" alt="img" loading="lazy"></figure>
+<p><img src="/post-assets/BOSW3NMIw/02-er-vs-per.svg" alt="ER 均匀抽样与 PER 非均匀抽样的对比：PER 中 |δ| 越大的 transition 抽样概率越高，学习率相应调小"></p>
 <h3 id="4-更新td-error">4）更新TD Error（Update TD Error）</h3>
 <p>为了做优先经验回放（PER），我们要对每一个transition标记上TD error δt。δt决定了这条transition的重要性，决定了它被抽样的概率。</p>
 <p>如果一个transition刚刚被收集到，我们并不知道它的δt，那么我们就直接把它的δt设置为最大值，让它有最高的优先级。</p>
@@ -209,7 +211,7 @@
 <li>
 <a href="#%E4%BA%8C-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BD%BF%E7%94%A8%E7%BB%8F%E9%AA%8C%E5%9B%9E%E6%94%BEwhy-use-the-experience-replay">二、为什么要使用经验回放（Why use the Experience Replay）</a>
 <ul>
-<li><a href="#1%E7%BC%BA%E7%82%B9%E4%B8%80%E6%B5%AA%E8%B4%B9%E7%BB%8F%E9%AA%8Cshortcoming-1watse-of-experience">1）缺点一：浪费经验（Shortcoming 1：Watse of Experience）</a></li>
+<li><a href="#1%E7%BC%BA%E7%82%B9%E4%B8%80%E6%B5%AA%E8%B4%B9%E7%BB%8F%E9%AA%8Cshortcoming-1waste-of-experience">1）缺点一：浪费经验（Shortcoming 1: Waste of Experience）</a></li>
 <li><a href="#2%E7%BC%BA%E7%82%B9%E4%BA%8C%E5%85%B3%E8%81%94%E6%80%A7%E6%9B%B4%E6%96%B0shortcoming-2correlated-updates">2）缺点二：关联性更新（Shortcoming 2：Correlated Updates）</a></li>
 </ul>
 </li>
