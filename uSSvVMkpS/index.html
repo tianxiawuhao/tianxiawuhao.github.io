@@ -370,12 +370,12 @@ select pg_walfile_name('0/47233270');
 </code></pre>
 <p>归档默认不是开启的，需要手动开启归档操作，才能保证wal日志的完整性</p>
 <p>修改postgresql.conf文件</p>
-<pre><code># 开启wal日志的内容，注释去掉即可
+<pre><code class="language-text"># 开启wal日志的内容，注释去掉即可
 wal_level = replica
 fsync = on
 </code></pre>
 <figure data-type="image" tabindex="5"><img src="/post-images/c785e2fd561c23686b42609d7269a476.png" alt="" loading="lazy"></figure>
-<pre><code># 开启归档操作
+<pre><code class="language-text"># 开启归档操作
 archive_mode = on
 # 修改一小下命令，修改存放归档日志的路径
 archive_command = 'test ! -f /archive/%f &amp;&amp; cp %p /archive/%f'
@@ -432,7 +432,7 @@ chown -R postgres. archive
 <p>查看一波pg_basebackup命令</p>
 <figure data-type="image" tabindex="10"><img src="/post-images/92841ec3a296ae1dd247f765cc51570c.png" alt="" loading="lazy"></figure>
 <p>先准备一个pg_basebackup的备份命令</p>
-<pre><code># -D 指定备份文件的存储位置
+<pre><code class="language-text"># -D 指定备份文件的存储位置
 # -Ft 备份文件打个包
 # -Pv 输出备份的详细信息
 # -U 用户名（要拥有备份的权限）
@@ -465,10 +465,10 @@ chown -R postgres. /pg_basebackup/
 <p>第三步：在postgresql.auto.conf文件中，指定归档文件的存储位置，以及恢复数据的方式</p>
 <figure data-type="image" tabindex="17"><img src="/post-images/d1163e6f78df134a3db3959112a62473.png" alt="" loading="lazy"></figure>
 <p>第四步：启动postgresql服务</p>
-<pre><code>systemctl start postgresql-12
+<pre><code class="language-bash">systemctl start postgresql-12
 </code></pre>
 <p>第五步：启动后查询没问题，但执行写操作会报错。需要执行一个函数结束恢复状态，之后才能正常写操作。</p>
-<pre><code>select pg_wal_replay_resume();
+<pre><code class="language-sql">select pg_wal_replay_resume();
 </code></pre>
 <h3 id="134-物理备份恢复pitr-point-in-time-recovery">13.4 物理备份&amp;恢复（PITR-Point in time Recovery）</h3>
 <p>模拟场景</p>
@@ -479,7 +479,7 @@ chown -R postgres. /pg_basebackup/
 <p>2、归档恢复：备份的归档中包含 02:00~14:00 之间的数据信息，可以基于归档日志把数据恢复到指定事务 ID 或指定时间点，实现完整恢复。</p>
 <p>准备场景和具体操作<br>
 <strong>1、构建一张t3表查询一些数据</strong></p>
-<pre><code>-- 构建一张表
+<pre><code class="language-sql">-- 构建一张表
 create table t3 (id int);
 insert into t3 values (1);
 insert into t3 values (11);
@@ -519,7 +519,7 @@ pg_waldump
 <p>7、启动postgreSQL服务，查看是否恢复到指定事务ID</p>
 <figure data-type="image" tabindex="23"><img src="/post-images/dd42a0c10819678855d480c029cf0afe.png" alt="" loading="lazy"></figure>
 <p>8、记得执行收尾函数（结束恢复状态），否则无法执行写操作。</p>
-<pre><code>select pg_wal_replay_resume();
+<pre><code class="language-sql">select pg_wal_replay_resume();
 </code></pre>
 <h2 id="十四-数据迁移">十四、数据迁移</h2>
 <p>PostgreSQL 做数据迁移的插件非常多，既可以从 MySQL 迁移到 PostgreSQL，也可以基于其他数据源迁移到 PostgreSQL。</p>
@@ -627,7 +627,7 @@ primary_conninfo = 'user=postgres password=postgres host=192.168.11.66 port=5432
 standby_mode = 'on'
 </code></pre>
 <p>启动从节点服务</p>
-<pre><code>systemctl restart postgresql-12
+<pre><code class="language-bash">systemctl restart postgresql-12
 </code></pre>
 <p>查看主从信息</p>
 <p>查看从节点是否有t1表</p>
@@ -724,7 +724,7 @@ pg_rewind -D ~/12/data/ --source-server='host=192.168.11.66 user=postgres passwo
 <li>6、修改新从节点的配置，然后启动</li>
 </ul>
 <p>构建standby.signal</p>
-<pre><code>standby_mode = 'on'
+<pre><code class="language-text">standby_mode = 'on'
 </code></pre>
 <p>修改postgresql.auto.conf文件</p>
 <pre><code class="language-sql"># 注意ip地址
@@ -733,7 +733,7 @@ primary_conninfo = 'user=postgres password=postgres host=192.168.11.66 port=5432
 restore_command = 'cp /archive/%f %p'
 </code></pre>
 <p>启动新的从节点</p>
-<pre><code>pg_ctl start -D ~/12/data/
+<pre><code class="language-text">pg_ctl start -D ~/12/data/
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">

@@ -241,7 +241,7 @@ producer 收到 ack， 就会进行下一轮的发送，否则重新发送数据
 本以前的 Kafka，对此是无能为力的，只能保证数据不丢失，再在下游消费者对数据做全局<br>
 去重。对于多个下游应用的情况，每个都需要单独做全局去重，这就对性能造成了很大影响。<br>
 0.11 版本的 Kafka，引入了一项重大特性：<strong>幂等性</strong>。所谓的幂等性就是指 Producer 不论向 Server 发送多少次重复数据， Server 端都只会持久化一条。幂等性结合 At Least Once 语义，就构成了 Kafka 的 Exactly Once 语义。即：</p>
-<pre><code>At Least Once + 幂等性 = Exactly Once
+<pre><code class="language-text">At Least Once + 幂等性 = Exactly Once
 </code></pre>
 <p>要启用幂等性，只需要将 Producer 的参数中 <code>enable.idempotence</code> 设置为 <code>true</code> 即可。Kafka<br>
 的幂等性实现其实就是将原来下游需要做的去重放在了数据上游。开启幂等性的 Producer 在<br>
@@ -293,14 +293,14 @@ C2-1：7，8，9
 <p><strong>Kafka 0.9 版本之前， consumer 默认将 offset 保存在 Zookeeper 中，从 0.9 版本开始，</strong><br>
 <strong>consumer 默认将 offset 保存在 Kafka 一个内置的 topic 中，该 topic 为__consumer_offsets。</strong></p>
 <p>1）修改配置文件 consumer.properties</p>
-<pre><code>exclude.internal.topics=false
+<pre><code class="language-properties">exclude.internal.topics=false
 </code></pre>
 <p>2）读取 offset</p>
 <p>0.11.0.0 之前版本:</p>
-<pre><code>bin/kafka-console-consumer.sh --topic __consumer_offsets --zookeeper hadoop102:2181 --formatter &quot;kafka.coordinator.GroupMetadataManager\$OffsetsMessageFormatter&quot; --consumer.config config/consumer.properties --from-beginning
+<pre><code class="language-text">bin/kafka-console-consumer.sh --topic __consumer_offsets --zookeeper hadoop102:2181 --formatter &quot;kafka.coordinator.GroupMetadataManager\$OffsetsMessageFormatter&quot; --consumer.config config/consumer.properties --from-beginning
 </code></pre>
 <p>0.11.0.0 之后版本(含):</p>
-<pre><code>bin/kafka-console-consumer.sh --topic __consumer_offsets --
+<pre><code class="language-text">bin/kafka-console-consumer.sh --topic __consumer_offsets --
 zookeeper hadoop102:2181 --formatter
 &quot;kafka.coordinator.group.GroupMetadataManager\$OffsetsMessageForm
 atter&quot; --consumer.config config/consumer.properties --frombeginning
@@ -310,17 +310,17 @@ atter&quot; --consumer.config config/consumer.properties --frombeginning
 <p>2） 案例实操</p>
 <p>（1）在 hadoop102、 hadoop103 上修改<code>/opt/module/kafka/config/consumer.properties</code> 配置<br>
 文件中的 <code>group.id</code> 属性为任意组名。</p>
-<pre><code>[atguigu@hadoop103 config]$ vi consumer.properties
+<pre><code class="language-properties">[atguigu@hadoop103 config]$ vi consumer.properties
 group.id=atguigu
 </code></pre>
 <p>（2）在 hadoop102、 hadoop103 上分别启动消费者</p>
-<pre><code>[atguigu@hadoop102 kafka]$ bin/kafka-console-consumer.sh \
+<pre><code class="language-json">[atguigu@hadoop102 kafka]$ bin/kafka-console-consumer.sh \
 --zookeeper hadoop102:2181 --topic first --consumer.config config/consumer.properties
 
 [atguigu@hadoop103 kafka]$ bin/kafka-console-consumer.sh --bootstrap-server hadoop102:9092 --topic first --consumer.config config/consumer.properties
 </code></pre>
 <p>（3）在 hadoop104 上启动生产者</p>
-<pre><code>[atguigu@hadoop104 kafka]$ bin/kafka-console-producer.sh \
+<pre><code class="language-json">[atguigu@hadoop104 kafka]$ bin/kafka-console-producer.sh \
 --broker-list hadoop102:9092 --topic first
 &gt;hello world
 </code></pre>
