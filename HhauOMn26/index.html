@@ -125,7 +125,11 @@
           
           <img class="post-feature-header-image" src="/post-images/HhauOMn26.png" alt="封面图">
           
-          <h2 id="1资源类型">1.资源类型</h2>
+          <h2 id="0概览资源对象与操作路径">0.概览：资源对象与操作路径</h2>
+<p>kubectl 的所有操作都可以归结为三件事：<strong>描述期望状态（YAML/命令）→ 提交给 API Server → 控制器把实际状态逼近期望状态</strong>。下图把常用资源对象、常见操作入口和排障路径放在一张图里，后文按这张图的顺序展开。</p>
+<p><img src="/post-assets/HhauOMn26/01-k8s-resource-ops.svg" alt="k8s 资源对象与操作路径图"></p>
+
+<h2 id="1资源类型">1.资源类型</h2>
 <table>
 <thead>
 <tr>
@@ -148,7 +152,7 @@
 <tr>
 <td>名称空间级别</td>
 <td>工作负载型资源</td>
-<td>Deployment(deployment:为 Pod 和 ReplicaSet 提供了一个 声明式定义 (declarative) 方法)</td>
+<td>Deployment(deploy:为 Pod 和 ReplicaSet 提供声明式定义，支持滚动更新与回滚)</td>
 </tr>
 <tr>
 <td>名称空间级别</td>
@@ -158,27 +162,27 @@
 <tr>
 <td>名称空间级别</td>
 <td>工作负载型资源</td>
-<td>DaemonSet(ds:)</td>
+<td>DaemonSet(ds:保证每个（或指定）节点上都运行一个 Pod，如日志采集、网络插件)</td>
 </tr>
 <tr>
 <td>名称空间级别</td>
 <td>工作负载型资源</td>
-<td>Job(jobs:负责批处理任务，即仅执行一次的任务，它保证批处理任务的一个或多个 Pod)</td>
+<td>Job(job:负责批处理任务，即仅执行一次的任务，保证一个或多个 Pod 成功结束)</td>
 </tr>
 <tr>
 <td>名称空间级别</td>
 <td>工作负载型资源</td>
-<td>CronJob(jobs:管理基于时间的 Job)</td>
+<td>CronJob(cj:管理基于时间的 Job，使用 cron 表达式)</td>
 </tr>
 <tr>
 <td>名称空间级别</td>
 <td>服务发现及负载均衡型资源</td>
-<td>Service(svc:为一组功能相同的Pod提供一个供外界访问的地址)</td>
+<td>Service(svc:为一组功能相同的 Pod 提供一个稳定的访问入口，并做四层负载均衡)</td>
 </tr>
 <tr>
 <td>名称空间级别</td>
 <td>服务发现及负载均衡型资源</td>
-<td>Ingress(ing:官方只能实现四层代理，INGRESS 可以实现七层代理)</td>
+<td>Ingress(ing:Service 只能做四层代理，Ingress 在此基础上提供七层 HTTP/HTTPS 路由，需配合 Ingress Controller 生效)</td>
 </tr>
 <tr>
 <td>名称空间级别</td>
@@ -233,12 +237,12 @@
 <tr>
 <td>集群级资源</td>
 <td>集群级资源</td>
-<td>ClusterRoleBinging(集群角色绑定)</td>
+<td>ClusterRoleBinding(集群角色绑定)</td>
 </tr>
 <tr>
 <td>元数据型资源</td>
 <td>元数据型资源</td>
-<td>HPA(根据 Pod的 CPU 利用率扩所容)</td>
+<td>HPA(根据 Pod 的 CPU 利用率等指标自动扩缩容，依赖 metrics-server)</td>
 </tr>
 <tr>
 <td>元数据型资源</td>
@@ -354,8 +358,8 @@
 <td style="text-align:center">查看pod的标签信息</td>
 </tr>
 <tr>
-<td style="text-align:center">kubectl get pod -A --selector=“k8s-app=kube-dns”</td>
-<td style="text-align:center">根据Selector（label query）来查询pod</td>
+<td style="text-align:center">kubectl get pod -A --selector="k8s-app=kube-dns"</td>
+<td style="text-align:center">根据 Selector（label query）来查询 pod</td>
 </tr>
 <tr>
 <td style="text-align:center">kubectl exec podName env</td>
@@ -374,8 +378,8 @@
 <td style="text-align:center">查看指定名称空间的service信息</td>
 </tr>
 <tr>
-<td style="text-align:center">kubectl get cs</td>
-<td style="text-align:center">查看componentstatuses信息</td>
+<td style="text-align:center">kubectl get componentstatuses（1.19 起已弃用，改用 kubectl get --raw /readyz?verbose）</td>
+<td style="text-align:center">查看各控制面组件状态</td>
 </tr>
 <tr>
 <td style="text-align:center">kubectl get cm -A</td>
@@ -423,7 +427,7 @@
 </tr>
 <tr>
 <td style="text-align:center">kubectl top node<br/>kubectl top pod</td>
-<td style="text-align:center">查看node或pod的资源使用情况<br/>（需要heapster 或metrics-server支持）</td>
+<td style="text-align:center">查看 node 或 pod 的实时资源使用情况<br/>（需要部署 metrics-server）</td>
 </tr>
 <tr>
 <td style="text-align:center">kubectl cluster-info <br /> kubectl cluster-info dump</td>
@@ -435,6 +439,26 @@
 </tr>
 </tbody>
 </table>
+<h3 id="3-1元数据查询与输出格式">3.1 元数据查询与输出格式</h3>
+<pre><code class="language-bash">kubectl version -o yaml            # 客户端与服务端版本（v1.24 起不再显示 --short 之外的旧格式）
+kubectl api-resources              # 所有资源类型、短名称、是否需要命名空间
+kubectl api-versions               # 集群支持的所有 apiVersion 分组，写 YAML 前先查
+kubectl cluster-info dump          # 导出集群信息，用于离线分析
+kubectl get --raw /readyz?verbose  # 探活各组件（1.19 起 /healthz 细化为 /livez /readyz）
+kubectl get componentstatuses      # 组件状态；1.19 起该接口被标记弃用，优先用上面的 /readyz
+kubectl get pod -o wide            # 附加信息：IP、节点、镜像等
+kubectl get pod -o yaml            # 完整对象定义（也可用 -o json）
+kubectl get pod myapp-pod -o jsonpath='{.status.podIP}'          # 只取某个字段
+kubectl get pod -A --no-headers | wc -l                          # 统计 Pod 数量
+kubectl get pod -w                 # 持续观察变化（watch）
+kubectl explain svc.spec.ports --recursive                        # 查字段结构，写 YAML 的利器
+kubectl completion bash &gt; /etc/bash_completion.d/kubectl          # 补全，能少打很多错命令
+kubectl -v=6 get pod               # 打开详细日志，排查 kubectl 本身的问题
+</code></pre>
+<blockquote>
+<p>小技巧：任何 <code>get</code> 都可以用 <code>--custom-columns</code> 定制表格，例如 <code>kubectl get pod -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,IP:.status.podIP</code>；对象太长时用 <code>kubectl get pod myapp-pod -o yaml --show-managed-fields=false</code> 去掉 managedFields，可读性更好。</p>
+</blockquote>
+
 <h2 id="4进入pod启动的容器">4.进入pod启动的容器</h2>
 <table>
 <thead>
@@ -454,7 +478,17 @@
 </tr>
 </tbody>
 </table>
-<h2 id="5添加label值">5.添加label值</h2>
+<h3 id="4-1命令写法要点">4.1 命令写法要点</h3>
+<pre><code class="language-bash">kubectl exec -it myapp-pod -n default -- /bin/sh      # 推荐：容器无 bash 时用 sh，-- 用于分隔 kubectl 参数与容器内命令
+kubectl exec -it myapp-pod -n default -- /bin/bash    # 容器内有 bash 时才能用
+kubectl exec -it myapp-pod -n default -c sidecar -- sh   # 多容器 Pod 必须指定 -c 容器名
+kubectl exec myapp-pod -- env                         # 不进容器也能看环境变量
+kubectl exec myapp-pod -- ls /etc/config              # 一次性执行命令并看输出
+</code></pre>
+<blockquote>
+<p><code>-it</code> 是 <code>--stdin --tty</code> 的缩写，只在交互式排查时需要；写脚本或做探活时不要加，否则会因为没有 TTY 而报错。生产环境的基础镜像（如 distroless）常常没有 shell，此时可用 <code>kubectl debug</code> 挂一个临时容器进去排查：<code>kubectl debug -it myapp-pod --image=busybox:1.36 --target=myapp</code>。</p>
+</blockquote>
+<h2 id="5添加label值">5.添加 label 值</h2>
 <table>
 <thead>
 <tr>
@@ -468,24 +502,552 @@
 <td style="text-align:center">为指定节点添加标签</td>
 </tr>
 <tr>
-<td style="text-align:center">kubectl label nodes k8s-node01 zone</td>
-<td style="text-align:center">为指定节点删除标签</td>
+<td style="text-align:center">kubectl label nodes k8s-node01 zone-</td>
+<td style="text-align:center">删除节点上的指定标签（键名后缀 -）</td>
 </tr>
 <tr>
 <td style="text-align:center">kubectl label pod podName -n nsName role-name=test</td>
-<td style="text-align:center">为指定pod添加标签</td>
+<td style="text-align:center">为指定 pod 添加标签</td>
 </tr>
 <tr>
 <td style="text-align:center">kubectl label pod podName -n nsName role-name=dev --overwrite</td>
-<td style="text-align:center">修改lable标签值</td>
+<td style="text-align:center">修改已有标签的值，必须加 --overwrite</td>
 </tr>
 <tr>
-<td style="text-align:center">kubectl label pod podName -n nsName role-name</td>
-<td style="text-align:center">删除lable标签</td>
+<td style="text-align:center">kubectl label pod podName -n nsName role-name-</td>
+<td style="text-align:center">删除指定 pod 上的标签</td>
 </tr>
 </tbody>
 </table>
-<h2 id="6滚动升级">6.滚动升级</h2>
+<h2 id="6核心资源对象与YAML骨架">6.核心资源对象与 YAML 骨架</h2>
+<p>下面给出工作中最常用的几个对象的 YAML 骨架。所有对象都以 <code>apiVersion/kind/metadata/spec</code> 四段式为骨架，字段名大小写敏感，<strong>不能用 Tab 缩进</strong>，同一层级缩进必须对齐。</p>
+<h3 id="6-1命名空间">6.1 命名空间</h3>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    env: dev
+</code></pre>
+<pre><code class="language-bash">kubectl create namespace dev          # 等价于上面用 YAML 声明式创建
+kubectl config set-context --current --namespace=dev   # 把当前上下文默认命名空间切到 dev
+kubectl config view --minify --output 'jsonpath={..namespace}'  # 查看当前默认命名空间
+</code></pre>
+<h3 id="6-2Pod">6.2 Pod</h3>
+<pre><code class="language-yaml">apiVersion: v1                       # Pod 属于核心组，apiVersion 就是 v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  namespace: default                 # 省略则落到 default
+  labels:
+    app: myapp
+    env: dev
+spec:
+  containers:
+  - name: myapp
+    image: registry.cn-beijing.aliyuncs.com/google_registry/myapp:v1
+    imagePullPolicy: IfNotPresent    # 默认：镜像 tag 为 latest 时是 Always，否则是 IfNotPresent
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    env:
+    - name: APP_ENV
+      value: "dev"
+    resources:
+      requests:                      # 调度依据：kube-scheduler 按 requests 找足够大的节点
+        cpu: 100m
+        memory: 128Mi
+      limits:                        # 运行时上限：超内存会被 OOMKill，超 CPU 会被节流
+        cpu: 500m
+        memory: 256Mi
+    readinessProbe:                  # 就绪探针：决定 Pod 是否进入 Endpoints（能否接流量）
+      httpGet:
+        path: /healthz
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    livenessProbe:                   # 存活探针：失败则重启容器
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 15
+      periodSeconds: 20
+  restartPolicy: Always              # Pod 级字段，与 containers 同级
+</code></pre>
+<blockquote>
+<p>生产中很少直接创建「裸 Pod」：裸 Pod 删掉就没了，也不会自愈。业务负载一般交给 Deployment（无状态）、StatefulSet（有状态）、DaemonSet（每节点一份）或 Job/CronJob（批处理）管理。</p>
+</blockquote>
+<h3 id="6-3Deployment">6.3 Deployment</h3>
+<pre><code class="language-yaml">apiVersion: apps/v1                  # Deployment 在 apps 组，注意不是 extensions/v1beta1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+  namespace: default
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10           # 保留多少个 ReplicaSet 供回滚
+  selector:                          # 必填且创建后不可改，必须匹配 template 的 labels
+    matchLabels:
+      app: myapp
+  strategy:
+    type: RollingUpdate              # 另一种是 Recreate（先全删再建，会中断服务）
+    rollingUpdate:
+      maxUnavailable: 1              # 滚动过程中最多几个副本不可用（可以是 25%）
+      maxSurge: 1                    # 滚动过程中最多超出 replicas 几个（可以是 25%）
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: v1
+    spec:
+      containers:
+      - name: myapp
+        image: registry.cn-beijing.aliyuncs.com/google_registry/myapp:v1
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+</code></pre>
+<pre><code class="language-bash">kubectl create deployment myapp-deployment --image=nginx:1.27 --replicas=3 --dry-run=client -o yaml &gt; myapp-deployment.yaml
+kubectl apply -f myapp-deployment.yaml
+kubectl get deploy,rs,pod -l app=myapp -o wide
+</code></pre>
+<h3 id="6-4Service">6.4 Service</h3>
+<p>Service 通过<strong>标签选择器</strong>找到后端 Pod，并为其提供固定 ClusterIP 和 DNS 名。四种类型：<code>ClusterIP</code>（仅集群内，默认）、<code>NodePort</code>（每节点开一个 30000-32767 的端口）、<code>LoadBalancer</code>（云厂商 LB）、<code>ExternalName</code>（CNAME 到外部域名）。</p>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-svc
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:                          # 与 Pod 的 labels 对应，写错则 Endpoints 为空
+    app: myapp
+  ports:
+  - name: http
+    port: 80                         # Service 暴露的端口
+    targetPort: 8080                 # 容器实际监听端口，可直接写端口名 http
+    protocol: TCP
+</code></pre>
+<pre><code class="language-bash">kubectl expose deployment myapp-deployment --name=myapp-svc --port=80 --target-port=8080 --type=ClusterIP
+kubectl get svc myapp-svc -o wide
+kubectl get endpoints myapp-svc    # Endpoints 为空说明 selector 不匹配或 Pod 未就绪（kubectl get endpointslices 亦可）
+</code></pre>
+<h3 id="6-5Ingress">6.5 Ingress</h3>
+<p>Service 是四层（TCP/UDP）负载均衡，Ingress 是七层（HTTP/HTTPS）路由规则，可以按域名和路径转发，必须配合 Ingress Controller（如 ingress-nginx、Traefik）才能生效。</p>
+<pre><code class="language-yaml">apiVersion: networking.k8s.io/v1     # 1.19 起使用该版本，extensions/v1beta1 已废弃
+kind: Ingress
+metadata:
+  name: myapp-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx            # 替代已废弃的 kubernetes.io/ingress.class 注解
+  tls:
+  - hosts:
+    - myapp.example.com
+    secretName: myapp-tls            # 提前创建好的 tls 类型 Secret
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix             # 必填：Prefix（前缀）或 Exact（精确）
+        backend:
+          service:
+            name: myapp-svc
+            port:
+              number: 80
+</code></pre>
+<pre><code class="language-bash">kubectl get ingress -A
+kubectl describe ingress myapp-ingress      # 看 Rules / Events，排 404、502 的常用入口
+kubectl get pods -n ingress-nginx           # 确认 Controller 本身在跑
+</code></pre>
+<h3 id="6-6ConfigMap与Secret">6.6 ConfigMap 与 Secret</h3>
+<pre><code class="language-bash"># 从字面量创建 ConfigMap
+kubectl create configmap app-config --from-literal=APP_ENV=dev --from-literal=LOG_LEVEL=info
+# 从文件/目录创建（键名就是文件名）
+kubectl create configmap app-config --from-file=./application.yaml
+# 从字面量创建 Secret（键值对形式）
+kubectl create secret generic db-secret --from-literal=username=root --from-literal=password='S3cr3t!'
+# 从文件创建 docker-registry 类型 Secret，用于拉私有镜像
+kubectl create secret docker-registry regcred --docker-server=registry.cn-beijing.aliyuncs.com \
+  --docker-username=user --docker-password=pass --docker-email=me@example.com
+kubectl get secret db-secret -o jsonpath='{.data.password}' | base64 -d   # 只是编码，不是加密
+</code></pre>
+<pre><code class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_ENV: dev
+  application.yaml: |               # 竖线表示保留换行的多行文本
+    server:
+      port: 8080
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+stringData:                         # stringData 写明文，提交时自动转成 data 的 base64
+  username: root
+  password: "S3cr3t!"
+</code></pre>
+<pre><code class="language-yaml"># 在 Pod 中以「环境变量」或「文件」两种方式消费配置
+spec:
+  containers:
+  - name: myapp
+    image: myapp:v1
+    envFrom:
+    - configMapRef:
+        name: app-config            # 整个 ConfigMap 变成环境变量
+    - secretRef:
+        name: db-secret
+    env:
+    - name: DB_PASSWORD             # 只取 Secret 中的某一个键
+      valueFrom:
+        secretKeyRef:
+          name: db-secret
+          key: password
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-config              # 挂载后 /etc/config/application.yaml 就是上面的内容
+      items:
+      - key: application.yaml
+        path: application.yaml
+</code></pre>
+<blockquote>
+<p>以 volume 方式挂载的 ConfigMap/Secret 更新后，容器内的文件会在约 1 分钟内（kubelet 同步周期 + 缓存 TTL）自动更新；以环境变量方式注入的<strong>不会</strong>更新，必须重启 Pod 才生效。修改 ConfigMap 后可用 <code>kubectl rollout restart deployment/myapp-deployment</code> 触发一次滚动重启。</p>
+</blockquote>
+<h3 id="6-7PV与PVC">6.7 PV、PVC 与 StorageClass</h3>
+<p>PV 是集群里的实际存储资源（集群级对象），PVC 是用户对存储的申请（命名空间级对象），两者按 <code>容量 + accessModes + storageClassName</code> 匹配绑定，Pod 只挂载 PVC。</p>
+<pre><code class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+provisioner: kubernetes.io/aws-ebs    # 换成实际环境的 CSI 驱动，如 diskplugin.csi.alibabacloud.com
+reclaimPolicy: Delete                 # Delete：PVC 删除后自动回收 PV；Retain：保留数据需人工处理
+volumeBindingMode: WaitForFirstConsumer   # 等 Pod 调度后再建卷，避免跨可用区挂载失败
+allowVolumeExpansion: true
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-nfs-10g
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce                     # RWO 单节点读写；ROX 多节点只读；RWX 多节点读写（需共享存储）
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: standard
+  nfs:                                # 生产更常用 CSI，这里以 NFS 为例便于理解
+    server: 172.16.1.120
+    path: /data/nfs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myapp-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard          # 省略且集群有默认 StorageClass 时会动态供给
+</code></pre>
+<pre><code class="language-yaml">spec:
+  containers:
+  - name: myapp
+    image: myapp:v1
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: myapp-pvc
+</code></pre>
+<pre><code class="language-bash">kubectl get pv                     # STATUS: Available / Bound / Released / Failed
+kubectl get pvc -A
+kubectl describe pvc myapp-pvc     # Pending 时看 Events，一般是没匹配到 PV 或 StorageClass 不存在
+kubectl get storageclass
+</code></pre>
+
+<h2 id="7声明式与命令式">7.声明式与命令式</h2>
+<p>kubectl 有三类操作方式，理解了它们的关系，就知道什么时候该用哪个命令：</p>
+<table>
+<thead>
+<tr><th style="text-align:center">方式</th><th style="text-align:center">典型命令</th><th>特点与适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align:center">命令式对象配置</td><td style="text-align:center"><code>kubectl create/delete -f xxx.yaml</code></td><td>从一个 YAML 创建或删除对象。语义是「动作」：对象已存在时 create 直接报 AlreadyExists，不报错就继续用</td></tr>
+<tr><td style="text-align:center">命令式命令</td><td style="text-align:center"><code>kubectl run/expose/scale/set image/label</code></td><td>直接对活动对象做动作，快捷、适合调试和应急；不可复现，不产生可版本化的配置</td></tr>
+<tr><td style="text-align:center">声明式对象配置</td><td style="text-align:center"><code>kubectl apply -f xxx.yaml</code></td><td>只描述「期望的最终状态」，kubectl 做三方合并后决定创建还是更新，可反复执行（幂等），适合 CI/CD 与 GitOps</td></tr>
+</tbody>
+</table>
+<h3 id="7-1applycreate与replace的区别">7.1 apply、create 与 replace 的区别</h3>
+<table>
+<thead>
+<tr><th style="text-align:center">命令</th><th style="text-align:center">对象不存在</th><th style="text-align:center">对象已存在</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align:center"><code>apply</code></td><td style="text-align:center">创建</td><td style="text-align:center">按 last-applied-configuration 做三方合并更新（增量）</td><td>推荐日常使用；用 <code>-f</code> 可指向文件、目录或 URL</td></tr>
+<tr><td style="text-align:center"><code>create</code></td><td style="text-align:center">创建</td><td style="text-align:center">报错 <code>AlreadyExists</code></td><td>需要 <code>--save-config</code> 才会记录上次配置，否则后续 apply 会告警</td></tr>
+<tr><td style="text-align:center"><code>replace</code></td><td style="text-align:center">报错 <code>NotFound</code></td><td style="text-align:center">用新文件整体替换，未写到的字段会被清空</td><td>危险：容易误删字段，部分字段不可变时会直接失败</td></tr>
+<tr><td style="text-align:center"><code>patch</code></td><td style="text-align:center">报错</td><td style="text-align:center">只改指定字段（strategic/merge/json patch）</td><td>小改动、脚本化修改时很实用</td></tr>
+</tbody>
+</table>
+<pre><code class="language-bash"># 不真正执行，只把客户端生成的 YAML 打印出来，用于「命令转配置」
+kubectl create deployment web --image=nginx --replicas=2 --dry-run=client -o yaml &gt; web.yaml
+# 走一次服务端校验（需要集群连通），提前发现字段错误
+kubectl apply -f web.yaml --dry-run=server
+# 查看某对象的差异与最近一次配置
+kubectl diff -f web.yaml
+kubectl get deploy web -o yaml | grep -A5 last-applied-configuration
+# 只改一个字段
+kubectl patch deployment web -p '{"spec":{"replicas":5}}'
+</code></pre>
+<blockquote>
+<p>常见坑：<strong>先用 create 再用 apply</strong> 会提示 <code>missing last-applied-configuration annotation</code>，此时用 <code>kubectl apply -f xxx.yaml --force</code> 或先 delete 再 apply。另外 <code>kubectl apply</code> 不带 <code>-f</code> 不会读 stdin 以外的任何输入，目录模式下只处理 <code>.yaml/.yml/.json</code>。</p>
+</blockquote>
+
+<h2 id="8滚动更新与回滚">8.滚动更新与回滚</h2>
+<p>Deployment 的更新本质是「新建一个 ReplicaSet，逐步把副本从旧 RS 迁到新 RS」。相关命令如下：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">kubectl apply -f myapp-deployment-v2.yaml</td>
+<td style="text-align:center">通过配置文件滚动升级</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl set image deploy/myapp-deployment myapp=registry.cn-beijing.aliyuncs.com/google_registry/myapp:v3</td>
+<td style="text-align:center">通过命令只改镜像触发滚动升级（注意容器名 myapp 要写对）</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl rollout status deploy/myapp-deployment</td>
+<td style="text-align:center">阻塞观察本次滚动是否完成</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl rollout history deploy/myapp-deployment</td>
+<td style="text-align:center">查看历史版本号（REVISION）</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl rollout pause / resume deploy/myapp-deployment</td>
+<td style="text-align:center">暂停/恢复滚动，用于金丝雀式分批发布</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl rollout restart deploy/myapp-deployment</td>
+<td style="text-align:center">不改镜像只重启（常用于让新 ConfigMap/Secret 生效）</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl rollout undo deploy/myapp-deployment<br />kubectl rollout undo deploy myapp-deployment</td>
+<td style="text-align:center">回滚到上一个版本</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl rollout undo deploy/myapp-deployment --to-revision=2</td>
+<td style="text-align:center">回滚到指定历史版本</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-bash">kubectl rollout status deploy/myapp-deployment --timeout=120s
+kubectl rollout undo deploy/myapp-deployment
+kubectl get rs -l app=myapp            # DESIRED/CURRENT/READY 能看出新旧 RS 的交替过程
+kubectl describe deploy myapp-deployment | tail -20   # Events 里能看到 ScalingReplicaSet 记录
+</code></pre>
+<pre><code class="language-yaml"># 保证滚动更新可用的三个要点：就绪探针、maxUnavailable、revisionHistoryLimit
+spec:
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0       # 先扩容再缩容，做到零中断（副本数少时更稳）
+      maxSurge: 1
+  template:
+    spec:
+      containers:
+      - name: myapp
+        image: myapp:v2
+        readinessProbe:       # 没有就绪探针时，新 Pod 一 Running 就会被加进 Endpoints 接流量
+          httpGet: {path: /healthz, port: 8080}
+          initialDelaySeconds: 5
+</code></pre>
+<blockquote>
+<p>回滚只能回滚到<strong>本次 apply/set image 之前的模板</strong>。如果改动是通过 <code>kubectl edit</code> 直接改的，同样会生成新 RS 与 Revision，因此可以回滚；但如果是修改了 ConfigMap 内容，则 <code>rollout undo</code> 无效，需要回退 ConfigMap 并重启。</p>
+</blockquote>
+<h3 id="8-1动态伸缩">8.1 动态伸缩</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">kubectl scale deploy myapp-deployment --replicas=5</td>
+<td style="text-align:center">按名字动态伸缩</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl scale --replicas=8 -f myapp-deployment-v2.yaml</td>
+<td style="text-align:center">按 YAML 文件里声明的对象伸缩</td>
+</tr>
+<tr>
+<td style="text-align:center">kubectl autoscale deploy myapp-deployment --min=2 --max=10 --cpu-percent=60</td>
+<td style="text-align:center">创建 HPA，按 CPU 利用率自动扩缩容</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-bash">kubectl get hpa                                  # 依赖 metrics-server，否则 TARGETS 显示 unknown
+kubectl top pod -l app=myapp                     # 同样需要 metrics-server（旧版本曾用 heapster，已废弃）
+</code></pre>
+<blockquote>
+<p>HPA 的 <code>--cpu-percent</code> 是相对 <strong>requests</strong> 计算的：Pod 没写 <code>resources.requests.cpu</code> 时，HPA 拿不到分母，会显示 <code>unknown/60%</code> 而无法扩容。</p>
+</blockquote>
+<h3 id="8-2探针与资源限制">8.2 探针与资源限制</h3>
+<table>
+<thead>
+<tr><th style="text-align:center">探针</th><th style="text-align:center">作用</th><th>失败后果</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align:center"><code>readinessProbe</code></td><td style="text-align:center">容器是否准备好接收流量</td><td>从 Service Endpoints 中摘除，<strong>不重启</strong>容器</td></tr>
+<tr><td style="text-align:center"><code>livenessProbe</code></td><td style="text-align:center">容器是否还活着</td><td>按 restartPolicy 重启容器</td></tr>
+<tr><td style="text-align:center"><code>startupProbe</code></td><td style="text-align:center">启动慢的应用是否已启动完成</td><td>在它成功前，存活/就绪探针都不生效，避免慢启动被误杀</td></tr>
+</tbody>
+</table>
+<pre><code class="language-yaml">spec:
+  containers:
+  - name: myapp
+    image: myapp:v1
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: "1", memory: 512Mi}   # CPU 单位是核，1 等价于 1000m；内存建议用 Mi/Gi
+    startupProbe:                          # 最多等 30×5=150 秒启动时间
+      httpGet: {path: /healthz, port: 8080}
+      failureThreshold: 30
+      periodSeconds: 5
+    livenessProbe:
+      httpGet: {path: /healthz, port: 8080}   # httpGet 支持 path/port/host/scheme/httpHeaders
+      initialDelaySeconds: 10                 # 有 startupProbe 时可不写
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3                     # 连续失败 3 次判定为失败，默认就是 3
+    readinessProbe:
+      exec:                                   # exec 方式：命令返回 0 视为成功
+        command: ["/bin/sh", "-c", "curl -sf http://localhost:8080/healthz"]
+      periodSeconds: 5
+</code></pre>
+<blockquote>
+<p>资源单位说明：CPU 用 <code>m</code>（千分之一核），<code>100m</code>=0.1 核；内存用 <code>Mi/Gi</code>（1024 进制）或 <code>M/G</code>（1000 进制）。<code>requests</code> 影响调度与 HPA 分母，<code>limits</code> 是硬上限：内存超限 OOMKilled（退出码 137），CPU 超限被节流。可以再配合 <code>LimitRange</code>（给命名空间设默认 requests/limits）与 <code>ResourceQuota</code>（限制命名空间总量）。</p>
+</blockquote>
+
+<h2 id="9命名空间与标签选择器">9.命名空间与标签选择器</h2>
+<pre><code class="language-bash">kubectl get ns                                   # 查看有哪些命名空间
+kubectl create namespace test
+kubectl config set-context --current --namespace=test
+kubectl get pod -n kube-system                   # 指定命名空间
+kubectl get pod -A                               # 所有命名空间
+kubectl delete ns test                           # 会级联删除命名空间内所有资源，慎用
+kubectl get ns test -o jsonpath='{.status.phase}'   # Active / Terminating
+</code></pre>
+<p>标签（label）是键值对，用于<strong>选择与分组</strong>；注解（annotation）同样键值对，但用于存放工具和控制器读取的元信息，<strong>不能被选择器匹配</strong>。</p>
+<pre><code class="language-bash">kubectl get pod -A --show-labels
+kubectl get pod -l 'app=myapp,env in (dev,test)'    # 集合式：in / notin / exists
+kubectl get pod -l 'env!=prod'                      # 注意：不满足与不存在都会被选中
+kubectl get pod -l app=myapp --show-labels -o wide
+kubectl label nodes k8s-node01 zone=north           # 为节点打标签
+kubectl label pod podName -n nsName role-name=test
+kubectl label pod podName -n nsName role-name=dev --overwrite   # 改标签值必须加 --overwrite
+kubectl label pod podName -n nsName role-name-             # 删除标签要用「键名+减号」
+kubectl label nodes k8s-node01 zone-                 # 删除节点上的标签
+kubectl annotate pod podName -n nsName note=hello --overwrite
+</code></pre>
+<pre><code class="language-yaml"># 节点亲和与 Pod 反亲和：比 nodeSelector 更灵活的选择方式
+spec:
+  nodeSelector:
+    zone: north
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/os
+            operator: In
+            values: [linux]
+    podAntiAffinity:                        # 同一 Deployment 的副本尽量分散到不同节点
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app: myapp
+</code></pre>
+<blockquote>
+<p>标签选择器写错的典型症状：<code>kubectl get pods -l app=myapp</code> 明明有 Pod 却查不到（键或值打错），或者 Service 的 Endpoints 为空。<strong>Deployment 的 <code>spec.selector</code> 一旦创建就不能修改</strong>，需要改就只能删掉重建。</p>
+</blockquote>
+
+<h2 id="10排障命令">10.排障命令</h2>
+<table>
+<thead>
+<tr><th style="text-align:center">命令</th><th>用途</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align:center"><code>kubectl get pod -o wide</code></td><td>看 IP、所在节点、重启次数，快速定位「重启多」「Pending」</td></tr>
+<tr><td style="text-align:center"><code>kubectl describe pod &lt;name&gt;</code></td><td>看事件（Events）、探针失败原因、调度失败原因、挂载失败原因</td></tr>
+<tr><td style="text-align:center"><code>kubectl logs &lt;pod&gt; [-c 容器] [-f] [--tail=100] [--previous]</code></td><td>看标准输出日志；<code>--previous</code> 看被重启掉的上一实例日志</td></tr>
+<tr><td style="text-align:center"><code>kubectl exec -it &lt;pod&gt; -- sh</code></td><td>进容器排查网络、配置、进程</td></tr>
+<tr><td style="text-align:center"><code>kubectl get events --sort-by=.lastTimestamp</code></td><td>按时间顺序看集群事件，注意要带 <code>-A</code> 或 <code>-n</code></td></tr>
+<tr><td style="text-align:center"><code>kubectl port-forward svc/myapp-svc 8080:80</code></td><td>把 Service/端口转发到本地，绕过 Ingress 直接验证服务</td></tr>
+<tr><td style="text-align:center"><code>kubectl top pod/node</code></td><td>看资源用量，需 metrics-server</td></tr>
+<tr><td style="text-align:center"><code>kubectl cp</code></td><td>与容器互拷文件，例如 <code>kubectl cp myapp-pod:/tmp/dump.log ./dump.log</code></td></tr>
+<tr><td style="text-align:center"><code>kubectl api-resources</code></td><td>查资源名、短名称（如 deploy/svc/ing）、是否命名空间级</td></tr>
+<tr><td style="text-align:center"><code>kubectl explain pod.spec.containers</code></td><td>查字段含义与类型，替代翻文档</td></tr>
+</tbody>
+</table>
+<pre><code class="language-bash"># 1. 容器起不来看 describe 的 Events 与 Last State
+kubectl describe pod myapp-pod | sed -n '/Events:/,$p'
+# 2. 容器内进程崩溃看上一次的日志
+kubectl logs myapp-pod --previous --tail=200
+# 3. 多容器 Pod 必须指定容器名
+kubectl logs myapp-pod -c sidecar --tail=100
+# 4. 镜像拉取失败（ImagePullBackOff）先确认 Secret 与镜像地址
+kubectl get pod myapp-pod -o jsonpath='{.spec.imagePullSecrets[*].name}'
+# 5. 集群内 DNS / 连通性排查
+kubectl run tmp-shell --rm -it --image=busybox:1.36 --restart=Never -- sh
+#    nslookup myapp-svc.default.svc.cluster.local
+#    wget -qO- http://myapp-svc.default.svc.cluster.local
+# 6. 查看所有命名空间的异常 Pod（非 Running / 非 Succeeded）
+kubectl get pod -A --field-selector=status.phase!=Running,status.phase!=Succeeded
+# 7. 只看最近的 Warning 事件
+kubectl get events -A --field-selector type=Warning --sort-by=.lastTimestamp | tail -20
+# 8. 本地直接访问 Service，跳过 Ingress 定位是应用问题还是入口问题
+kubectl port-forward svc/myapp-svc 8080:80
+# 9. 强制删除卡在 Terminating 的 Pod（确认确实要强删时再用）
+kubectl delete pod myapp-pod -n default --grace-period=0 --force
+</code></pre>
+<blockquote>
+<p>排障顺序建议：先 <code>get -o wide</code> 看状态 → 再 <code>describe</code> 看 Events 找到「谁在拒绝」→ 再看 <code>logs</code> 判断应用自身问题 → 最后用 <code>exec</code>/<code>port-forward</code> 从容器内部和集群内部验证。90% 的问题在 <code>describe</code> 的 Events 里已经有答案。</p>
+</blockquote>
+
+<h2 id="11操作类命令">11.操作类命令</h2>
 <table>
 <thead>
 <tr>
@@ -499,7 +1061,7 @@
 <td style="text-align:center">通过配置文件滚动升级</td>
 </tr>
 <tr>
-<td style="text-align:center">kubectl set image deploy/myapp-deployment myapp=“registry.cn-beijing.aliyuncs.com/google_registry/myapp:v3”</td>
+<td style="text-align:center">kubectl set image deploy/myapp-deployment myapp="registry.cn-beijing.aliyuncs.com/google_registry/myapp:v3"</td>
 <td style="text-align:center">通过命令滚动升级</td>
 </tr>
 <tr>
@@ -512,26 +1074,6 @@
 </tr>
 </tbody>
 </table>
-<h2 id="7动态伸缩">7.动态伸缩</h2>
-<table>
-<thead>
-<tr>
-<th style="text-align:center">命令名</th>
-<th style="text-align:center">作用</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:center">kubectl scale deploy myapp-deployment --replicas=5</td>
-<td style="text-align:center">动态伸缩</td>
-</tr>
-<tr>
-<td style="text-align:center">kubectl scale --replicas=8 -f myapp-deployment-v2.yaml</td>
-<td style="text-align:center">动态伸缩（根据yaml文件）</td>
-</tr>
-</tbody>
-</table>
-<h2 id="8操作类命令">8.操作类命令</h2>
 <table>
 <thead>
 <tr>
@@ -582,7 +1124,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="9状态">9.状态</h2>
+<h2 id="12状态">12.状态</h2>
 <table>
 <thead>
 <tr>
@@ -604,7 +1146,7 @@
 <td style="text-align:center">准备中，暂时无法提供服务</td>
 </tr>
 <tr>
-<td style="text-align:center"><code>Terminaling</code></td>
+<td style="text-align:center"><code>Terminating</code></td>
 <td style="text-align:center">结束中，即将被移除</td>
 </tr>
 <tr>
@@ -694,7 +1236,7 @@ spec:                           #必选，对象【如pod】的详细定义
   containers:                   #必选，spec对象的容器信息
   - name: string                #必选，容器名称
     image: string               #必选，要用到的镜像名称
-    imagePullPolicy: [Always|Never|IfNotPresent]  #获取镜像的策略；(1)Always：意思是每次都尝试重新拉取镜像；(2)Never：表示仅使用本地镜像，即使本地没有镜像也不拉取；(3) IfNotPresent：如果本地有镜像就使用本地镜像，没有就拉取远程镜像。默认：Always
+    imagePullPolicy: [Always|Never|IfNotPresent]  #获取镜像的策略；(1)Always：每次都尝试重新拉取镜像；(2)Never：仅使用本地镜像，本地没有也不拉取；(3)IfNotPresent：本地有就用本地，没有才拉取。默认规则：镜像 tag 为 latest 或省略 tag 时为 Always，否则为 IfNotPresent
     command: [string]           #指定容器启动命令，由于是数组因此可以指定多个。不指定则使用镜像打包时指定的启动命令。
     args: [string]              #指定容器启动命令参数，由于是数组因此可以指定多个
     workingDir: string          #指定容器的工作目录
@@ -762,26 +1304,86 @@ spec:                           #必选，对象【如pod】的详细定义
       name: string             #提供你想要挂载的 ConfigMap 的名字
 </code></pre>
 <blockquote>
-<p>kubectl explain pod命令可以查看资源的模板</p>
-<p>kubectl explain pod.apiVersion 查看详细字段</p>
+<p><strong>小结与操作路径</strong>：写 YAML 或用命令生成期望状态 → <code>kubectl apply -f</code> 提交 → <code>kubectl get/describe</code> 观察是否达到期望 → 升级用 <code>set image</code> 或新 YAML + <code>rollout status</code>，出问题 <code>rollout undo</code> → 排障按 <code>describe → logs → exec/port-forward → events</code> 的顺序走。</p>
+<p><code>kubectl explain pod</code> 可以查看资源的字段模板，<code>kubectl explain pod.spec.containers</code> 查看更细的字段说明，字段是否必填、类型是什么都写得很清楚，比翻文档更快。</p>
 </blockquote>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#0%E6%A6%82%E8%A7%88%E8%B5%84%E6%BA%90%E5%AF%B9%E8%B1%A1%E4%B8%8E%E6%93%8D%E4%BD%9C%E8%B7%AF%E5%BE%84">0.概览：资源对象与操作路径</a>
 <ul>
-<li>
-<ul>
-<li><a href="#1%E8%B5%84%E6%BA%90%E7%B1%BB%E5%9E%8B">1.资源类型</a></li>
-<li><a href="#2%E6%93%8D%E4%BD%9C%E6%8C%87%E4%BB%A4">2.操作指令</a></li>
-<li><a href="#3%E6%9F%A5%E7%9C%8B%E5%92%8C%E8%BF%9B%E5%85%A5%E7%A9%BA%E9%97%B4">3.查看和进入空间</a></li>
-<li><a href="#4%E8%BF%9B%E5%85%A5pod%E5%90%AF%E5%8A%A8%E7%9A%84%E5%AE%B9%E5%99%A8">4.进入pod启动的容器</a></li>
-<li><a href="#5%E6%B7%BB%E5%8A%A0label%E5%80%BC">5.添加label值</a></li>
-<li><a href="#6%E6%BB%9A%E5%8A%A8%E5%8D%87%E7%BA%A7">6.滚动升级</a></li>
-<li><a href="#7%E5%8A%A8%E6%80%81%E4%BC%B8%E7%BC%A9">7.动态伸缩</a></li>
-<li><a href="#8%E6%93%8D%E4%BD%9C%E7%B1%BB%E5%91%BD%E4%BB%A4">8.操作类命令</a></li>
-<li><a href="#9%E7%8A%B6%E6%80%81">9.状态</a></li>
 </ul>
 </li>
+<li>
+<a href="#1%E8%B5%84%E6%BA%90%E7%B1%BB%E5%9E%8B">1.资源类型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#2%E6%93%8D%E4%BD%9C%E6%8C%87%E4%BB%A4">2.操作指令</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#3%E6%9F%A5%E7%9C%8B%E5%92%8C%E8%BF%9B%E5%85%A5%E7%A9%BA%E9%97%B4">3.查看和进入空间</a>
+<ul>
+<li><a href="#3-1%E5%85%83%E6%95%B0%E6%8D%AE%E6%9F%A5%E8%AF%A2%E4%B8%8E%E8%BE%93%E5%87%BA%E6%A0%BC%E5%BC%8F">3.1 元数据查询与输出格式</a></li>
+</ul>
+</li>
+<li>
+<a href="#4%E8%BF%9B%E5%85%A5pod%E5%90%AF%E5%8A%A8%E7%9A%84%E5%AE%B9%E5%99%A8">4.进入pod启动的容器</a>
+<ul>
+<li><a href="#4-1%E5%91%BD%E4%BB%A4%E5%86%99%E6%B3%95%E8%A6%81%E7%82%B9">4.1 命令写法要点</a></li>
+</ul>
+</li>
+<li>
+<a href="#5%E6%B7%BB%E5%8A%A0label%E5%80%BC">5.添加 label 值</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#6%E6%A0%B8%E5%BF%83%E8%B5%84%E6%BA%90%E5%AF%B9%E8%B1%A1%E4%B8%8EYAML%E9%AA%A8%E6%9E%B6">6.核心资源对象与 YAML 骨架</a>
+<ul>
+<li><a href="#6-1%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4">6.1 命名空间</a></li>
+<li><a href="#6-2Pod">6.2 Pod</a></li>
+<li><a href="#6-3Deployment">6.3 Deployment</a></li>
+<li><a href="#6-4Service">6.4 Service</a></li>
+<li><a href="#6-5Ingress">6.5 Ingress</a></li>
+<li><a href="#6-6ConfigMap%E4%B8%8ESecret">6.6 ConfigMap 与 Secret</a></li>
+<li><a href="#6-7PV%E4%B8%8EPVC">6.7 PV、PVC 与 StorageClass</a></li>
+</ul>
+</li>
+<li>
+<a href="#7%E5%A3%B0%E6%98%8E%E5%BC%8F%E4%B8%8E%E5%91%BD%E4%BB%A4%E5%BC%8F">7.声明式与命令式</a>
+<ul>
+<li><a href="#7-1applycreate%E4%B8%8Ereplace%E7%9A%84%E5%8C%BA%E5%88%AB">7.1 apply、create 与 replace 的区别</a></li>
+</ul>
+</li>
+<li>
+<a href="#8%E6%BB%9A%E5%8A%A8%E6%9B%B4%E6%96%B0%E4%B8%8E%E5%9B%9E%E6%BB%9A">8.滚动更新与回滚</a>
+<ul>
+<li><a href="#8-1%E5%8A%A8%E6%80%81%E4%BC%B8%E7%BC%A9">8.1 动态伸缩</a></li>
+<li><a href="#8-2%E6%8E%A2%E9%92%88%E4%B8%8E%E8%B5%84%E6%BA%90%E9%99%90%E5%88%B6">8.2 探针与资源限制</a></li>
+</ul>
+</li>
+<li>
+<a href="#9%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E4%B8%8E%E6%A0%87%E7%AD%BE%E9%80%89%E6%8B%A9%E5%99%A8">9.命名空间与标签选择器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#10%E6%8E%92%E9%9A%9C%E5%91%BD%E4%BB%A4">10.排障命令</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#11%E6%93%8D%E4%BD%9C%E7%B1%BB%E5%91%BD%E4%BB%A4">11.操作类命令</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#12%E7%8A%B6%E6%80%81">12.状态</a>
+<ul>
 </ul>
 </li>
 </ul>

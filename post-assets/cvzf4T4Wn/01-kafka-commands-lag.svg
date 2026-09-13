@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6b7c"/>
+    </marker>
+    <marker id="arrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f6fd0"/>
+    </marker>
+  </defs>
+  <rect width="900" height="560" fill="#ffffff"/>
+  <text x="450" y="30" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">Kafka 常用命令与消费组 Lag 排查</text>
+  <text x="450" y="52" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" fill="#5b6b7c" text-anchor="middle">统一使用 --bootstrap-server；--zookeeper 自 Kafka 2.2 起废弃、3.0 起移除</text>
+
+  <text x="30" y="80" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#1f2b38">一、消息链路：Producer → Topic（分区 / 副本）→ Consumer Group</text>
+
+  <rect x="30" y="92" width="180" height="116" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="120" y="114" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#2f6fd0" text-anchor="middle">Producer 生产</text>
+  <text x="44" y="140" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">kafka-console-producer.sh</text>
+  <text x="44" y="160" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">--bootstrap-server</text>
+  <text x="44" y="180" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">--topic test</text>
+  <text x="44" y="198" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">key 与 value 用 \t 分隔</text>
+
+  <line x1="216" y1="150" x2="292" y2="150" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="300" y="92" width="290" height="116" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.2"/>
+  <text x="445" y="114" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">Topic: test（4 分区 / 2 副本）</text>
+  <rect x="316" y="126" width="80" height="68" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="356" y="148" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">P0</text>
+  <text x="356" y="168" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38" text-anchor="middle">leader: 0</text>
+  <text x="356" y="186" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c" text-anchor="middle">replicas 0,1</text>
+  <rect x="406" y="126" width="80" height="68" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="446" y="148" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">P1</text>
+  <text x="446" y="168" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38" text-anchor="middle">leader: 1</text>
+  <text x="446" y="186" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c" text-anchor="middle">replicas 1,2</text>
+  <rect x="496" y="126" width="80" height="68" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="536" y="148" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">P2</text>
+  <text x="536" y="168" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38" text-anchor="middle">leader: 2</text>
+  <text x="536" y="186" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c" text-anchor="middle">replicas 2,0</text>
+
+  <line x1="596" y1="150" x2="652" y2="150" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="660" y="92" width="210" height="116" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="765" y="114" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#e08a1e" text-anchor="middle">Consumer Group 消费</text>
+  <text x="676" y="140" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">kafka-console-consumer.sh</text>
+  <text x="676" y="160" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">--group my-group</text>
+  <text x="676" y="180" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">--from-beginning</text>
+  <text x="676" y="198" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">一个分区只给一个消费者</text>
+
+  <text x="30" y="236" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#1f2b38">二、消费组 Lag：kafka-consumer-groups.sh --describe --group my-group</text>
+
+  <rect x="30" y="248" width="560" height="152" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.2"/>
+  <text x="46" y="276" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c">GROUP</text>
+  <text x="150" y="276" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c">TOPIC</text>
+  <text x="240" y="276" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c">PARTITION</text>
+  <text x="330" y="276" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c">CURRENT-OFFSET</text>
+  <text x="446" y="276" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c">LOG-END-OFFSET</text>
+  <text x="548" y="276" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c">LAG</text>
+  <line x1="42" y1="286" x2="578" y2="286" stroke="#c8d3e0" stroke-width="1"/>
+  <text x="46" y="308" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">my-group</text>
+  <text x="150" y="308" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">test</text>
+  <text x="240" y="308" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">0</text>
+  <text x="330" y="308" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">1200</text>
+  <text x="446" y="308" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">1500</text>
+  <text x="548" y="308" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" font-weight="700" fill="#e08a1e">300</text>
+  <text x="46" y="332" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">my-group</text>
+  <text x="150" y="332" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">test</text>
+  <text x="240" y="332" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">1</text>
+  <text x="330" y="332" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">800</text>
+  <text x="446" y="332" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">800</text>
+  <text x="548" y="332" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" font-weight="700" fill="#2e9e5b">0</text>
+  <text x="46" y="356" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">my-group</text>
+  <text x="150" y="356" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">test</text>
+  <text x="240" y="356" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">2</text>
+  <text x="330" y="356" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">1500</text>
+  <text x="446" y="356" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#1f2b38">1500</text>
+  <text x="548" y="356" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" font-weight="700" fill="#2e9e5b">0</text>
+  <text x="46" y="384" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">LAG 长期不降 → 消费能力不足；突然暴涨 → 流量激增或消费者掉线</text>
+
+  <rect x="610" y="248" width="260" height="152" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="740" y="272" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#2f6fd0" text-anchor="middle">Lag 的计算与判读</text>
+  <text x="626" y="300" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" fill="#1f2b38">LAG = LOG-END-OFFSET</text>
+  <text x="626" y="320" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" fill="#1f2b38">− CURRENT-OFFSET</text>
+  <text x="626" y="346" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">LAG = 0 表示已追平</text>
+  <text x="626" y="366" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">LAG 单调增说明消费跟不上</text>
+  <text x="626" y="386" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" fill="#5b6b7c">STATE 非 Stable 时先处理</text>
+
+  <text x="30" y="428" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#1f2b38">三、分区与副本：分区只能增不能减，副本数不能超过 broker 数</text>
+
+  <rect x="30" y="440" width="270" height="104" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="165" y="462" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#2e9e5b" text-anchor="middle">topic 与分区</text>
+  <text x="46" y="484" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--create --partitions 4</text>
+  <text x="46" y="502" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--replication-factor 2</text>
+  <text x="46" y="520" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--alter --partitions 8（只能增）</text>
+  <text x="46" y="538" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--delete --topic test</text>
+
+  <rect x="315" y="440" width="270" height="104" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="450" y="462" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#2f6fd0" text-anchor="middle">生产与消费</text>
+  <text x="331" y="484" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--bootstrap-server host:9092</text>
+  <text x="331" y="502" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">console-producer.sh --topic t</text>
+  <text x="331" y="520" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">console-consumer.sh --group g</text>
+  <text x="331" y="538" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--from-beginning 从头消费</text>
+
+  <rect x="600" y="440" width="270" height="104" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="735" y="462" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#e08a1e" text-anchor="middle">副本迁移与 leader 均衡</text>
+  <text x="616" y="484" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">kafka-reassign-partitions.sh</text>
+  <text x="616" y="502" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--reassignment-json-file xx.json</text>
+  <text x="616" y="520" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">--execute / --verify</text>
+  <text x="616" y="538" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" fill="#1f2b38">preferred-replica-election.sh</text>
+</svg>

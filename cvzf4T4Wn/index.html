@@ -127,102 +127,103 @@
           
           <img class="post-feature-header-image" src="/post-images/cvzf4T4Wn.png" alt="封面图">
           
-          <h2 id="管理">管理</h2>
-<pre><code class="language-shell">## 创建topic（4个分区，2个副本）
+          <p><img src="/post-assets/cvzf4T4Wn/01-kafka-commands-lag.svg" alt="Kafka 常用命令与消费组 Lag 排查示意图"></p>
+<h2 id="管理">管理</h2>
+<p>从 Kafka 2.2 开始，topic 管理类命令统一通过 <code>--bootstrap-server</code> 连接 broker；旧版的 <code>--zookeeper</code> 参数已经废弃，并在 Kafka 3.0 中被移除，新集群不要再用。下面的示例除对照说明外都使用 <code>--bootstrap-server localhost:9092</code>。</p>
+<pre><code class="language-bash">## 创建 topic：4 个分区、2 个副本（副本数不能超过 broker 数量）
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic test --partitions 4 --replication-factor 2
+
+## 分区扩容：只能增加，不能减少（Kafka 不支持删除分区，只能删掉整个 topic 重建）
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic test --partitions 8
+
+## 删除 topic：需要 broker 配置 delete.topic.enable=true（默认即为 true）
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic test
+
+## 旧版写法（Kafka &lt; 2.2，仅作对照，--zookeeper 已废弃）
 bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 2 --partitions 4 --topic test
-
-### kafka版本 &gt;= 2.2
-bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic test
-
-## 分区扩容
-### kafka版本 &lt; 2.2
 bin/kafka-topics.sh --zookeeper localhost:2181 --alter --topic topic1 --partitions 2
-
-### kafka版本 &gt;= 2.2
-bin/kafka-topics.sh --bootstrap-server broker_host:port --alter --topic topic1 --partitions 2
-
-## 删除topic
 bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic test
 </code></pre>
+<p>分区数决定 topic 的并行度上限：同一个消费组内，一个分区同一时刻只会分给一个消费者，因此消费者数量超过分区数时，多出来的消费者会一直空闲。副本数（replication-factor）决定冗余能力，取值必须小于等于 broker 数量；同一分区的多个副本分布在不同 broker 上，其中一个为 leader 对外提供读写，其余 follower 持续同步。</p>
 <h2 id="查询">查询</h2>
-<pre><code class="language-shell">## 查询集群描述
-bin/kafka-topics.sh --describe --zookeeper 127.0.0.1:2181
+<pre><code class="language-bash">## 查看所有 topic
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
 
-## 查询集群描述（新）
-bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic foo --describe
+## 查看指定 topic 的分区、副本与 ISR
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic test
+#   Partition  Count  Leader  Replicas  Isr
+#   分区号      副本数  leader 所在 broker  副本所在 broker 列表  与 leader 保持同步的副本集合
+#   Isr 少于 Replicas 说明有副本没跟上，该分区的可靠性在下降
 
-## topic列表查询
-bin/kafka-topics.sh --zookeeper 127.0.0.1:2181 --list
+## 不带 --topic 时，列出集群内所有 topic 的描述信息
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
 
-## topic列表查询（支持0.9版本+）
-bin/kafka-topics.sh --list --bootstrap-server localhost:9092
-
-## 消费者列表查询（存储在zk中的）
-bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
-
-## 消费者列表查询（支持0.9版本+）
-bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server localhost:9092 --list
-
-## 消费者列表查询（支持0.10版本+）
+## 消费者组列表
 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
 
-## 显示某个消费组的消费详情（仅支持offset存储在zookeeper上的）
-bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper localhost:2181 --group test
-
-## 显示某个消费组的消费详情（0.9版本 - 0.10.1.0 之前）
-bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server localhost:9092 --describe --group test-consumer-group
-
-## 显示某个消费组的消费详情（0.10.1.0版本+）
+## 消费组详情：CURRENT-OFFSET / LOG-END-OFFSET / LAG
 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
+#   还可加 --members 看成员分配、--state 只看状态、--all-groups 看所有消费组
+
+## 旧版命令（offset 还存放在 ZooKeeper 的时代，仅作对照）
+bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
+bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper localhost:2181 --group test
 </code></pre>
+<p>消费组详情中最关键的一列是 <strong>LAG</strong>：<code>LAG = LOG-END-OFFSET − CURRENT-OFFSET</code>，也就是「这个分区还有多少条消息没被消费」。<code>LAG = 0</code> 表示已经追平；LAG 长期不降说明消费能力不足，可以在不超过分区数的前提下增加消费者，或优化消费逻辑；LAG 突然暴涨通常是上游流量激增或消费者掉线。详情里还会给出消费组状态（STATE），只有 <code>Stable</code> 时 LAG 才有稳定的参考价值，否则应先排查 rebalance。</p>
 <h2 id="发送和消费">发送和消费</h2>
-<pre><code class="language-shell">## 生产者
-bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test
+<pre><code class="language-bash">## 生产者：从标准输入逐行发送（parse.key=true 时用 \t 分隔 key 与 value）
+bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic test
 
-## 消费者（已失效）
-bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic test
-
-## 生产者（支持0.9版本+）
+## 指定生产者配置文件；旧参数 --broker-list 仍可用，但建议统一改成 --bootstrap-server
 bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test --producer.config config/producer.properties
 
-## 消费者（支持0.9版本+，已失效）
-bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --new-consumer --from-beginning --consumer.config config/consumer.properties
+## 消费者：默认只消费新消息，--from-beginning 表示从头消费
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning
 
-## 消费者（最新）
-bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning --consumer.config config/consumer.properties
+## 指定消费组（会提交 offset，可在 kafka-consumer-groups.sh 中看到该组的 LAG）
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --group my-group --consumer.config config/consumer.properties
 
+## 打印 key、分区、offset 等元信息，便于确认消息落在哪个分区
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --property print.key=true --property print.partition=true
 
-## kafka-verifiable-consumer.sh（消费者事件，例如：offset提交等）
+## 指定分区与起始 offset，最多消费 10 条（offset 也可写 earliest / latest）
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --partition 0 --offset 1234 --max-messages 10
+
+## 消费者早期写法（--zookeeper / --new-consumer 均已废弃，仅作对照）
+bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic test
+bin/kafka-console-consumer.sh --new-consumer --bootstrap-server localhost:9092 --topic test
+
+## kafka-verifiable-consumer.sh：消费并打印 offset 提交等事件，用于验证消费链路
+## 注意：该工具的参数是 --broker-list，不是 --bootstrap-server
 bin/kafka-verifiable-consumer.sh --broker-list localhost:9092 --topic test --group-id groupName
-
-## 高级点的用法
-bin/kafka-simple-consumer-shell.sh --brist localhost:9092 --topic test --partition 0 --offset 1234  --max-messages 10
 </code></pre>
+<p>生产与消费工具都支持用 <code>--property</code> 定制输出格式；<code>--bootstrap-server</code> 只需填集群中任意一个（或多个）broker 地址，客户端会自动拉取完整元数据，不必列全所有 broker。</p>
 <h2 id="切换leader">切换leader</h2>
-<pre><code class="language-shell">## kafka版本 &lt;= 2.4
+<pre><code class="language-bash">## kafka版本 &lt;= 2.4
 bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
 
 ## kafka新版本
 bin/kafka-preferred-replica-election.sh --bootstrap-server broker_host:port
 </code></pre>
 <h2 id="kafka自带压测命令">kafka自带压测命令</h2>
-<pre><code class="language-shell">bin/kafka-producer-perf-test.sh --topic test --num-records 100 --record-size 1 --throughput 100  --producer-props bootstrap.servers=localhost:9092
+<pre><code class="language-bash">bin/kafka-producer-perf-test.sh --topic test --num-records 100 --record-size 1 --throughput 100  --producer-props bootstrap.servers=localhost:9092
 </code></pre>
 <h2 id="kafka持续发送消息">kafka持续发送消息</h2>
 <p>持续发送消息到指定的topic中，且每条发送的消息都会有响应信息：</p>
-<pre><code class="language-shell">kafka-verifiable-producer.sh --broker-list $(hostname -i):9092 --topic test --max-messages 100000
+<pre><code class="language-bash">kafka-verifiable-producer.sh --broker-list $(hostname -i):9092 --topic test --max-messages 100000
 </code></pre>
 <h2 id="zookeeper-shellsh">zookeeper-shell.sh</h2>
 <p>如果 kafka 集群的 zk 配置了 chroot 路径，那么需要加上 <code>/path</code>。</p>
-<pre><code class="language-shell">bin/zookeeper-shell.sh localhost:2181[/path]
+<pre><code class="language-bash">bin/zookeeper-shell.sh localhost:2181[/path]
 ls /brokers/ids
 get /brokers/ids/0
 </code></pre>
 <h2 id="迁移分区">迁移分区</h2>
+<p>迁移分区（把副本挪到新 broker、或给已有分区增加副本）使用 kafka-reassign-partitions.sh 完成，分「生成规则 → 执行 → 验证」三步。较新的 Kafka 版本中该脚本同样支持 --bootstrap-server，新集群建议与其它命令保持一致，即把下例中的 --zookeeper localhost:2181 换成 --bootstrap-server localhost:9092。</p>
 <ol>
 <li>
 <p>创建规则json</p>
-<pre><code class="language-shell">cat &gt; increase-replication-factor.json &lt;&lt;EOF
+<pre><code class="language-bash">cat &gt; increase-replication-factor.json &lt;&lt;EOF
 {&quot;version&quot;:1, &quot;partitions&quot;:[
 {&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:0,&quot;replicas&quot;:[0,1]},
 {&quot;topic&quot;:&quot;__consumer_offsets&quot;,&quot;partition&quot;:1,&quot;replicas&quot;:[0,1]},
@@ -280,42 +281,70 @@ EOF
 </li>
 <li>
 <p>执行</p>
-<pre><code class="language-shell">bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --execute
+<pre><code class="language-bash">bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --execute
 </code></pre>
 </li>
 <li>
 <p>验证</p>
-<pre><code class="language-shell">bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
+<pre><code class="language-bash">bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
 </code></pre>
 </li>
 </ol>
 <h2 id="删除消费者组">删除消费者组</h2>
 <p>查询消费者组列表：</p>
-<pre><code class="language-shell">kafka-consumer-groups.sh --bootstrap-server 172.31.1.245:9092 --list
+<pre><code class="language-bash">kafka-consumer-groups.sh --bootstrap-server 172.31.1.245:9092 --list
 </code></pre>
 <p>查询消费者组明细：</p>
-<pre><code class="language-shell">kafka-consumer-groups.sh --bootstrap-server {Kafka instance connection address} --describe --group {consumer group name}
+<pre><code class="language-bash">kafka-consumer-groups.sh --bootstrap-server {Kafka instance connection address} --describe --group {consumer group name}
 </code></pre>
 <p>删除消费者组：</p>
-<pre><code class="language-shell">kafka-consumer-groups.sh --bootstrap-server {Kafka instance connection address} --delete --group {consumer group name}
+<pre><code class="language-bash">kafka-consumer-groups.sh --bootstrap-server {Kafka instance connection address} --delete --group {consumer group name}
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E7%AE%A1%E7%90%86">管理</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E7%AE%A1%E7%90%86">管理</a></li>
-<li><a href="#%E6%9F%A5%E8%AF%A2">查询</a></li>
-<li><a href="#%E5%8F%91%E9%80%81%E5%92%8C%E6%B6%88%E8%B4%B9">发送和消费</a></li>
-<li><a href="#%E5%88%87%E6%8D%A2leader">切换leader</a></li>
-<li><a href="#kafka%E8%87%AA%E5%B8%A6%E5%8E%8B%E6%B5%8B%E5%91%BD%E4%BB%A4">kafka自带压测命令</a></li>
-<li><a href="#kafka%E6%8C%81%E7%BB%AD%E5%8F%91%E9%80%81%E6%B6%88%E6%81%AF">kafka持续发送消息</a></li>
-<li><a href="#zookeeper-shellsh">zookeeper-shell.sh</a></li>
-<li><a href="#%E8%BF%81%E7%A7%BB%E5%88%86%E5%8C%BA">迁移分区</a></li>
-<li><a href="#%E5%88%A0%E9%99%A4%E6%B6%88%E8%B4%B9%E8%80%85%E7%BB%84">删除消费者组</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E6%9F%A5%E8%AF%A2">查询</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8F%91%E9%80%81%E5%92%8C%E6%B6%88%E8%B4%B9">发送和消费</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%87%E6%8D%A2leader">切换leader</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#kafka%E8%87%AA%E5%B8%A6%E5%8E%8B%E6%B5%8B%E5%91%BD%E4%BB%A4">kafka自带压测命令</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#kafka%E6%8C%81%E7%BB%AD%E5%8F%91%E9%80%81%E6%B6%88%E6%81%AF">kafka持续发送消息</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#zookeeper-shellsh">zookeeper-shell.sh</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%BF%81%E7%A7%BB%E5%88%86%E5%8C%BA">迁移分区</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%A0%E9%99%A4%E6%B6%88%E8%B4%B9%E8%80%85%E7%BB%84">删除消费者组</a>
+<ul>
 </ul>
 </li>
 </ul>
