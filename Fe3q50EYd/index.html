@@ -126,8 +126,10 @@
           <img class="post-feature-header-image" src="/post-images/Fe3q50EYd.png" alt="封面图">
           
           <h1 id="依赖">依赖</h1>
+<p>本文整理 Gradle 依赖与插件的常用写法：依赖的声明方式、仓库（repositories）与元数据源、变体（variant）与平台（platform）、版本规则与冲突解决、依赖锁定，以及插件应用与 Android 构建中的实用配置。示例均以 Groovy DSL 的 build.gradle 为准。</p>
+<p><img src="/post-assets/Fe3q50EYd/01-dependency-scopes.svg" alt="Gradle 常用依赖配置作用域对比：编译期与运行期是否可见、是否传递给消费者"></p>
 <h2 id="configurations">configurations</h2>
-<p>设置configurations 配置依赖信息</p>
+<p>configurations 块用于声明或调整依赖配置（configuration），也就是一组依赖的集合。下面的例子用 canBeResolved / canBeConsumed 区分该配置是“可被解析（消费者视角）”还是“可被发布（生产者视角）”。</p>
 <p>build.gradle</p>
 <pre><code class="language-java">configurations {
     // 针对需要组件API的消费者的配置
@@ -182,7 +184,7 @@
 <li>compileOnly —用于编译生产代码所必需的依赖关系，但不应该属于运行时类路径的一部分</li>
 <li>implementation（取代compile）-用于编译和运行时</li>
 <li>runtimeOnly（取代runtime）-仅在运行时使用，不用于编译</li>
-<li>testCompileOnly—与compileOnly测试相同</li>
+<li>testCompileOnly —— 与 compileOnly 对应，只在测试源集编译期可见</li>
 <li>testImplementation —测试相当于 implementation</li>
 <li>testRuntimeOnly —测试相当于 runtimeOnly</li>
 </ul>
@@ -192,7 +194,7 @@
 <pre><code class="language-java">repositories {
     
     mavenCentral() // Maven Central存储库  
-    jcenter() // JCenter Maven存储库
+    jcenter() // JCenter Maven存储库（2021 年起已停止服务，仅遗留项目可用，新项目请改用 mavenCentral()）
     google() // Google Maven存储库
         
     mavenLocal()   // 将本地Maven缓存添加为存储库（不推荐）
@@ -326,8 +328,6 @@
 <h3 id="声明功能变体">声明功能变体</h3>
 <p>可以通过应用<code>java</code>或<code>java-library</code>插件来声明功能变体。以下代码说明了如何声明名为<code>mongodbSupport</code>的功能：</p>
 <p>示例1.声明一个功能变量</p>
-<pre><code class="language-java">Groovy``Kotlin
-</code></pre>
 <p>build.gradle</p>
 <pre><code class="language-java">group = 'org.gradle.demo'
 version = '1.0'
@@ -808,7 +808,7 @@ gradlePlugin {
 <pre><code class="language-java">buildscript {
     repositories {
         google()
-        jcenter()
+        jcenter() // 已停服，建议改用 mavenCentral()
     }
     dependencies {
         classpath &quot;com.android.tools.build:gradle:4.0.1&quot;
@@ -895,13 +895,13 @@ sourceSets {
 </code></pre>
 <p>导入依赖</p>
 <pre><code class="language-java"> repositories {
-        jcenter()
+        jcenter() // 已停服，建议改用 mavenCentral()
  }
 dependencies {
      implementation group:'com.android.support',name:'appcompat-v7',version:'28.0.0'
      implementation 'com.android.support:appcompat-v7:28.0.0'
-     implementation protect(':p')
-     implementation file('libs/ss.jar','libs/ss2.jar')
+     implementation project(':p')
+     implementation files('libs/ss.jar', 'libs/ss2.jar')
          
     implementation fileTree(dir: &quot;libs&quot;, include: [&quot;*.jar&quot;])
 }
@@ -960,7 +960,7 @@ android {
 }
 </code></pre>
 <h2 id="adb设置">adb设置</h2>
-<p>adb工具</p>
+<p>adb 工具。<strong>注意</strong>：adbOptions 自 AGP 3.0 起被废弃、后续版本已被移除，新项目请直接使用 <code>adb install</code> 或 Gradle 的安装任务，本节配置仅对旧项目有参考价值。</p>
 <pre><code class="language-java">android {
     adbOptions{
         timeOutInMs = 5000 //5s超时
@@ -969,11 +969,11 @@ android {
 }
 </code></pre>
 <h2 id="dexoptions">dexOptions</h2>
-<p>dex工具</p>
+<p>dex 工具。<strong>注意</strong>：dexOptions 是 AGP 3.0 之前的配置，AGP 3.0 起由 D8 取代 dx、R8 取代 ProGuard，AGP 7.0 移除 dx 后该配置已失效。</p>
 <pre><code class="language-java">android {
     dexOptions{
         incremental true //增量
-        javaMaxHeapSize '4G'//dx最大队内存
+        javaMaxHeapSize '4G' // dx 最大堆内存
         jumboMode true //强制开启jumbo跳过65535限制
         preDexLibraries true //提高增量构建速度
             threadCount 1 //dx线程数量
@@ -981,7 +981,7 @@ android {
 }
 </code></pre>
 <h2 id="ant">Ant</h2>
-<p>例.将嵌套元素传递给Ant任</p>
+<p>例.将嵌套元素传递给 Ant 任务</p>
 <p>build.gradle</p>
 <pre><code class="language-java">task zip {
     doLast {
@@ -1023,11 +1023,11 @@ android {
 }
 </code></pre>
 <h2 id="lint">Lint</h2>
-<p>Lint：android tool目录下的工具，一个代码扫描工具，能够帮助我们识别资源、代码结构存在的问题</p>
+<p>Lint 是 Android SDK 自带的静态代码扫描工具，用于发现资源引用、代码结构中的潜在问题。下表配置项多数默认值取自 AGP 3.x 前后的 lintOptions。</p>
 <pre><code class="language-java">lintOptions
 android {
     lintOptions{
-        abortOnError true //发生错误时推出Gradle
+        abortOnError true //发生错误时退出 Gradle（默认 true）
         absolutePaths true //配置错误输出是否显示绝对路径
         check 'NewApi','InlinedApi' // 检查lint check的issue id            
         enable 'NewApi','InlinedApi' //启动 lint check的issue id
@@ -1039,108 +1039,149 @@ android {
         htmlOutput new File(&quot;/xx.html&quot;) //html报告输出路径
         htmlReport true // 是否生成html报告，默认true
         lintConfig new File(&quot;/xx.xml&quot;) //lint配置
-        noLines true // 输出不带行号 默认true
-        quite true // 安静模式
+        noLines true // 输出不带行号，默认 false
+        quiet true // 安静模式（关闭进度与日志输出）
         showAll true //是否显示所有输出，不截断
     }
 }
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li><a href="#%E4%BE%9D%E8%B5%96">依赖</a>
+<li>
+<a href="#configurations">configurations</a>
 <ul>
-<li><a href="#configurations">configurations</a></li>
-<li><a href="#%E4%BE%9D%E8%B5%96%E6%96%B9%E5%BC%8F">依赖方式</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%BE%9D%E8%B5%96%E6%96%B9%E5%BC%8F">依赖方式</a>
 <ul>
 <li><a href="#%E6%A8%A1%E5%9D%97%E4%BE%9D%E8%B5%96">模块依赖</a></li>
 <li><a href="#%E6%96%87%E4%BB%B6%E4%BE%9D%E8%B5%96">文件依赖</a></li>
 <li><a href="#%E9%A1%B9%E7%9B%AE%E4%BE%9D%E8%B5%96">项目依赖</a></li>
+<li><a href="#%E4%BE%9D%E8%B5%96%E6%96%B9%E5%BC%8F-2">常用配置作用域</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BE%9D%E8%B5%96%E6%96%B9%E5%BC%8F-2">依赖方式</a></li>
-<li><a href="#repositories">repositories</a>
+<li>
+<a href="#repositories">repositories</a>
 <ul>
 <li><a href="#%E5%A3%B0%E6%98%8E%E5%AD%98%E5%82%A8%E5%BA%93%E8%BF%87%E6%BB%A4%E5%99%A8">声明存储库过滤器</a></li>
 <li><a href="#%E5%88%86%E5%89%B2%E5%BF%AB%E7%85%A7%E5%92%8C%E5%8F%91%E8%A1%8C%E7%89%88">分割快照和发行版</a></li>
 <li><a href="#%E6%94%AF%E6%8C%81%E7%9A%84%E5%85%83%E6%95%B0%E6%8D%AE%E6%BA%90">支持的元数据源</a></li>
 </ul>
 </li>
-<li><a href="#gav%E5%9D%90%E6%A0%87">GAV坐标</a></li>
-<li><a href="#%E5%8F%98%E4%BD%93">变体</a>
+<li>
+<a href="#gav%E5%9D%90%E6%A0%87">GAV坐标</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8F%98%E4%BD%93">变体</a>
 <ul>
 <li><a href="#%E5%A3%B0%E6%98%8E%E5%8A%9F%E8%83%BD%E5%8F%98%E4%BD%93">声明功能变体</a></li>
 </ul>
 </li>
-<li><a href="#%E5%85%83%E6%95%B0%E6%8D%AE">元数据</a></li>
-<li><a href="#%E5%B9%B3%E5%8F%B0">平台</a>
+<li>
+<a href="#%E5%85%83%E6%95%B0%E6%8D%AE">元数据</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B9%B3%E5%8F%B0">平台</a>
 <ul>
 <li><a href="#%E4%BD%BF%E7%94%A8%E5%B9%B3%E5%8F%B0">使用平台</a></li>
 </ul>
 </li>
-<li><a href="#capability">Capability</a>
+<li>
+<a href="#capability">Capability</a>
 <ul>
 <li><a href="#%E5%A3%B0%E6%98%8E%E7%BB%84%E4%BB%B6%E7%9A%84capability">声明组件的capability</a></li>
 <li><a href="#%E8%A7%A3%E5%86%B3%E5%86%B2%E7%AA%81">解决冲突</a></li>
 </ul>
 </li>
-<li><a href="#%E7%89%88%E6%9C%AC">版本</a>
+<li>
+<a href="#%E7%89%88%E6%9C%AC">版本</a>
 <ul>
 <li><a href="#%E7%89%88%E6%9C%AC%E8%A7%84%E5%88%99">版本规则</a></li>
 <li><a href="#%E7%89%88%E6%9C%AC%E6%8E%92%E5%BA%8F">版本排序</a></li>
 <li><a href="#%E5%A3%B0%E6%98%8E%E6%B2%A1%E6%9C%89%E7%89%88%E6%9C%AC%E7%9A%84%E4%BE%9D%E8%B5%96">声明没有版本的依赖</a></li>
-<li><a href="#%E4%BE%9D%E8%B5%96%E6%96%B9%E5%BC%8F-3">依赖方式</a>
-<ul>
-<li><a href="#strictly">strictly</a></li>
-<li><a href="#require">require</a></li>
-<li><a href="#prefer">prefer</a></li>
-<li><a href="#reject">reject</a></li>
-</ul>
-</li>
+<li><a href="#%E4%BE%9D%E8%B5%96%E6%96%B9%E5%BC%8F-3">依赖方式</a></li>
 <li><a href="#%E5%8A%A8%E6%80%81%E7%89%88%E6%9C%AC">动态版本</a></li>
 <li><a href="#%E7%89%88%E6%9C%AC%E5%BF%AB%E7%85%A7">版本快照</a></li>
 <li><a href="#%E4%BB%A5%E7%BC%96%E7%A8%8B%E6%96%B9%E5%BC%8F%E6%8E%A7%E5%88%B6%E4%BE%9D%E8%B5%96%E9%A1%B9%E7%BC%93%E5%AD%98">以编程方式控制依赖项缓存</a></li>
-<li><a href="#%E9%94%81%E5%AE%9A%E9%85%8D%E7%BD%AE">锁定配置</a>
-<ul>
-<li><a href="#%E9%94%81%E5%AE%9Abuildscript%E7%B1%BB%E8%B7%AF%E5%BE%84%E9%85%8D%E7%BD%AE">锁定buildscript类路径配置</a></li>
-<li><a href="#%E4%BD%BF%E7%94%A8%E9%94%81%E5%AE%9A%E6%A8%A1%E5%BC%8F%E5%BE%AE%E8%B0%83%E4%BE%9D%E8%B5%96%E9%A1%B9%E9%94%81%E5%AE%9A%E8%A1%8C%E4%B8%BA">使用锁定模式微调依赖项锁定行为</a></li>
-</ul>
-</li>
+<li><a href="#%E9%94%81%E5%AE%9A%E9%85%8D%E7%BD%AE">锁定配置</a></li>
 <li><a href="#%E7%89%88%E6%9C%AC%E5%86%B2%E7%AA%81">版本冲突</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E6%8F%92%E4%BB%B6%E7%B1%BB%E5%9E%8B">插件类型</a>
+<ul>
 </ul>
 </li>
-<li><a href="#%E6%8F%92%E4%BB%B6">插件</a>
+<li>
+<a href="#%E5%BA%94%E7%94%A8%E6%8F%92%E4%BB%B6">应用插件</a>
 <ul>
-<li><a href="#%E6%8F%92%E4%BB%B6%E7%B1%BB%E5%9E%8B">插件类型</a></li>
-<li><a href="#%E5%BA%94%E7%94%A8%E6%8F%92%E4%BB%B6">应用插件</a>
-<ul>
-<li><a href="#%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%8F%92%E4%BB%B6">二进制插件</a>
-<ul>
-<li><a href="#apply-plugin">apply plugin</a></li>
-<li><a href="#plugins-dsl">plugins DSL</a></li>
-</ul>
-</li>
+<li><a href="#%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%8F%92%E4%BB%B6">二进制插件</a></li>
 <li><a href="#%E8%84%9A%E6%9C%AC%E6%8F%92%E4%BB%B6">脚本插件</a></li>
 </ul>
 </li>
-<li><a href="#%E5%AE%9A%E4%B9%89%E6%8F%92%E4%BB%B6">定义插件</a></li>
-<li><a href="#%E7%AC%AC%E4%B8%89%E6%96%B9%E6%8F%92%E4%BB%B6">第三方插件</a></li>
-<li><a href="#%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86">插件管理</a></li>
-<li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8F%92%E4%BB%B6%E5%AD%98%E5%82%A8%E5%BA%93">自定义插件存储库</a></li>
+<li>
+<a href="#%E5%AE%9A%E4%B9%89%E6%8F%92%E4%BB%B6">定义插件</a>
+<ul>
 </ul>
 </li>
-<li><a href="#java%E5%BA%93">java库</a></li>
-<li><a href="#%E5%AE%89%E5%8D%93%E5%AE%9E%E7%94%A8">安卓实用</a>
+<li>
+<a href="#%E7%AC%AC%E4%B8%89%E6%96%B9%E6%8F%92%E4%BB%B6">第三方插件</a>
 <ul>
-<li><a href="#%E8%AE%BE%E7%BD%AE%E7%AD%BE%E5%90%8D">设置签名</a></li>
-<li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%BE%93%E5%87%BAapk%E6%96%87%E4%BB%B6%E5%90%8D%E7%A7%B0">自定义输出apk文件名称</a></li>
-<li><a href="#%E5%8A%A8%E6%80%81androidmanifest">动态AndroidManifest</a></li>
-<li><a href="#%E5%A4%9A%E6%B8%A0%E9%81%93">多渠道</a></li>
-<li><a href="#adb%E8%AE%BE%E7%BD%AE">adb设置</a></li>
-<li><a href="#dexoptions">dexOptions</a></li>
-<li><a href="#ant">Ant</a></li>
-<li><a href="#lint">Lint</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86">插件管理</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8F%92%E4%BB%B6%E5%AD%98%E5%82%A8%E5%BA%93">自定义插件存储库</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%AE%BE%E7%BD%AE%E7%AD%BE%E5%90%8D">设置签名</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%BE%93%E5%87%BAapk%E6%96%87%E4%BB%B6%E5%90%8D%E7%A7%B0">自定义输出apk文件名称</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8A%A8%E6%80%81androidmanifest">动态AndroidManifest</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%A4%9A%E6%B8%A0%E9%81%93">多渠道</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#adb%E8%AE%BE%E7%BD%AE">adb设置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#dexoptions">dexOptions</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ant">Ant</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#lint">Lint</a>
+<ul>
 </ul>
 </li>
 </ul>

@@ -126,6 +126,7 @@
           <img class="post-feature-header-image" src="/post-images/FRRzAbqMV.png" alt="封面图">
           
           <h2 id="基础数据结构说明">基础数据结构说明</h2>
+<p>本文先回顾数组、链表、二叉树、哈希表的基础与复杂度，再逐个分析 ArrayList、LinkedList、HashMap、Hashtable、ConcurrentHashMap、HashSet、LinkedHashMap 等常用集合的实现要点，最后总结集合遍历方式的性能差异，以及 Array/List/Set 互转和 List 初始化的常见写法。</p>
 <p>		<strong>数组</strong>：采用一段连续的存储单元来存储数据。对于指定下标的查找，时间复杂度为O(1)；通过给定值进行查找，需要遍历数组，逐一比对给定关键字和数组元素，时间复杂度为O(n)，当然，对于有序数组，则可采用二分查找，插值查找，斐波那契查找等方式，可将查找复杂度提高为O(logn)；对于一般的插入删除操作，涉及到数组元素的移动，其平均复杂度也为O(n)</p>
 <p><strong>线性链表</strong>：对于链表的新增，删除等操作（在找到指定操作位置后），仅需处理结点间的引用即可，时间复杂度为O(1)，而查找操作需要遍历链表逐一进行比对，复杂度为O(n)</p>
 <p><strong>二叉树</strong>：对一棵相对平衡的有序二叉树，对其进行插入，查找，删除等操作，平均复杂度均为O(logn)。</p>
@@ -150,8 +151,8 @@
 <p><strong>注意</strong>：<br>
 (01) 特性(3)中的叶子节点，是只为空(NIL或null)的节点。<br>
 (02) 特性(5)，确保没有一条路径会比其他路径长出俩倍。因而，红黑树是相对是接近平衡的二叉树。</p>
-<p>红黑树示意图如下：</p>
-<figure data-type="image" tabindex="2"><a href="https://images0.cnblogs.com/i/497634/201403/251730074203156.jpg"><img src="https://images0.cnblogs.com/i/497634/201403/251730074203156.jpg" alt="img" loading="lazy"></a></figure>
+<p>红黑树示意图如下（根节点为黑，红节点的两个子节点必须为黑，从任一节点到各 NIL 叶子的路径上黑节点数目相同）：</p>
+<p><img src="/post-assets/FRRzAbqMV/01-red-black-tree.svg" alt="红黑树示例：根节点为黑色，红节点的子节点为黑色，各路径黑高一致"></p>
 <p><strong>性质</strong><br>
 红黑树是每个节点都带有颜色属性的二叉查找树，颜色或红色或黑色。在二叉查找树强制一般要求以外，对于任何有效的红黑树我们增加了如下的额外要求：<br>
 【1】性质1. 节点是红色或黑色。<br>
@@ -283,7 +284,7 @@
 <p>HashMap是基于哈希表的Map接口的非同步实现，允许使用null值和null键，但不保证映射的顺序。</p>
 </li>
 <li>
-<p>底层使用数组实现，数组中每一项是个单向链表，即数组和链表的结合体；当链表长度大于8时，链表转换为红黑树，这样减少链表查询时间。</p>
+<p>底层使用数组实现，数组中每一项是个单向链表，即数组和链表的结合体；当链表长度达到 8 且数组容量不小于 64 时，该桶上的链表会转换为红黑树（容量不足时先扩容），从而把极端冲突下的查询时间从 O(n) 降为 O(log n)。</p>
 </li>
 </ol>
 <figure data-type="image" tabindex="6"><img src="/post-images/1619592496628.png" alt="" loading="lazy"></figure>
@@ -322,7 +323,9 @@
 <li>synchronized是针对整张Hash表的，即每次锁住整张表让线程独占</li>
 </ol>
 <h3 id="concurrenthashmap实现原理要点概括">ConcurrentHashMap实现原理要点概括</h3>
+<p>下面第 1–5 点描述的是 JDK 1.7 及更早版本的实现（Segment 分段锁）；JDK 1.8 起改为「CAS + synchronized + 红黑树」，见本节后半部分。</p>
 <figure data-type="image" tabindex="8"><img src="/post-images/1619592765108.jpeg" alt="" loading="lazy"></figure>
+<p><img src="/post-assets/FRRzAbqMV/02-concurrenthashmap-lock.svg" alt="ConcurrentHashMap 锁粒度对比：JDK 1.7 的 16 段分段锁与 JDK 1.8 按桶 CAS 加 synchronized"></p>
 <ol>
 <li>
 <p>ConcurrentHashMap允许多个修改操作并发进行，其关键在于使用了锁分离技术。</p>
@@ -331,7 +334,7 @@
 <p>它使用了多个锁来控制对hash表的不同段进行的修改，每个段其实就是一个小的hashtable，它们有自己的锁。只要多个并发发生在不同的段上，它们就可以并发进行。</p>
 </li>
 <li>
-<p>ConcurrentHashMap在底层将key-value当成一个整体进行处理，这个整体就是一个Entry对象。Hashtable底层采用一个Entry[]数组来保存所有的key-value对，当需要存储一个 Entry 对象时，会根据 key 的 hash 算法来决定其在数组中的存储位置，再根据 equals 方法决定其在该数组位置链表中的存储位置；当需要取出一个Entry时，也会根据key的hash算法找到其在数组中的存储位置，再根据equals方法从该位置上的链表中取出该Entry。</p>
+<p>ConcurrentHashMap 在底层将 key-value 当成一个整体进行处理，这个整体就是一个 Entry 对象。JDK 1.8 之前底层用 Segment[] 数组保存所有 key-value 对，1.8 起改为 Node[] 桶数组，当需要存储一个 Entry 对象时，会根据 key 的 hash 算法来决定其在数组中的存储位置，再根据 equals 方法决定其在该数组位置链表中的存储位置；当需要取出一个Entry时，也会根据key的hash算法找到其在数组中的存储位置，再根据equals方法从该位置上的链表中取出该Entry。</p>
 </li>
 <li>
 <p>与HashMap不同的是，ConcurrentHashMap使用多个子Hash表，也就是段(Segment)</p>
@@ -355,6 +358,9 @@
 <p>	但如果是ReentrantLock呢?它则只有在线程没有抢到锁,然后新建Node节点后再尝试一次而已,不会自旋,而是直接被挂起,这样一来,我们就很容易会多出线程上下文开销的代价.当然,你也可以使用tryLock(),但是这样又出现了一个问题,你怎么知道tryLock的时间呢?在时间范围里还好,假如超过了呢?</p>
 <p>	所以,在锁被细化到如此程度上,使用Synchronized是最好的选择了.这里再补充一句,Synchronized和ReentrantLock他们的开销差距是在释放锁时唤醒线程的数量,Synchronized是唤醒锁池里所有的线程+刚好来访问的线程,而ReentrantLock则是当前线程后进来的第一个线程+刚好来访问的线程.</p>
 <p>	如果是线程并发量不大的情况下,那么Synchronized因为自旋锁,偏向锁,轻量级锁的原因,不用将等待线程挂起,偏向锁甚至不用自旋,所以在这种情况下要比ReentrantLock高效</p>
+<blockquote>
+<p>过时提示：自 JDK 15（JEP 374）起，偏向锁已被默认禁用并标记为废弃，更新的 JDK 版本中相关实现已逐步移除；自旋的阈值也随 JDK 版本不断调整。因此上述关于偏向锁的结论只适用于 JDK 15 之前的 HotSpot，具体性能仍应以实际压测为准。</p>
+</blockquote>
 <p><strong>1.8弃用分段锁的原因由以下几点：</strong><br>
 1. 加入多个分段锁浪费内存空间。<br>
 2. 生产环境中， map 在放入时竞争同一个锁的概率非常小，分段锁反而会造成更新等操作的长时间等待。<br>
@@ -507,7 +513,7 @@ public E previous() {
 }
 </code></pre>
 <p><strong>3、foreach循环遍历：</strong></p>
-<p>    分析Java字节码可知，foreach内部实现原理，也是通过Iterator实现的，只不过这个Iterator是Java编译器帮我们生成的，所以我们不需要再手动去编写。但是因为每次都要做类型转换检查，所以花费的时间比Iterator略长。时间复杂度和Iterator一样。</p>
+<p>    分析Java字节码可知，foreach内部实现原理，也是通过Iterator实现的，只不过这个Iterator是Java编译器帮我们生成的，所以我们不需要再手动去编写。在泛型集合上，手写 Iterator 同样会插入类型转换检查（对比上面两段字节码），因此现代 JVM 上两者的字节码基本一致，性能差异可以忽略，时间复杂度也相同。</p>
 <p>Iterator和foreach字节码如下：</p>
 <pre><code class="language-java">//使用Iterator的字节码：
     Code:
@@ -561,7 +567,7 @@ public E previous() {
 </li>
 <li>
 <p>foreach循环遍历：</p>
-<p>    foreach只是让代码更加简洁了，但是他有一些缺点，就是遍历过程中不能操作数据集合（删除等），所以有些场合不使用。而且它本身就是基于Iterator实现的，但是由于类型转换的问题，所以会比直接使用Iterator慢一点，但是还好，时间复杂度都是一样的。所以怎么选择，参考上面两种方式，做一个折中的选择。</p>
+<p>    foreach只是让代码更加简洁了，但是他有一些缺点，就是遍历过程中不能操作数据集合（删除等），所以有些场合不使用。而且它本身就是基于 Iterator 实现的，字节码上的差别只是编译器插入的类型转换检查，泛型场景下与手写 Iterator 基本一致，性能差异可以忽略，时间复杂度相同。所以怎么选择，参考上面两种方式，做一个折中的选择。</p>
 </li>
 </ol>
 <h3 id="randomaccess接口标记">RandomAccess接口标记</h3>
@@ -583,10 +589,10 @@ public E previous() {
 </ol>
 <pre><code class="language-java">String[] s = new String[]{&quot;A&quot;, &quot;B&quot;, &quot;C&quot;, &quot;D&quot;,&quot;E&quot;};
 List&lt;String&gt; list = Arrays.asList(s);
-# 注意这里list里面的元素直接是s里面的元素( list backed by the specified array)，换句话就是说：对s的修改，直接影响list。
+// 注意这里list里面的元素直接是s里面的元素( list backed by the specified array)，换句话就是说：对s的修改，直接影响list。
 s[0] =&quot;AA&quot;;
 System.out.println(&quot;list: &quot; + list);
-# 输出结果
+// 输出结果
 list: [AA, B, C, D, E]
 </code></pre>
 <ol start="2">
@@ -594,16 +600,16 @@ list: [AA, B, C, D, E]
 </ol>
 <pre><code class="language-java">String[] dest = list.toArray(new String[0]);//new String[0]是指定返回数组的类型
 System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
-# 输出结果
+// 输出结果
 dest: [AA, B, C, D, E]
-# 注意这里的dest里面的元素不是list里面的元素，换句话就是说：对list中关于元素的修改，不会影响dest。
+// 注意这里的dest里面的元素不是list里面的元素，换句话就是说：对list中关于元素的修改，不会影响dest。
 list.set(0, &quot;Z&quot;);
 System.out.println(&quot;modified list: &quot; + list);
 System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
-# 输出结果
+// 输出结果
 modified list: [Z, B, C, D, E]
 dest: [AA, B, C, D, E]
-# 可以看到list虽然被修改了，但是dest数组没有没修改。
+// 可以看到list虽然被修改了，但是dest数组没有没修改。
 </code></pre>
 <h3 id="list-set互转">List、Set互转</h3>
 <p>因为List和Set都实现了Collection接口，且addAll(Collection&lt;? extends E&gt; c);方法，因此可以采用addAll()方法将List和Set互相转换；另外，List和Set也提供了Collection&lt;? extends E&gt; c作为参数的构造函数，因此通常采用构造函数的形式完成互相转化。</p>
@@ -613,7 +619,7 @@ System.out.println(&quot;set: &quot; + set);
 //Set转List
 List&lt;String&gt; list_1 = new ArrayList&lt;&gt;(set);
 System.out.println(&quot;list_1: &quot; + list_1);
-# 和toArray()一样，被转换的List(Set)的修改不会对被转化后的Set（List）造成影响。
+// 和toArray()一样，被转换的List(Set)的修改不会对被转化后的Set（List）造成影响。
 </code></pre>
 <h3 id="array-set互转">Array、Set互转</h3>
 <pre><code class="language-java">//array转set
@@ -628,7 +634,7 @@ System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
 <ol>
 <li>
 <p>常规方式</p>
-<pre><code class="language-java"> # 后面缺失的泛型类型在 JDK 7 之后就可以不用写具体的类型了，改进后会自动推断类型
+<pre><code class="language-java"> // 后面缺失的泛型类型在 JDK 7 之后就可以不用写具体的类型了，改进后会自动推断类型
  List&lt;String&gt; list = new ArrayList&lt;&gt;();
  list.add(&quot;1&quot;);
  list.add(&quot;2&quot;);
@@ -639,8 +645,8 @@ System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
 <p>Arrays 工具类</p>
 <pre><code class="language-java">import static java.util.Arrays.asList;
  List&lt;String&gt; list = asList(&quot;1&quot;, &quot;2&quot;, &quot;3&quot;);
- # 注意，上面的 asList 是 Arrays 的静态方法，这里使用了静态导入。这种方式添加的是不可变的 List, 即不能添加、删除等操作，需要警惕。。
- # 如果要可变，那就使用 ArrayList 再包装一下，如下面所示。
+ // 注意，上面的 asList 是 Arrays 的静态方法，这里使用了静态导入。这种方式添加的是不可变的 List, 即不能添加、删除等操作，需要警惕。。
+ // 如果要可变，那就使用 ArrayList 再包装一下，如下面所示。
  List&lt;String&gt; numbers = new ArrayList&lt;&gt;(Arrays.asList(&quot;1&quot;, &quot;2&quot;, &quot;3&quot;));
  numbers.add(&quot;4&quot;);
 </code></pre>
@@ -648,17 +654,17 @@ System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
 <li>
 <p>Collections 工具类</p>
 <pre><code class="language-java">List&lt;String&gt; list = Collections.nCopies(3, &quot;list&quot;);
- # 这种方式添加的是不可变的、复制某个元素N遍的工具类，以上程序输出：
- # [list, list, list]
- # 老规则，如果要可变，使用 ArrayList 包装一遍。
+ // 这种方式添加的是不可变的、复制某个元素N遍的工具类，以上程序输出：
+ // [list, list, list]
+ // 老规则，如果要可变，使用 ArrayList 包装一遍。
  List&lt;String&gt; list = new ArrayList&lt;&gt;(Collections.nCopies(3, &quot;list&quot;));
  list.add(&quot;list&quot;);
 
- # 还有初始化单个对象的 List 工具类，这种方式也是不可变的，集合内只能有一个元素，这种也用得很少啊。
+ // 还有初始化单个对象的 List 工具类，这种方式也是不可变的，集合内只能有一个元素，这种也用得很少啊。
  List&lt;String&gt; list = Collections.singletonList(&quot;list&quot;);
 
- # 还有一个创建空 List 的工具类，没有默认容量，节省空间，但不知道实际工作中没有用。
- List&lt;String&gt; list = Collections.emptyList(&quot;list&quot;);
+ // 还有一个创建空 List 的工具类，没有默认容量，节省空间，但不知道实际工作中没有用。
+ List&lt;String&gt; list = Collections.emptyList();
 </code></pre>
 </li>
 <li>
@@ -689,22 +695,18 @@ System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E5%9F%BA%E7%A1%80%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E8%AF%B4%E6%98%8E">基础数据结构说明</a>
+<a href="#%E5%9F%BA%E7%A1%80%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E8%AF%B4%E6%98%8E">基础数据结构说明</a>
 <ul>
 <li><a href="#%E5%93%88%E5%B8%8C%E8%A1%A8%E5%85%B7%E4%BD%93%E8%AF%B4%E6%98%8E">哈希表具体说明</a></li>
 <li><a href="#r-b-tree%E7%AE%80%E4%BB%8B">R-B Tree简介</a></li>
 </ul>
 </li>
-<li><a href="#%E9%9B%86%E5%90%88%E8%AF%B4%E6%98%8E">集合说明</a>
+<li>
+<a href="#%E9%9B%86%E5%90%88%E8%AF%B4%E6%98%8E">集合说明</a>
 <ul>
 <li><a href="#arraylist%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">ArrayList实现原理要点概括</a></li>
 <li><a href="#linkedlist%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">LinkedList实现原理要点概括</a></li>
-<li><a href="#hashmap%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">HashMap实现原理要点概括</a>
-<ul>
-<li><a href="#%E9%87%8D%E5%86%99equals%E6%96%B9%E6%B3%95%E9%9C%80%E5%90%8C%E6%97%B6%E9%87%8D%E5%86%99hashcode%E6%96%B9%E6%B3%95">重写equals方法需同时重写hashCode方法</a></li>
-</ul>
-</li>
+<li><a href="#hashmap%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">HashMap实现原理要点概括</a></li>
 <li><a href="#hashtable%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">Hashtable实现原理要点概括</a></li>
 <li><a href="#concurrenthashmap%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">ConcurrentHashMap实现原理要点概括</a></li>
 <li><a href="#hashset%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">HashSet实现原理要点概括</a></li>
@@ -712,7 +714,8 @@ System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
 <li><a href="#linkedhashset%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%A6%81%E7%82%B9%E6%A6%82%E6%8B%AC">LinkedHashSet实现原理要点概括</a></li>
 </ul>
 </li>
-<li><a href="#java%E9%9B%86%E5%90%88%E9%81%8D%E5%8E%86%E7%9A%84%E5%87%A0%E7%A7%8D%E6%96%B9%E5%BC%8F%E6%80%BB%E7%BB%93%E5%8F%8A%E6%AF%94%E8%BE%83">java集合遍历的几种方式总结及比较</a>
+<li>
+<a href="#java%E9%9B%86%E5%90%88%E9%81%8D%E5%8E%86%E7%9A%84%E5%87%A0%E7%A7%8D%E6%96%B9%E5%BC%8F%E6%80%BB%E7%BB%93%E5%8F%8A%E6%AF%94%E8%BE%83">java集合遍历的几种方式总结及比较</a>
 <ul>
 <li><a href="#%E9%9B%86%E5%90%88%E7%B1%BB%E7%9A%84%E9%80%9A%E7%94%A8%E9%81%8D%E5%8E%86%E6%96%B9%E5%BC%8F-%E7%94%A8%E8%BF%AD%E4%BB%A3%E5%99%A8%E8%BF%AD%E4%BB%A3">集合类的通用遍历方式, 用迭代器迭代:</a></li>
 <li><a href="#map%E9%81%8D%E5%8E%86%E6%96%B9%E5%BC%8F">Map遍历方式：</a></li>
@@ -723,14 +726,17 @@ System.out.println(&quot;dest: &quot; + Arrays.toString(dest));
 <li><a href="#randomaccess%E6%8E%A5%E5%8F%A3%E6%A0%87%E8%AE%B0">RandomAccess接口标记</a></li>
 </ul>
 </li>
-<li><a href="#array-list-set%E4%BA%92%E8%BD%AC">Array、List、Set互转</a>
+<li>
+<a href="#array-list-set%E4%BA%92%E8%BD%AC">Array、List、Set互转</a>
 <ul>
 <li><a href="#array-list%E4%BA%92%E8%BD%AC">Array、List互转</a></li>
 <li><a href="#list-set%E4%BA%92%E8%BD%AC">List、Set互转</a></li>
 <li><a href="#array-set%E4%BA%92%E8%BD%AC">Array、Set互转</a></li>
 </ul>
 </li>
-<li><a href="#java-%E4%B8%AD%E5%88%9D%E5%A7%8B%E5%8C%96-list-%E9%9B%86%E5%90%88%E7%9A%84-6-%E7%A7%8D%E6%96%B9%E5%BC%8F">Java 中初始化 List 集合的 6 种方式!</a></li>
+<li>
+<a href="#java-%E4%B8%AD%E5%88%9D%E5%A7%8B%E5%8C%96-list-%E9%9B%86%E5%90%88%E7%9A%84-6-%E7%A7%8D%E6%96%B9%E5%BC%8F">Java 中初始化 List 集合的 6 种方式!</a>
+<ul>
 </ul>
 </li>
 </ul>
