@@ -131,6 +131,21 @@
 <p>compileOnly:compileOnly修饰的依赖会添加到编译路径中，但是不会打包，因此只能在编译时访问，且compileOnly修饰的依赖不会传递。</p>
 <p>runtimeOnly：与 compileOnly 相反，它修饰的依赖不会添加到编译路径中，但是会被打包，在运行时使用。</p>
 <p>annotationProcessor:用于注解处理器的依赖配置</p>
+<p><strong>各配置的差别可以归纳为三个维度</strong>：编译期能否访问、是否随产物一起打包、能否传递给依赖本模块的其他模块。</p>
+<table>
+<thead>
+<tr><th>配置</th><th>编译类路径</th><th>参与打包</th><th>跨模块传递</th><th>典型用途</th></tr>
+</thead>
+<tbody>
+<tr><td>implementation</td><td>可见</td><td>是</td><td>否</td><td>模块内部实现依赖，默认首选</td></tr>
+<tr><td>api</td><td>可见</td><td>是</td><td>是</td><td>对外暴露的类型出现在公共 API 中</td></tr>
+<tr><td>compileOnly</td><td>可见</td><td>否</td><td>否</td><td>Lombok、Servlet API 等容器已提供的依赖</td></tr>
+<tr><td>runtimeOnly</td><td>不可见</td><td>是</td><td>否</td><td>JDBC 驱动、日志实现等只运行期加载的依赖</td></tr>
+<tr><td>annotationProcessor</td><td>仅处理器路径</td><td>否</td><td>否</td><td>Lombok、MapStruct 等注解处理器</td></tr>
+<tr><td>testImplementation</td><td>仅测试源码集</td><td>否</td><td>否</td><td>JUnit、Mockito 等测试依赖</td></tr>
+</tbody>
+</table>
+<p><img src="/post-assets/29jyrX-eN/01-dependency-config-transitivity.svg" alt="Gradle 依赖配置传递性对比图"></p>
 <pre><code class="language-java">dependencies {
     // 本地项目
     api project(':com.test.core:core-common')  
@@ -148,6 +163,9 @@
     mavenCentral()
 }
 </code></pre>
+<blockquote>
+<p>Gradle 7 起已移除 <code>maven()</code> 与 <code>jcenter()</code> 的旧写法，统一使用 <code>mavenCentral()</code>、<code>google()</code>、<code>gradlePluginPortal()</code>，或显式写 <code>maven { url '…' }</code>；仓库按声明顺序依次查找，命中即停止，因此把私服或镜像放在前面可以减少外网等待。</p>
+</blockquote>
 <p>使用Maven远程仓库</p>
 <pre><code class="language-java">repositories {
     //阿里云远程仓库
@@ -157,7 +175,8 @@
 }
 </code></pre>
 <p><strong>本地仓库</strong><br>
-配置Gradle使用maven本地仓库：<code>CRADLE_USER_HOME：D:.m2\repository</code></p>
+让 Gradle 直接复用 Maven 的本地仓库：在 build.gradle 中加入 <code>mavenLocal()</code>，Gradle 会读取 Maven 的 <code>settings.xml</code>（<code>localRepository</code> 配置），未配置时默认取 <code>%USERPROFILE%\.m2\repository</code>（Linux 下为 <code>~/.m2/repository</code>）；也可以用 <code>maven { url uri('D:/.m2/repository') }</code> 显式指定目录。<br>
+注意 <code>GRADLE_USER_HOME</code> 是 Gradle 自己的用户目录（默认 <code>%USERPROFILE%\.gradle</code>），用来存放依赖缓存、wrapper 发行版和构建缓存，并不等同于 Maven 本地仓库，两者不要混用。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1657022747903.png" alt="img" loading="lazy"></figure>
 <p>修改配置build.gradle：</p>
 <pre><code class="language-java">/**
@@ -166,7 +185,8 @@
  * 配置mavenLocal()表示引入jar包的时候，先从本地仓库中找，没有再去中央仓库下载
  */
 repositories {
-    mavenLocal()
+    // 使用 Maven 本地仓库（默认 ~/.m2/repository，可用 -Dmaven.repo.local 或 settings.xml 改变位置）
+    maven { url uri('D:/.m2/repository') }
     mavenCentral()
 }
 </code></pre>
@@ -208,6 +228,7 @@ include 'seata'
 include 'provide'
 findProject(':iot-service:user-center')?.name = 'user-center'
 </code></pre>
+<p><img src="/post-assets/29jyrX-eN/02-multi-module-structure.svg" alt="Gradle 多模块构建结构图"></p>
 <p><strong>buildScript</strong><br>
 buildScript块的repositories主要是为了Gradle脚本自身的执行，获取脚本依赖插件。<br>
 buildscript中的声明是gradle脚本自身需要使用的资源。可以声明的资源包括依赖项、第三方插件、maven仓库地址等。<br>
@@ -233,7 +254,7 @@ gradle在执行脚本时，会优先执行buildscript代码块中的内容，然
     }
 
     dependencies {
-        //用来打包
+        // 加载 Spring Boot 插件到构建脚本的 classpath（旧写法）
         classpath(&quot;org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}&quot;)
     }
 }
@@ -252,7 +273,8 @@ buildscript中的声明是gradle脚本自身需要使用的资源，就是说它
     //下面两句必须在所有子项目中添加，否则导致import了看起来没问题，但是编译时找不到其他模块的类。
     group = 'com.example'
     version = '0.0.1-SNAPSHOT'
-    // 指定JDK版本
+    // 指定 JDK 版本；更现代的写法是声明 Java 工具链：
+    // java { toolchain { languageVersion = JavaLanguageVersion.of(8) } }
     sourceCompatibility = 1.8
     targetCompatibility = 1.8
 
@@ -272,6 +294,9 @@ buildscript中的声明是gradle脚本自身需要使用的资源，就是说它
 <p><strong>subprojects子项目通用配置</strong><br>
 subprojects是对所有Child Project的配置:</p>
 <pre><code class="language-java">subprojects {
+    // 推荐：在根项目 build.gradle 用 plugins 块统一版本，版本只声明一次
+    // plugins { id 'org.springframework.boot' version '2.6.8' apply false }
+    // 子项目沿用 apply plugin 即可，版本由根项目提供，避免重复声明造成版本漂移
     apply plugin: 'java-library'
     apply plugin: 'idea'
     apply plugin: 'org.springframework.boot'
@@ -430,7 +455,80 @@ configurations.all {
     }
 }
 </code></pre>
-<h2 id="十-springcloud-gradle管理">十 springcloud-gradle管理</h2>
+<h2 id="十-仓库配置与版本冲突解决">十 仓库配置与版本冲突解决</h2>
+<h3 id="仓库声明与查找顺序">仓库声明与查找顺序</h3>
+<pre><code class="language-groovy">repositories {
+    // Gradle 按声明顺序依次查找，命中即返回，因此把私服/镜像放在前面
+    mavenLocal()                                                  // 1. Maven 本地仓库
+    maven { url 'https://maven.aliyun.com/repository/public' }    // 2. 阿里云聚合镜像
+    mavenCentral()                                                // 3. Maven 中央仓库
+    maven {
+        url 'https://repo.example.com/releases'                   // 4. 公司私服
+        credentials {                                             // 需要鉴权时配置账号
+            username = findProperty('repoUser') ?: System.getenv('REPO_USER')
+            password = findProperty('repoPass') ?: System.getenv('REPO_PASS')
+        }
+        allowInsecureProtocol = false
+    }
+}
+
+// 只想让某个仓库解析特定 group 时，可用内容过滤（Gradle 6.2+）
+repositories {
+    maven {
+        url 'https://repo.example.com/internal'
+        content { includeGroup 'com.example' }
+    }
+}
+</code></pre>
+<p>两点容易踩坑：其一，<code>buildscript { repositories { … } }</code> 只影响构建脚本自身依赖（如插件 classpath），项目依赖的仓库必须写在 <code>repositories { }</code> 或 <code>dependencyResolutionManagement</code> 中；其二，<code>pluginManagement { repositories { … } }</code> 只出现在 <code>settings.gradle</code> 里，用于解析 <code>plugins {}</code> 块声明的插件。</p>
+<h3 id="版本冲突的三种解决手段">版本冲突的三种解决手段</h3>
+<pre><code class="language-groovy">dependencies {
+    // 1. 排除传递依赖：只排除指定坐标，其余传递依赖仍然保留
+    implementation('com.example:module-a:1.0') {
+        exclude group: 'com.example', module: 'module-b1'
+    }
+
+    // 2. 关闭整个依赖分支的传递解析，需要自己补齐缺失的依赖
+    implementation('com.example:module-d:1.0') {
+        transitive = false
+    }
+
+    // 3. 强制指定版本：strictly 参与冲突检测，force 直接覆盖
+    implementation('com.example:module-b1') {
+        version { strictly '2.1.0' }
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'com.example:module-b1:2.1.0'   // 强制所有相关配置都用这个版本
+        failOnVersionConflict()               // 出现冲突直接失败，便于尽早发现
+        cacheDynamicVersionsFor 0, 'seconds'  // 动态版本不缓存，保证拿到最新结果
+        cacheChangingModulesFor 0, 'seconds'  // SNAPSHOT 每次重新检查
+    }
+}
+</code></pre>
+<p>排查冲突最直接的办法是查看依赖树：<code>./gradlew :app:dependencies --configuration runtimeClasspath</code> 会列出每个依赖的解析结果与被覆盖的版本，冲突处标出 <code>-&gt;</code> 箭头；<code>dependencyInsight</code> 则只看某个库为什么被选成当前版本。</p>
+<pre><code class="language-bash"># 查看全部配置的依赖树
+./gradlew dependencies
+
+# 只看运行时类路径，并写入文件便于比对
+./gradlew :app:dependencies --configuration runtimeClasspath &gt; deps.txt
+
+# 查看某个依赖为何被解析成当前版本
+./gradlew :app:dependencyInsight --dependency spring-core --configuration runtimeClasspath
+</code></pre>
+<h3 id="bom-与-platform-统一版本">BOM 与 platform 统一版本</h3>
+<pre><code class="language-groovy">dependencies {
+    // 只约束版本、不引入依赖本身
+    implementation platform('org.springframework.boot:spring-boot-dependencies:2.6.8')
+    // 约束版本且不允许被传递依赖覆盖，适合统一整个技术栈
+    implementation enforcedPlatform('org.springframework.cloud:spring-cloud-dependencies:2021.0.3')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'  // 版本由 BOM 决定，无需再写
+}
+</code></pre>
+<h2 id="十一-springcloud-gradle管理">十一 springcloud-gradle管理</h2>
 <p><strong>parent:settings.gradle</strong></p>
 <pre><code class="language-groovy">rootProject.name = 'nacos'
 include 'sentinel'
@@ -464,7 +562,7 @@ include 'provide'
     }
 
     dependencies {
-        //用来打包
+        // 加载 Spring Boot 插件到构建脚本的 classpath（旧写法）
         classpath(&quot;org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}&quot;)
     }
 }
@@ -476,7 +574,8 @@ allprojects {
     //下面两句必须在所有子项目中添加，否则导致import了看起来没问题，但是编译时找不到其他模块的类。
     group = 'com.example'
     version = '0.0.1-SNAPSHOT'
-    // 指定JDK版本
+    // 指定 JDK 版本；更现代的写法是声明 Java 工具链：
+    // java { toolchain { languageVersion = JavaLanguageVersion.of(8) } }
     sourceCompatibility = 1.8
     targetCompatibility = 1.8
 
@@ -495,6 +594,9 @@ allprojects {
 
 
 subprojects {
+    // 推荐：在根项目 build.gradle 用 plugins 块统一版本，版本只声明一次
+    // plugins { id 'org.springframework.boot' version '2.6.8' apply false }
+    // 子项目沿用 apply plugin 即可，版本由根项目提供，避免重复声明造成版本漂移
     apply plugin: 'java-library'
     apply plugin: 'idea'
     apply plugin: 'org.springframework.boot'
@@ -552,6 +654,141 @@ subprojects {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 }
 </code></pre>
+<h2 id="十二-war-jar-打包与-spring-boot-插件">十二 WAR/JAR 打包与 Spring Boot 插件</h2>
+<p>Spring Boot 插件会按项目类型决定最终产物：引入 <code>java</code> 插件的项目额外获得 <code>bootJar</code>（生成可直接 <code>java -jar</code> 启动的可执行 JAR），引入 <code>war</code> 插件的项目获得 <code>bootWar</code>（可执行 WAR，既能在容器中部署，也能独立启动）。</p>
+<pre><code class="language-groovy">plugins {
+    id 'java'
+    id 'war'
+    id 'org.springframework.boot' version '2.6.8'
+    id 'io.spring.dependency-management' version '1.0.13.RELEASE'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // 打成 WAR 部署到外部容器时，容器已提供 Tomcat，必须改为 provided 语义
+    compileOnly 'org.springframework.boot:spring-boot-starter-tomcat'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+// 可执行 JAR：mainClass 由插件自动推断，也可显式指定
+bootJar {
+    archiveFileName = 'app.jar'
+}
+
+// 可执行 WAR：继承 war 任务配置，并在 manifest 中写入启动类
+bootWar {
+    archiveFileName = 'app.war'
+}
+</code></pre>
+<blockquote>
+<p>关键区别：普通 <code>jar</code>/<code>war</code> 任务只把本项目的类与资源打成包，依赖的 JAR 需要由容器或 classpath 提供；<code>bootJar</code>/<code>bootWar</code> 会把依赖一并收进产物内部，因此体积更大、但不依赖外部 classpath。</p>
+</blockquote>
+<p>WAR 部署到外部 Servlet 容器时，启动类还需继承 <code>SpringBootServletInitializer</code> 并重写 <code>configure</code>，否则容器不会加载 Spring 应用上下文。</p>
+<pre><code class="language-java">@SpringBootApplication
+public class Application extends SpringBootServletInitializer {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+
+    @Override
+    protected SpringApplicationBuilder configure(SpringApplicationBuilder builder) {
+        return builder.sources(Application.class);
+    }
+}
+</code></pre>
+<h2 id="十三-构建缓存与增量构建">十三 构建缓存与增量构建</h2>
+<p>Gradle 通过三层机制避免重复劳动，配置正确时第二次构建的耗时通常只有首次的零头：</p>
+<ul>
+<li><strong>增量构建</strong>：任务声明了输入与输出，Gradle 用输入快照判断任务是否 <code>UP-TO-DATE</code>，未变化的任务直接跳过。</li>
+<li><strong>构建缓存</strong>：把任务输出按输入哈希缓存起来，换目录、换分支甚至换机器都能复用（本地缓存目录默认位于 <code>GRADLE_USER_HOME/caches/build-cache-1</code>）。</li>
+<li><strong>配置缓存</strong>：Gradle 6.6 引入、Gradle 8 起趋于稳定，把配置阶段的结果缓存复用，只重跑受影响的任务图。</li>
+</ul>
+<pre><code class="language-properties"># gradle.properties
+org.gradle.caching=true
+org.gradle.parallel=true
+org.gradle.configuration-cache=true
+org.gradle.configuration-cache.problems=warn
+</code></pre>
+<p>让自定义任务也能被缓存，需要显式声明输入输出：</p>
+<pre><code class="language-groovy">abstract class GenerateVersionTask extends DefaultTask {
+
+    @Input
+    abstract Property&lt;String&gt; getVersionText()
+
+    @OutputFile
+    abstract RegularFileProperty getOutputFile()
+
+    @TaskAction
+    void generate() {
+        outputFile.get().asFile.text = versionText.get()
+    }
+}
+
+tasks.register('generateVersion', GenerateVersionTask) {
+    versionText = project.version.toString()
+    outputFile = layout.buildDirectory.file('generated/version.txt')
+}
+</code></pre>
+<blockquote>
+<p>注意事项：任务动作中读取 <code>project</code>、使用 <code>System.getenv()</code>、遍历 <code>File</code> 等非受控输入会破坏缓存与配置缓存的可重现性，Gradle 8 会直接报错或告警；多模块项目建议同时开启 <code>--parallel</code> 以并行执行无依赖的任务。</p>
+</blockquote>
+<h2 id="十四-与-maven-的对照">十四 与 Maven 的对照</h2>
+<table>
+<thead>
+<tr><th>维度</th><th>Maven</th><th>Gradle</th></tr>
+</thead>
+<tbody>
+<tr><td>构建文件</td><td>pom.xml（XML 声明式）</td><td>build.gradle / build.gradle.kts（Groovy / Kotlin DSL）</td></tr>
+<tr><td>构建模型</td><td>固定生命周期阶段</td><td>任务图（DAG），任务按依赖关系增量执行</td></tr>
+<tr><td>依赖范围</td><td>compile / provided / runtime / test</td><td>implementation / api / compileOnly / runtimeOnly / testImplementation</td></tr>
+<tr><td>多模块</td><td>父 POM 的 <code>&lt;modules&gt;</code> 与 <code>&lt;parent&gt;</code></td><td>settings.gradle 的 <code>include</code> 与 allprojects / subprojects</td></tr>
+<tr><td>版本统一</td><td><code>&lt;dependencyManagement&gt;</code> 导入 BOM</td><td><code>platform()</code> 或 <code>enforcedPlatform()</code> 导入 BOM</td></tr>
+<tr><td>版本冲突</td><td>最短路径优先，可用 dependencyManagement 锁定</td><td>默认取最高版本，用 resolutionStrategy.force / strictly 锁定</td></tr>
+<tr><td>本地仓库</td><td><code>~/.m2/repository</code></td><td>依赖缓存在 <code>~/.gradle/caches/modules-2</code>，可用 <code>mavenLocal()</code> 复用 Maven 仓库</td></tr>
+<tr><td>插件</td><td><code>&lt;plugin&gt;</code> 声明，执行绑定到 phase</td><td><code>plugins {}</code> 或 <code>apply plugin</code>，直接注册任务</td></tr>
+</tbody>
+</table>
+<p>范围对应关系：Maven 的 <code>provided</code> ≈ Gradle 的 <code>compileOnly</code> 加测试可见性（Maven 中 provided 对测试类路径可见，而 Gradle 的 <code>compileOnly</code> 默认不进入测试编译路径，需要时补一条 <code>testCompileOnly</code>）。Maven 的 <code>compile</code>（默认）在 Gradle 中应按是否需要对外暴露，选择 <code>implementation</code> 或 <code>api</code>，这也是迁移时最容易被忽略的一点。</p>
+<h2 id="十五-gradle-7-8-废弃写法与新写法">十五 Gradle 7/8 废弃写法与新写法</h2>
+<table>
+<thead>
+<tr><th>废弃 / 旧写法</th><th>推荐新写法</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>compile</code></td><td><code>implementation</code> / <code>api</code></td><td>Gradle 7 已移除，按是否对外暴露选择</td></tr>
+<tr><td><code>runtime</code></td><td><code>runtimeOnly</code></td><td>Gradle 7 已移除</td></tr>
+<tr><td><code>testCompile</code> / <code>testRuntime</code></td><td><code>testImplementation</code> / <code>testRuntimeOnly</code></td><td>Gradle 7 已移除</td></tr>
+<tr><td><code>jcenter()</code></td><td><code>mavenCentral()</code></td><td>jcenter 已停止服务，Gradle 7 起弃用</td></tr>
+<tr><td><code>task myTask { … }</code></td><td><code>tasks.register('myTask') { … }</code></td><td>延迟配置，避免配置阶段创建全部任务</td></tr>
+<tr><td>直接改 <code>compileJava.options</code></td><td><code>tasks.withType(JavaCompile).configureEach { }</code></td><td>避免任务被提前实现化</td></tr>
+<tr><td><code>sourceCompatibility = 1.8</code></td><td><code>java { toolchain { languageVersion = … } }</code></td><td>工具链同时约束编译与运行 JDK</td></tr>
+<tr><td><code>buildDir</code></td><td><code>layout.buildDirectory</code></td><td>Gradle 8 起逐步弃用可写属性</td></tr>
+</tbody>
+</table>
+<pre><code class="language-groovy">// 旧写法
+task printVersion {
+    doLast {
+        println project.version
+    }
+}
+
+// 新写法：延迟配置 + 类型安全的容器 API
+tasks.register('printVersion') {
+    group = 'help'
+    description = '打印当前项目版本'
+    def v = project.version
+    doLast {
+        println v
+    }
+}
+</code></pre>
+<blockquote>
+<p>升级建议：先用 <code>./gradlew wrapper --gradle-version 8.x</code> 升级 wrapper，再执行 <code>./gradlew build --warning-mode all</code>，按告警逐条替换废弃 API；Gradle 8 对 <code>buildDir</code>、配置缓存不兼容的任务以及 Groovy 动态属性访问都会明确报错或警告，早改早受益。</p>
+</blockquote>
 <h2 id="项目构建-gradle-docker打包">项目构建--Gradle--Docker打包</h2>
 <p>在<code>build.gradle</code>中引入插件。</p>
 <pre><code class="language-java"> id &quot;com.google.cloud.tools.jib&quot; version &quot;3.2.1&quot;
@@ -620,26 +857,87 @@ ENTRYPOINT [&quot;java&quot;,&quot;-jar&quot;,&quot;app.jar&quot;]
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86">一 依赖管理</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#%E4%BA%8C-%E4%BB%93%E5%BA%93">二 仓库</a>
 <ul>
-<li><a href="#%E4%B8%80-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86">一 依赖管理</a></li>
-<li><a href="#%E4%BA%8C-%E4%BB%93%E5%BA%93">二 仓库</a></li>
-<li><a href="#%E4%B8%89-%E5%A4%9A%E9%A1%B9%E7%9B%AE%E6%9E%84%E5%BB%BA">三 多项目构建</a></li>
-<li><a href="#%E5%9B%9B-gradleproperties">四 gradle.properties</a></li>
-<li><a href="#%E4%BA%94-gradle-%E6%8F%92%E4%BB%B6plugins">五 Gradle 插件(Plugins)</a></li>
-<li><a href="#%E5%85%AD-%E5%B8%B8%E8%A7%81%E7%9A%84task%E5%91%BD%E4%BB%A4">六 常见的task命令</a></li>
-<li><a href="#%E4%B8%83-gradle-wrapper">七 gradle-wrapper</a></li>
-<li><a href="#%E5%85%AB-%E4%BE%9D%E8%B5%96%E5%88%86%E7%BB%84">八 依赖分组</a></li>
-<li><a href="#%E4%B9%9D-%E4%BE%9D%E8%B5%96%E7%89%88%E6%9C%AC%E5%86%B2%E7%AA%81">九 依赖版本冲突</a></li>
-<li><a href="#%E5%8D%81-springcloud-gradle%E7%AE%A1%E7%90%86">十 springcloud-gradle管理</a></li>
-<li><a href="#%E9%A1%B9%E7%9B%AE%E6%9E%84%E5%BB%BA-gradle-docker%E6%89%93%E5%8C%85">项目构建--Gradle--Docker打包</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E5%A4%9A%E9%A1%B9%E7%9B%AE%E6%9E%84%E5%BB%BA">三 多项目构建</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-gradleproperties">四 gradle.properties</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-gradle-%E6%8F%92%E4%BB%B6plugins">五 Gradle 插件(Plugins)</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-%E5%B8%B8%E8%A7%81%E7%9A%84task%E5%91%BD%E4%BB%A4">六 常见的task命令</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-gradle-wrapper">七 gradle-wrapper</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AB-%E4%BE%9D%E8%B5%96%E5%88%86%E7%BB%84">八 依赖分组</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B9%9D-%E4%BE%9D%E8%B5%96%E7%89%88%E6%9C%AC%E5%86%B2%E7%AA%81">九 依赖版本冲突</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81-%E4%BB%93%E5%BA%93%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%89%88%E6%9C%AC%E5%86%B2%E7%AA%81%E8%A7%A3%E5%86%B3">十 仓库配置与版本冲突解决</a>
+<ul>
+<li><a href="#%E4%BB%93%E5%BA%93%E5%A3%B0%E6%98%8E%E4%B8%8E%E6%9F%A5%E6%89%BE%E9%A1%BA%E5%BA%8F">仓库声明与查找顺序</a></li>
+<li><a href="#%E7%89%88%E6%9C%AC%E5%86%B2%E7%AA%81%E7%9A%84%E4%B8%89%E7%A7%8D%E8%A7%A3%E5%86%B3%E6%89%8B%E6%AE%B5">版本冲突的三种解决手段</a></li>
+<li><a href="#bom-%E4%B8%8E-platform-%E7%BB%9F%E4%B8%80%E7%89%88%E6%9C%AC">BOM 与 platform 统一版本</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%B8%80-springcloud-gradle%E7%AE%A1%E7%90%86">十一 springcloud-gradle管理</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%BA%8C-war-jar-%E6%89%93%E5%8C%85%E4%B8%8E-spring-boot-%E6%8F%92%E4%BB%B6">十二 WAR/JAR 打包与 Spring Boot 插件</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%B8%89-%E6%9E%84%E5%BB%BA%E7%BC%93%E5%AD%98%E4%B8%8E%E5%A2%9E%E9%87%8F%E6%9E%84%E5%BB%BA">十三 构建缓存与增量构建</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E5%9B%9B-%E4%B8%8E-maven-%E7%9A%84%E5%AF%B9%E7%85%A7">十四 与 Maven 的对照</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%BA%94-gradle-7-8-%E5%BA%9F%E5%BC%83%E5%86%99%E6%B3%95%E4%B8%8E%E6%96%B0%E5%86%99%E6%B3%95">十五 Gradle 7/8 废弃写法与新写法</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%A1%B9%E7%9B%AE%E6%9E%84%E5%BB%BA-gradle-docker%E6%89%93%E5%8C%85">项目构建--Gradle--Docker打包</a>
 <ul>
 <li><a href="#%E4%BD%BF%E7%94%A8ideadocker%E6%8F%92%E4%BB%B6%E5%B8%83%E7%BD%B2">使用IdeaDocker插件布署</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
