@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>volatile 的内存屏障与 happens-before 偏序关系</title>
+  <rect width="900" height="520" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">volatile 的内存屏障与 happens-before 关系</text>
+
+  <rect x="85" y="75" width="200" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="185" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">普通写 A</text>
+  <text x="185" y="120" text-anchor="middle" font-size="11" fill="#5b6b7c">写共享变量 number = 42</text>
+
+  <rect x="350" y="75" width="200" height="60" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="450" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">volatile 写</text>
+  <text x="450" y="120" text-anchor="middle" font-size="11" fill="#5b6b7c">写 flag = true</text>
+
+  <rect x="615" y="75" width="200" height="60" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="715" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">主内存</text>
+  <text x="715" y="120" text-anchor="middle" font-size="11" fill="#5b6b7c">新值立即对其他线程可见</text>
+
+  <line x1="287" y1="105" x2="346" y2="105" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="316" y="97" text-anchor="middle" font-size="11" fill="#5b6b7c">LH 屏障</text>
+  <line x1="552" y1="105" x2="611" y2="105" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="581" y="97" text-anchor="middle" font-size="11" fill="#5b6b7c">刷新</text>
+  <text x="450" y="168" text-anchor="middle" font-size="11.5" fill="#5b6b7c">volatile 写之前的所有操作，都不会被重排到 volatile 写之后（LoadStore + StoreStore 屏障）</text>
+
+  <rect x="85" y="200" width="200" height="60" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="185" y="225" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">主内存 / 总线</text>
+  <text x="185" y="245" text-anchor="middle" font-size="11" fill="#5b6b7c">volatile 变量最新值</text>
+  <rect x="350" y="200" width="200" height="60" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="450" y="225" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">volatile 读</text>
+  <text x="450" y="245" text-anchor="middle" font-size="11" fill="#5b6b7c">读 flag == true</text>
+  <rect x="615" y="200" width="200" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="715" y="225" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">普通读 B</text>
+  <text x="715" y="245" text-anchor="middle" font-size="11" fill="#5b6b7c">读 number == 42</text>
+  <line x1="287" y1="230" x2="346" y2="230" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="316" y="222" text-anchor="middle" font-size="11" fill="#5b6b7c">读取</text>
+  <line x1="552" y1="230" x2="611" y2="230" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="581" y="252" text-anchor="middle" font-size="11" fill="#5b6b7c">Acquire（LD 屏障）</text>
+  <text x="450" y="292" text-anchor="middle" font-size="11.5" fill="#5b6b7c">volatile 读之后的所有操作，都不会被重排到 volatile 读之前 → 一定能看到 flag = true 之前的所有写入</text>
+
+  <rect x="60" y="330" width="270" height="110" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="85" y="362" font-size="13" font-weight="700" fill="#1f2b38">volatile 规则</text>
+  <text x="85" y="390" font-size="11.5" fill="#5b6b7c">对 volatile 变量的写 happens-before</text>
+  <text x="85" y="410" font-size="11.5" fill="#5b6b7c">后续对同一变量的读</text>
+  <text x="85" y="430" font-size="11.5" fill="#5b6b7c">（可见性来源）</text>
+
+  <rect x="345" y="330" width="510" height="110" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="370" y="358" font-size="13" font-weight="700" fill="#1f2b38">happens-before 的另外七条规则</text>
+  <text x="370" y="382" font-size="11.5" fill="#5b6b7c">① 程序次序（单线程内按控制流顺序）　② 监视器锁（unlock 先于后续 lock）</text>
+  <text x="370" y="404" font-size="11.5" fill="#5b6b7c">③ 线程启动（start 先于新线程的每个动作）　④ 线程终止（线程所有操作先于 join 返回）</text>
+  <text x="370" y="426" font-size="11.5" fill="#5b6b7c">⑤ 线程中断（interrupt 先于被中断线程检测到中断）　⑥ 对象终结（构造完成先于 finalize 开始）</text>
+</svg>
