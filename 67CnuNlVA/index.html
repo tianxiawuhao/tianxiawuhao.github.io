@@ -162,7 +162,7 @@
 <p>但是，在JMM中就没有这个保证。未同步程序在JMM中不但整体的执行顺序是无序的，而且所有线程看到的操作执行顺序也可能不一致。比如，在当前线程把写过的数据缓存在本地内存中，且还没有刷新到主内存之前，这个写操作仅对当前线程可见；从其他线程的角度来观察，会认为这个写操作根本还没有被当前线程执行。只有当前线程把本地内存中写过的数据刷新到主内存之后，这个写操作才能对其他线程可见。在这种情况下，当前线程和其它线程看到的操作执行顺序将不一致。</p>
 <p><strong>Java内存模型</strong></p>
 <p>关于Java内存模型的书籍文章，汗牛充栋，想必大家也都有自己的理解。那就仅仅由上面的顺序一致性模型来引出JMM，看看具体区别在哪。<br>
-<img src="https://mmbiz.qpic.cn/mmbiz_png/6fuT3emWI5L2ia8pMCBIIMcJS5mdJUl6qPH8FLPQnoyYbQDM3VsSQIB0m7wrvsm7QgPBGyhaMRmoOHV1cSHqbCA/640?tp=webp&amp;wxfrom=5&amp;wx_lazy=1&amp;wx_co=1" alt="图片" loading="lazy"></p>
+<img src="/post-assets/67CnuNlVA/01-jmm-vs-sequential-consistency.svg" alt="顺序一致性内存模型与 JMM 本地内存对比示意图"></p>
 <p>可以看出，本地内存是一个明显区别于顺序一致性内存模型的地方。事实上，造成可见性问题的根源之一，就在于这个本地内存（强调一下，包括缓存、写缓冲和寄存器等等）。本地内存使得每个线程都有了自己的私有存储，大部分时间对数据的存取工作都在这个区域完成。但是我们写一个数据，是直到数据写到主存中才算真正完成。实际上每个线程维护了一个<strong>副本</strong>，所有线程都在自己的本地内存中不断地读/写一个共享内存中的数据的副本。单线程情况下，这个副本不会造成任何问题；但一旦到多线程，有一个线程将变量写到主存，其他线程却不知道，其他线程的副本就都过期。比如，由于本地内存的存在，程序员写的一段代码，写一个普通的共享变量，其可能先被写到缓冲区，那指令完成的时间就被推迟了，实际表现也就是我们常说的“指令重排序”（这实际上是内存模型层面的重排序，重排序还可能是编译器、机器指令层级上的乱序）。</p>
 <p>因此，在Java内存模型中，每个线程不再像顺序一致性模型中那样有确定的指令执行视图，一个指令可能被重排了。从一个线程的角度看，其他线程（甚至是这个线程本身）执行的指令顺序有多种可能性，也就是说，一个线程的执行结果对其他线程的可见性无法保证。</p>
 <p>总结一下导致可见性问题的原因：</p>
@@ -212,7 +212,7 @@
 <h2 id="volatile原理">Volatile原理</h2>
 <p>Java语言提供了一种稍弱的同步机制，即volatile变量，用来确保将变量的更新操作通知到其他线程。当把变量声明为volatile类型后，编译器与运行时都会注意到这个变量是共享的，因此不会将该变量上的操作与其他内存操作一起重排序。volatile变量不会被缓存在寄存器或者对其他处理器不可见的地方，因此在读取volatile类型的变量时总会返回最新写入的值。</p>
 <p>在访问volatile变量时不会执行加锁操作，因此也就不会使执行线程阻塞，因此<code>volatile</code>变量是一种比<code>synchronized</code>关键字更轻量级的同步机制。<br>
-<img src="/post-images/1619330405178.png" alt="" loading="lazy"></p>
+<img src="/post-assets/67CnuNlVA/02-volatile-visibility.svg" alt="普通变量与 volatile 变量的读写路径对比示意图"></p>
 <p>当对非 volatile 变量进行读写的时候，每个线程先从内存拷贝变量到CPU缓存中。如果计算机有多个CPU，每个线程可能在不同的CPU上被处理，这意味着每个线程可以拷贝到不同的 CPU cache 中。</p>
 <p>而声明变量是 volatile 的，JVM 保证了每次读变量都从内存中读，跳过 CPU cache 这一步。</p>
 <p><strong>当一个变量定义为 volatile 之后，将具备两种特性：</strong></p>
@@ -250,25 +250,28 @@ public static int load() {
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5">基本概念</a>
+<a href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5">基本概念</a>
 <ul>
 <li><a href="#%E5%8F%AF%E8%A7%81%E6%80%A7">可见性：</a></li>
 <li><a href="#%E5%8E%9F%E5%AD%90%E6%80%A7">原子性：</a></li>
 <li><a href="#%E6%9C%89%E5%BA%8F%E6%80%A7">有序性：</a></li>
 </ul>
 </li>
-<li><a href="#happens-before">happens-before</a></li>
-<li><a href="#%E6%9C%89%E5%93%AA%E4%BA%9Bhappens-before%E8%A7%84%E5%88%99">有哪些happens-before规则</a>
+<li>
+<a href="#happens-before">happens-before</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%9C%89%E5%93%AA%E4%BA%9Bhappens-before%E8%A7%84%E5%88%99">有哪些happens-before规则</a>
 <ul>
 <li><a href="#%E9%A1%BA%E5%BA%8F%E4%B8%80%E8%87%B4%E6%80%A7%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B">顺序一致性内存模型</a></li>
 </ul>
 </li>
-<li><a href="#volatile%E5%8E%9F%E7%90%86">Volatile原理</a>
+<li>
+<a href="#volatile%E5%8E%9F%E7%90%86">Volatile原理</a>
 <ul>
 <li><a href="#volatile%E5%8F%98%E9%87%8F">volatile变量</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
