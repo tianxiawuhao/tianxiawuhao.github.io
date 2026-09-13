@@ -125,7 +125,8 @@
           
           <img class="post-feature-header-image" src="/post-images/pR59olYKQ.png" alt="封面图">
           
-          <p>在实际小程序开发中，大部分前后台交互与前后端分离的 WebApp 没有本质区别，都是调用后台接口、用 JSON 传数据；只有在微信授权登录、微信支付、微信模板消息推送等特殊环节，才会感受到微信的存在。</p>
+          <h2 id="sec-wx-login-flow">一、微信授权登录流程</h2>
+<p>在实际小程序开发中，大部分前后台交互与前后端分离的 WebApp 没有本质区别，都是调用后台接口、用 JSON 传数据；只有在微信授权登录、微信支付、微信模板消息推送等特殊环节，才会感受到微信的存在。</p>
 <p>这些场景理解原理后其实都不复杂。本节主要讲解如何使用 Spring Boot 后台处理微信授权登录。</p>
 <p>处理微信小程序授权登录之前，最好先了解一下 OAuth 2.0 授权协议；如果确实不清楚也没关系，可以直接阅读微信小程序开发官方文档的相关章节：<a href="https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html">小程序登录时序图</a>。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1561214993902290.jpg" alt="api-login.2fcc9f35.jpg" loading="lazy"></figure>
@@ -143,7 +144,10 @@
 </ol>
 </blockquote>
 <figure data-type="image" tabindex="2"><img src="/post-images/1561215028690143.png" alt="1561208469103749.png" loading="lazy"></figure>
+<p>把上面两个官方说明合起来看，整条链路可以概括为下面这张时序图：小程序只负责拿 code 和保管 token，服务端负责与微信接口打交道并签发自己的登录态。</p>
+<p><img src="/post-assets/pR59olYKQ/01-wx-login-sequence.svg" alt="微信小程序授权登录时序图：小程序 wx.login 获取 code，服务端调用 auth.code2Session 换取 openid 与 session_key，签发 JWT 存入 Redis 后下发，后续业务请求在 Header 中携带 token"></p>
 <hr>
+<h2 id="sec-deps-utils">二、依赖与工具类</h2>
 <p><strong>流程理清之后，下面就用代码实现。Spring Boot 部分为了压缩篇幅，这里只贴核心代码：</strong></p>
 <p>核心技术是 HttpClient 与 JWT Token。需要在原有依赖的基础上增加这两个 Maven 依赖：</p>
 <pre><code class="language-xml">&lt;!-- httpclient --&gt;
@@ -158,7 +162,7 @@
     &lt;version&gt;0.7.0&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<p>为HttpClient和jwtToken封装工具类：</p>
+<h3 id="sec-httpclient-util">2.1 HttpClient 工具类</h3>
 <p><strong>HttpClientUtil.java</strong></p>
 <pre><code class="language-java">package com.wx.video.utils;
  
@@ -436,6 +440,7 @@ public class UserClaims extends JwtMap implements Claims {
     }
 }
 </code></pre>
+<h3 id="sec-jwt-utils">2.2 JWT 工具类</h3>
 <p><strong>JwtTokenProvider.java</strong></p>
 <pre><code class="language-java">package com.wx.video.utils;
  
@@ -515,6 +520,7 @@ public class JwtUtils {
     }
 }
 </code></pre>
+<h2 id="sec-wxlogin-api">三、授权登录接口实现</h2>
 <p>有了上面的工具类，真正的授权登录代码就很简单了，如下（为了便于直接阅读省略了一些代码；文中用到的常量如 appid、secret 没有单独封装，实际工程中建议专门建一个类统一存放和管理）。</p>
 <pre><code class="language-java">@Controller
 @RequestMapping(&quot;/api&quot;)
@@ -570,7 +576,7 @@ public class UserController {
             newUser.setCreateTime(new Date());
             // 添加到数据库
             int count = userService.insert(newUser);
-            if(count &lt; 0){
+            if (count &lt;= 0) {
                 return JsonResult.error(&quot;插入数据失败&quot;);
             }
         }
@@ -600,30 +606,38 @@ public class UserController {
 <p>1、上文用到的 appid 和 secret 都是我编造的占位值，需要替换成自己的；</p>
 <p>2、统一返回结果的数据结构实现方式很多，我代码里使用的是 JsonResult 类；</p>
 <p>3、代码中用到的 Redis 工具类需要自行封装，实现不难，也不影响授权登录流程；</p>
+<p>4、为了保持代码主干清晰，这里省略了防御性判断：临时凭证失效时微信接口会返回 errcode（例如 40029 表示 code 无效），此时响应里并不存在 session_key 和 openid，直接取字段会抛空指针异常。生产代码应先判断返回 JSON 中是否有 errcode，再读取字段；小程序端传来的 code、uname 等参数同样建议先做非空校验。</p>
+<p>5、session_key 是对用户数据做加密签名的密钥，只应保存在服务端，示例中把它写入 Redis 和用户表、不下发给小程序，这一点是正确的；另外 Redis 中的 token 建议设置与 JWT 有效期一致的过期时间，避免长期堆积。</p>
+<p>6、文中的 System.out.println 仅用于演示，实际项目建议改用 SLF4J 等日志框架，并且不要把完整的 token 打印到日志里。</p>
 </blockquote>
+<h2 id="sec-client-verify">四、小程序端接入与登录态校验</h2>
 <p>上面的代码就足以完成微信小程序的授权登录。小程序拿到 token 后要存入本地 storage；后续需要登录态校验的请求，在 Header 中把 Authorization 设为 token 值。后台使用封装好的 JwtUtils.getUserClaim 方法，即可从 request 中直接解析出 Claims 对象（里面存放着我们封装的 uid 和 openid），然后继续处理正常业务。</p>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/uTx-7SqyQ/"><span class="pn-label">← 上一篇</span><span class="pn-title">Docker+Jenkins(blueocean)+Gitee构建CICD流水线实战</span></a>
-      <a class="next-post" href="/RokgvWufI/"><span class="pn-label">下一篇 →</span><span class="pn-title">一文彻底弄懂ctx.close()和ctx.channel().close()的区别</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
-
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#sec-wx-login-flow">一、微信授权登录流程</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-deps-utils">二、依赖与工具类</a>
+<ul>
+<li><a href="#sec-httpclient-util">2.1 HttpClient 工具类</a></li>
+<li><a href="#sec-jwt-utils">2.2 JWT 工具类</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec-wxlogin-api">三、授权登录接口实现</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-client-verify">四、小程序端接入与登录态校验</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">

@@ -126,13 +126,15 @@
           <img class="post-feature-header-image" src="/post-images/McgbXRFnx.png" alt="封面图">
           
           <h2 id="整体环境">整体环境</h2>
-<p>3台master节点，3台<a href="https://so.csdn.net/so/search?q=node&amp;spm=1001.2101.3001.7020">node</a>节点。采用了Centos 7，有网络，互相可以ping通。</p>
-<p><strong>准备工作查看单集群部署</strong></p>
-<h3 id="1安装keepalived-和-haproxy">1.安装keepalived 和 haproxy</h3>
-<h4 id="11安装keepalived和-haproxy">1.1安装keepalived和 haproxy</h4>
-<pre><code class="language-shell">1yum install keepalived haproxy -y
+<p>整体规划：3 台 master 节点（同时承载 keepalived、HAProxy、kube-apiserver 与 etcd）+ 3 台 <a href="https://so.csdn.net/so/search?q=node&amp;spm=1001.2101.3001.7020">node</a> 工作节点。操作系统为 CentOS 7，各节点同网段、网络互通、可互相 ping 通。</p>
+<p><strong>准备工作（安装 Docker、关闭 swap、关闭防火墙与 SELinux 等）可参考「单集群部署」一文，本文只补充高可用相关的配置。</strong></p>
+<p>整个高可用架构可以用下面一张图概括：客户端不再直连某一台 master，而是访问由 keepalived 维护的 VIP，再由 HAProxy 把请求负载到三台 apiserver 上。</p>
+<p><img src="/post-assets/McgbXRFnx/01-ha-architecture.svg" alt="Kubernetes 高可用集群架构：kubectl 访问 VIP 192.168.40.19:16443，keepalived 负责漂移、HAProxy 转发到三台 master 的 apiserver，三台 master 组成 etcd 集群并下挂三台 node 工作节点"></p>
+<h2 id="1安装keepalived-和-haproxy">1.安装keepalived 和 haproxy</h2>
+<h3 id="11安装keepalived和-haproxy">1.1 安装 keepalived 和 haproxy</h3>
+<pre><code class="language-shell">yum install keepalived haproxy -y
 </code></pre>
-<h4 id="12-配置-keepalived">1.2 配置 keepalived</h4>
+<h3 id="12-配置-keepalived">1.2 配置 keepalived</h3>
 <pre><code class="language-shell">cat &lt;&lt;EOF &gt; /etc/keepalived/keepalived.conf
 ! Configuration File for keepalived
 
@@ -249,7 +251,7 @@ EOF
 <li>另外很多文章中没有强调 nopreempt 参数，意为不可抢占，此时 master 节点失败后，backup 节点也不能接管 vip，因此我将此配置删去</li>
 </ul>
 </blockquote>
-<h4 id="13-配置haproxy">1.3 配置haproxy</h4>
+<h3 id="13-配置haproxy">1.3 配置haproxy</h3>
 <pre><code class="language-shell">cat &lt;&lt;EOF &gt; /etc/haproxy/haproxy.cfg
 #---------------------------------------------------------------------
 # Global settings
@@ -331,8 +333,8 @@ EOF
 <pre><code class="language-bash">systemctl enable haproxy &amp;&amp; systemctl start haproxy 
 systemctl enable keepalived &amp;&amp; systemctl start keepalived 
 </code></pre>
-<h3 id="2安装kubeadm-kubelet-kubectl">2.安装kubeadm、kubelet、kubectl</h3>
-<h4 id="1配置文件修改">1.配置文件修改</h4>
+<h2 id="2安装kubeadm-kubelet-kubectl">2.安装kubeadm、kubelet、kubectl</h2>
+<h3 id="1配置文件修改">1.配置文件修改</h3>
 <pre><code class="language-shell">cat &lt;&lt;EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
@@ -343,11 +345,11 @@ repo_gpgcheck=0
 gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
 EOF
 </code></pre>
-<h4 id="2安装启用">2.安装启用</h4>
+<h3 id="2安装启用">2.安装启用</h3>
 <pre><code class="language-shell">sudo yum install -y kubelet-1.24.1 kubeadm-1.24.1 kubectl-1.24.1 --disableexcludes=kubernetes 
 sudo systemctl enable kubelet &amp;&amp; systemctl start kubelet
 </code></pre>
-<h4 id="3修改kubelet的配置文件">3.修改kubelet的配置文件</h4>
+<h3 id="3修改kubelet的配置文件">3.修改kubelet的配置文件</h3>
 <p>先查看配置文件位置</p>
 <pre><code class="language-shell">systemctl status kubelet
 </code></pre>
@@ -357,11 +359,12 @@ sudo systemctl enable kubelet &amp;&amp; systemctl start kubelet
 <p>并添加以下内容(使用和docker相同的cgroup-driver)。</p>
 <pre><code class="language-shell">Environment=&quot;KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --cgroup-driver=systemd&quot;
 </code></pre>
-<h4 id="4重启kubelet">4.重启kubelet</h4>
+<p>说明：Kubernetes 1.24 起移除了内置的 dockershim，如果仍使用 Docker 作为容器运行时，需要额外部署 cri-dockerd 并由它提供 /var/run/cri-docker.sock，所以下文的 kubeadm init 与 join 都要显式带上 --cri-socket unix:///var/run/cri-docker.sock。</p>
+<h3 id="4重启kubelet">4.重启kubelet</h3>
 <pre><code class="language-shell">systemctl daemon-reload &amp;&amp; systemctl restart kubelet
 </code></pre>
-<h3 id="3获取k8s镜像可忽略">3.获取K8S镜像（可忽略）</h3>
-<h4 id="1获取镜像列表">1.获取镜像列表</h4>
+<h2 id="3获取k8s镜像可忽略">3.获取K8S镜像（可忽略）</h2>
+<h3 id="1获取镜像列表">1.获取镜像列表</h3>
 <p><strong>使用阿里云镜像仓库下载（国内环境该命令可不执行，下步骤kubeadm init --image-repository registry.cn-hangzhou.aliyuncs.com/google_containers已经默认为国内环境）</strong></p>
 <p>由于官方镜像地址被墙，所以我们需要首先获取所需镜像以及它们的版本。然后从国内镜像站获取。</p>
 <pre><code class="language-bash">kubeadm config images list
@@ -388,12 +391,12 @@ for imageName in ${images[@]} ; do
     docker rmi registry.cn-hangzhou.aliyuncs.com/google_containers/$imageName
 done
 </code></pre>
-<h4 id="2赋权执行">2.赋权执行</h4>
+<h3 id="2赋权执行">2.赋权执行</h3>
 <pre><code class="language-shell">chmod +x k8s-images.sh &amp;&amp; ./k8s-images.sh
 </code></pre>
 <p><strong>以上操作在所有机器执行</strong></p>
-<h3 id="4初始化环境master操作">4.初始化环境（master操作）</h3>
-<h4 id="1安装镜像">1.安装镜像</h4>
+<h2 id="4初始化环境master操作">4.初始化环境（master操作）</h2>
+<h3 id="1安装镜像">1.安装镜像</h3>
 <p><strong>采用模板配置文件加载</strong></p>
 <pre><code class="language-shell">kubeadm config print init-defaults  &gt; kubeadm-config.yaml
 </code></pre>
@@ -460,18 +463,19 @@ featureGates:
   SupportIPVSProxyMode: true
 mode: ipvs
 </code></pre>
-<h4 id="2查看kubeadm版本修改命令参数">2.查看kubeadm版本，修改命令参数</h4>
+<p>注意：kubeadm 1.24 默认生成的配置版本是 kubeadm.k8s.io/v1beta3，v1beta2 自 1.22 起已弃用；这里沿用旧版本是为了与文中字段写法保持一致。实际部署请以本机 <code>kubeadm config print init-defaults</code> 输出的 apiVersion 与字段为准，否则可能因配置版本不匹配导致 init 失败。</p>
+<h3 id="2查看kubeadm版本修改命令参数">2.查看kubeadm版本，修改命令参数</h3>
 <pre><code class="language-shell">kubeadm version
 </code></pre>
 <p>这个就很简单了，只需要简单的一个命令：</p>
 <pre><code class="language-bash">#直接使用已经下载好的镜像
 kubeadm init --kubernetes-version=v1.24.1 --control-plane-endpoint &quot;192.168.40.19:16443&quot; --apiserver-advertise-address=192.168.40.20 --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12 --ignore-preflight-errors=Swap  --cri-socket unix:///var/run/cri-docker.sock | tee kubeadm-init.log
 #或者采用aliyuncs镜像下载
-kubeadm init --kubernetes-version=v1.24.1 --control-plane-endpoint &quot;192.168.40.19:16443&quot; --apiserver-advertise-address=192.168.40.20 --image-repository  registry.aliyuncs.com/google_containers  --service-cidr=10.1.0.0/16 --pod-network-cidr=10.244.0.0/16 --cri-socket unix:///var/run/cri-docker.sock| tee kubeadm-init.log
+kubeadm init --kubernetes-version=v1.24.1 --control-plane-endpoint &quot;192.168.40.19:16443&quot; --apiserver-advertise-address=192.168.40.20 --image-repository registry.aliyuncs.com/google_containers --service-cidr=10.96.0.0/12 --pod-network-cidr=10.244.0.0/16 --cri-socket unix:///var/run/cri-docker.sock| tee kubeadm-init.log
 #使用上面系统生成配置文件加载
 kubeadm init --config kubeadm-config.yaml
 </code></pre>
-<h4 id="3初始化命令说明">3.初始化命令说明：</h4>
+<h3 id="3初始化命令说明">3.初始化命令说明：</h3>
 <blockquote>
 <p>虚拟ip节点端口号</p>
 </blockquote>
@@ -502,20 +506,20 @@ kubeadm init --config kubeadm-config.yaml
 </blockquote>
 <pre><code class="language-shell">--cri-socket unix:///var/run/cri-docker.sock 
 </code></pre>
-<h4 id="4错误启动重置">4.错误启动重置</h4>
+<h3 id="4错误启动重置">4. 初始化失败时重置</h3>
 <pre><code class="language-shell"># 重置 如果有需要
 kubeadm reset --cri-socket unix:///var/run/cri-docker.sock
 </code></pre>
-<h4 id="5初始化成功后为顺利使用kubectl执行以下命令">5.初始化成功后，为顺利使用kubectl，执行以下命令：</h4>
+<h3 id="5初始化成功后为顺利使用kubectl执行以下命令">5.初始化成功后，为顺利使用kubectl，执行以下命令：</h3>
 <pre><code class="language-shell">mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 </code></pre>
-<h4 id="6添加其他主节点">6.添加其他主节点</h4>
-<h5 id="1复制密钥及相关文件">1.复制密钥及相关文件</h5>
+<h3 id="6添加其他主节点">6.添加其他主节点</h3>
+<h4 id="1复制密钥及相关文件">1.复制密钥及相关文件</h4>
 <pre><code class="language-shell">ssh root@192.168.40.21 mkdir -p /etc/kubernetes/pki/etcd
 scp /etc/kubernetes/admin.conf root@192.168.40.21:/etc/kubernetes 
-scp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*}root@192.168.40.21:/etc/kubernetes/pki
+scp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*} root@192.168.40.21:/etc/kubernetes/pki
 scp /etc/kubernetes/pki/etcd/ca.* root@192.168.40.21:/etc/kubernetes/pki/etcd
 </code></pre>
 <pre><code class="language-shell">ssh root@192.168.40.22 mkdir -p /etc/kubernetes/pki/etcd
@@ -523,17 +527,19 @@ scp /etc/kubernetes/admin.conf root@192.168.40.22:/etc/kubernetes
 scp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*} root@192.168.40.22:/etc/kubernetes/pki
 scp /etc/kubernetes/pki/etcd/ca.* root@192.168.40.22:/etc/kubernetes/pki/etcd
 </code></pre>
-<h5 id="2添加节点">2.添加节点</h5>
+<h4 id="2添加节点">2.添加节点</h4>
 <pre><code class="language-shell">kubeadm join 192.168.40.19:16443 --token pqir66.66fy6pexw3kprt2b --discovery-token-ca-cert-hash sha256:cd4c42e956fdc7e0ad48c990484c22cfd43da63cb3f3887bedc481e7f33a0be1 --control-plane --cri-socket unix:///var/run/cri-docker.sock 
 </code></pre>
-<h4 id="7执行kubectl-get-nodes查看master节点状态">7.执行kubectl get nodes，查看master节点状态：</h4>
+<h3 id="7执行kubectl-get-nodes查看master节点状态">7.执行kubectl get nodes，查看master节点状态：</h3>
 <pre><code class="language-shell">kubectl get node
 </code></pre>
-<h4 id="8通过如下命令查看kubelet状态">8.通过如下命令查看kubelet状态：</h4>
+<h3 id="8通过如下命令查看kubelet状态">8.通过如下命令查看kubelet状态：</h3>
 <pre><code class="language-bash">journalctl -xef -u kubelet -n 20
 </code></pre>
 <p>提示未安装cni 网络插件。</p>
-<h3 id="51安装flannel网络插件cni">5.1安装flannel网络插件(CNI)</h3>
+<h2 id="5部署网络插件cni">5.部署网络插件（CNI）</h2>
+<p>flannel 与 calico 是两种可选的 CNI 方案，同一个集群只应安装其中一种，下面两个小节任选其一即可。</p>
+<h3 id="51安装flannel网络插件cni">5.1 安装 flannel 网络插件（CNI）</h3>
 <p>master执行以下命令安装flannel即可：</p>
 <pre><code class="language-shell">kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
 </code></pre>
@@ -545,22 +551,23 @@ NAME         STATUS   ROLES    AGE   VERSION
 k8s-master   Ready    master   16m   v1.24.1
 </code></pre>
 <p><strong>如上所示，master状态变为，表明Master节点部署成功！</strong></p>
-<h3 id="52安装calico网络功能更完善">5.2安装calico网络(功能更完善)</h3>
-<h4 id="1在master上下载配置calico网络的yaml">1.在master上下载配置calico网络的yaml。</h4>
+<h3 id="52安装calico网络功能更完善">5.2 安装 calico 网络（功能更完善）</h3>
+<h3 id="1在master上下载配置calico网络的yaml">1.在master上下载配置calico网络的yaml。</h3>
 <pre><code class="language-shell">kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 </code></pre>
-<h4 id="2提前下载所需要的镜像">2.提前下载所需要的镜像。</h4>
+<p>注意：docs.projectcalico.org 这个域名已不再维护，建议改为按版本固定下载，例如本文使用的 v3.23.1 对应 <code>https://raw.githubusercontent.com/projectcalico/calico/v3.23.1/manifests/calico.yaml</code>。</p>
+<h3 id="2提前下载所需要的镜像">2.提前下载所需要的镜像。</h3>
 <pre><code class="language-shell"># 查看此文件用哪些镜像：
 [root@k8s-master ~]# grep image calico.yaml
 image: docker.io/calico/cni:v3.23.1
 image: docker.io/calico/node:v3.23.1
 image: docker.io/calico/kube-controllers:v3.23.1
 </code></pre>
-<h4 id="3安装calico网络">3.安装calico网络。</h4>
+<h3 id="3安装calico网络">3.安装calico网络。</h3>
 <p>在master上执行如下命令：</p>
 <pre><code class="language-shell">kubectl apply -f calico.yaml
 </code></pre>
-<h4 id="5验证结果">5.验证结果。</h4>
+<h3 id="5验证结果">4. 验证结果</h3>
 <p>再次在master上运行命令 kubectl get nodes查看运行结果：</p>
 <pre><code class="language-shell">[root@k8s-master ~]# kubectl get nodes
 NAME       STATUS   ROLES                  AGE   VERSION
@@ -568,17 +575,18 @@ master01   Ready    control-plane,master   21h   v1.23.4
 worker01   Ready    control-plane,master   16h   v1.23.4
 worker02   Ready    control-plane,master   16h   v1.23.4
 </code></pre>
-<h3 id="6部署k8s-node1-k8s-node2-k8s-node3集群">6.部署k8s-node1、k8s-node2、k8s-node3集群</h3>
+<p>（上面这段是示例输出，节点名与版本号随环境不同，请以自己集群的实际输出为准。）</p>
+<h2 id="6部署k8s-node1-k8s-node2-k8s-node3集群">6.部署k8s-node1、k8s-node2、k8s-node3集群</h2>
 <p><strong>1、在k8s-node1、k8s-node2、k8s-node3等三台虚拟机中重复执行上面的步骤，安装好docker、kubelet、kubectl、kubeadm。</strong></p>
-<h4 id="1node节点加入集群">1.node节点加入集群</h4>
+<h3 id="1node节点加入集群">1.node节点加入集群</h3>
 <p>在上面第初始化master节点成功后，输出了下面的kubeadm join命令：</p>
 <pre><code class="language-shell">kubeadm join 192.168.40.131:6443 --token zj0u08.ge77y7uv76flqgdk --discovery-token-ca-cert-hash sha256:7cd23cec6afb192b2d34c5c719b378082a6315a9d91a22d91b83066c870d4db5 --cri-socket unix:///var/run/cri-docker.sock 
 </code></pre>
-<p>该命令就是node加入集群的命令，分别在k8s-node1、k8s-node2上执行该命令加入集群。</p>
+<p>该命令就是 node 节点加入集群的命令，在 k8s-node1、k8s-node2、k8s-node3 三台机器上分别执行即可。</p>
 <p>如果忘记该命令，可以通过以下命令重新生成：</p>
 <pre><code class="language-shell">kubeadm token create --print-join-command
 </code></pre>
-<h4 id="2在master节点执行下面命令查看集群状态">2.在master节点执行下面命令查看集群状态：</h4>
+<h3 id="2在master节点执行下面命令查看集群状态">2.在master节点执行下面命令查看集群状态：</h3>
 <pre><code class="language-shell">kubectl get nodes
 </code></pre>
 <pre><code class="language-shell">[root@k8s-master ~]# kubectl get node
@@ -612,17 +620,20 @@ reboot
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E6%95%B4%E4%BD%93%E7%8E%AF%E5%A2%83">整体环境</a>
 <ul>
-<li><a href="#%E6%95%B4%E4%BD%93%E7%8E%AF%E5%A2%83">整体环境</a>
+</ul>
+</li>
+<li>
+<a href="#1%E5%AE%89%E8%A3%85keepalived-%E5%92%8C-haproxy">1.安装keepalived 和 haproxy</a>
 <ul>
-<li><a href="#1%E5%AE%89%E8%A3%85keepalived-%E5%92%8C-haproxy">1.安装keepalived 和 haproxy</a>
-<ul>
-<li><a href="#11%E5%AE%89%E8%A3%85keepalived%E5%92%8C-haproxy">1.1安装keepalived和 haproxy</a></li>
+<li><a href="#11%E5%AE%89%E8%A3%85keepalived%E5%92%8C-haproxy">1.1 安装 keepalived 和 haproxy</a></li>
 <li><a href="#12-%E9%85%8D%E7%BD%AE-keepalived">1.2 配置 keepalived</a></li>
 <li><a href="#13-%E9%85%8D%E7%BD%AEhaproxy">1.3 配置haproxy</a></li>
 </ul>
 </li>
-<li><a href="#2%E5%AE%89%E8%A3%85kubeadm-kubelet-kubectl">2.安装kubeadm、kubelet、kubectl</a>
+<li>
+<a href="#2%E5%AE%89%E8%A3%85kubeadm-kubelet-kubectl">2.安装kubeadm、kubelet、kubectl</a>
 <ul>
 <li><a href="#1%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%BF%AE%E6%94%B9">1.配置文件修改</a></li>
 <li><a href="#2%E5%AE%89%E8%A3%85%E5%90%AF%E7%94%A8">2.安装启用</a></li>
@@ -630,47 +641,47 @@ reboot
 <li><a href="#4%E9%87%8D%E5%90%AFkubelet">4.重启kubelet</a></li>
 </ul>
 </li>
-<li><a href="#3%E8%8E%B7%E5%8F%96k8s%E9%95%9C%E5%83%8F%E5%8F%AF%E5%BF%BD%E7%95%A5">3.获取K8S镜像（可忽略）</a>
+<li>
+<a href="#3%E8%8E%B7%E5%8F%96k8s%E9%95%9C%E5%83%8F%E5%8F%AF%E5%BF%BD%E7%95%A5">3.获取K8S镜像（可忽略）</a>
 <ul>
 <li><a href="#1%E8%8E%B7%E5%8F%96%E9%95%9C%E5%83%8F%E5%88%97%E8%A1%A8">1.获取镜像列表</a></li>
 <li><a href="#2%E8%B5%8B%E6%9D%83%E6%89%A7%E8%A1%8C">2.赋权执行</a></li>
 </ul>
 </li>
-<li><a href="#4%E5%88%9D%E5%A7%8B%E5%8C%96%E7%8E%AF%E5%A2%83master%E6%93%8D%E4%BD%9C">4.初始化环境（master操作）</a>
+<li>
+<a href="#4%E5%88%9D%E5%A7%8B%E5%8C%96%E7%8E%AF%E5%A2%83master%E6%93%8D%E4%BD%9C">4.初始化环境（master操作）</a>
 <ul>
 <li><a href="#1%E5%AE%89%E8%A3%85%E9%95%9C%E5%83%8F">1.安装镜像</a></li>
 <li><a href="#2%E6%9F%A5%E7%9C%8Bkubeadm%E7%89%88%E6%9C%AC%E4%BF%AE%E6%94%B9%E5%91%BD%E4%BB%A4%E5%8F%82%E6%95%B0">2.查看kubeadm版本，修改命令参数</a></li>
 <li><a href="#3%E5%88%9D%E5%A7%8B%E5%8C%96%E5%91%BD%E4%BB%A4%E8%AF%B4%E6%98%8E">3.初始化命令说明：</a></li>
-<li><a href="#4%E9%94%99%E8%AF%AF%E5%90%AF%E5%8A%A8%E9%87%8D%E7%BD%AE">4.错误启动重置</a></li>
+<li><a href="#4%E9%94%99%E8%AF%AF%E5%90%AF%E5%8A%A8%E9%87%8D%E7%BD%AE">4. 初始化失败时重置</a></li>
 <li><a href="#5%E5%88%9D%E5%A7%8B%E5%8C%96%E6%88%90%E5%8A%9F%E5%90%8E%E4%B8%BA%E9%A1%BA%E5%88%A9%E4%BD%BF%E7%94%A8kubectl%E6%89%A7%E8%A1%8C%E4%BB%A5%E4%B8%8B%E5%91%BD%E4%BB%A4">5.初始化成功后，为顺利使用kubectl，执行以下命令：</a></li>
-<li><a href="#6%E6%B7%BB%E5%8A%A0%E5%85%B6%E4%BB%96%E4%B8%BB%E8%8A%82%E7%82%B9">6.添加其他主节点</a>
-<ul>
-<li><a href="#1%E5%A4%8D%E5%88%B6%E5%AF%86%E9%92%A5%E5%8F%8A%E7%9B%B8%E5%85%B3%E6%96%87%E4%BB%B6">1.复制密钥及相关文件</a></li>
-<li><a href="#2%E6%B7%BB%E5%8A%A0%E8%8A%82%E7%82%B9">2.添加节点</a></li>
-</ul>
-</li>
+<li><a href="#6%E6%B7%BB%E5%8A%A0%E5%85%B6%E4%BB%96%E4%B8%BB%E8%8A%82%E7%82%B9">6.添加其他主节点</a></li>
 <li><a href="#7%E6%89%A7%E8%A1%8Ckubectl-get-nodes%E6%9F%A5%E7%9C%8Bmaster%E8%8A%82%E7%82%B9%E7%8A%B6%E6%80%81">7.执行kubectl get nodes，查看master节点状态：</a></li>
 <li><a href="#8%E9%80%9A%E8%BF%87%E5%A6%82%E4%B8%8B%E5%91%BD%E4%BB%A4%E6%9F%A5%E7%9C%8Bkubelet%E7%8A%B6%E6%80%81">8.通过如下命令查看kubelet状态：</a></li>
 </ul>
 </li>
-<li><a href="#51%E5%AE%89%E8%A3%85flannel%E7%BD%91%E7%BB%9C%E6%8F%92%E4%BB%B6cni">5.1安装flannel网络插件(CNI)</a></li>
-<li><a href="#52%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C%E5%8A%9F%E8%83%BD%E6%9B%B4%E5%AE%8C%E5%96%84">5.2安装calico网络(功能更完善)</a>
+<li>
+<a href="#5%E9%83%A8%E7%BD%B2%E7%BD%91%E7%BB%9C%E6%8F%92%E4%BB%B6cni">5.部署网络插件（CNI）</a>
 <ul>
+<li><a href="#51%E5%AE%89%E8%A3%85flannel%E7%BD%91%E7%BB%9C%E6%8F%92%E4%BB%B6cni">5.1 安装 flannel 网络插件（CNI）</a></li>
+<li><a href="#52%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C%E5%8A%9F%E8%83%BD%E6%9B%B4%E5%AE%8C%E5%96%84">5.2 安装 calico 网络（功能更完善）</a></li>
 <li><a href="#1%E5%9C%A8master%E4%B8%8A%E4%B8%8B%E8%BD%BD%E9%85%8D%E7%BD%AEcalico%E7%BD%91%E7%BB%9C%E7%9A%84yaml">1.在master上下载配置calico网络的yaml。</a></li>
 <li><a href="#2%E6%8F%90%E5%89%8D%E4%B8%8B%E8%BD%BD%E6%89%80%E9%9C%80%E8%A6%81%E7%9A%84%E9%95%9C%E5%83%8F">2.提前下载所需要的镜像。</a></li>
 <li><a href="#3%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C">3.安装calico网络。</a></li>
-<li><a href="#5%E9%AA%8C%E8%AF%81%E7%BB%93%E6%9E%9C">5.验证结果。</a></li>
+<li><a href="#5%E9%AA%8C%E8%AF%81%E7%BB%93%E6%9E%9C">4. 验证结果</a></li>
 </ul>
 </li>
-<li><a href="#6%E9%83%A8%E7%BD%B2k8s-node1-k8s-node2-k8s-node3%E9%9B%86%E7%BE%A4">6.部署k8s-node1、k8s-node2、k8s-node3集群</a>
+<li>
+<a href="#6%E9%83%A8%E7%BD%B2k8s-node1-k8s-node2-k8s-node3%E9%9B%86%E7%BE%A4">6.部署k8s-node1、k8s-node2、k8s-node3集群</a>
 <ul>
 <li><a href="#1node%E8%8A%82%E7%82%B9%E5%8A%A0%E5%85%A5%E9%9B%86%E7%BE%A4">1.node节点加入集群</a></li>
 <li><a href="#2%E5%9C%A8master%E8%8A%82%E7%82%B9%E6%89%A7%E8%A1%8C%E4%B8%8B%E9%9D%A2%E5%91%BD%E4%BB%A4%E6%9F%A5%E7%9C%8B%E9%9B%86%E7%BE%A4%E7%8A%B6%E6%80%81">2.在master节点执行下面命令查看集群状态：</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E5%8D%B8%E8%BD%BD%E9%9B%86%E7%BE%A4%E5%91%BD%E4%BB%A4">卸载集群命令</a></li>
+<li>
+<a href="#%E5%8D%B8%E8%BD%BD%E9%9B%86%E7%BE%A4%E5%91%BD%E4%BB%A4">卸载集群命令</a>
+<ul>
 </ul>
 </li>
 </ul>
