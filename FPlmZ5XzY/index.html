@@ -125,25 +125,25 @@
           
           <img class="post-feature-header-image" src="/post-images/FPlmZ5XzY.png" alt="封面图">
           
-          <p>与 <a href="http://c.biancheng.net/java/">Java</a> 和 .NET 等编程语言不同，Go语言为程序员提供了控制<a href="http://c.biancheng.net/data_structure/">数据结构</a>指针的能力，但是，并不能进行指针运算。Go语言允许你控制特定集合的数据结构、分配的数量以及内存访问模式，这对于构建运行良好的系统是非常重要的。指针对于性能的影响不言而喻，如果你想要做系统编程、操作系统或者网络应用，指针更是不可或缺的一部分。</p>
+          <p>与 <a href="http://c.biancheng.net/java/">Java</a> 只提供“引用”不同，Go 语言把指针作为一等类型交给程序员：可以取变量地址，可以通过指针修改原变量，但不能对指针做算术运算（除非使用 <code>unsafe</code>）。它也不同于 <a href="http://c.biancheng.net/cplus/">C/C++</a>：指针不能越界偏移，指向的对象由垃圾回收器管理，不需要手动 <code>free</code>。Go 语言允许你控制特定集合的<a href="http://c.biancheng.net/data_structure/">数据结构</a>、分配的数量以及内存访问模式，这对于构建运行良好的系统非常重要；做系统编程、操作系统或网络应用时，指针更是绕不开的一环。</p>
 <p>指针（pointer）在Go语言中可以被拆分为两个核心概念：</p>
 <ul>
 <li>类型指针，允许对这个指针类型的数据进行修改，传递数据可以直接使用指针，而无须拷贝数据，类型指针不能进行偏移和运算。</li>
 <li>切片，由指向起始元素的原始指针、元素数量和容量组成。</li>
 </ul>
 <p>受益于这样的约束和拆分，Go 语言的指针类型变量既拥有指针高效访问的特点，又不会发生指针偏移，从而避免了非法修改关键数据的问题；同时，垃圾回收也比较容易对不发生偏移的指针进行检索和回收。</p>
-<p>切片比原始指针更强大，也更安全：切片越界时，运行时会抛出 panic（宕机）并打印堆栈；而原始指针越界只会让程序崩溃。</p>
+<p>切片比裸指针更强大，也更安全：切片访问越界时运行时会抛出 panic 并打印堆栈（<code>index out of range</code>）；而 Go 的指针本身不支持偏移，也就不存在 C 语言那种“指针越界改写相邻内存”的途径——真正危险的只剩解引用 <code>nil</code> 指针（panic：<code>invalid memory address or nil pointer dereference</code>）以及滥用 <code>unsafe</code>。</p>
 <h2 id="cc中的指针">C/<a href="http://c.biancheng.net/cplus/">C++</a>中的指针</h2>
 <p>说到 C/C++ 中的指针，会让许多人“谈虎色变”，尤其是对指针的偏移、运算和转换。</p>
 <p>其实，指针正是 C/C++ 语言拥有极高性能的根本所在，操作大块数据和做偏移时既方便又高效。因此，操作系统依然主要用 C 语言及指针特性编写。</p>
 <p>C/C++ 中指针饱受诟病的根本原因是指针的运算和内存释放，C/C++ 语言中的裸指针可以自由偏移，甚至可以在某些情况下偏移进入操作系统的核心区域，我们的计算机操作系统经常需要更新、修复漏洞的本质，就是为解决指针越界访问所导致的“缓冲区溢出”的问题。</p>
 <p>要明白指针，需要知道几个概念：指针地址、指针类型和指针取值，下面将展开详细说明。</p>
 <h2 id="认识指针地址和指针类型">认识指针地址和指针类型</h2>
-<p>一个指针变量可以指向任何一个值的内存地址，它所指向的值的内存地址在 32 和 64 位机器上分别占用 4 或 8 个字节，占用字节的大小与所指向的值的大小无关。当一个指针被声明但尚未指向任何变量时，其默认值为 nil。指针变量通常缩写为 ptr。</p>
-<p>每个变量在运行时都拥有一个地址，这个地址代表变量在内存中的位置。Go语言中使用在变量名前面添加<code>&amp;</code>操作符（前缀）来获取变量的内存地址（取地址操作），格式如下：</p>
+<p>一个指针变量保存的是某个值的内存地址。指针本身占用的字节数只取决于目标平台的字长：32 位平台（如 <code>GOARCH=386</code>）为 4 字节，64 位平台（如 <code>amd64</code>、<code>arm64</code>）为 8 字节，与它所指向的值的大小无关。用 <code>var p *int</code> 声明指针后，其默认值为 <code>nil</code>（空指针），表示“不指向任何变量”。指针变量通常缩写为 <code>ptr</code>。</p>
+<p>每个变量在运行时都拥有一个地址，它代表变量在内存中的位置。在变量名前加 <code>&amp;</code> 操作符即可取得该变量的内存地址（取地址操作），格式如下：</p>
 <pre><code class="language-text">ptr := &amp;v   // v 的类型为 T
 </code></pre>
-<p>其中 v 代表被取地址的变量，变量 v 的地址用变量 <code>ptr</code> 接收；<code>ptr</code> 的类型为 <code>*T</code>，称为 T 的指针类型，<code>*</code> 代表指针。</p>
+<p>其中 v 代表被取地址的变量，变量 v 的地址用变量 <code>ptr</code> 接收；<code>ptr</code> 的类型为 <code>*T</code>，称为 T 的指针类型，<code>*</code> 代表指针。注意只能对“可取地址”的值取地址：字面量与常量不行（<code>&amp;42</code> 无法编译），map 元素、接口中取出的值同样不可取地址；例外是复合字面量，<code>&amp;Circle{}</code>、<code>&amp;[]int{1, 2}</code> 都允许直接取地址。</p>
 <p>指针实际用法，可以通过下面的例子了解：</p>
 <pre><code class="language-go">package main
 import (
@@ -189,7 +189,7 @@ func main() {
 }
 </code></pre>
 <p>运行结果：</p>
-<pre><code class="language-tex">ptr type: *string
+<pre><code class="language-text">ptr type: *string
 address: 0xc0420401b0
 value type: string
 value: Malibu Point 10880, 90265
@@ -243,7 +243,7 @@ func main() {
 <p>运行结果：</p>
 <pre><code class="language-text">1 2
 </code></pre>
-<p>结果表明，交换是不成功的。上面代码中的 swap() 函数交换的是 a 和 b 的地址，在交换完毕后，a 和 b 的变量值确实被交换。但和 a、b 关联的两个变量并没有实际关联。这就像写有两座房子的卡片放在桌上一字摊开，交换两座房子的卡片后并不会对两座房子有任何影响。</p>
+<p>结果表明，交换是不成功的。<code>swap()</code> 交换的只是形参 <code>a</code>、<code>b</code> 自身保存的地址，交换后形参的地址确实互换了，但 <code>main</code> 里的 <code>x</code>、<code>y</code> 完全不受影响。可以用卡片来理解：桌上摊开两张写着房子地址的卡片，交换卡片并不会对房子本身做任何改动，只有走进房子换掉里面的东西（<code>*a = *b</code>）才会真正改变原变量。这也说明 Go 的参数传递永远是值传递，传入指针时复制的也只是地址。</p>
 <h2 id="示例使用指针变量获取命令行的输入信息">示例：使用指针变量获取命令行的输入信息</h2>
 <p>Go语言内置的 flag 包实现了对命令行参数的解析，flag 包使得开发命令行工具更为简单。</p>
 <p>下面的代码通过提前定义一些命令行指令和对应的变量，并在运行时输入对应的参数，经过 flag 包的解析后即可获取命令行的数据。</p>
@@ -267,7 +267,7 @@ func main() {
 <pre><code class="language-shell">go run main.go --mode=fast
 </code></pre>
 <p>命令行输出结果如下：</p>
-<pre><code class="language-tex">fast
+<pre><code class="language-text">fast
 </code></pre>
 <p>代码说明如下：</p>
 <ul>
@@ -285,15 +285,35 @@ func main() {
 <p><img src="/post-images/1695555544438.jpg" alt="" loading="lazy"><br>
 图：命令行参数与变量的关系</p>
 <h2 id="创建指针的另一种方法new-函数">创建指针的另一种方法——new() 函数</h2>
-<p>Go语言还提供了另外一种方法来创建指针变量，格式如下：</p>
+<p>Go 语言还提供了另一种创建指针变量的方法，格式如下：</p>
 <pre><code class="language-text">new(类型)
 </code></pre>
 <p>一般这样写：</p>
-<pre><code class="language-go">str := new(string)
-*str = &quot;Go语言教程&quot;
-fmt.Println(*str)
+<pre><code class="language-go">package main
+
+import &quot;fmt&quot;
+
+func main() {
+	str := new(string) // *string，指向零值 &quot;&quot;
+	*str = &quot;Go语言教程&quot;
+	fmt.Println(*str) // Go语言教程
+}
 </code></pre>
-<p>new() 函数可以创建对应类型的指针：创建过程会分配内存，返回的指针指向该类型的零值（默认值）。</p>
+<p><code>new(T)</code> 会为该类型分配内存并清零，返回指向零值的 <code>*T</code>，适用于任意类型（含数组与结构体）：<code>p := new([3]int)</code> 得到的是全部元素为 0 的数组指针。等价的常见写法是取复合字面量的地址 <code>p := &amp;Circle{Radius: 1}</code>，区别是后者可以顺便带上初值。</p>
+<h3 id="new与make的区别">new 与 make 的区别</h3>
+<p>最容易混淆的是 <code>new</code> 和 <code>make</code>：共同点是都分配内存，区别在于返回值与适用类型。</p>
+<table>
+<thead>
+<tr><th>对比项</th><th>new(T)</th><th>make(T, …)</th></tr>
+</thead>
+<tbody>
+<tr><td>返回值</td><td><code>*T</code>（指针）</td><td><code>T</code> 本身，不是指针</td></tr>
+<tr><td>适用类型</td><td>任意类型，如 <code>int</code>、结构体、数组</td><td>仅 <code>slice</code>、<code>map</code>、<code>chan</code></td></tr>
+<tr><td>初始化程度</td><td>清零，返回指向零值的指针</td><td>完成运行时所需的内部初始化（如 slice 的长度与容量、map 的哈希表）</td></tr>
+<tr><td>典型写法</td><td><code>p := new(bytes.Buffer)</code></td><td><code>s := make([]int, 0, 8)</code>、<code>m := make(map[string]int)</code></td></tr>
+</tbody>
+</table>
+<p>为什么 <code>make</code> 返回的不是指针？因为 slice、map、chan 的底层结构由运行时维护，用户拿到的是内含指针的描述符，本身已经很轻量。反过来 <code>new(map[string]int)</code> 虽然能编译，得到的是指向 <code>nil</code> map 的指针，直接写入 <code>(*p)[&quot;k&quot;] = 1</code> 仍会 panic，必须先 <code>*p = make(map[string]int)</code>，所以几乎没有人这样用。</p>
 <pre><code class="language-go">package main
 
 import &quot;fmt&quot;
@@ -376,7 +396,7 @@ func demo2(a *A) {
 	fmt.Printf(&quot;demo2 Val3 addr: %p, value: %v\n&quot;, &amp;a.Val3, a.Val3)
 }
 </code></pre>
-<pre><code class="language-go">main a addr: 0xc000078040
+<pre><code class="language-text">main a addr: 0xc000078040
 main a addr: %!p(main.A={0xc00006c250 0xc00006c260 {val-str} main 0})
 main Ptr1 addr: 0xc000078040, point to addr: 0xc00006c250, value: {ptr-str-1}
 main Ptr2 addr: 0xc000078048, point to addr: 0xc00006c260, value: {ptr-str-2}
@@ -417,16 +437,297 @@ main Val addr: 0xc000078050, value: {demo2-val-str}
 main Val2 addr: 0xc000078060, value: demo2
 main Val3 addr: 0xc000078070, value: 2
 </code></pre>
+<p>这段输出有两处细节值得留意：第 2 行 <code>%!p(main.A={...})</code> 是动词用错的结果——<code>%p</code> 只能用于指针，把结构体值 <code>a</code> 直接传进去就会打印这种占位提示，正确写法是 <code>%p</code> 配 <code>&amp;a</code>；另外输出中的地址仅作示例，每次运行都不同，长行折行也不影响结论。还有一处规范问题：示例里的 <code>B{&quot;ptr-str-1&quot;}</code> 是不带字段名的字面量，能编译但 <code>go vet</code> 会提示 <code>composite literal uses unkeyed fields</code>，规范写法是 <code>B{Str: &quot;ptr-str-1&quot;}</code>。</p>
+<p>从地址变化还能读出 Go 的值语义：<code>demo1(a A)</code> 收到的是整个结构体的副本（形参 <code>a</code> 的地址与 main 中不同），所以在里面改 <code>a.Ptr2</code>、<code>a.Val</code>、<code>a.Val2</code> 都不影响 main；但 <code>a.Ptr1.Str = &quot;...&quot;</code> 修改的是指针所指向的那块内存，因此 main 能看到变化（见 “after demo1”）。而 <code>demo2(a *A)</code> 传的是地址，对 <code>a.Ptr2</code>、<code>a.Val</code>、<code>a.Val2</code> 的修改都落回 main 的变量。这正是“Go 传参一律是值传递，传指针时复制的值就是地址”的具体表现。</p>
+
+<p><img src="/post-assets/FPlmZ5XzY/01-pointer-memory-methodset.svg" alt="Go 指针内存布局与接收者方法集示意图"><br>
+图：变量与指针的内存布局、结构体字段布局，以及值接收者与指针接收者的方法集对照</p>
+
+<h2 id="指针接收者与值接收者">指针接收者与值接收者：方法集规则</h2>
+<p>Go 没有 C++ 那样的隐式 <code>this</code>，方法的接收者既可写成值也可写成指针，差别不只是性能：</p>
+<pre><code class="language-go">package main
+
+import &quot;fmt&quot;
+
+type Circle struct {
+	Radius float64
+}
+
+// 值接收者：拿到的是副本，修改不影响调用者
+func (c Circle) Area() float64 {
+	return 3.14159 * c.Radius * c.Radius
+}
+
+// 指针接收者：可以修改原对象
+func (c *Circle) Scale(k float64) {
+	c.Radius *= k
+}
+
+type Shaper interface {
+	Area() float64
+}
+
+func main() {
+	c := Circle{Radius: 1}
+	c.Scale(2) // 等价于 (&amp;c).Scale(2)，编译器自动取地址
+	fmt.Println(c.Area(), c.Radius) // 3.14159 2
+
+	var s Shaper = c // Circle 实现了 Area（值接收者），合法
+	s = &amp;c          // *Circle 的方法集同样包含 Area
+	fmt.Println(s.Area())
+}
+</code></pre>
+<p>方法集（method set）的规则决定了“谁能调用、谁满足接口”：</p>
+<table>
+<thead>
+<tr><th>方法定义</th><th>值 <code>T</code> 可调用</th><th>指针 <code>*T</code> 可调用</th><th>接口实现</th></tr>
+</thead>
+<tbody>
+<tr><td>值接收者 <code>func (t T) M()</code></td><td>是</td><td>是</td><td><code>T</code> 与 <code>*T</code> 都满足</td></tr>
+<tr><td>指针接收者 <code>func (t *T) M()</code></td><td>仅当该值可取地址（编译器自动插入 <code>&amp;</code>）</td><td>是</td><td>只有 <code>*T</code> 满足</td></tr>
+</tbody>
+</table>
+<p>由此可推出两个常见坑：</p>
+<ul>
+<li>对只有指针接收者方法的类型写 <code>var s Shaper = Circle{}</code> 会编译失败，提示 <code>Circle does not implement Shaper (Area method has pointer receiver)</code>，改成 <code>&amp;Circle{}</code> 即可。</li>
+<li>不可寻址的值不能调用指针接收者方法。例如 <code>m := map[string]Circle{}</code> 时 <code>m[&quot;a&quot;].Scale(2)</code> 无法编译（<code>cannot call pointer method on m[&quot;a&quot;]</code>），因为 map 元素不可取地址；正确做法是先取出到局部变量，改完再写回：<code>c := m[&quot;a&quot;]; c.Scale(2); m[&quot;a&quot;] = c</code>。接口中取出的值、函数返回的值同样不可寻址。</li>
+</ul>
+<p>实践约定：一个类型的方法集里一旦出现指针接收者，其余方法通常也统一用指针接收者，避免同一个类型的值方法与指针方法混杂；小而不变的值类型（如只含几个字段的坐标点）适合用值接收者。</p>
+
+<h2 id="nil指针与panic">nil 指针与 panic</h2>
+<p>Go 的 <code>nil</code> 指针不会像 C 那样读到随机数据，它会在解引用时立即 panic 并结束程序，定位起来要容易得多：</p>
+<pre><code class="language-go">package main
+
+import &quot;fmt&quot;
+
+type Node struct {
+	Val  int
+	Next *Node
+}
+
+func (n *Node) Sum() int {
+	total := 0
+	for n != nil { // 遍历链表必须判空
+		total += n.Val
+		n = n.Next
+	}
+	return total
+}
+
+func main() {
+	var p *int
+	fmt.Println(p == nil) // true
+	// fmt.Println(*p)    // panic: invalid memory address or nil pointer dereference
+	// *p = 1             // 同样 panic
+
+	n := &amp;Node{Val: 1, Next: &amp;Node{Val: 2}}
+	fmt.Println(n.Sum()) // 3
+
+	var empty *Node
+	fmt.Println(empty.Sum()) // 0：方法内先判空，nil 接收者本身合法
+}
+</code></pre>
+<p>几个容易混淆的点：</p>
+<ul>
+<li><strong>nil 接收者</strong>：用 <code>nil</code> 指针调用方法本身不会 panic，只有当方法内部解引用字段或调用其他需要解引用的方法时才 panic。链表、树、可选配置（<code>*Config</code>）常利用这一点，在方法开头写 <code>if n == nil { return 零值 }</code>。</li>
+<li><strong>nil 不是万能的零值</strong>：nil map 读取返回零值、写入 panic；nil slice 可以 <code>append</code>、<code>len</code> 为 0，但不能索引；向 nil channel 发送或接收会永久阻塞。这些行为与 nil 指针并不相同。</li>
+<li><strong>“非 nil”不等于“有值”</strong>：<code>p != nil</code> 只说明指针有地址，字段仍可能是零值；反向的陷阱是接口的 typed nil——<code>var err error = (*MyErr)(nil)</code> 时 <code>err != nil</code> 成立，判断前要留意接口里装的具体类型。</li>
+</ul>
+<p>习惯上，返回指针的函数要么返回有效指针，要么返回 <code>nil</code> 并让调用方检查；对可能为 nil 的入参，在函数入口集中校验并返回错误，比在调用深处 panic 更可控。</p>
+
+<h2 id="指针数组与数组指针">指针数组与数组指针</h2>
+<p>声明读法要记住优先级：数组或切片的 <code>[]</code> 先结合，指针 <code>*</code> 后结合，于是“指针数组”和“数组指针”是两种类型。</p>
+<pre><code class="language-go">package main
+
+import &quot;fmt&quot;
+
+func main() {
+	// 指针数组：[3]*int，共 3 个元素，每个元素都是 *int
+	pa := [3]*int{}
+	x, y, z := 1, 2, 3
+	pa[0], pa[1], pa[2] = &amp;x, &amp;y, &amp;z
+	*pa[1] = 20
+	fmt.Println(x, y, z, *pa[1]) // 1 20 3 20
+
+	// 数组指针：*[3]int，一个指针，指向长度固定为 3 的数组
+	arr := [3]int{1, 2, 3}
+	var ap *[3]int = &amp;arr
+	ap[0] = 100          // 通过数组指针改元素，不必写 (*ap)[0]
+	fmt.Println(arr)     // [100 2 3]
+	fmt.Println(len(ap)) // 3：数组指针可直接取长度
+
+	// 切片与指针的组合也要分清
+	ps := []*int{&amp;x} // 元素为指针的切片
+	fmt.Println(*ps[0])
+
+	sp := &amp;[]int{1, 2} // 合法但不常用：*[]int 指向切片描述符
+	fmt.Println((*sp)[0])
+}
+</code></pre>
+<p>补充两点：Go 1.17 起可以把数组指针转成切片（<code>ap[:]</code>），因此 <code>*[N]T</code> 适合把定长数组交给需要切片的函数；而 <code>*[]T</code>（指向切片的指针）在真实代码中很少见，因为切片本身已经是轻量的描述符，直接传切片即可。</p>
+
+<h2 id="逃逸分析与堆分配">逃逸分析与堆分配</h2>
+<p>在 C 中返回局部变量的地址是严重错误（函数返回后栈帧失效），但在 Go 中这是完全合法且常见的写法，因为编译器会做<strong>逃逸分析</strong>（escape analysis）：一旦发现变量的地址“逃出”了函数作用域，就把它分配在堆上，由垃圾回收器管理生命周期，因此不会出现悬垂指针。</p>
+<pre><code class="language-go">package main
+
+import &quot;fmt&quot;
+
+type Point struct{ X, Y int }
+
+// p 逃逸到堆：它的地址被返回了
+func NewPoint(x, y int) *Point {
+	p := Point{X: x, Y: y}
+	return &amp;p
+}
+
+// s 留在栈上：地址没有被带出函数
+func Sum(ps []Point) int {
+	s := 0
+	for _, p := range ps {
+		s += p.X + p.Y
+	}
+	return s
+}
+
+func main() {
+	p := NewPoint(1, 2)
+	fmt.Println(*p, Sum([]Point{*p, {3, 4}})) // {1 2} 10
+}
+</code></pre>
+<p>查看编译器的判断结果，可以用 <code>-gcflags</code> 打印逃逸分析日志：</p>
+<pre><code class="language-bash">go build -gcflags=&quot;-m -l&quot; .
+</code></pre>
+<p>输出中会出现 <code>escapes to heap</code>、<code>moved to heap: p</code> 这类提示（行号与具体代码有关）。常见会导致逃逸的场景有：</p>
+<ul>
+<li>把局部变量的地址返回，或把它存入全局变量、切片、map、channel；</li>
+<li>把值装箱进接口（例如传给 <code>fmt.Println</code>、包装成 <code>error</code>），这是“看不见的堆分配”最常见的来源；</li>
+<li>闭包捕获了局部变量，而闭包自身逃出了函数；</li>
+<li>对象过大，或大小在编译期无法确定（如 <code>make([]int, n)</code>，n 为变量）。</li>
+</ul>
+<p>堆分配不是错误，只是有成本：分配要花时间，回收要占用 GC 的 CPU。优化时先用 <code>go test -bench</code> 配合 <code>-benchmem</code> 量化，再考虑减少指针与接口的使用、复用对象（<code>sync.Pool</code>）或改为传值；不要为了“避免逃逸”写出难以维护的代码。反过来说，把大结构体按值传递会产生拷贝，此时用指针往往更快——结论应由基准测试给出，而不是凭直觉。</p>
+
+<h2 id="unsafepointer与uintptr">unsafe.Pointer 与 uintptr 的边界</h2>
+<p>标准库 <code>unsafe</code> 提供了绕过类型系统的能力，也是 Go 中唯一能做指针算术的地方，其中两个类型必须分清：</p>
+<ul>
+<li><code>unsafe.Pointer</code>：通用指针类型，可与任意类型的指针 <code>*T</code> 相互转换（<code>unsafe.Pointer(p)</code>、<code>(*T)(up)</code>），<strong>被垃圾回收器视为有效指针</strong>，指向的对象不会被回收。</li>
+<li><code>uintptr</code>：只是一个足够宽的<strong>整数</strong>，GC 不把它当指针，也不会因为它的存在而保留对象。</li>
+</ul>
+<p>由此得到一条铁律：不要把 <code>unsafe.Pointer</code> 转成 <code>uintptr</code> 保存起来、过一段时间再转回指针。中间只要有函数调用、内存分配或 GC，原对象就可能被回收或移动，结果是读到垃圾数据甚至崩溃。合法用法只有一种：在<strong>同一个表达式</strong>内完成“转整数—算偏移—转回指针”，即 <code>unsafe.Pointer(uintptr(unsafe.Pointer(p)) + offset)</code>。</p>
+<pre><code class="language-go">package main
+
+import (
+	&quot;fmt&quot;
+	&quot;unsafe&quot;
+)
+
+type Header struct {
+	Magic uint32
+	Len   uint32
+}
+
+func main() {
+	h := Header{Magic: 0x5a5a, Len: 7}
+
+	// 合法：同一个表达式内完成偏移换算
+	lenPtr := (*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(&amp;h)) + unsafe.Offsetof(h.Len)))
+	fmt.Println(*lenPtr) // 7
+
+	// 合法：把整块数据当作字节数组读写
+	b := (*[8]byte)(unsafe.Pointer(&amp;h))
+	fmt.Println(len(b), b[0]) // 8 90
+
+	// 危险：把 uintptr 存起来（仅作反例，不要这样写）
+	// u := uintptr(unsafe.Pointer(&amp;h))
+	// ... 中间的任何代码都可能触发 GC ...
+	// p := (*Header)(unsafe.Pointer(u)) // 原对象可能已被回收或移动
+}
+</code></pre>
+<p><code>0x5a5a</code> 的低字节是 <code>0x5a</code>，即十进制的 90，在小端机器上 <code>b[0]</code> 正是它。此外还要注意：</p>
+<ul>
+<li><code>unsafe.Sizeof</code>、<code>unsafe.Offsetof</code>、<code>unsafe.Alignof</code> 是编译期常量求值，安全且常用于了解内存布局；</li>
+<li>通过 <code>reflect.Value.Pointer()</code>、<code>UnsafeAddr()</code> 得到的也是 <code>uintptr</code>，若转换后还要继续使用该对象，需要 <code>runtime.KeepAlive(x)</code> 延长它的生命周期；</li>
+<li><code>unsafe</code> 会破坏类型安全与可移植性（字节序、对齐、字段布局都依赖具体实现与平台），只在性能关键路径或与 C 交互时使用，并把用法收敛到极小的包内。</li>
+</ul>
+
+<h2 id="与java引用和cc指针的区别">与 Java 引用、C/C++ 指针的区别</h2>
+<p>三种语言里最容易被混为一谈的是“指针”和“引用”，可以对照来看：</p>
+<table>
+<thead>
+<tr><th>对比项</th><th>Go 指针 <code>*T</code></th><th>Java 引用</th><th>C/C++ 指针 <code>T*</code></th></tr>
+</thead>
+<tbody>
+<tr><td>是否独立类型</td><td>是，<code>*T</code> 与 <code>T</code> 不同类型</td><td>不是，引用只是访问对象的方式，无法单独取出</td><td>是，指针类型可以多级嵌套</td></tr>
+<tr><td>取变量地址</td><td>可以，<code>&amp;x</code></td><td>不可以</td><td>可以，<code>&amp;x</code></td></tr>
+<tr><td>指针算术</td><td>不支持（需借助 <code>unsafe</code>）</td><td>不支持</td><td>支持 <code>p+1</code>、<code>p++</code></td></tr>
+<tr><td>可否为空</td><td>可以，<code>nil</code>，解引用 panic</td><td>可以，<code>null</code>，解引用抛 <code>NullPointerException</code></td><td>可以是空指针，解引用属未定义行为</td></tr>
+<tr><td>内存回收</td><td>GC 自动回收，无需手动释放</td><td>GC 自动回收</td><td>手动 <code>malloc/free</code>，易泄漏或重复释放</td></tr>
+<tr><td>能否指向任意地址</td><td>不能（除非 <code>unsafe</code>）</td><td>不能</td><td>可以，包括非法地址</td></tr>
+<tr><td>指针的指针</td><td>可以，<code>**T</code>（少见）</td><td>不可以</td><td>常用，如 <code>char**</code></td></tr>
+<tr><td>参数传递</td><td>值传递，传指针也是复制地址</td><td>值传递，复制的是引用的副本，对象本身不复制</td><td>值传递，复制地址</td></tr>
+</tbody>
+</table>
+<p>另一处差异在值语义：Go 的结构体赋值、作为参数、放进容器都是复制，想共享修改就必须显式传 <code>*T</code>；Java 的对象变量天然共享同一个对象，只有基本类型是值语义；C++ 则把选择权交给程序员，值、引用、指针三种都能写。因此读 Go 代码时，看到 <code>*T</code> 基本可以确认“这里会修改原对象或避免大对象拷贝”，而 Java 里没有这层显式信息。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#cc%E4%B8%AD%E7%9A%84%E6%8C%87%E9%92%88">C/C++中的指针</a>
 <ul>
-<li><a href="#cc%E4%B8%AD%E7%9A%84%E6%8C%87%E9%92%88">C/C++中的指针</a></li>
-<li><a href="#%E8%AE%A4%E8%AF%86%E6%8C%87%E9%92%88%E5%9C%B0%E5%9D%80%E5%92%8C%E6%8C%87%E9%92%88%E7%B1%BB%E5%9E%8B">认识指针地址和指针类型</a></li>
-<li><a href="#%E4%BB%8E%E6%8C%87%E9%92%88%E8%8E%B7%E5%8F%96%E6%8C%87%E9%92%88%E6%8C%87%E5%90%91%E7%9A%84%E5%80%BC">从指针获取指针指向的值</a></li>
-<li><a href="#%E4%BD%BF%E7%94%A8%E6%8C%87%E9%92%88%E4%BF%AE%E6%94%B9%E5%80%BC">使用指针修改值</a></li>
-<li><a href="#%E7%A4%BA%E4%BE%8B%E4%BD%BF%E7%94%A8%E6%8C%87%E9%92%88%E5%8F%98%E9%87%8F%E8%8E%B7%E5%8F%96%E5%91%BD%E4%BB%A4%E8%A1%8C%E7%9A%84%E8%BE%93%E5%85%A5%E4%BF%A1%E6%81%AF">示例：使用指针变量获取命令行的输入信息</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E6%8C%87%E9%92%88%E7%9A%84%E5%8F%A6%E4%B8%80%E7%A7%8D%E6%96%B9%E6%B3%95new-%E5%87%BD%E6%95%B0">创建指针的另一种方法——new() 函数</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E8%AE%A4%E8%AF%86%E6%8C%87%E9%92%88%E5%9C%B0%E5%9D%80%E5%92%8C%E6%8C%87%E9%92%88%E7%B1%BB%E5%9E%8B">认识指针地址和指针类型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BB%8E%E6%8C%87%E9%92%88%E8%8E%B7%E5%8F%96%E6%8C%87%E9%92%88%E6%8C%87%E5%90%91%E7%9A%84%E5%80%BC">从指针获取指针指向的值</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BD%BF%E7%94%A8%E6%8C%87%E9%92%88%E4%BF%AE%E6%94%B9%E5%80%BC">使用指针修改值</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E7%A4%BA%E4%BE%8B%E4%BD%BF%E7%94%A8%E6%8C%87%E9%92%88%E5%8F%98%E9%87%8F%E8%8E%B7%E5%8F%96%E5%91%BD%E4%BB%A4%E8%A1%8C%E7%9A%84%E8%BE%93%E5%85%A5%E4%BF%A1%E6%81%AF">示例：使用指针变量获取命令行的输入信息</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%88%9B%E5%BB%BA%E6%8C%87%E9%92%88%E7%9A%84%E5%8F%A6%E4%B8%80%E7%A7%8D%E6%96%B9%E6%B3%95new-%E5%87%BD%E6%95%B0">创建指针的另一种方法——new() 函数</a>
+<ul>
+<li><a href="#new%E4%B8%8Emake%E7%9A%84%E5%8C%BA%E5%88%AB">new 与 make 的区别</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%8C%87%E9%92%88%E6%8E%A5%E6%94%B6%E8%80%85%E4%B8%8E%E5%80%BC%E6%8E%A5%E6%94%B6%E8%80%85">指针接收者与值接收者：方法集规则</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#nil%E6%8C%87%E9%92%88%E4%B8%8Epanic">nil 指针与 panic</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%8C%87%E9%92%88%E6%95%B0%E7%BB%84%E4%B8%8E%E6%95%B0%E7%BB%84%E6%8C%87%E9%92%88">指针数组与数组指针</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%80%83%E9%80%B8%E5%88%86%E6%9E%90%E4%B8%8E%E5%A0%86%E5%88%86%E9%85%8D">逃逸分析与堆分配</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#unsafepointer%E4%B8%8Euintptr">unsafe.Pointer 与 uintptr 的边界</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%8Ejava%E5%BC%95%E7%94%A8%E5%92%8Ccc%E6%8C%87%E9%92%88%E7%9A%84%E5%8C%BA%E5%88%AB">与 Java 引用、C/C++ 指针的区别</a>
+<ul>
 </ul>
 </li>
 </ul>
