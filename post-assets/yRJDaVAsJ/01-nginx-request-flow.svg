@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="720" viewBox="0 0 900 720" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <rect width="900" height="720" fill="#ffffff"/>
+
+  <text x="450" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">nginx 请求处理流程与 location 优先级</text>
+  <text x="450" y="57" text-anchor="middle" font-size="12" fill="#5b6b7c">客户端请求依次经过 listen → server_name → location 三层选择，location 决定最终由谁处理</text>
+
+  <rect x="40" y="74" width="400" height="620" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="60" y="100" font-size="14" font-weight="700" fill="#1f2b38">请求处理管线</text>
+
+  <rect x="70" y="112" width="340" height="40" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="240" y="137" text-anchor="middle" font-size="13" fill="#1f2b38">客户端请求  GET https://example.com/api/user</text>
+  <line x1="240" y1="152" x2="240" y2="184" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ab)"/>
+
+  <rect x="70" y="188" width="340" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="86" y="205" font-size="12.5" font-weight="700" fill="#1f2b38">① listen 选端口 → ② server_name 选主机</text>
+  <text x="86" y="222" font-size="11.5" fill="#5b6b7c">精确名 &gt; *.开头 &gt; .*结尾 &gt; 正则 &gt; default_server</text>
+  <line x1="240" y1="230" x2="240" y2="262" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ab)"/>
+
+  <rect x="70" y="266" width="340" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="86" y="283" font-size="12.5" font-weight="700" fill="#1f2b38">③ location 选择</text>
+  <text x="86" y="300" font-size="11.5" fill="#5b6b7c">命中后进入 content 阶段（静态 / 代理 / FastCGI）</text>
+  <line x1="240" y1="308" x2="240" y2="340" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ab)"/>
+
+  <rect x="70" y="344" width="340" height="44" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="240" y="362" text-anchor="middle" font-size="12.5" fill="#1f2b38">静态文件 / proxy_pass / fastcgi_pass</text>
+  <text x="240" y="379" text-anchor="middle" font-size="11.5" fill="#5b6b7c">sendfile、expires、gzip 等生效</text>
+  <line x1="240" y1="388" x2="240" y2="420" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ab)"/>
+
+  <rect x="70" y="424" width="340" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="86" y="443" font-size="12.5" font-weight="700" fill="#1f2b38">log 阶段</text>
+  <text x="86" y="461" font-size="11.5" fill="#5b6b7c">access_log 记录 rt=$request_time（含排队）</text>
+  <text x="86" y="476" font-size="11.5" fill="#5b6b7c">urt=$upstream_response_time（仅后端耗时）</text>
+  <line x1="240" y1="476" x2="240" y2="508" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ab)"/>
+
+  <rect x="70" y="512" width="340" height="38" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="240" y="536" text-anchor="middle" font-size="12.5" fill="#1f2b38">响应返回客户端</text>
+
+  <rect x="130" y="570" width="220" height="108" rx="8" fill="#ffffff" stroke="#c8d3e0"/>
+  <text x="240" y="592" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">location 优先级判断</text>
+  <text x="240" y="613" text-anchor="middle" font-size="11.5" fill="#5b6b7c">精确 = 命中即结束</text>
+  <text x="240" y="632" text-anchor="middle" font-size="11.5" fill="#5b6b7c">^~ 前缀命中后跳过正则</text>
+  <text x="240" y="651" text-anchor="middle" font-size="11.5" fill="#5b6b7c">~ / ~* 取最先出现的一条</text>
+  <text x="240" y="670" text-anchor="middle" font-size="11.5" fill="#5b6b7c">普通前缀取最长命中</text>
+
+  <rect x="460" y="74" width="400" height="620" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="480" y="100" font-size="14" font-weight="700" fill="#1f2b38">location 匹配顺序（自上而下）</text>
+
+  <rect x="485" y="112" width="350" height="54" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="501" y="131" font-size="12.5" font-weight="700" fill="#1f2b38">1.  location = /favicon.ico</text>
+  <text x="501" y="149" font-size="11.5" fill="#5b6b7c">精确匹配，命中立即结束，优先级最高</text>
+
+  <rect x="485" y="176" width="350" height="70" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="501" y="195" font-size="12.5" font-weight="700" fill="#1f2b38">2.  location ^~ /static/</text>
+  <text x="501" y="213" font-size="11.5" fill="#5b6b7c">最长前缀 + 阻断正则：/static/a.png</text>
+  <text x="501" y="231" font-size="11.5" fill="#5b6b7c">直接走静态服务，不再匹配图片正则</text>
+
+  <rect x="485" y="256" width="350" height="70" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="501" y="275" font-size="12.5" font-weight="700" fill="#1f2b38">3.  location ~* \.(gif|jpg|png)$</text>
+  <text x="501" y="293" font-size="11.5" fill="#5b6b7c">正则匹配，按书写顺序取第一条</text>
+  <text x="501" y="311" font-size="11.5" fill="#5b6b7c">~ 区分大小写，~* 不区分大小写</text>
+
+  <rect x="485" y="336" width="350" height="52" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="501" y="355" font-size="12.5" font-weight="700" fill="#1f2b38">4.  location ~ \.php$</text>
+  <text x="501" y="373" font-size="11.5" fill="#5b6b7c">交给 fastcgi_pass 127.0.0.1:9000</text>
+
+  <rect x="485" y="398" width="350" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="501" y="417" font-size="12.5" font-weight="700" fill="#1f2b38">5.  location /</text>
+  <text x="501" y="435" font-size="11.5" fill="#5b6b7c">普通前缀兜底：try_files 或 proxy_pass</text>
+
+  <rect x="485" y="464" width="350" height="80" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="501" y="483" font-size="12.5" font-weight="700" fill="#1f2b38">root vs alias</text>
+  <text x="501" y="502" font-size="11.5" fill="#5b6b7c">root /data/www  + /img/logo.png</text>
+  <text x="501" y="519" font-size="11.5" fill="#5b6b7c">     → /data/www/img/logo.png（拼接）</text>
+  <text x="501" y="536" font-size="11.5" fill="#5b6b7c">alias /data/static/ → /data/static/logo.png（替换）</text>
+
+  <rect x="485" y="558" width="350" height="120" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="501" y="577" font-size="12.5" font-weight="700" fill="#1f2b38">proxy_pass 尾斜杠语义</text>
+  <text x="501" y="596" font-size="11.5" fill="#5b6b7c">location /api/ → proxy_pass http://b;</text>
+  <text x="501" y="613" font-size="11.5" fill="#5b6b7c">     不带 URI，后端收到 /api/user</text>
+  <text x="501" y="630" font-size="11.5" fill="#5b6b7c">location /api/ → proxy_pass http://b/;</text>
+  <text x="501" y="647" font-size="11.5" fill="#5b6b7c">     带 URI，后端收到 /user</text>
+  <text x="501" y="666" font-size="11.5" fill="#e08a1e">正则 location 内 proxy_pass 不能带 URI</text>
+</svg>

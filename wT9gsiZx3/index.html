@@ -125,65 +125,61 @@
           
           <img class="post-feature-header-image" src="/post-images/wT9gsiZx3.png" alt="封面图">
           
-          <h2 id="future">Future</h2>
-<p>Future模式是多线程设计常用的一种设计模式。Future 模式可以理解成：我有一个任务，提交给了 Future，由 Future 替我完成这个任务。期间我自己可以去做任何想做的事情，一段时间之后，我便可以从 Future 那儿取出结果。</p>
-<h3 id="future提供了三种功能">Future提供了三种功能：</h3>
-<ul>
-<li>判断任务是否完成</li>
-<li>能够中断任务</li>
-<li>能够获取任务执行的结果<br>
-向线程池中提交任务的<strong>submit方法不是阻塞方法，而Future.get方法是一个阻塞方法</strong>，当submit提交多个任务时，只有所有任务都完成后，才能使用get按照任务的提交顺序得到返回结果，所以一般需要使用future.isDone先判断任务是否全部执行完成，完成后再使用future.get得到结果。（也可以用get (long timeout, TimeUnit unit)方法可以设置超时时间，防止无限时间的等待）<br>
-三段式的编程：1.启动多线程任务2.处理其他事3.收集多线程任务结果，Future虽然可以实现获取异步执行结果的需求，但是它没有提供通知的机制，要么使用阻塞，在future.get()的地方等待future返回的结果，这时又变成同步操作；要么使用isDone()轮询地判断Future是否完成，这样会耗费CPU的资源。<br>
-<strong>解决方法：CompletionService和CompletableFuture（按照任务完成的先后顺序获取任务的结果）</strong></li>
-</ul>
-<h2 id="executorservice">ExecutorService</h2>
-<p>创建线程池，多线程功能调用</p>
+<h2 id="future">Future 回顾</h2>
+<p>Future 模式是多线程设计中常用的一种设计模式：把任务交给一个「凭据」，自己先去忙别的事，之后拿着凭据去取结果。Java 里这个凭据就是 <code>Future</code>。</p>
+<h3 id="future提供了三种功能">Future 提供的三种功能</h3>
+<ul><li><code>isDone()</code> / <code>isCancelled()</code>：判断任务是否完成。</li><li><code>cancel(boolean)</code>：尝试中断任务（能否真正停下取决于任务是否响应中断）。</li><li><code>get()</code> / <code>get(long, TimeUnit)</code>：获取执行结果，前者会一直阻塞。</li></ul>
+<p>关键差异在于：<strong>线程池的 <code>submit</code> 不阻塞，而 <code>Future.get()</code> 阻塞</strong>。当提交一批任务后按提交顺序逐个 <code>get</code>，只要第一个任务耗时最长，后面已经完成的任务也拿不到结果，整体耗时被拖成「最慢的那个任务」。<code>get(long, TimeUnit)</code> 可以加超时避免无限等待，但依然没有解决顺序问题。</p>
+<p>典型的三段式写法是：① 提交多线程任务 → ② 处理其他事 → ③ 收集结果。Future 本身<strong>没有完成通知机制</strong>，第 ③ 步只能二选一：要么在 <code>get()</code> 处阻塞，异步又退回同步；要么用 <code>isDone()</code> 轮询，白白消耗 CPU。</p>
+<p>要「按任务完成的先后顺序拿结果」，有两条路：<code>ExecutorCompletionService</code> 和 <code>CompletableFuture</code>。本文讲前者。</p>
+<h2 id="executorservice">ExecutorService：按提交顺序取结果的写法</h2>
+<p>下面这段代码模拟「开车依次接人」：三个人上厕所耗时分别是 10 秒、6 秒、3 秒，结果按提交顺序打印，所以必须等最慢的总裁先出来。</p>
 <pre><code class="language-java">public static void test1() throws Exception {
     ExecutorService executorService = Executors.newCachedThreadPool();
     ArrayList&lt;Future&lt;String&gt;&gt; futureArrayList = new ArrayList&lt;&gt;();
-    System.out.println(&quot;公司让你通知大家聚餐 你开车去接人&quot;);
+    System.out.println("公司让你通知大家聚餐 你开车去接人");
 
     Future&lt;String&gt; future10 = executorService.submit(() -&gt; {
-        System.out.println(&quot;总裁：我在家上大号 我最近拉肚子比较慢 要蹲1个小时才能出来 你等会来接我吧&quot;);
+        System.out.println("总裁：我在家上大号 我最近拉肚子比较慢 要蹲1个小时才能出来 你等会来接我吧");
         TimeUnit.SECONDS.sleep(10);
-        System.out.println(&quot;总裁：1小时了 我上完大号了。你来接吧&quot;);
-        return &quot;总裁上完大号了&quot;;
+        System.out.println("总裁：1小时了 我上完大号了。你来接吧");
+        return "总裁上完大号了";
     });
     futureArrayList.add(future10);
 
     Future&lt;String&gt; future6 = executorService.submit(() -&gt; {
-        System.out.println(&quot;中层管理：我在家上大号  要蹲10分钟就可以出来 你等会来接我吧&quot;);
+        System.out.println("中层管理：我在家上大号  要蹲10分钟就可以出来 你等会来接我吧");
         TimeUnit.SECONDS.sleep(6);
-        System.out.println(&quot;中层管理：10分钟 我上完大号了。你来接吧&quot;);
-        return &quot;中层管理上完大号了&quot;;
+        System.out.println("中层管理：10分钟 我上完大号了。你来接吧");
+        return "中层管理上完大号了";
     });
     futureArrayList.add(future6);
 
     Future&lt;String&gt; future3 = executorService.submit(() -&gt; {
-        System.out.println(&quot;研发：我在家上大号 我比较快 要蹲3分钟就可以出来 你等会来接我吧&quot;);
+        System.out.println("研发：我在家上大号 我比较快 要蹲3分钟就可以出来 你等会来接我吧");
         TimeUnit.SECONDS.sleep(3);
-        System.out.println(&quot;研发：3分钟 我上完大号了。你来接吧&quot;);
-        return &quot;研发上完大号了&quot;;
+        System.out.println("研发：3分钟 我上完大号了。你来接吧");
+        return "研发上完大号了";
     });
     futureArrayList.add(future3);
 
     TimeUnit.SECONDS.sleep(1);
-    System.out.println(&quot;都通知完了,等着接吧。&quot;);
+    System.out.println("都通知完了,等着接吧。");
     try {
-        for (Future&lt;String&gt; future : futureArrayList) {
+        for (Future&lt;String&gt; future : futureArrayList) {   // 按提交顺序 get
             String returnStr = future.get();
-            System.out.println(returnStr + &quot;，你去接他&quot;);
+            System.out.println(returnStr + "，你去接他");
         }
     } catch (Exception e) {
         e.printStackTrace();
-    }finally {
+    } finally {
         executorService.shutdown();
     }
-
 }
 </code></pre>
-<p><strong>结果</strong></p>
-<pre><code class="language-java">公司让你通知大家聚餐 你开车去接人
+
+<p><strong>运行结果</strong>（研发 3 秒就完事了，却要等总裁 10 秒的 <code>get()</code> 返回后才被打印）</p>
+<pre><code class="language-text">公司让你通知大家聚餐 你开车去接人
 研发：我在家上大号 我比较快 要蹲3分钟就可以出来 你等会来接我吧
 总裁：我在家上大号 我最近拉肚子比较慢 要蹲1个小时才能出来 你等会来接我吧
 中层管理：我在家上大号  要蹲10分钟就可以出来 你等会来接我吧
@@ -195,49 +191,52 @@
 总裁上完大号了，你去接他
 中层管理上完大号了，你去接他
 </code></pre>
-<h2 id="executorcompletionservice">ExecutorCompletionService</h2>
+
+<h2 id="executorcompletionservice">ExecutorCompletionService 登场</h2>
+<p>把线程池包一层 <code>ExecutorCompletionService</code>，用 <code>submit</code> 提交、用 <code>take</code> 取结果，顺序就变成了<strong>完成顺序</strong>：谁先干完谁先被取走。</p>
 <pre><code class="language-java">public static void test2() throws Exception {
     ExecutorService executorService = Executors.newCachedThreadPool();
-    ExecutorCompletionService&lt;String&gt; completionService = new ExecutorCompletionService&lt;&gt;(executorService);
-    System.out.println(&quot;公司让你通知大家聚餐 你开车去接人&quot;);
+    ExecutorCompletionService&lt;String&gt; completionService =
+            new ExecutorCompletionService&lt;&gt;(executorService);
+    System.out.println("公司让你通知大家聚餐 你开车去接人");
+
     completionService.submit(() -&gt; {
-        System.out.println(&quot;总裁：我在家上大号 我最近拉肚子比较慢 要蹲1个小时才能出来 你等会来接我吧&quot;);
+        System.out.println("总裁：我在家上大号 我最近拉肚子比较慢 要蹲1个小时才能出来 你等会来接我吧");
         TimeUnit.SECONDS.sleep(10);
-        System.out.println(&quot;总裁：1小时了 我上完大号了。你来接吧&quot;);
-        return &quot;总裁上完大号了&quot;;
-    });
-     completionService.submit(() -&gt; {
-        System.out.println(&quot;中层管理：我在家上大号  要蹲10分钟就可以出来 你等会来接我吧&quot;);
-        TimeUnit.SECONDS.sleep(6);
-        System.out.println(&quot;中层管理：10分钟 我上完大号了。你来接吧&quot;);
-        return &quot;中层管理上完大号了&quot;;
+        System.out.println("总裁：1小时了 我上完大号了。你来接吧");
+        return "总裁上完大号了";
     });
     completionService.submit(() -&gt; {
-        System.out.println(&quot;研发：我在家上大号 我比较快 要蹲3分钟就可以出来 你等会来接我吧&quot;);
-        TimeUnit.SECONDS.sleep(3);
-        System.out.println(&quot;研发：3分钟 我上完大号了。你来接吧&quot;);
-        return &quot;研发上完大号了&quot;;
+        System.out.println("中层管理：我在家上大号  要蹲10分钟就可以出来 你等会来接我吧");
+        TimeUnit.SECONDS.sleep(6);
+        System.out.println("中层管理：10分钟 我上完大号了。你来接吧");
+        return "中层管理上完大号了";
     });
-   
+    completionService.submit(() -&gt; {
+        System.out.println("研发：我在家上大号 我比较快 要蹲3分钟就可以出来 你等会来接我吧");
+        TimeUnit.SECONDS.sleep(3);
+        System.out.println("研发：3分钟 我上完大号了。你来接吧");
+        return "研发上完大号了";
+    });
+
     TimeUnit.SECONDS.sleep(1);
-    System.out.println(&quot;都通知完了,等着接吧。&quot;);
-    //提交了3个异步任务）
+    System.out.println("都通知完了,等着接吧。");
     try {
+        // 提交了几个任务就取几次；take() 阻塞直到有任务完成
         for (int i = 0; i &lt; 3; i++) {
             String returnStr = completionService.take().get();
-            System.out.println(returnStr + &quot;，你去接他&quot;);
+            System.out.println(returnStr + "，你去接他");
         }
-        Thread.currentThread().join();
     } catch (Exception e) {
         e.printStackTrace();
-    }finally {
+    } finally {
         executorService.shutdown();
     }
-
 }
 </code></pre>
-<p><strong>结果</strong></p>
-<pre><code class="language-java">公司让你通知大家聚餐 你开车去接人
+
+<p><strong>运行结果</strong>：3 秒的研发最先被接走，6 秒的中层第二，10 秒的总裁最后，接人顺序与完成顺序一致。</p>
+<pre><code class="language-text">公司让你通知大家聚餐 你开车去接人
 总裁：我在家上大号 我最近拉肚子比较慢 要蹲1个小时才能出来 你等会来接我吧
 研发：我在家上大号 我比较快 要蹲3分钟就可以出来 你等会来接我吧
 中层管理：我在家上大号  要蹲10分钟就可以出来 你等会来接我吧
@@ -249,12 +248,85 @@
 总裁：1小时了 我上完大号了。你来接吧
 总裁上完大号了，你去接他
 </code></pre>
+
+<h2 id="submit-与-take-的语义">submit 与 take / poll 的语义</h2>
+<p>先看类里到底有什么。除了构造方法，<code>ExecutorCompletionService</code> 只暴露两类方法：</p>
+<pre><code class="language-java">public class ExecutorCompletionService&lt;V&gt; implements CompletionService&lt;V&gt; {
+    public Future&lt;V&gt; submit(Callable&lt;V&gt; task);           // 提交并返回原任务的 Future
+    public Future&lt;V&gt; submit(Runnable task, V result);
+    public Future&lt;V&gt; take() throws InterruptedException; // 阻塞取「已完成」任务，队列空则等待
+    public Future&lt;V&gt; poll();                             // 非阻塞取，队列空返回 null
+    public Future&lt;V&gt; poll(long timeout, TimeUnit unit)   // 限时等待，超时返回 null
+            throws InterruptedException;
+}
+</code></pre>
+
+<p>三个取结果方法的行为要分清楚：</p>
+<ul><li><code>take()</code>：队列为空时<strong>一直阻塞</strong>，直到有任务完成或被中断（抛 <code>InterruptedException</code>）。适合「知道自己提交了几个任务，就取几次」的场景。</li><li><code>poll()</code>：立即返回，没有已完成的任务时返回 <code>null</code>，不会阻塞。<strong>必须判空</strong>，否则紧接着的 <code>.get()</code> 会抛 <code>NullPointerException</code>。</li><li><code>poll(timeout, unit)</code>：最多等 <code>timeout</code>，超时返回 <code>null</code>。适合「等不到就放弃」的场景。</li></ul>
+<p>两点容易忽略的语义：其一，返回的 <code>Future</code> 就是原来那个 <code>FutureTask</code>，<code>get()</code> 拿到的是任务真正的返回值，而不是队列里的什么东西；其二，任务<strong>抛异常也算「完成」</strong>，同样会被放进队列，此时 <code>get()</code> 会抛出包装后的 <code>ExecutionException</code>（原始异常可用 <code>e.getCause()</code> 取到）。<code>take()</code> 不区分成功与失败，异常必须靠 <code>get()</code> 暴露出来——只 <code>take()</code> 不 <code>get()</code>，异常会被静静吞掉。</p>
+<h3 id="异常与超时处理">异常与超时处理</h3>
+<p>由于结果可能失败，工程代码里不能只写一个 <code>for</code> 循环就完事。下面是一份可直接编译运行的完整示例，包含任务异常、单个任务超时以及整体退出三类处理。</p>
+<pre><code class="language-java">import java.util.concurrent.*;
+
+public class CompletionServiceDemo {
+
+    static String work(String name, long seconds, boolean fail) throws Exception {
+        TimeUnit.SECONDS.sleep(seconds);
+        if (fail) {
+            throw new IllegalStateException(name + " 拉肚子太严重，去不了");
+        }
+        return name + " 上完大号了";
+    }
+
+    public static void main(String[] args) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        CompletionService&lt;String&gt; cs = new ExecutorCompletionService&lt;&gt;(pool);
+        int submitted = 0;
+
+        cs.submit(() -&gt; work("研发", 3, false));      submitted++;
+        cs.submit(() -&gt; work("中层管理", 6, false));   submitted++;
+        cs.submit(() -&gt; work("总裁", 10, false));      submitted++;
+        cs.submit(() -&gt; work("实习生", 1, true));      submitted++;   // 这个会失败
+
+        int finished = 0;
+        while (finished &lt; submitted) {
+            Future&lt;String&gt; f = cs.poll(12, TimeUnit.SECONDS);   // 整体限时，防无限等待
+            if (f == null) {
+                System.out.println("超过 12 秒还有任务没回来，放弃等待");
+                break;
+            }
+            finished++;
+            try {
+                // 单任务超时：已经完成的 Future 会立刻返回，这里只是兜底
+                System.out.println("接到：" + f.get(1, TimeUnit.SECONDS));
+            } catch (ExecutionException e) {
+                System.out.println("任务失败：" + e.getCause().getMessage());
+            } catch (TimeoutException e) {
+                System.out.println("单任务取结果超时，跳过");
+            }
+        }
+
+        pool.shutdown();
+        if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
+            pool.shutdownNow();
+        }
+    }
+}
+</code></pre>
+
+<p>预期输出顺序为：实习生失败 → 研发 → 中层管理 → 总裁，失败的任务不会卡住后面的结果回收：</p>
+<pre><code class="language-text">任务失败：实习生 拉肚子太严重，去不了
+接到：研发 上完大号了
+接到：中层管理 上完大号了
+接到：总裁 上完大号了
+</code></pre>
+
+<p>注意最后两句：<code>shutdown()</code> 只是不再接新任务，<code>awaitTermination()</code> 才负责等待已有任务收尾，超时再 <code>shutdownNow()</code> 打断，这样进程不会因为还有非守护线程而挂着不退出。</p>
 <h2 id="源码分析">源码分析</h2>
-<p>completionService是JUC里的线程池ExecutorCompletionService</p>
+<p><code>ExecutorCompletionService</code> 位于 <code>java.util.concurrent</code> 包下，整个类不到 200 行，核心只有两点：一个阻塞队列 + 一个重写了 <code>done()</code> 的内部 <code>FutureTask</code>。</p>
+<p><img src="/post-assets/wT9gsiZx3/01-completion-service-structure.svg" alt="ExecutorCompletionService 结构图：submit 把 Callable 包装成 QueueingFuture 交给线程池，任务结束时 done() 把 Future 放入 completionQueue，take/poll 按完成顺序取出"></p>
 <h3 id="初始化线程池">初始化线程池</h3>
-<ol>
-<li>
-<p>同步初始化一个完成队列completionQueue</p>
+<ol><li>构造时同步创建一个完成队列 <code>completionQueue</code>，默认实现是 <code>LinkedBlockingQueue</code>（无界）；同时判断传入的 executor 是否为 <code>AbstractExecutorService</code>，是则缓存下来以复用其 <code>newTaskFor</code>。</li></ol>
 <pre><code class="language-java">public ExecutorCompletionService(Executor executor) {
     if (executor == null)
         throw new NullPointerException();
@@ -264,12 +336,9 @@
     this.completionQueue = new LinkedBlockingQueue&lt;Future&lt;V&gt;&gt;();
 }
 </code></pre>
-</li>
-</ol>
-<h3 id="执行submit方法">执行submit方法</h3>
-<ol>
-<li>
-<p>线程池执行的时候传入了自己的内部类QueueingFuture</p>
+
+<h3 id="执行submit方法">执行 submit 方法</h3>
+<ol><li>提交时先用 <code>newTaskFor</code> 把任务包装成 <code>RunnableFuture</code>，再把它包进 <code>QueueingFuture</code> 交给线程池执行。交给线程池的是「包装后的任务」，而<strong>返回给调用方的是原来那个 Future</strong>，两者共享同一个执行结果。</li></ol>
 <pre><code class="language-java">public Future&lt;V&gt; submit(Callable&lt;V&gt; task) {
     if (task == null) throw new NullPointerException();
     RunnableFuture&lt;V&gt; f = newTaskFor(task);
@@ -277,9 +346,8 @@
     return f;
 }
 </code></pre>
-</li>
-<li>
-<p>QueueingFuture构造函数，需要关注这里重写了done方法，向阻塞队列里添加task</p>
+
+<ol start="2"><li><code>QueueingFuture</code> 继承 <code>FutureTask</code>，构造函数里 <code>super(task, null)</code> 把真正的任务交给父类执行（所以它的泛型是 <code>Void</code>，结果仍存在内部那个 task 上）。关键在于它<strong>重写了 <code>done()</code></strong>：任务结束（无论正常结束、异常还是取消）时把 task 放进阻塞队列。</li></ol>
 <pre><code class="language-java">private static class QueueingFuture&lt;V&gt; extends FutureTask&lt;Void&gt; {
     QueueingFuture(RunnableFuture&lt;V&gt; task,
                    BlockingQueue&lt;Future&lt;V&gt;&gt; completionQueue) {
@@ -289,12 +357,11 @@
     }
     private final Future&lt;V&gt; task;
     private final BlockingQueue&lt;Future&lt;V&gt;&gt; completionQueue;
-    protected void done() { completionQueue.add(task); } //往completionQueue里面存值
+    protected void done() { completionQueue.add(task); } // 完成后入队
 }
 </code></pre>
-</li>
-<li>
-<p>执行FutureTask的run方法</p>
+
+<ol start="3"><li><code>done()</code> 由 <code>FutureTask</code> 在状态转为终态时回调。任务提交后线程池执行的是 <code>run()</code>：正常结束走 <code>set(result)</code>，抛异常走 <code>setException(ex)</code>，取消则直接进入终态。</li></ol>
 <pre><code class="language-java">public void run() {
     if (state != NEW ||
         !RUNNER.compareAndSet(this, null, Thread.currentThread()))
@@ -313,90 +380,116 @@
                 setException(ex);
             }
             if (ran)
-                set(result); //设置值
+                set(result);              // 设置值，随后触发 finishCompletion
         }
     } finally {
-        // runner must be non-null until state is settled to
-        // prevent concurrent calls to run()
         runner = null;
-        // state must be re-read after nulling runner to prevent
-        // leaked interrupts
         int s = state;
         if (s &gt;= INTERRUPTING)
             handlePossibleCancellationInterrupt(s);
     }
 }
 </code></pre>
-</li>
-<li>
-<p>set方法</p>
+
+<ol start="4"><li><code>set</code> 把状态从 <code>NEW</code> 推到 <code>COMPLETING</code> → <code>NORMAL</code>，写入结果后调用 <code>finishCompletion()</code>。</li></ol>
 <pre><code class="language-java">protected void set(V v) {
     if (STATE.compareAndSet(this, NEW, COMPLETING)) {
         outcome = v;
-        STATE.setRelease(this, NORMAL); // final state
-        finishCompletion(); 
+        STATE.setRelease(this, NORMAL);   // 终态，结果对其它线程可见
+        finishCompletion();
     }
 }
 </code></pre>
-</li>
-<li>
-<p>在finishCompletion方法中执行了done方法</p>
+
+<ol start="5"><li><code>finishCompletion()</code> 唤醒所有在 <code>get()</code> 上排队的线程，然后<strong>调用 <code>done()</code></strong>——这正是 <code>QueueingFuture</code> 把结果送进完成队列的位置。</li></ol>
 <pre><code class="language-java">private void finishCompletion() {
-    // assert state &gt; COMPLETING;
     for (WaitNode q; (q = waiters) != null;) {
         if (WAITERS.weakCompareAndSet(this, q, null)) {
             for (;;) {
                 Thread t = q.thread;
                 if (t != null) {
                     q.thread = null;
-                    LockSupport.unpark(t);
+                    LockSupport.unpark(t);      // 唤醒阻塞在 get() 的线程
                 }
                 WaitNode next = q.next;
                 if (next == null)
                     break;
-                q.next = null; // unlink to help gc
+                q.next = null;                  // unlink to help gc
                 q = next;
             }
             break;
         }
     }
 
-    done();             //执行done方法-completionQueue.add(task);
+    done();                 // 执行 done()：completionQueue.add(task)
 
     callable = null;        // to reduce footprint
 }
 </code></pre>
-</li>
-</ol>
-<p>因此，每次线程完成任务，都会往 completionQueue 中新增一条记录。completionQueue 中的记录需要通过别的方式取出：ExecutorCompletionService.take()。<br>
-ExecutorCompletionService的实际用法应该是这样的：CompletionService一边执行任务，一边处理完成的任务结果，这样可以将执行的任务与处理任务隔离开来进行处理，使用submit执行任务，使用take获取已完成的任务，先完成的任务结果先加入队列。获取的结果，跟提交给线程池的任务是无关联的。</p>
-<pre><code class="language-java">Future&lt;String&gt; submit = completionService.submit(() -&gt; {
-    return &quot;假装有返回&quot;;
-});
-submit.get();//直接获取返回值
-</code></pre>
-<p>如上所述，如果我们在使用过程中需要的是当前线程任务的返回值，因而没有调用 take 方法，而是通过 get 方法获取当前线程调用的返回值，就会导致 task 在队列中一直堆积，从而造成 OOM。</p>
 
+<p>所以整条链路是：<code>submit → QueueingFuture → 线程池执行 → 任务终态 → finishCompletion → done() → completionQueue.add(task)</code>。每完成一个任务，队列里就多一条记录，<code>take()</code> 从这个队列里按完成顺序取，取出来的 Future 与提交时返回的 Future 是同一个对象。</p>
+<pre><code class="language-java">Future&lt;String&gt; submit = completionService.submit(() -&gt; {
+    return "假装有返回";
+});
+submit.get();   // 直接取返回值，不经过 take()
+</code></pre>
+
+<p>如上所述，如果使用过程中只需要当前任务的返回值，于是从不调用 <code>take()</code> / <code>poll()</code>，那么 <code>completionQueue</code> 里的记录永远不会被消费（<code>LinkedBlockingQueue</code> 默认无界），已完成的任务对象会持续堆积，任务量大时就会 OOM。凡是用了 <code>ExecutorCompletionService</code>，就必须保证「提交几次、取几次」。</p>
+<h2 id="取舍">与 invokeAll / invokeAny / CompletableFuture 的取舍</h2>
+<ul><li><strong>ExecutorCompletionService</strong>：需要「谁先完成先处理谁」，处理逻辑又比较重（写库、发通知）时最合适。只需一个线程池，取结果的过程天然串行，方便做限流和聚合。缺点是结果必须靠调用方循环取，容易漏取导致队列堆积。</li><li><strong>invokeAll</strong>：一次提交一批任务并阻塞到<strong>全部完成</strong>，返回的 List 顺序与提交顺序一致，每个 Future 都已完成，<code>get()</code> 不会阻塞。适合「批处理、只要最终结果」。它无法感知完成顺序，中途也拿不到部分结果。</li><li><strong>invokeAny</strong>：只返回<strong>第一个成功完成</strong>的任务结果，其余任务被取消。适合「多个数据源任取其一」「接口竞速」这类只要一个答案的场景。</li><li><strong>CompletableFuture</strong>：需要编排（<code>thenApply</code> / <code>thenCombine</code> / <code>allOf</code> / <code>anyOf</code>）、串行依赖、异常恢复（<code>exceptionally</code> / <code>handle</code>）时更合适，回调式无需手动循环。代价是错误处理与线程上下文（默认共用 <code>ForkJoinPool.commonPool</code>）需要额外留意；只做 CompletionService 那点事，它偏重。</li></ul>
+<pre><code class="language-java">// 只要一个答案：invokeAny
+String fastest = executor.invokeAny(Arrays.asList(
+        () -&gt; queryFromPrimary(),
+        () -&gt; queryFromBackup()));
+
+// 编排式：CompletableFuture + anyOf（等价于「先完成先要」）
+CompletableFuture&lt;String&gt; any = (CompletableFuture&lt;String&gt;) CompletableFuture.anyOf(
+        CompletableFuture.supplyAsync(() -&gt; queryFromPrimary(), executor),
+        CompletableFuture.supplyAsync(() -&gt; queryFromBackup(), executor));
+System.out.println(any.join());
+</code></pre>
+
+<p>一句话选型：<strong>要完成顺序 + 边完成边处理</strong>选 ExecutorCompletionService；<strong>要全部结果</strong>选 <code>invokeAll</code> 或 <code>allOf</code>；<strong>只要最快的一个</strong>选 <code>invokeAny</code> 或 <code>anyOf</code>；<strong>要复杂编排与异步回调</strong>选 <code>CompletableFuture</code>。</p>
+<h2 id="小结">小结</h2>
+<ul><li><code>ExecutorCompletionService</code> = 线程池 + 无界 <code>BlockingQueue</code> + 重写 <code>done()</code> 的 <code>QueueingFuture</code>，因此能按完成顺序返回结果。</li><li><code>take()</code> 阻塞、<code>poll()</code> 立即返回 <code>null</code>、<code>poll(timeout, unit)</code> 限时等待；<code>poll</code> 系列必须判空。</li><li>任务失败也会入队，异常通过 <code>get()</code> 的 <code>ExecutionException</code> 抛出，不能只 <code>take</code> 不 <code>get</code>。</li><li>必须「提交几次取几次」，否则队列堆积会导致 OOM。</li></ul>
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#future">Future 回顾</a>
 <ul>
-<li>
-<ul>
-<li><a href="#future">Future</a>
-<ul>
-<li><a href="#future%E6%8F%90%E4%BE%9B%E4%BA%86%E4%B8%89%E7%A7%8D%E5%8A%9F%E8%83%BD">Future提供了三种功能：</a></li>
+<li><a href="#future%E6%8F%90%E4%BE%9B%E4%BA%86%E4%B8%89%E7%A7%8D%E5%8A%9F%E8%83%BD">Future 提供的三种功能</a></li>
 </ul>
 </li>
-<li><a href="#executorservice">ExecutorService</a></li>
-<li><a href="#executorcompletionservice">ExecutorCompletionService</a></li>
-<li><a href="#%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90">源码分析</a>
+<li>
+<a href="#executorservice">ExecutorService：按提交顺序取结果的写法</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#executorcompletionservice">ExecutorCompletionService 登场</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#submit-%E4%B8%8E-take-%E7%9A%84%E8%AF%AD%E4%B9%89">submit 与 take / poll 的语义</a>
+<ul>
+<li><a href="#%E5%BC%82%E5%B8%B8%E4%B8%8E%E8%B6%85%E6%97%B6%E5%A4%84%E7%90%86">异常与超时处理</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90">源码分析</a>
 <ul>
 <li><a href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E7%BA%BF%E7%A8%8B%E6%B1%A0">初始化线程池</a></li>
-<li><a href="#%E6%89%A7%E8%A1%8Csubmit%E6%96%B9%E6%B3%95">执行submit方法</a></li>
+<li><a href="#%E6%89%A7%E8%A1%8Csubmit%E6%96%B9%E6%B3%95">执行 submit 方法</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E5%8F%96%E8%88%8D">与 invokeAll / invokeAny / CompletableFuture 的取舍</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E5%B0%8F%E7%BB%93">小结</a>
+<ul>
 </ul>
 </li>
 </ul>

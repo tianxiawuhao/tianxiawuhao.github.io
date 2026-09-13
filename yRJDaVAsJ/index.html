@@ -125,341 +125,446 @@
           
           <img class="post-feature-header-image" src="/post-images/yRJDaVAsJ.png" alt="封面图">
           
-          <pre><code class="language-nginx">#定义Nginx运行的用户和用户组
-user www www;
+<h2 id="nginx-的配置结构">nginx 的配置结构</h2>
+<p>nginx.conf 是一个「分层块结构」的配置文件：文件最外层是 <strong>main</strong> 上下文，往下依次是 <code>events</code>、<code>http</code>，<code>http</code> 里可以并列多个 <code>server</code>，每个 <code>server</code> 里再放多个 <code>location</code>。理解「哪条指令能写在哪个块里」比记住某条指令本身更重要，因为绝大多数 <code>nginx: [emerg] "xxx" directive is not allowed here</code> 报错都是把指令放错了层级。</p>
+<pre><code class="language-text">main                       # 全局：user / worker_processes / pid / error_log
+├── events                 # 事件模型与连接数
+│   ├── use epoll
+│   └── worker_connections 65535
+└── http                   # HTTP 服务，可含多个 server、upstream、log_format
+    ├── upstream backend   # 后端服务器组（只能在 http 里定义）
+    ├── server             # 虚拟主机：listen + server_name
+    │   ├── location /     # 路由规则
+    │   └── location ~ \.php$
+    └── server ...         # 第二个虚拟主机
+</code></pre>
 
-#nginx进程数，建议设置为等于CPU总核心数。
-worker_processes 8;
+<h3 id="指令的作用域规则">指令的作用域规则</h3>
+<p>每条指令都有固定的可写范围，常见的有三类：</p>
+<ul><li><strong>只能写在 main</strong>：<code>worker_processes</code>、<code>worker_rlimit_nofile</code>、<code>pid</code>、<code>user</code>。</li><li><strong>只能写在 http / server / location</strong>：<code>root</code>、<code>index</code>、<code>expires</code>、<code>proxy_pass</code>、<code>access_log</code>。</li><li><strong>只能写在 http</strong>：<code>upstream</code>、<code>log_format</code>、<code>server_names_hash_bucket_size</code>。</li></ul>
+<p>作用域是「向下继承、就近覆盖」：写在 <code>http</code> 的 <code>root</code> 会作用于所有 <code>server</code>，而某个 <code>location</code> 里再写一次 <code>root</code> 就只影响它自己。同一层级里重复定义同一指令会直接启动失败，而父子层级重复定义是合法的覆盖行为。</p>
+<h2 id="worker-进程与并发能力">worker 进程与并发能力</h2>
+<p>nginx 采用 master + worker 的多进程模型：master 只负责读取配置、绑定端口和管理 worker，真正处理请求的是 worker。因此 <code>worker_processes</code> 决定并行处理能力。</p>
+<pre><code class="language-nginx"># 取值 auto 表示按 CPU 核心数自动设置（1.3.8+ 支持），
+# 老版本可写死核心数，例如 8 核机器写 8。
+worker_processes auto;
 
-#全局错误日志定义类型，[ debug | info | notice | warn | error | crit ]
-error_log /usr/local/nginx/logs/error.log info;
-
-#进程pid文件
-pid /usr/local/nginx/logs/nginx.pid;
-
-#指定进程可以打开的最大描述符：数目
-#工作模式与连接数上限
-#这个指令是指当一个nginx进程打开的最多文件描述符数目，理论值应该是最多打开文件数（ulimit -n）与nginx进程数相除，但是nginx分配请求并不是那么均匀，所以最好与ulimit -n 的值保持一致。
-#现在在linux 2.6内核下开启文件打开数为65535，worker_rlimit_nofile就相应应该填写65535。
-#这是因为nginx调度时分配请求到进程并不是那么的均衡，所以假如填写10240，总并发量达到3-4万时就有进程可能超过10240了，这时会返回502错误。
+# 每个 worker 能打开的文件描述符上限。
+# 应为 0 表示不限制（受系统上限约束），一般直接对齐 ulimit -n。
 worker_rlimit_nofile 65535;
 
-events{
-    #参考事件模型，use [ kqueue | rtsig | epoll | /dev/poll | select | poll ]; epoll模型
-    #是Linux 2.6以上版本内核中的高性能网络I/O模型，linux建议epoll，如果跑在FreeBSD上面，就用kqueue模型。
-    #补充说明：
-    #与apache相类，nginx针对不同的操作系统，有不同的事件模型
-    #A）标准事件模型
-    #Select、poll属于标准事件模型，如果当前系统不存在更有效的方法，nginx会选择select或poll
-    #B）高效事件模型
-    #Kqueue：使用于FreeBSD 4.1+, OpenBSD 2.9+, NetBSD 2.0 和 MacOS X.使用双处理器的MacOS X系统使用kqueue可能会造成内核崩溃。
-    #Epoll：使用于Linux内核2.6版本及以后的系统。
-    #/dev/poll：使用于Solaris 7 11/99+，HP/UX 11.22+ (eventport)，IRIX 6.5.15+ 和 Tru64 UNIX 5.1A+。
-    #Eventport：使用于Solaris 10。 为了防止出现内核崩溃的问题， 有必要安装安全补丁。
-    use epoll;
-
-    #单个进程最大连接数（最大连接数=连接数*进程数）
-    #根据硬件调整，和前面工作进程配合起来用，尽量大，但是别把cpu跑到100%就行。每个进程允许的最多连接数，理论上每台nginx服务器的最大连接数为。
-    worker_connections 65535;
-
-    #keepalive超时时间。
-    keepalive_timeout 60;
-
-    #客户端请求头部的缓冲区大小。这个可以根据你的系统分页大小来设置，一般一个请求头的大小不会超过1k，不过由于一般系统分页都要大于1k，所以这里设置为分页大小。
-    #分页大小可以用命令getconf PAGESIZE 取得。
-    #[root@web001 ~]# getconf PAGESIZE
-    #4096
-    #但也有client_header_buffer_size超过4k的情况，但是client_header_buffer_size该值必须设置为“系统分页大小”的整倍数。
-    client_header_buffer_size 4k;
-
-    #这个将为打开文件指定缓存，默认是没有启用的，max指定缓存数量，建议和打开文件数一致，inactive是指经过多长时间文件没被请求后删除缓存。
-    open_file_cache max=65535 inactive=60s;
-
-    #这个是指多长时间检查一次缓存的有效信息。
-    #语法:open_file_cache_valid time 默认值:open_file_cache_valid 60 使用字段:http, server, location 这个指令指定了何时需要检查open_file_cache中缓存项目的有效信息.
-    open_file_cache_valid 80s;
-
-    #open_file_cache指令中的inactive参数时间内文件的最少使用次数，如果超过这个数字，文件描述符一直是在缓存中打开的，如上例，如果有一个文件在inactive时间内一次没被使用，它将被移除。
-    #语法:open_file_cache_min_uses number 默认值:open_file_cache_min_uses 1 使用字段:http, server, location  这个指令指定了在open_file_cache指令无效的参数中一定的时间范围内可以使用的最小文件数,如果使用更大的值,文件描述符在cache中总是打开状态.
-    open_file_cache_min_uses 1;
-
-    #语法:open_file_cache_errors on | off 默认值:open_file_cache_errors off 使用字段:http, server, location 这个指令指定是否在搜索一个文件时记录cache错误.
-    open_file_cache_errors on;
-
+events {
+    use epoll;                    # Linux 2.6+ 用 epoll，FreeBSD 用 kqueue
+    worker_connections 10240;     # 单个 worker 的最大连接数
+    multi_accept on;              # 一次事件循环尽量接受全部新连接
 }
+</code></pre>
 
-#设定http服务器，利用它的反向代理功能提供负载均衡支持
-http{
+<p>并发能力的关键是那条常被误传的公式。对 nginx 反向代理来说，每个客户端连接会占用「客户端 + 后端」各一个连接，所以：</p>
+<div class="math-block">\[ \text{理论最大连接数} = \text{worker\_processes} \times \text{worker\_connections} \]</div>
+<div class="math-block">\[ \text{可承载客户端并发} \approx \frac{\text{worker\_processes} \times \text{worker\_connections}}{2} \]</div>
+<p>取 <code>worker_connections 65535</code> 是很多老文章的写法，但真正生效的上限由 <code>worker_rlimit_nofile</code> 和内核 <code>net.core.somaxconn</code>、<code>fs.file-max</code> 共同决定；只改 nginx 配置而系统 <code>ulimit -n</code> 仍是 1024，就会在并发达标时出现 <code>worker_connections are not enough</code> 或 502。建议 <code>worker_rlimit_nofile</code> 与 <code>ulimit -n</code> 保持一致，并在 <code>/etc/security/limits.conf</code> 里为 nginx 用户放开。</p>
+<h2 id="sendfile-与-tcp-优化">sendfile 与 TCP 优化</h2>
+<p><code>sendfile on</code> 让 nginx 通过内核的零拷贝直接把文件从磁盘送进套接字，省掉「内核态 → 用户态 → 内核态」的两次拷贝和两次上下文切换，静态文件服务收益明显。</p>
+<pre><code class="language-nginx">sendfile on;        # 静态文件零拷贝，普通站点保持 on
+tcp_nopush on;      # 仅在使用 sendfile 时生效：攒满一个数据包再发，减少报文数
+tcp_nodelay on;     # 长连接下禁用 Nagle 算法，降低小响应的延迟
+aio on;             # 大文件场景可再开异步 IO；也可用 sendfile_max_chunk 限制单次大小
+sendfile_max_chunk 1m;
+</code></pre>
 
-    #文件扩展名与文件类型映射表
-    include mime.types;
+<p>三个指令容易互相踩：<code>tcp_nopush</code> 与 <code>tcp_nodelay</code> 并不矛盾，前者作用于完整文件的批量发送、后者作用于长连接上的小包，nginx 会按场景择一使用。反过来，如果做的是大文件下载、磁盘 IO 已经是瓶颈，可以把 <code>sendfile</code> 关掉以平衡磁盘与网络；<code>aio</code> 在 Linux 上需要配合 <code>directio</code> 才有明显效果。</p>
+<h2 id="gzip-压缩">gzip 压缩</h2>
+<pre><code class="language-nginx">gzip on;
+gzip_min_length 1k;              # 小于 1k 的内容压缩后可能更大，不压
+gzip_comp_level 5;               # 1~9，5 左右性价比最高，9 费 CPU 收益很小
+gzip_types text/plain text/css application/json application/javascript
+           application/xml text/xml image/svg+xml;
+gzip_vary on;                    # 追加 Vary: Accept-Encoding，供 CDN/代理正确缓存
+gzip_disable "msie6";            # 老 IE6 对 gzip 支持有缺陷
+gzip_static on;                  # 若已预生成 .gz 文件，直接发送，省 CPU 又省时间
+gzip_proxied any;                # 对代理来的请求也压缩（默认只压部分场景）
+</code></pre>
 
-    #默认文件类型
-    default_type application/octet-stream;
+<p>两个常见坑：一是 <code>gzip_types</code> 默认只包含 <code>text/html</code>，不写这一行会发现 CSS、JS、JSON 全都没压；二是 <code>gzip_http_version 1.0</code> 是十几年前为兼容 Squid 2.5 而写的，现代链路统一用 1.1 即可，写 1.0 只会在部分代理场景下让压缩失效，没必要保留。图片、视频已经是压缩格式，不要放进 <code>gzip_types</code>。</p>
+<h2 id="keepalive-长连接">keepalive 长连接</h2>
+<p>长连接分两段，两段都要配，否则只优化了一半：客户端到 nginx 由 <code>keepalive_timeout</code> / <code>keepalive_requests</code> 控制；nginx 到后端则需要在 <code>upstream</code> 里显式声明 <code>keepalive</code>。</p>
+<pre><code class="language-nginx">http {
+    keepalive_timeout 65s;         # 空闲长连接保持时间，第二个参数可选，用于响应头 Keep-Alive: timeout=
+    keepalive_requests 1000;       # 单条长连接最多处理多少个请求
+    keepalive_disable msie6;
+    client_header_timeout 15s;     # 读请求头的超时，防止慢速攻击占住连接
+    client_body_timeout 15s;
+    send_timeout 30s;              # 两次写操作之间的超时
 
-    #默认编码
-    #charset utf-8;
-    #服务器名字的hash表大小
-    #保存服务器名字的hash表是由指令server_names_hash_max_size 和server_names_hash_bucket_size所控制的。参数hash bucket size总是等于hash表的大小，并且是一路处理器缓存大小的倍数。在减少了在内存中的存取次数后，使在处理器中加速查找hash表键值成为可能。如果hash bucket size等于一路处理器缓存的大小，那么在查找键的时候，最坏的情况下在内存中查找的次数为2。第一次是确定存储单元的地址，第二次是在存储单元中查找键 值。因此，如果Nginx给出需要增大hash max size 或 hash bucket size的提示，那么首要的是增大前一个参数的大小.
-    server_names_hash_bucket_size 128;
-
-    #客户端请求头部的缓冲区大小。这个可以根据你的系统分页大小来设置，一般一个请求的头部大小不会超过1k，不过由于一般系统分页都要大于1k，所以这里设置为分页大小。分页大小可以用命令getconf PAGESIZE取得。
-    client_header_buffer_size 32k;
-
-    #客户请求头缓冲大小。nginx默认会用client_header_buffer_size这个buffer来读取header值，如果header过大，它会使用large_client_header_buffers来读取。
-    large_client_header_buffers 4 64k;
-
-    #设定通过nginx上传文件的大小
-    client_max_body_size 8m;
-
-    #开启高效文件传输模式，sendfile指令指定nginx是否调用sendfile函数来输出文件，对于普通应用设为 on，如果用来进行下载等应用磁盘IO重负载应用，可设置为off，以平衡磁盘与网络I/O处理速度，降低系统的负载。注意：如果图片显示不正常把这个改成off。
-    #sendfile指令指定 nginx 是否调用sendfile 函数（zero copy 方式）来输出文件，对于普通应用，必须设为on。如果用来进行下载等应用磁盘IO重负载应用，可设置为off，以平衡磁盘与网络IO处理速度，降低系统uptime。
-    sendfile on;
-
-    #开启目录列表访问，合适下载服务器，默认关闭。
-    autoindex on;
-
-    #此选项允许或禁止使用socke的TCP_CORK的选项，此选项仅在使用sendfile的时候使用
-    tcp_nopush on;
-
-    tcp_nodelay on;
-
-    #长连接超时时间，单位是秒
-    keepalive_timeout 120;
-
-    #FastCGI相关参数是为了改善网站的性能：减少资源占用，提高访问速度。下面参数看字面意思都能理解。
-    fastcgi_connect_timeout 300;
-    fastcgi_send_timeout 300;
-    fastcgi_read_timeout 300;
-    fastcgi_buffer_size 64k;
-    fastcgi_buffers 4 64k;
-    fastcgi_busy_buffers_size 128k;
-    fastcgi_temp_file_write_size 128k;
-
-    #gzip模块设置
-    gzip on; #开启gzip压缩输出
-    gzip_min_length 1k;    #最小压缩文件大小
-    gzip_buffers 4 16k;    #压缩缓冲区
-    gzip_http_version 1.0;    #压缩版本（默认1.1，前端如果是squid2.5请使用1.0）
-    gzip_comp_level 2;    #压缩等级
-    gzip_types text/plain application/x-javascript text/css application/xml;    #压缩类型，默认就已经包含textml，所以下面就不用再写了，写上去也不会有问题，但是会有一个warn。
-    gzip_vary on;
-
-    #开启限制IP连接数的时候需要使用
-    #limit_zone crawler $binary_remote_addr 10m;
-    #负载均衡配置
-    upstream jh.w3cschool.cn {
-
-        #upstream的负载均衡，weight是权重，可以根据机器配置定义权重。weigth参数表示权值，权值越高被分配到的几率越大。
-        server 192.168.80.121:80 weight=3;
-        server 192.168.80.122:80 weight=2;
-        server 192.168.80.123:80 weight=3;
-
-        #nginx的upstream目前支持4种方式的分配
-        #1、轮询（默认）
-        #每个请求按时间顺序逐一分配到不同的后端服务器，如果后端服务器down掉，能自动剔除。
-        #2、weight
-        #指定轮询几率，weight和访问比率成正比，用于后端服务器性能不均的情况。
-        #例如：
-        #upstream bakend {
-        #    server 192.168.0.14 weight=10;
-        #    server 192.168.0.15 weight=10;
-        #}
-        #2、ip_hash
-        #每个请求按访问ip的hash结果分配，这样每个访客固定访问一个后端服务器，可以解决session的问题。
-        #例如：
-        #upstream bakend {
-        #    ip_hash;
-        #    server 192.168.0.14:88;
-        #    server 192.168.0.15:80;
-        #}
-        #3、fair（第三方）
-        #按后端服务器的响应时间来分配请求，响应时间短的优先分配。
-        #upstream backend {
-        #    server server1;
-        #    server server2;
-        #    fair;
-        #}
-        #4、url_hash（第三方）
-        #按访问url的hash结果来分配请求，使每个url定向到同一个后端服务器，后端服务器为缓存时比较有效。
-        #例：在upstream中加入hash语句，server语句中不能写入weight等其他的参数，hash_method是使用的hash算法
-        #upstream backend {
-        #    server squid1:3128;
-        #    server squid2:3128;
-        #    hash $request_uri;
-        #    hash_method crc32;
-        #}
-        #tips:
-        #upstream bakend{#定义负载均衡设备的Ip及设备状态}{
-        #    ip_hash;
-        #    server 127.0.0.1:9090 down;
-        #    server 127.0.0.1:8080 weight=2;
-        #    server 127.0.0.1:6060;
-        #    server 127.0.0.1:7070 backup;
-        #}
-        #在需要使用负载均衡的server中增加 proxy_pass http://bakend/;
-        #每个设备的状态设置为:
-        #1.down表示单前的server暂时不参与负载
-        #2.weight为weight越大，负载的权重就越大。
-        #3.max_fails：允许请求失败的次数默认为1.当超过最大次数时，返回proxy_next_upstream模块定义的错误
-        #4.fail_timeout:max_fails次失败后，暂停的时间。
-        #5.backup： 其它所有的非backup机器down或者忙的时候，请求backup机器。所以这台机器压力会最轻。
-        #nginx支持同时设置多组的负载均衡，用来给不用的server来使用。
-        #client_body_in_file_only设置为On 可以讲client post过来的数据记录到文件中用来做debug
-        #client_body_temp_path设置记录文件的目录 可以设置最多3层目录
-        #location对URL进行匹配.可以进行重定向或者进行新的代理 负载均衡
+    upstream backend {
+        server 10.0.0.11:8080;
+        server 10.0.0.12:8080;
+        keepalive 64;              # 每个 worker 与后端保持的空闲长连接数
+        keepalive_requests 1000;
+        keepalive_timeout 60s;
     }
 
-    #虚拟主机的配置
-    server{
-
-        #监听端口
-        listen 80;
-
-        #域名可以有多个，用空格隔开
-        server_name www.w3cschool.cn w3cschool.cn;
-        index index.html index.htm index.php;
-        root /data/www/w3cschool;
-
-        #对******进行负载均衡
-        location ~ .*.(php|php5)?${
-            fastcgi_pass 127.0.0.1:9000;
-            fastcgi_index index.php;
-            include fastcgi.conf;
-        }
-
-        #图片缓存时间设置
-        location ~ .*.(gif|jpg|jpeg|png|bmp|swf)${
-            expires 10d;
-        }
-
-        #JS和CSS缓存时间设置
-
-        location ~ .*.(js|css)?${
-            expires 1h;
-        }
-
-        #日志格式设定
-        #$remote_addr与$http_x_forwarded_for用以记录客户端的ip地址；
-        #$remote_user：用来记录客户端用户名称；
-        #$time_local： 用来记录访问时间与时区；
-        #$request： 用来记录请求的url与http协议；
-        #$status： 用来记录请求状态；成功是200，
-        #$body_bytes_sent ：记录发送给客户端文件主体内容大小；
-        #$http_referer：用来记录从那个页面链接访问过来的；
-        #$http_user_agent：记录客户浏览器的相关信息；
-        #通常web服务器放在反向代理的后面，这样就不能获取到客户的IP地址了，通过$remote_add拿到的IP地址是反向代理服务器的iP地址。反向代理服务器在转发请求的http头信息中，可以增加x_forwarded_for信息，用以记录原有客户端的IP地址和原来客户端的请求的服务器地址。
-        log_format access '$remote_addr - $remote_user [$time_local] &quot;$request&quot; '
-        '$status $body_bytes_sent &quot;$http_referer&quot; '
-        '&quot;$http_user_agent&quot; $http_x_forwarded_for';
-
-        #定义本虚拟主机的访问日志
-        access_log  /usr/local/nginx/logs/host.access.log  main;
-        access_log  /usr/local/nginx/logs/host.access.404.log  log404;
-
-        #对 &quot;/&quot; 启用反向代理
-        location / {
-            proxy_pass http://127.0.0.1:88;
-            proxy_redirect off;
-            proxy_set_header X-Real-IP $remote_addr;
-
-            #后端的Web服务器可以通过X-Forwarded-For获取用户真实IP
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
-            #以下是一些反向代理的配置，可选。
+    server {
+        location /api/ {
+            proxy_pass http://backend;
+            proxy_http_version 1.1;                 # 1.1 才支持长连接
+            proxy_set_header Connection "";         # 清掉 close，交给 upstream keepalive 管理
             proxy_set_header Host $host;
-
-            #允许客户端请求的最大单文件字节数
-            client_max_body_size 10m;
-
-            #缓冲区代理缓冲用户端请求的最大字节数，
-            #如果把它设置为比较大的数值，例如256k，那么，无论使用firefox还是IE浏览器，来提交任意小于256k的图片，都很正常。如果注释该指令，使用默认的client_body_buffer_size设置，也就是操作系统页面大小的两倍，8k或者16k，问题就出现了。
-            #无论使用firefox4.0还是IE8.0，提交一个比较大，200k左右的图片，都返回500 Internal Server Error错误
-            client_body_buffer_size 128k;
-
-            #表示使nginx阻止HTTP应答代码为400或者更高的应答。
-            proxy_intercept_errors on;
-
-            #后端服务器连接的超时时间_发起握手等候响应超时时间
-            #nginx跟后端服务器连接超时时间(代理连接超时)
-            proxy_connect_timeout 90;
-
-            #后端服务器数据回传时间(代理发送超时)
-            #后端服务器数据回传时间_就是在规定时间之内后端服务器必须传完所有的数据
-            proxy_send_timeout 90;
-
-            #连接成功后，后端服务器响应时间(代理接收超时)
-            #连接成功后_等候后端服务器响应时间_其实已经进入后端的排队之中等候处理（也可以说是后端服务器处理请求的时间）
-            proxy_read_timeout 90;
-
-            #设置代理服务器（nginx）保存用户头信息的缓冲区大小
-            #设置从被代理服务器读取的第一部分应答的缓冲区大小，通常情况下这部分应答中包含一个小的应答头，默认情况下这个值的大小为指令proxy_buffers中指定的一个缓冲区的大小，不过可以将其设置为更小
-            proxy_buffer_size 4k;
-
-            #proxy_buffers缓冲区，网页平均在32k以下的设置
-            #设置用于读取应答（来自被代理服务器）的缓冲区数目和大小，默认情况也为分页大小，根据操作系统的不同可能是4k或者8k
-            proxy_buffers 4 32k;
-
-            #高负荷下缓冲大小（proxy_buffers*2）
-            proxy_busy_buffers_size 64k;
-
-            #设置在写入proxy_temp_path时数据的大小，预防一个工作进程在传递文件时阻塞太长
-            #设定缓存文件夹大小，大于这个值，将从upstream服务器传
-            proxy_temp_file_write_size 64k;
-        }   
-
-        #设定查看Nginx状态的地址
-        location /NginxStatus {
-            stub_status on;
-            access_log on;
-            auth_basic &quot;NginxStatus&quot;;
-            auth_basic_user_file confpasswd;
-            #htpasswd文件的内容可以用apache提供的htpasswd工具来产生。
-        }
-
-        #本地动静分离反向代理配置
-        #所有jsp的页面均交由tomcat或resin处理
-        location ~ .(jsp|jspx|do)?$ {
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_pass http://127.0.0.1:8080;
-        }
-
-        #所有静态文件由nginx直接读取不经过tomcat或resin
-        location ~ .*.(htm|html|gif|jpg|jpeg|png|bmp|swf|ioc|rar|zip|txt|flv|mid|doc|ppt|
-        pdf|xls|mp3|wma)${
-            expires 15d; 
-        }
-
-        location ~ .*.(js|css)?${
-            expires 1h;
         }
     }
 }
 </code></pre>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/I1j63ouUN/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spring Boot 自带 Buff 工具类</span></a>
-      <a class="next-post" href="/KW_02xshc/"><span class="pn-label">下一篇 →</span><span class="pn-title">docker 宿主机定时清除容器的运行日志</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
+<p>只写 <code>upstream keepalive</code> 而漏掉 <code>proxy_http_version 1.1</code> 和 <code>Connection ""</code>，后端连接会在每个请求后被关闭，keepalive 完全不生效——这是排查「后端 TIME_WAIT 暴涨」时最常被忽略的一步。</p>
+<h2 id="server-name-匹配">server_name 匹配</h2>
+<p>一个请求先按 <code>listen</code>（IP + 端口）找到候选虚拟主机，再在候选里按 <code>server_name</code> 匹配。匹配优先级固定如下：</p>
+<ol><li>精确名字，如 <code>www.example.com</code>；</li><li>以通配符开头的名字，如 <code>*.example.com</code>；</li><li>以通配符结尾的名字，如 <code>www.example.*</code>；</li><li>正则表达式，如 <code>~^www\d+\.example\.com$</code>；</li><li>都没命中时，使用该 <code>listen</code> 上第一个 <code>server</code>，或显式标记了 <code>default_server</code> 的那个。</li></ol>
+<pre><code class="language-nginx">server {
+    listen 80 default_server;                # 兜底主机，接住所有未匹配域名
+    server_name _;
+    return 444;                              # 直接断开，避免被扫描器抓到站点信息
+}
 
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+server {
+    listen 80;
+    server_name www.example.com example.com;  # 多个名字用空格分隔
+    # 名字很多时把公共后缀提出来，减小 hash 表内存占用
+    # server_name .example.com;  等价于 example.com *.example.com
+}
+</code></pre>
+
+<p>域名（尤其是长域名或名字很多）报 <code>could not build server_names_hash</code> 时，先调大 <code>server_names_hash_bucket_size</code>（常用 64 或 128），它必须是 CPU 缓存行的倍数；再动 <code>server_names_hash_max_size</code>。</p>
+<h2 id="location-匹配优先级">location 匹配优先级</h2>
+<p>location 的优先级不能只看书写顺序，规则是「先精确、再前缀、后正则」，且只有最长前缀命中 <code>^~</code> 或精确命中 <code>=</code> 时才会跳过正则：</p>
+<ol><li><code>= /path</code>：精确匹配，命中即结束，最快；</li><li><code>^~ /static/</code>：最长前缀匹配且命中后不再尝试正则；</li><li><code>~ / ~*</code>：正则匹配，按配置中出现的先后顺序取第一个命中项；</li><li>普通前缀 <code>/path</code>：记住最长的一个，如果正则全不命中就用它。</li></ol>
+<p><img src="/post-assets/yRJDaVAsJ/01-nginx-request-flow.svg" alt="nginx 请求处理流程与 location 匹配优先级：先按 listen 与 server_name 选定虚拟主机，再按 = 精确、^~ 前缀、~ / ~* 正则、普通前缀的顺序选定 location"></p>
+<pre><code class="language-nginx"># 命中顺序（自上而下书写只是便于阅读，决定优先级的是前缀与修饰符）：
+location = /favicon.ico { log_not_found off; access_log off; }   # 1) 精确
+location ^~ /static/    { root /data/www; expires 30d; }         # 2) 前缀且阻断正则
+location ~* \.(gif|jpg|jpeg|png|webp|svg)$ { expires 30d; }      # 3) 正则，不区分大小写
+location ~ \.php$      { fastcgi_pass 127.0.0.1:9000; }          # 4) 正则，区分大小写
+location /             { try_files $uri $uri/ /index.html; }     # 5) 兜底前缀
+</code></pre>
+
+<p>原文里写的 <code>location ~ .*.(gif|jpg)$</code> 有两个隐患：正则中的 <code>.</code> 未转义会匹配任意字符；末尾的 <code>?</code> 让分组变成可选，导致 <code>/a.php.txt</code> 这类路径也会命中 PHP 规则。正确写法是 <code>~* \.(gif|jpg)$</code>，只匹配以扩展名结尾的 URI。</p>
+<h2 id="rewrite-与-return">rewrite 与 return</h2>
+<p>能用 <code>return</code> 就不要用 <code>rewrite</code>：<code>return</code> 直接结束处理，开销最小；<code>rewrite</code> 会重新走一遍 location 匹配（<code>last</code>）或直接返回 30x（<code>redirect</code>/<code>permanent</code>）。</p>
+<pre><code class="language-nginx"># 整站跳 HTTPS（推荐：listen 独立成 server，用 return 最简单）
+server {
+    listen 80;
+    server_name example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name example.com;
+
+    # 旧域名与新路径迁移：rewrite 的替换串里不再走 location 匹配
+    rewrite ^/old/(.*)$ /new/$1 permanent;
+
+    # 条件判断要少用；if 在 location 中属于「rewrite 模块」，语义易出意外
+    if ($request_method !~ ^(GET|HEAD|POST)$) { return 405; }
+
+    location /download/ {
+        rewrite ^/download/(.*)$ /files/$1 break;   # break：本 location 内改写后继续
+        root /data/www;
+    }
+
+    location /search {
+        # return 可以返回文本，注意 content-type 要自己写
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+}
+</code></pre>
+
+<p>三个修饰符的区别：<code>last</code> 用新 URI 重新匹配 location；<code>break</code> 只在当前 location 内改 URI，不再匹配；<code>permanent</code> / <code>redirect</code> 直接回 301 / 302。<code>if</code> 处于 rewrite 阶段，对 <code>proxy_pass</code> 等 content 阶段指令的包裹时有已知陷阱，常见的按 UA、Referer 防盗链可以用 <code>map</code> 或 <code>valid_referers</code> 替代。</p>
+<h2 id="root-与-alias">root 与 alias</h2>
+<p>两者都用来拼出磁盘路径，区别在于 <code>root</code> 是「拼接」，<code>alias</code> 是「替换」：<code>root</code> 后的路径 = root 值 + 完整 URI；<code>alias</code> 后的路径 = alias 值 + location 匹配部分之外的那段 URI。</p>
+<pre><code class="language-nginx"># 请求 /img/logo.png
+location /img/ {
+    root /data/www;        # → /data/www/img/logo.png
+}
+location /img/ {
+    alias /data/static/;   # → /data/static/logo.png
+}
+
+# alias 必须与结尾斜杠保持一致，且正则 location 里要用捕获组
+location ~* ^/user/(.+)\.(png|jpg)$ {
+    alias /data/avatars/$1.$2;
+}
+</code></pre>
+
+<p>最常见的错误是 <code>alias</code> 忘了写结尾斜杠：<code>location /img/ { alias /data/static; }</code> 会去找 <code>/data/staticlogo.png</code>，表现为 404 或 403。另一条经验法则是「<code>alias</code> 只放在 location 里，绝不要写在 server 或 http 层」，写错层级会导致路径完全无法预期。目录索引仍由 <code>index</code> 决定，与 root/alias 无关。</p>
+<h2 id="proxy-pass-语义">proxy_pass 尾斜杠语义</h2>
+<p><code>proxy_pass</code> 带不带斜杠、location 是前缀还是正则，决定了 URI 是否被替换，这是反代 404 的头号原因：</p>
+<ul><li><code>location /api/ { proxy_pass http://backend; }</code>：<strong>不带 URI</strong>，原样透传 <code>/api/xxx</code>；</li><li><code>location /api/ { proxy_pass http://backend/; }</code>：<strong>带 URI</strong>，把 location 匹配到的 <code>/api/</code> 替换成 <code>/</code>，后端收到 <code>/xxx</code>；</li><li>location 是正则（<code>~</code> / <code>~*</code>）时，<code>proxy_pass</code> 后面<strong>不允许</strong>带 URI，只能写成 <code>http://backend</code>，否则启动报错。</li></ul>
+<pre><code class="language-nginx"># 后端网关前缀是 /，前端暴露 /api/ → 去掉 /api 前缀
+location /api/ {
+    proxy_pass http://backend/;              # 尾斜杠 → 剥掉 /api/
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    proxy_next_upstream error timeout http_502 http_503 http_504;
+}
+
+# 后端自带同名前缀，需要原样透传 → 不写 URI
+location /service/ {
+    proxy_pass http://backend;               # 无尾斜杠 → 保持 /service/
+}
+</code></pre>
+
+<p>顺带提醒：<code>proxy_set_header Host $host</code> 默认并不携带端口，需要端口时用 <code>$http_host</code>。另外 <code>proxy_redirect off</code> 关掉的是重写后端返回的 <code>Location</code> 头，只有确认后端返回的跳转地址确实可直接访问时才关，否则浏览器会被带到内网地址。</p>
+<div class="math-block">\[ \text{最终 URI} = \begin{cases} \text{后端前缀} + \text{URI 中 location 之后的剩余部分}, & \text{proxy\_pass 带 URI} \\ \text{原 URI}, & \text{proxy\_pass 不带 URI} \end{cases} \]</div>
+<h2 id="upstream-负载均衡">upstream 负载均衡</h2>
+<p><code>upstream</code> 定义一组后端服务器，默认是加权轮询；还有 <code>ip_hash</code>（会话保持）、<code>least_conn</code>（按当前连接数）、<code>hash $key</code>（一致性较弱但可指定键）、<code>random</code>。原文提到的 <code>fair</code> 与 <code>url_hash</code> 都是第三方模块，用之前要确认已编译安装。</p>
+<pre><code class="language-nginx">upstream backend {
+    least_conn;                        # 或默认轮询 / ip_hash / hash $request_uri consistent
+    server 10.0.0.11:8080 weight=3 max_fails=3 fail_timeout=10s;
+    server 10.0.0.12:8080 weight=1;
+    server 10.0.0.13:8080 backup;      # 仅当其它节点全部不可用时启用
+    server 10.0.0.14:8080 down;        # 人工摘除，保留配置便于灰度
+    keepalive 64;
+    keepalive_requests 1000;
+}
+</code></pre>
+
+<p>各参数含义：<code>weight</code> 是权重，越大分到的请求越多；<code>max_fails</code> 是在 <code>fail_timeout</code> 窗口内允许的失败次数，超过即标记为不可用；<code>fail_timeout</code> 同时是「统计窗口」和「摘除时长」；<code>backup</code> 是热备；<code>down</code> 是永久摘除。哪些响应算「失败」由 <code>proxy_next_upstream</code> 决定。</p>
+<h3 id="健康检查">被动健康检查</h3>
+<p>开源版 nginx 只有<strong>被动健康检查</strong>：只有当请求真的打到某台后端并失败时才会累计 <code>max_fails</code>，没有流量就不会探测。要让检查更积极，需要把超时和判定条件写细，或者使用 nginx Plus 的 <code>health_check</code> 指令 / 另配 <code>nginx_upstream_check_module</code>。</p>
+<pre><code class="language-nginx">location / {
+    proxy_pass http://backend;
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 10s;
+    # 这些情况才换下一台重试；POST 等非幂等请求慎开 non_idempotent
+    proxy_next_upstream error timeout http_502 http_503 http_504;
+    proxy_next_upstream_tries 2;
+    proxy_next_upstream_timeout 10s;
+}
+
+# 需要「主动探测 + 状态面板」时，可另起一个 server 暴露 stub_status
+server {
+    listen 127.0.0.1:8081;
+    location /nginx_status {
+        stub_status;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+}
+</code></pre>
+
+<p>注意 <code>auth_basic</code> 与 <code>auth_basic_user_file</code> 是两条指令，单独写 <code>auth_basic "x";</code> 而缺密码文件会启动失败；同时要加 <code>allow/deny</code> 或 <code>listen 127.0.0.1</code>，别把 <code>stub_status</code> 暴露到公网。</p>
+<h2 id="日志格式">日志格式</h2>
+<pre><code class="language-nginx">log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                '$status $body_bytes_sent "$http_referer" '
+                '"$http_user_agent" "$http_x_forwarded_for" '
+                'rt=$request_time urt=$upstream_response_time';
+
+access_log /var/log/nginx/access.log main buffer=64k flush=5s;
+error_log  /var/log/nginx/error.log warn;
+
+server {
+    listen 80;
+    server_name example.com;
+    access_log /var/log/nginx/example.access.log main;
+    # 被代理时记录真实客户端 IP，需要先信任代理来源
+    set_real_ip_from 10.0.0.0/8;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+}
+</code></pre>
+
+<p>原文里 <code>log_format</code> 定义在 <code>server</code> 内、<code>access_log ... main</code> 却引用了名为 <code>main</code> 的格式，而 <code>log_format</code> 只能写在 <code>http</code> 层，这样配置无法启动。另外 <code>$remote_addr</code> 在反向代理后面拿到的是代理 IP，必须靠 <code>$http_x_forwarded_for</code> 或 <code>set_real_ip_from</code> + <code>real_ip_header</code> 还原，前者只是记录、后者才真正改写 <code>$remote_addr</code>。排查性能问题时应固定带上 <code>$request_time</code> 与 <code>$upstream_response_time</code>。</p>
+<h2 id="一份可直接使用的配置">一份可直接使用的配置</h2>
+<p>下面这份配置按「静态站点 + 反向代理 + HTTPS」的最小可用场景整理，改写域名、证书路径和后端地址后即可 <code>nginx -t</code> 校验并加载。</p>
+<pre><code class="language-nginx">user  www-data;
+worker_processes  auto;
+worker_rlimit_nofile 65535;
+error_log  /var/log/nginx/error.log warn;
+pid        /var/run/nginx.pid;
+
+events {
+    use epoll;
+    worker_connections 10240;
+    multi_accept on;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    charset       utf-8;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    'rt=$request_time urt=$upstream_response_time';
+    access_log /var/log/nginx/access.log main buffer=64k flush=5s;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65s;
+    keepalive_requests 1000;
+    client_header_timeout 15s;
+    client_body_timeout 15s;
+    send_timeout 30s;
+    client_max_body_size 16m;
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 16k;
+    server_tokens off;                 # 隐藏版本号
+    server_names_hash_bucket_size 64;
+
+    gzip on;
+    gzip_min_length 1k;
+    gzip_comp_level 5;
+    gzip_types text/plain text/css application/json application/javascript
+               application/xml text/xml image/svg+xml;
+    gzip_vary on;
+    gzip_disable "msie6";
+    gzip_static on;
+
+    upstream backend {
+        least_conn;
+        server 10.0.0.11:8080 weight=3 max_fails=3 fail_timeout=10s;
+        server 10.0.0.12:8080 weight=1 max_fails=3 fail_timeout=10s;
+        keepalive 64;
+    }
+
+    server {
+        listen 80 default_server;
+        server_name _;
+        return 444;
+    }
+
+    server {
+        listen 80;
+        server_name example.com www.example.com;
+        return 301 https://$host$request_uri;
+    }
+
+    server {
+        listen 443 ssl;
+        http2 on;                       # 1.25.1+ 的写法；旧版本用 listen 443 ssl http2;
+        server_name example.com www.example.com;
+
+        ssl_certificate     /etc/nginx/ssl/example.com.pem;
+        ssl_certificate_key /etc/nginx/ssl/example.com.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_session_cache   shared:SSL:10m;
+        ssl_session_timeout 1h;
+
+        root  /data/www/example;
+        index index.html;
+
+        location = /favicon.ico { access_log off; log_not_found off; }
+        location ^~ /static/    { expires 30d; add_header Cache-Control "public"; }
+        location ~* \.(gif|jpg|jpeg|png|webp|svg|css|js)$ { expires 7d; }
+
+        location /api/ {
+            proxy_pass http://backend/;          # 尾斜杠：剥掉 /api 前缀
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 3s;
+            proxy_read_timeout 30s;
+            proxy_next_upstream error timeout http_502 http_503 http_504;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}
+</code></pre>
+
+<h2 id="常见坑清单">常见坑清单</h2>
+<ul><li><strong>autoindex on</strong>：会把目录内容列给所有人看，只在确实做下载站时开启，并配合 <code>location</code> 限制范围。</li><li><strong>指令放错层级</strong>：<code>upstream</code>/<code>log_format</code> 必须在 <code>http</code> 内，<code>alias</code> 只写在 <code>location</code> 内。</li><li><strong>x_forwarded_for 写反</strong>：客户端伪造同名头就能污染日志，务必只信任已知代理并配合 <code>set_real_ip_from</code>。</li><li><strong>正则里 <code>.</code> 不转义</strong>：<code>.*.(jpg)$</code> 会额外匹配 <code>aXjpg</code>，应为 <code>\.(jpg)$</code>。</li><li><strong>limit_zone 已废弃</strong>：现代版本用 <code>limit_conn_zone $binary_remote_addr zone=perip:10m;</code> 配合 <code>limit_conn perip 20;</code>。</li><li><strong>只配 gzip 不开 gzip_types</strong>：CSS/JS/JSON 不会被压缩。</li><li><strong>reload 与 restart 混用</strong>：<code>nginx -s reload</code> 会优雅重启，改配置后先用 <code>nginx -t</code> 验证；<code>kill -HUP</code> 等价于 reload。</li></ul>
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#nginx-%E7%9A%84%E9%85%8D%E7%BD%AE%E7%BB%93%E6%9E%84">nginx 的配置结构</a>
+<ul>
+<li><a href="#%E6%8C%87%E4%BB%A4%E7%9A%84%E4%BD%9C%E7%94%A8%E5%9F%9F%E8%A7%84%E5%88%99">指令的作用域规则</a></li>
+</ul>
+</li>
+<li>
+<a href="#worker-%E8%BF%9B%E7%A8%8B%E4%B8%8E%E5%B9%B6%E5%8F%91%E8%83%BD%E5%8A%9B">worker 进程与并发能力</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sendfile-%E4%B8%8E-tcp-%E4%BC%98%E5%8C%96">sendfile 与 TCP 优化</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#gzip-%E5%8E%8B%E7%BC%A9">gzip 压缩</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#keepalive-%E9%95%BF%E8%BF%9E%E6%8E%A5">keepalive 长连接</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#server-name-%E5%8C%B9%E9%85%8D">server_name 匹配</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#location-%E5%8C%B9%E9%85%8D%E4%BC%98%E5%85%88%E7%BA%A7">location 匹配优先级</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#rewrite-%E4%B8%8E-return">rewrite 与 return</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#root-%E4%B8%8E-alias">root 与 alias</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#proxy-pass-%E8%AF%AD%E4%B9%89">proxy_pass 尾斜杠语义</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#upstream-%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1">upstream 负载均衡</a>
+<ul>
+<li><a href="#%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5">被动健康检查</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%97%A5%E5%BF%97%E6%A0%BC%E5%BC%8F">日志格式</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%80%E4%BB%BD%E5%8F%AF%E7%9B%B4%E6%8E%A5%E4%BD%BF%E7%94%A8%E7%9A%84%E9%85%8D%E7%BD%AE">一份可直接使用的配置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B8%B8%E8%A7%81%E5%9D%91%E6%B8%85%E5%8D%95">常见坑清单</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">
