@@ -125,82 +125,206 @@
           
           <img class="post-feature-header-image" src="/post-images/syanmQ0CA.png" alt="封面图">
           
-          <p>Actor-Critic方法，是策略学习和价值学习结合的一种方法。</p>
-<p>Actor是策略网络，用来控制Agent运动，可以看做“运动员”。</p>
-<p>Critic是价值网络，用来给动作打分，可以看做“裁判”。</p>
-<figure data-type="image" tabindex="1"><img src="https://pic1.zhimg.com/80/v2-307ee4710d0b11ca06b020f7a40afc28_720w.webp" alt="img" loading="lazy"></figure>
-<h2 id="一-价值网络和策略网络value-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</h2>
-<p>首先回顾状态价值函数Vπ(s)，它是动作状态函数Qπ(s,a)的数学期望，如果动作是离散的，那么它是由策略函数π(a|s)作为权重系数，和动作价值函数Qπ(s,a)[可以评价动作的好坏程度]相乘并对a做求和得到。如果动作是连续的，那么就要对a求积分。</p>
-<p><strong>① Policy network（Actor）</strong>：控制 Agent 运动，即在某一状态 s 做出动作 a。</p>
-<p>我们利用策略网络π(a|s;θ)来近似策略函数π(a|s)，θ是一个可训练的神经网络参数。</p>
-<p><strong>② Value network（Critic）</strong>：不控制 Agent 运动，仅给 Agent 打分。</p>
-<p>我们利用价值网络q(s,a;w)来近似价值函数Qπ(s,a)，w 是一个可训练的神经网络参数。</p>
-<figure data-type="image" tabindex="2"><img src="https://pic4.zhimg.com/80/v2-1d777e4ca0d687837a46bdfcc86f1663_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="1策略网络policy-networkactor">1）策略网络（Policy Network）（Actor）</h3>
-<p>以超级玛丽为例：</p>
-<p>该网络有一个输入：状态s</p>
-<p>将超级玛丽的一帧画面传输到策略网络中，即输入一个状态s。</p>
-<p>价值网络中包含：一个卷积层，将一帧画面变成特征向量；全连接层，将特征向量转变为相对于动作空间（Action Space）中元素个数对应的向量；再采用 Softmax 激活函数，将其转换为各动作概率求和为 1 的值，即策略的概率分布。</p>
-<figure data-type="image" tabindex="3"><img src="https://pic1.zhimg.com/80/v2-8535085bc52a8a9500f72d711ced5220_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="2价值网络value-networkcritic">2）价值网络（Value Network）（Critic）</h3>
-<p>以超级玛丽为例：</p>
-<p>该网络有两个输入：状态s和动作a</p>
-<p>将超级玛丽的一帧画面传输到价值网络中，即输入一个状态s；以及策略网络（Actor）做出的一个动作a传入到价值网络中，即输入一个动作a。对于离散动作而言，这里可以采用独热编码（one-hot encoding），具体可以参考<a href="https://zhuanlan.zhihu.com/p/474234821">学习笔记 | 独热编码(One-Hot Encoding)</a>，这里不再对独热编码进行过多介绍。</p>
-<p>对于两个不同的输入，处理方法如下：</p>
-<p>针对于状态s，采用一个卷积层，从输入中提取特征，获得一个状态特征向量</p>
-<p>针对于动作a，采用一个全连接层，从输入中提取特征，获得一个动作特征向量</p>
-<p>然后将两个特征向量进行拼接，得到一个更高维的特征向量，再通过一个全连接层输出一个实数q(s,a;w)，即Critic对于Agent处于状态s下做出动作a的评价。</p>
-<figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-a5344bd46cff01b68e06314bb30d8bd1_720w.webp" alt="img" loading="lazy"></figure>
-<p>值得一提的是，价值网络和策略网络中的参数是可以共享的；当然，其中的参数也可以各自独立。</p>
-<p>同时训练价值网络和策略网络，就是 Actor-Critic Method（AC Method）。</p>
-<h2 id="二-训练神经网络train-the-neural-network">二、训练神经网络（Train the Neural Network）</h2>
-<p>因此，我们可以用策略网络和价值网络来近似状态价值函数。</p>
-<p>针对于两个网络的参数θ和w，我们的更新方法是不一样的：</p>
-<p>对于θ，它是策略网络的参数。我们更新参数θ是为了让状态价值函数V(s;θ,w)的值增加，V(s;θ,w)是对策略π和状态s的评价。如果固定状态s，那么V(s;θ,w)越大，意味着策略π越好；同理，如果固定策略π，V(s;θ,w)越大，则状态s越好。</p>
-<p>对于w，它是价值网络的参数。我们更新参数w是为了让价值网络对于动作的打分更精准，从而更好地估计未来奖励的总和。它相当于是裁判，一开始并没有打分能力，因此在初始阶段，Critic的打分都是瞎猜的，它会通过环境给的奖励Reward来更新w，最后Critic的打分会越来越精准。</p>
-<figure data-type="image" tabindex="5"><img src="https://pic4.zhimg.com/80/v2-0e1df9491a20914809366f441fdd2b53_720w.webp" alt="img" loading="lazy"></figure>
-<p>利用如下五个步骤来对两个神经网络做一次更新：</p>
-<figure data-type="image" tabindex="6"><img src="https://pic2.zhimg.com/80/v2-a86048ee7d13168bdb37c84aec417945_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="1-使用时序差分算法更新价值网络qupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</h3>
-<p>用 TD 算法更新价值网络 q 时，需要先获取 Actor 在 t 时刻与 t+1 时刻的状态 s_t、s_{t+1} 及动作 a_t、ã_{t+1}，此时 Critic 的参数为 w_t。由此得到 TD target y_t；结合 t 时刻的观测值即可写出 Loss L(w)（通常取 δ_t²/2 的形式），再用梯度下降（Gradient Descent）更新 Critic 的参数，得到 w_{t+1}。需要注意的是，Agent 并不会真正执行 ã_{t+1} 这个动作，它只是供 Critic 做 TD 参数更新使用的。</p>
-<p>直接附图：</p>
-<figure data-type="image" tabindex="7"><img src="https://pic2.zhimg.com/80/v2-3d0c7377e346ce2a56cff226fa4b912d_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="2使用策略梯度更新策略网络πupdate-policy-network-π-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</h3>
-<p>首先回顾一下策略梯度：</p>
-<p>策略梯度是对某个函数 g(A,θ) 关于 A 求期望。因为按策略随机抽取得到的单个 g(a_t,θ) 是整体期望的无偏估计，所以这里使用蒙特卡洛近似。</p>
-<figure data-type="image" tabindex="8"><img src="https://pic1.zhimg.com/80/v2-f97f15bbc5b5c39a687d08fcd722b63c_720w.webp" alt="img" loading="lazy"></figure>
-<p>根据策略 π 对动作 a 做一次随机抽样，然后对该样本做一次随机梯度上升（Stochastic Gradient Ascent，SGA）来更新 θ，得到 θ_{t+1}。</p>
-<figure data-type="image" tabindex="9"><img src="https://pic1.zhimg.com/80/v2-5e17c6dfe8d7afe44950bd9bea8a32b8_720w.webp" alt="img" loading="lazy"></figure>
-<p>AC方法的整体流程和对应关系：</p>
-<figure data-type="image" tabindex="10"><img src="https://pic3.zhimg.com/80/v2-9c0bad295340d7057cbd037b7400c93a_720w.webp" alt="img" loading="lazy"></figure>
-<h3 id="3算法总结summary-of-algorithm">3）算法总结（Summary of Algorithm）</h3>
-<p>直接上图，非常清晰：</p>
-<figure data-type="image" tabindex="11"><img src="https://pic1.zhimg.com/80/v2-db8d172e038bf40ed57a750cc2d30d80_720w.webp" alt="img" loading="lazy"></figure>
-<p>值得注意的是，在论文和教科书中，最后一步往往不使用 q_t，而采用 TD error δ_t。使用δt叫做基线策略梯度（Policy Gradient with Baseline），其效果更好。好的baseline可以降低方差，使算法收敛更快。</p>
-<p>Baseline：任何接近qt的数都可以是baseline，但它不能是at的函数，即不与at存在映射关系。</p>
-<h2 id="三-总结summary">三、总结（Summary）</h2>
-<figure data-type="image" tabindex="12"><img src="https://pic3.zhimg.com/80/v2-68d72b2c946eb65e90bb9d1a1ff46fda_720w.webp" alt="img" loading="lazy"></figure>
-<figure data-type="image" tabindex="13"><img src="https://pic4.zhimg.com/80/v2-453074af0ddabd665db4f010a2b3a03b_720w.webp" alt="img" loading="lazy"></figure>
-<figure data-type="image" tabindex="14"><img src="https://pic1.zhimg.com/80/v2-b3f9b7c10dd7bc2af18fef010cd93170_720w.webp" alt="img" loading="lazy"></figure>
+          <p>蒙特卡洛（Monte Carlo，MC）方法是一类<strong>不需要环境模型、直接用完整回合的经验来估计价值</strong>的强化学习算法。笔记4的 Actor-Critic 用<strong>时序差分（TD）</strong>让 Critic 逐步逼近动作价值；这一篇换成另一条路线：把一个状态-动作对之后<strong>整条回合的折扣回报</strong>取平均，用这个平均回报去估计动作价值函数 \(Q_\pi(s,a)\)，再据此改进策略。</p>
+<p>MC 是这一系列里第一个 model-free（无模型）的方法族，也是理解「经验如何替代模型」的入口。下面先说明 MC 在动态规划、MC、TD 三种方法中的位置，再给出 MC Basic 的完整流程，然后讨论探索性初始化、\(\varepsilon\)-greedy、on-policy 与 off-policy（重要性采样），最后比较 MC 与 TD 的偏差-方差权衡和收敛条件。</p>
+
+<h2 id="sec1-position">一、蒙特卡洛算法的定位（Where Monte Carlo Fits）</h2>
+<h3 id="sub1-dp-mc-td">1）动态规划、蒙特卡洛与时序差分的分工</h3>
+<p>强化学习的核心任务可以概括为<strong>策略评估 + 策略改进</strong>：先估计当前策略 \(\pi\) 的价值，再依据价值把策略改得更好，两者交替进行直到收敛。三种经典方法的差别，就在于「用什么信息完成策略评估」。</p>
+<ul>
+<li><strong>动态规划（DP）</strong>：已知环境模型 \(p(s',r \mid s,a)\)，用 Bellman 期望方程做自举（bootstrap），一次遍历就能更新所有状态的价值。它需要模型，状态空间大时难以承受。</li>
+<li><strong>蒙特卡洛（MC）</strong>：没有模型，让 Agent 真正与环境交互，得到一条条<strong>完整回合</strong>，用回合中观测到的回报做平均来估计价值。它既不需要模型，也不需要显式写出状态转移，但必须等回合结束。</li>
+<li><strong>时序差分（TD）</strong>：同样无模型，但不等回合结束——每走一步，就用「即时奖励 + 下一状态的估计值」更新当前估计，即自举。它可以在线学习，代价是引入了偏差。</li>
+</ul>
+<p>三者不是互相替代的关系，而是同一条「用经验替代模型」路线上的不同取法：MC 与 TD 都属于 model-free，区别只在<strong>目标值里有没有自举</strong>。</p>
+<h3 id="sub1-experience">2）无模型学习：经验从哪里来</h3>
+<p>MC 中的一次<strong>经验（experience）</strong>就是一条回合（episode），写成轨迹的形式：</p>
+<div class="math-block">\[ s_0, a_0, r_0,\; s_1, a_1, r_1,\; \dots,\; s_{T-1}, a_{T-1}, r_{T-1} \]</div>
+<p>其中 \(s_t\) 是状态，\(a_t\) 是按策略采样出的动作，\(r_t\) 是执行动作后环境返回的奖励，\(T\) 是回合的终止时刻。因此 MC 有两个前提：任务是<strong>分回合的（episodic）</strong>，每条回合都会终止；并且 Agent 能够反复与环境交互。</p>
+<p>另外要注意，MC 估计的是<strong>策略 \(\pi\) 下</strong>的动作价值 \(Q_\pi(s,a)\)，它属于「策略迭代」框架里的策略评估模块。它直接学 \(Q\) 而不是 \(V\)，原因见第三节。</p>
+
+<h2 id="sec2-return-average">二、用整条回合的回报均值估计 Q(s,a)</h2>
+<h3 id="sub2-return">1）折扣回报与动作价值函数</h3>
+<p>从 \(t\) 时刻起，把之后所有奖励按折扣率 \(\gamma \in [0,1]\) 加权求和，就得到<strong>折扣回报</strong>：</p>
+<div class="math-block">\[ U_t = R_t + \gamma R_{t+1} + \gamma^2 R_{t+2} + \cdots + \gamma^{T-1-t} R_{T-1} \]</div>
+<p>动作价值函数 \(Q_\pi(s,a)\) 定义为：在状态 \(s\) 下先执行动作 \(a\)，此后一直按策略 \(\pi\) 行动，所能得到回报的期望：</p>
+<div class="math-block">\[ Q_\pi(s,a) = \mathbb{E}\left[\, U_t \mid S_t = s,\; A_t = a \,\right] \]</div>
+<p>回报 \(U_t\) 是一个<strong>随机变量</strong>：环境的状态转移、奖励以及策略自身的随机性，都会让它每回合都不一样。</p>
+<h3 id="sub2-mc-approx">2）蒙特卡洛近似：用样本均值代替期望</h3>
+<p>有模型时，这个期望可以直接由 \(p(s',r\mid s,a)\) 算出；无模型时算不了，但可以<strong>采样</strong>：从 \((s,a)\) 出发，按 \(\pi\) 一直走到回合结束，得到该回合的回报 \(u^{(i)}\)。重复 \(N\) 次，用样本均值近似期望：</p>
+<div class="math-block">\[ Q_\pi(s,a) \approx \frac{1}{N} \sum_{i=1}^{N} u^{(i)} \]</div>
+<p>只要 \(U_t\) 的方差有限，由<strong>大数定律</strong>，\(N \to \infty\) 时样本均值依概率收敛到 \(Q_\pi(s,a)\)。这正是「蒙特卡洛」这个名字的来源——用大量随机样本的统计量去逼近数学期望。</p>
+<p>有三个关键点需要记住：</p>
+<ul>
+<li>参与平均的每个 \(u^{(i)}\) 都必须是<strong>从 \((s,a)\) 出发、之后严格按 \(\pi\) 采样</strong>得到的完整回报，否则平均出来的就不是 \(Q_\pi(s,a)\)；</li>
+<li>MC 的估计是<strong>无偏</strong>的——它直接使用回报本身，没有做任何近似替换；</li>
+<li>但它的<strong>方差很大</strong>——一条回合里所有随机性（转移、奖励、动作）都叠加进了 \(u^{(i)}\)，而且必须等回合结束才能算出这个样本。</li>
+</ul>
+<p>下图把「采样整条回合 → 反向累加回报 → 多条回合求平均」这三步画在一起：</p>
+<p><img src="/post-assets/syanmQ0CA/01-mc-return-average.svg" alt="蒙特卡洛估计 Q(s,a)：按策略采样一条完整回合，从终止处反向累加折扣回报，再把 N 条回合的回报求平均"></p>
+
+<h2 id="sec3-mc-basic">三、MC Basic（Monte Carlo Basic）</h2>
+<p>MC Basic 是把「策略迭代」中的策略评估换成 MC 估计后得到的最朴素算法。它简单到无法直接用于实际问题，却完整包含了 model-free 的核心思想。</p>
+<h3 id="sub3-flow">1）算法流程</h3>
+<p><strong>第一步，策略评估。</strong>对每一个状态-动作对 \((s,a)\)，从 \((s,a)\) 出发、之后按当前策略 \(\pi\) 采样 \(N\) 条回合，把回报取平均，作为 \(Q(s,a)\) 的估计。</p>
+<p><strong>第二步，策略改进。</strong>对每一个状态 \(s\)，选择让动作价值最大的那个动作：</p>
+<div class="math-block">\[ \pi_{\text{new}}(s) = \arg\max_{a} Q(s,a) \]</div>
+<p>然后回到第一步，用新的 \(\pi_{\text{new}}\) 继续采样、评估、改进，如此反复。若写成增量形式会更接近代码：对轨迹中出现的每个 \((s_t,a_t)\)，</p>
+<div class="math-block">\[ N(s_t,a_t) \leftarrow N(s_t,a_t) + 1, \qquad Q(s_t,a_t) \leftarrow Q(s_t,a_t) + \frac{1}{N(s_t,a_t)}\Big( u_t - Q(s_t,a_t) \Big) \]</div>
+<p>这是「求平均」的增量写法：每来一个新样本，就把 \(Q\) 朝样本方向挪 \(1/N\)。它与直接计算 \(\frac{1}{N}\sum_i u^{(i)}\) 完全等价，但不必保存历史样本，只要维护计数 \(N(s,a)\) 即可。</p>
+<h3 id="sub3-whyq">2）为什么估计的是 Q 而不是 V</h3>
+<p>策略改进要比较<strong>同一个状态下不同动作</strong>的好坏，也就是需要 \(\arg\max_a\)。如果只学了状态价值 \(V_\pi(s)\)，想算出某个动作的价值就必须知道转移概率 \(p(s'\mid s,a)\)——那又回到需要模型的老路。直接估计 \(Q_\pi(s,a)\) 就不需要模型：把动作 \(a\) 轮流代入比较即可。这就是 model-free 控制算法普遍选择动作价值的原因。</p>
+<h3 id="sub3-limits">3）两个明显的局限</h3>
+<ul>
+<li><strong>必须等回合结束</strong>：回报 \(u_t\) 要走到终止时刻才能算出来，因此 MC Basic 只能用于分回合任务，也无法做单步在线更新；回合很长时，一次更新要等很久。</li>
+<li><strong>探索与效率的矛盾</strong>：要估计所有 \((s,a)\) 的价值，就必须让每个 \((s,a)\) 都被采样到；而 MC Basic 为每个 \((s,a)\) 单独从该点出发采样 \(N\) 条回合，数据利用率极低。这正是下面两个改进要解决的问题。</li>
+</ul>
+
+<h2 id="sec4-exploration">四、探索性初始化与 ε-greedy</h2>
+<h3 id="sub4-exploring-starts">1）MC Exploring Starts：更充分地利用数据</h3>
+<p>MC Basic 的低效来自「采一条回合只用一次」。注意如果一条轨迹是</p>
+<div class="math-block">\[ s_1, a_2,\; s_2, a_4,\; s_3, a_5,\; \dots \]</div>
+<p>那么从 \(s_1\) 出发的这条轨迹，其尾部本身就是「从 \(s_2\) 执行 \(a_4\) 出发」的一条合法轨迹。于是同一条回合可以为沿途<strong>每一个</strong> \((s_t,a_t)\) 提供样本：</p>
+<ul>
+<li><strong>first-visit</strong>：只把某个 \((s,a)\) 在回合中<strong>第一次</strong>出现时得到的回报计入该 \((s,a)\) 的样本，之后再遇到就跳过；</li>
+<li><strong>every-visit</strong>：每次出现都当作一个独立样本。在同样的采样次数下它能拿到多得多的样本，因此可以把 \(N\) 调小，等于变相省掉了计算量。</li>
+</ul>
+<p>与此同时，还可以把策略改进的频率提高到<strong>每采完一条回合就改进一次</strong>，而不必等 \(N\) 条回合全部结束。这几点改进合起来就是 MC Exploring Starts。</p>
+<p>至于「探索」，则是另一个独立的要求：只有把所有动作都试过，才能确定哪个动作最优。最直接的办法是让每条回合都从一个<strong>随机选定的 \((s,a)\) 作为起点</strong>，起点覆盖所有状态-动作对——这就是 <strong>exploring starts（探索性初始化）</strong>。它能保证每个 \((s,a)\) 都必然被访问到，但在真实系统里往往做不到（无法任意指定初始状态），所以只是一个理想化假设。</p>
+<h3 id="sub4-epsilon-greedy">2）MC ε-Greedy：从策略本身保证探索</h3>
+<p>exploring starts 之所以必要，是因为按贪婪策略行动时非最优动作的概率可能是 0，永远采不到。既然问题出在策略太「硬」，那就把策略软化：以 \(1-\varepsilon\) 的概率选当前最优动作，以 \(\varepsilon\) 的概率在<strong>所有动作上均匀随机</strong>——这就是 \(\varepsilon\)-greedy 策略：</p>
+<div class="math-block">\[ \pi(a \mid s) = \begin{cases} 1 - \varepsilon + \dfrac{\varepsilon}{|\mathcal{A}(s)|}, &amp; a = \arg\max_{a'} Q(s,a') \\ \dfrac{\varepsilon}{|\mathcal{A}(s)|}, &amp; \text{其他动作} \end{cases} \]</div>
+<p>由于每个动作至少有 \(\varepsilon / |\mathcal{A}(s)| &gt; 0\) 的概率被选中，只要 \(\varepsilon &gt; 0\)，所有 \((s,a)\) 都有可能被采样到，于是<strong>不再需要 exploring starts</strong>，哪怕只采一条回合也能尝试到多个动作。用 \(\varepsilon\)-greedy 做策略改进、用 MC 做策略评估，就是 <strong>MC ε-Greedy</strong>（也叫 on-policy MC control）。</p>
+<p>但要清楚它付出的代价：由 \(\varepsilon\)-greedy 得到的策略<strong>通常不是最优策略</strong>，只能保证不比原策略差。\(\varepsilon\) 越小越接近贪婪策略，\(\varepsilon = 0\) 就退化成 MC Basic 的贪婪改进，\(\varepsilon = 1\) 则完全随机。实践中常让 \(\varepsilon\) 在训练早期取大一些（多探索），后期逐渐减小（多利用），这就是 <strong>GLIE</strong>（Greedy in the Limit with Infinite Exploration）的思路。</p>
+<p>表格型 MC ε-Greedy 的伪代码如下：</p>
+<pre><code class="language-python">from collections import defaultdict
+
+Q = defaultdict(float)      # 动作价值估计
+N = defaultdict(int)        # 每个 (s, a) 的样本计数
+
+for episode in range(num_episodes):
+    traj = rollout(policy_from(Q, eps))            # 1. 用当前策略采一条完整回合
+    G = 0.0
+    for s, a, r in reversed(traj):                 # 2. 从终止处反向累加回报
+        G = r + gamma * G
+        N[(s, a)] += 1
+        Q[(s, a)] += (G - Q[(s, a)]) / N[(s, a)]   # 3. 增量式平均，等价于取均值
+    eps = max(eps_min, eps * decay)                # 4. ε 逐渐减小（GLIE）
+</code></pre>
+<p>注意第 3 步用的是 <code>every-visit</code> 的写法：同一回合里重复出现的 \((s,a)\) 会被计入多次样本。</p>
+
+<h2 id="sec5-off-policy">五、on-policy 与 off-policy：重要性采样</h2>
+<h3 id="sub5-two-policies">1）行为策略与目标策略</h3>
+<p>上面所有算法都有一个共同点：<strong>采样用的策略和要评估、改进的策略是同一个</strong>，这类方法称为 <strong>on-policy（同策略）</strong>。它有两个不便：数据用完就作废（策略一更新，旧数据就不再符合新策略的分布）；探索与利用耦合在一起（要想探索，就得让目标策略本身带上 \(\varepsilon\) 随机性，于是学到的并不是真正的最优策略）。</p>
+<p><strong>off-policy（异策略）</strong>把这两件事拆开：</p>
+<ul>
+<li><strong>行为策略（behavior policy）</strong> \(b\)：负责与环境交互、生成数据，要求它有足够的探索性（例如 \(\varepsilon\)-greedy，甚至完全随机）；</li>
+<li><strong>目标策略（target policy）</strong> \(\pi\)：我们真正要评估和改进的策略，可以是确定性的贪婪策略。</li>
+</ul>
+<p>问题是：用 \(b\) 采样出来的回报，其期望是 \(Q_b(s,a)\)，而我们要的是 \(Q_\pi(s,a)\)，两者一般不相等。解决办法是<strong>重要性采样（importance sampling）</strong>。</p>
+<h3 id="sub5-is">2）重要性采样：给样本重新加权</h3>
+<p>一条从 \((s_t,a_t)\) 开始的轨迹在策略 \(\pi\) 下出现的概率，与在策略 \(b\) 下出现的概率之比，称为<strong>重要性采样比（importance sampling ratio）</strong>：</p>
+<div class="math-block">\[ \rho_{t:T-1} = \prod_{k=t}^{T-1} \frac{\pi(a_k \mid s_k)}{b(a_k \mid s_k)} \]</div>
+<p>用它加权之后，样本的期望就被「纠正」到目标策略下：</p>
+<div class="math-block">\[ Q_\pi(s,a) \approx \frac{1}{N} \sum_{i=1}^{N} \rho^{(i)}\, u^{(i)} \]</div>
+<p>这就是<strong>普通重要性采样（ordinary importance sampling）</strong>：无偏，但 \(\rho\) 是连乘，方差可能非常大——只要某一时刻 \(b(a_k\mid s_k)\) 很小，整条轨迹的权重就会被放大到失控。于是实践中更常用<strong>加权重要性采样（weighted importance sampling）</strong>：</p>
+<div class="math-block">\[ Q_\pi(s,a) \approx \frac{\sum_{i=1}^{N} \rho^{(i)}\, u^{(i)}}{\sum_{i=1}^{N} \rho^{(i)}} \]</div>
+<p>它是有偏的（分母本身也是随机变量），但方差小得多，实际效果通常更好。此外还有两个工程细节值得记住：</p>
+<ul>
+<li>若 \(\pi(a_k\mid s_k) = 0\) 而 \(b(a_k\mid s_k) &gt; 0\)，则整条轨迹的 \(\rho = 0\)，这个样本直接被丢弃，后面的时刻也不必再算——这是 off-policy MC 常用的一种截断技巧；</li>
+<li>重要性采样只对「回合制」的 MC 天然成立，因为回报是有限项的乘积；它也是 off-policy 策略梯度（例如 PPO 目标里的概率比项）的同一思想来源。</li>
+</ul>
+
+<h2 id="sec6-mc-vs-td">六、MC 与 TD：偏差-方差权衡</h2>
+<h3 id="sub6-update">1）更新方式：真实回报 vs 自举</h3>
+<p>两者都用「让估计靠近目标」的方式更新，差别只在<strong>目标值 \(y\) 从哪里来</strong>。MC 的目标是真实回报：</p>
+<div class="math-block">\[ y_t = u_t \]</div>
+<p>它必须等回合结束。TD 的目标只用一步真实奖励，其余部分用当前估计补上（自举）：</p>
+<div class="math-block">\[ y_t = r_t + \gamma\, q(s_{t+1}, a_{t+1}; w), \qquad \delta_t = q(s_t,a_t;w) - y_t \]</div>
+<p>每走一步就能更新一次。下图把两条更新路径并排放在一起对比：</p>
+<p><img src="/post-assets/syanmQ0CA/02-mc-vs-td-update.svg" alt="MC 与 TD 更新方式对比：MC 需要整条回合的真实回报，无偏但方差大、必须等回合结束；TD 只需一步转移，用自举构造目标，方差小可在线更新但有偏差"></p>
+<h3 id="sub6-bias-variance">2）偏差与方差</h3>
+<p>把这个差别放到统计语言里，就是<strong>偏差-方差权衡（bias-variance tradeoff）</strong>：</p>
+<ul>
+<li><strong>MC 是无偏的</strong>：\(u_t\) 本身就是回报的一个样本，\(\mathbb{E}[u_t] = Q_\pi(s_t,a_t)\)，中间没有做任何近似替换。但它要等一整条回合的随机性全部实现出来，<strong>方差大</strong>、收敛慢，且对回合长度很敏感。</li>
+<li><strong>TD 是有偏的</strong>：目标里的 \(q(s_{t+1},a_{t+1};w)\) 是当前估计，估计不准时目标就不准，偏差还会沿着轨迹传播（这就是自举的代价）。但它只含一个随机奖励 \(r_t\)，<strong>方差小</strong>，通常收敛更快，也不需要等回合结束。</li>
+</ul>
+<p>谁的样本效率更高取决于任务：回合短、状态被反复访问时 MC 不差；回合长、奖励稀疏时 TD 一般明显更好。工程上并不需要在两者之间二选一：把回报截断成 \(m\) 步、尾部用估计值补上，就得到 <strong>n 步回报 / 多步 TD Target</strong>——\(m=1\) 退化为 TD，\(m \to \infty\) 就是 MC，两者正是这条谱系的两端。本站 <a href="/xWqlayf1I/">Multi-Step TD Target</a> 一文对此有详细推导。</p>
+<h3 id="sub6-convergence">3）收敛性与实践建议</h3>
+<p>表格型 MC 控制收敛需要两个条件同时成立：</p>
+<ul>
+<li><strong>充分探索</strong>：每个 \((s,a)\) 都被访问无限多次。\(\varepsilon\)-greedy 配合 \(\varepsilon &gt; 0\)，或者 exploring starts，都可以保证这一点；</li>
+<li><strong>步长满足 Robbins-Monro 条件</strong>：把增量更新写成 \(Q \leftarrow Q + \alpha (u - Q)\) 时，步长需要满足 \(\sum_k \alpha_k = \infty\) 且 \(\sum_k \alpha_k^2 &lt; \infty\)（例如 \(\alpha_k = 1/k\)，也就是样本平均）。</li>
+</ul>
+<p>在此基础上，若策略序列是 GLIE 的，MC 控制会以概率 1 收敛到最优策略与最优动作价值。落到实践上，还有几条建议：</p>
+<ul>
+<li><strong>优先估计 Q 而不是 V</strong>：无模型时只有 \(Q\) 能直接支撑 \(\arg\max_a\) 的策略改进。</li>
+<li><strong>回合必须能终止</strong>：MC 不适合没有终止状态的连续任务，这类任务应改用 TD 或 n 步方法。</li>
+<li><strong>折扣率与奖励尺度</strong>：\(\gamma\) 越接近 1，回报的有效长度越长、方差越大；把奖励归一化到相近量级有助于稳定更新。</li>
+<li><strong>first-visit 与 every-visit</strong>：every-visit 数据利用率更高，但同一回合内的样本并不独立；表格任务里 first-visit 更常见，实际差异通常不大。</li>
+<li><strong>\(\varepsilon\) 的调度</strong>：先大后小（GLIE）通常比固定 \(\varepsilon\) 表现更好；\(\varepsilon\) 过大会稀释最优策略，过小则探索不足。</li>
+<li><strong>与函数逼近结合</strong>：MC 也能用神经网络来做（拿回报当回归目标），但高方差会放大近似误差，实践中往往被 TD / n 步方法取代——笔记4里 Actor-Critic 的 Critic 用的正是 TD。</li>
+</ul>
+
+<h2 id="sec7-summary">七、总结（Summary）</h2>
+<p>本篇的核心只有一句话：<strong>MC 用整条回合的回报均值估计 \(Q_\pi(s,a)\)，再据此贪婪地改进策略</strong>。围绕这句话，可以展开成四个层次：</p>
+<ul>
+<li><strong>定位</strong>：MC 与 TD 都是无模型方法，用经验替代模型；MC 的代价是必须等回合结束，收益是估计无偏。</li>
+<li><strong>估计</strong>：\(Q_\pi(s,a) \approx \frac{1}{N}\sum_{i=1}^{N} u^{(i)}\)，这是大数定律的直接应用，可以用增量式平均实现。</li>
+<li><strong>探索</strong>：MC Basic 需要 exploring starts；MC Exploring Starts 通过复用整条回合的数据提高效率；MC ε-Greedy 把探索写进策略本身，去掉了 exploring starts 假设，代价是策略不再严格最优。</li>
+<li><strong>异策略</strong>：off-policy MC 用行为策略 \(b\) 采样、目标策略 \(\pi\) 学习，靠重要性采样比 \(\rho\) 校正分布差异；加权形式方差更小，但引入了偏差。</li>
+</ul>
+<p>把 MC 与 TD 放在一起看，两者的取舍就是偏差与方差：MC 无偏但方差大、必须等回合结束；TD 低方差、可在线更新，但有自举带来的偏差；n 步回报与 TD(λ) 在两者之间取值。后续的 <a href="/02-wFwlBm/">SARSA</a> 与 <a href="/Qnqlnnzkz/">Q-Learning</a> 是 TD 路线的表格与神经网络形式，而 <a href="/UWk0iL6Ex/">Actor-Critic</a> 则把这里的价值估计与策略学习结合到了一起。</p>
 <hr>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#sec1-position">一、蒙特卡洛算法的定位（Where Monte Carlo Fits）</a>
 <ul>
-<li><a href="#%E4%B8%80-%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9C%E5%92%8C%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cvalue-network-and-policy-network">一、价值网络和策略网络（Value Network and Policy Network）</a>
-<ul>
-<li><a href="#1%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9Cpolicy-networkactor">1）策略网络（Policy Network）（Actor）</a></li>
-<li><a href="#2%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9Cvalue-networkcritic">2）价值网络（Value Network）（Critic）</a></li>
+<li><a href="#sub1-dp-mc-td">1）动态规划、蒙特卡洛与时序差分的分工</a></li>
+<li><a href="#sub1-experience">2）无模型学习：经验从哪里来</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-%E8%AE%AD%E7%BB%83%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9Ctrain-the-neural-network">二、训练神经网络（Train the Neural Network）</a>
+<li>
+<a href="#sec2-return-average">二、用整条回合的回报均值估计 Q(s,a)</a>
 <ul>
-<li><a href="#1-%E4%BD%BF%E7%94%A8%E6%97%B6%E5%BA%8F%E5%B7%AE%E5%88%86%E7%AE%97%E6%B3%95%E6%9B%B4%E6%96%B0%E4%BB%B7%E5%80%BC%E7%BD%91%E7%BB%9Cqupdate-value-network-q-using-td">1） 使用时序差分算法更新价值网络q（Update Value Network q Using TD）</a></li>
-<li><a href="#2%E4%BD%BF%E7%94%A8%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6%E6%9B%B4%E6%96%B0%E7%AD%96%E7%95%A5%E7%BD%91%E7%BB%9C%CF%80update-policy-network-%CF%80-using-policy-gradient">2）使用策略梯度更新策略网络π（Update Policy Network π Using Policy Gradient）</a></li>
-<li><a href="#3%E7%AE%97%E6%B3%95%E6%80%BB%E7%BB%93summary-of-algorithm">3）算法总结（Summary of Algorithm）</a></li>
+<li><a href="#sub2-return">1）折扣回报与动作价值函数</a></li>
+<li><a href="#sub2-mc-approx">2）蒙特卡洛近似：用样本均值代替期望</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-%E6%80%BB%E7%BB%93summary">三、总结（Summary）</a></li>
+<li>
+<a href="#sec3-mc-basic">三、MC Basic（Monte Carlo Basic）</a>
+<ul>
+<li><a href="#sub3-flow">1）算法流程</a></li>
+<li><a href="#sub3-whyq">2）为什么估计的是 Q 而不是 V</a></li>
+<li><a href="#sub3-limits">3）两个明显的局限</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec4-exploration">四、探索性初始化与 ε-greedy</a>
+<ul>
+<li><a href="#sub4-exploring-starts">1）MC Exploring Starts：更充分地利用数据</a></li>
+<li><a href="#sub4-epsilon-greedy">2）MC ε-Greedy：从策略本身保证探索</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec5-off-policy">五、on-policy 与 off-policy：重要性采样</a>
+<ul>
+<li><a href="#sub5-two-policies">1）行为策略与目标策略</a></li>
+<li><a href="#sub5-is">2）重要性采样：给样本重新加权</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec6-mc-vs-td">六、MC 与 TD：偏差-方差权衡</a>
+<ul>
+<li><a href="#sub6-update">1）更新方式：真实回报 vs 自举</a></li>
+<li><a href="#sub6-bias-variance">2）偏差与方差</a></li>
+<li><a href="#sub6-convergence">3）收敛性与实践建议</a></li>
+</ul>
+</li>
+<li>
+<a href="#sec7-summary">七、总结（Summary）</a>
+<ul>
 </ul>
 </li>
 </ul>
