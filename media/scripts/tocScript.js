@@ -1,7 +1,7 @@
 "use strict";
 /* =====================================================================
    tianxia blog — 目录增强脚本
-   1) 宽屏（>=1280px）：把文末 .markdownIt-TOC 克隆为左侧吸顶 #tocSidebar，
+   1) 宽屏（>=1280px）：把文末 .markdownIt-TOC 整段克隆为右侧吸顶 #tocSidebar，
       滚动时高亮当前章节（.is-active），并把当前项滚动到目录面板的可见区，
       避免长目录「跑出可视范围」。原生锚点平滑跳转。
    2) 窄屏：保留文末目录卡片（由 styles/main.css 负责外观），仅绑定平滑滚动。
@@ -63,9 +63,12 @@
     var aside = document.createElement("aside");
     aside.id = "tocSidebar";
     aside.setAttribute("aria-label", "文章目录");
+    // 必须克隆整个 <ul class="markdownIt-TOC">（outerHTML），只取 innerHTML 会丢掉外层
+    // 列表容器：<li> 直接挂在 <aside> 下属于无效结构，且 styles/main.css 里
+    // #tocSidebar .markdownIt-TOC … 与「一级/二级」层级选择器都会失配。
     aside.innerHTML =
       '<div class="toc-label">目录 · Contents</div>' +
-      source.innerHTML;
+      source.outerHTML;
 
     // 关键变化：把 sidebar 挂到文章 row 里，让 sticky 真正"和文章挂钩"
     var mount = findMount();
