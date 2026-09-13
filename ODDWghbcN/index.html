@@ -129,6 +129,8 @@
 flink版本：1.13.1<br>
 scala版本：2.12</p>
 </blockquote>
+<p><strong>与站内同名文章的关系：</strong>本站另有一篇同名的《<a href="/tloS_nSAM/">第十章 Table API 与 SQL</a>》，侧重 Table API 与 SQL 的整体概念（动态表与连续查询、表与流的转换、时间属性、窗口 TVF、连接、SQL 与 DataStream 互转）；本篇侧重 1.13.1 的实操案例与老/新窗口语法对照。经比对，两篇正文的字符重合度不到 8%，属于同一主题的不同版本、内容互补，并非重复文章，建议对照阅读。</p>
+<p><img src="/post-assets/ODDWghbcN/01-time-attribute-window.svg" alt="Flink Table API 与 SQL 的时间属性与窗口语法演进：DDL 与 DataStream 两种时间属性定义方式，以及老版分组窗口与 1.13 窗口 TVF 的写法对比"></p>
 <h2 id="maven-依赖引用">maven 依赖引用</h2>
 <pre><code class="language-xml"> &lt;!-- 使用table api 引入的依赖，使用桥接器和底层datastream api连接支持--&gt;
 &lt;dependency&gt;
@@ -164,13 +166,13 @@ scala版本：2.12</p>
     &lt;version&gt;${flink.version}&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<h1 id="时间属性">时间属性</h1>
-<h2 id="1-事件时间">1 事件时间</h2>
+<h1 id="1-时间属性">1 时间属性</h1>
+<h2 id="11-事件时间">1.1 事件时间</h2>
 <p>在DDL连接表中创建</p>
-<pre><code class="language-java">CREATE TABLE EventTable(
+<pre><code class="language-sql">CREATE TABLE EventTable(
  user STRING,
  url STRING,
- ts TIMESTAMP(3), // 传入得值是bigint,自动转换
+ ts TIMESTAMP(3), -- 传入的值是 bigint，会自动转换为 TIMESTAMP(3)
  WATERMARK FOR ts AS ts - INTERVAL '5' SECOND
 ) WITH (
  ...
@@ -179,8 +181,8 @@ scala版本：2.12</p>
 <p>说明：</p>
 <p>这里我们把 ts 字段定义为事件时间属性，而且基于 ts 设置了 5 秒的水位线延迟。<br>
 这里的“5 秒”是以“时间间隔”的形式定义的，格式是 INTERVAL &lt;数值&gt; &lt;时间单位&gt;：INTERVAL ‘5’ SECOND，这里的数值必须用单引号引起来，而单位用 SECOND 和 SECONDS 是等效的。<br>
-TIMESTAMP会自动转为国际UTF时间，使用当地时间需要使用TIMESTAMP_LTZ</p>
-<pre><code class="language-java">CREATE TABLE events (
+TIMESTAMP 类型的字段不带时区信息，只表示“墙上时间”；如果需要表示带本地时区的绝对时间点，应使用 TIMESTAMP_LTZ。</p>
+<pre><code class="language-sql">CREATE TABLE events (
  user STRING,
  url STRING,
  ts BIGINT,
@@ -225,12 +227,12 @@ ZONE）；一般情况下如果数据中的时间戳是“年-月-日-时-分-�
 </code></pre>
 <p>说明</p>
 <blockquote>
-<p>设置水位线(assignTimestampsAndWatermarks),<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>(</mo><mi mathvariant="normal">“</mi><mi>e</mi><mi>t</mi><mi mathvariant="normal">”</mi><mo>)</mo><mi mathvariant="normal">.</mi><mi>r</mi><mi>o</mi><mi>w</mi><mi>t</mi><mi>i</mi><mi>m</mi><mi>e</mi><mo>(</mo><mo>)</mo><mi mathvariant="normal">自</mi><mi mathvariant="normal">动</mi><mi mathvariant="normal">获</mi><mi mathvariant="normal">取</mi><mi mathvariant="normal">，</mi><mi>e</mi><mi>t</mi><mi mathvariant="normal">为</mi><mi mathvariant="normal">虚</mi><mi mathvariant="normal">拟</mi><mi mathvariant="normal">表</mi><mi mathvariant="normal">别</mi><mi mathvariant="normal">名</mi></mrow><annotation encoding="application/x-tex">(“et”).rowtime()自动获取，et为虚拟表别名
-</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">“</span><span class="mord mathdefault">e</span><span class="mord mathdefault">t</span><span class="mord">”</span><span class="mclose">)</span><span class="mord">.</span><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="mord mathdefault">o</span><span class="mord mathdefault" style="margin-right:0.02691em;">w</span><span class="mord mathdefault">t</span><span class="mord mathdefault">i</span><span class="mord mathdefault">m</span><span class="mord mathdefault">e</span><span class="mopen">(</span><span class="mclose">)</span><span class="mord cjk_fallback">自</span><span class="mord cjk_fallback">动</span><span class="mord cjk_fallback">获</span><span class="mord cjk_fallback">取</span><span class="mord cjk_fallback">，</span><span class="mord mathdefault">e</span><span class="mord mathdefault">t</span><span class="mord cjk_fallback">为</span><span class="mord cjk_fallback">虚</span><span class="mord cjk_fallback">拟</span><span class="mord cjk_fallback">表</span><span class="mord cjk_fallback">别</span><span class="mord cjk_fallback">名</span></span></span></span>(“ps”).proctime()表示系统处理时间，ps为虚拟表别名<br>
-.rowtime()，.proctime()值均是国际UTF时间</p>
+<p>通过 <code>assignTimestampsAndWatermarks</code> 生成水位线后，用 <code>$("et").rowtime()</code> 把字段声明为事件时间属性，用 <code>$("ps").proctime()</code> 声明为处理时间属性（<code>et</code>、<code>ps</code> 为示例中的字段/虚拟表别名）。<br>
+时间语义上：不带时区的 <code>TIMESTAMP</code> 只表示“墙上时间”，带时区的 <code>TIMESTAMP_LTZ</code> 才表示绝对时间点，两者不要混用；原始时间戳是长整型毫秒数时，建议先用 <code>TO_TIMESTAMP_LTZ()</code> 转换。</p>
 </blockquote>
-<h2 id="2-处理时间">2 处理时间</h2>
-<pre><code class="language-java">在创建表的 DDL 中定义
+<h2 id="12-处理时间">1.2 处理时间</h2>
+<p>在创建表的 DDL 中定义：</p>
+<pre><code class="language-sql">
 CREATE TABLE EventTable(
  user STRING,
  url STRING,
@@ -244,7 +246,7 @@ CREATE TABLE EventTable(
 // 声明一个额外的字段作为处理时间属性字段，$(&quot;ts&quot;).proctime()系统处理时间
 Table table = tEnv.fromDataStream(stream, $(&quot;user&quot;), $(&quot;url&quot;), $(&quot;ts&quot;).proctime());
 </code></pre>
-<h2 id="11-案例1datastream-sql统计">1.1 案例1（DataStream SQL统计）</h2>
+<h2 id="13-案例1datastream-sql统计">1.3 案例1（DataStream SQL统计）</h2>
 <p><strong>需求：将DataStream注册为Table和View并进行SQL统计。</strong></p>
 <p>代码如下：</p>
 <pre><code class="language-java">import lombok.AllArgsConstructor;
@@ -316,9 +318,10 @@ public class Demo1 {
 
 }
 </code></pre>
+<p><strong>版本提示：</strong>本篇基于 Flink 1.13.1：Blink planner 自 1.11 起即为默认 planner，1.14 起旧 planner 被移除，示例中注释掉的 <code>useBlinkPlanner()</code> 已无必要；<code>toAppendStream()</code>/<code>toRetractStream()</code> 在新版本中也已废弃，推荐改用 <code>toDataStream()</code>/<code>toChangelogStream()</code>（见 3.2 节示例）。</p>
 <p>运行结果：<br>
 <img src="/post-images/1681542069704.png" alt="" loading="lazy"></p>
-<h2 id="12-案例2datastream-tablesql统计">1.2 案例2（DataStream Table&amp;SQL统计）</h2>
+<h2 id="14-案例2datastream-tablesql统计">1.4 案例2（DataStream Table&amp;SQL统计）</h2>
 <p><strong>需求：使用SQL和Table两种方式对DataStream中的单词进行统计。</strong></p>
 <p>示例代码如下（SQL方式）：</p>
 <pre><code class="language-java">import lombok.AllArgsConstructor;
@@ -434,15 +437,15 @@ public class Demo02Table {
     }
 }
 </code></pre>
-<h2 id="14-案例4sql消费kafka">1.4 案例4（SQL消费Kafka）</h2>
+<h2 id="15-案例4sql消费kafka">1.5 案例4（SQL消费Kafka）</h2>
 <p><strong>需求：从Kafka中消费数据并过滤出状态为success的数据再写入到Kafka</strong></p>
-<pre><code class="language-java">{&quot;user_id&quot;: &quot;1&quot;, &quot;page_id&quot;:&quot;1&quot;, &quot;status&quot;: &quot;success&quot;}
+<pre><code class="language-json">{&quot;user_id&quot;: &quot;1&quot;, &quot;page_id&quot;:&quot;1&quot;, &quot;status&quot;: &quot;success&quot;}
 {&quot;user_id&quot;: &quot;1&quot;, &quot;page_id&quot;:&quot;1&quot;, &quot;status&quot;: &quot;success&quot;}
 {&quot;user_id&quot;: &quot;1&quot;, &quot;page_id&quot;:&quot;1&quot;, &quot;status&quot;: &quot;success&quot;}
 {&quot;user_id&quot;: &quot;1&quot;, &quot;page_id&quot;:&quot;1&quot;, &quot;status&quot;: &quot;success&quot;}
 {&quot;user_id&quot;: &quot;1&quot;, &quot;page_id&quot;:&quot;1&quot;, &quot;status&quot;: &quot;fail&quot;}
 </code></pre>
-<pre><code class="language-java">/export/server/kafka/bin/kafka-topics.sh --create --zookeeper node1:2181 --replication-factor 2 --partitions 3 --topic input_kafka
+<pre><code class="language-bash">/export/server/kafka/bin/kafka-topics.sh --create --zookeeper node1:2181 --replication-factor 2 --partitions 3 --topic input_kafka
 
 /export/server/kafka/bin/kafka-topics.sh --create --zookeeper node1:2181 --replication-factor 2 --partitions 3 --topic output_kafka
 
@@ -450,10 +453,12 @@ public class Demo02Table {
 
 /export/server/kafka/bin/kafka-console-consumer.sh --bootstrap-server node1:9092 --topic output_kafka --from-beginning
 </code></pre>
+<p><strong>版本提示：</strong><code>kafka-topics.sh --zookeeper</code> 在 Kafka 2.2 中已被标记废弃、3.0 起移除，新版本请统一改用 <code>--bootstrap-server node1:9092</code>。</p>
 <p>代码实现：</p>
 <blockquote>
-<p>https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/<br>
-https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/connectors/kafka.html</p>
+<p>官方文档（Flink 1.13）：<br>
+<a href="https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/dev/table/tableapi/">https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/dev/table/tableapi/</a><br>
+<a href="https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/connectors/table/kafka/">https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/connectors/table/kafka/</a></p>
 </blockquote>
 <pre><code class="language-java">import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -509,12 +514,14 @@ public class Demo4 {
                 &quot;from input_kafka &quot; +
                 &quot;where status = 'success'&quot;;
 
-        Table ResultTable = tEnv.sqlQuery(sql);
+        Table resultTable = tEnv.sqlQuery(sql);
 
-        DataStream&lt;Tuple2&lt;Boolean, Row&gt;&gt; resultDS = tEnv.toRetractStream(ResultTable, Row.class);
+        DataStream&lt;Tuple2&lt;Boolean, Row&gt;&gt; resultDS = tEnv.toRetractStream(resultTable, Row.class);
         resultDS.print();
 
-        tEnv.executeSql(&quot;insert into output_kafka select * from &quot; + ResultTable);
+        // 将结果表写入 Kafka：推荐直接调用 executeInsert，
+        // 不要把 Table 对象拼进 SQL 字符串（Table.toString() 只是内部临时表名，不保证可用）
+        resultTable.executeInsert(&quot;output_kafka&quot;);
 
 
         //7.excute
@@ -571,14 +578,14 @@ WHERE name IN (SELECT name FROM Table2)
 <p>GROUP BY ：是对数据进行分组操作。例如我们需要计算成绩明细表中，每个学生的总分。</p>
 </blockquote>
 <p>示例：</p>
-<pre><code class="language-java">SELECT name, SUM(score) as TotalScore FROM Table GROUP BY name;
+<pre><code class="language-sql">SELECT name, SUM(score) as TotalScore FROM Table GROUP BY name;
 </code></pre>
 <h2 id="25-union-和-union-all">2.5 UNION 和 UNION ALL</h2>
 <blockquote>
 <p>UNION: 用于将两个结果集合并起来，要求两个结果集字段完全一致，包括字段类型、字段顺序。不同于 UNION ALL 的是，UNION 会对结果数据去重。</p>
 </blockquote>
 <p>示例：</p>
-<pre><code class="language-java">SELECT * FROM T1 UNION (ALL) SELECT * FROM T2；
+<pre><code class="language-sql">SELECT * FROM T1 UNION (ALL) SELECT * FROM T2；
 </code></pre>
 <h2 id="26-join">2.6 JOIN</h2>
 <blockquote>
@@ -600,15 +607,14 @@ WHERE name IN (SELECT name FROM Table2)
 </ul>
 <p>这里的 JOIN的语义和我们在关系型数据库中使用的 JOIN 语义一致。</p>
 <p>示例：JOIN(将订单表数据和商品表进行关联)</p>
-<pre><code class="language-java">SELECT * FROM Orders INNER JOIN Product ON Orders.productId = Product.id
+<pre><code class="language-sql">SELECT * FROM Orders INNER JOIN Product ON Orders.productId = Product.id
 </code></pre>
-<p>LEFT JOIN与 JOIN 的区别是当右表没有与左边相 JOIN 的数据时候，右边对应的字段补NULL输出，RIGHT JOIN 相当于LEFT JOIN左右两个表交互一下位置。FULL JOIN相当于RIGHT JOIN 和 LEFT JOIN之后进行UNION ALL 操作，示例：</p>
-<pre><code class="language-java">SELECT * FROM Orders LEFT JOIN Product ON Orders.productId = Product.id
+<p>LEFT JOIN与 JOIN 的区别是当右表没有与左边相 JOIN 的数据时候，右边对应的字段补NULL输出，RIGHT JOIN 相当于把 LEFT JOIN 左右两张表交换一下位置。FULL JOIN相当于RIGHT JOIN 和 LEFT JOIN之后进行UNION ALL 操作，示例：</p>
+<pre><code class="language-sql">SELECT * FROM Orders LEFT JOIN Product ON Orders.productId = Product.id
 SELECT * FROM Orders RIGHT JOIN Product ON Orders.productId = Product.id
 SELECT * FROM Orders FULL OUTER JOIN Product ON Orders.productId = Product.id
 </code></pre>
-<h1 id="3-窗口window">3 窗口(window)</h1>
-<h1 id="3-聚合aggregation查询">3 聚合（Aggregation）查询</h1>
+<h1 id="3-聚合与窗口查询">3 聚合与窗口查询（Aggregation &amp; Window）</h1>
 <h2 id="31-ttl">3.1 TTL</h2>
 <p>在持续查询的过程中，由于用于分组的 key 可能会不断增加，因此计算结果所需要<br>
 维护的状态也会持续增长。为了防止状态无限增长耗尽资源</p>
@@ -629,7 +635,7 @@ configuration.setString(&quot;table.exec.state.ttl&quot;, &quot;60 min&quot;);
 <pre><code class="language-java">Table eventCountTable = tableEnv.sqlQuery(&quot;SELECT user, COUNT(url) as cnt FROM EventTable GROUP BY user&quot;);
 </code></pre>
 <p><strong>csv数据</strong></p>
-<pre><code class="language-java">Mary,./home,1000
+<pre><code class="language-text">Mary,./home,1000
 Alice,./cart,2000
 Bob,./prod?id=100,3000
 Bob,./cart,4000
@@ -696,7 +702,7 @@ Bob,./prod?id=10,15000
     }
 </code></pre>
 <p><strong>agg结果</strong></p>
-<pre><code class="language-java">agg&gt; +I[Mary, 1]
+<pre><code class="language-text">agg&gt; +I[Mary, 1]
 agg&gt; +I[Alice, 1]
 agg&gt; +I[Bob, 1]
 agg&gt; -U[Bob, 1]
@@ -719,7 +725,7 @@ agg&gt; -U[Bob, 8]
 agg&gt; +U[Bob, 9]
 </code></pre>
 <p><strong>group window结果</strong></p>
-<pre><code class="language-java">group window:&gt; +I[Mary, 2, 1970-01-01T08:00:10]
+<pre><code class="language-text">group window:&gt; +I[Mary, 2, 1970-01-01T08:00:10]
 group window:&gt; +I[Alice, 1, 1970-01-01T08:00:10]
 group window:&gt; +I[Bob, 6, 1970-01-01T08:00:10]
 group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
@@ -727,7 +733,7 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
 在第二个窗口十秒中，Bob有3次
 </code></pre>
 <h2 id="33-分组窗口">3.3 分组窗口</h2>
-<p>在 Flink 1.12 之前的版本中，Table API 和 SQL 提供了一组“分组窗口”（Group Window）函数，常用的时间窗口如滚动窗口、滑动窗口、会话窗口都有对应的实现；具体在 SQL 中就是调用 TUMBLE()、HOP()、SESSION()，传入时间属性字段、窗口大小等参数就可以了。</p>
+<p>在 Flink 1.13 之前，Table API 和 SQL 只提供了一组“分组窗口”（Group Window）函数，滚动窗口、滑动窗口、会话窗口都有对应的实现：在 SQL 中调用 TUMBLE()、HOP()、SESSION()，传入时间属性字段、窗口大小等参数即可。自 1.13 引入窗口表值函数（TVF）后，这套老语法被标记为废弃（deprecated），新代码应优先使用 TVF 写法。</p>
 <h3 id="331-老版本">3.3.1 老版本</h3>
 <pre><code class="language-java">Table result = tableEnv.sqlQuery(
  &quot;SELECT &quot; +
@@ -740,7 +746,7 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
  &quot;TUMBLE(ts, INTERVAL '1' HOUR)&quot; // 定义 1 小时滚动窗口
  );
 </code></pre>
-<p>这里定义了 1 小时的滚动窗口，将窗口和用户 user 一起作为分组的字段。用聚合函数COUNT()对分组数据的个数进行了聚合统计，并将结果字段重命名为cnt；用TUPMBLE_END()函数获取滚动窗口的结束时间，重命名为 endT 提取出来。</p>
+<p>这里定义了 1 小时的滚动窗口，将窗口和用户 user 一起作为分组的字段。用聚合函数COUNT()对分组数据的个数进行了聚合统计，并将结果字段重命名为cnt；用TUMBLE_END()函数获取滚动窗口的结束时间，重命名为 endT 提取出来。</p>
 <h3 id="332-新版本窗口表值函数-windowing-tvfs">3.3.2 新版本（窗口表值函数 Windowing TVFs）</h3>
 <p>从 1.13 版本开始，Flink 开始使用窗口表值函数（Windowing table-valued functions，Windowing TVFs）来定义窗口。窗口表值函数是 Flink 定义的多态表函数（PTF），可以将表进行扩展后返回。表函数（table function）可以看作是返回一个表的函数</p>
 <p><strong>案例</strong></p>
@@ -768,7 +774,7 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
                 &quot; count(1) AS ct,&quot; +
                 &quot; TUMBLE_END(ts,INTERVAL '10' SECOND) AS endTime&quot; +
                 &quot; from table_click &quot; +
-                &quot; group by user, TUMBLE(ts, INTERVAL '10' SECOND)&quot;); // 滚动窗口 布长10
+                &quot; group by user, TUMBLE(ts, INTERVAL '10' SECOND)&quot;); // 滚动窗口，步长 10 秒
     
         // 3. 窗口聚合查询 TVF-滚动窗口
         Table tvfTumbleAgg = tableEnv.sqlQuery(&quot;select &quot; +
@@ -776,7 +782,7 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
                 &quot; count(1) AS ct,&quot; +
                 &quot; window_start,&quot; +
                 &quot; window_end&quot; +
-                &quot; from TABLE(&quot; + // 创建一个滚动窗口,参数1:数据来源的虚拟表,参数2:滚动日期参数，参数3：窗口布长
+                &quot; from TABLE(&quot; + // 创建一个滚动窗口：参数1 数据来源的虚拟表，参数2 时间属性字段，参数3 窗口长度
                 &quot; TUMBLE(table table_click, DESCRIPTOR(ts), INTERVAL '10' SECOND))&quot; +
                 &quot; GROUP BY user, window_start, window_end&quot;); // group by window_start, window_end 固定写法
     
@@ -786,7 +792,7 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
                 &quot; count(1) AS ct,&quot; +
                 &quot; window_start,&quot; +
                 &quot; window_end&quot; +
-                &quot; from TABLE(&quot; + // 创建一个滚动窗口,参数1:数据来源的虚拟表,参数2:滚动日期参数，参数3：滑动补布长 参数4：窗口布长
+                &quot; from TABLE(&quot; + // 创建一个滑动窗口：参数1 数据来源的虚拟表，参数2 时间属性字段，参数3 滑动步长，参数4 窗口长度
                 &quot; HOP(table table_click, DESCRIPTOR(ts), INTERVAL '5' SECOND,INTERVAL '10' SECOND))&quot; +
                 &quot; GROUP BY user, window_start, window_end&quot;); // group by window_start, window_end 固定写法
     
@@ -797,7 +803,7 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
                 &quot; count(1) AS ct,&quot; +
                 &quot; window_start,&quot; +
                 &quot; window_end&quot; +
-                &quot; from TABLE(&quot; + // 创建一个滚动窗口,参数1:数据来源的虚拟表,参数2:滚动日期参数，参数3：每隔多久计算输出一次 参数4：全窗口布长
+                &quot; from TABLE(&quot; + // 创建一个累计窗口：参数1 数据来源的虚拟表，参数2 时间属性字段，参数3 每一步的步长，参数4 累计窗口总长度
                 &quot; CUMULATE(table table_click, DESCRIPTOR(ts), INTERVAL '5' SECOND,INTERVAL '10' SECOND))&quot; +
                 &quot; GROUP BY user, window_start, window_end&quot;); // group by window_start, window_end 固定写法
     
@@ -808,13 +814,14 @@ group window:&gt; +I[Bob, 3, 1970-01-01T08:00:20]
         tableEnv.toChangelogStream(tvfCumulateAgg).print(&quot;tvfCumulateAgg:&quot;);
 
 </code></pre>
+<p><strong>版本提示：</strong>1.13 引入的窗口 TVF 提供 TUMBLE（滚动）、HOP（滑动）、CUMULATE（累计）三种窗口；会话窗口（SESSION）没有对应的 TVF 形式，仍只能用老的分组窗口语法。另外，窗口 TVF 中窗口边界字段 window_start / window_end 是普通字段，必须写在 GROUP BY 里。</p>
 <blockquote>
 <p>注意：GROUP BY window_start, window_end 是固定写法</p>
 </blockquote>
 <h2 id="34-开窗over聚合">3.4 开窗（Over）聚合</h2>
 <p>Flink SQL 中的开窗函数也是通过 OVER 子句来实现的</p>
 <h3 id="341-语法">3.4.1 语法</h3>
-<pre><code class="language-java"> &lt;聚合函数&gt; OVER (
+<pre><code class="language-sql"> &lt;聚合函数&gt; OVER (
  [PARTITION BY &lt;字段 1&gt;[, &lt;字段 2&gt;, ...]]
  ORDER BY &lt;时间属性字段&gt;
  &lt;开窗范围&gt;),
@@ -835,7 +842,7 @@ OVER 窗口是基于当前行扩展出的一段数据范围，选择的标准可
 对于开窗函数而言，还有一个必须要指定的就是开窗的范围，也就是到底要扩展多少行来做聚合。这个范围是由 BETWEEN &lt;下界&gt; AND &lt;上界&gt; 来定义的，也就是“从下界到上界”的范围。目前支持的上界只能是 CURRENT ROW，也就是定义一个“从之前某一行到当前行”的范围，所以一般的形式为：</p>
 </li>
 </ul>
-<pre><code class="language-java">PRECEDING 指前面几个/前一段时间；CURRENT ROW：指到当前最新得行数
+<pre><code class="language-text">PRECEDING：前面几个/前一段时间；CURRENT ROW：到当前最新的一行
 
 BETWEEN ... PRECEDING AND CURRENT ROW
 </code></pre>
@@ -843,16 +850,16 @@ BETWEEN ... PRECEDING AND CURRENT ROW
 <li>范围间隔<br>
 范围间隔以 RANGE 为前缀，就是基于 ORDER BY 指定的时间字段去选取一个范围，一般就是当前行时间戳之前的一段时间。例如开窗范围选择当前行之前 1 小时的数据：</li>
 </ul>
-<pre><code class="language-java">RANGE BETWEEN INTERVAL '1' HOUR PRECEDING AND CURRENT ROW
+<pre><code class="language-sql">RANGE BETWEEN INTERVAL '1' HOUR PRECEDING AND CURRENT ROW
 </code></pre>
 <ul>
 <li>行间隔<br>
 行间隔以 ROWS 为前缀，就是直接确定要选多少行，由当前行出发向前选取就可以了。<br>
 例如开窗范围选择当前行之前的 5 行数据（最终聚合会包括当前行，所以一共 6 条数据）</li>
 </ul>
-<pre><code class="language-java">ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+<pre><code class="language-sql">ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
 </code></pre>
-<pre><code class="language-java">SELECT user,
+<pre><code class="language-sql">SELECT user,
  COUNT(url) OVER (
  PARTITION BY user
  ORDER BY ts
@@ -909,7 +916,7 @@ public class WindowTopNExample {
         String subQuery =
                 &quot;SELECT window_start, window_end, user, COUNT(url) as cnt &quot; +
                         &quot;FROM TABLE ( &quot; +
-                        &quot;TUMBLE( TABLE EventTable, DESCRIPTOR(ts), INTERVAL '1' HOUR )) &quot; + // 滚动窗口 布长1小时
+                        &quot;TUMBLE( TABLE EventTable, DESCRIPTOR(ts), INTERVAL '1' HOUR )) &quot; + // 滚动窗口，步长 1 小时
                         &quot;GROUP BY window_start, window_end, user &quot;;
         // 定义 Top N 的外层查询
         String topNQuery =
@@ -936,63 +943,156 @@ public class WindowTopNExample {
 这部分跟标准SQL一样呢，就不赘述啦</p>
 <h2 id="52-间隔联结查询">5.2  间隔联结查询</h2>
 <p><strong>1.时间间隔限制</strong></p>
-<pre><code class="language-java">ltime BETWEEN rtime - INTERVAL '10' SECOND AND rtime + INTERVAL '5' SECOND
+<pre><code class="language-sql">ltime BETWEEN rtime - INTERVAL '10' SECOND AND rtime + INTERVAL '5' SECOND
 </code></pre>
-<pre><code class="language-java">SELECT *
+<pre><code class="language-sql">SELECT *
 FROM Order o, Shipment s
 WHERE o.id = s.order_id
 AND o.order_time BETWEEN s.ship_time - INTERVAL '4' HOUR AND s.ship_time
 </code></pre>
 <p>在流处理中，间隔联结查询只支持具有时间属性的“仅追加”（Append-only）表。</p>
+<h2 id="6-版本差异小结">6 版本差异小结（1.13 → 1.15+）</h2>
+<p>本篇示例基于 Flink 1.13.1，迁移到更高版本时，下面这些点是主要差异：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">变化点</th>
+<th style="text-align:left">1.13（本篇）</th>
+<th style="text-align:left">更高版本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">planner 依赖</td>
+<td style="text-align:left"><code>flink-table-planner-blink_${scala.binary.version}</code></td>
+<td style="text-align:left">1.15 起改名为 <code>flink-table-planner_${scala.binary.version}</code>，并引入 <code>flink-table-planner-loader</code> 做类加载隔离</td>
+</tr>
+<tr>
+<td style="text-align:left">planner 切换</td>
+<td style="text-align:left">Blink planner 为默认实现，旧 planner 仍然存在</td>
+<td style="text-align:left">1.14 起旧 planner 被移除，<code>useBlinkPlanner()</code> 废弃</td>
+</tr>
+<tr>
+<td style="text-align:left">窗口语法</td>
+<td style="text-align:left">分组窗口已标记废弃，窗口 TVF 刚引入</td>
+<td style="text-align:left">统一使用 TUMBLE / HOP / CUMULATE 窗口 TVF；会话窗口没有 TVF 形式</td>
+</tr>
+<tr>
+<td style="text-align:left">结果表转流</td>
+<td style="text-align:left"><code>toAppendStream()</code>/<code>toRetractStream()</code> 已不推荐</td>
+<td style="text-align:left">使用 <code>toDataStream()</code>/<code>toChangelogStream()</code>；写入外部表用 <code>executeInsert()</code></td>
+</tr>
+<tr>
+<td style="text-align:left">状态 TTL</td>
+<td style="text-align:left"><code>table.exec.state.ttl</code>（推荐方式）</td>
+<td style="text-align:left">沿用，仍是控制持续查询状态大小的主要手段</td>
+</tr>
+<tr>
+<td style="text-align:left">Kafka 连接器</td>
+<td style="text-align:left"><code>'connector' = 'kafka'</code>，配合 <code>scan.startup.mode</code></td>
+<td style="text-align:left">参数名基本兼容；更早的版本（1.10 之前）用的是 <code>kafka-0.11</code> 这类带版本号的 connector</td>
+</tr>
+</tbody>
+</table>
+<p>另外，SQL 中的时间类型要区分 <code>TIMESTAMP</code>（不带时区）与 <code>TIMESTAMP_LTZ</code>（带本地时区）：原始时间戳是长整型毫秒数时用 <code>TO_TIMESTAMP_LTZ()</code> 更稳妥，必要时可以用 <code>table.local-time-zone</code> 指定会话时区。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li><a href="#flink-tablesql">Flink Table&amp;SQL</a>
+<li>
+<a href="#maven-%E4%BE%9D%E8%B5%96%E5%BC%95%E7%94%A8">maven 依赖引用</a>
 <ul>
-<li><a href="#maven-%E4%BE%9D%E8%B5%96%E5%BC%95%E7%94%A8">maven 依赖引用</a></li>
 </ul>
 </li>
-<li><a href="#%E6%97%B6%E9%97%B4%E5%B1%9E%E6%80%A7">时间属性</a>
+<li>
+<a href="#11-%E4%BA%8B%E4%BB%B6%E6%97%B6%E9%97%B4">1.1 事件时间</a>
 <ul>
-<li><a href="#1-%E4%BA%8B%E4%BB%B6%E6%97%B6%E9%97%B4">1 事件时间</a></li>
-<li><a href="#2-%E5%A4%84%E7%90%86%E6%97%B6%E9%97%B4">2 处理时间</a></li>
-<li><a href="#11-%E6%A1%88%E4%BE%8B1datastream-sql%E7%BB%9F%E8%AE%A1">1.1 案例1（DataStream SQL统计）</a></li>
-<li><a href="#12-%E6%A1%88%E4%BE%8B2datastream-tablesql%E7%BB%9F%E8%AE%A1">1.2 案例2（DataStream Table&amp;SQL统计）</a></li>
-<li><a href="#14-%E6%A1%88%E4%BE%8B4sql%E6%B6%88%E8%B4%B9kafka">1.4 案例4（SQL消费Kafka）</a></li>
 </ul>
 </li>
-<li><a href="#2-flink-sql%E5%B8%B8%E7%94%A8%E7%AE%97%E5%AD%90">2 Flink SQL常用算子</a>
+<li>
+<a href="#12-%E5%A4%84%E7%90%86%E6%97%B6%E9%97%B4">1.2 处理时间</a>
 <ul>
-<li><a href="#21-select">2.1 SELECT</a></li>
-<li><a href="#22-where">2.2 WHERE</a></li>
-<li><a href="#23-distinct">2.3 DISTINCT</a></li>
-<li><a href="#24-group-by">2.4 GROUP BY</a></li>
-<li><a href="#25-union-%E5%92%8C-union-all">2.5 UNION 和 UNION ALL</a></li>
-<li><a href="#26-join">2.6 JOIN</a></li>
 </ul>
 </li>
-<li><a href="#3-%E7%AA%97%E5%8F%A3window">3 窗口(window)</a></li>
-<li><a href="#3-%E8%81%9A%E5%90%88aggregation%E6%9F%A5%E8%AF%A2">3 聚合（Aggregation）查询</a>
+<li>
+<a href="#13-%E6%A1%88%E4%BE%8B1datastream-sql%E7%BB%9F%E8%AE%A1">1.3 案例1（DataStream SQL统计）</a>
 <ul>
-<li><a href="#31-ttl">3.1 TTL</a></li>
-<li><a href="#32-%E5%88%86%E7%BB%84%E8%81%9A%E5%90%88">3.2 分组聚合</a></li>
-<li><a href="#33-%E5%88%86%E7%BB%84%E7%AA%97%E5%8F%A3">3.3 分组窗口</a>
+</ul>
+</li>
+<li>
+<a href="#14-%E6%A1%88%E4%BE%8B2datastream-tablesql%E7%BB%9F%E8%AE%A1">1.4 案例2（DataStream Table&amp;SQL统计）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#15-%E6%A1%88%E4%BE%8B4sql%E6%B6%88%E8%B4%B9kafka">1.5 案例4（SQL消费Kafka）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#21-select">2.1 SELECT</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#22-where">2.2 WHERE</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#23-distinct">2.3 DISTINCT</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#24-group-by">2.4 GROUP BY</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#25-union-%E5%92%8C-union-all">2.5 UNION 和 UNION ALL</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#26-join">2.6 JOIN</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#31-ttl">3.1 TTL</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#32-%E5%88%86%E7%BB%84%E8%81%9A%E5%90%88">3.2 分组聚合</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#33-%E5%88%86%E7%BB%84%E7%AA%97%E5%8F%A3">3.3 分组窗口</a>
 <ul>
 <li><a href="#331-%E8%80%81%E7%89%88%E6%9C%AC">3.3.1 老版本</a></li>
 <li><a href="#332-%E6%96%B0%E7%89%88%E6%9C%AC%E7%AA%97%E5%8F%A3%E8%A1%A8%E5%80%BC%E5%87%BD%E6%95%B0-windowing-tvfs">3.3.2 新版本（窗口表值函数 Windowing TVFs）</a></li>
 </ul>
 </li>
-<li><a href="#34-%E5%BC%80%E7%AA%97over%E8%81%9A%E5%90%88">3.4 开窗（Over）聚合</a>
+<li>
+<a href="#34-%E5%BC%80%E7%AA%97over%E8%81%9A%E5%90%88">3.4 开窗（Over）聚合</a>
 <ul>
 <li><a href="#341-%E8%AF%AD%E6%B3%95">3.4.1 语法</a></li>
 </ul>
 </li>
+<li>
+<a href="#51-%E5%B8%B8%E8%A7%84%E8%81%94%E7%BB%93%E6%9F%A5%E8%AF%A2">5.1 常规联结查询</a>
+<ul>
 </ul>
 </li>
-<li><a href="#4-topn-example">4 topN example</a></li>
-<li><a href="#5-%E8%81%94%E7%BB%93%E6%9F%A5%E8%AF%A2">5 联结查询</a>
+<li>
+<a href="#52-%E9%97%B4%E9%9A%94%E8%81%94%E7%BB%93%E6%9F%A5%E8%AF%A2">5.2 间隔联结查询</a>
 <ul>
-<li><a href="#51-%E5%B8%B8%E8%A7%84%E8%81%94%E7%BB%93%E6%9F%A5%E8%AF%A2">5.1 常规联结查询</a></li>
-<li><a href="#52-%E9%97%B4%E9%9A%94%E8%81%94%E7%BB%93%E6%9F%A5%E8%AF%A2">5.2  间隔联结查询</a></li>
+</ul>
+</li>
+<li>
+<a href="#6-%E7%89%88%E6%9C%AC%E5%B7%AE%E5%BC%82%E5%B0%8F%E7%BB%93">6 版本差异小结（1.13 → 1.15+）</a>
+<ul>
 </ul>
 </li>
 </ul>
