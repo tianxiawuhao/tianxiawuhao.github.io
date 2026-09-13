@@ -125,14 +125,15 @@
           
           <img class="post-feature-header-image" src="/post-images/dpVtZ7y41.png" alt="封面图">
           
-          <p>Gitlab是什么就不用多讲了，直接上手安装——使用Docker安装，<a href="https://docs.gitlab.com/ee/install/docker.html">参考官方文档</a></p>
+          <p>GitLab 是什么就不多讲了，直接上手安装。这里使用 Docker 方式安装，可同时<a href="https://docs.gitlab.com/ee/install/docker.html">参考官方文档</a>。</p>
 <h2 id="ch1-install">一、GitLab 的安装</h2>
 <p><strong>1、在宿主机创建配置、日志、数据的目录：</strong></p>
-<pre><code class="language-shell">mkdir -p /home/gitlab/config   创建config目录
-mkdir -p /home/gitlab/logs    创建logs目录
-mkdir -p /home/gitlab/data    创建data目录
+<pre><code class="language-shell">mkdir -p /home/gitlab/config   # 创建 config 目录
+mkdir -p /home/gitlab/logs     # 创建 logs 目录
+mkdir -p /home/gitlab/data     # 创建 data 目录
 </code></pre>
-<p><strong>2、使用以下将本拉取并启动gitlab：</strong></p>
+<p>这三个目录会分别挂载到容器内，用于持久化配置、日志和仓库数据，这样删除并重建容器时数据不会丢失。</p>
+<p><strong>2、使用以下命令拉取并启动 GitLab：</strong></p>
 <pre><code class="language-shell">docker run --detach \
   --hostname 192.168.56.11 \
   --publish 443:443 --publish 80:80 --publish 222:22 \
@@ -143,23 +144,28 @@ mkdir -p /home/gitlab/data    创建data目录
   --volume /home/gitlab/data:/var/opt/gitlab \
   gitlab/gitlab-ce:latest
 </code></pre>
-<p>拉取镜像时间较长，需耐心等待，镜像大小达2.29G！</p>
-<p>第一次启动时候，由于要安装很多东西，而且还要检查健康状况，所以会非常慢，耐心！</p>
-<p><strong>3、获得Gitlab初始root账号密码：</strong></p>
-<pre><code class="language-shell">[root@mycentos2 ~]# sudo docker exec -it gitlab grep 'Password:' /etc/gitlab/initial_root_password
+<p>其中 <code>--hostname</code> 需要填宿主机的 IP 或域名，否则克隆地址和邮件里的链接都会不正确；<code>--publish 222:22</code> 把容器内的 SSH 端口映射到宿主机 222，避免和宿主机自身的 sshd 冲突，因此后续 <code>git clone</code> 要用 <code>ssh://git@192.168.56.11:222/...</code> 这种带端口的写法。</p>
+<p><img src="/post-assets/dpVtZ7y41/01-docker-ports-volumes.svg" alt="GitLab 容器的端口映射与配置、日志、数据三个目录的挂载关系"></p>
+<p>拉取镜像时间较长，需耐心等待，镜像大小达 2.29G，请留出足够的磁盘空间。</p>
+<p>第一次启动时，容器内要初始化很多东西，还要做健康检查，所以会非常慢，请耐心等待。可以用 <code>docker logs -f gitlab</code> 观察启动进度。</p>
+<p><strong>3、获得 GitLab 初始 root 账号密码：</strong></p>
+<pre><code class="language-shell">[root@mycentos2 ~]# docker exec -it gitlab grep 'Password:' /etc/gitlab/initial_root_password
 Password: Ho0rM3Gm9LpuIARVnNE/6YoQrXC05g+JwYITLm0y2oo=
 </code></pre>
+<p>该文件只在首次启动后的 24 小时内保留，24 小时后会被自动删除（GitLab 14.0 之前的版本没有这个文件，初始密码需要通过其他方式重置）。</p>
 <p>登录成功后，立即修改掉root密码：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1634118424330076.png" alt="image.png" loading="lazy"></figure>
 <p>重新登录！</p>
 <hr>
 <h2 id="ch2-tips">二、GitLab 的使用小妙招</h2>
 <p><strong>1、快速迁移git仓库（所有分支）</strong></p>
-<pre><code class="language-shell">git clone --mirror &lt;URL to my OLD repo location&gt;
-cd 文件夹下
-git remote set-url origin &lt;URL to my NEW repo location&gt;
-git push -f origin
+<pre><code class="language-shell">git clone --mirror &lt;旧仓库地址&gt;    # 克隆出带全部分支、标签的裸镜像
+cd &lt;克隆出的目录&gt;                # 进入克隆出来的目录
+git remote set-url origin &lt;新仓库地址&gt;
+git push -f origin                # 把镜像中的全部 refs 推到新仓库
 </code></pre>
+<p><code>--mirror</code> 拉下来的是裸仓库，包含所有分支和标签；配合 <code>git push -f origin</code>，一次就能把完整的引用结构搬到新仓库，不需要逐个分支推送。</p>
+<p><img src="/post-assets/dpVtZ7y41/02-mirror-migration.svg" alt="git clone --mirror 迁移仓库全部分支的三条命令示意"></p>
 <hr>
 <h2 id="ch3-new-project">三、创建新项目</h2>
 <p><strong>全局设置</strong></p>
@@ -167,7 +173,7 @@ git push -f origin
 git config --global user.email &quot;xxx@163.com&quot;
 </code></pre>
 <p><strong>在本地创建一个新的git仓库</strong></p>
-<pre><code class="language-shell">git clone git@qdxwgitlab.qingdao.cosmoplat.com:jiguiquan/openiot-k8s.git
+<pre><code class="language-shell">git clone git@gitlab.example.com:group/openiot-k8s.git
 cd openiot-k8s
 touch README.md
 git add README.md
@@ -177,7 +183,7 @@ git push -u origin master
 <p><strong>上传现有文件夹</strong></p>
 <pre><code class="language-shell">cd existing_folder
 git init
-git remote add origin git@qdxwgitlab.qingdao.cosmoplat.com:xxx/openiot-k8s.git
+git remote add origin git@gitlab.example.com:group/openiot-k8s.git
 git add .
 git commit -m &quot;Initial commit&quot;
 git push -u origin master
@@ -185,7 +191,7 @@ git push -u origin master
 <p><strong>上传现有本地仓库</strong></p>
 <pre><code class="language-shell">cd existing_repo
 git remote rename origin old-origin
-git remote add origin git@qdxwgitlab.qingdao.cosmoplat.com:xxx/openiot-k8s.git
+git remote add origin git@gitlab.example.com:group/openiot-k8s.git
 git push -u origin --all
 git push -u origin --tags
 </code></pre>
@@ -193,10 +199,10 @@ git push -u origin --tags
 <h2 id="ch4-ssh-key">四、配置 Git 的 ssh 密钥</h2>
 <p>默认的密钥对存放在 用户目录/.ssh/ 下：</p>
 <p>1、在任意位置的 cmd 中执行下面的命令，生成公钥/私钥密钥对：</p>
-<pre><code class="language-shell">ssh-keygen -t rsa -C &quot;jiguiquan@haier.com&quot;
+<pre><code class="language-shell">ssh-keygen -t rsa -b 4096 -C &quot;you@example.com&quot;
 </code></pre>
-<p>需要输入的地方都直接回车即可！</p>
-<p>2、到github或者gitlab上添加ssh凭证即可！</p>
+<p>过程中需要输入的地方直接回车即可，默认会在 <code>用户目录/.ssh/</code> 下生成 <code>id_rsa</code>（私钥，不能外泄）和 <code>id_rsa.pub</code>（公钥）。</p>
+<p>2、到 GitHub 或 GitLab 的「SSH Keys / SSH 密钥」设置页，粘贴 <code>id_rsa.pub</code> 的内容即可。</p>
 <hr>
 <h2 id="ch5-crlf">五、git 提交时的 CRLF 转化问题</h2>
 <p>1、当我们提交git add的时候，git会给出提示：</p>
@@ -206,19 +212,35 @@ The file will have its original line endings in your working directory
 warning: LF will be replaced by CRLF in .idea/.gitignore.
 The file will have its original line endings in your working directory
 </code></pre>
-<p>2、有时候我们不希望自动转化，所以我们可以关闭自动转化的功能</p>
-<p>提前在全局 git config 中设置，关闭该功能：</p>
+<p>出现这个提示的原因是：Git 在 Windows 上的默认行为是按 <code>core.autocrlf=true</code> 工作，检出文件时把仓库中的 LF 换成 CRLF，提交时再换回 LF；上面这两条只是警告，提交仍然会正常完成。</p>
+<p>2、有时候我们不希望自动转化，可以提前在全局 git config 中关闭该功能：</p>
 <pre><code class="language-shell">git config --global core.autocrlf false
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#ch1-install">一、GitLab 的安装</a>
 <ul>
-<li><a href="#ch1-install">一、GitLab 的安装</a></li>
-<li><a href="#ch2-tips">二、GitLab 的使用小妙招</a></li>
-<li><a href="#ch3-new-project">三、创建新项目</a></li>
-<li><a href="#ch4-ssh-key">四、配置 Git 的 ssh 密钥</a></li>
-<li><a href="#ch5-crlf">五、git 提交时的 CRLF 转化问题</a></li>
+</ul>
+</li>
+<li>
+<a href="#ch2-tips">二、GitLab 的使用小妙招</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch3-new-project">三、创建新项目</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch4-ssh-key">四、配置 Git 的 ssh 密钥</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch5-crlf">五、git 提交时的 CRLF 转化问题</a>
+<ul>
 </ul>
 </li>
 </ul>
