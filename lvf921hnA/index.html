@@ -132,9 +132,9 @@
 返回此集群的执行环境， 也就是说， getExecutionEnvironment 会根据查询运行的方
 式决定返回什么样的运行环境， 是最常用的一种创建执行环境的方式。</p>
 <pre><code class="language-java">// 批处理环境
-ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment()
+ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 // 流式数据处理环境
-StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment()
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 </code></pre>
 <p>如果没有设置并行度， 会以 flink-conf.yaml 中的配置为准， 默认是 1。<br>
 <img src="/post-images/1618450455593.png" alt="" loading="lazy"></p>
@@ -150,9 +150,9 @@ StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironm
             config
     );
 </code></pre>
-<p>scala</p>
-<pre><code class="language-java">val env = ExecutionEnvironment.createRemoteEnvironment(&quot;jobmanage-hostname&quot;,
-6123,&quot;YOURPATH//wordcount.jar&quot;)
+<p>Scala 写法：</p>
+<pre><code class="language-scala">val env = ExecutionEnvironment.createRemoteEnvironment("jobmanage-hostname",
+  6123, "YOURPATH//wordcount.jar")
 </code></pre>
 <h3 id="setparallelism">setParallelism</h3>
 <pre><code class="language-java">// 为了打印到控制台的结果不乱序，我们配置全局的并发为1，改变并发对结果正确性没有影响
@@ -218,7 +218,7 @@ public class SourceReading_Collection {
 <h3 id="以-kafka-消息队列的数据作为来源">以 kafka 消息队列的数据作为来源</h3>
 <p>需要引入 kafka 连接器的依赖：<br>
 <code>pom.xml</code></p>
-<pre><code class="language-java">&lt;!--
+<pre><code class="language-xml">&lt;!--
 https://mvnrepository.com/artifact/org.apache.flink/flink-connector-kafka-0.11
 --&gt;
 &lt;dependency&gt;
@@ -227,11 +227,11 @@ https://mvnrepository.com/artifact/org.apache.flink/flink-connector-kafka-0.11
     &lt;version&gt;1.10.1&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<pre><code class="language-sh">//1. 创建一个Topic名为“test20201217”的主题
+<pre><code class="language-bash"># 1. 创建一个 Topic
 kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test20201217
-//2. 创建producer(生产者)，生产主题的消息
+# 2. 创建 producer(生产者)，生产主题的消息
 kafka-console-producer.bat --broker-list localhost:9092 --topic test20201217
-//3. 创建consumer(消费者)，消费主题消息
+# 3. 创建 consumer(消费者)，消费主题消息
 kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test20201217
 </code></pre>
 <p>具体代码如下：</p>
@@ -342,6 +342,7 @@ public class MySelfSourceTest01 {
 </code></pre>
 <h2 id="transform">Transform</h2>
 <p>转换算子</p>
+<p><img src="/post-assets/lvf921hnA/01-datastream-pipeline.svg" alt="DataStream 处理链路示意图：Environment、Source、Transform、Sink"></p>
 <h3 id="map">map</h3>
 <figure data-type="image" tabindex="3"><img src="/post-images/1618450860405.png" alt="" loading="lazy"></figure>
 <pre><code class="language-java">stream.map { x =&gt; x * 2 }
@@ -502,6 +503,133 @@ unionStream.print(&quot;union:::&quot;)
 <li>Connect 只能操作两个流， Union 可以操作多个。</li>
 </ol>
 </blockquote>
+<h2 id="时间语义与水位线">时间语义与水位线</h2>
+<p><img src="/post-assets/lvf921hnA/02-time-watermark.svg" alt="Flink 时间语义与水位线示意图：事件时间、处理时间、Watermark 与窗口触发"></p>
+<p style="text-indent:2em">流处理与批处理最大的差别在于「时间」：数据没有边界，什么时候算「一批数据到齐了」，必须由时间语义来回答。Flink 支持三种时间语义：</p>
+<ul>
+<li><strong>事件时间（Event Time）</strong>：使用数据自身携带的时间戳（通常是数据产生的时间）。即使数据乱序到达或延迟数小时，结果依然正确且可重放，是生产环境的首选。</li>
+<li><strong>处理时间（Processing Time）</strong>：使用算子所在机器的系统时钟。延迟最低、实现最简单，但结果与数据到达速度相关，无法重放，也无法处理乱序。</li>
+<li><strong>摄入时间（Ingestion Time）</strong>：数据进入 Flink Source 时的时钟时间，介于两者之间，实际使用很少。</li>
+</ul>
+<pre><code class="language-java">// Flink 1.12 之前：显式声明时间语义（默认 ProcessingTime）
+env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+// Flink 1.12 起：该 API 被标记废弃，时间语义由窗口/水位线的使用方式隐式决定；
+// 仍然使用 TimeCharacteristic 的代码在 1.12+ 会编译告警，在 Flink 2.x 中已删除。
+</code></pre>
+<h3 id="水位线watermark">水位线（Watermark）</h3>
+<p style="text-indent:2em">在事件时间语义下，算子需要知道「某个时间点之前的数据是否已经全部到达」，这个进度信息就是<strong>水位线（Watermark）</strong>。水位线本质上是一个时间戳 \(t\)，表示「不会再出现事件时间小于等于 \(t\) 的数据」。窗口的触发条件是<strong>时间</strong>而不是元素个数：当水位线推进到窗口结束时间时，窗口才会触发计算。</p>
+<div class="math-block">\[\text{watermark} = \max(\text{eventTime}) - \text{allowedOutOfOrderness}\]</div>
+<p style="text-indent:2em">常用的两种生成方式：</p>
+<pre><code class="language-java">DataStream&lt;SensorReading&gt; stream = env.addSource(new MySensorSource());
+
+// 方式一：周期性水位线（BoundedOutOfOrderness），允许固定乱序，最常用
+DataStream&lt;SensorReading&gt; withWm = stream.assignTimestampsAndWatermarks(
+        WatermarkStrategy.&lt;SensorReading&gt;forBoundedOutOfOrderness(Duration.ofSeconds(2))
+                .withTimestampAssigner((event, recordTimestamp) -&gt; event.getTimestamp() * 1000L)
+);
+
+// 方式二：严格有序流（forMonotonousTimestamps），水位线就是当前最大事件时间
+DataStream&lt;SensorReading&gt; ordered = stream.assignTimestampsAndWatermarks(
+        WatermarkStrategy.&lt;SensorReading&gt;forMonotonousTimestamps()
+                .withTimestampAssigner((event, ts) -&gt; event.getTimestamp() * 1000L)
+);
+</code></pre>
+<p style="text-indent:2em">Flink 1.11 之前的写法是 <code>AssignerWithPeriodicWatermarks</code> / <code>AssignerWithPunctuatedWatermarks</code> 接口，1.11 起统一为 <code>WatermarkStrategy</code>，旧接口在后续版本中被废弃。<code>Duration.ofSeconds(2)</code> 是 Java 8 的 <code>java.time.Duration</code>，Scala 中一般写作 <code>Time.seconds(2)</code> 或同样调用 <code>Duration.ofSeconds</code>。</p>
+<p style="text-indent:2em">水位线会像普通数据一样在算子之间向下游传递，多个输入时取<strong>最小值</strong>（取最慢的那条流），因此任何一条上游流卡住都会拖慢整个作业的窗口触发。它只表示时间进度，不会删除任何数据，也不会自动丢弃迟到数据。</p>
+<h3 id="窗口与迟到数据">窗口与迟到数据</h3>
+<p style="text-indent:2em">窗口把无界流切分成有界的「桶」，配合事件时间与水位线才能得到确定的结果。三种基本窗口如下：</p>
+<pre><code class="language-java">// 1) 滚动窗口：窗口不重叠，每条数据只属于一个窗口
+stream.keyBy(SensorReading::getId)
+      .window(TumblingEventTimeWindows.of(Time.seconds(5)))
+      .sum("temperature");
+
+// 2) 滑动窗口：窗口可重叠，一条数据可以属于多个窗口
+stream.keyBy(SensorReading::getId)
+      .window(SlidingEventTimeWindows.of(Time.seconds(10), Time.seconds(5)))
+      .max("temperature");
+
+// 3) 会话窗口：按活动间隔切分，间隔超过 gap 就关闭窗口
+stream.keyBy(SensorReading::getId)
+      .window(EventTimeSessionWindows.withGap(Time.seconds(10)))
+      .sum("temperature");
+</code></pre>
+<p style="text-indent:2em">对于迟到数据，可以设置 <code>allowedLateness</code>，让窗口在触发后继续保留状态一段时间，迟到数据到达时重新触发计算；超过保留期的数据可以用侧输出流（Side Output）单独收集，而不是被静默丢弃。</p>
+<pre><code class="language-java">// 侧输出流标签：用于收集被 allowedLateness 排除掉的更晚数据
+final OutputTag&lt;SensorReading&gt; lateTag = new OutputTag&lt;SensorReading&gt;("late") {};
+
+SingleOutputStreamOperator&lt;String&gt; result = stream
+        .keyBy(SensorReading::getId)
+        .window(TumblingEventTimeWindows.of(Time.seconds(5)))
+        .allowedLateness(Time.seconds(2))   // 窗口触发后再等 2 秒
+        .sideOutputLateData(lateTag)        // 更晚的数据进侧输出流
+        .process(new ProcessWindowFunction&lt;SensorReading, String, String, TimeWindow&gt;() {
+            @Override
+            public void process(String key, Context ctx, Iterable&lt;SensorReading&gt; elements,
+                                Collector&lt;String&gt; out) {
+                // ctx.window() 可拿到窗口起止时间，ctx.currentProcessingTime() 拿到处理时间
+                out.collect(key + " window=" + ctx.window().getStart() + "-"
+                        + ctx.window().getEnd() + " size=" + ((Collection&lt;?&gt;) elements).size());
+            }
+        });
+
+result.getSideOutput(lateTag).print("late");
+</code></pre>
+<p style="text-indent:2em">选择建议：需要结果正确、可重放、能容忍一定延迟时用事件时间；只关心「现在这一刻」的近似统计且能接受不可重放时用处理时间。Flink 1.12 起官方推荐使用 <code>WatermarkStrategy</code> 配合事件时间，不再推荐 <code>TimeCharacteristic.ProcessingTime</code> 与 <code>timeWindow()</code> 这类隐式处理时间 API。</p>
+<h2 id="状态与-checkpoint">状态与 Checkpoint</h2>
+<p style="text-indent:2em">流处理算子大多是有状态的：<code>sum</code>、<code>max</code> 要记住累加值，窗口要缓存窗口内的元素，<code>process</code> 里还可以自定义键控状态。Flink 把状态划分为两类：</p>
+<ul>
+<li><strong>键控状态（Keyed State）</strong>：只能在 <code>keyBy</code> 之后的算子中使用，按 key 隔离，常用形式有 <code>ValueState</code>、<code>ListState</code>、<code>MapState</code>、<code>ReducingState</code>、<code>AggregatingState</code>。</li>
+<li><strong>算子状态（Operator State）</strong>：作用在算子实例上，与 key 无关，典型代表是 Kafka Source 里记录 offset 的 <code>ListState</code>。</li>
+</ul>
+<pre><code class="language-java">public class CountWithState extends RichFlatMapFunction&lt;SensorReading, String&gt; {
+    private transient ValueState&lt;Integer&gt; countState;
+
+    @Override
+    public void open(Configuration parameters) {
+        ValueStateDescriptor&lt;Integer&gt; descriptor =
+                new ValueStateDescriptor&lt;&gt;("count", Integer.class, 0);
+        countState = getRuntimeContext().getState(descriptor);
+    }
+
+    @Override
+    public void flatMap(SensorReading value, Collector&lt;String&gt; out) throws Exception {
+        int current = countState.value();
+        countState.update(current + 1);
+        out.collect(value.getId() + " 第 " + current + " 次");
+    }
+}
+</code></pre>
+<p style="text-indent:2em">状态本身不提供容错，<strong>Checkpoint</strong> 才是容错的基础：JobManager 周期性触发快照，把各算子的状态写入可靠存储（HDFS、S3 等），作业失败后从最近一次完成的快照恢复。</p>
+<pre><code class="language-java">StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+// 每 10 秒做一次 Checkpoint，精确一次语义，超时 10 分钟
+env.enableCheckpointing(10000L, CheckpointingMode.EXACTLY_ONCE);
+env.getCheckpointConfig().setCheckpointTimeout(600000L);
+env.getCheckpointConfig().setMinPauseBetweenCheckpoints(5000L);
+env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+// 作业取消后保留 Checkpoint，便于后续恢复
+env.getCheckpointConfig().enableExternalizedCheckpoints(
+        CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+// Checkpoint 存储位置（Flink 1.10 写法）
+env.setStateBackend(new FsStateBackend("hdfs://hadoop102:9000/flink/checkpoints"));
+</code></pre>
+<pre><code class="language-yaml"># conf/flink-conf.yaml 中的全局配置
+state.backend: filesystem
+state.checkpoints.dir: hdfs://hadoop102:9000/flink/checkpoints
+state.savepoints.dir: hdfs://hadoop102:9000/flink/savepoints
+execution.checkpointing.interval: 10s
+execution.checkpointing.mode: EXACTLY_ONCE
+</code></pre>
+<p style="text-indent:2em"><strong>版本差异</strong>：Flink 1.10 使用 <code>FsStateBackend</code> / <code>RocksDBStateBackend</code>，从 Flink 1.13 起统一为 <code>HashMapStateBackend</code> 与 <code>EmbeddedRocksDBStateBackend</code>；<code>state.backend: filesystem</code> 对应哈希状态后端（状态存内存、快照写文件系统），<code>state.backend: rocksdb</code> 会把工作状态放在 RocksDB 中，适合状态远大于内存的场景。Flink 2.x 中 Checkpoint 存储改用 <code>FileSystemCheckpointStorage</code>，配置项为 <code>execution.checkpointing.dir</code>。</p>
+<h3 id="端到端-exactly-once">端到端 Exactly-Once</h3>
+<p style="text-indent:2em">作业内部做到 Exactly-Once（Checkpoint 对齐 + 状态快照 + 从快照恢复）并不等于端到端 Exactly-Once。端到端还需要：</p>
+<ol>
+<li><strong>可重放的数据源</strong>：Kafka 等能按 offset 重新消费的数据源；</li>
+<li><strong>状态一致性</strong>：Checkpoint 时把 Source 的 offset 一并写入快照，恢复时从快照中的 offset 继续；</li>
+<li><strong>幂等或事务性的 Sink</strong>：幂等写入（如按主键 upsert）或两阶段提交（Kafka Sink 的 <code>TwoPhaseCommitSinkFunction</code>、<code>exactly-once</code> 语义），否则会出现重复写入。</li>
+</ol>
+<p style="text-indent:2em">需要权衡的是：Exactly-Once 会带来 Checkpoint 对齐时的等待与额外的存储开销，如果下游可接受重复（如写日志、做近似统计），改用 At-Least-Once 往往能换来更低延迟。</p>
 <h2 id="支持的数据类型">支持的数据类型</h2>
 <p style="text-indent:2em">Flink 流应用程序处理的是以数据对象表示的事件流。 所以在 Flink 内部， 我们
 需要能够处理这些对象。 它们需要被序列化和反序列化， 以便通过网络传送它们；
@@ -652,7 +780,7 @@ stream.addSink(new MySink(xxxx))
 官方提供了一部分的框架的 sink。 除此以外， 需要用户自定义实现 sink。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1618451579569.png" alt="" loading="lazy"></figure>
 <h3 id="kafka">Kafka</h3>
-<pre><code class="language-java">pom.xml
+<pre><code class="language-xml">pom.xml
 &lt;!--
 https://mvnrepository.com/artifact/org.apache.flink/flink-connector-kafka-0.11
 --&gt;
@@ -669,7 +797,7 @@ union.addSink(new FlinkKafkaProducer&lt;String&gt;(&quot;localhost:9092&quot;,
 </code></pre>
 <h3 id="redis">Redis</h3>
 <p>pom.xml</p>
-<pre><code class="language-java">&lt;!-- https://mvnrepository.com/artifact/org.apache.bahir/flink-connector-redis
+<pre><code class="language-xml">&lt;!-- https://mvnrepository.com/artifact/org.apache.bahir/flink-connector-redis
 --&gt;
 &lt;dependency&gt;
     &lt;groupId&gt;org.apache.bahir&lt;/groupId&gt;
@@ -696,7 +824,7 @@ FlinkJedisPoolConfig.Builder().setHost(&quot;localhost&quot;).setPort(6379).buil
 </code></pre>
 <h3 id="elasticsearch">Elasticsearch</h3>
 <p>pom.xml</p>
-<pre><code class="language-java">&lt;dependency&gt;
+<pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.apache.flink&lt;/groupId&gt;
     &lt;artifactId&gt;flink-connector-elasticsearch6_2.12&lt;/artifactId&gt;
     &lt;version&gt;1.10.1&lt;/version&gt;
@@ -766,8 +894,7 @@ dataStream.addSink( esSinkBuilder.build() )
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#environment">Environment</a>
+<a href="#environment">Environment</a>
 <ul>
 <li><a href="#getexecutionenvironment">getExecutionEnvironment</a></li>
 <li><a href="#createlocalenvironment">createLocalEnvironment</a></li>
@@ -775,7 +902,8 @@ dataStream.addSink( esSinkBuilder.build() )
 <li><a href="#setparallelism">setParallelism</a></li>
 </ul>
 </li>
-<li><a href="#source">Source</a>
+<li>
+<a href="#source">Source</a>
 <ul>
 <li><a href="#%E4%BB%8E%E9%9B%86%E5%90%88%E8%AF%BB%E5%8F%96%E6%95%B0%E6%8D%AE">从集合读取数据</a></li>
 <li><a href="#%E4%BB%8E%E6%96%87%E4%BB%B6%E8%AF%BB%E5%8F%96%E6%95%B0%E6%8D%AE">从文件读取数据</a></li>
@@ -783,7 +911,8 @@ dataStream.addSink( esSinkBuilder.build() )
 <li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89-source">自定义 Source</a></li>
 </ul>
 </li>
-<li><a href="#transform">Transform</a>
+<li>
+<a href="#transform">Transform</a>
 <ul>
 <li><a href="#map">map</a></li>
 <li><a href="#flatmap">flatMap</a></li>
@@ -796,7 +925,21 @@ dataStream.addSink( esSinkBuilder.build() )
 <li><a href="#union">Union</a></li>
 </ul>
 </li>
-<li><a href="#%E6%94%AF%E6%8C%81%E7%9A%84%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">支持的数据类型</a>
+<li>
+<a href="#%E6%97%B6%E9%97%B4%E8%AF%AD%E4%B9%89%E4%B8%8E%E6%B0%B4%E4%BD%8D%E7%BA%BF">时间语义与水位线</a>
+<ul>
+<li><a href="#%E6%B0%B4%E4%BD%8D%E7%BA%BFwatermark">水位线（Watermark）</a></li>
+<li><a href="#%E7%AA%97%E5%8F%A3%E4%B8%8E%E8%BF%9F%E5%88%B0%E6%95%B0%E6%8D%AE">窗口与迟到数据</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E7%8A%B6%E6%80%81%E4%B8%8E-checkpoint">状态与 Checkpoint</a>
+<ul>
+<li><a href="#%E7%AB%AF%E5%88%B0%E7%AB%AF-exactly-once">端到端 Exactly-Once</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%94%AF%E6%8C%81%E7%9A%84%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">支持的数据类型</a>
 <ul>
 <li><a href="#%E5%9F%BA%E7%A1%80%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">基础数据类型</a></li>
 <li><a href="#java-%E5%92%8C-scala-%E5%85%83%E7%BB%84tuples">Java 和 Scala 元组（Tuples）</a></li>
@@ -805,21 +948,21 @@ dataStream.addSink( esSinkBuilder.build() )
 <li><a href="#%E5%85%B6%E5%AE%83arrays-lists-maps-enums-%E7%AD%89%E7%AD%89">其它（Arrays, Lists, Maps, Enums, 等等）</a></li>
 </ul>
 </li>
-<li><a href="#%E5%AE%9E%E7%8E%B0-udf-%E5%87%BD%E6%95%B0%E6%9B%B4%E7%BB%86%E7%B2%92%E5%BA%A6%E7%9A%84%E6%8E%A7%E5%88%B6%E6%B5%81">实现 UDF 函数——更细粒度的控制流</a>
+<li>
+<a href="#%E5%AE%9E%E7%8E%B0-udf-%E5%87%BD%E6%95%B0%E6%9B%B4%E7%BB%86%E7%B2%92%E5%BA%A6%E7%9A%84%E6%8E%A7%E5%88%B6%E6%B5%81">实现 UDF 函数——更细粒度的控制流</a>
 <ul>
 <li><a href="#%E5%87%BD%E6%95%B0%E7%B1%BBfunction-classes">函数类（Function Classes）</a></li>
 <li><a href="#%E5%8C%BF%E5%90%8D%E5%87%BD%E6%95%B0lambda-functions">匿名函数（Lambda Functions）</a></li>
 <li><a href="#%E5%AF%8C%E5%87%BD%E6%95%B0rich-functions">富函数（Rich Functions）</a></li>
 </ul>
 </li>
-<li><a href="#sink">Sink</a>
+<li>
+<a href="#sink">Sink</a>
 <ul>
 <li><a href="#kafka">Kafka</a></li>
 <li><a href="#redis">Redis</a></li>
 <li><a href="#elasticsearch">Elasticsearch</a></li>
 <li><a href="#jdbc-%E8%87%AA%E5%AE%9A%E4%B9%89-sink">JDBC 自定义 sink</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

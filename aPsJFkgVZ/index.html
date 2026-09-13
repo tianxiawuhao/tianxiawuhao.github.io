@@ -125,147 +125,397 @@
           
           <img class="post-feature-header-image" src="/post-images/aPsJFkgVZ.png" alt="封面图">
           
-          <h2 id="standalone-模式">Standalone 模式</h2>
+<h2 id="flink-部署模式概览">Flink 部署模式概览</h2>
+<p>Flink 的部署方式可以归纳为三类：Standalone、YARN 和 Kubernetes。三者的<strong>运行架构完全相同</strong>——都是 JobManager 负责调度与协调、TaskManager 提供 slot 执行 subtask，区别只在于<strong>资源由谁分配、进程由谁拉起</strong>。Standalone 自己管理进程和资源；YARN 与 Kubernetes 把资源调度和进程编排交给外部平台，Flink 只负责作业本身。</p>
+<p><img src="/post-assets/aPsJFkgVZ/01-deploy-modes.svg" alt="Flink Standalone、YARN、Kubernetes 三种部署模式对比图"></p>
+<p>三种模式的关键差异可以概括为下表：</p>
+<table>
+<thead>
+<tr><th>对比项</th><th>Standalone</th><th>YARN</th><th>Kubernetes</th></tr>
+</thead>
+<tbody>
+<tr><td>资源来源</td><td>各节点本地资源，静态划分</td><td>NodeManager 动态分配 Container</td><td>调度器拉取 Pod</td></tr>
+<tr><td>集群生命周期</td><td>常驻，扩容需改 slaves 后重启</td><td>Session 常驻；Per-Job / Application 随作业生死</td><td>Session 常驻；Application 随作业生死</td></tr>
+<tr><td>提交入口</td><td><code>flink run -c 主类 -p 2 app.jar</code></td><td><code>flink run -t yarn-application</code></td><td><code>flink run -t kubernetes-application</code></td></tr>
+<tr><td>高可用</td><td>ZooKeeper + 共享存储目录</td><td>YARN 重启 ApplicationMaster</td><td>Pod 重建 + Kubernetes HA 服务</td></tr>
+<tr><td>适用场景</td><td>开发测试、固定资源小集群</td><td>已有 Hadoop 集群的大规模生产</td><td>云原生、弹性扩缩容</td></tr>
+</tbody>
+</table>
+<h2 id="standalone-模式">Standalone 模式</h2>
 <h3 id="安装">安装</h3>
-<p>解压缩 flink-1.10.1-bin-scala_2.12.tgz， 进入 conf 目录中。</p>
+<p>解压 <code>flink-1.10.1-bin-scala_2.12.tgz</code>，进入 conf 目录，需要修改两个配置文件并分发到集群的所有节点。</p>
 <ol>
-<li>修改 flink/conf/flink-conf.yaml 文件：<br>
-<img src="/post-images/1617953255377.png" alt="" loading="lazy"></li>
-<li>修改 /conf/slaves 文件：<br>
-<img src="/post-images/1617953264929.png" alt="" loading="lazy"></li>
-<li>分发给另外两台机子：<br>
-<img src="/post-images/1617953282098.png" alt="" loading="lazy"></li>
-<li>启动<br>
-<img src="/post-images/1617953292985.png" alt="" loading="lazy"><br>
-访问 http://localhost:8081 可以对 flink 集群和任务进行监控管理。<br>
-<img src="/post-images/1617953298218.png" alt="" loading="lazy"></li>
+<li>
+<p>修改 <code>conf/flink-conf.yaml</code>，指定 JobManager 地址以及各角色的内存与并行度：</p>
+<pre><code class="language-yaml"># JobManager 的 RPC 地址：standalone 模式下必须显式指向 Master 节点
+jobmanager.rpc.address: hadoop102
+jobmanager.rpc.port: 6123
+
+# JobManager 进程可用内存（Flink 1.10 及更早）
+jobmanager.heap.size: 1024m
+# TaskManager 进程可用内存与 slot 数（Flink 1.10 及更早）
+taskmanager.heap.size: 1024m
+taskmanager.numberOfTaskSlots: 2
+parallelism.default: 2
+
+# 历史服务器与 Web UI
+jobmanager.web.port: 8081
+historyserver.web.port: 8082
+</code></pre>
+<p>注意：<code>taskmanager.heap.size</code> 与 <code>jobmanager.heap.size</code> 是 <strong>Flink 1.10 之前</strong>的写法；从 Flink 1.10 开始内存模型细分为框架堆、托管内存、网络缓冲区等多个区域，推荐改用进程总内存 <code>taskmanager.memory.process.size</code> 与 <code>jobmanager.memory.process.size</code>（见下文「内存配置」）。</p>
+</li>
+<li>
+<p>修改 <code>conf/slaves</code>（Flink 1.11 起该文件更名为 <code>workers</code>），每一行写一台 TaskManager 节点：</p>
+<pre><code class="language-text">hadoop102
+hadoop103
+hadoop104
+</code></pre>
+<p><code>conf/slaves</code> 只决定 <code>start-cluster.sh</code> 通过 SSH 去哪些机器拉起 TaskManager 进程；每台机器上的 slot 数仍然由各自的 <code>taskmanager.numberOfTaskSlots</code> 决定，两者的乘积才是集群总 slot 数。</p>
+</li>
+<li>
+<p>把整个解压目录分发到另外两台机器（目录结构必须保持一致，否则启动脚本会找不到路径）：</p>
+<pre><code class="language-bash">xsync flink-1.10.1/
+</code></pre>
+</li>
+<li>
+<p>启动集群并访问 Web UI：</p>
+<pre><code class="language-bash"># 在配置了 slaves 的节点上启动 JobManager 与所有 TaskManager
+bin/start-cluster.sh
+
+# 需要停止时
+bin/stop-cluster.sh
+</code></pre>
+<p>浏览器访问 <code>http://hadoop102:8081</code>，即可查看集群与任务的运行情况。</p>
+</li>
 </ol>
 <h3 id="提交任务">提交任务</h3>
 <ol>
-<li>准备数据文件（ 如果需要）<br>
-<img src="/post-images/1617953344217.png" alt="" loading="lazy"></li>
-<li>把含数据文件的文件夹分发到 taskmanager 机器中<br>
-<img src="/post-images/1617953351280.png" alt="" loading="lazy"></li>
+<li>准备数据文件（如果作业需要从本地磁盘读取）：</li>
 </ol>
-<p style="text-indent:2em">如 果 从 文 件 中 读 取 数 据 ， 由 于 是 从 本 地 磁 盘 读 取 ， 实 际 任 务 会 被 分 发 到taskmanager 的机器中， 所以要把目标文件分发。</p>
-<ol start="3">
-<li>执行程序</li>
-</ol>
-<pre><code class="language-sh">./flink run -c com.atguigu.wc.StreamWordCount –p 2
-FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host lcoalhost –port 7777
+<pre><code class="language-bash">mkdir -p /opt/module/flink-1.10.1/input
+echo -e "hello flink\nhello world\nhello flink" &gt; /opt/module/flink-1.10.1/input/words.txt
 </code></pre>
-<figure data-type="image" tabindex="1"><img src="/post-images/1617953534756.png" alt="" loading="lazy"></figure>
+<ol start="2">
+<li>把含数据文件的文件夹分发到 taskmanager 机器中：</li>
+</ol>
+<pre><code class="language-bash">xsync /opt/module/flink-1.10.1/input
+</code></pre>
+<p style="text-indent:2em">如果从文件中读取数据，由于是从本地磁盘读取，实际任务会被分发到 taskmanager 的机器中，所以要把目标文件分发到每一台 TaskManager。</p>
+<ol start="3">
+<li>执行程序：</li>
+</ol>
+<pre><code class="language-bash">./bin/flink run -c com.atguigu.wc.StreamWordCount -p 2 \
+  FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host localhost --port 7777
+</code></pre>
+<p>常用参数：<code>-c</code> 指定入口类（jar 的 Main-Class 没写时必须指定）；<code>-p</code> 指定作业并行度，会覆盖配置文件的 <code>parallelism.default</code>；<code>-d</code> 表示 detached 模式，提交后立即返回；最后的 <code>--host --port</code> 才是传给应用程序 <code>main()</code> 的参数。注意原文命令里的 <code>–p</code>、<code>–port</code> 是排版时被替换成了长破折号，实际必须写成半角减号 <code>-p</code>、<code>--port</code>，否则参数会被当成主类名而报错。</p>
 <ol start="4">
-<li>到目标文件夹中查看计算结果<br>
-注 意 ： 如 果 计 算 结 果 输 出 到 文 件 ， 会 保 存 到 taskmanager 的 机 器 下 ， 不 会 在jobmanage 下。<br>
-<img src="/post-images/1617953549746.png" alt="" loading="lazy"></li>
-<li>在 webui 控制台查看计算过程<br>
-<img src="/post-images/1617953465087.png" alt="" loading="lazy"></li>
+<li>到目标文件夹中查看计算结果。<br>
+注意：如果计算结果输出到文件，会保存到 taskmanager 的机器下，不会在 jobmanager 下。</li>
 </ol>
+<pre><code class="language-bash">ls /opt/module/flink-1.10.1/output
+cat /opt/module/flink-1.10.1/output/*
+</code></pre>
+<ol start="5">
+<li>在 Web UI 控制台查看计算过程：<code>Running Jobs</code> 页可以看到各算子的 subtask、数据流量与反压情况，<code>Task Managers</code> 页可以看到每个 TaskManager 的 slot 占用。</li>
+</ol>
+<h3 id="standalone-高可用配置">Standalone 高可用配置</h3>
+<p>Standalone 集群默认只有一个 JobManager，它一旦宕机整个集群就不可用。生产环境需要配置高可用（HA）：多个 JobManager 通过 <strong>ZooKeeper 选举</strong>出唯一 leader，作业的元数据（JobGraph、Checkpoint 指针）写入<strong>共享存储目录</strong>，新 leader 从该目录恢复作业。</p>
+<pre><code class="language-yaml"># 1) 与 zookeeper 相关的配置
+high-availability: zookeeper
+high-availability.zookeeper.quorum: hadoop102:2181,hadoop103:2181,hadoop104:2181
+high-availability.zookeeper.path.root: /flink
+high-availability.cluster-id: /default_ns
+
+# 2) 存放 JobManager 元数据（JobGraph 与 Checkpoint 指针）的共享目录，必须是 HDFS/S3 等共享文件系统
+high-availability.storageDir: hdfs://hadoop102:9000/flink/ha/
+
+# 3) 使用 ZooKeeper 作为 HA 后，JobManager 地址改为从 ZK 获取
+# jobmanager.rpc.address 不再需要指向固定主机
+
+# 4) 高可用时的默认文件系统
+fs.default-scheme: hdfs://hadoop102:9000
+</code></pre>
+<pre><code class="language-bash"># 在 conf/masters 中列出所有候选 JobManager（每行一个 主机:web端口）
+echo "hadoop102:8081" &gt;&gt; conf/masters
+echo "hadoop103:8081" &gt;&gt; conf/masters
+
+# 依次启动多个 JobManager 与所有 TaskManager
+bin/start-cluster.sh
+</code></pre>
+<p>需要区分两个层面的高可用：<strong>JobManager 高可用</strong>解决「主节点宕机」，靠 ZooKeeper 选举加共享存储；<strong>任务级容错</strong>解决「TaskManager 或作业失败」，靠 Checkpoint 与重启策略（见第五章状态与 Checkpoint 一节）。两者缺一不可。</p>
+<h3 id="内存配置">内存配置</h3>
+<p>Flink 1.10 起内存被划分为若干区域，理解这些区域才能正确设置参数：</p>
+<ul>
+<li><strong>JVM 堆（Heap）</strong>：框架堆与用户代码堆，运行算子和用户对象。</li>
+<li><strong>托管内存（Managed Memory）</strong>：排序、哈希表、RocksDB 状态后端使用，由 Flink 自己管理。</li>
+<li><strong>网络内存（Network）</strong>：TaskManager 之间数据交换的缓冲区，直接影响吞吐与反压表现。</li>
+<li><strong>JVM 元空间、Overhead 与 JVM 自身开销</strong>：由 Flink 预留或 JVM 占用。</li>
+</ul>
+<p>因此推荐用<strong>进程总内存</strong>来配置，其余区域自动推算：</p>
+<pre><code class="language-yaml"># 以进程总内存为单位配置（推荐，Flink 1.10+）
+jobmanager.memory.process.size: 1600m
+taskmanager.memory.process.size: 2048m
+
+# 需要单独调大网络缓冲区时（影响数据交换与反压）
+taskmanager.memory.network.min: 64mb
+taskmanager.memory.network.max: 1gb
+</code></pre>
+<p>YARN 与 Kubernetes 模式下，提交命令中的 <code>-Djobmanager.memory.process.size</code>、<code>-Dtaskmanager.memory.process.size</code> 会覆盖配置文件；<code>taskmanager.numberOfTaskSlots</code> 与 <code>parallelism.default</code> 同理可用 <code>-D</code> 指定。</p>
+<h3 id="并行度与-slot-设置">并行度与 slot 设置</h3>
+<p>Flink 中「并行度」有三个层次，优先级由低到高：</p>
+<ol>
+<li><strong>配置文件</strong>：<code>parallelism.default: 2</code>，作用于整个集群的默认值。</li>
+<li><strong>提交命令</strong>：<code>-p 4</code> 或 <code>-Dparallelism.default=4</code>，作用于本次提交的作业。</li>
+<li><strong>代码中</strong>：<code>env.setParallelism(4)</code> 或对单个算子调用 <code>operator.setParallelism(2)</code>，优先级最高。</li>
+</ol>
+<p><strong>slot</strong> 是 TaskManager 上的资源单位，一个 slot 代表 TaskManager 的一份固定资源子集（内存等），算子链中的多个 subtask 可以共享同一个 slot。集群总 slot 数 = TaskManager 数量 × <code>taskmanager.numberOfTaskSlots</code>。一个作业所需 slot 数 = 作业中<strong>最大并行度</strong>（在 slot 共享组内计算），与作业的算子数量无关。</p>
+<pre><code class="language-yaml"># 每个 TaskManager 提供 4 个 slot
+taskmanager.numberOfTaskSlots: 4
+# 提交时让 8 个 subtask 分布在 2 个 TaskManager 上
+parallelism.default: 8
+</code></pre>
 <h2 id="yarn-模式">Yarn 模式</h2>
-<p style="text-indent:2em">以 Yarn 模式部署 Flink 任务时， 要求 Flink 是有 Hadoop 支持的版本， Hadoop环境需要保证版本在 2.2 以上， 并且集群中安装有 HDFS 服务</p>
+<p style="text-indent:2em">以 Yarn 模式部署 Flink 任务时，要求 Flink 是有 Hadoop 支持的版本（<code>flink-1.10.1-bin-scala_2.12.tgz</code> 这类不带 hadoop 的包需要额外下载对应 Hadoop 版本的依赖 jar），Hadoop 环境需要保证版本在 2.2 以上，并且集群中安装有 HDFS 服务。</p>
 <h3 id="flink-on-yarn">Flink on Yarn</h3>
-<p style="text-indent:2em">Flink 提供了两种在 yarn 上运行的模式， 分别为 Session-Cluster 和 Per-Job-Cluster模式。</p>
+<p style="text-indent:2em">Flink 提供了三种在 yarn 上运行的模式：Session-Cluster、Per-Job-Cluster（Flink 1.15 起被标记废弃）和 Application 模式（Flink 1.11 引入）。</p>
 <ol>
-<li>
-<p>Session-cluster 模式：</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1617953616812.png" alt="" loading="lazy"></figure>
-</li>
+<li>Session-cluster 模式：</li>
 </ol>
-<p style="text-indent:2em">Session-Cluster 模式需要先启动集群， 然后再提交作业， 接着会向 yarn 申请一块空间后， 资源永远保持不变。 如果资源满了， 下一个作业就无法提交， 只能等到
-yarn 中的其中一个作业执行完成后， 释放了资源， 下个作业才会正常提交。 所有作
-业共享 Dispatcher 和 ResourceManager； 共享资源； 适合规模小执行时间短的作业。
-<p style="text-indent:2em">在 yarn 中初始化一个 flink 集群， 开辟指定的资源， 以后提交任务都向这里提交。 这个 flink 集群会常驻在 yarn 集群中， 除非手工停止。</p>
-<ol>
+<p style="text-indent:2em">Session-Cluster 模式需要先启动集群，然后再提交作业，接着会向 yarn 申请一块空间后，资源永远保持不变。如果资源满了，下一个作业就无法提交，只能等到 yarn 中的其中一个作业执行完成后释放了资源，下个作业才会正常提交。所有作业共享 Dispatcher 和 ResourceManager，共享资源，适合规模小、执行时间短的作业。</p>
+<p style="text-indent:2em">在 yarn 中初始化一个 flink 集群，开辟指定的资源，以后提交任务都向这里提交。这个 flink 集群会常驻在 yarn 集群中，除非手工停止。</p>
+<ol start="2">
 <li>Per-Job-Cluster 模式：</li>
 </ol>
-<figure data-type="image" tabindex="3"><img src="/post-images/1617953630802.png" alt="" loading="lazy"></figure>
-<p style="text-indent:2em">一个 Job 会对应一个集群， 每提交一个作业会根据自身的情况， 都会单独向 yarn申请资源， 直到作业执行完成， 一个作业的失败与否并不会影响下一个作业的正常
-提交和运行。 独享 Dispatcher 和 ResourceManager， 按需接受资源申请； 适合规模大
-长时间运行的作业。
-<p style="text-indent:2em">每次提交都会创建一个新的 flink 集群， 任务之间互相独立， 互不影响， 方便管理。 任务执行完成之后创建的集群也会消失。</p>
+<p style="text-indent:2em">一个 Job 会对应一个集群，每提交一个作业会根据自身的情况单独向 yarn 申请资源，直到作业执行完成，一个作业的失败与否并不会影响下一个作业的正常提交和运行。独享 Dispatcher 和 ResourceManager，按需申请资源，适合规模大、长时间运行的作业。</p>
+<p style="text-indent:2em">每次提交都会创建一个新的 flink 集群，任务之间互相独立、互不影响，方便管理，任务执行完成之后创建的集群也会消失。</p>
+<blockquote>
+<p>补充：Application 模式（Flink 1.11 引入，2.x 推荐）与 Per-Job 一样是「一作业一集群」，但 <code>main()</code> 方法在集群中执行而不是在客户端执行，因此客户端不再需要下载大量依赖、也不承担生成 JobGraph 的开销，是当前生产环境的首选。</p>
+</blockquote>
 <h3 id="session-cluster">Session Cluster</h3>
 <ol>
-<li>启动 hadoop 集群（ 略）</li>
-<li>启动 yarn-session</li>
+<li>启动 hadoop 集群（略）。</li>
+<li>启动 yarn-session：</li>
 </ol>
-<pre><code class="language-sh">./yarn-session.sh -n 2 -s 2 -jm 1024 -tm 1024 -nm test -d
+<pre><code class="language-bash">./bin/yarn-session.sh -n 2 -s 2 -jm 1024 -tm 1024 -nm test -d
 </code></pre>
 <p>其中：</p>
 <blockquote>
-<p>-n(--container)： TaskManager 的数量。<br>
--s(--slots)： 每个 TaskManager 的 slot 数量， 默认一个 slot 一个 core， 默认每个<br>
-taskmanager 的 slot 的个数为 1， 有时可以多一些 taskmanager， 做冗余。<br>
--jm： JobManager 的内存（ 单位 MB)。<br>
--tm： 每个 taskmanager 的内存（ 单位 MB)。<br>
--nm： yarn 的 appName(现在 yarn 的 ui 上的名字)。<br>
--d： 后台执行。</p>
+<p>-n(--container)：TaskManager 的数量。<br>
+-s(--slots)：每个 TaskManager 的 slot 数量，默认一个 slot 一个 core。默认每个 taskmanager 的 slot 个数为 1，有时可以多一些 taskmanager，做冗余。<br>
+-jm：JobManager 的内存（单位 MB）。<br>
+-tm：每个 taskmanager 的内存（单位 MB）。<br>
+-nm：yarn 的 appName（显示在 yarn ui 上的名字）。<br>
+-d：后台执行（detached）。</p>
 </blockquote>
-<figure data-type="image" tabindex="4"><img src="/post-images/1617953810515.png" alt="" loading="lazy"></figure>
+<p>上述参数是 <code>yarn-session.sh</code> 的专用参数；Flink 1.11 之后这些配置也可以统一写成 <code>-D</code> 形式，例如 <code>-Dtaskmanager.numberOfTaskSlots=2</code>。</p>
 <ol start="3">
-<li>执行任务</li>
+<li>执行任务：</li>
 </ol>
-<pre><code class="language-sh">./flink run -c com.atguigu.wc.StreamWordCount
-FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host lcoalhost –port 7777
+<pre><code class="language-bash">./bin/flink run -c com.atguigu.wc.StreamWordCount \
+  FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host localhost --port 7777
 </code></pre>
 <ol start="4">
-<li>去 yarn 控制台查看任务状态</li>
+<li>去 yarn 控制台查看任务状态：<code>yarn application -list</code> 或者 YARN ResourceManager UI（默认 8088 端口）。</li>
+<li>取消 yarn-session：</li>
 </ol>
-<figure data-type="image" tabindex="5"><img src="/post-images/1617953816721.png" alt="" loading="lazy"></figure>
-<ol start="5">
-<li>取消 yarn-session</li>
-</ol>
-<pre><code class="language-sh">yarn application --kill application_1577588252906_0001
-3.2.2 Per Job Cluster
+<pre><code class="language-bash">yarn application -kill application_1577588252906_0001
 </code></pre>
-<ol start="6">
-<li>启动 hadoop 集群（ 略）</li>
-<li>不启动 yarn-session， 直接执行 job</li>
+<h3 id="per-job-cluster">Per Job Cluster</h3>
+<ol>
+<li>启动 hadoop 集群（略）。</li>
+<li>不启动 yarn-session，直接执行 job：</li>
 </ol>
-<pre><code class="language-sh">./flink run –m yarn-cluster -c com.atguigu.wc.StreamWordCount
-FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host lcoalhost –port
-7777
+<pre><code class="language-bash"># Flink 1.10 的写法
+./bin/flink run -m yarn-cluster -c com.atguigu.wc.StreamWordCount \
+  FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host localhost --port 7777
+</code></pre>
+<pre><code class="language-bash"># 推荐写法：1.11 起用 -t 指定部署目标，不再使用 -m yarn-cluster
+./bin/flink run -t yarn-per-job -c com.atguigu.wc.StreamWordCount \
+  FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host localhost --port 7777
+
+# Application 模式：main() 在集群中执行，生产环境首选
+./bin/flink run -t yarn-application \
+  -Djobmanager.memory.process.size=1024m \
+  -Dtaskmanager.memory.process.size=1024m \
+  -Dtaskmanager.numberOfTaskSlots=2 \
+  FlinkTutorial-1.0-SNAPSHOT-jar-with-dependencies.jar --host localhost --port 7777
+</code></pre>
+<p><strong>版本差异要特别注意</strong>：Flink 1.10 使用 <code>bin/yarn-session.sh</code> 与 <code>flink run -m yarn-cluster</code>；Flink 1.11 起 <code>yarn-session.sh</code> 被 <code>bin/yarn-session.sh</code>（新参数体系）与 <code>-t yarn-session</code> 取代，Per-Job 推荐 <code>-t yarn-per-job</code>；Flink 2.x 已经<strong>移除</strong>了 <code>-m yarn-cluster</code> 与 <code>yarn-session.sh</code>，只能使用 <code>-t yarn-session</code>、<code>-t yarn-per-job</code>、<code>-t yarn-application</code> 三种目标。旧教程里的 <code>-m yarn-cluster</code> 在 2.x 上会直接报错。</p>
+<h3 id="yarn-高可用与内存">YARN 高可用与内存</h3>
+<p>YARN 模式的高可用由两套机制配合完成：</p>
+<ul>
+<li><strong>ApplicationMaster 重试</strong>：Flink 的 JobManager 运行在 YARN 的 ApplicationMaster 中，AM 失败时由 YARN ResourceManager 重新拉起，重试次数由 <code>yarn.application-attempts</code>（默认 1）或 <code>yarn.resourcemanager.am.max-attempts</code> 控制。作业状态则从 Checkpoint 恢复。</li>
+<li><strong>JobManager 内部高可用</strong>：需要多个 AM 候选时，配置 <code>high-availability: zookeeper</code> 与 <code>high-availability.storageDir</code>，与 Standalone 的配置一致。</li>
+</ul>
+<pre><code class="language-yaml"># 允许 AM 失败后由 YARN 重试的次数（Flink 1.10 参数名）
+yarn.application-attempts: 3
+# HA 元数据存储位置
+high-availability: zookeeper
+high-availability.zookeeper.quorum: hadoop102:2181,hadoop103:2181,hadoop104:2181
+high-availability.storageDir: hdfs://hadoop102:9000/flink/ha/
 </code></pre>
 <h2 id="kubernetes-部署">Kubernetes 部署</h2>
-<p style="text-indent:2em">容器化部署时目前业界很流行的一项技术， 基于 Docker 镜像运行能够让用户更加 方 便 地 对 应 用 进 行 管 理 和 运 维 。 容 器 管 理 工 具 中 最 为 流 行 的 就 是 Kubernetes（ k8s） ， 而 Flink 也在最近的版本中支持了 k8s 部署模式。</p>
+<p style="text-indent:2em">容器化部署是目前业界很流行的一项技术，基于 Docker 镜像运行能够让用户更加方便地对应用进行管理和运维。容器管理工具中最为流行的就是 Kubernetes（k8s），而 Flink 也在最近的版本中支持了 k8s 部署模式。</p>
+<h3 id="手工部署-flink-session-cluster">手工部署 Flink Session Cluster</h3>
 <ol>
-<li>搭建 Kubernetes 集群（ 略）</li>
-<li>配置各组件的 yaml 文件</li>
+<li>搭建 Kubernetes 集群（略）。</li>
+<li>配置各组件的 yaml 文件：</li>
 </ol>
-<p style="text-indent:2em">在 k8s 上构建 Flink Session Cluster， 需要将 Flink 集群的组件对应的 docker 镜像分别在 k8s 上启动， 包括 JobManager、 TaskManager、 JobManagerService 三个镜像服务。 每个镜像服务都可以从中央镜像仓库中获取。</p>
+<p style="text-indent:2em">在 k8s 上构建 Flink Session Cluster，需要将 Flink 集群的组件对应的 docker 镜像分别在 k8s 上启动，包括 JobManager、TaskManager、JobManagerService 三个服务，每个镜像服务都可以从中央镜像仓库中获取。</p>
+<pre><code class="language-yaml"># jobmanager-service.yaml：给 JobManager 暴露 Web UI 与 RPC 端口
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-jobmanager
+spec:
+  type: ClusterIP
+  ports:
+    - name: rpc
+      port: 6123
+    - name: blob-server
+      port: 6124
+    - name: webui
+      port: 8081
+  selector:
+    app: flink
+    component: jobmanager
+</code></pre>
+<pre><code class="language-yaml"># jobmanager-deployment.yaml：JobManager 容器
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-jobmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flink
+      component: jobmanager
+  template:
+    metadata:
+      labels:
+        app: flink
+        component: jobmanager
+    spec:
+      containers:
+        - name: jobmanager
+          image: flink:1.10.1-scala_2.12
+          args: ["jobmanager"]
+          ports:
+            - containerPort: 6123
+            - containerPort: 8081
+</code></pre>
+<pre><code class="language-yaml"># taskmanager-deployment.yaml：TaskManager 容器，replicas 决定 TaskManager 个数
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-taskmanager
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flink
+      component: taskmanager
+  template:
+    metadata:
+      labels:
+        app: flink
+        component: taskmanager
+    spec:
+      containers:
+        - name: taskmanager
+          image: flink:1.10.1-scala_2.12
+          args: ["taskmanager"]
+          ports:
+            - containerPort: 6122
+          env:
+            # TaskManager 必须能解析并连上 JobManager 的 Service 名
+            - name: JOB_MANAGER_RPC_ADDRESS
+              value: flink-jobmanager
+</code></pre>
 <ol start="3">
-<li>启动 Flink Session Cluster</li>
+<li>启动 Flink Session Cluster：</li>
 </ol>
-<pre><code class="language-sh">// 启动 jobmanager-service 服务
+<pre><code class="language-bash"># 启动 jobmanager-service 服务
 kubectl create -f jobmanager-service.yaml
-// 启动 jobmanager-deployment 服务
+# 启动 jobmanager-deployment 服务
 kubectl create -f jobmanager-deployment.yaml
-// 启动 taskmanager-deployment 服务
+# 启动 taskmanager-deployment 服务
 kubectl create -f taskmanager-deployment.yaml
+
+# 查看 Pod 与 Service 是否就绪
+kubectl get pods,svc
 </code></pre>
 <ol start="4">
-<li>访问 Flink UI 页面</li>
+<li>访问 Flink UI 页面：集群启动后，可以通过 JobManagerService 中配置的 WebUI 端口访问：</li>
 </ol>
-<p style="text-indent:2em">集群启动后， 就可以通过 JobManagerServicers 中配置的 WebUI 端口， 用浏览器输入以下 url 来访问 Flink UI 页面了：</p>
-<pre><code class="language-yaml">http://{JobManagerHost:Port}/api/v1/namespaces/default/services/flink-jobmanager:ui/proxy
+<pre><code class="language-bash"># 本机端口转发后访问 http://localhost:8081
+kubectl port-forward svc/flink-jobmanager 8081:8081
+
+# 或者使用 apiserver 代理（kube-proxy 之外的方式）
+http://{JobManagerHost:Port}/api/v1/namespaces/default/services/flink-jobmanager:ui/proxy
 </code></pre>
+<h3 id="原生-kubernetes-集成">原生 Kubernetes 集成</h3>
+<p>手工维护 yaml 的方式只能算「把 Flink 装进容器」，Flink 1.10 起提供了<strong>原生 Kubernetes 集成</strong>（<code>flink-kubernetes</code>，1.10 为 beta），由 Flink 客户端直接调用 Kubernetes API 创建和销毁 JobManager、TaskManager Pod，无需自己写 yaml：</p>
+<pre><code class="language-yaml"># flink-conf.yaml 中配置镜像与 RBAC 账号
+kubernetes.container.image: flink:1.10.1-scala_2.12
+kubernetes.service-account: flink
+kubernetes.cluster-id: flink-session
+kubernetes.namespace: default
+</code></pre>
+<pre><code class="language-bash"># 作业集群（Application 模式）：一条命令拉起整个集群并执行作业
+./bin/flink run -t kubernetes-application \
+  -Dkubernetes.container.image=flink:1.10.1-scala_2.12 \
+  -Dkubernetes.service-account=flink \
+  -Dkubernetes.cluster-id=flink-demo \
+  local:///opt/flink/usrlib/FlinkTutorial-1.0-SNAPSHOT.jar
+
+# Session 模式：先起常驻集群，再提交作业
+./bin/kubernetes-session.sh -Dkubernetes.cluster-id=flink-session
+./bin/flink run -t kubernetes-session -Dkubernetes.cluster-id=flink-session app.jar
+</code></pre>
+<p>两点容易踩坑：其一，原生集成需要 Flink 客户端能访问 Kubernetes API，因此要准备 ServiceAccount 与对应 RBAC 权限；其二，JobManager 与 TaskManager 必须使用<strong>同一个</strong> <code>kubernetes.service-account</code>，否则 TaskManager Pod 会因权限不足连不上 JobManager。此外，<code>local:///path</code> 表示镜像内部已有的 jar 路径，只有集群模式下才有意义。</p>
+<h3 id="flink-版本演进与-k8s-现状">Flink 版本演进与 K8s 现状</h3>
+<ul>
+<li><strong>Flink 1.10</strong>：Standalone / YARN / Kubernetes 三种模式并存；K8s 支持手工 yaml 与原生集成两种方式；内存参数仍以 <code>heap.size</code> 为主，同时引入细粒度内存模型。</li>
+<li><strong>Flink 1.11</strong>：引入 Application 模式，部署目标统一为 <code>-t session|per-job|application</code>；<code>conf/slaves</code> 更名 <code>workers</code>。</li>
+<li><strong>Flink 1.14</strong>：Kubernetes 成为<strong>默认资源提供者</strong>（不再需要 <code>-Dexecution.target</code>）。</li>
+<li><strong>Flink 1.15</strong>：Per-Job 模式标记为废弃，官方推荐 transition 到 Application 模式。</li>
+<li><strong>Flink 2.x</strong>：移除 legacy 的 <code>-m yarn-cluster</code>、<code>-m kubernetes-session</code> 与 <code>yarn-session.sh</code> 入口；移除 Scala API（本系列后续示例请使用 Java 或 Scala 1.x 版本）；内存统一以 <code>*.memory.process.size</code> 配置；State Backend 统一为 <code>EmbeddedRocksDBStateBackend</code>/<code>HashMapStateBackend</code>，Checkpoint 存储改用 <code>FileSystemCheckpointStorage</code> 并在 <code>execution.checkpointing.dir</code> 中配置。</li>
+</ul>
+<p>因此，本系列教程基于 Flink 1.10～1.13 的写法能覆盖绝大多数历史资料；若使用 Flink 2.x，请把提交命令统一改为 <code>flink run -t &lt;target&gt;</code> 形式，并注意 <code>-m</code> 与 <code>yarn-session.sh</code> 已不可用。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#flink-%E9%83%A8%E7%BD%B2%E6%A8%A1%E5%BC%8F%E6%A6%82%E8%A7%88">Flink 部署模式概览</a>
 <ul>
-<li><a href="#standalone-%E6%A8%A1%E5%BC%8F">Standalone 模式</a>
+</ul>
+</li>
+<li>
+<a href="#standalone-%E6%A8%A1%E5%BC%8F">Standalone 模式</a>
 <ul>
 <li><a href="#%E5%AE%89%E8%A3%85">安装</a></li>
 <li><a href="#%E6%8F%90%E4%BA%A4%E4%BB%BB%E5%8A%A1">提交任务</a></li>
+<li><a href="#standalone-%E9%AB%98%E5%8F%AF%E7%94%A8%E9%85%8D%E7%BD%AE">Standalone 高可用配置</a></li>
+<li><a href="#%E5%86%85%E5%AD%98%E9%85%8D%E7%BD%AE">内存配置</a></li>
+<li><a href="#%E5%B9%B6%E8%A1%8C%E5%BA%A6%E4%B8%8E-slot-%E8%AE%BE%E7%BD%AE">并行度与 slot 设置</a></li>
 </ul>
 </li>
-<li><a href="#yarn-%E6%A8%A1%E5%BC%8F">Yarn 模式</a>
+<li>
+<a href="#yarn-%E6%A8%A1%E5%BC%8F">Yarn 模式</a>
 <ul>
 <li><a href="#flink-on-yarn">Flink on Yarn</a></li>
 <li><a href="#session-cluster">Session Cluster</a></li>
+<li><a href="#per-job-cluster">Per Job Cluster</a></li>
+<li><a href="#yarn-%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8E%E5%86%85%E5%AD%98">YARN 高可用与内存</a></li>
 </ul>
 </li>
-<li><a href="#kubernetes-%E9%83%A8%E7%BD%B2">Kubernetes 部署</a></li>
+<li>
+<a href="#kubernetes-%E9%83%A8%E7%BD%B2">Kubernetes 部署</a>
+<ul>
+<li><a href="#%E6%89%8B%E5%B7%A5%E9%83%A8%E7%BD%B2-flink-session-cluster">手工部署 Flink Session Cluster</a></li>
+<li><a href="#%E5%8E%9F%E7%94%9F-kubernetes-%E9%9B%86%E6%88%90">原生 Kubernetes 集成</a></li>
+<li><a href="#flink-%E7%89%88%E6%9C%AC%E6%BC%94%E8%BF%9B%E4%B8%8E-k8s-%E7%8E%B0%E7%8A%B6">Flink 版本演进与 K8s 现状</a></li>
 </ul>
 </li>
 </ul>

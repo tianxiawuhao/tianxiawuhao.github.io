@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="980" viewBox="0 0 900 980">
+<defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5b6b7c"/></marker><marker id="arb" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2f6fd0"/></marker><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#e08a1e"/></marker></defs>
+<rect width="900" height="980" fill="#ffffff"/>
+<text x="450" y="28" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">Flink 时间语义与水位线：事件时间、处理时间、Watermark 与窗口触发</text>
+<text x="450" y="50" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="400" fill="#5b6b7c" text-anchor="middle">1000 / 1001 / 1002 表示事件时间戳，事件按到达顺序排列，时间戳可以乱序</text>
+<text x="24" y="80" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14.5" font-weight="700" fill="#2f6fd0">① 乱序事件流与事件时间</text>
+<rect x="24" y="92" width="852" height="150" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1"/>
+<line x1="60" y1="190" x2="852" y2="190" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar)"/>
+<text x="846" y="208" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#5b6b7c" text-anchor="end">处理时间 →（到达顺序）</text>
+<line x1="100" y1="190" x2="100" y2="150" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="100" cy="190" r="5" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+<text x="100" y="142" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">事件时间 1000</text>
+<line x1="220" y1="190" x2="220" y2="150" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="220" cy="190" r="5" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+<text x="220" y="142" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">事件时间 1002</text>
+<line x1="340" y1="190" x2="340" y2="150" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="340" cy="190" r="5" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+<text x="340" y="142" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">事件时间 1001</text>
+<line x1="470" y1="190" x2="470" y2="150" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="470" cy="190" r="5" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+<text x="470" y="142" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">事件时间 1005</text>
+<line x1="600" y1="190" x2="600" y2="150" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="600" cy="190" r="5" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+<text x="600" y="142" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">事件时间 1003</text>
+<line x1="730" y1="190" x2="730" y2="150" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="730" cy="190" r="5" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+<text x="730" y="142" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">事件时间 1008</text>
+<text x="60" y="122" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11.5" font-weight="400" fill="#1f2b38">到达顺序：1000 → 1002 → 1001 → 1005 → 1003 → 1008，其中 1001、1003 属于迟到数据</text>
+<text x="60" y="232" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#2f6fd0">只要在代码里设置 env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)，窗口就必须依赖事件时间戳与水位线来判断「数据到齐了没有」</text>
+<text x="60" y="250" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#5b6b7c">若不设置，Flink 1.12 之前默认是处理时间 ProcessingTime（用系统时钟），结果不可重放、与到达速度相关</text>
+<text x="24" y="300" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14.5" font-weight="700" fill="#2e9e5b">② 水位线（Watermark）与窗口触发</text>
+<rect x="24" y="312" width="852" height="146" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1"/>
+<rect x="44" y="332" width="230" height="100" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.3"/>
+<text x="159" y="354" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">周期性水位线（默认）</text>
+<text x="159" y="374" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">按 processingTime 间隔周期生成</text>
+<text x="159" y="390" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">（默认 200ms）</text>
+<text x="159" y="406" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">WM = 当前最大事件时间 − 1ms</text>
+<text x="159" y="422" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">表示「不会再出现更早的事件」</text>
+<text x="159" y="438" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">用 -D 或 ExecutionConfig 配置</text>
+<rect x="292" y="332" width="270" height="100" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.3"/>
+<text x="427" y="354" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#e08a1e" text-anchor="middle">窗口何时触发</text>
+<text x="427" y="374" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">窗口 [1000,1005) 的结束时间 1005</text>
+<text x="427" y="390" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">当水位线 ≥ 1005 时触发计算</text>
+<text x="427" y="406" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">触发条件是时间，不是元素个数</text>
+<text x="427" y="422" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">乱序越大，等待越久、延迟越高</text>
+<text x="427" y="438" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">WM 只为事件时间窗口服务</text>
+<rect x="580" y="332" width="276" height="100" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.3"/>
+<text x="718" y="354" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#2f6fd0" text-anchor="middle">水位线如何产生</text>
+<text x="718" y="374" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">assignTimestampsAndWatermarks</text>
+<text x="718" y="390" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">BoundedOutOfOrderness 允许</text>
+<text x="718" y="406" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">固定乱序（如 2 秒）</text>
+<text x="718" y="422" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">forMonotonousTimestamps 用于</text>
+<text x="718" y="438" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38" text-anchor="middle">严格有序流；自定义实现也可</text>
+<text x="44" y="326" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10.5" font-weight="400" fill="#5b6b7c">水位线在算子之间像普通数据一样传递，多个输入取最小值；它不会删除数据，只告诉算子时间进度</text>
+<text x="24" y="478" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14.5" font-weight="700" fill="#7a5bd0">③ 三种窗口与时间语义的选择</text>
+<rect x="24" y="490" width="852" height="132" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1"/>
+<rect x="40" y="506" width="200" height="104" rx="8" fill="#eef4ff" stroke="#7a5bd0" stroke-width="1.1"/>
+<text x="140" y="528" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#7a5bd0" text-anchor="middle">滚动窗口 Tumbling</text>
+<text x="140" y="548" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">窗口不重叠：timeWindow(Time.</text>
+<text x="140" y="563" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">seconds(5))</text>
+<text x="140" y="596" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#5b6b7c" text-anchor="middle">每条数据只属于一个窗口</text>
+<rect x="350" y="506" width="200" height="104" rx="8" fill="#eef4ff" stroke="#7a5bd0" stroke-width="1.1"/>
+<text x="450" y="528" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#7a5bd0" text-anchor="middle">滑动窗口 Sliding</text>
+<text x="450" y="548" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">窗口可重叠：timeWindow(Time.</text>
+<text x="450" y="563" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">seconds(10), Time.seconds(5)</text>
+<text x="450" y="578" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">)</text>
+<text x="450" y="596" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#5b6b7c" text-anchor="middle">一条数据可属于多个窗口</text>
+<rect x="660" y="506" width="200" height="104" rx="8" fill="#eef4ff" stroke="#7a5bd0" stroke-width="1.1"/>
+<text x="760" y="528" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#7a5bd0" text-anchor="middle">会话窗口 Session</text>
+<text x="760" y="548" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">按活动间隔切分：EventTimeS</text>
+<text x="760" y="563" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#1f2b38" text-anchor="middle">essionWindows</text>
+<text x="760" y="596" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="10" font-weight="400" fill="#5b6b7c" text-anchor="middle">间隔超时后窗口关闭</text>
+<text x="44" y="640" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38">ProcessingTime 用系统时钟、延迟最低但结果不可重放；EventTime 用事件自带时间戳，可重放、可处理乱序，是生产环境的默认选择</text>
+<text x="24" y="700" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="14.5" font-weight="700" fill="#e08a1e">④ 迟到数据与 Exactly-Once 的关系</text>
+<rect x="24" y="712" width="852" height="240" rx="8" fill="#fff6e8" stroke="#c8d3e0" stroke-width="1"/>
+<circle cx="44" cy="738" r="5" fill="#e08a1e" stroke="#e08a1e" stroke-width="1.5"/>
+<text x="58" y="742" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#e08a1e">allowedLateness</text>
+<text x="158.39999999999998" y="742" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38">窗口触发后仍保留窗口状态一段时间，迟到数据可再次触发增量计算；超出保留期的数据可用侧输出流收</text>
+<text x="58" y="757" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38">集</text>
+<circle cx="44" cy="784" r="5" fill="#e08a1e" stroke="#e08a1e" stroke-width="1.5"/>
+<text x="58" y="788" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#e08a1e">侧输出流</text>
+<text x="110.0" y="788" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38">用 OutputTag 收集迟到或超过 allowedLateness 的数据，避免被直接丢弃</text>
+<circle cx="44" cy="815" r="5" fill="#e08a1e" stroke="#e08a1e" stroke-width="1.5"/>
+<text x="58" y="819" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#e08a1e">Checkpoint</text>
+<text x="127.19999999999999" y="819" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38">按间隔把算子状态快照写入 HDFS/S3 等可靠存储；作业失败后从最近一次完成的快照恢复</text>
+<circle cx="44" cy="846" r="5" fill="#e08a1e" stroke="#e08a1e" stroke-width="1.5"/>
+<text x="58" y="850" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#e08a1e">Exactly-Once</text>
+<text x="138.0" y="850" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="11" font-weight="400" fill="#1f2b38">端到端精确一次 = Checkpoint 对齐 + 可重放的数据源 + 幂等或事务 Sink（如 Kafka 两阶段提交）</text>
+</svg>
