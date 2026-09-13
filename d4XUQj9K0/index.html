@@ -133,9 +133,10 @@
 <p>Validator校验框架遵循了JSR-303验证规范（参数校验规范）, JSR是<code>Java Specification Requests</code>的缩写。</p>
 </blockquote>
 <p>接下来我们看看在 Spring Boot 中如何集成参数校验框架。</p>
+<p><img src="/post-assets/d4XUQj9K0/01-request-validation-flow.svg" alt="Spring Boot 请求参数校验链路示意图：请求参数先经 Validator 校验，通过后进入 Controller 执行业务，失败则由全局异常处理器统一返回错误响应"></p>
 <h2 id="springboot中集成参数校验">SpringBoot中集成参数校验</h2>
 <h3 id="第一步引入依赖">第一步，引入依赖</h3>
-<pre><code>&lt;dependency&gt;
+<pre><code class="language-xml">&lt;dependency&gt;
   &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
   &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
 &lt;/dependency&gt;
@@ -149,7 +150,7 @@
 <p>注：从 <code>Spring Boot 2.3</code> 开始，校验包被独立成了一个 <code>starter</code> 组件，所以需要引入 validation 和 web；而 <code>Spring Boot 2.3</code> 之前的版本只需要引入 web 依赖就可以了。</p>
 </blockquote>
 <h3 id="第二步定义要参数校验的实体类">第二步，定义要参数校验的实体类</h3>
-<pre><code>@Data
+<pre><code class="language-java">@Data
 public class ValidVO {
     private String id;
 
@@ -192,7 +193,7 @@ public class ValidVO {
 </tr>
 <tr>
 <td style="text-align:left">@DecimalMin</td>
-<td style="text-align:left">设置不能超过最小值</td>
+<td style="text-align:left">必须不小于指定的最小值（支持字符串表示的大数）</td>
 </tr>
 <tr>
 <td style="text-align:left">@Digits</td>
@@ -208,15 +209,15 @@ public class ValidVO {
 </tr>
 <tr>
 <td style="text-align:left">@Max</td>
-<td style="text-align:left">最大不得超过此最大值</td>
+<td style="text-align:left">必须不大于指定的最大值</td>
 </tr>
 <tr>
 <td style="text-align:left">@Min</td>
-<td style="text-align:left">最大不得小于此最小值</td>
+<td style="text-align:left">必须不小于指定的最小值</td>
 </tr>
 <tr>
 <td style="text-align:left">@NotNull</td>
-<td style="text-align:left">不能为null，可以是空</td>
+<td style="text-align:left">不能为 null，空字符串可以通过</td>
 </tr>
 <tr>
 <td style="text-align:left">@Null</td>
@@ -232,11 +233,11 @@ public class ValidVO {
 </tr>
 <tr>
 <td style="text-align:left">@Email</td>
-<td style="text-align:left">必须是email格式</td>
+<td style="text-align:left">必须是合法的 email 格式</td>
 </tr>
 <tr>
 <td style="text-align:left">@Length</td>
-<td style="text-align:left">长度必须在指定范围内</td>
+<td style="text-align:left">字符串长度必须在指定范围内（Hibernate Validator 扩展）</td>
 </tr>
 <tr>
 <td style="text-align:left">@NotBlank</td>
@@ -244,21 +245,22 @@ public class ValidVO {
 </tr>
 <tr>
 <td style="text-align:left">@NotEmpty</td>
-<td style="text-align:left">不能为null，集合、数组、map等size()不能为0；字符串trim()后可以等于“”</td>
+<td style="text-align:left">不能为 null，集合、数组、map 等 size() 不能为 0；字符串 trim() 后可以等于“”</td>
 </tr>
 <tr>
 <td style="text-align:left">@Range</td>
-<td style="text-align:left">值必须在指定范围内</td>
+<td style="text-align:left">数值必须在指定范围内（Hibernate Validator 扩展）</td>
 </tr>
 <tr>
 <td style="text-align:left">@URL</td>
-<td style="text-align:left">必须是一个URL</td>
+<td style="text-align:left">必须是合法的 URL（Hibernate Validator 扩展）</td>
 </tr>
 </tbody>
 </table>
-<p>注：此表格只是简单的对注解功能的说明，并没有对每一个注解的属性进行说明；可详见源码。</p>
+<p>注：此表格只是简单地对注解功能进行说明，并没有覆盖每个注解的全部属性，具体可查阅源码。其中 <code>@Length</code>、<code>@Range</code>、<code>@URL</code> 属于 Hibernate Validator 提供的扩展注解，其余均为 JSR-303 标准注解。</p>
+<p>最容易被混用的是 <code>@NotNull</code>、<code>@NotEmpty</code>、<code>@NotBlank</code> 三者：<code>@NotNull</code> 只要求值不是 <code>null</code>；<code>@NotEmpty</code> 在非 null 的基础上还要求长度或元素个数大于 0，因此一串空格可以通过；<code>@NotBlank</code> 最严格，要求 <code>trim()</code> 之后长度大于 0，且只能用于字符串。<strong>字符串的必填校验一般用 @NotBlank</strong>。类似地，<code>@Size</code> 是标准注解，字符串、集合、数组、Map 都能用，而 <code>@Length</code> 只能用于字符串。</p>
 <h3 id="第三步定义校验类进行测试">第三步，定义校验类进行测试</h3>
-<pre><code>@RestController
+<pre><code class="language-java">@RestController
 @Slf4j
 @Validated
 public class ValidController {
@@ -290,7 +292,7 @@ public class ValidController {
 <ol>
 <li>调用test1方法，提示的是<code>org.springframework.web.bind.MethodArgumentNotValidException</code>异常</li>
 </ol>
-<pre><code>POST http://localhost:8080/valid/test1
+<pre><code class="language-http">POST http://localhost:8080/valid/test1
 Content-Type: application/json
 
 {
@@ -309,7 +311,7 @@ Content-Type: application/json
 <ol>
 <li>调用test2方法，提示的是<code>org.springframework.validation.BindException</code>异常</li>
 </ol>
-<pre><code>POST http://localhost:8080/valid/test2
+<pre><code class="language-http">POST http://localhost:8080/valid/test2
 Content-Type: application/x-www-form-urlencoded
 
 id=1&amp;level=12&amp;email=476938977&amp;appId=ab1c
@@ -323,7 +325,7 @@ id=1&amp;level=12&amp;email=476938977&amp;appId=ab1c
 <ol>
 <li>调用test3方法，提示的是<code>javax.validation.ConstraintViolationException</code>异常</li>
 </ol>
-<pre><code>POST http://localhost:8080/valid/test3
+<pre><code class="language-http">POST http://localhost:8080/valid/test3
 Content-Type: application/x-www-form-urlencoded
 
 email=476938977
@@ -338,7 +340,11 @@ email=476938977
 <h2 id="参数异常加入全局异常处理器">参数异常加入全局异常处理器</h2>
 <p><code>Validator</code>校验框架返回的错误提示太臃肿了，不便于阅读，为了方便前端提示，我们需要将其简化一下。</p>
 <p>创建<code>RestExceptionHandler</code>，单独拦截参数校验的三个异常：<code>javax.validation.ConstraintViolationException</code>，<code>org.springframework.validation.BindException</code>，<code>org.springframework.web.bind.MethodArgumentNotValidException</code>，代码如下：</p>
-<pre><code>@ExceptionHandler(value = {BindException.class, ValidationException.class, MethodArgumentNotValidException.class})
+<pre><code class="language-java">// 必须放在 @RestControllerAdvice（或 @ControllerAdvice + @ResponseBody）标注的类中才会全局生效
+@RestControllerAdvice
+public class RestExceptionHandler {
+
+  @ExceptionHandler(value = {BindException.class, ValidationException.class, MethodArgumentNotValidException.class})
 public ResponseEntity&lt;ResultData&lt;String&gt;&gt; handleValidatedException(Exception e) {
   ResultData&lt;String&gt; resp = null;
 
@@ -369,10 +375,12 @@ public ResponseEntity&lt;ResultData&lt;String&gt;&gt; handleValidatedException(E
   }
 
   return new ResponseEntity&lt;&gt;(resp,HttpStatus.BAD_REQUEST);
+  }
 }
 </code></pre>
+<p>这里有一个常见的坑：<strong>判断顺序必须把 <code>MethodArgumentNotValidException</code> 放在 <code>BindException</code> 之前</strong>。在较新的 Spring 版本中，前者已经是后者的子类，如果把父类分支写在前面，<code>@RequestBody</code> 的校验异常就会被当成表单异常处理，取到的错误信息格式也随之改变。三个异常对应的场景分别是：<code>MethodArgumentNotValidException</code> 对应 <code>@RequestBody</code> 对象校验失败，<code>BindException</code> 对应表单或查询参数绑定到对象时校验失败，<code>ConstraintViolationException</code> 对应方法级单参数（例如 <code>@Email String email</code>）校验失败。</p>
 <h3 id="体验效果">体验效果</h3>
-<pre><code>POST http://localhost:8080/valid/test1
+<pre><code class="language-http">POST http://localhost:8080/valid/test1
 Content-Type: application/json
 
 {
@@ -389,11 +397,65 @@ Content-Type: application/json
 }
 </code></pre>
 <p>是不是感觉清爽多了？</p>
+<h2 id="参数校验进阶要点">参数校验进阶要点</h2>
+<p>上面的例子已经能跑通完整链路，下面补充几个实际项目里最容易踩坑的细节。</p>
+<h3 id="valid-与-validated-的区别">@Valid 与 @Validated 的区别</h3>
+<p><code>@Valid</code> 是 JSR-303（Jakarta Bean Validation）标准注解（对应 <code>javax.validation.Valid</code> 或 <code>jakarta.validation.Valid</code>），只负责触发校验，本身不支持分组；<code>@Validated</code> 是 Spring 在标准之上做的封装（对应 <code>org.springframework.validation.annotation.Validated</code>），额外提供了 <code>value</code> 属性用于指定校验分组，并且允许标注在类上。</p>
+<ul>
+<li>方法参数是对象（<code>@RequestBody</code> 或表单对象）时，<code>@Valid</code> 与 <code>@Validated</code> 都能触发校验，区别只在于是否需要分组。</li>
+<li>单个基础类型参数且约束直接写在参数上时，必须让所在类带上 <code>@Validated</code>，Spring 才会为该 Bean 生成校验代理，否则注解形同虚设。</li>
+<li>类内部的方法自调用（同一个 Bean 中 A 方法调用 B 方法）不经过代理，写在 B 方法参数上的约束同样不会生效，这是 Spring AOP 代理机制的共性限制。</li>
+</ul>
+<h3 id="嵌套对象校验与-valid-级联">嵌套对象校验与 @Valid 级联</h3>
+<p>如果 <code>ValidVO</code> 里还有一个对象字段，只在内层对象的类上写约束注解是不够的，外层校验不会自动进入内层。需要在字段上加 <code>@Valid</code>（或 <code>@Validated</code>）显式开启级联校验：</p>
+<pre><code class="language-java">@Data
+public class ValidVO {
+    @NotBlank(message = "名字为必填项")
+    private String name;
+
+    // 级联校验：会继续校验 Address 内部的约束
+    @Valid
+    @NotNull(message = "地址不能为空")
+    private Address address;
+}
+
+@Data
+public class Address {
+    @NotBlank(message = "收件人不能为空")
+    private String receiver;
+
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+}
+</code></pre>
+<p>集合字段同理，写成 <code>@Valid private List&lt;Address&gt; addresses;</code> 即可逐个校验集合元素。级联只对非 null 的值继续深入，所以通常再配一个 <code>@NotNull</code> 保证对象本身存在，否则传入 null 时内层约束会被整体跳过。</p>
+<h3 id="快速失败模式与错误信息取舍">快速失败模式与错误信息取舍</h3>
+<p>默认情况下 Bean Validation 会先收集<strong>所有</strong>校验失败项再一起抛出，所以前面看到的提示是「名字为必填项; 不是一个合法的电子邮件地址; appId长度必须位于6到12之间」。如果只想返回第一条错误，可以在配置类中打开 <code>failFast</code>：</p>
+<pre><code class="language-java">@Configuration
+public class ValidatorConfig {
+
+    @Bean
+    public Validator validator() {
+        return Validation.byProvider(HibernateValidator.class)
+                .configure()
+                // 只要有一个校验失败就立即返回，不再继续收集
+                .failFast(true)
+                .buildValidatorFactory()
+                .getValidator();
+    }
+}
+</code></pre>
+<p>把自定义的 <code>Validator</code> 注册为 Bean 之后，Spring Boot 自动配置的方法级校验器会使用它；如果项目里自定义过 MVC 的校验器，也可以在 <code>WebMvcConfigurer#getValidator()</code> 中返回这个 Bean 来显式指定。</p>
+<blockquote>
+<p>注意：<code>failFast</code> 是 Hibernate Validator 的扩展能力，不属于 JSR-303 标准，更换校验实现后不保证可用；而且开启之后前端一次只能看到一条错误，如果表单需要一次性提示所有字段的问题，就要谨慎使用。</p>
+</blockquote>
+<h3 id="版本差异javax-还是-jakarta">版本差异：javax 还是 jakarta</h3>
+<p>本文示例基于 Spring Boot 2.x，约束注解与异常类型都位于 <code>javax.validation</code> 包下。从 Spring Boot 3.0 开始，底层规范迁移到 Jakarta EE 9+，包名统一改为 <code>jakarta.validation</code>：<code>javax.validation.Valid</code> 变为 <code>jakarta.validation.Valid</code>，<code>javax.validation.ConstraintViolationException</code> 变为 <code>jakarta.validation.ConstraintViolationException</code>；而 <code>org.springframework.validation.BindException</code>、<code>org.springframework.web.bind.MethodArgumentNotValidException</code> 的包名保持不变。升级时除了改 import，还要保证 <code>spring-boot-starter-validation</code> 的版本跟随 Spring Boot 一起走，避免 javax 与 jakarta 两套 API 混用导致校验静默失效。</p>
 <h2 id="自定义参数校验">自定义参数校验</h2>
 <p>虽然Spring Validation 提供的注解基本上够用，但是面对复杂的定义，我们还是需要自己定义相关注解来实现自动校验。</p>
 <p>比如上面实体类中的sex性别属性，只允许前端传递传 M，F 这2个枚举值，如何实现呢？</p>
 <h3 id="第一步创建自定义注解">第一步，创建自定义注解</h3>
-<pre><code>@Target({METHOD, FIELD, ANNOTATION_TYPE, CONSTRUCTOR, PARAMETER, TYPE_USE})
+<pre><code class="language-java">@Target({METHOD, FIELD, ANNOTATION_TYPE, CONSTRUCTOR, PARAMETER, TYPE_USE})
 @Retention(RUNTIME)
 @Repeatable(EnumString.List.class)
 @Documented
@@ -425,7 +487,7 @@ public @interface EnumString {
 }
 </code></pre>
 <h3 id="第二步自定义校验逻辑">第二步，自定义校验逻辑</h3>
-<pre><code>public class EnumStringValidator implements ConstraintValidator&lt;EnumString, String&gt; {
+<pre><code class="language-java">public class EnumStringValidator implements ConstraintValidator&lt;EnumString, String&gt; {
     private List&lt;String&gt; enumStringList;
 
     @Override
@@ -443,12 +505,12 @@ public @interface EnumString {
 }
 </code></pre>
 <h3 id="第三步在字段上增加注解">第三步，在字段上增加注解</h3>
-<pre><code>@ApiModelProperty(value = &quot;性别&quot;)
+<pre><code class="language-java">@ApiModelProperty(value = &quot;性别&quot;)
 @EnumString(value = {&quot;F&quot;,&quot;M&quot;}, message=&quot;性别只允许为F或M&quot;)
 private String sex;
 </code></pre>
 <h3 id="第四步体验效果-2">第四步，体验效果</h3>
-<pre><code>POST http://localhost:8080/valid/test2
+<pre><code class="language-http">POST http://localhost:8080/valid/test2
 Content-Type: application/x-www-form-urlencoded
 
 id=1&amp;name=javadaily&amp;level=12&amp;email=476938977@qq.com&amp;appId=ab1cdddd&amp;sex=N
@@ -460,11 +522,11 @@ id=1&amp;name=javadaily&amp;level=12&amp;email=476938977@qq.com&amp;appId=ab1cdd
 }
 </code></pre>
 <h2 id="分组校验">分组校验</h2>
-<p>一个VO对象在新增的时候某些字段为必填，在更新的时候又非必填。如上面的<code>ValidVO</code>中 id 和 appId 属性在新增操作时都是<strong>非必填</strong>，而在编辑操作时都为<strong>必填</strong>，name在新增操作时为<strong>必填</strong>，面对这种场景你会怎么处理呢？</p>
+<p>同一个 VO 对象，不同操作对字段的要求往往不同：新增时某些字段必须为空（交由后端生成），编辑时它们又必须传入；而 name 只在新增时必填、编辑时允许不改。如上面的 <code>ValidVO</code>，id 和 appId 在新增时要求<strong>必须为 null</strong>，在更新时要求<strong>不能为 null</strong>，面对这种场景你会怎么处理呢？</p>
 <p>在实际开发中我见到很多同学都是建立两个VO对象，<code>ValidCreateVO</code>，<code>ValidEditVO</code>来处理这种场景，这样确实也能实现效果，但是会造成类膨胀，而且极其容易被开发老鸟们嘲笑。</p>
 <p>其实<code>Validator</code>校验框架已经考虑到了这种场景并且提供了解决方案，就是<strong>分组校验</strong>，只不过很多同学不知道而已。要使用分组校验，只需要三个步骤：</p>
 <h3 id="第一步定义分组接口">第一步：定义分组接口</h3>
-<pre><code>public interface ValidGroup extends Default {
+<pre><code class="language-java">public interface ValidGroup extends Default {
   
     interface Crud extends ValidGroup{
         interface Create extends Crud{
@@ -487,12 +549,12 @@ id=1&amp;name=javadaily&amp;level=12&amp;email=476938977@qq.com&amp;appId=ab1cdd
 </code></pre>
 <p>这里我们定义一个分组接口ValidGroup让其继承<code>javax.validation.groups.Default</code>，再在分组接口中定义出多个不同的操作类型，Create，Update，Query，Delete。至于为什么需要继承Default我们稍后再说。</p>
 <h3 id="第二步在模型中给参数分配分组">第二步，在模型中给参数分配分组</h3>
-<pre><code>@Data
+<pre><code class="language-java">@Data
 @ApiModel(value = &quot;参数校验类&quot;)
 public class ValidVO {
     @ApiModelProperty(&quot;ID&quot;)
     @Null(groups = ValidGroup.Crud.Create.class)
-    @NotNull(groups = ValidGroup.Crud.Update.class, message = &quot;应用ID不能为空&quot;)
+    @NotNull(groups = ValidGroup.Crud.Update.class, message = &quot;ID不能为空&quot;)
     private String id;
 
     @Null(groups = ValidGroup.Crud.Create.class)
@@ -505,16 +567,16 @@ public class ValidVO {
     private String name;
   
    @ApiModelProperty(value = &quot;邮箱&quot;)
-    @Email(message = &quot;请填写正取的邮箱地址&quot;)
-    privte String email;
+    @Email(message = &quot;请填写正确的邮箱地址&quot;)
+    private String email;
 
     ...
 
 }
 </code></pre>
-<p>给参数指定分组，对于未指定分组的则使用的是默认分组。</p>
+<p>给参数指定分组后，只有属于该分组的约束才会在对应场景下生效；没有写 <code>groups</code> 的约束（例如上面的 <code>@Email</code>）属于默认分组 <code>Default</code>。它之所以仍然会被校验，是因为分组是<strong>可继承</strong>的：校验 <code>ValidGroup.Crud.Create</code> 时会连同它的父分组 <code>Crud</code>、<code>ValidGroup</code>、<code>Default</code> 一起校验，这正是 <code>ValidGroup</code> 要继承 <code>Default</code> 的原因。</p>
 <h3 id="第三步给需要参数校验的方法指定分组">第三步，给需要参数校验的方法指定分组</h3>
-<pre><code>@RestController
+<pre><code class="language-java">@RestController
 @Api(&quot;参数校验&quot;)
 @Slf4j
 @Validated
@@ -538,14 +600,14 @@ public class ValidController {
 </code></pre>
 <p>这里我们通过<code>value</code>属性给<code>add()</code>和<code>update()</code>方法分别指定Create和Update分组。</p>
 <h3 id="第四步体验效果-3">第四步，体验效果</h3>
-<pre><code>POST http://localhost:8080/valid/add
+<pre><code class="language-http">POST http://localhost:8080/valid/add
 Content-Type: application/x-www-form-urlencoded
 
 name=javadaily&amp;level=12&amp;email=476938977@qq.com&amp;sex=F
 </code></pre>
 <p>在Create时我们没有传递id和appId参数，校验通过。</p>
 <p>当我们使用同样的参数调用update方法时则提示参数校验错误。</p>
-<pre><code>{
+<pre><code class="language-json">{
   &quot;status&quot;: 400,
   &quot;message&quot;: &quot;ID不能为空; 应用ID不能为空&quot;,
   &quot;data&quot;: null,
@@ -553,13 +615,13 @@ name=javadaily&amp;level=12&amp;email=476938977@qq.com&amp;sex=F
 }
 </code></pre>
 <p>由于email属于默认分组，而我们的分组接口<code>ValidGroup</code>已经继承了<code>Default</code>分组，所以也是可以对email字段作参数校验的。如：</p>
-<pre><code>POST http://localhost:8080/valid/add
+<pre><code class="language-http">POST http://localhost:8080/valid/add
 Content-Type: application/x-www-form-urlencoded
 
 name=javadaily&amp;level=12&amp;email=476938977&amp;sex=F
 {
   &quot;status&quot;: 400,
-  &quot;message&quot;: &quot;请填写正取的邮箱地址&quot;,
+  &quot;message&quot;: &quot;请填写正确的邮箱地址&quot;,
   &quot;data&quot;: null,
   &quot;timestamp&quot;: 1628492637305
 }
@@ -569,7 +631,7 @@ name=javadaily&amp;level=12&amp;email=476938977&amp;sex=F
 <p>业务规则校验指接口需要满足某些特定的业务规则，举个例子：业务系统的用户需要保证其唯一性，用户属性不能与其他用户产生冲突，不允许与数据库中任何已有用户的用户名称、手机号码、邮箱产生重复。</p>
 <p>这就要求在<strong>创建用户时需要校验用户名称、手机号码、邮箱是否被注册</strong>；<strong>编辑用户时不能将信息修改成已有用户的属性</strong>。</p>
 <p>95%的程序员当面对这种业务规则校验时往往选择写在service逻辑中，常见的代码逻辑如下：</p>
-<pre><code>public void create(User user) {
+<pre><code class="language-java">public void create(User user) {
     Account account = accountDao.queryByUserNameOrPhoneOrEmail(user.getName(),user.getPhone(),user.getEmail());
     if (account != null) {
         throw new IllegalArgumentException(&quot;用户已存在，请重新输入&quot;);
@@ -586,7 +648,7 @@ name=javadaily&amp;level=12&amp;email=476938977&amp;sex=F
 <ul>
 <li><code>UniqueUser</code>:表示一个用户是唯一的，唯一性包含：用户名，手机号码、邮箱</li>
 </ul>
-<pre><code>@Documented
+<pre><code class="language-java">@Documented
 @Retention(RUNTIME)
 @Target({FIELD, METHOD, PARAMETER, TYPE})
 @Constraint(validatedBy = UserValidation.UniqueUserValidator.class)
@@ -602,7 +664,7 @@ public @interface UniqueUser {
 <ul>
 <li><code>NotConflictUser</code>:表示一个用户的信息是无冲突的，无冲突是指该用户的敏感信息与其他用户不重合</li>
 </ul>
-<pre><code>@Documented
+<pre><code class="language-java">@Documented
 @Retention(RUNTIME)
 @Target({FIELD, METHOD, PARAMETER, TYPE})
 @Constraint(validatedBy = UserValidation.NotConflictUserValidator.class)
@@ -616,7 +678,7 @@ public @interface NotConflictUser {
 </code></pre>
 <h3 id="实现业务校验规则">实现业务校验规则</h3>
 <p>想让自定义验证注解生效，需要实现 <code>ConstraintValidator</code> 接口。接口的第一个参数是 <strong>自定义注解类型</strong>，第二个参数是 <strong>被注解字段的类</strong>，因为需要校验多个参数，我们直接传入用户对象。需要提到的一点是 <code>ConstraintValidator</code> 接口的实现类无需添加 <code>@Component</code> 它在启动的时候就已经被加载到容器中了。</p>
-<pre><code>@Slf4j
+<pre><code class="language-java">@Slf4j
 public class UserValidation&lt;T extends Annotation&gt; implements ConstraintValidator&lt;T, User&gt; {
 
     protected Predicate&lt;User&gt; predicate = c -&gt; true;
@@ -660,7 +722,7 @@ public class UserValidation&lt;T extends Annotation&gt; implements ConstraintVal
 </code></pre>
 <p>这里使用Predicate函数式接口对业务规则进行判断。</p>
 <h3 id="使用">使用</h3>
-<pre><code>@RestController
+<pre><code class="language-java">@RestController
 @RequestMapping(&quot;/senior/user&quot;)
 @Slf4j
 @Validated
@@ -688,7 +750,7 @@ public class UserController {
 <p>使用很简单，只需要在方法上加入自定义注解即可，业务逻辑中不需要添加任何业务规则的代码。</p>
 <h3 id="测试">测试</h3>
 <p>调用接口后出现如下错误，说明业务规则校验生效。</p>
-<pre><code>{
+<pre><code class="language-json">{
   &quot;status&quot;: 400,
   &quot;message&quot;: &quot;用户名、手机号码、邮箱不允许与现存用户重复&quot;,
   &quot;data&quot;: null,
@@ -700,8 +762,6 @@ public class UserController {
 <p>这种方式比任何业务规则校验的方法都优雅，推荐大家在项目中使用。在开发时可以将不带业务含义的格式校验注解放到 Bean 的类定义之上，将带业务逻辑的校验放到 Bean 的类定义的外面。<strong>这两者的区别是放在类定义中的注解能够自动运行，而放到类外面则需要像前面代码那样，明确标出注解时才会运行。</strong></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li>
-<ul>
 <li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C">为什么需要参数校验</a></li>
 <li><a href="#springboot%E4%B8%AD%E9%9B%86%E6%88%90%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C">SpringBoot中集成参数校验</a>
 <ul>
@@ -714,6 +774,14 @@ public class UserController {
 <li><a href="#%E5%8F%82%E6%95%B0%E5%BC%82%E5%B8%B8%E5%8A%A0%E5%85%A5%E5%85%A8%E5%B1%80%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86%E5%99%A8">参数异常加入全局异常处理器</a>
 <ul>
 <li><a href="#%E4%BD%93%E9%AA%8C%E6%95%88%E6%9E%9C">体验效果</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C%E8%BF%9B%E9%98%B6%E8%A6%81%E7%82%B9">参数校验进阶要点</a>
+<ul>
+<li><a href="#valid-%E4%B8%8E-validated-%E7%9A%84%E5%8C%BA%E5%88%AB">@Valid 与 @Validated 的区别</a></li>
+<li><a href="#%E5%B5%8C%E5%A5%97%E5%AF%B9%E8%B1%A1%E6%A0%A1%E9%AA%8C%E4%B8%8E-valid-%E7%BA%A7%E8%81%94">嵌套对象校验与 @Valid 级联</a></li>
+<li><a href="#%E5%BF%AB%E9%80%9F%E5%A4%B1%E8%B4%A5%E6%A8%A1%E5%BC%8F%E4%B8%8E%E9%94%99%E8%AF%AF%E4%BF%A1%E6%81%AF%E5%8F%96%E8%88%8D">快速失败模式与错误信息取舍</a></li>
+<li><a href="#%E7%89%88%E6%9C%AC%E5%B7%AE%E5%BC%82javax-%E8%BF%98%E6%98%AF-jakarta">版本差异：javax 还是 jakarta</a></li>
 </ul>
 </li>
 <li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C">自定义参数校验</a>
@@ -742,10 +810,7 @@ public class UserController {
 <li><a href="#%E5%B0%8F%E7%BB%93">小结</a></li>
 </ul>
 </li>
-</ul>
-</li>
-</ul>
-</div>
+</ul></div>
           <hr />
           
             <nav class="post-pn">
