@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540" viewBox="0 0 900 540"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Docker 部署 ELK 的拓扑与数据流</title>
+  <rect width="900" height="540" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">Docker 部署 ELK：拓扑与数据流</text>
+
+  <!-- 宿主机边界 -->
+  <rect x="24" y="46" width="852" height="392" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="40" y="66" font-size="12" font-weight="700" fill="#5b6b7c">宿主机 Docker 自定义网络 elk（bridge）</text>
+
+  <!-- 采集侧 -->
+  <rect x="44" y="80" width="200" height="86" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="144" y="104" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">应用服务器</text>
+  <text x="144" y="124" font-size="11" fill="#5b6b7c" text-anchor="middle">业务日志 / Nginx 访问日志</text>
+  <text x="144" y="142" font-size="11" fill="#5b6b7c" text-anchor="middle">logback 直接推送 4560</text>
+  <text x="144" y="159" font-size="11" fill="#5b6b7c" text-anchor="middle">或落盘后由 Filebeat 采集</text>
+
+  <rect x="44" y="192" width="200" height="86" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="144" y="216" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">Filebeat 容器</text>
+  <text x="144" y="236" font-size="11" fill="#5b6b7c" text-anchor="middle">--user=root，只读挂载</text>
+  <text x="144" y="254" font-size="11" fill="#5b6b7c" text-anchor="middle">/var/lib/docker/containers</text>
+  <text x="144" y="271" font-size="11" fill="#5b6b7c" text-anchor="middle">与 docker.sock</text>
+
+  <rect x="44" y="304" width="200" height="86" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="144" y="328" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">Kibana 容器</text>
+  <text x="144" y="348" font-size="11" fill="#5b6b7c" text-anchor="middle">浏览器访问 :5601</text>
+  <text x="144" y="366" font-size="11" fill="#5b6b7c" text-anchor="middle">I18N_LOCALE=zh-CN</text>
+  <text x="144" y="383" font-size="11" fill="#5b6b7c" text-anchor="middle">只读查询 ES</text>
+
+  <!-- 中间：Logstash -->
+  <rect x="330" y="176" width="220" height="130" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="440" y="200" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">Logstash 容器</text>
+  <text x="440" y="220" font-size="11" fill="#5b6b7c" text-anchor="middle">input：beats 5044 / tcp 4560</text>
+  <text x="440" y="238" font-size="11" fill="#5b6b7c" text-anchor="middle">jdbc、kafka 按需接入</text>
+  <text x="440" y="256" font-size="11" fill="#5b6b7c" text-anchor="middle">filter：mutate 等字段清洗</text>
+  <text x="440" y="274" font-size="11" fill="#5b6b7c" text-anchor="middle">output：写入 ES 索引/别名</text>
+  <text x="440" y="294" font-size="11" fill="#5b6b7c" text-anchor="middle">codec 必须用 json_lines</text>
+
+  <!-- 右侧：ES -->
+  <rect x="636" y="150" width="220" height="220" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="746" y="174" font-size="12.5" font-weight="700" fill="#1f2b38" text-anchor="middle">Elasticsearch 7.12.0</text>
+  <text x="746" y="196" font-size="11" fill="#5b6b7c" text-anchor="middle">单节点：discovery.type=single-node</text>
+  <text x="746" y="215" font-size="11" fill="#5b6b7c" text-anchor="middle">9200 读写 / 9300 节点间通信</text>
+  <text x="746" y="238" font-size="11" font-weight="700" fill="#1f2b38" text-anchor="middle">索引与生命周期</text>
+  <text x="746" y="257" font-size="11" fill="#5b6b7c" text-anchor="middle">模板 export_log_index_template</text>
+  <text x="746" y="275" font-size="11" fill="#5b6b7c" text-anchor="middle">ILM audit_policy：热 30GB/180d</text>
+  <text x="746" y="293" font-size="11" fill="#5b6b7c" text-anchor="middle">到期 delete，别名滚动写入</text>
+  <text x="746" y="316" font-size="11" font-weight="700" fill="#1f2b38" text-anchor="middle">前置条件</text>
+  <text x="746" y="335" font-size="11" fill="#5b6b7c" text-anchor="middle">vm.max_map_count=262144</text>
+  <text x="746" y="353" font-size="11" fill="#5b6b7c" text-anchor="middle">数据目录 chown 1000:1000</text>
+
+  <!-- 箭头 -->
+  <line x1="244" y1="230" x2="326" y2="230" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="285" y="222" font-size="11" fill="#5b6b7c" text-anchor="middle">:5044</text>
+  <line x1="244" y1="347" x2="636" y2="347" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="440" y="339" font-size="11" fill="#5b6b7c" text-anchor="middle">查询 / 可视化</text>
+  <line x1="550" y1="241" x2="632" y2="241" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="591" y="233" font-size="11" fill="#5b6b7c" text-anchor="middle">:9200</text>
+  <line x1="144" y1="166" x2="144" y2="188" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="152" y="182" font-size="11" fill="#5b6b7c">采集</text>
+
+  <!-- 底部说明 -->
+  <rect x="24" y="452" width="852" height="70" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="40" y="474" font-size="12.5" font-weight="700" fill="#1f2b38">链路：日志产生 → Filebeat :5044 → Logstash 转换 → Elasticsearch :9200 → Kibana :5601 检索展示</text>
+  <text x="40" y="494" font-size="11.5" fill="#5b6b7c">容器之间统一接入自定义网络 elk，用容器名互访（替代已过时的 --link）；对外只需暴露 5601、9200。</text>
+  <text x="40" y="512" font-size="11.5" fill="#5b6b7c">四个组件版本必须一致（本文 7.12.0）；8.x 默认开启安全认证，部署命令与 7.x 不同，详见正文第八节。</text>
+</svg>

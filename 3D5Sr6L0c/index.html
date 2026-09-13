@@ -127,18 +127,41 @@
           
           <img class="post-feature-header-image" src="/post-images/3D5Sr6L0c.png" alt="封面图">
           
-          <h2 id="docker部署elasticsearch">Docker部署ElasticSearch</h2>
-<h3 id="搜索elasticsearch镜像">搜索ElasticSearch镜像</h3>
+          <h2 id="一-elk组件与版本选择">一、ELK 组件与版本选择</h2>
+<p>ELK 是 Elasticsearch（存储与检索）、Logstash（采集与转换）、Kibana（可视化）三个组件的合称，实际生产中通常再加一个 Filebeat（轻量采集端）组成 EFK/ELK 链路。本文按「Elasticsearch → Kibana → Logstash → Filebeat」的顺序用 Docker 逐个部署。</p>
+<p>三件事必须在动手前确认，否则后面必然踩坑：</p>
+<ol>
+<li><strong>版本必须统一</strong>：Elasticsearch、Kibana、Logstash、Filebeat 四者版本号应完全一致（本文用 7.12.0），跨版本混用会在握手阶段直接报错。</li>
+<li><strong>内核参数 <code>vm.max_map_count</code></strong>：Elasticsearch 使用 mmap 读取索引文件，Linux 默认值 65530 太小，启动时会直接退出并提示 <code>max virtual memory areas vm.max_map_count [65530] is too low</code>。必须先把宿主机参数调到 262144 以上。</li>
+<li><strong>容器网络与卷权限</strong>：<code>--link</code> 是 Docker 的早期特性，已不推荐；正确做法是先建一个自定义 bridge 网络，容器之间用容器名互访。Elasticsearch 官方镜像以 uid/gid 1000 的 <code>elasticsearch</code> 用户运行，挂载目录属主不对会报 <code>AccessDeniedException</code>。</li>
+</ol>
+<pre><code class="language-bash"># 1. 调整内核参数，写入后立即生效
+sudo sysctl -w vm.max_map_count=262144
+# 永久生效
+echo &quot;vm.max_map_count=262144&quot; | sudo tee -a /etc/sysctl.conf
+
+# 2. 创建自定义网络，后续所有容器都接入该网络
+docker network create elk
+
+# 3. 准备数据与日志目录，并交给 elasticsearch 容器用户（uid 1000）
+sudo mkdir -p /data/elk/es-data /data/elk/es-logs
+sudo chown -R 1000:1000 /data/elk
+</code></pre>
+<p>如果宿主机内存较小，还应在启动 Elasticsearch 时通过 <code>ES_JAVA_OPTS</code> 限制堆内存（见下一节）。</p>
+<p><img src="/post-assets/3D5Sr6L0c/01-elk-topology.svg" alt="Docker 部署 ELK 的拓扑与数据流：应用日志与 Nginx 日志经 Filebeat(5044) 送入 Logstash，Logstash 转写后写入 Elasticsearch(9200)，Kibana(5601) 读取 ES 做检索与可视化，Kibana 通过 5601 端口对外暴露"></p>
+<h2 id="二-docker部署elasticsearch">二、Docker 部署 Elasticsearch</h2>
+<h3 id="搜索elasticsearch镜像">搜索 Elasticsearch 镜像</h3>
 <pre><code class="language-java">docker search elasticsearch
 </code></pre>
 <h3 id="拉取镜像">拉取镜像</h3>
-<p>拉取镜像的时候，可以指定版本，如果不指定，默认使用latest。</p>
+<p>拉取镜像时建议显式指定版本；不指定则默认 <code>latest</code>，在 8.x 之后 <code>latest</code> 会拉到 8.x 镜像，行为与 7.x 差异很大（见第八节版本差异对比）。</p>
 <pre><code class="language-java">docker pull elasticsearch:7.12.0
 </code></pre>
 <h3 id="查看镜像">查看镜像</h3>
 <pre><code class="language-java">docker images
 </code></pre>
-<h3 id="docker-启动-elasticsearch">docker 启动 elasticsearch</h3>
+<h3 id="docker-启动-elasticsearch">docker 启动 Elasticsearch</h3>
+<p>下面的命令在原文基础上补了三处关键参数：<code>-v</code> 数据卷（否则容器删除后索引全丢）、<code>ES_JAVA_OPTS</code> 堆内存上限，以及显式的集群名。容器接入第一步创建的 <code>elk</code> 网络。</p>
 <pre><code class="language-java"># --name : 为 elasticsearch 容器起个别名
 # -e : 指定为单节点集群模式
 # -i：表示运行容器
@@ -146,9 +169,21 @@
 # -v：表示目录映射关系（前者是宿主机目录，后者是映射到宿主机上的目录），可以使用多个－v做多个目录或文件映射。注意：最好做目录映射，在宿主机上做修改，然后共享到容器上。
 # -d：在run后面加上-d参数,则会创建一个守护式容器在后台运行（这样创建容器后不会自动登录容器，如果只加-i -t两个参数，创建后就会自动进去容器）。
 # -p：表示端口映射，前者是宿主机端口，后者是容器内的映射端口。可以使用多个-p做多个端口映射
-docker run -di --name elasticsearch -p 9200:9200 -p 9300:9300 -e &quot;discovery.type=single-node&quot; elasticsearch:7.12.0 
+docker run -d --name elasticsearch --net elk \
+  -p 9200:9200 -p 9300:9300 \
+  -e &quot;discovery.type=single-node&quot; \
+  -e &quot;cluster.name=docker-cluster&quot; \
+  -e &quot;ES_JAVA_OPTS=-Xms512m -Xmx512m&quot; \
+  -v /data/elk/es-data:/usr/share/elasticsearch/data \
+  -v /data/elk/es-logs:/usr/share/elasticsearch/logs \
+  elasticsearch:7.12.0
+
+# 验证：等待 30 秒左右待其完成启动
+curl http://localhost:9200
+# 返回 JSON 中出现 &quot;number&quot; : &quot;7.12.0&quot;、&quot;cluster_name&quot; : &quot;docker-cluster&quot; 即成功
 </code></pre>
-<h3 id="elasticsearch配置">elasticsearch配置</h3>
+<h3 id="elasticsearch配置">Elasticsearch 索引策略与模板配置</h3>
+<p>下文命令中的 <code>${host}</code> 是 shell 变量，需先导出，例如 <code>export host=http://localhost:9200</code>；所有请求都是 JSON 体，<code>-H &#39;Content-Type: application/json&#39;</code> 不能省。</p>
 <h4 id="创建elasticsearch滚动策略">创建elasticsearch滚动策略</h4>
 <pre><code class="language-json"># 定义审计日志管理策略
 curl -X PUT &quot;${host}/_ilm/policy/audit_policy&quot; -H 'Content-Type: application/json' -d'
@@ -243,7 +278,7 @@ curl -X PUT &quot;${host}/%3Cexport_log_index-%7Bnow%2Fd%7D-1%3E&quot; -H 'Conte
   }
 }
 </code></pre>
-<h2 id="docker-安装-kibana">docker 安装 kibana</h2>
+<h2 id="三-docker安装kibana">三、Docker 安装 Kibana</h2>
 <h3 id="拉取镜像-2">拉取镜像</h3>
 <p>拉取镜像的时候，需要注意的是, <strong>kibana 的版本最好与 elasticsearch 保持一致</strong>, 避免发生不必要的错误</p>
 <pre><code class="language-java">docker pull kibana:7.12.0
@@ -252,14 +287,18 @@ curl -X PUT &quot;${host}/%3Cexport_log_index-%7Bnow%2Fd%7D-1%3E&quot; -H 'Conte
 <pre><code class="language-java">docker images
 </code></pre>
 <h3 id="docker-启动-kibana">docker 启动 kibana</h3>
-<pre><code class="language-java"># -e : 指定环境变量配置, 提供汉化
-# --like : 建立两个容器之间的关联, kibana 关联到 es
-docker run -di --name kibana --link elasticsearch:elasticsearch -e &quot;I18N_LOCALE=zh-CN&quot; -p 5601:5601 kibana:7.12.0
-# kibana 的汉化我感觉做的并不好
-# 如果不习惯汉化, 可以把条件去除
-docker run -di --name kibana --link elasticsearch:elasticsearch -p 5601:5601 kibana:7.12.0
+<pre><code class="language-java"># -e I18N_LOCALE：Kibana 7.x 的中文界面开关（Kibana 8.x 起改用 i18n.locale 配置）
+# ELASTICSEARCH_HOSTS：Kibana 连接 ES 的地址，容器间用容器名 + 9200 端口
+docker run -d --name kibana --net elk \
+  -e &quot;ELASTICSEARCH_HOSTS=http://elasticsearch:9200&quot; \
+  -e &quot;I18N_LOCALE=zh-CN&quot; \
+  -p 5601:5601 \
+  kibana:7.12.0
+# 如果不习惯汉化，去掉 I18N_LOCALE 环境变量即可：
+docker run -d --name kibana --net elk -e &quot;ELASTICSEARCH_HOSTS=http://elasticsearch:9200&quot; -p 5601:5601 kibana:7.12.0
 </code></pre>
-<h2 id="docker-安装-logstash">Docker 安装 Logstash</h2>
+<p>启动后访问 <code>http://&lt;宿主机IP&gt;:5601</code>，能打开 Kibana 首页即说明与 ES 连接正常；若页面提示 <code>Unable to connect to Elasticsearch</code>，先在容器内用 <code>curl http://elasticsearch:9200</code> 排查网络与地址。Kibana 启动较慢，首次访问可能需要等 1—2 分钟。</p>
+<h2 id="四-docker安装logstash">四、Docker 安装 Logstash</h2>
 <h3 id="拉取镜像-3">拉取镜像</h3>
 <p>拉取镜像的时候，需要注意的是, <strong>Logstash 的版本最好与 elasticsearch 保持一致</strong>, 避免发生不必要的错误</p>
 <pre><code class="language-java">docker pull logstash:7.12.0
@@ -268,27 +307,32 @@ docker run -di --name kibana --link elasticsearch:elasticsearch -p 5601:5601 kib
 <pre><code class="language-java">docker images
 </code></pre>
 <h3 id="文件映射">文件映射</h3>
-<p>在本机建立配置文件和目录,用来存放所有配置的映射</p>
-<pre><code class="language-java">/usr/local/logstash/config/logstash.yml
-/usr/local/logstash/conf.d/
+<p>在本机建立配置文件和目录，用来存放所有需要映射进容器的配置。</p>
+<pre><code class="language-bash"># 宿主机目录结构
+/usr/local/logstash/config/logstash.yml   # 主配置
+/usr/local/logstash/conf.d/               # 存放各个 pipeline 配置
+/usr/local/logstash/data/                 # 持久化 sincedb、last_run 元数据
 </code></pre>
-<p>logstash.yml (文件内容)</p>
-<pre><code class="language-java">path.config: /usr/share/logstash/conf.d/*.conf
+<p>logstash.yml（主配置文件，内容如下）：</p>
+<pre><code class="language-yaml">path.config: /usr/share/logstash/conf.d/*.conf
 path.logs: /var/log/logstash
+# 关掉自带的 X-Pack 监控上报，单机部署没必要，也可避免无谓的 ES 连接报错
+xpack.monitoring.enabled: false
 </code></pre>
-<p>conf.d/configuration.conf (文件内容)</p>
+<p>conf.d/configuration.conf（pipeline 配置文件，每个文件是一套独立的 input/filter/output，内容如下）：</p>
 <p><strong>Filebeat和elasticsearch的交互</strong></p>
 <pre><code class="language-json">input {
-    beats {
+  beats {
     port =&gt; 5044
-    codec =&gt; &quot;json&quot;
-}
+    # Filebeat 默认发送的是逐行 JSON，用 json_lines 才能按行解析
+    codec =&gt; json_lines
+  }
 }
 
 output {
-  elasticsearch { 
-    hosts =&gt; [&quot;elasticsearch:9200&quot;]，
-	index =&gt; &quot;export_log_index&quot;
+  elasticsearch {
+    hosts =&gt; [&quot;http://elasticsearch:9200&quot;]
+    index =&gt; &quot;export_log_index&quot;
   }
   stdout { codec =&gt; rubydebug }
 }
@@ -296,7 +340,8 @@ output {
 <p><strong>mysql和elasticsearch的交互</strong></p>
 <pre><code class="language-json">input {
   jdbc {
-    jdbc_driver_class =&gt; &quot;com.mysql.jdbc.Driver&quot;
+    jdbc_driver_class =&gt; &quot;com.mysql.cj.jdbc.Driver&quot;
+    jdbc_driver_library =&gt; &quot;/usr/share/logstash/logstash-core/lib/jars/mysql-connector-java-8.0.28.jar&quot;
     jdbc_connection_string =&gt; &quot;jdbc:mysql://localhost:3306/db_example&quot;
     jdbc_user =&gt; root
     jdbc_password =&gt; ymruan123
@@ -317,9 +362,10 @@ output {
 output {
   elasticsearch {
     document_id =&gt; &quot;%{id}&quot;
-    document_type =&gt; &quot;_doc&quot;
+    # document_type 在 ES 7.x 中已废弃、8.x 中移除，不要再配置
     index =&gt; &quot;export_log_index&quot;
-    hosts =&gt; [&quot;http://localhost:9200&quot;]
+    # 注意：Logstash 在容器内运行，localhost 指向容器自身，必须用容器名 elasticsearch
+    hosts =&gt; [&quot;http://elasticsearch:9200&quot;]
   }
   stdout{
     codec =&gt; rubydebug
@@ -364,24 +410,25 @@ output {
 <pre><code class="language-xml">&lt;dependency&gt;
       &lt;groupId&gt;net.logstash.logback&lt;/groupId&gt;
       &lt;artifactId&gt;logstash-logback-encoder&lt;/artifactId&gt;
-     &lt;version&gt;4.10&lt;/version&gt;
+     &lt;version&gt;6.6&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
 <p>参数配置</p>
 <pre><code class="language-json">input {
-  # 应用日志
-  tcp{
+  # 应用日志：接收 logback 的 LogstashTcpSocketAppender
+  tcp {
     type =&gt; &quot;app&quot;
     mode =&gt; &quot;server&quot;
     host =&gt; &quot;0.0.0.0&quot;
     port =&gt; 4560
-    codec =&gt; json
+    # appender 发送的是换行分隔的 JSON，必须用 json_lines
+    codec =&gt; json_lines
   }
 }
 
 output {
-   elasticsearch {
-      hosts =&gt; &quot;http://127.0.0.1:9200&quot;
+  elasticsearch {
+      hosts =&gt; [&quot;http://elasticsearch:9200&quot;]
       index =&gt; &quot;export_log_index&quot;
     }
 }
@@ -441,20 +488,30 @@ output {
 &lt;/root&gt;
 </code></pre>
 <h3 id="docker-启动-logstash">docker 启动 Logstash</h3>
-<pre><code class="language-java">#docker容器互访 运行容器的时候加上参数link
-docker run -id -p 5044:5044 --name logstash --link elasticsearch --link beats -v /usr/local/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml -v /usr/local/logstash/conf.d/:/usr/share/logstash/conf.d/ logstash:7.4.1
+<p>用同一条自定义网络 <code>elk</code> 代替 <code>--link</code>。启动后用 <code>docker logs</code> 关注日志里的 <code>Pipeline started</code>，确认 pipeline 配置语法无误。</p>
+<pre><code class="language-bash">docker run -d --name logstash --net elk \
+  -p 5044:5044 -p 4560:4560 -p 9600:9600 \
+  -v /usr/local/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml \
+  -v /usr/local/logstash/conf.d/:/usr/share/logstash/conf.d/ \
+  -v /usr/local/logstash/data/:/usr/share/logstash/data/ \
+  logstash:7.12.0
+
+# 查看启动日志，确认没有 ConfigurationError 且出现 Pipeline started
+docker logs -f logstash
 </code></pre>
-<h2 id="docker-安装-filebeat">Docker 安装 Filebeat</h2>
+<p>注意版本：原文这里写的是 <code>logstash:7.4.1</code>，与 ES/Kibana 的 7.12.0 不一致，已统一为 7.12.0。另外 Logstash 必须同时映射 9600 端口——这是它自己的监控 API，<code>GET /_node/stats</code> 可查看事件吞吐与管道状态。</p>
+<h2 id="五-docker安装filebeat">五、Docker 安装 Filebeat</h2>
 <h3 id="拉取镜像-4">拉取镜像</h3>
 <p>拉取镜像的时候，需要注意的是, <strong>Filebeat 的版本最好与 elasticsearch 保持一致</strong>, 避免发生不必要的错误</p>
-<pre><code class="language-java">docker pull store/elastic/filebeat:7.12.0
+<pre><code class="language-bash"># 官方镜像仓库域名形式（推荐），等效于 7.12 时期的 store/elastic/filebeat:7.12.0
+docker pull docker.elastic.co/beats/filebeat:7.12.0
 </code></pre>
 <h3 id="查看镜像-4">查看镜像</h3>
 <pre><code class="language-java">docker images
 </code></pre>
 <h3 id="文件映射-2">文件映射</h3>
 <p><strong>下载默认官方配置文件</strong></p>
-<pre><code class="language-http">wget https://raw.githubusercontent.com/elastic/beats/7.12/deploy/docker/filebeat.docker.yml
+<pre><code class="language-bash">wget https://raw.githubusercontent.com/elastic/beats/7.12/deploy/docker/filebeat.docker.yml
 </code></pre>
 <p>注意：文件放在宿主机的 /data/elk/filebeat 目录下</p>
 <p><strong>打开配置文件</strong><br>
@@ -468,40 +525,48 @@ filebeat.inputs:
   #- /data/elk/*.log
   - /logs/*/*.log
 
-#日志输出配置(采用 logstash 收集日志，5044为logstash端口)
+# 日志输出配置（采用 logstash 收集日志，5044 为 logstash 端口）
+# 同一 docker 网络内可直接用容器名，不必写死宿主机 IP
 output.logstash:
-  hosts: ['192.168.12.183:5044']
+  hosts: ['logstash:5044']
 </code></pre>
-<h3 id="docker运行filebeat">docker运行Filebeat</h3>
-<pre><code class="language-java">docker run --name filebeat --user=root -d --net somenetwork --volume=&quot;/usr/local/filebeat/log/nginx/:/var/log/nginx/&quot; --volume=&quot;/data/elk/filebeat/filebeat.docker.yml:/usr/share/filebeat/filebeat.yml&quot; --volume=&quot;/var/lib/docker/containers:/var/lib/docker/containers:ro&quot; --volume=&quot;/var/run/docker.sock:/var/run/docker.sock:ro&quot; store/elastic/filebeat:7.12.0
+<p>若 Filebeat 与 Logstash 不在同一台机器或同一网络，则把 <code>logstash:5044</code> 换成 Logstash 所在宿主机 IP（例如 <code>192.168.12.183:5044</code>），并确保该端口已放通防火墙。</p>
+<h3 id="docker运行filebeat">docker 运行 Filebeat</h3>
+<pre><code class="language-bash">docker run -d --name filebeat --user=root --net elk \
+  --volume=&quot;/usr/local/filebeat/log/nginx/:/var/log/nginx/&quot; \
+  --volume=&quot;/data/elk/filebeat/filebeat.docker.yml:/usr/share/filebeat/filebeat.yml&quot; \
+  --volume=&quot;/var/lib/docker/containers:/var/lib/docker/containers:ro&quot; \
+  --volume=&quot;/var/run/docker.sock:/var/run/docker.sock:ro&quot; \
+  docker.elastic.co/beats/filebeat:7.12.0
 </code></pre>
+<p>这里挂载 <code>/var/lib/docker/containers</code> 与 <code>docker.sock</code> 是为了采集宿主机上其他容器的标准输出日志（Filebeat 的 <code>add_docker_metadata</code> / autodiscover 需要它们），只读挂载即可；<code>--user=root</code> 是为了让容器内进程有权读取这些 root 属主的路径。原文这里用的网络名是 <code>somenetwork</code>，而前面创建的是 <code>elk</code>，已统一，否则 Filebeat 无法解析 <code>logstash</code> 这个容器名。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-elk%E7%BB%84%E4%BB%B6%E4%B8%8E%E7%89%88%E6%9C%AC%E9%80%89%E6%8B%A9">一、ELK 组件与版本选择</a>
 <ul>
-<li><a href="#docker%E9%83%A8%E7%BD%B2elasticsearch">Docker部署ElasticSearch</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-docker%E9%83%A8%E7%BD%B2elasticsearch">二、Docker 部署 Elasticsearch</a>
 <ul>
-<li><a href="#%E6%90%9C%E7%B4%A2elasticsearch%E9%95%9C%E5%83%8F">搜索ElasticSearch镜像</a></li>
+<li><a href="#%E6%90%9C%E7%B4%A2elasticsearch%E9%95%9C%E5%83%8F">搜索 Elasticsearch 镜像</a></li>
 <li><a href="#%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F">拉取镜像</a></li>
 <li><a href="#%E6%9F%A5%E7%9C%8B%E9%95%9C%E5%83%8F">查看镜像</a></li>
-<li><a href="#docker-%E5%90%AF%E5%8A%A8-elasticsearch">docker 启动 elasticsearch</a></li>
-<li><a href="#elasticsearch%E9%85%8D%E7%BD%AE">elasticsearch配置</a>
-<ul>
-<li><a href="#%E5%88%9B%E5%BB%BAelasticsearch%E6%BB%9A%E5%8A%A8%E7%AD%96%E7%95%A5">创建elasticsearch滚动策略</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E6%A8%A1%E6%9D%BF">创建索引模板</a></li>
-<li><a href="#%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95">创建索引</a></li>
+<li><a href="#docker-%E5%90%AF%E5%8A%A8-elasticsearch">docker 启动 Elasticsearch</a></li>
+<li><a href="#elasticsearch%E9%85%8D%E7%BD%AE">Elasticsearch 索引策略与模板配置</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#docker-%E5%AE%89%E8%A3%85-kibana">docker 安装 kibana</a>
+<li>
+<a href="#%E4%B8%89-docker%E5%AE%89%E8%A3%85kibana">三、Docker 安装 Kibana</a>
 <ul>
 <li><a href="#%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F-2">拉取镜像</a></li>
 <li><a href="#%E6%9F%A5%E7%9C%8B%E9%95%9C%E5%83%8F-2">查看镜像</a></li>
 <li><a href="#docker-%E5%90%AF%E5%8A%A8-kibana">docker 启动 kibana</a></li>
 </ul>
 </li>
-<li><a href="#docker-%E5%AE%89%E8%A3%85-logstash">Docker 安装 Logstash</a>
+<li>
+<a href="#%E5%9B%9B-docker%E5%AE%89%E8%A3%85logstash">四、Docker 安装 Logstash</a>
 <ul>
 <li><a href="#%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F-3">拉取镜像</a></li>
 <li><a href="#%E6%9F%A5%E7%9C%8B%E9%95%9C%E5%83%8F-3">查看镜像</a></li>
@@ -509,14 +574,13 @@ output.logstash:
 <li><a href="#docker-%E5%90%AF%E5%8A%A8-logstash">docker 启动 Logstash</a></li>
 </ul>
 </li>
-<li><a href="#docker-%E5%AE%89%E8%A3%85-filebeat">Docker 安装 Filebeat</a>
+<li>
+<a href="#%E4%BA%94-docker%E5%AE%89%E8%A3%85filebeat">五、Docker 安装 Filebeat</a>
 <ul>
 <li><a href="#%E6%8B%89%E5%8F%96%E9%95%9C%E5%83%8F-4">拉取镜像</a></li>
 <li><a href="#%E6%9F%A5%E7%9C%8B%E9%95%9C%E5%83%8F-4">查看镜像</a></li>
 <li><a href="#%E6%96%87%E4%BB%B6%E6%98%A0%E5%B0%84-2">文件映射</a></li>
-<li><a href="#docker%E8%BF%90%E8%A1%8Cfilebeat">docker运行Filebeat</a></li>
-</ul>
-</li>
+<li><a href="#docker%E8%BF%90%E8%A1%8Cfilebeat">docker 运行 Filebeat</a></li>
 </ul>
 </li>
 </ul>
@@ -540,7 +604,144 @@ output.logstash:
         </div>
       </div>
     </div>
-  </article>
+  
+<h2 id="六-中文分词插件analysis-ik">六、中文分词插件 analysis-ik</h2>
+<p>前面创建索引模板时用到了 <code>ik_max_word</code> 分析器。这是第三方插件，Elasticsearch 官方镜像<strong>不自带</strong>；如果不安装就直接按该模板创建索引，会报 <code>analyzer [ik_max_word] not found</code>（模板本身能创建成功，但用它建索引时会失败）。</p>
+<pre><code class="language-bash"># 方式一：进容器安装（插件版本必须与 ES 版本严格一致）
+docker exec -it elasticsearch bash
+bin/elasticsearch-plugin install https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.12.0/elasticsearch-analysis-ik-7.12.0.zip
+exit
+docker restart elasticsearch
+
+# 方式二：构建自带插件的镜像（生产更推荐，容器重建后插件不会丢）
+cat &gt; Dockerfile &lt;&lt;&#39;EOF&#39;
+FROM elasticsearch:7.12.0
+RUN bin/elasticsearch-plugin install --batch \
+    https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.12.0/elasticsearch-analysis-ik-7.12.0.zip
+EOF
+docker build -t elasticsearch-ik:7.12.0 .
+</code></pre>
+<p>若把 <code>/usr/share/elasticsearch/plugins</code> 映射到宿主机目录，则插件必须提前解压到该目录，否则容器重建后插件丢失、索引无法写入。安装完成后验证：</p>
+<pre><code class="language-bash">curl -X POST &quot;http://localhost:9200/_analyze&quot; -H &#39;Content-Type: application/json&#39; -d&#39;
+{&quot;analyzer&quot;: &quot;ik_max_word&quot;, &quot;text&quot;: &quot;中华人民共和国国歌&quot;}
+&#39;
+# 返回的 tokens 中若能切出「中华人民共和国」「国歌」等词，说明插件生效
+</code></pre>
+<h2 id="七-用docker-compose统一编排">七、用 docker-compose 统一编排</h2>
+<p>逐个 <code>docker run</code> 适合理解各组件参数，但环境难以复现。下面这份 compose 文件等价覆盖了前五节的全部内容，可直接 <code>docker compose up -d</code> 启动（Compose V2 命令为 <code>docker compose</code>，老版本是 <code>docker-compose</code>）。</p>
+<pre><code class="language-yaml">version: &quot;3.8&quot;
+services:
+  elasticsearch:
+    image: elasticsearch:7.12.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - cluster.name=docker-cluster
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - ./es-data:/usr/share/elasticsearch/data
+      - ./es-logs:/usr/share/elasticsearch/logs
+    ports:
+      - &quot;9200:9200&quot;
+      - &quot;9300:9300&quot;
+    networks: [elk]
+    healthcheck:
+      test: [&quot;CMD-SHELL&quot;, &quot;curl -fs http://localhost:9200/_cluster/health || exit 1&quot;]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  kibana:
+    image: kibana:7.12.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - I18N_LOCALE=zh-CN
+    ports:
+      - &quot;5601:5601&quot;
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+    networks: [elk]
+
+  logstash:
+    image: logstash:7.12.0
+    container_name: logstash
+    volumes:
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./logstash/conf.d:/usr/share/logstash/conf.d
+      - ./logstash/data:/usr/share/logstash/data
+    ports:
+      - &quot;5044:5044&quot;
+      - &quot;4560:4560&quot;
+      - &quot;9600:9600&quot;
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+    networks: [elk]
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.12.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat/filebeat.docker.yml:/usr/share/filebeat/filebeat.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./nginx-logs:/logs:ro
+    depends_on: [logstash]
+    networks: [elk]
+
+networks:
+  elk:
+    driver: bridge
+</code></pre>
+<p>使用前注意三点：宿主机目录 <code>./es-data</code>、<code>./es-logs</code> 需先 <code>mkdir</code> 并 <code>chown 1000:1000</code>（否则 ES 直接启动失败）；<code>vm.max_map_count=262144</code> 仍需在宿主机设置；<code>depends_on</code> 只保证启动顺序，<code>condition: service_healthy</code> 才保证依赖服务真正就绪（7.12 的 ES 镜像不含 <code>curl</code> 时，健康检查可改用 <code>bash -c &#39;echo &gt; /dev/tcp/localhost/9200&#39;</code>）。</p>
+<h2 id="八-7-x与8-x的关键差异">八、7.x 与 8.x 的关键差异</h2>
+<p>本文示例基于 7.12.0。若要改用 8.x，下面几处差异会让原文命令直接报错，务必先调整。</p>
+<pre><code class="language-bash"># 8.x 默认开启安全认证：ES 首次启动会自动生成 elastic 用户密码，并启用 HTTPS
+# 快速验证环境可以显式关闭安全（仅限内网测试，勿用于生产）
+docker run -d --name elasticsearch --net elk \
+  -p 9200:9200 \
+  -e &quot;discovery.type=single-node&quot; \
+  -e &quot;xpack.security.enabled=false&quot; \
+  -e &quot;ES_JAVA_OPTS=-Xms512m -Xmx512m&quot; \
+  -v /data/elk/es-data:/usr/share/elasticsearch/data \
+  docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+
+# 若保留默认安全：用以下命令重置/查看密码，请求需携带 -u 与 -k（自签证书）
+docker exec -it elasticsearch bin/elasticsearch-reset-password -u elastic
+curl -k -u elastic:&lt;密码&gt; https://localhost:9200
+</code></pre>
+<ul>
+<li><strong>安全认证</strong>：7.x 默认关闭（需手动配置 xpack.security 才启用）；8.x 默认开启，HTTP 端口启用 TLS，写入/查询必须带认证。</li>
+<li><strong>Kibana 连接加密开关</strong>：8.x 连接启用 HTTPS 的 ES 时要额外配置 <code>ELASTICSEARCH_HOSTS=https://elasticsearch:9200</code>、<code>ELASTICSEARCH_USERNAME</code>、<code>ELASTICSEARCH_PASSWORD</code>，以及证书信任（或 <code>ELASTICSEARCH_SSL_VERIFICATIONMODE=none</code>，仅用于测试）。</li>
+<li><strong>Logstash 输出</strong>：8.x 连接启用安全的 ES 需加 <code>user</code>/<code>password</code>（或 <code>api_key</code>）与 <code>ssl =&gt; true</code>、<code>cacert</code>。</li>
+<li><strong>索引模板 API</strong>：<code>_template</code>（legacy template）自 7.8 起被可组合模板 <code>_index_template</code> 取代、8.x 中移除，需改写为带 <code>template</code> 与 <code>composed_of</code> 结构的可组合模板。</li>
+<li><strong>Filebeat 输入类型</strong>：8.x 推荐 <code>filestream</code> 输入（<code>log</code> 类型仍可用但已不推荐）。</li>
+<li><strong>镜像仓库</strong>：统一使用 <code>docker.elastic.co/...</code> 官方仓库，旧别名 <code>store/elastic/*</code> 已不再维护。</li>
+<li><strong>默认 JVM 堆</strong>：8.x 镜像默认按容器内存自动推断堆大小，小内存机器反而更容易被 OOM Kill，仍建议显式设置 <code>ES_JAVA_OPTS</code>。</li>
+</ul>
+<h2 id="九-部署验证与常见报错">九、部署验证与常见报错</h2>
+<p>四步验证，全部通过即链路可用：</p>
+<ol>
+<li><code>curl http://localhost:9200/_cluster/health?pretty</code> → <code>&quot;status&quot; : &quot;green&quot;</code>（单节点无副本时可能为 yellow，属正常）。</li>
+<li>Kibana 打开 <code>http://&lt;宿主机IP&gt;:5601</code>，Stack Management → 索引管理能看到 <code>export_log_index-000001</code>。</li>
+<li><code>curl http://localhost:9600/_node/stats/pipelines?pretty</code> → 查看 <code>events.in</code> / <code>events.out</code> 是否增长。</li>
+<li><code>docker logs filebeat</code> 无 <code>Failed to connect</code>，Kibana 中能搜到业务日志。</li>
+</ol>
+<p>常见报错与处理：</p>
+<ul>
+<li><code>max virtual memory areas vm.max_map_count [65530] is too low</code>：宿主机未设置内核参数，执行第一节的 <code>sysctl -w vm.max_map_count=262144</code>。</li>
+<li><code>AccessDeniedException: /usr/share/elasticsearch/data/...</code>：挂载目录属主不是 uid 1000，执行 <code>sudo chown -R 1000:1000 /data/elk</code>。</li>
+<li><code>analyzer [ik_max_word] not found</code>：未安装 analysis-ik 插件，见第六节。</li>
+<li>Logstash 报连接 ES 超时：配置里写了 <code>localhost:9200</code>，容器内应改为 <code>http://elasticsearch:9200</code>。</li>
+<li>Logstash 只收到一条合并的日志或字段错乱：codec 用了 <code>json</code>，需改为 <code>json_lines</code>。</li>
+<li>Kibana 反复重启：与 ES 版本不一致，或 <code>ELASTICSEARCH_HOSTS</code> 写成了 <code>localhost</code>。</li>
+<li>启动后 <code>docker ps</code> 看不到容器：缺少 <code>-d</code>，或容器启动即退出，用 <code>docker logs &lt;容器名&gt;</code> 查看退出原因。</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">
