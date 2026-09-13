@@ -261,13 +261,13 @@ int grade=6;
 </code></pre>
 <p>当我们写“int age=50；”，其实是分为两步的：</p>
 <p><code>	int age;</code>//定义变量<code> age=50;</code>//赋值</p>
-<p>	首先<code>JVM</code>创建一个名为age的变量，存于局部变量表中，然后去栈中查找是否存在有字面量值为50的内容，如果有就直接把age指向这个地址，如果没有，<code>JVM</code>会在栈中开辟一块空间来存储“50”这个内容，并且把age指向这个地址。因此我们可以知道：</p>
-<p>	我们声明并初始化基本数据类型的局部变量时，变量名以及字面量值都是存储在栈中，而且是真实的内容。</p>
-<p>	我们再来看<code>“int weight=50；”</code>，按照刚才的思路：字面量为50的内容在栈中已经存在，因此weight是直接指向这个地址的。由此可见：栈中的数据在当前线程下是共享的。</p>
+<p>	首先，<code>JVM</code> 在 <code>main()</code> 方法栈帧的局部变量表中为 <code>age</code> 分配一个槽位（slot），赋值时把字面量 50 存入该槽位。基本数据类型的局部变量直接保存数值本身，不同的局部变量各自占用独立的槽位，互不影响。因此可以说：</p>
+<p>	声明并初始化基本数据类型的局部变量时，变量所在的槽位和数值都位于虚拟机栈的局部变量表中，栈中保存的就是真实的值。</p>
+<p>	再看 <code>int weight = 50;</code>：<code>weight</code> 同样在自己的槽位中保存数值 50。两个变量保存的是两份彼此独立的值，只是数值恰好相同，并不存在“共享同一份数据”的说法；虚拟机栈是线程私有的，栈中的局部变量只对当前线程可见。</p>
 <p>	那么如果再执行下面的代码呢？</p>
 <p>	<code>weight=40；</code></p>
-<p>	当代码中重新给weight变量进行赋值时，<code>JVM</code>会去栈中寻找字面量为40的内容，发现没有，就会开辟一块内存空间存储40这个内容，并且把weight指向这个地址。由此可知：</p>
-<p>	基本数据类型的数据本身是不会改变的，当局部变量重新赋值时，并不是在内存中改变字面量内容，而是重新在栈中寻找已存在的相同的数据，若栈中不存在，则重新开辟内存存新数据，并且把要重新赋值的局部变量的引用指向新数据所在地址。</p>
+<p>	重新给 <code>weight</code> 赋值时，<code>JVM</code> 直接把 40 写入 <code>weight</code> 自己的槽位，覆盖原来的 50，<code>age</code> 的槽位不受任何影响。由此可知：</p>
+<p>	基本数据类型的局部变量重新赋值时，改变的是本栈帧中该变量槽位里的数值，既不会影响同一方法中其他变量，也不会影响调用方栈帧中实参的值。</p>
 <p>B. 基本数据类型的成员变量</p>
 <p>成员变量：顾名思义，就是在类体中定义的变量。</p>
 <p>看下图：<br>
@@ -333,18 +333,19 @@ public static void main(String[] args) {
 </code></pre>
 <p>从上面的打印结果可以看到：</p>
 <p>a和w作为实参传入<code>valueCrossTest</code>之后，无论在方法内做了什么操作，最终a和w都没变化。</p>
-<p>这是什么造型呢？！！</p>
+<p>为什么会出现这样的结果呢？下面我们结合前面学到的内存模型知识，逐步分析原因。</p>
 <p>下面我们根据上面学到的知识点，进行详细的分析：</p>
-<p>首先程序运行时，调用<code>mian()</code>方法，此时<code>JVM</code>为<code>main()</code>方法往虚拟机栈中压入一个栈帧，即为当前栈帧，用来存放<code>main()</code>中的局部变量表(包括参数)、操作栈、方法出口等信息，如a和w都是<code>mian()</code>方法中的局部变量，因此可以断定，a和w是躺着<code>mian</code>方法所在的栈帧中</p>
+<p>首先程序运行时，调用<code>main()</code>方法，此时<code>JVM</code>为<code>main()</code>方法往虚拟机栈中压入一个栈帧，即为当前栈帧，用来存放<code>main()</code>中的局部变量表(包括参数)、操作栈、方法出口等信息，如a和w都是<code>main()</code>方法中的局部变量，因此可以断定，a 和 w 都存放在 <code>main</code> 方法所在的栈帧中</p>
 <p>如图：</p>
 <figure data-type="image" tabindex="3"><img src="/post-images/1619167361127.jpeg" alt="" loading="lazy"></figure>
-<p>而当执行到<code>valueCrossTest()</code>方法时，<code>JVM</code>也为其往虚拟机栈中压入一个栈，即为当前栈帧，用来存放<code>valueCrossTest()</code>中的局部变量等信息，因此age和weight是躺着<code>valueCrossTest</code>方法所在的栈帧中，而他们的值是从a和w的值copy了一份副本而得，如图：</p>
+<p>而当执行到<code>valueCrossTest()</code>方法时，<code>JVM</code>也为其往虚拟机栈中压入一个栈，即为当前栈帧，用来存放<code>valueCrossTest()</code>中的局部变量等信息，因此age 和 weight 存放在 <code>valueCrossTest</code> 方法所在的栈帧中，而他们的值是从a和w的值copy了一份副本而得，如图：</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1619167368733.jpeg" alt="" loading="lazy"></figure>
-<p>因而可以a和age、w和weight对应的内容是不一致的，所以当在方法内重新赋值时，实际流程如图：<br>
+<p>因而 a 和 age、w 和 weight 对应的内容是不一致的，所以当在方法内重新赋值时，实际流程如图：<br>
 <img src="/post-images/1619167375812.jpeg" alt="" loading="lazy"></p>
-<p>也就是说，age和weight的改动，只是改变了当前栈帧（<code>valueCrossTest</code>方法所在栈帧）里的内容，当方法执行结束之后，这些局部变量都会被销毁，<code>mian</code>方法所在栈帧重新回到栈顶，成为当前栈帧，再次输出a和w时，依然是初始化时的内容。</p>
+<p>也就是说，age 和 weight 的改动，只是改变了当前栈帧（<code>valueCrossTest</code>方法所在栈帧）里的内容，当方法执行结束之后，这些局部变量都会被销毁，<code>main</code> 方法所在栈帧重新回到栈顶，成为当前栈帧，再次输出a和w时，依然是初始化时的内容。</p>
 <p>因此：</p>
 <p>值传递传递的是真实内容的一个副本，对副本的操作不影响原内容，也就是形参怎么变化，不会影响实参对应的内容。</p>
+<p><img src="/post-assets/nRZ1sLPT7/01-value-passing-stack.svg" alt="值传递：基本类型参数在两个栈帧中的副本"></p>
 <h3 id="引用传递">引用传递：</h3>
 <p>	”引用”也就是指向真实内容的地址值，在方法调用时，实参的地址通过方法调用被传递给相应的形参，在方法体内，形参和实参指向同一块内存地址，对形参的操作会影响的真实内容。</p>
 <p>举个栗子：</p>
@@ -387,10 +388,8 @@ public static void main(String[] args) {
 方法执行后的name：我是张三
 </code></pre>
 <p>可以看出，person经过<code>personCrossTest()</code>方法的执行之后，内容发生了改变，这印证了上面所说的“引用传递”，对形参的操作，改变了实际对象的内容。</p>
-<p>那么，到这里就结题了吗？</p>
-<p>不是的，没那么简单，</p>
-<p>能看得到想要的效果</p>
-<p>是因为刚好选对了例子而已！！！</p>
+<p>那么，到这里就得出结论了吗？</p>
+<p>其实并没有这么简单：之所以能看到上面这种“修改生效”的效果，只是因为刚好选对了例子而已。</p>
 <p>下面我们对上面的例子稍作修改，加上一行代码，</p>
 <pre><code class="language-java">public static void PersonCrossTest(Person person){    
     System.out.println(&quot;传入的person的name：&quot;+person.getName());     
@@ -426,9 +425,10 @@ PersonCrossTest(p);
 <figure data-type="image" tabindex="6"><img src="/post-images/1619167408670.jpeg" alt="" loading="lazy"></figure>
 <p>由图可以看出，方法内的形参 person 和实参 p 并无实质关联，它只是由 p 处 copy 了一份指向对象的地址，此时：</p>
 <p>p和person都是指向同一个对象。</p>
-<p>因此在第一个例子中，对形参p的操作，会影响到实参对应的对象内容。而在第二个例子中，当执行到new Person()之后，<code>JVM</code>在堆内开辟一块空间存储新对象，并且把person改成指向新对象的地址，此时：</p>
+<p>因此在第一个例子中，对形参 person 的操作，会影响到实参所指向的对象内容。而在第二个例子中，当执行到new Person()之后，<code>JVM</code>在堆内开辟一块空间存储新对象，并且把person改成指向新对象的地址，此时：</p>
 <p>p依旧是指向旧的对象，person指向新对象的地址。</p>
-<p>所以此时对person的操作，实际上是对新对象的操作，于实参p中对应的对象毫无关系。</p>
+<p>所以此时对 person 的操作，实际上都是对新对象的操作，与实参 p 所指向的对象毫无关系。</p>
+<p><img src="/post-assets/nRZ1sLPT7/02-reference-passing-heap.svg" alt="引用类型传递时形参改指新对象与实参无关"></p>
 <h2 id="结语">结语</h2>
 <p>因此可见：在Java中所有的参数传递，不管基本类型还是引用类型，都是值传递，或者说是副本传递。</p>
 <p>只是在传递过程中：</p>
@@ -437,12 +437,17 @@ PersonCrossTest(p);
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%BD%A2%E5%8F%82%E4%B8%8E%E5%AE%9E%E5%8F%82">形参与实参</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#java%E7%9A%84%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">Java的数据类型</a>
 <ul>
-<li><a href="#%E5%BD%A2%E5%8F%82%E4%B8%8E%E5%AE%9E%E5%8F%82">形参与实参</a></li>
-<li><a href="#java%E7%9A%84%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">Java的数据类型</a></li>
-<li><a href="#jvm%E5%86%85%E5%AD%98%E7%9A%84%E5%88%92%E5%88%86%E5%8F%8A%E8%81%8C%E8%83%BD">JVM内存的划分及职能</a>
+</ul>
+</li>
+<li>
+<a href="#jvm%E5%86%85%E5%AD%98%E7%9A%84%E5%88%92%E5%88%86%E5%8F%8A%E8%81%8C%E8%83%BD">JVM内存的划分及职能</a>
 <ul>
 <li><a href="#%E8%99%9A%E6%8B%9F%E6%9C%BA%E6%A0%88">虚拟机栈</a></li>
 <li><a href="#%E5%A0%86">堆</a></li>
@@ -451,21 +456,23 @@ PersonCrossTest(p);
 <li><a href="#%E7%A8%8B%E5%BA%8F%E8%AE%A1%E6%95%B0%E5%99%A8">程序计数器：</a></li>
 </ul>
 </li>
-<li><a href="#%E6%95%B0%E6%8D%AE%E5%A6%82%E4%BD%95%E5%9C%A8%E5%86%85%E5%AD%98%E4%B8%AD%E5%AD%98%E5%82%A8">数据如何在内存中存储？</a>
+<li>
+<a href="#%E6%95%B0%E6%8D%AE%E5%A6%82%E4%BD%95%E5%9C%A8%E5%86%85%E5%AD%98%E4%B8%AD%E5%AD%98%E5%82%A8">数据如何在内存中存储？</a>
 <ul>
 <li><a href="#%E5%9F%BA%E6%9C%AC%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B%E7%9A%84%E5%AD%98%E5%82%A8">基本数据类型的存储</a></li>
 <li><a href="#%E5%BC%95%E7%94%A8%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B%E7%9A%84%E5%AD%98%E5%82%A8">引用数据类型的存储:</a></li>
 </ul>
 </li>
-<li><a href="#%E5%80%BC%E4%BC%A0%E9%80%92%E5%92%8C%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92">值传递和引用传递</a>
+<li>
+<a href="#%E5%80%BC%E4%BC%A0%E9%80%92%E5%92%8C%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92">值传递和引用传递</a>
 <ul>
 <li><a href="#%E5%80%BC%E4%BC%A0%E9%80%92">值传递：</a></li>
 <li><a href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92">引用传递：</a></li>
 </ul>
 </li>
-<li><a href="#%E7%BB%93%E8%AF%AD">结语</a></li>
-</ul>
-</li>
+<li>
+<a href="#%E7%BB%93%E8%AF%AD">结语</a>
+<ul>
 </ul>
 </li>
 </ul>
