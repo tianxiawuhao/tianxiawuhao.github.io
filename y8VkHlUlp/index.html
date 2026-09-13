@@ -125,7 +125,8 @@
           
           <img class="post-feature-header-image" src="/post-images/y8VkHlUlp.png" alt="封面图">
           
-          <h2 id="executors目前提供了5种不同的线程池创建配置">Executors目前提供了5种不同的线程池创建配置：</h2>
+          <p>Java 中创建线程池有两种途径：一是用 <code>Executors</code> 工厂方法快速创建，二是手动 <code>new ThreadPoolExecutor(...)</code>。前者写法简单，但线程数与队列容量不可控——《阿里巴巴 Java 开发手册》明确要求线程池不允许使用 <code>Executors</code> 创建，因为无界队列可能堆积大量请求导致 OOM；后者才能精确指定核心线程数、最大线程数、队列与拒绝策略。本文先梳理 <code>Executors</code> 的 5 种线程池，再展开 <code>ThreadPoolExecutor</code> 的参数与拒绝策略，最后给出 Spring Boot 中的异步线程池实践。</p>
+<h2 id="一-executors-提供的-5-种线程池创建方式">一、Executors 提供的 5 种线程池创建方式</h2>
 <ol>
 <li>
 <p>newCachedThreadPool（），它是用来处理大量短时间工作任务的线程池，具有几个鲜明特点：它会试图缓存线程并重用，当无缓存线程可用时，就会创建新的工作线程；如果线程闲置时间超过60秒，则被终止并移除缓存；长时间闲置时，这种线程池，不会消耗什么资源。其内部使用SynchronousQueue作为工作队列。</p>
@@ -143,7 +144,9 @@
 <p>newWorkStealingPool(int parallelism)，这是一个经常被人忽略的线程池，Java 8 才加入这个创建方法，其内部会构建<a href="https://docs.oracle.com/javase/9/docs/api/java/util/concurrent/ForkJoinPool.html">ForkJoinPool</a>，利用<a href="https://en.wikipedia.org/wiki/Work_stealing">Work-Stealing</a>算法，并行地处理任务，不保证处理顺序。</p>
 </li>
 </ol>
-<pre><code class="language-java">public class MyThreadPool {
+<pre><code class="language-java">import java.util.concurrent.*;
+
+public class MyThreadPool {
     public static void main(String[] args) {
 //        ExecutorService executorService = Executors.newFixedThreadPool(5);
 //        ExecutorService executorService= Executors.newSingleThreadExecutor();
@@ -178,9 +181,11 @@
 }
 
 </code></pre>
-<h2 id="executor框架的基本组成">Executor框架的基本组成</h2>
+<p>这段代码创建了一个核心线程数 2、最大线程数 5、队列容量 3 的线程池，然后连续提交 10 个任务：前 2 个任务由核心线程直接执行，接着 3 个任务进入队列；队列满后线程池把线程数扩容到 5 个，再执行 3 个任务，此时共有 8 个任务被受理。最后 2 个任务在队列已满且线程数已达 <code>maximumPoolSize</code> 时触发 <code>AbortPolicy</code>，抛出 <code>RejectedExecutionException</code>。</p>
+<p>还要注意示例把 <code>shutdown()</code> 放在 <code>finally</code> 中：一旦拒绝异常被 <code>catch</code> 捕获，循环随之中断，剩余任务不再提交，线程池也进入关闭流程。生产代码应把拒绝异常与业务异常分开处理，并按业务语义决定丢弃、降级还是阻塞等待。</p>
+<h2 id="二-executor-框架的基本组成">二、Executor 框架的基本组成</h2>
 <p><img src="/post-images/1631088364651.png" alt="" loading="lazy"><br>
-而我们创建时，一般使用它的子类：ThreadPoolExecutor.</p>
+Executor 框架的核心接口是 <code>Executor</code>，实际创建线程池时一般使用它的实现类 <code>ThreadPoolExecutor</code>。</p>
 <pre><code class="language-java">public ThreadPoolExecutor(int corePoolSize,  
                               int maximumPoolSize,  
                               long keepAliveTime,  
@@ -189,7 +194,7 @@
                               ThreadFactory threadFactory,  
                               RejectedExecutionHandler handler)
 </code></pre>
-<p>这是其中最重要的一个构造方法，这个方法决定了创建出来的线程池的各种属性，下面依靠一张图来更好的理解线程池和这几个参数：</p>
+<p>这是其中最常用的一个构造方法，它决定了创建出来的线程池的各种属性。下面这张图展示了这些参数在任务处理流程中的位置与作用：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1631088504377.png" alt="" loading="lazy"></figure>
 <p>（1）corePoolSize：线程池中常驻核心线程数</p>
 <p>（2）maximumPoolSize：线程池能够容纳同时执行的最大线程数，此值必须大于等于1</p>
@@ -198,16 +203,20 @@
 <p>（5）workQueue：任务队列，被提交但尚未执行的任务</p>
 <p>（6）threadFactory：表示生成线程池中的工作线程的线程工厂，用于创建线程，一般为默认线程工厂即可</p>
 <p>（7）handler：拒绝策略，表示当队列满了并且工作线程数达到线程池的最大线程数（maximumPoolSize）时，如何拒绝新提交的 Runnable 的策略</p>
-<h2 id="handler的拒绝策略">handler的拒绝策略：</h2>
-<p>有四种：</p>
+<p>把上面的参数串起来，一个任务从提交到执行（或被拒绝）的完整判断顺序如下：</p>
+<p><img src="/post-assets/y8VkHlUlp/01-task-flow.svg" alt="ThreadPoolExecutor 任务提交与处理顺序：核心线程、工作队列、扩容到最大线程数、拒绝策略"></p>
+<h2 id="三-handler-的拒绝策略">三、Handler 的拒绝策略</h2>
+<p>JDK 内置了四种拒绝策略：</p>
 <ol>
 <li>第一种 AbortPolicy：不执行新任务，直接抛出异常，提示线程池已满</li>
 <li>第二种 DiscardPolicy：不执行新任务，也不抛出异常</li>
 <li>第三种 DiscardOldestPolicy：将工作队列中的第一个任务移除，替换为当前新进来的任务执行</li>
 <li>第四种 CallerRunsPolicy：直接调用 execute 来执行当前任务</li>
 </ol>
-<h2 id="在spring项目中的使用">在spring项目中的使用</h2>
-<p>先创建一个线程池的配置，让Spring Boot加载，用来定义如何创建一个<code>ThreadPoolTaskExecutor</code>，要使用<code>@Configuration</code>和@<code>EnableAsync</code>这两个注解，表示这是个配置类，并且是线程池的配置类</p>
+<p>四种策略的核心差异在于「任务丢不丢、调用方知不知道、由谁执行」：</p>
+<p><img src="/post-assets/y8VkHlUlp/02-reject-policy.svg" alt="四种拒绝策略对比：AbortPolicy、DiscardPolicy、DiscardOldestPolicy、CallerRunsPolicy"></p>
+<h2 id="四-在-spring-项目中的使用">四、在 Spring 项目中的使用</h2>
+<p>先创建一个线程池的配置，让Spring Boot加载，用来定义如何创建一个<code>ThreadPoolTaskExecutor</code>，要使用 <code>@Configuration</code> 和 <code>@EnableAsync</code> 这两个注解：前者表示这是一个配置类，后者开启基于注解的异步任务支持。</p>
 <pre><code class="language-java">@Configuration
 @EnableAsync
 public class ExecutorConfig {
@@ -246,7 +255,7 @@ public class ExecutorConfig {
 }
 </code></pre>
 <p><code>@Value</code>是我配置在<code>application.properties</code>，可以参考配置，自由定义</p>
-<pre><code class="language-xml"># 异步线程配置
+<pre><code class="language-properties"># 异步线程配置
 # 配置核心线程数
 async.executor.thread.core_pool_size = 5
 # 配置最大线程数
@@ -259,7 +268,10 @@ async.executor.thread.name.prefix = async-service-
 <p>创建一个Service接口，是异步线程的接口</p>
 <pre><code class="language-java">public interface AsyncService {
 
-    /** * 执行异步任务 * 可以根据需求，自己加参数拟定，我这里就做个测试演示 */
+    /**
+     * 执行异步任务。
+     * 可以根据需求自己加参数，这里只做测试演示。
+     */
     void executeAsync();
 }
 </code></pre>
@@ -291,8 +303,8 @@ public void async(){
     asyncService.executeAsync();
 }
 </code></pre>
-<p><strong>用postmain或者其他工具来多次测试请求一下</strong></p>
-<pre><code class="language-java"> 2018-07-16 22:15:47.655  INFO 10516 --- [async-service-5] c.u.d.e.executor.impl.AsyncServiceImpl   : start executeAsync
+<p><strong>用 Postman 或者其他工具多次发起请求测试</strong></p>
+<pre><code class="language-text"> 2018-07-16 22:15:47.655  INFO 10516 --- [async-service-5] c.u.d.e.executor.impl.AsyncServiceImpl   : start executeAsync
 异步线程要做的事情
 可以在这里执行批量插入等耗时的事情
 2018-07-16 22:15:47.655  INFO 10516 --- [async-service-5] c.u.d.e.executor.impl.AsyncServiceImpl   : end executeAsync
@@ -313,7 +325,7 @@ public void async(){
 可以在这里执行批量插入等耗时的事情
 2018-07-16 22:15:48.987  INFO 10516 --- [async-service-4] c.u.d.e.executor.impl.AsyncServiceImpl   : end executeAsync
 </code></pre>
-<p>通过以上日志可以发现，<code>[async-service-]</code>是有多个线程的，显然已经在我们配置的线程池中执行了，并且每次请求中，controller的起始和结束日志都是连续打印的，表明每次请求都快速响应了，而耗时的操作都留给线程池中的线程去异步执行；</p>
+<p>日志中的线程名是 <code>async-service-1</code> 到 <code>async-service-5</code>，说明任务确实交给了我们配置的线程池；每个请求提交任务后立即返回，耗时操作全部由线程池中的线程异步完成。</p>
 <p>虽然我们已经用上了线程池，但是还不清楚线程池当时的情况，有多少线程在执行，多少在队列中等待呢？这里我创建了一个ThreadPoolTaskExecutor的子类，在每次提交线程的时候都会将当前线程池的运行状况打印出来</p>
 <pre><code class="language-java">import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -324,7 +336,10 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 
-/** * @Author: ChenBin * @Date: 2018/7/16/0016 22:19 */
+/**
+ * @Author: ChenBin
+ * @Date: 2018/7/16/0016 22:19
+ */
 public class VisiableThreadPoolTaskExecutor extends ThreadPoolTaskExecutor {
 
 
@@ -384,7 +399,7 @@ public class VisiableThreadPoolTaskExecutor extends ThreadPoolTaskExecutor {
 }
 </code></pre>
 <p>如上所示，showThreadPoolInfo方法中将任务总数、已完成数、活跃线程数，队列大小都打印出来了，然后Override了父类的execute、submit等方法，在里面调用showThreadPoolInfo方法，这样每次有任务被提交到线程池的时候，都会将当前线程池的基本情况打印到日志中；</p>
-<p>修改<code>ExecutorConfig.java</code>的<code>asyncServiceExecutor</code>方法，将<code>ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor()</code>改为<code>ThreadPoolTaskExecutor executor = new VisiableThreadPoolTaskExecutor()</code></p>
+<p>修改<code>ExecutorConfig.java</code>的<code>asyncServiceExecutor</code>方法，将<code>ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor()</code>改为<code>ThreadPoolTaskExecutor executor = new VisiableThreadPoolTaskExecutor()</code>。</p>
 <pre><code class="language-java">@Bean(name = &quot;asyncServiceExecutor&quot;)
     public Executor asyncServiceExecutor() {
         logger.info(&quot;start asyncServiceExecutor&quot;);
@@ -408,7 +423,7 @@ public class VisiableThreadPoolTaskExecutor extends ThreadPoolTaskExecutor {
     }
 </code></pre>
 <p>再次启动该工程测试</p>
-<pre><code class="language-java">2018-07-16 22:23:30.951  INFO 14088 --- [nio-8087-exec-2] u.d.e.e.i.VisiableThreadPoolTaskExecutor : async-service-, 2. do submit,taskCount [0], completedTaskCount [0], activeCount [0], queueSize [0]
+<pre><code class="language-text">2018-07-16 22:23:30.951  INFO 14088 --- [nio-8087-exec-2] u.d.e.e.i.VisiableThreadPoolTaskExecutor : async-service-, 2. do submit,taskCount [0], completedTaskCount [0], activeCount [0], queueSize [0]
 2018-07-16 22:23:30.952  INFO 14088 --- [async-service-1] c.u.d.e.executor.impl.AsyncServiceImpl   : start executeAsync
 异步线程要做的事情
 可以在这里执行批量插入等耗时的事情
@@ -430,21 +445,29 @@ public class VisiableThreadPoolTaskExecutor extends ThreadPoolTaskExecutor {
 2018-07-16 22:23:32.499  INFO 14088 --- [async-service-4] c.u.d.e.executor.impl.AsyncServiceImpl   : end executeAsync
 </code></pre>
 <p>注意这一行日志：</p>
-<pre><code class="language-java">2018-07-16 22:23:32.496  INFO 14088 --- [nio-8087-exec-7] u.d.e.e.i.VisiableThreadPoolTaskExecutor : async-service-, 2. do submit,taskCount [3], completedTaskCount [3], activeCount [0], queueSize [0]
+<pre><code class="language-text">2018-07-16 22:23:32.496  INFO 14088 --- [nio-8087-exec-7] u.d.e.e.i.VisiableThreadPoolTaskExecutor : async-service-, 2. do submit,taskCount [3], completedTaskCount [3], activeCount [0], queueSize [0]
 </code></pre>
-<p>这说明提交任务到线程池的时候，调用的是submit(Callable task)这个方法，当前已经提交了3个任务，完成了3个，当前有0个线程在处理任务，还剩0个任务在队列中等待，线程池的基本情况一目了然</p>
+<p>这说明 Spring 把 <code>@Async</code> 方法包装成 <code>Callable</code> 后，走的是 <code>submit(Callable)</code> 分支：当时已提交 3 个任务、完成 3 个、活跃线程 0 个、队列中 0 个等待任务，线程池的基本情况一目了然。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-executors-%E6%8F%90%E4%BE%9B%E7%9A%84-5-%E7%A7%8D%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%88%9B%E5%BB%BA%E6%96%B9%E5%BC%8F">一、Executors 提供的 5 种线程池创建方式</a>
 <ul>
-<li>
-<ul>
-<li><a href="#executors%E7%9B%AE%E5%89%8D%E6%8F%90%E4%BE%9B%E4%BA%865%E7%A7%8D%E4%B8%8D%E5%90%8C%E7%9A%84%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%88%9B%E5%BB%BA%E9%85%8D%E7%BD%AE">Executors目前提供了5种不同的线程池创建配置：</a></li>
-<li><a href="#executor%E6%A1%86%E6%9E%B6%E7%9A%84%E5%9F%BA%E6%9C%AC%E7%BB%84%E6%88%90">Executor框架的基本组成</a></li>
-<li><a href="#handler%E7%9A%84%E6%8B%92%E7%BB%9D%E7%AD%96%E7%95%A5">handler的拒绝策略：</a></li>
-<li><a href="#%E5%9C%A8spring%E9%A1%B9%E7%9B%AE%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8">在spring项目中的使用</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-executor-%E6%A1%86%E6%9E%B6%E7%9A%84%E5%9F%BA%E6%9C%AC%E7%BB%84%E6%88%90">二、Executor 框架的基本组成</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-handler-%E7%9A%84%E6%8B%92%E7%BB%9D%E7%AD%96%E7%95%A5">三、Handler 的拒绝策略</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E5%9C%A8-spring-%E9%A1%B9%E7%9B%AE%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8">四、在 Spring 项目中的使用</a>
+<ul>
 </ul>
 </li>
 </ul>
