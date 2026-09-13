@@ -150,11 +150,13 @@
 <ul>
 <li><strong>应用解耦</strong>：消息队列减少了服务之间的耦合性，不同的服务可以通过消息队列进行通信，而不用关心彼此的实现细节。</li>
 <li><strong>异步处理</strong>：消息队列本身是异步的，它允许接收者在消息发送很长时间后再取回消息。</li>
-<li><strong>流量削锋</strong>：当上下游系统处理能力存在差距的时候，利用消息队列做一个通用的”载体”，在下游有能力处理的时候，再进行分发与处理。</li>
+<li><strong>流量削峰</strong>：当上下游系统处理能力存在差距的时候，先把突发的请求写入消息队列，在下游有能力处理的时候，再按自身处理能力取出并分发处理，从而把峰值流量摊平，避免下游被打垮。</li>
 <li><strong>日志处理</strong>：日志处理是指将消息队列用在日志处理中，比如 Kafka 的应用，解决大量日志传输的问题。</li>
 <li><strong>消息通讯</strong>：消息队列一般都内置了高效的通信机制，因此也可以用在纯的消息通讯，比如实现点对点消息队列，或者聊天室等。</li>
 <li><strong>消息广播</strong>：如果没有消息队列，每当一个新的业务方接入，我们都要接入一次新接口。有了消息队列，我们只需要关心消息是否送达了队列，至于谁希望订阅，是下游的事情，无疑极大地减少了开发和联调的工作量。</li>
 </ul>
+<p>把上面这些场景归纳一下：无论哪种用法，消息队列都在生产者和消费者之间充当了缓冲层，让两端的处理节奏可以不一致。</p>
+<p><img src="/post-assets/DyzAzkEVU/01-mq-application-scenarios.svg" alt="消息队列的六大典型应用场景：应用解耦、异步处理、流量削峰、日志处理、消息通讯、消息广播"></p>
 <h2 id="常用消息队列">常用消息队列</h2>
 <p>由于官方社区现在对 ActiveMQ 5.x 的维护越来越少，它已较少在大规模吞吐的场景中使用，所以我们主要讲解 Kafka、RabbitMQ 和 RocketMQ。</p>
 <h3 id="kafka">Kafka</h3>
@@ -216,7 +218,7 @@
 <p>简单提一下，Broker 通过集群部署，并提供了 master/slave 结构：slave 定时从 master 同步数据（同步复制或者异步复制）。如果 master 宕机，slave 仍可提供消费服务，但不能写入消息。</p>
 <p>看到这里，大家应该可以发现，RocketMQ 的设计和 Kafka 真的很像！</p>
 <blockquote>
-<p>更多知识，详见</p>
+<p>更多知识，详见<a href="https://rocketmq.apache.org/docs/quickStart/01quickstart">RocketMQ 官方快速开始</a></p>
 </blockquote>
 <h3 id="rabbitmq">RabbitMQ</h3>
 <p>RabbitMQ 2007 年发布，是使用 Erlang 语言开发的开源消息队列系统，基于 AMQP 协议来实现。</p>
@@ -241,18 +243,15 @@
 <figure data-type="image" tabindex="12"><img src="/post-images/1657627658105.png" alt="" loading="lazy"></figure>
 <h4 id="常用交换器">常用交换器</h4>
 <p>RabbitMQ 常用的交换器类型有 direct、topic、fanout、headers 四种</p>
-<p>具体的使用方法，可以参考官网：</p>
-<ul>
-<li>官网入口：https://www.rabbitmq.com/getstarted.html</li>
-</ul>
+<p>具体的使用方法，可以参考官网：<a href="https://www.rabbitmq.com/getstarted.html">RabbitMQ 官方入门教程</a>。</p>
 <figure data-type="image" tabindex="13"><img src="/post-images/1657627665439.png" alt="" loading="lazy"></figure>
-<figure data-type="image" tabindex="14"><img src="/post-images/1657627671336.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="14"><img src="/post-images/1657627671336.png" alt="RabbitMQ 交换器类型示意" loading="lazy"></figure>
 <blockquote>
-<p>更多知识，详见</p>
+<p>更多知识，详见<a href="https://www.rabbitmq.com/tutorials/amqp-concepts">RabbitMQ 官方 AMQP 概念文档</a></p>
 </blockquote>
 <h2 id="消息队列对比选型">消息队列对比&amp;选型</h2>
-<figure data-type="image" tabindex="15"><img src="/post-images/1657627677983.png" alt="" loading="lazy"></figure>
 <h3 id="消息队列对比">消息队列对比</h3>
+<figure data-type="image" tabindex="15"><img src="/post-images/1657627677983.png" alt="Kafka、RocketMQ、RabbitMQ 对比表" loading="lazy"></figure>
 <h4 id="kafka-2">Kafka</h4>
 <p><strong>优点：</strong></p>
 <ul>
@@ -282,7 +281,7 @@
 </ul>
 <p><strong>缺点：</strong></p>
 <ul>
-<li>不支持消息路由，<strong>支持的客户端语言不多，目前是 java 及 c++，其中 c++ 不成熟</strong>；</li>
+<li>不支持消息路由；<strong>官方客户端语言不如 RabbitMQ 丰富</strong>，目前官方主推 Java，C++/Go 等客户端由社区维护，成熟度参差不齐（RocketMQ 5.x 提供了多语言 gRPC 代理，可缓解这一问题）；</li>
 <li>部分支持消息有序：需要将同一类的消息 hash 到同一个队列 Queue 中，才能支持消息的顺序，如果同一类消息散落到不同的 Queue中，就不能支持消息的顺序。</li>
 <li><strong>社区活跃度一般。</strong></li>
 </ul>
@@ -309,59 +308,36 @@
 <li>RabbitMQ：结合 erlang 语言本身的并发优势，性能较好，社区活跃度也比较高，但是不利于做二次开发和维护，不过 RabbitMQ 的社区十分活跃，可以解决开发过程中遇到的 bug。<strong>如果你的数据量没有那么大，小公司优先选择功能比较完备的 RabbitMQ。</strong></li>
 <li>ActiveMQ：官方社区现在对 ActiveMQ 5.x 维护越来越少，<strong>较少在大规模吞吐的场景中使用。</strong></li>
 </ul>
+<p>把上面的选型建议浓缩成一张决策图，方便按业务诉求快速定位候选：</p>
+<p><img src="/post-assets/DyzAzkEVU/02-mq-selection-decision.svg" alt="消息队列选型决策路径：日志采集选 Kafka，金融交易选 RocketMQ，数据量适中的中小项目选 RabbitMQ"></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">消息队列</a>
 <ul>
+</ul>
+</li>
 <li>
-<ul>
-<li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">消息队列</a></li>
-<li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%9F%BA%E7%A1%80">消息队列基础</a>
+<a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%9F%BA%E7%A1%80">消息队列基础</a>
 <ul>
 <li><a href="#%E4%BB%80%E4%B9%88%E6%98%AF%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">什么是消息队列？</a></li>
 <li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E6%A8%A1%E5%BC%8F">消息队列模式</a></li>
 <li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF">消息队列应用场景</a></li>
 </ul>
 </li>
-<li><a href="#%E5%B8%B8%E7%94%A8%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">常用消息队列</a>
+<li>
+<a href="#%E5%B8%B8%E7%94%A8%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">常用消息队列</a>
 <ul>
-<li><a href="#kafka">Kafka</a>
-<ul>
-<li><a href="#%E9%87%8D%E8%A6%81%E6%A6%82%E5%BF%B5">重要概念</a></li>
-<li><a href="#kafka-%E6%9E%B6%E6%9E%84">Kafka 架构</a></li>
-<li><a href="#kafka-%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">Kafka 工作原理</a></li>
+<li><a href="#kafka">Kafka</a></li>
+<li><a href="#rocketmq">RocketMQ</a></li>
+<li><a href="#rabbitmq">RabbitMQ</a></li>
 </ul>
 </li>
-<li><a href="#rocketmq">RocketMQ</a>
+<li>
+<a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%AF%B9%E6%AF%94%E9%80%89%E5%9E%8B">消息队列对比&amp;选型</a>
 <ul>
-<li><a href="#%E9%87%8D%E8%A6%81%E6%A6%82%E5%BF%B5-2">重要概念</a></li>
-<li><a href="#rocketmq-%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">RocketMQ 工作原理</a></li>
-<li><a href="#rocketmq-%E6%9E%B6%E6%9E%84">RocketMQ 架构</a></li>
-</ul>
-</li>
-<li><a href="#rabbitmq">RabbitMQ</a>
-<ul>
-<li><a href="#%E9%87%8D%E8%A6%81%E6%A6%82%E5%BF%B5-3">重要概念</a></li>
-<li><a href="#rabbitmq-%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">RabbitMQ 工作原理</a></li>
-<li><a href="#%E5%B8%B8%E7%94%A8%E4%BA%A4%E6%8D%A2%E5%99%A8">常用交换器</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%AF%B9%E6%AF%94%E9%80%89%E5%9E%8B">消息队列对比&amp;选型</a>
-<ul>
-<li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%AF%B9%E6%AF%94">消息队列对比</a>
-<ul>
-<li><a href="#kafka-2">Kafka</a></li>
-<li><a href="#rocketmq-2">RocketMQ</a></li>
-<li><a href="#rabbitmq-2">RabbitMQ</a></li>
-</ul>
-</li>
+<li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%AF%B9%E6%AF%94">消息队列对比</a></li>
 <li><a href="#%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E9%80%89%E5%9E%8B">消息队列选型</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
