@@ -126,10 +126,12 @@
           <img class="post-feature-header-image" src="/post-images/6pSug_PPu.png" alt="封面图">
           
           <h2 id="多流转换">多流转换</h2>
+<p>多流转换可以概括为“分流”与“合流”两个方向：把一条流拆成多条用侧输出流（side output），把多条流合成一条或配对处理则用 union、connect、join、coGroup 等算子。本章的代码示例基于 Flink 1.13 前后的 DataStream API（该版本中 <code>Time</code>、<code>TumblingEventTimeWindows</code> 仍在使用；Flink 1.14 起窗口分配器改由 <code>org.apache.flink.streaming.api.windowing.assigners</code> 提供，1.18 起 <code>Time</code> 已废弃，应改用 <code>Duration</code>）。</p>
 <p>无论是基本的简单转换和聚合， 还是基于窗口的计算，都是针对一条流上的数据进行 处理的。在实际应用中， 可能需要将不同来源的数据连接合并在一起处理， 也有可能需要将 一条流拆分开， 所以经常会有对多条流进行处理的场景。简单划分，多流转换可以分为“分流”和“合流”两大类。目前分流的操作一般是通 过侧输出流(side output) 来实现，而合流的算子比较丰富，根据不同的需求可以调用 union、 connect、join 以及 coGroup 等接口进行连接合并操作。</p>
 <h3 id="侧输出流">侧输出流</h3>
 <p>简单来说，只需要调用上下文 ctx的output()方法，就可以输出任意类型的数据了。而侧输出流的标记和提取， 都离不开一个“输出标签”(OutputTag)，指定了侧输出流的 id 和类型。<br>
 代码示例：</p>
+<p>侧输出流的关键是 <code>OutputTag</code>：它同时携带标识与元素类型，<code>ctx.output(tag, value)</code> 负责写入，<code>getSideOutput(tag)</code> 负责取出。同一个 <code>OutputTag</code> 对象必须被两处共用（示例中声明为 <code>static</code> 字段），否则取不到数据。</p>
 <pre><code class="language-java">package com.company.flink.demo;
 
 import com.company.flink.data.ClickSource;
@@ -176,16 +178,19 @@ public class SplitStreamDemo {
 }
 </code></pre>
 <h2 id="合流操作">合流操作</h2>
-<p>Flink  中合流的操作会更加普遍，对应的 API 也更加丰富。</p>
+<p>Flink 中合流的操作会更加普遍，对应的 API 也更加丰富：按两条流是否需要按 key 配对、匹配的时间范围是否固定，可以依次选择 union、connect、window join / interval join 与 window coGroup。</p>
 <h3 id="1联合union">1）联合(Union)</h3>
 <p>     最简单的合流操作，就是直接将多条流合在一起，叫作流“联合”（union）。联合操作要求参与合并的流中数据类型必须相同，合并之后的新流会包含所有流中的元素，数据类型不变。</p>
-<figure data-type="image" tabindex="1"><img src=".%5Cf9a6ffa993f249c285c54995d56c6dbe.png" alt="" loading="lazy"></figure>
+<p><img src="/post-assets/6pSug_PPu/01-union.svg" alt="Flink union 算子：三条同类型流经 union 合并为一条 DataStream"></p>
+<p>union 只做“拼接”：参与合并的流元素类型必须一致，合并后类型不变，不按 key 配对、也不做窗口对齐。三条以上的流可以链式调用 <code>stream1.union(stream2, stream3)</code> 一次合并；元素之间的先后顺序不做保证，因此 union 多用于把多路同构数据汇成一路继续处理。</p>
 <h3 id="2连接connect">2）连接（Connect）</h3>
 <p>     流的联合虽然简单，不过受限于数据类型不能改变，灵活性不足，实践中较少使用。除了联合（union），Flink 还提供了另外一种合流操作就是连接（connect）。这种操作就是直接把两条流像接线一样对接起来。<br>
     为了处理更加灵活，连接操作允许流的数据类型不同。但一个 DataStream 中的数据类型是唯一的（所以需要（co-process）转换操作）</p>
-<figure data-type="image" tabindex="2"><img src=".%5C846048d37bc34d2b9f63117c4f1883c3.png" alt="" loading="lazy"></figure>
+<p><img src="/post-assets/6pSug_PPu/02-connect.svg" alt="Flink connect 算子：两条类型不同的流对接为 ConnectedStreams，再由 CoProcessFunction 协同处理"></p>
+<p>connect 允许两条流的元素类型不同，但一个 DataStream 内部类型仍然唯一，所以它只产出 <code>ConnectedStreams</code>，必须再接协同处理算子（<code>CoProcessFunction</code>、<code>CoMapFunction</code>、<code>CoFlatMapFunction</code>）才算完整转换；这一点正是它比 union 灵活的地方。若希望两条流共享状态或按 key 配对，应先分别 <code>keyBy</code> 再 connect，并在处理函数中使用状态与定时器。窗口 join 与 coGroup 的底层实现同样是 connect + 协同处理。</p>
 <h4 id="基于时间的合流双流联结join">基于时间的合流——双流联结(Join)</h4>
-<p>对于两条流的合并，很多情况并不是简单地将所有数据放在一起，而是希望根据某个字段的值将它们联结起来“配对”做处理。 这种需求与关系型数据库中表的join 操作非常相似。Flink 中两条流 的 connect 操作，就可以通过 keyBy 指定键进行分组后合并，实现了类似于 SQL 中的 join 操作； 另外 connect 支持处理函数，可以使用自定义状态和 TimerService 灵活实现各种需求。</p>
+<p><img src="/post-assets/6pSug_PPu/03-window-join.svg" alt="基于时间的合流：窗口联结按窗口和 key 配对，间隔联结按数据时间戳取区间匹配"></p>
+<p>对于两条流的合并，很多情况并不是简单地将所有数据放在一起，而是希望根据某个字段的值将它们联结起来“配对”做处理。 这种需求与关系型数据库中表的join 操作非常相似。Flink 中两条流 的 connect 操作，可以通过 keyBy 指定键分组后合并，实现了类似于 SQL 中的 join 操作； 另外 connect 支持处理函数，可以使用自定义状态和 TimerService 灵活实现各种需求。</p>
 <h4 id="1窗口联结window-join">1）窗口联结(Window Join)</h4>
 <p>     窗口联结首先需要调用 DataStream 的 .join() 方法来合并两条流，得到一个 JoinedStreams；接着通过 .where() 和 .equalTo() 方法指定两条流中联结的 key；然后通过 .window() 开窗口，并调用 .apply()传入联结窗口函数进行处理计算。调用形式如下：</p>
 <pre><code class="language-java">SingleOutputStreamOperator&lt;Event&gt; eventStream = env.addSource(new ClickSource())
@@ -195,11 +200,12 @@ public class SplitStreamDemo {
                 .window(WindowAssigner assigner)
                 .apply(JoinFunction function)
 </code></pre>
-<p>上面代码中.where()的参数是键选择器(KeySelector)， 用来指定第一条流中的 key ；而.equalTo()传入的 KeySelector 则指定了第二条流中的 key。两者相同的元素，如果在同一窗口中， 就可以匹配起来， 并通过一个“联结函数”(JoinFunction) 进行处理。这里需要注意， JoinFunciton 并不是真正的“窗口函数”，它只是定义了窗口函数在调用时 对匹配数据的具体处理逻辑。<br>
+<p>上面代码中.where()的参数是键选择器(KeySelector)， 用来指定第一条流中的 key ；而.equalTo()传入的 KeySelector 则指定了第二条流中的 key。两者相同的元素，如果在同一窗口中， 就可以匹配起来， 并通过一个“联结函数”(JoinFunction) 进行处理。这里需要注意， JoinFunction 并不是真正的“窗口函数”，它只是定义了窗口函数在调用时 对匹配数据的具体处理逻辑。<br>
 两条流的数据到来之后， 首先会按照 key 分组、进入对应的窗口中存储；当到达窗口结束时间时，算子会先统计出窗口内两条流的数据的所有组合，也就是对两条流中的数据做一个笛卡尔积(相当于表的交叉连接， cross join)，然后进行遍历，把每一对匹配的数据， 作为参数 (first ，second)传入 JoinFunction 的.join()方法进行计算处理。所以窗口中每有一对数据成功联结匹配， JoinFunction 的.join()方法就会被调用一次， 并输 出一个结果。</p>
-<figure data-type="image" tabindex="3"><img src=".%5C29bc60a04fd34b57a7245878f8084fcf.png" alt="" loading="lazy"></figure>
+<p>下图给出窗口联结的配对时机：数据先按 key 进入各自窗口缓存，窗口结束时才枚举两条流数据的全部组合并逐个调用 <code>JoinFunction</code>。</p>
+<p><img src="/post-assets/6pSug_PPu/04-window-join-pairing.svg" alt="窗口联结配对时机：窗口结束时对两条流按 key 做笛卡尔积组合，逐对调用 JoinFunction"></p>
 <p>窗口join的调用和SQL中表的join非常相似。SQL的 inner join ... on本身表示的是两张表基于 id 的“内连接”(inner join)。而 Flink 中的 window join，同样类似于 inner join。也就是说，最后 处理输出的，只有两条流中数据按 key 配对成功的那些；如果某个窗口中一条流的数据没有任 何另一条流的数据匹配， 那么就不会调用 JoinFunction 的.join()方法， 也就没有任何输出。<br>
-代码示列：</p>
+代码示例：</p>
 <pre><code class="language-java">package com.company.flink.demo;
 
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
@@ -261,9 +267,9 @@ public class FlinkWindowJoinDemo {
 <p>在一些场景下， 处理的时间间隔可能并不是固定的。比如， 在交易系统中， 需要实时地对每一笔交易进行核验，保证两个账户转入转出数额相等，也就是所谓的“实时对账”。 两次转账的数据可能写入了不同的日志流，它们的时间戳相差不大，所以可以考虑只统计一段时间内是否有出账入账的数据匹配。这时显然不能用滚动窗口或滑动窗口来处理因为匹配的两个数据有可能刚好在窗口边缘两侧，这时窗口内就都没有匹配了；会话窗口虽然时间不固定，但也明显不适合这个场景。Flink 为这种场景提供了一种叫作“间隔联结”(interval join) 的合流操作，间隔联结的思路就是针对一条流的每条数据，开辟出其时间戳前后的一段时间间隔， 看这期间是否有来自另一条流的数据与之匹配。<br>
 间隔连接原理：<br>
 给定两个时间点，分别叫作间隔的“上界”(upperBound) 和“下界”(lowerBound)；对于一条流A 中的任意一个数据元素 a，就可以 开辟一段时间间隔： [a.timestamp + lowerBound, a.timestamp + upperBound）把这段时间作为可以匹配另一条流数据 的“窗口”范围。所以对于另一条流 B 中的数据元素 b，如果它的时间戳落在了这 个区间范围内， a 和 b 就可以成功配对，进而进行计算输出结果。所以匹配的条件为：a.timestamp + lowerBound &lt;= b.timestamp &lt;= a.timestamp + upperBound 这里需要注意， 做间隔联结的两条流 A 和 B，也必须基于相同的 key； 间隔联结目前只支持事件时间语义。如图所示：</p>
-<figure data-type="image" tabindex="4"><img src=".%5C9bac7747e88347709a56401ac8d450cd.png" alt="" loading="lazy"></figure>
+<p><img src="/post-assets/6pSug_PPu/05-interval-join.svg" alt="间隔联结：为流 A 的每条数据开辟 [a.t+lowerBound, a.t+upperBound] 区间，落在区间内的流 B 数据与之配对"></p>
 <p>可以看到，间隔联结同样是一种内连接(inner join)。与窗口联结不同的是，interval join 做匹配的时间段是基于流中数据的并不确定； 而且流 B 中的数据可以不只在一个区间内被匹配。<br>
-代码示列：</p>
+代码示例：</p>
 <pre><code class="language-java">package com.company.flink.demo;
 
 import com.company.flink.entity.Event;
@@ -412,6 +418,16 @@ public class FlinkCoGroupDemo {
 
 }
 </code></pre>
+<h3 id="小结选型对照">小结：选型对照</h3>
+<p>把本章的合流算子放在一起比较，可以根据“元素类型是否相同”“是否需要按 key 配对”“匹配时间范围是否固定”三个问题来选：</p>
+<ul>
+<li><strong>union</strong>：多条同类型流合并为一条，只拼接、不配对，元素顺序无保证。</li>
+<li><strong>connect</strong>：两条异类型流对接为 ConnectedStreams，必须再接 CoProcessFunction / CoMapFunction / CoFlatMapFunction，最灵活，可共享状态与定时器。</li>
+<li><strong>window join</strong>：先 keyBy 再 join，在固定窗口中按 key 求两条流数据的笛卡尔积，逐对调用 JoinFunction；语义等同 inner join，没有配对就不输出。</li>
+<li><strong>interval join</strong>：以流 A 每条数据的时间戳为基准，取 [a.t+lowerBound, a.t+upperBound] 区间去匹配流 B，区间随数据移动，仅支持事件时间，同样只输出配对成功的数据。</li>
+<li><strong>window coGroup</strong>：与 window join 调用方式相似（.coGroup() 替代 .join()），但一次拿到两条流在该窗口内的全部数据（Iterable），既可实现 inner join，也能实现左外、右外与全外连接；窗口 join 的底层实现正是 coGroup。</li>
+</ul>
+<p>无论哪种算子，只要涉及配对，都要先按相同 key 分组，并保证两条流的事件时间与 Watermark 语义一致，否则同一批数据可能落在不同窗口而无法匹配。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
@@ -425,6 +441,7 @@ public class FlinkCoGroupDemo {
 <ul>
 <li><a href="#1%E8%81%94%E5%90%88union">1）联合(Union)</a></li>
 <li><a href="#2%E8%BF%9E%E6%8E%A5connect">2）连接（Connect）</a></li>
+<li><a href="#%E5%B0%8F%E7%BB%93%E9%80%89%E5%9E%8B%E5%AF%B9%E7%85%A7">小结：选型对照</a></li>
 </ul>
 </li>
 </ul>

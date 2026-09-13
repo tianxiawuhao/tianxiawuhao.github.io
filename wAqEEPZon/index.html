@@ -127,23 +127,30 @@
           
           <img class="post-feature-header-image" src="/post-images/wAqEEPZon.png" alt="封面图">
           
-          <p>在本章中，我们将学习如何将Kafka与Apache Storm集成。</p>
+          <p>在本章中，我们将学习如何将 Kafka 与 Apache Storm 集成。</p>
+<p>Storm 是较早成体系的分布式实时计算框架，它把计算链路描述为一张常驻运行的“拓扑”（Topology），由数据源 Spout 和处理节点 Bolt 组成。Kafka 与 Storm 的经典组合，就是用 Storm 消费 Kafka 主题、在拓扑内完成实时计算；本章介绍二者的集成 API，并在末尾给出与 Flink 的对照，便于迁移时快速定位概念差异。</p>
+<blockquote>
+<p><strong>版本说明</strong>：本章基于 storm-kafka 0.8.x/0.9.x（Storm 0.9.5，包名为 <code>backtype.storm</code>）编写，示例中的偏移量保存在 ZooKeeper 中。storm-kafka 已被 Apache Storm 标记为废弃并在后续版本移除，Storm 1.0 起根包名改为 <code>org.apache.storm</code>，官方推荐改用 <code>storm-kafka-client</code> 中的 <code>org.apache.storm.kafka.spout.KafkaSpout</code>，它把消费偏移量交给 Kafka 自身（__consumer_offsets）管理。本章示例可作为理解老项目代码的参考，新项目请直接使用 storm-kafka-client。</p>
+</blockquote>
 <h2 id="关于storm">关于Storm</h2>
 <p>Storm最初由Nathan Marz和BackType的团队创建。 在短时间内，Apache Storm成为分布式实时处理系统的标准，允许您处理大量数据。 Storm是非常快的，并且一个基准时钟为每个节点每秒处理超过一百万个元组。 Apache Storm持续运行，从配置的源(Spouts)消耗数据，并将数据传递到处理管道(Bolts)。 联合，Spouts和Bolt构成一个拓扑。</p>
 <h2 id="与storm集成">与Storm集成</h2>
 <p>Kafka和Storm自然互补，它们强大的合作能够实现快速移动的大数据的实时流分析。 Kafka和Storm集成是为了使开发人员更容易地从Storm拓扑获取和发布数据流。</p>
 <h3 id="概念流">概念流</h3>
 <p>Spouts是流的源。 例如，一个喷头可以从Kafka Topic读取元组并将它们作为流发送。 Bolt消耗输入流，处理并可能发射新的流。 Bolt可以从运行函数，过滤元组，执行流聚合，流连接，与数据库交谈等等做任何事情。 Storm拓扑中的每个节点并行执行。 拓扑无限运行，直到终止它。 Storm将自动重新分配任何失败的任务。 此外，Storm保证没有数据丢失，即使机器停机和消息被丢弃。</p>
-<p>让我们详细了解Kafka-Storm集成API。 有三个主要类集成Kafka与Storm。 他们如下 -</p>
+<p>下图给出 Kafka 与 Storm 集成的整体结构：KafkaSpout 按偏移量从 Kafka 主题拉取消息，转换成元组后交给下游 Bolt 处理，处理结果通过 ack 回传，偏移量则写入 ZooKeeper。</p>
+<p><img src="/post-assets/wAqEEPZon/01-kafka-storm-topology.svg" alt="Kafka 与 Storm 集成的拓扑结构：Kafka 主题经 KafkaSpout 到 Bolt 再到偏移量提交与 ack 确认"></p>
+<p>让我们详细了解 Kafka-Storm 集成 API。 有三个主要类集成 Kafka 与 Storm，它们如下。</p>
 <h3 id="brokerhosts-zkhosts-statichosts">BrokerHosts - ZkHosts &amp; StaticHosts</h3>
 <p>BrokerHosts是一个接口，ZkHosts和StaticHosts是它的两个主要实现。 ZkHosts用于通过在ZooKeeper中维护细节来动态跟踪Kafka代理，而StaticHosts用于手动/静态设置Kafka代理及其详细信息。 ZkHosts是访问Kafka代理的简单快捷的方式。</p>
-<p>ZkHosts的签名如下 -</p>
+<p>ZkHosts 的构造方法签名如下（<code>brokerZkStr</code> 是 ZooKeeper 连接串，<code>brokerZkPath</code> 是存放 Kafka Broker 信息的 ZooKeeper 路径，默认 <code>/brokers</code>）：</p>
 <pre><code class="language-java">public ZkHosts(String brokerZkStr, String brokerZkPath)
 public ZkHosts(String brokerZkStr)
 </code></pre>
-<p>其中brokerZkStr是ZooKeeper主机，brokerZkPath是ZooKeeper路径以维护Kafka代理详细信息。</p>
+<p>其中 brokerZkStr 是 ZooKeeper 主机（例如 <code>localhost:2181</code>），brokerZkPath 是维护 Kafka Broker 详细信息的 ZooKeeper 路径。</p>
 <h3 id="kafkaconfig-api">KafkaConfig API</h3>
-<p>此API用于定义Kafka集群的配置设置。 Kafka Con-fig的签名定义如下</p>
+<p>此 API 用于定义 Kafka 集群的配置设置。KafkaConfig 的构造方法签名定义如下：</p>
+<p>注意：此处填写的是主题名（<code>string topic</code>），不是 Broker 地址；Broker 信息统一由第一个参数 <code>BrokerHosts</code> 提供。</p>
 <pre><code class="language-java">public KafkaConfig(BrokerHosts hosts, string topic)
 </code></pre>
 <ul>
@@ -155,17 +162,17 @@ public ZkHosts(String brokerZkStr)
 </li>
 </ul>
 <h3 id="spoutconfig-api">SpoutConfig API</h3>
-<p>Spoutconfig是KafkaConfig的扩展，支持额外的ZooKeeper信息。</p>
+<p>SpoutConfig 是 KafkaConfig 的扩展，支持额外的 ZooKeeper 信息。</p>
 <pre><code class="language-java">public SpoutConfig(BrokerHosts hosts, string topic, string zkRoot, string id)
 </code></pre>
 <ul>
 <li><strong>主机</strong> - BrokerHosts可以是BrokerHosts接口的任何实现</li>
 <li><strong>主题</strong> - 主题名称。</li>
 <li><strong>zkRoot</strong> - ZooKeeper根路径。</li>
-<li><strong>id -</strong> spouts存储在Zookeeper中消耗的偏移量的状态。 ID应该唯一标识您的喷嘴。</li>
+<li><strong>id -</strong> 该 Spout 在 ZooKeeper 中存储消费偏移量所用的标识，应当唯一标识这个 Spout。</li>
 </ul>
 <h3 id="schemeasmultischeme">SchemeAsMultiScheme</h3>
-<p>SchemeAsMultiScheme是一个接口，用于指示如何将从Kafka中消耗的ByteBuffer转换为风暴元组。 它源自MultiScheme并接受Scheme类的实现。 有很多Scheme类的实现，一个这样的实现是StringScheme，它将字节解析为一个简单的字符串。 它还控制输出字段的命名。 签名定义如下。</p>
+<p>SchemeAsMultiScheme 是一个接口，用于指示如何将从 Kafka 中消费的 ByteBuffer 转换为 Storm 元组。 它源自MultiScheme并接受Scheme类的实现。 有很多Scheme类的实现，一个这样的实现是StringScheme，它将字节解析为一个简单的字符串。 它还控制输出字段的命名。 签名定义如下。</p>
 <pre><code class="language-java">public SchemeAsMultiScheme(Scheme scheme)
 </code></pre>
 <ul>
@@ -177,16 +184,17 @@ public ZkHosts(String brokerZkStr)
 <pre><code class="language-java">// ZooKeeper connection string
 BrokerHosts hosts = new ZkHosts(zkConnString);
 
-//Creating SpoutConfig Object
-SpoutConfig spoutConfig = new SpoutConfig(hosts, 
-   topicName, &quot;/&quot; + topicName UUID.randomUUID().toString());
+// Creating SpoutConfig Object: hosts, topic, zkRoot, id
+SpoutConfig spoutConfig = new SpoutConfig(hosts,
+   topicName, &quot;/&quot; + topicName, UUID.randomUUID().toString());
 
-//convert the ByteBuffer to String.
+// convert the ByteBuffer to String.
 spoutConfig.scheme = new SchemeAsMultiScheme(new StringScheme());
 
-//Assign SpoutConfig to KafkaSpout.
+// Assign SpoutConfig to KafkaSpout.
 KafkaSpout kafkaSpout = new KafkaSpout(spoutConfig);
 </code></pre>
+<p>四个参数依次是 BrokerHosts、主题名、ZooKeeper 中的根路径（zkRoot）和该 Spout 的唯一 id。zkRoot 与 id 共同决定偏移量的存放位置；id 变化会被当成一个全新的 Spout，从而从头（或按 <code>forceFromStart</code>）开始消费。</p>
 
 <h2 id="创建bolt">创建Bolt</h2>
 <p>Bolt是一个使用元组作为输入，处理元组，并产生新的元组作为输出的组件。 Bolt将实现IRichBolt接口。 在此程序中，使用两个Bolt类WordSplitter-Bolt和WordCounterBolt来执行操作。</p>
@@ -307,7 +315,8 @@ public class CountBolt implements IRichBolt{
 </code></pre>
 <h2 id="提交拓扑">提交拓扑</h2>
 <p>Storm拓扑基本上是一个Thrift结构。 TopologyBuilder类提供了简单而容易的方法来创建复杂的拓扑。 TopologyBuilder类具有设置spout(setSpout)和设置bolt(setBolt)的方法。 最后，TopologyBuilder有createTopology来创建to-pology。 shuffleGrouping和fieldsGrouping方法有助于为喷头和Bolt设置流分组。</p>
-<p><strong>本地集群</strong> - 为了开发目的，我们可以使用 LocalCluster 对象创建本地集群，然后使用 LocalCluster的 submitTopology 类。</p>
+<p><strong>本地集群</strong> - 为了开发目的，我们可以使用 LocalCluster 对象创建本地集群，然后调用 LocalCluster 的 submitTopology 方法提交拓扑。生产环境则提交到 Nimbus，由 Supervisor 分配 Worker 执行。</p>
+<p>需要提醒的是，setSpout/setBolt 的第二个参数只是组件名，并行度（executor 数量）要通过重载方法或 <code>Config.TOPOLOGY_*</code> 配置设置；本章示例未显式设置并行度，因此每个组件默认只起 1 个 executor。此外，<code>Config.TOPOLOGY_MAX_SPOUT_PENDING=1</code> 表示同一时刻最多允许 1 条 Spout 元组处于“未被确认”状态，常用于演示与限流：它会显著压低吞吐，生产环境应结合处理能力调大。</p>
 <h3 id="kafkastormsamplejava">KafkaStormSample.java</h3>
 <pre><code class="language-java">import backtype.storm.Config;
 import backtype.storm.LocalCluster;
@@ -345,12 +354,12 @@ public class KafkaStormSample {
       kafkaSpoutConfig.scheme = new SchemeAsMultiScheme(new StringScheme());
 
       TopologyBuilder builder = new TopologyBuilder();
-      builder.setSpout(&quot;kafka-spout&quot;, new KafkaSpout(kafkaSpoutCon-fig));
-      builder.setBolt(&quot;word-spitter&quot;, new SplitBolt()).shuffleGroup-ing(&quot;kafka-spout&quot;);
-      builder.setBolt(&quot;word-counter&quot;, new CountBolt()).shuffleGroup-ing(&quot;word-spitter&quot;);
+      builder.setSpout(&quot;kafka-spout&quot;, new KafkaSpout(kafkaSpoutConfig));
+      builder.setBolt(&quot;word-splitter&quot;, new SplitBolt()).shuffleGrouping(&quot;kafka-spout&quot;);
+      builder.setBolt(&quot;word-counter&quot;, new CountBolt()).shuffleGrouping(&quot;word-splitter&quot;);
          
       LocalCluster cluster = new LocalCluster();
-      cluster.submitTopology(&quot;KafkaStormSample&quot;, config, builder.create-Topology());
+      cluster.submitTopology(&quot;KafkaStormSample&quot;, config, builder.createTopology());
 
       Thread.sleep(10000);
       
@@ -358,12 +367,12 @@ public class KafkaStormSample {
    }
 }
 </code></pre>
-<p>编译之前，Kafka-Storm 集成需要 Curator ZooKeeper 客户端 Java 库。Curator 2.9.1 版本支持 Apache Storm 0.9.5 版（本教程中使用该版本）。 下载下面指定的jar文件并将其放在java类路径中。</p>
+<p>编译之前，Kafka-Storm 集成需要 Curator ZooKeeper 客户端 Java 库。Curator 2.9.1 版本支持 Apache Storm 0.9.5 版（本教程中使用该版本）。 下载下面指定的 jar 文件并将其放在 Java 类路径中。</p>
 <ul>
 <li>curator-client-2.9.1.jar</li>
 <li>curator-framework-2.9.1.jar</li>
 </ul>
-<p>在包括依赖文件之后，使用以下命令编译程序，</p>
+<p>在包括依赖文件之后，使用以下命令编译程序（<code>-cp</code> 中的路径请替换为本地 Storm 安装目录），</p>
 <pre><code class="language-sh">javac -cp &quot;/path/to/Kafka/apache-storm-0.9.5/lib/*&quot; *.java
 </code></pre>
 <h3 id="执行">执行</h3>
@@ -378,7 +387,7 @@ another test message
 <p>现在使用以下命令执行应用程序 -</p>
 <pre><code class="language-sh">java -cp “/path/to/Kafka/apache-storm-0.9.5/lib/*&quot;:. KafkaStormSample
 </code></pre>
-<p>此应用程序的示例输出如下所示 -</p>
+<p>此应用程序的示例输出如下所示（注意 CountBolt 只做了词频累加，且未按词分组，因此多并行度下每个 executor 各自持有一份计数器；示例中 <code>test</code> 与 <code>message</code> 各出现 2 次）：</p>
 <pre><code class="language-sh">storm : 1
 test : 2
 spark : 1
@@ -387,15 +396,23 @@ kafka : 1
 hello : 1
 message : 2
 </code></pre>
+<h3 id="一致性与迁移对照">一致性与迁移对照</h3>
+<p>Storm 的可靠性建立在“元组树”之上：Spout 发出的每条元组都会被跟踪，下游 Bolt 处理成功后调用 <code>collector.ack(input)</code>（失败则 <code>fail(input)</code>），当整棵元组树都被确认，Spout 才认为这条消息处理完成。因此 Storm 提供的是<strong>至少一次（at-least-once）</strong>语义——未被确认的元组会重放，代价是可能重复处理，业务逻辑需要幂等。</p>
+<p>需要注意的是，Storm 的 ack 与 Kafka 的 offset 提交是两件事：ack 决定元组是否重放，offset 决定重启后从哪里继续消费。在 storm-kafka 0.9.x 中，KafkaSpout 依据 ack 结果周期性地把偏移量写入 ZooKeeper 的 zkRoot/id 节点；如果拓扑失败或 ZooKeeper 数据丢失，就可能出现重复消费（甚至按 <code>forceFromStart</code> 从头消费）。因此不能把 Storm 的 ack 机制误当成“已提交到 Kafka”。</p>
+<p>下图把本章的 Storm 概念与 Flink 的对应概念并列，便于从 Storm 迁移到 Flink 时对照。</p>
+<p><img src="/post-assets/wAqEEPZon/02-storm-vs-flink.svg" alt="Storm 与 Flink 流处理模型对照：Topology/Spout/Bolt/ack 与 Job/Source/Operator/checkpoint 的对应关系"></p>
 <blockquote>
 <p>原文：https://www.w3cschool.cn/apache_kafka/apache_kafka_integration_storm.html</p>
 </blockquote>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%85%B3%E4%BA%8Estorm">关于Storm</a>
 <ul>
-<li><a href="#%E5%85%B3%E4%BA%8Estorm">关于Storm</a></li>
-<li><a href="#%E4%B8%8Estorm%E9%9B%86%E6%88%90">与Storm集成</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%8Estorm%E9%9B%86%E6%88%90">与Storm集成</a>
 <ul>
 <li><a href="#%E6%A6%82%E5%BF%B5%E6%B5%81">概念流</a></li>
 <li><a href="#brokerhosts-zkhosts-statichosts">BrokerHosts - ZkHosts &amp; StaticHosts</a></li>
@@ -405,19 +422,19 @@ message : 2
 <li><a href="#kafkaspout-api">KafkaSpout API</a></li>
 </ul>
 </li>
-<li></li>
-<li><a href="#%E5%88%9B%E5%BB%BAbolt">创建Bolt</a>
+<li>
+<a href="#%E5%88%9B%E5%BB%BAbolt">创建Bolt</a>
 <ul>
 <li><a href="#splitboltjava">SplitBolt.java</a></li>
 <li><a href="#countboltjava">CountBolt.java</a></li>
 </ul>
 </li>
-<li><a href="#%E6%8F%90%E4%BA%A4%E6%8B%93%E6%89%91">提交拓扑</a>
+<li>
+<a href="#%E6%8F%90%E4%BA%A4%E6%8B%93%E6%89%91">提交拓扑</a>
 <ul>
 <li><a href="#kafkastormsamplejava">KafkaStormSample.java</a></li>
 <li><a href="#%E6%89%A7%E8%A1%8C">执行</a></li>
-</ul>
-</li>
+<li><a href="#%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E8%BF%81%E7%A7%BB%E5%AF%B9%E7%85%A7">一致性与迁移对照</a></li>
 </ul>
 </li>
 </ul>
