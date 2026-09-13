@@ -129,6 +129,9 @@
 <p>服务端对外暴露的API：https://nacos.io/zh-cn/docs/open-api.html</p>
 <p>Nacos的Server端其实就是一个Web服务，对外提供了Http服务接口，所有的客户端与服务端的通讯都通过Http调用完成（短链接）。</p>
 <blockquote>
+<p><strong>版本说明</strong>：本文的源码分析基于 Nacos 1.x 的配置中心实现（HTTP 短连接 + 长轮询）。2.x 中命名模块改为 gRPC 长连接，配置模块仍保留 HTTP 长轮询接口以兼容旧客户端，并新增了基于 gRPC 的配置变更通知通道；<code>NacosConfigService</code>、<code>ClientWorker</code>、<code>CacheData</code>、<code>LongPollingService</code> 等核心类在 2.x 中依然存在，但内部实现有调整。</p>
+</blockquote>
+<blockquote>
 <p><strong>Nacos注册服务核心类：NacosNamingService</strong></p>
 <p><strong>Nacos配置中心核心类：NacosConfigService</strong></p>
 </blockquote>
@@ -144,7 +147,8 @@
         namespace: haier-iot
         group: dev
         file-extension: yaml
-# 上面的配置，拼装成的最高优先级配置文件为 haier-iot/dev/ nacos-config-client-dev.yaml
+# 当 spring.profiles.active=dev 时，优先级最高的配置为：命名空间 haier-iot + 分组 dev + DataId nacos-config-client-dev.yaml
+# 若未指定 profile，则加载的是 nacos-config-client 与 nacos-config-client.yaml
 </code></pre>
 <p><strong>Nacos还支持扩展配置：extension-configs，和共享配置：shared-configs</strong>，以支持各种复杂的应用场景！</p>
 <p>官方github wiki地址：https://github.com/alibaba/spring-cloud-alibaba/wiki/Nacos-config</p>
@@ -368,7 +372,7 @@ public static ConfigService createConfigService(Properties properties) throws Na
 <pre><code class="language-java">// worker.getServerConfig()
 public String[] getServerConfig(String dataId, String group, String tenant, long readTimeout){
     // 从远端Server获取配置，这里的agent就是NacosConfigService构造方法中创建的agent代理
-    result = agent.httpGet(Constants.CONFIG_CONTROLLER_PATH, null, params, agent.getEncode(), readTimeout);
+    HttpRestResult&lt;String&gt; result = agent.httpGet(Constants.CONFIG_CONTROLLER_PATH, null, params, agent.getEncode(), readTimeout);
      
     switch (result.getCode()) {
         case HttpURLConnection.HTTP_OK:
@@ -399,7 +403,7 @@ public String[] getServerConfig(String dataId, String group, String tenant, long
 <h3 id="4-client第一次获取到server端配置后之后如何进行定时更新"><strong>4 Client第一次获取到Server端配置后，之后如何进行定时更新？</strong></h3>
 <pre><code class="language-java">// ClientWorker构造时，会创建2个线程池
 // 1. executor(单线程) ：定时每10毫秒执行checkConfigInfo()方法
-// 2. executorService(1~核数/2): 具体的执行长轮询的线程
+// 2. executorService(线程数为 CPU 核数): 具体执行长轮询的线程
 public ClientWorker(final HttpAgent agent, final ConfigFilterChainManager configFilterChainManager,final Properties properties) {
     this.agent = agent;
     this.configFilterChainManager = configFilterChainManager;
@@ -458,7 +462,7 @@ public void checkConfigInfo() {
 <p><strong>总结：ClientWorker实例化时，会创建两个线程：executor和executorService</strong></p>
 <ul>
 <li><strong>executor（单线程）：每隔10ms检查本地的配置数是否发生改变，以3000为一批次创建长轮询任务，不足的话，不另外创建长轮询任务；</strong></li>
-<li><strong>executorService（多线程1~核数/2）:具体执行长轮询LongPolling任务的工作线程；</strong></li>
+<li><strong>executorService（多线程，线程数为 CPU 核数）: 具体执行长轮询 LongPolling 任务的工作线程；</strong></li>
 </ul>
 </blockquote>
 <h3 id="5-nacos客户端长轮询longpolling任务的核心逻辑md5比对"><strong>5 Nacos客户端长轮询LongPolling任务的核心逻辑（md5比对）：</strong></h3>
@@ -614,6 +618,7 @@ List&lt;String&gt; checkUpdateConfigStr(String probeUpdateString, boolean isInit
 <li>最后，<strong>再次执行本次的 LongPollingRunnable 任务，循环往复，完成配置的实时监听更新</strong>！</li>
 </ul>
 </blockquote>
+<p><img src="/post-assets/bp8DT_bHg/01-config-longpolling.svg" alt="Nacos 配置中心长轮询与配置变更推送链路"></p>
 <h3 id="6-经过长轮询后如果本地配置文件更新后该如何通知到我们的应用程序注册监听器"><strong>6 经过长轮询后，如果本地配置文件更新后，该如何通知到我们的应用程序（注册监听器）？</strong></h3>
 <p>在Springboot项目完成refresh(context)后，会调用 listeners.running(context) 方法，这个方法会向系统发出ApplicationReadyEvent事件，其它的监听了这个事件的Listener就可以做对应的工作了，而<strong>NacosContextRefresher</strong>就是其中之一！</p>
 <pre><code class="language-java">public class NacosContextRefresher implements ApplicationListener&lt;ApplicationReadyEvent&gt;, ApplicationContextAware {
@@ -657,8 +662,8 @@ List&lt;String&gt; checkUpdateConfigStr(String probeUpdateString, boolean isInit
 </ul>
 <figure data-type="image" tabindex="10"><img src="/post-images/1658666346288.png" alt="" loading="lazy"></figure>
 <h3 id="1-配置文件的dump加载dumpservice"><strong>1 配置文件的Dump加载：DumpService</strong></h3>
-<p>DumpService由两个实现类：EmbeddedDumpService（derby） 和 ExternalDumpService（mysql）；</p>
-<p>当新节点启动时，需要从mysql中加载配置数据，如果最后心跳时间&gt;6h，则从mysql加载全量数据；如果最后心跳时间&lt;6h，则从mysql加载增量数据；</p>
+<p>DumpService 有两个实现类：EmbeddedDumpService（内嵌 derby）和 ExternalDumpService（外部 mysql）。</p>
+<p>当新节点启动时，需要从 MySQL 中加载配置数据：DumpService 会先判断距离上一次 Dump 的时间是否超过 6 小时（或从未 Dump 过），超过则从 MySQL <strong>全量加载</strong>，否则只做<strong>增量加载</strong>；</p>
 <ul>
 <li>全量加载：删除本地的配置文件，全部从mysql加载配置数据；（每次捞取1000条）</li>
 <li>增量加载：捞取最近6小时的新增配置，更新本地和内存元数据后，与mysql数据库中的配置进行比对，如果不一致，则再同步一次！</li>
@@ -666,39 +671,65 @@ List&lt;String&gt; checkUpdateConfigStr(String probeUpdateString, boolean isInit
 <h3 id="2-新的配置被发布后如何在集群间进行同步"><strong>2 新的配置被发布后，如何在集群间进行同步？</strong></h3>
 <ul>
 <li>AP集群，每个节点地位平等，发布配置后，根据轮询机制，会<strong>由某一台Server节点处理本地请求，该节点首先会将配置写入到Mysql数据库中</strong>；</li>
-<li>该节点会<strong>发布一个ConfigDataChangeEvent事件</strong>，该事件会<strong>被自己的监听器处理</strong>，处理时，会<strong>通过HTTP调用集群的所有节点，告知配置发生改变（包括自己</strong>，因为上面只是写mysql，自己的本地文件和内存文件也都没有被修改）</li>
+<li>该节点会<strong>发布一个ConfigDataChangeEvent事件</strong>，该事件会<strong>被自己的监听器处理</strong>，处理时，会<strong>通过 HTTP 调用集群的所有节点，告知配置发生改变（包括自己）</strong>，因为上面只是写 MySQL，自己的本地文件和内存文件也都还没被修改</li>
 <li><strong>所有节点接收到本地配置修改的通知后，会到Mysql中同步最新的配置</strong>，刷新内存缓存 和 本地磁盘文件；</li>
+</ul>
+<hr>
+<h2 id="四-补充说明-命名空间分组与本地容灾缓存">四 补充说明 命名空间分组与本地容灾缓存</h2>
+<p>前面沿着源码走完了“拉取 → 长轮询 → 回调”的主链路，这里再补充三个容易被忽略的点。</p>
+<h3 id="1-命名空间-分组与-dataid-的定位关系">1 命名空间 分组与 DataId 的定位关系</h3>
+<ul>
+<li><strong>命名空间（namespace / tenant）</strong>：最外层的隔离，通常按环境（prod / test / dev）或按项目划分，不同命名空间的配置互不可见；在 1.x 的 Http 接口里对应 <code>tenant</code> 参数。</li>
+<li><strong>分组（group）</strong>：命名空间内部的二级分类，默认 <code>DEFAULT_GROUP</code>；同一命名空间下，不同分组可以存在同名 DataId。</li>
+<li><strong>DataId</strong>：配置的唯一标识，通常是 <code>${spring.application.name}</code> 加上 profile 与扩展名，例如 <code>nacos-config-client-dev.yaml</code>。</li>
+<li>因此客户端里一条配置的唯一键可以记作 <code>namespace + group + dataId</code>，长轮询参数中的 tenant 就是命名空间；<strong>配置中心没有 Cluster 这一层</strong>，这是它与注册中心在模型上的主要区别。</li>
+</ul>
+<h3 id="2-本地容灾缓存-failover-与本地快照-snapshot">2 本地容灾缓存 Failover 与本地快照 Snapshot</h3>
+<ul>
+<li><strong>Failover 文件</strong>：由 <code>LocalConfigInfoProcessor.getFailover()</code> 读取的故障转移文件，优先级最高，<code>getConfigInner()</code> 会先读它。它的意义是“即使服务端整体不可用，应用也能用本地这份配置启动”，一般由运维在故障时手工写入。</li>
+<li><strong>Snapshot 快照</strong>：由 <code>LocalConfigInfoProcessor.saveSnapshot()</code> 写出的本地快照，是客户端每次从远端拿到配置后的落地备份；长轮询发现变更并重新拉取到新配置后也会刷新它。</li>
+<li><strong>两者的区别</strong>：Failover 是运维介入的“人工兜底”，会覆盖远端配置；Snapshot 是客户端自动维护的“最近一次拉取结果”。这也是服务端短暂不可用或客户端重启时，应用仍能读到配置的原因。</li>
+<li>要注意二者都是<strong>磁盘文件</strong>，并不等于注册中心那种“内存注册表”：没有 Failover 文件时，<code>getConfig()</code> 仍可能发起远端请求。</li>
+</ul>
+<h3 id="3-长轮询的边界与代价">3 长轮询的边界与代价</h3>
+<ul>
+<li>客户端长轮询的超时时间是 30s，服务端会在 <strong>29.5s</strong> 左右提前返回，避免客户端先超时导致连接被浪费；客户端的读取超时则放大到 45s（<code>timeout + timeout / 2</code>）。</li>
+<li>只有当本地 md5 与服务端 md5 不一致时，服务端才会返回变化的 dataId，因此 <strong>md5 是变更判定的核心</strong>：md5 一致就直接判定为“无变更”，客户端不会去拉取配置内容。</li>
+<li>长轮询本质仍是“客户端拉取”，只是把请求挂起、由服务端在配置变更时提前唤醒；<strong>2.x</strong> 在保留它的同时新增了基于 gRPC 的变更通知通道，推送实时性更好。</li>
 </ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-nacos%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%8A%A0%E8%BD%BD%E9%85%8D%E7%BD%AE%E7%9A%84%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91">一 nacos客户端加载配置的核心逻辑</a>
 <ul>
+<li><a href="#1-nacos%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AEnacospropertysourcelocator%E7%B1%BB%E7%9A%84%E5%AE%9A%E4%BD%8D">1 nacos核心配置NacosPropertySourceLocator类的定位：</a></li>
+<li><a href="#2-%E9%80%9A%E8%BF%87nacospropertysourcelocator%E7%B1%BB%E7%90%86%E6%B8%85nacos%E5%90%84%E4%B8%AD%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84%E4%BC%98%E5%85%88%E7%BA%A7">2 通过NacosPropertySourceLocator类，理清Nacos各中配置文件的优先级：</a></li>
+</ul>
+</li>
 <li>
+<a href="#%E4%BA%8C-nacos%E9%85%8D%E7%BD%AE%E4%B8%AD%E5%BF%83%E7%9A%84%E6%A0%B8%E5%BF%83%E7%B1%BBnacosconfigservice%E7%9A%84%E5%BC%95%E5%85%A5">二 Nacos配置中心的核心类NacosConfigService的引入</a>
 <ul>
-<li><a href="#%E4%B8%80-nacos%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%8A%A0%E8%BD%BD%E9%85%8D%E7%BD%AE%E7%9A%84%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91">一 nacos客户端加载配置的核心逻辑</a>
-<ul>
-<li><a href="#1-nacos%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AEnacospropertysourcelocator%E7%B1%BB%E7%9A%84%E5%AE%9A%E4%BD%8D"><strong>1 nacos核心配置NacosPropertySourceLocator类的定位：</strong></a></li>
-<li><a href="#2-%E9%80%9A%E8%BF%87nacospropertysourcelocator%E7%B1%BB%E7%90%86%E6%B8%85nacos%E5%90%84%E4%B8%AD%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84%E4%BC%98%E5%85%88%E7%BA%A7"><strong>2 通过NacosPropertySourceLocator类，理清Nacos各中配置文件的优先级：</strong></a></li>
+<li><a href="#1-%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%98%AF%E4%BD%95%E6%97%B6%E4%BB%8E%E8%BF%9C%E7%A8%8B%E9%85%8D%E7%BD%AEnacos%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%8B%89%E5%8F%96%E9%85%8D%E7%BD%AE%E7%9A%84">1 客户端是何时从远程配置Nacos服务端拉取配置的</a></li>
+<li><a href="#2-nacosconfigservice%E7%B1%BB%E7%9A%84%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95%E4%B8%AD%E4%BC%9A%E5%88%9B%E5%BB%BA%E9%87%8D%E8%A6%81%E7%9A%84%E4%B8%A4%E4%B8%AA%E5%B1%9E%E6%80%A7agent%E5%92%8Cworker">2 NacosConfigService类的构造方法中会创建重要的两个属性agent和worker：</a></li>
+<li><a href="#3-nacosconfigservice%E4%B8%AD%E7%9A%84%E6%A0%B8%E5%BF%83%E8%8E%B7%E5%8F%96%E9%85%8D%E7%BD%AE%E6%96%B9%E6%B3%95getconfig-getconfiginner">3 NacosConfigService中的核心获取配置方法getConfig() ——&gt; getConfigInner()：</a></li>
+<li><a href="#4-client%E7%AC%AC%E4%B8%80%E6%AC%A1%E8%8E%B7%E5%8F%96%E5%88%B0server%E7%AB%AF%E9%85%8D%E7%BD%AE%E5%90%8E%E4%B9%8B%E5%90%8E%E5%A6%82%E4%BD%95%E8%BF%9B%E8%A1%8C%E5%AE%9A%E6%97%B6%E6%9B%B4%E6%96%B0">4 Client第一次获取到Server端配置后，之后如何进行定时更新？</a></li>
+<li><a href="#5-nacos%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%95%BF%E8%BD%AE%E8%AF%A2longpolling%E4%BB%BB%E5%8A%A1%E7%9A%84%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91md5%E6%AF%94%E5%AF%B9">5 Nacos客户端长轮询LongPolling任务的核心逻辑（md5比对）：</a></li>
+<li><a href="#6-%E7%BB%8F%E8%BF%87%E9%95%BF%E8%BD%AE%E8%AF%A2%E5%90%8E%E5%A6%82%E6%9E%9C%E6%9C%AC%E5%9C%B0%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E6%9B%B4%E6%96%B0%E5%90%8E%E8%AF%A5%E5%A6%82%E4%BD%95%E9%80%9A%E7%9F%A5%E5%88%B0%E6%88%91%E4%BB%AC%E7%9A%84%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F%E6%B3%A8%E5%86%8C%E7%9B%91%E5%90%AC%E5%99%A8">6 经过长轮询后，如果本地配置文件更新后，该如何通知到我们的应用程序（注册监听器）？</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-nacos%E9%85%8D%E7%BD%AE%E4%B8%AD%E5%BF%83%E7%9A%84%E6%A0%B8%E5%BF%83%E7%B1%BBnacosconfigservice%E7%9A%84%E5%BC%95%E5%85%A5">二 Nacos配置中心的核心类NacosConfigService的引入</a>
+<li>
+<a href="#%E4%B8%89-ap%E6%A8%A1%E5%BC%8Fnacos%E9%9B%86%E7%BE%A4%E6%9C%8D%E5%8A%A1%E7%AB%AF%E5%A6%82%E4%BD%95%E5%B7%A5%E4%BD%9C">三 AP模式nacos集群，服务端如何工作</a>
 <ul>
-<li><a href="#1-%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%98%AF%E4%BD%95%E6%97%B6%E4%BB%8E%E8%BF%9C%E7%A8%8B%E9%85%8D%E7%BD%AEnacos%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%8B%89%E5%8F%96%E9%85%8D%E7%BD%AE%E7%9A%84"><strong>1 客户端是何时从远程配置Nacos服务端拉取配置的</strong></a></li>
-<li><a href="#2-nacosconfigservice%E7%B1%BB%E7%9A%84%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95%E4%B8%AD%E4%BC%9A%E5%88%9B%E5%BB%BA%E9%87%8D%E8%A6%81%E7%9A%84%E4%B8%A4%E4%B8%AA%E5%B1%9E%E6%80%A7agent%E5%92%8Cworker"><strong>2 NacosConfigService类的构造方法中会创建重要的两个属性agent和worker：</strong></a></li>
-<li><a href="#3-nacosconfigservice%E4%B8%AD%E7%9A%84%E6%A0%B8%E5%BF%83%E8%8E%B7%E5%8F%96%E9%85%8D%E7%BD%AE%E6%96%B9%E6%B3%95getconfig-getconfiginner"><strong>3 NacosConfigService中的核心获取配置方法getConfig() ——&gt; getConfigInner()：</strong></a></li>
-<li><a href="#4-client%E7%AC%AC%E4%B8%80%E6%AC%A1%E8%8E%B7%E5%8F%96%E5%88%B0server%E7%AB%AF%E9%85%8D%E7%BD%AE%E5%90%8E%E4%B9%8B%E5%90%8E%E5%A6%82%E4%BD%95%E8%BF%9B%E8%A1%8C%E5%AE%9A%E6%97%B6%E6%9B%B4%E6%96%B0"><strong>4 Client第一次获取到Server端配置后，之后如何进行定时更新？</strong></a></li>
-<li><a href="#5-nacos%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%95%BF%E8%BD%AE%E8%AF%A2longpolling%E4%BB%BB%E5%8A%A1%E7%9A%84%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91md5%E6%AF%94%E5%AF%B9"><strong>5 Nacos客户端长轮询LongPolling任务的核心逻辑（md5比对）：</strong></a></li>
-<li><a href="#6-%E7%BB%8F%E8%BF%87%E9%95%BF%E8%BD%AE%E8%AF%A2%E5%90%8E%E5%A6%82%E6%9E%9C%E6%9C%AC%E5%9C%B0%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E6%9B%B4%E6%96%B0%E5%90%8E%E8%AF%A5%E5%A6%82%E4%BD%95%E9%80%9A%E7%9F%A5%E5%88%B0%E6%88%91%E4%BB%AC%E7%9A%84%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F%E6%B3%A8%E5%86%8C%E7%9B%91%E5%90%AC%E5%99%A8"><strong>6 经过长轮询后，如果本地配置文件更新后，该如何通知到我们的应用程序（注册监听器）？</strong></a></li>
+<li><a href="#1-%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84dump%E5%8A%A0%E8%BD%BDdumpservice">1 配置文件的Dump加载：DumpService</a></li>
+<li><a href="#2-%E6%96%B0%E7%9A%84%E9%85%8D%E7%BD%AE%E8%A2%AB%E5%8F%91%E5%B8%83%E5%90%8E%E5%A6%82%E4%BD%95%E5%9C%A8%E9%9B%86%E7%BE%A4%E9%97%B4%E8%BF%9B%E8%A1%8C%E5%90%8C%E6%AD%A5">2 新的配置被发布后，如何在集群间进行同步？</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-ap%E6%A8%A1%E5%BC%8Fnacos%E9%9B%86%E7%BE%A4%E6%9C%8D%E5%8A%A1%E7%AB%AF%E5%A6%82%E4%BD%95%E5%B7%A5%E4%BD%9C">三 AP模式nacos集群，服务端如何工作</a>
+<li>
+<a href="#%E5%9B%9B-%E8%A1%A5%E5%85%85%E8%AF%B4%E6%98%8E-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E5%88%86%E7%BB%84%E4%B8%8E%E6%9C%AC%E5%9C%B0%E5%AE%B9%E7%81%BE%E7%BC%93%E5%AD%98">四 补充说明 命名空间分组与本地容灾缓存</a>
 <ul>
-<li><a href="#1-%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84dump%E5%8A%A0%E8%BD%BDdumpservice"><strong>1 配置文件的Dump加载：DumpService</strong></a></li>
-<li><a href="#2-%E6%96%B0%E7%9A%84%E9%85%8D%E7%BD%AE%E8%A2%AB%E5%8F%91%E5%B8%83%E5%90%8E%E5%A6%82%E4%BD%95%E5%9C%A8%E9%9B%86%E7%BE%A4%E9%97%B4%E8%BF%9B%E8%A1%8C%E5%90%8C%E6%AD%A5"><strong>2 新的配置被发布后，如何在集群间进行同步？</strong></a></li>
-</ul>
-</li>
-</ul>
-</li>
+<li><a href="#1-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4-%E5%88%86%E7%BB%84%E4%B8%8E-dataid-%E7%9A%84%E5%AE%9A%E4%BD%8D%E5%85%B3%E7%B3%BB">1 命名空间 分组与 DataId 的定位关系</a></li>
+<li><a href="#2-%E6%9C%AC%E5%9C%B0%E5%AE%B9%E7%81%BE%E7%BC%93%E5%AD%98-failover-%E4%B8%8E%E6%9C%AC%E5%9C%B0%E5%BF%AB%E7%85%A7-snapshot">2 本地容灾缓存 Failover 与本地快照 Snapshot</a></li>
+<li><a href="#3-%E9%95%BF%E8%BD%AE%E8%AF%A2%E7%9A%84%E8%BE%B9%E7%95%8C%E4%B8%8E%E4%BB%A3%E4%BB%B7">3 长轮询的边界与代价</a></li>
 </ul>
 </li>
 </ul>

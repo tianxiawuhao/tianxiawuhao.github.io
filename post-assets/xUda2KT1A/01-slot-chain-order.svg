@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="822" viewBox="0 0 900 822" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>ProcessorSlotChain 中九个插槽的执行顺序（进入与退出两个阶段）</title>
+  <rect width="900" height="822" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">ProcessorSlotChain 插槽执行顺序与责任链传递（1.8.x）</text>
+  <rect x="180" y="50" width="680" height="32" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="204" y="71" font-size="12.5" font-weight="700" fill="#1f2b38">SphU.entry(resource)</text>
+  <text x="836" y="71" text-anchor="end" font-size="11.5" fill="#5b6b7c">入口</text>
+  <line x1="450" y1="82" x2="450" y2="96" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="180" y="98" width="680" height="56" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="204" y="119" font-size="12" font-weight="700" fill="#1f2b38">退出阶段（exit）：业务方法执行完成后逆序回调</text>
+  <text x="204" y="136" font-size="11.5" fill="#5b6b7c">StatisticSlot 完成线程数与通过量统计；其余插槽负责异常计数与资源清理</text>
+  <text x="204" y="150" font-size="10.5" fill="#2e9e5b">逆序：扩展 Slot → DegradeSlot → FlowSlot → SystemSlot → AuthoritySlot → StatisticSlot → LogSlot → ClusterBuilderSlot → NodeSelectorSlot</text>
+  <text x="450" y="242" text-anchor="middle" font-size="11.5" fill="#5b6b7c">↓ 以下为进入阶段（entry）的正序执行</text>
+
+  <rect x="40" y="254" width="126" height="596" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="103" y="286" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2b38">进入阶段</text>
+  <text x="103" y="310" text-anchor="middle" font-size="11.5" fill="#5b6b7c">entry() 正序</text>
+  <rect x="180" y="254" width="680" height="596" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="200" y="274" font-size="11.5" fill="#5b6b7c">插槽按 order 从小到大串成单向链表，fireEntry 依次向后传递</text>
+
+  <rect x="180" y="224" width="680" height="52" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <rect x="180" y="224" width="6" height="52" rx="3" fill="#2f6fd0"/>
+  <text x="204" y="246" font-size="12.5" font-weight="700" fill="#1f2b38">NodeSelectorSlot</text>
+  <text x="204" y="263" font-size="11.5" fill="#5b6b7c">为当前 Context 下的资源创建 DefaultNode，构建调用树</text>
+
+  <rect x="180" y="284" width="680" height="52" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <rect x="180" y="284" width="6" height="52" rx="3" fill="#2f6fd0"/>
+  <text x="204" y="306" font-size="12.5" font-weight="700" fill="#1f2b38">ClusterBuilderSlot</text>
+  <text x="204" y="323" font-size="11.5" fill="#5b6b7c">同一资源的 DefaultNode 共用 ClusterNode，做全局统计</text>
+
+  <rect x="180" y="344" width="680" height="52" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <rect x="180" y="344" width="6" height="52" rx="3" fill="#2f6fd0"/>
+  <text x="204" y="366" font-size="12.5" font-weight="700" fill="#1f2b38">LogSlot</text>
+  <text x="204" y="383" font-size="11.5" fill="#5b6b7c">被规则拦截时记录 BlockException 的日志，不参与统计</text>
+
+  <rect x="180" y="404" width="680" height="52" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <rect x="180" y="404" width="6" height="52" rx="3" fill="#2f6fd0"/>
+  <text x="204" y="426" font-size="12.5" font-weight="700" fill="#1f2b38">StatisticSlot</text>
+  <text x="204" y="443" font-size="11.5" fill="#5b6b7c">入口先 fireEntry 放行，回调时统计线程数与滑动窗口 QPS</text>
+
+  <rect x="180" y="464" width="680" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <rect x="180" y="464" width="6" height="52" rx="3" fill="#e08a1e"/>
+  <text x="204" y="486" font-size="12.5" font-weight="700" fill="#1f2b38">AuthoritySlot</text>
+  <text x="204" y="503" font-size="11.5" fill="#5b6b7c">黑白名单校验（AuthorityRule），来源不合法直接抛异常</text>
+
+  <rect x="180" y="524" width="680" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <rect x="180" y="524" width="6" height="52" rx="3" fill="#e08a1e"/>
+  <text x="204" y="546" font-size="12.5" font-weight="700" fill="#1f2b38">SystemSlot</text>
+  <text x="204" y="563" font-size="11.5" fill="#5b6b7c">按系统规则校验 load、RT、线程数、入口 QPS 等指标</text>
+
+  <rect x="180" y="584" width="680" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <rect x="180" y="584" width="6" height="52" rx="3" fill="#e08a1e"/>
+  <text x="204" y="606" font-size="12.5" font-weight="700" fill="#1f2b38">FlowSlot</text>
+  <text x="204" y="623" font-size="11.5" fill="#5b6b7c">按 FlowRule 做 QPS/线程数限流，委托给 TrafficShapingController</text>
+
+  <rect x="180" y="644" width="680" height="52" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <rect x="180" y="644" width="6" height="52" rx="3" fill="#e08a1e"/>
+  <text x="204" y="666" font-size="12.5" font-weight="700" fill="#1f2b38">DegradeSlot</text>
+  <text x="204" y="683" font-size="11.5" fill="#5b6b7c">按熔断降级规则判断资源是否处于熔断状态（1.8 改为断路器）</text>
+
+  <rect x="180" y="704" width="680" height="52" rx="8" fill="#f7f9fc" stroke="#7a5bd0" stroke-width="1.4"/>
+  <rect x="180" y="704" width="6" height="52" rx="3" fill="#7a5bd0"/>
+  <text x="204" y="726" font-size="12.5" font-weight="700" fill="#1f2b38">其余扩展 Slot（如 ParamFlowSlot、ClusterNode…）</text>
+  <text x="204" y="743" font-size="11.5" fill="#5b6b7c">通过 SPI 注册，按 order 排在责任链末尾，热点参数限流即在此</text>
+
+  
+
+  <rect x="180" y="766" width="680" height="34" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="204" y="788" font-size="12" fill="#5b6b7c">全部通过后进入业务方法；任一插槽抛 BlockException 则整个链路短路，不再向后传递</text>
+
+  <line x1="520" y1="272" x2="520" y2="280" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="332" x2="520" y2="340" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="392" x2="520" y2="400" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="452" x2="520" y2="460" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="512" x2="520" y2="520" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="572" x2="520" y2="580" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="632" x2="520" y2="640" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="520" y1="756" x2="520" y2="764" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+</svg>

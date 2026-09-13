@@ -126,7 +126,7 @@
           <img class="post-feature-header-image" src="/post-images/xdN8U8BuX.png" alt="封面图">
           
           <p>Sentinel核心源码——插槽机制（责任链模式）</p>
-<p>Sentinel的工作原理：https://github.com/alibaba/Sentinel/wiki</p>
+<p>Sentinel 的工作原理可参考官方 Wiki：<a href="https://github.com/alibaba/Sentinel/wiki" target="_blank" rel="noopener">https://github.com/alibaba/Sentinel/wiki</a></p>
 <ul>
 <li>
 <p><strong>Sentinel会为所有的资源，以资源名为区分，创建各自的DefaultProcessorSlotChain，放在缓存中；</strong></p>
@@ -143,7 +143,7 @@
 <p><strong>最终完成责任链上所有ProcessorSlot的逻辑！</strong></p>
 </li>
 <li>
-<p><strong>——————————————————————————————————————————————</strong></p>
+<hr>
 </li>
 <li>
 <p><strong>Context链路上下文为request请求级别的，放在ThreadLocal中，请求结束即释放；</strong></p>
@@ -161,16 +161,14 @@
 <figure data-type="image" tabindex="1"><img src="/post-images/1658667201037.png" alt="" loading="lazy"></figure>
 <h3 id="1-processorslotchain处理器插槽链的引入">1 ProcessorSlotChain处理器插槽链的引入</h3>
 <p>ProcessorSlotChain是上图整个链的骨架，基于“责任链模式”设计，将“统计、授权、限流、降级等”处理逻辑封装成一个个的Slot插槽，串联起来。</p>
-<p>处理链中的Slot插槽可粗分为上下两大类：数据统计部分 + 规则判断部分</p>
+<p>处理链中的 Slot 插槽可粗分为上下两大类：数据统计部分 + 规则判断部分。</p>
 <ul>
 <li>
-<p>数据统计：</p>
-</li>
-<li>
+<p>数据统计部分：</p>
 <ul>
-<li>**NodeSelectorSlot：**负责构建簇点链路中的各个节点（DefaultNode），形成NodeTree</li>
-<li>**ClusterBuilderSlot：**负责构建某个资源的ClusterNode（具体的DefaultNode和ClusterNode的区别见下文）</li>
-<li>**StatisticSlot：**负责实时统计请求的各种调用信息，如来源信息、请求次数、运行信息等；</li>
+<li><strong>NodeSelectorSlot：</strong>为当前 Context 下的资源创建 DefaultNode，构建调用树 NodeTree</li>
+<li><strong>ClusterBuilderSlot：</strong>负责构建某个资源的 ClusterNode（DefaultNode 和 ClusterNode 的区别见下文）</li>
+<li><strong>StatisticSlot：</strong>负责实时统计请求的各种调用信息，如来源信息、请求次数、运行信息等</li>
 </ul>
 </li>
 <li>
@@ -181,7 +179,7 @@
 <li><strong>AuthoritySlot</strong>：授权规则判断（来源控制）</li>
 <li><strong>SystemSlot</strong>：系统保护规则判断，当系统资源使用量达到一定程度后，拒绝新的请求进入等；</li>
 <li><strong>ParamFlowSlot</strong>：热点参数限流规则判断</li>
-<li><strong>FlowSolt</strong>：普通限流规则判断</li>
+<li><strong>FlowSlot</strong>：普通限流规则判断</li>
 <li><strong>DegradeSlot</strong>：降级规则判断</li>
 </ul>
 </li>
@@ -190,13 +188,13 @@
 <figure data-type="image" tabindex="2"><img src="/post-images/1658667225838.png" alt="" loading="lazy"></figure>
 <ul>
 <li><strong>DefaultNode：</strong>同一份资源经过不同的链路调用，会创建不同的 DefaultNode，用于记录不同链路访问当前资源的统计元数据。因为 Sentinel 支持“按链路限流”，所以肯定要分开统计；</li>
-<li><strong>ClusterNode： 同一份资源，在整个系统中只会创建一个ClusterNode，记录所有入口访问当前资源的统计元数据</strong>，因为很多时候，我们只需要统计该资源的整体使用情况。</li>
+<li><strong>ClusterNode：</strong>同一份资源在整个系统中只会创建一个 ClusterNode，记录所有入口访问该资源时的统计元数据；因为很多时候，我们只关心该资源的整体使用情况。</li>
 </ul>
-<p>注意这里的用词，DefaultNode和ClusterNode都只是负责记录统计元数据，真正的统计工作由之后的StatisticSlot进行，另外ParmFlowSlot会负责热点参数限流这种特殊场景下的数据统计。（热点参数限流的统计为什么要单独出来，后面做限流算法实现的讲解时就清楚了）。</p>
+<p>注意这里的用词：DefaultNode 和 ClusterNode 都只负责记录统计元数据，真正的统计工作由之后的 StatisticSlot 完成，另外 ParamFlowSlot 负责热点参数限流这种特殊场景下的数据统计。（热点参数限流的统计为什么要单独出来，在限流算法实现那一篇里就清楚了。）</p>
 <h3 id="3-如何自定义一个sentinel资源sentinelresource注解">3 如何自定义一个Sentinel资源？@SentinelResource注解？</h3>
-<p>我们知道，在实际使用过程中，当我们要自定义sentinel资源时，只需要使用@SentinelResource注解定义即可，很方便。</p>
-<p>而且Sentinel默认就已经将 springmvc 的 controller 中的方法注册为sentinel资源了，但是这些方法并没有添加 @SentinelResource 注解呀！</p>
-<p>其实@SentinelResource底层也就是通过AOP + Entry 的方式来手动注册 Sentinel资源的：</p>
+<p>我们知道，在实际使用过程中，要自定义 Sentinel 资源时，只需要使用 @SentinelResource 注解即可，非常方便。</p>
+<p>但你会发现：Sentinel 默认就已经把 Spring MVC Controller 中的方法注册成 Sentinel 资源了，而这些方法上并没有添加 @SentinelResource 注解。</p>
+<p>其实 @SentinelResource 底层也是通过 AOP + Entry 的方式来注册 Sentinel 资源的：</p>
 <pre><code class="language-java">// 资源名可使用任意有业务语义的字符串，比如方法名、接口名或其它可唯一标识的字符串。
 try (Entry entry = SphU.entry(&quot;resourceName&quot;)) {
   // 被保护的业务逻辑
@@ -246,7 +244,7 @@ public class SentinelResourceAspect extends AbstractSentinelAspectSupport {
 }
 </code></pre>
 <blockquote>
-<p><strong>所以，通过Entry手动注册资源 和 通过@SentinelResource 注解自动注入资源，原理上时一样的，都是通过 SphU.entry(…) 方法实现。</strong></p>
+<p><strong>所以，通过 Entry 手动注册资源，和通过 @SentinelResource 注解自动注册资源，原理上是一样的，最终都是通过 SphU.entry(…) 方法实现。</strong></p>
 </blockquote>
 <h3 id="4-链路上下文context">4 链路上下文Context</h3>
 <pre><code class="language-java">public class Context {
@@ -258,10 +256,10 @@ public class SentinelResourceAspect extends AbstractSentinelAspectSupport {
 }
 </code></pre>
 <ul>
-<li>Context代表调用链路的上下文，贯穿一次链路调用中的所有资源（Entry），基于ThreadLocal实现；</li>
-<li>Context 维护着入口节点（entranceNode）、当前资源节点（curEntry —&gt; curNode）、调用来源（origin）等信息；</li>
-<li>后续所有的Slot插槽都可以通过context拿到DefaultNode 和 ClusterNode，从而完成统计或判断逻辑；</li>
-<li>Context创建过程中，会创建EntranceNode，contextName 就是entranceNode的名称；</li>
+<li>Context 代表调用链路的上下文，贯穿一次链路调用中的所有资源（Entry），基于 ThreadLocal 实现；</li>
+<li>Context 维护着入口节点（entranceNode）、当前资源节点（curEntry → curNode）、调用来源（origin）等信息；</li>
+<li>后续所有的 Slot 插槽都可以通过 Context 拿到 DefaultNode 和 ClusterNode，从而完成统计或判断逻辑；</li>
+<li>Context 创建过程中会创建 EntranceNode，contextName 就是 EntranceNode 的名称；</li>
 </ul>
 <pre><code class="language-java">// 创建context，包含两个参数：context名称、 来源名称
 ContextUtil.enter(&quot;contextName&quot;, &quot;originName&quot;);
@@ -270,11 +268,12 @@ ContextUtil.enter(&quot;contextName&quot;, &quot;originName&quot;);
 <li>默认情况下，Sentinel的entranceNode是sentinel_default_context，如果想要做链路限流，就必须关闭“统一入口配置”，从而让每一个 Controller 方法都成为 Context 的入口。</li>
 </ul>
 <pre><code class="language-java">public final static String CONTEXT_DEFAULT_NAME = &quot;sentinel_default_context&quot;;
-
-spring:
+</code></pre>
+<p>若要关闭统一入口配置（让每个 Controller 方法各自成为一个 Context 入口），可在配置文件中设置：</p>
+<pre><code class="language-yaml">spring:
   cloud:
     sentinel:
-      web-context-unify: false  # 关闭context统一入口配置
+      web-context-unify: false  # 关闭 context 统一入口配置
 </code></pre>
 <hr>
 <h2 id="二-sentinel源码剖析context的初始化">二 Sentinel源码剖析——Context的初始化</h2>
@@ -479,19 +478,19 @@ protected static Context trueEnter(String name, String origin) {
 <p>由此我们可以得出重要结论：</p>
 <ul>
 <li>在每一个请求到达时，Sentinel的拦截器都会为本次请求封装一个“链路上下文context”，然后放入到ThreadLocal中，便于请求在后面的处理过程中取用；</li>
-<li>默认情况下，“统一入口配置开启”，“链路上下文context”以sentinel-spring-web-context 命名；</li>
+<li>默认情况下“统一入口配置开启”，链路上下文 context 以 sentinel_spring_web_context 命名；</li>
 <li>如果关闭了“统一入口配置”，“链路上下文context”将以本次请求对应的controller方法的 @RequestMapping() 的值命名，如“/order/{orderId}”；</li>
 <li>由于context是放在Thread中的，所以当本次请求结束后，context就会被释放，下次请求需要重新创建；<strong>（context生命周期为request）</strong></li>
 <li>但是入口 entranceNode 却是放在缓存HashMap中的，所以下一次新的请求到达时，就没有必要再重新创建了；<strong>(entranceNode生命周期为应用级)</strong></li>
 <li><strong>创建入口方法 entranceNode 时，使用了 双重检测锁 + CopyOnWrite ，因为存在多个请求线程并发情况；</strong></li>
-<li><strong>创建 context 过程不需要考虑多线程安全 ，原因也是因为 context时线程内的，单线程 。</strong></li>
+<li>创建 Context 的过程不需要考虑多线程安全，因为 Context 是线程内的（ThreadLocal），只属于当前请求线程。</li>
 </ul>
 <hr>
 <h2 id="三-sentinel核心源码之processorslotchain的构建">三 Sentinel核心源码之ProcessorSlotChain的构建</h2>
-<h3 id="1-入口方法正式上文拦截器中创建context之后的方法">1 入口方法，正式上文拦截器中创建Context之后的方法</h3>
+<h3 id="1-入口方法正式上文拦截器中创建context之后的方法">1 入口方法：上文拦截器创建 Context 之后调用的方法</h3>
 <pre><code class="language-java">Entry entry = SphU.entry(resourceName, 1, EntryType.IN);
 </code></pre>
-<p>该方法，将“一脉单传”调用到以下方法 entryWithPriority() ：</p>
+<p>它会层层调用到下面的 entryWithPriority() 方法：</p>
 <pre><code class="language-java">private Entry entryWithPriority(ResourceWrapper resourceWrapper, int count, boolean prioritized, Object... args)
     throws BlockException {
     // 获取 Context
@@ -544,7 +543,7 @@ ProcessorSlot&lt;Object&gt; lookProcessChain(ResourceWrapper resourceWrapper) {
     return chain;
 }
 </code></pre>
-<p>虽然每一次请求的ResourceWrapper都是新new的，但是由于它的hashCode() 和 equals() 方法，只会对比 name;</p>
+<p>虽然每一次请求的 ResourceWrapper 都是新 new 出来的，但它的 hashCode() 与 equals() 只比较 name：</p>
 <pre><code class="language-java">public abstract class ResourceWrapper {
  
     protected final String name;
@@ -569,8 +568,8 @@ ProcessorSlot&lt;Object&gt; lookProcessChain(ResourceWrapper resourceWrapper) {
 </code></pre>
 <p>所以，得出结论：</p>
 <ul>
-<li><strong>Sentinel会为所有的资源，以资源名为区分，创建对应的ProcessorSlotChain ，并缓存到chainMap中；</strong></li>
-<li>ProcessorSlotChain应用级有效，创建后，下次相同名称的Resource请求进入时，将不需要再次创建chain；</li>
+<li>Sentinel 会为所有资源以资源名区分，创建对应的 ProcessorSlotChain，并缓存到 chainMap 中；</li>
+<li>ProcessorSlotChain 应用级有效：创建后，下次相同名称的 Resource 请求进入时无需再次创建；</li>
 </ul>
 <h3 id="3-slotchainprovidernewslotchain-处理器插槽链的构建过程">3 SlotChainProvider.newSlotChain() 处理器插槽链的构建过程</h3>
 <pre><code class="language-java">// com.alibaba.csp.sentinel.slotchain.SlotChainProvider#newSlotChain
@@ -597,7 +596,7 @@ public class DefaultSlotChainBuilder implements SlotChainBuilder {
         // 创建一个 DefaultProcessorSlotChain
         ProcessorSlotChain chain = new DefaultProcessorSlotChain();
  
-        // 该方法会通过spi机制从 \META-INF\services\目录下，加载所有的ProcessorSlot类
+        // 通过 SPI 机制从 META-INF/services/ 目录下加载所有 ProcessorSlot 实现类
         List&lt;ProcessorSlot&gt; sortedSlotList = SpiLoader.loadPrototypeInstanceListSorted(ProcessorSlot.class);
         for (ProcessorSlot slot : sortedSlotList) {
             if (!(slot instanceof AbstractLinkedProcessorSlot)) {
@@ -638,7 +637,7 @@ public static &lt;T&gt; List&lt;T&gt; loadPrototypeInstanceListSorted(Class&lt;T
     }
 }
 </code></pre>
-<p>本地 META/services/ 目录下的 ProcessorSlot文件定义了9个插槽！</p>
+<p>本地 <code>META-INF/services/com.alibaba.csp.sentinel.slotchain.ProcessorSlot</code> 文件里按 order 顺序定义了 9 个默认插槽。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1658667294348.png" alt="" loading="lazy"></figure>
 <h3 id="5-最终构建成的processorslotchain的结构">5 最终构建成的ProcessorSlotChain的结构</h3>
 <p>首先，所有的9大ProcessorSlot都继承于一个AbstractLinkedProcessorSlot类：</p>
@@ -656,7 +655,7 @@ public static &lt;T&gt; List&lt;T&gt; loadPrototypeInstanceListSorted(Class&lt;T
     }
      
     // 所有ProcessorSlot的入口方法，其中会通过模板方法模式，调用各自的entry处理逻辑
-    // 而再所有的处理逻辑的最后，都会再调一次 fireEntry() 方法
+    // 在各自的 entry 处理逻辑最后，都会再调用一次 fireEntry() 方法
     void transformEntry(Context context, ResourceWrapper resourceWrapper, Object o, int count, boolean prioritized, Object... args)
     throws Throwable {
         T t = (T)o;
@@ -664,53 +663,46 @@ public static &lt;T&gt; List&lt;T&gt; loadPrototypeInstanceListSorted(Class&lt;T
     }
 }
 </code></pre>
-<p>经过 next 指向，最终构建出来的 DefaultProcessorSlotChain 如下：</p>
+<p>经过 next 指针串联，最终构建出来的 DefaultProcessorSlotChain 如下（这也是 1.8.x 的默认顺序）：</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1658667303745.png" alt="" loading="lazy"></figure>
+<p><img src="/post-assets/xdN8U8BuX/01-slot-chain-build.svg" alt="DefaultProcessorSlotChain 的构建过程与九个插槽的 order 顺序"></p>
 <p>综上总结：</p>
 <ul>
-<li><strong>Sentinel会 为所有的资源，以资源名为区分，创建各自的DefaultProcessorSlotChain，放在缓存 中；</strong></li>
-<li><strong>DefaultProcessorSlotChain的 每一个ProcessorSlot插槽都是通过SPI机制从 META/services/ 目录下加载的 ；</strong></li>
-<li><strong>每一个ProcessorSlot 其实是一个 AbstractLinkedProcessorSlot 抽象链表处理器插槽，有一个next属性，指向下一个Slot ，当某一个Slot执行完后，会调用 fireEntry() 方法，将请求转到下一个Slot继续执行。</strong></li>
-<li><strong>最终完成责任链上所有ProcessorSlot的逻辑！</strong></li>
+<li>Sentinel 会为所有资源以资源名区分，创建各自的 DefaultProcessorSlotChain 并放入缓存；</li>
+<li>DefaultProcessorSlotChain 的每一个 ProcessorSlot 插槽都是通过 SPI 机制从 <code>META-INF/services/</code> 目录下加载的，加载后按 order 升序排列；</li>
+<li>每一个 ProcessorSlot 本质上都是 AbstractLinkedProcessorSlot 抽象链表节点，持有 next 属性指向下一个 Slot；当前 Slot 执行完后调用 fireEntry()，把请求交给下一个 Slot 继续执行，最终完成责任链上所有 ProcessorSlot 的逻辑。</li>
 </ul>
 <hr>
 <h2 id="四-九大processorslot处理器插槽的工作原理">四 九大ProcessorSlot处理器插槽的工作原理</h2>
 <blockquote>
 <p>LogSlot 是边缘插槽，只做日志记录，不算重要；排除后还剩 8 大插槽，也就是第一章列出的八大插槽。</p>
 </blockquote>
-<p>数据统计部分 + 规则判断部分</p>
+<p>除 LogSlot 外，其余 8 个插槽可分为数据统计与规则判断两大类：</p>
 <ul>
 <li>
-<p>数据统计：</p>
-</li>
-<li>
+<p>数据统计部分：</p>
 <ul>
-<li><strong>NodeSelectorSlot</strong>：负责构建簇点链路中的各个节点（DefaultNode），形成NodeTree</li>
-<li><strong>ClusterBuilderSlot</strong>：负责构建某个资源的ClusterNode（具体的DefaultNode和ClusterNode的区别见下文）</li>
-<li><strong>StatisticSlot</strong>：负责实时统计请求的各种调用信息，如来源信息、请求次数、运行信息等；</li>
+<li><strong>NodeSelectorSlot</strong>：为当前 Context 下的资源创建 DefaultNode，构建调用树 NodeTree</li>
+<li><strong>ClusterBuilderSlot</strong>：负责构建某个资源的 ClusterNode，做全局维度统计</li>
+<li><strong>StatisticSlot</strong>：负责实时统计请求的各种调用信息，如来源信息、请求次数、运行信息等</li>
 </ul>
 </li>
 <li>
-<p>规则判断：</p>
-</li>
-<li>
+<p>规则判断部分：</p>
 <ul>
 <li><strong>AuthoritySlot</strong>：授权规则判断（来源控制）</li>
-<li><strong>SystemSlot</strong>：系统保护规则判断，当系统资源使用量达到一定程度后，拒绝新的请求进入等；</li>
+<li><strong>SystemSlot</strong>：系统保护规则判断，当系统资源使用量达到一定程度后，拒绝新的请求进入</li>
 <li><strong>ParamFlowSlot</strong>：热点参数限流规则判断</li>
-<li><strong>FlowSolt</strong>：普通限流规则判断</li>
-<li><strong>DegradeSlot</strong>：降级规则判断</li>
+<li><strong>FlowSlot</strong>：普通限流规则判断</li>
+<li><strong>DegradeSlot</strong>：降级熔断规则判断（1.8.x 中熔断策略改为慢调用比例、异常比例、异常数三种）</li>
 </ul>
 </li>
 </ul>
-<p>其实，当Sentinel的整体架构，和调用逻辑梳理清楚后，每一个责任链节点的处理逻辑就很简单了</p>
+<p>其实，当 Sentinel 的整体架构和调用链路梳理清楚以后，每一个责任链节点的处理逻辑就很简单了。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E4%B8%80-processorslotchain%E5%A4%84%E7%90%86%E5%99%A8%E6%8F%92%E6%A7%BD%E9%93%BE%E5%92%8Cnode%E8%8A%82%E7%82%B9%E7%9A%84%E5%BC%95%E5%85%A5">一 ProcessorSlotChain处理器插槽链和Node节点的引入</a>
+<a href="#%E4%B8%80-processorslotchain%E5%A4%84%E7%90%86%E5%99%A8%E6%8F%92%E6%A7%BD%E9%93%BE%E5%92%8Cnode%E8%8A%82%E7%82%B9%E7%9A%84%E5%BC%95%E5%85%A5">一 ProcessorSlotChain处理器插槽链和Node节点的引入</a>
 <ul>
 <li><a href="#1-processorslotchain%E5%A4%84%E7%90%86%E5%99%A8%E6%8F%92%E6%A7%BD%E9%93%BE%E7%9A%84%E5%BC%95%E5%85%A5">1 ProcessorSlotChain处理器插槽链的引入</a></li>
 <li><a href="#2-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%AD%98%E5%9C%A8nodeselectorslot%E5%92%8Cclusterbuilderslot%E4%B8%A4%E4%B8%AA%E6%8F%92%E6%A7%BDdefaultnode%E5%92%8Cclusternode%E6%9C%89%E4%BB%80%E4%B9%88%E5%8C%BA%E5%88%AB">2 为什么要存在NodeSelectorSlot和ClusterBuilderSlot两个插槽？DefaultNode和ClusterNode有什么区别？</a></li>
@@ -718,25 +710,27 @@ public static &lt;T&gt; List&lt;T&gt; loadPrototypeInstanceListSorted(Class&lt;T
 <li><a href="#4-%E9%93%BE%E8%B7%AF%E4%B8%8A%E4%B8%8B%E6%96%87context">4 链路上下文Context</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-sentinel%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90context%E7%9A%84%E5%88%9D%E5%A7%8B%E5%8C%96">二 Sentinel源码剖析——Context的初始化</a>
+<li>
+<a href="#%E4%BA%8C-sentinel%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90context%E7%9A%84%E5%88%9D%E5%A7%8B%E5%8C%96">二 Sentinel源码剖析——Context的初始化</a>
 <ul>
 <li><a href="#1-spring-cloud-starter-alibaba-sentinel-%E7%9A%84-springfactory-%E4%B8%AD%E6%9C%89%E4%B8%A4%E4%B8%AA%E7%9B%B8%E5%85%B3%E7%9A%84%E8%87%AA%E5%8A%A8%E8%A3%85%E9%85%8D%E7%B1%BB">1 spring-cloud-starter-alibaba-sentinel 的 spring.factory 中有两个相关的自动装配类</a></li>
 <li><a href="#2-%E5%90%91-springmvc-%E5%A4%84%E7%90%86%E9%93%BE%E4%B8%AD%E6%B7%BB%E5%8A%A0%E4%B8%80%E4%B8%AAsentinel%E7%9A%84%E6%8B%A6%E6%88%AA%E5%99%A8">2 向 springmvc 处理链中添加一个Sentinel的拦截器</a></li>
 <li><a href="#3-sentinelwebinterceptor%E6%8B%A6%E6%88%AA%E5%99%A8%E7%9A%84%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95">3 SentinelWebInterceptor拦截器的核心方法</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-sentinel%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81%E4%B9%8Bprocessorslotchain%E7%9A%84%E6%9E%84%E5%BB%BA">三 Sentinel核心源码之ProcessorSlotChain的构建</a>
+<li>
+<a href="#%E4%B8%89-sentinel%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81%E4%B9%8Bprocessorslotchain%E7%9A%84%E6%9E%84%E5%BB%BA">三 Sentinel核心源码之ProcessorSlotChain的构建</a>
 <ul>
-<li><a href="#1-%E5%85%A5%E5%8F%A3%E6%96%B9%E6%B3%95%E6%AD%A3%E5%BC%8F%E4%B8%8A%E6%96%87%E6%8B%A6%E6%88%AA%E5%99%A8%E4%B8%AD%E5%88%9B%E5%BB%BAcontext%E4%B9%8B%E5%90%8E%E7%9A%84%E6%96%B9%E6%B3%95">1 入口方法，正式上文拦截器中创建Context之后的方法</a></li>
+<li><a href="#1-%E5%85%A5%E5%8F%A3%E6%96%B9%E6%B3%95%E6%AD%A3%E5%BC%8F%E4%B8%8A%E6%96%87%E6%8B%A6%E6%88%AA%E5%99%A8%E4%B8%AD%E5%88%9B%E5%BB%BAcontext%E4%B9%8B%E5%90%8E%E7%9A%84%E6%96%B9%E6%B3%95">1 入口方法：上文拦截器创建 Context 之后调用的方法</a></li>
 <li><a href="#2-lookprocesschain-%E5%88%9B%E5%BB%BA%E6%88%96%E8%8E%B7%E5%8F%96%E8%B5%84%E6%BA%90%E5%AF%B9%E5%BA%94%E7%9A%84processorslotchain%E7%9A%84%E6%96%B9%E6%B3%95">2 lookProcessChain() 创建或获取资源对应的ProcessorSlotChain的方法</a></li>
 <li><a href="#3-slotchainprovidernewslotchain-%E5%A4%84%E7%90%86%E5%99%A8%E6%8F%92%E6%A7%BD%E9%93%BE%E7%9A%84%E6%9E%84%E5%BB%BA%E8%BF%87%E7%A8%8B">3 SlotChainProvider.newSlotChain() 处理器插槽链的构建过程</a></li>
 <li><a href="#4-spiloaderloadprototypeinstancelistsortedprocessorslotclass%E9%80%9A%E8%BF%87spi%E6%9C%BA%E5%88%B6%E5%8A%A0%E8%BD%BD%E6%89%80%E6%9C%89%E7%9A%84processorslot%E6%8F%92%E6%A7%BD%E7%B1%BB">4 SpiLoader.loadPrototypeInstanceListSorted(ProcessorSlot.class)通过SPI机制加载所有的ProcessorSlot插槽类</a></li>
 <li><a href="#5-%E6%9C%80%E7%BB%88%E6%9E%84%E5%BB%BA%E6%88%90%E7%9A%84processorslotchain%E7%9A%84%E7%BB%93%E6%9E%84">5 最终构建成的ProcessorSlotChain的结构</a></li>
 </ul>
 </li>
-<li><a href="#%E5%9B%9B-%E4%B9%9D%E5%A4%A7processorslot%E5%A4%84%E7%90%86%E5%99%A8%E6%8F%92%E6%A7%BD%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">四 九大ProcessorSlot处理器插槽的工作原理</a></li>
-</ul>
-</li>
+<li>
+<a href="#%E5%9B%9B-%E4%B9%9D%E5%A4%A7processorslot%E5%A4%84%E7%90%86%E5%99%A8%E6%8F%92%E6%A7%BD%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">四 九大ProcessorSlot处理器插槽的工作原理</a>
+<ul>
 </ul>
 </li>
 </ul>

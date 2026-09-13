@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2e9e5b"/></marker>
+    <marker id="aro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e08a1e"/></marker>
+  </defs>
+  <rect width="900" height="600" fill="#ffffff"/>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">Nacos 配置中心：长轮询与配置变更推送链路（1.x）</text>
+
+  <rect x="25" y="60" width="320" height="195" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="185" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">客户端 NacosConfigService / ClientWorker</text>
+  <text x="39" y="106" font-size="11" fill="#5b6b7c">getConfigInner()：先读本地 Failover 文件</text>
+  <text x="39" y="123" font-size="11" fill="#5b6b7c">未命中 → worker.getServerConfig() 请求远端</text>
+  <text x="39" y="140" font-size="11" fill="#5b6b7c">远端成功后写 Snapshot 快照文件</text>
+  <text x="39" y="157" font-size="11" fill="#5b6b7c">executor（单线程）每 10ms checkConfigInfo()</text>
+  <text x="39" y="174" font-size="11" fill="#5b6b7c">executorService 执行 LongPollingRunnable</text>
+  <text x="39" y="191" font-size="11" fill="#5b6b7c">CacheData 保存 content / md5 / taskId</text>
+  <text x="39" y="208" font-size="11" fill="#5b6b7c">md5 变化 → checkListenerMd5() 回调监听器</text>
+
+  <rect x="555" y="60" width="320" height="195" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="715" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">服务端 LongPollingService</text>
+  <text x="569" y="106" font-size="11" fill="#5b6b7c">POST /v1/cs/configs/listener</text>
+  <text x="569" y="123" font-size="11" fill="#5b6b7c">订阅存入 allSubs 队列（ClientLongPolling）</text>
+  <text x="569" y="140" font-size="11" fill="#5b6b7c">ConfigCacheService 按 md5 判断是否变更</text>
+  <text x="569" y="157" font-size="11" fill="#5b6b7c">未变更：挂起至 29.5s 后返回空串</text>
+  <text x="569" y="174" font-size="11" fill="#5b6b7c">已变更：DataChangeTask 立即唤醒订阅者</text>
+  <text x="569" y="191" font-size="11" fill="#5b6b7c">返回 dataId^2group^2tenant^1 列表</text>
+  <text x="569" y="208" font-size="11" fill="#5b6b7c">发布：先写 MySQL 再发 ConfigDataChangeEvent</text>
+
+  <line x1="345" y1="130" x2="549" y2="130" stroke="#2f6fd0" marker-end="url(#arb)"/>
+  <text x="447" y="122" text-anchor="middle" font-size="11" fill="#2f6fd0">① 长轮询 md5 列表</text>
+  <line x1="555" y1="200" x2="351" y2="200" stroke="#2e9e5b" marker-end="url(#arg)"/>
+  <text x="447" y="192" text-anchor="middle" font-size="11" fill="#2e9e5b">② 返回变化的 dataId</text>
+
+  <rect x="25" y="280" width="850" height="90" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="39" y="303" font-size="12" font-weight="700" fill="#1f2b38">配置发布与集群同步（AP）</text>
+  <text x="39" y="326" font-size="11" fill="#5b6b7c">任一节点收到发布 → 写入 MySQL → 发布 ConfigDataChangeEvent → 异步 Dump 到各节点本地磁盘与内存缓存</text>
+  <text x="39" y="344" font-size="11" fill="#5b6b7c">客户端感知变更的两条路径：长轮询在 30s 内返回变化项（准实时）；本地快照文件在启动时兜底</text>
+
+  <rect x="25" y="390" width="400" height="190" rx="8" fill="#f7f9fc" stroke="#5b6b7c"/>
+  <text x="39" y="414" font-size="12" font-weight="700" fill="#1f2b38">客户端本地文件：容灾与快照</text>
+  <text x="39" y="436" font-size="11" fill="#5b6b7c">Failover 文件：getFailover() 优先读取</text>
+  <text x="39" y="453" font-size="11" fill="#5b6b7c">路径 ~/nacos/config/fixed-{server}_{ns}/data/...</text>
+  <text x="39" y="470" font-size="11" fill="#5b6b7c">运维可手工写入，实现故障时的本地兜底</text>
+  <text x="39" y="487" font-size="11" fill="#5b6b7c">Snapshot 快照：saveSnapshot() 写入最新配置</text>
+  <text x="39" y="504" font-size="11" fill="#5b6b7c">长轮询发现变更后刷新内存与快照文件</text>
+  <text x="39" y="521" font-size="11" fill="#5b6b7c">两者都不命中才真正发起远端请求</text>
+  <text x="39" y="538" font-size="11" fill="#5b6b7c">本地文件存在时不影响长轮询继续监听</text>
+
+  <rect x="470" y="390" width="405" height="190" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="484" y="414" font-size="12" font-weight="700" fill="#1f2b38">1.x 与 2.x 的差异</text>
+  <text x="484" y="436" font-size="11" fill="#5b6b7c">1.x：HTTP 短连接 + 长轮询（本图所示）</text>
+  <text x="484" y="453" font-size="11" fill="#5b6b7c">2.x：命名模块改为 gRPC 长连接</text>
+  <text x="484" y="470" font-size="11" fill="#5b6b7c">配置模块保留 HTTP 长轮询接口兼容</text>
+  <text x="484" y="487" font-size="11" fill="#5b6b7c">2.x 新增基于 gRPC 的配置变更通知通道</text>
+  <text x="484" y="504" font-size="11" fill="#5b6b7c">定位键仍是 namespace + group + dataId</text>
+  <text x="484" y="521" font-size="11" fill="#5b6b7c">配置中心没有 Cluster 概念（注册中心才有）</text>
+  <text x="484" y="538" font-size="11" fill="#5b6b7c">AP：节点间短暂不一致，最终一致</text>
+</svg>

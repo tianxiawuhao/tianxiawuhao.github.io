@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker>
+    <marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2e9e5b"/></marker>
+    <marker id="aro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e08a1e"/></marker>
+  </defs>
+  <rect width="900" height="600" fill="#ffffff"/>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">Nacos 注册中心数据流：注册、心跳与服务发现（1.x）</text>
+
+  <rect x="25" y="60" width="250" height="120" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="150" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">服务提供者 Provider</text>
+  <text x="37" y="106" font-size="11" fill="#5b6b7c">registerInstance() 注册实例</text>
+  <text x="37" y="123" font-size="11" fill="#5b6b7c">BeatReactor.addBeatInfo() 心跳</text>
+  <text x="37" y="140" font-size="11" fill="#5b6b7c">ServerProxy 发起远端调用</text>
+  <text x="37" y="157" font-size="11" fill="#5b6b7c">1.x HTTP 短连接 / 2.x gRPC</text>
+
+  <rect x="430" y="60" width="445" height="120" rx="8" fill="#f7f9fc" stroke="#1f2b38"/>
+  <text x="652" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">Nacos Server：注册写入链路</text>
+  <text x="444" y="106" font-size="11" fill="#5b6b7c">① DistroConsistencyServiceImpl#put()</text>
+  <text x="444" y="123" font-size="11" fill="#5b6b7c">② onPut → notifier 阻塞队列（单线程消费）</text>
+  <text x="444" y="140" font-size="11" fill="#5b6b7c">③ Cluster#updateIps() → CopyOnWrite 替换集合</text>
+  <text x="444" y="157" font-size="11" fill="#5b6b7c">④ ServiceManager 双层 ConcurrentHashMap 存储</text>
+
+  <line x1="275" y1="120" x2="424" y2="120" stroke="#2f6fd0" marker-end="url(#arb)"/>
+  <text x="350" y="112" text-anchor="middle" font-size="11" fill="#2f6fd0">注册请求</text>
+
+  <rect x="25" y="210" width="250" height="90" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="150" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">客户端心跳 BeatTask</text>
+  <text x="37" y="254" font-size="11" fill="#5b6b7c">每 5s 调用一次发送心跳接口</text>
+  <text x="37" y="271" font-size="11" fill="#5b6b7c">/v1/ns/instance/beat（守护线程）</text>
+
+  <rect x="430" y="210" width="445" height="90" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="652" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">服务端健康检查 ClientBeatCheckTask（每 5s）</text>
+  <text x="444" y="254" font-size="11" fill="#5b6b7c">run()：遍历 service.allIPs(true)</text>
+  <text x="444" y="271" font-size="11" fill="#5b6b7c">超过 15s 未心跳 → 标记不健康；超过 30s → 剔除实例</text>
+
+  <line x1="275" y1="255" x2="424" y2="255" stroke="#e08a1e" marker-end="url(#aro)"/>
+  <text x="350" y="247" text-anchor="middle" font-size="11" fill="#e08a1e">心跳包</text>
+
+  <rect x="25" y="330" width="250" height="140" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="150" y="352" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">服务消费者 Consumer</text>
+  <text x="37" y="374" font-size="11" fill="#5b6b7c">HostReactor#getServiceInfo()</text>
+  <text x="37" y="391" font-size="11" fill="#5b6b7c">优先读本地 serviceInfoMap</text>
+  <text x="37" y="408" font-size="11" fill="#5b6b7c">未命中 → updateServiceNow()</text>
+  <text x="37" y="425" font-size="11" fill="#5b6b7c">UpdateTask 每 10s 同步一次</text>
+  <text x="37" y="442" font-size="11" fill="#5b6b7c">变更回调 EventListener</text>
+
+  <rect x="430" y="330" width="445" height="140" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="652" y="352" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">服务端：查询与推送</text>
+  <text x="444" y="374" font-size="11" fill="#5b6b7c">queryList 查询（Cluster 粒度），携带客户端 UDP 端口</text>
+  <text x="444" y="391" font-size="11" fill="#5b6b7c">PushService 通过 UDP 推送变更（1.x，不保证可靠）</text>
+  <text x="444" y="408" font-size="11" fill="#5b6b7c">2.x 改用 gRPC 长连接推送，连接断开即视为下线</text>
+  <text x="444" y="425" font-size="11" fill="#5b6b7c">客户端定时同步兜底 → 最终一致</text>
+  <text x="444" y="442" font-size="11" fill="#5b6b7c">注册表只存各节点内存，不落 MySQL</text>
+
+  <line x1="430" y1="395" x2="281" y2="395" stroke="#2e9e5b" marker-end="url(#arg)"/>
+  <text x="350" y="387" text-anchor="middle" font-size="11" fill="#2e9e5b">服务列表 / 变更推送</text>
+
+  <text x="25" y="505" font-size="12" font-weight="700" fill="#1f2b38">注册表定位链：ServiceManager 双层 Map → Service → Cluster → Set&lt;Instance&gt;</text>
+  <rect x="30" y="515" width="140" height="55" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="100" y="538" text-anchor="middle" font-size="11" fill="#1f2b38">namespaceId</text>
+  <text x="100" y="557" text-anchor="middle" font-size="11" fill="#5b6b7c">命名空间</text>
+  <rect x="185" y="515" width="175" height="55" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="272" y="538" text-anchor="middle" font-size="11" fill="#1f2b38">group::serviceName</text>
+  <text x="272" y="557" text-anchor="middle" font-size="11" fill="#5b6b7c">服务定位键</text>
+  <rect x="375" y="515" width="140" height="55" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="445" y="538" text-anchor="middle" font-size="11" fill="#1f2b38">Cluster</text>
+  <text x="445" y="557" text-anchor="middle" font-size="11" fill="#5b6b7c">集群 / 机房</text>
+  <rect x="530" y="515" width="170" height="55" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="615" y="538" text-anchor="middle" font-size="11" fill="#1f2b38">ephemeralInstances</text>
+  <text x="615" y="557" text-anchor="middle" font-size="11" fill="#5b6b7c">临时实例 AP / Distro</text>
+  <rect x="715" y="515" width="155" height="55" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="792" y="538" text-anchor="middle" font-size="11" fill="#1f2b38">persistentInstances</text>
+  <text x="792" y="557" text-anchor="middle" font-size="11" fill="#5b6b7c">持久实例 CP / Raft</text>
+  <line x1="170" y1="542" x2="183" y2="542" stroke="#5b6b7c" marker-end="url(#ar)"/>
+  <line x1="360" y1="542" x2="373" y2="542" stroke="#5b6b7c" marker-end="url(#ar)"/>
+  <line x1="515" y1="542" x2="528" y2="542" stroke="#5b6b7c" marker-end="url(#ar)"/>
+  <line x1="700" y1="542" x2="713" y2="542" stroke="#5b6b7c" marker-end="url(#ar)"/>
+</svg>

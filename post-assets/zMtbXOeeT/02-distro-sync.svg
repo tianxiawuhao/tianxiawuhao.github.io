@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker>
+    <marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2e9e5b"/></marker>
+  </defs>
+  <rect width="900" height="600" fill="#ffffff"/>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">Distro（AP）集群同步与健康检查责任划分</text>
+
+  <rect x="30" y="70" width="220" height="120" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="140" y="94" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">Nacos Server A</text>
+  <text x="44" y="116" font-size="11" fill="#5b6b7c">DistroProtocol</text>
+  <text x="44" y="133" font-size="11" fill="#5b6b7c">DistroConsistencyServiceImpl</text>
+  <text x="44" y="150" font-size="11" fill="#5b6b7c">ServiceManager 内存注册表</text>
+  <text x="44" y="167" font-size="11" fill="#5b6b7c">DistroMapper.healthyList</text>
+
+  <rect x="340" y="70" width="220" height="120" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="450" y="94" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">Nacos Server B</text>
+  <text x="354" y="116" font-size="11" fill="#5b6b7c">DistroProtocol</text>
+  <text x="354" y="133" font-size="11" fill="#5b6b7c">DistroConsistencyServiceImpl</text>
+  <text x="354" y="150" font-size="11" fill="#5b6b7c">ServiceManager 内存注册表</text>
+  <text x="354" y="167" font-size="11" fill="#5b6b7c">DistroMapper.healthyList</text>
+
+  <rect x="650" y="70" width="220" height="120" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="760" y="94" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">Nacos Server C</text>
+  <text x="664" y="116" font-size="11" fill="#5b6b7c">DistroProtocol</text>
+  <text x="664" y="133" font-size="11" fill="#5b6b7c">DistroConsistencyServiceImpl</text>
+  <text x="664" y="150" font-size="11" fill="#5b6b7c">ServiceManager 内存注册表</text>
+  <text x="664" y="167" font-size="11" fill="#5b6b7c">DistroMapper.healthyList</text>
+
+  <line x1="250" y1="112" x2="338" y2="112" stroke="#2f6fd0" marker-end="url(#arb)"/>
+  <line x1="340" y1="140" x2="252" y2="140" stroke="#2f6fd0" marker-end="url(#arb)"/>
+  <text x="295" y="104" text-anchor="middle" font-size="11" fill="#2f6fd0">同步 / 校验</text>
+  <line x1="560" y1="112" x2="648" y2="112" stroke="#2f6fd0" marker-end="url(#arb)"/>
+  <line x1="650" y1="140" x2="562" y2="140" stroke="#2f6fd0" marker-end="url(#arb)"/>
+  <text x="605" y="104" text-anchor="middle" font-size="11" fill="#2f6fd0">同步 / 校验</text>
+
+  <rect x="30" y="230" width="840" height="100" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="44" y="253" font-size="12" font-weight="700" fill="#1f2b38">健康检查责任划分：DistroMapper#responsible(serviceName)</text>
+  <text x="44" y="276" font-size="11" fill="#5b6b7c">distroHash(serviceName) % servers.size() → 命中区间 [index, lastIndex] 的节点负责该 Service 的 ClientBeatCheckTask</text>
+  <text x="44" y="294" font-size="11" fill="#5b6b7c">Distro 未启用或单机模式直接返回 true；healthyList 为空返回 false；自身不在列表返回 true</text>
+  <text x="44" y="312" font-size="11" fill="#5b6b7c">每个 Service 只由一台节点检查，避免重复检查与重复推送</text>
+
+  <rect x="30" y="355" width="415" height="155" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="44" y="378" font-size="12" font-weight="700" fill="#1f2b38">① 注册数据同步：DistroProtocol#sync()</text>
+  <text x="44" y="400" font-size="11" fill="#5b6b7c">put() 先在本机 onPut() 写入内存注册表</text>
+  <text x="44" y="417" font-size="11" fill="#5b6b7c">再 sync(DistroKey, CHANGE, 延时) 异步同步</text>
+  <text x="44" y="434" font-size="11" fill="#5b6b7c">2.x 由 DistroDelayTask 承载延时发送</text>
+  <text x="44" y="451" font-size="11" fill="#5b6b7c">同步失败进入失败任务队列重试</text>
+  <text x="44" y="468" font-size="11" fill="#5b6b7c">校验任务周期比对 checksum，不一致拉快照</text>
+  <text x="44" y="485" font-size="11" fill="#5b6b7c">1.x 走 HTTP + UDP 推送，2.x 走 gRPC</text>
+
+  <rect x="470" y="355" width="400" height="155" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="484" y="378" font-size="12" font-weight="700" fill="#1f2b38">② 新节点加载：DistroLoadDataTask#load()</text>
+  <text x="484" y="400" font-size="11" fill="#5b6b7c">等待 memberManager 与 dataStore 就绪</text>
+  <text x="484" y="417" font-size="11" fill="#5b6b7c">loadAllDataSnapshotFromRemote(resourceType)</text>
+  <text x="484" y="434" font-size="11" fill="#5b6b7c">调远程节点 getDatumSnapshot() 拉全量快照</text>
+  <text x="484" y="451" font-size="11" fill="#5b6b7c">processSnapshot() 写入本机内存注册表</text>
+  <text x="484" y="468" font-size="11" fill="#5b6b7c">任一节点成功即完成，失败则延时重试</text>
+  <text x="484" y="485" font-size="11" fill="#5b6b7c">后续由校验任务持续纠偏</text>
+
+  <rect x="30" y="530" width="840" height="50" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="450" y="560" text-anchor="middle" font-size="11" fill="#1f2b38">AP 取舍：任一节点都可独立响应读写，注册表不落 MySQL；代价是节点间短暂不一致（最终一致）</text>
+</svg>
