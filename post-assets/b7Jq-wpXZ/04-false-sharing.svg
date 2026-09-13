@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="460" viewBox="0 0 900 460" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+<rect width="900" height="460" fill="#ffffff"/>
+<text x="450" y="34" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">伪共享：两个独立变量落在同一条缓存行</text>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+<rect x="80" y="90" width="300" height="66" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="230" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">CPU Core 1 —— 线程 A</text>
+<text x="230" y="140" text-anchor="middle" font-size="12" font-weight="400" fill="#5b6b7c">反复更新变量 X</text>
+<rect x="520" y="90" width="300" height="66" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="670" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">CPU Core 2 —— 线程 B</text>
+<text x="670" y="140" text-anchor="middle" font-size="12" font-weight="400" fill="#5b6b7c">反复更新变量 Y</text>
+<line x1="230" y1="156" x2="230" y2="206" stroke="#5b6b7c" marker-end="url(#a)"/>
+<text x="240" y="186" text-anchor="start" font-size="11" font-weight="400" fill="#5b6b7c">① 写 X</text>
+<line x1="670" y1="156" x2="670" y2="206" stroke="#5b6b7c" marker-end="url(#a)"/>
+<text x="680" y="186" text-anchor="start" font-size="11" font-weight="400" fill="#5b6b7c">② 写 Y</text>
+<rect x="150" y="210" width="600" height="120" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+<text x="450" y="236" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">同一条缓存行（64 字节）</text>
+<rect x="180" y="252" width="180" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="270" y="278" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">X = 1</text>
+<text x="270" y="298" text-anchor="middle" font-size="11" font-weight="400" fill="#5b6b7c">volatile long</text>
+<rect x="540" y="252" width="180" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="630" y="278" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">Y = 2</text>
+<text x="630" y="298" text-anchor="middle" font-size="11" font-weight="400" fill="#5b6b7c">volatile long</text>
+<text x="450" y="288" text-anchor="middle" font-size="11" font-weight="400" fill="#5b6b7c">两者之间只隔几十字节</text>
+<text x="40" y="360" text-anchor="start" font-size="12" font-weight="400" fill="#5b6b7c">① Core 1 写 X 时要先取得该缓存行的独占权（发出 RFO 消息），Core 2 上同一缓存行随即被置为失效（Invalid）。</text>
+<text x="40" y="388" text-anchor="start" font-size="12" font-weight="400" fill="#5b6b7c">② Core 2 接着写 Y 时又要重新夺取这一行的独占权，缓存行于是在两个核心之间来回“弹跳”。</text>
+<text x="40" y="416" text-anchor="start" font-size="12" font-weight="400" fill="#5b6b7c">X 与 Y 逻辑上互不共享，却因为落在同一缓存行而互相干扰，这就是伪共享（False Sharing）。</text>
+</svg>
