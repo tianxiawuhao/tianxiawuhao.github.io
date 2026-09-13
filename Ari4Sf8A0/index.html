@@ -130,6 +130,16 @@
           <img class="post-feature-header-image" src="/post-images/Ari4Sf8A0.png" alt="封面图">
           
           <h2 id="springbootmybatisdruid单数据源整合">Spring Boot、MyBatis、Druid 单数据源整合</h2>
+<p>本文用一个 Spring Boot 2.4.5 的示例工程，按由浅入深的顺序给出三种整合形态：单数据源、多数据源（@Primary 固定路由）、主从动态路由。三者共用同一套 Druid 连接池参数，差别只在数据源与 SqlSessionFactory 的组织方式。阅读时建议把配置项和运行现象对照起来看，文末「监控台与连接池」「常见坑」两节集中解释了控制台 404、SQL 监控不生效、密码加密等高频问题。</p>
+<p><img src="/post-assets/Ari4Sf8A0/01-integration-flow.svg" alt="Spring Boot、MyBatis、Druid 整合结构与请求监控链路图"></p>
+<h3 id="mybatis配置">MyBatis 配置</h3>
+<ul>
+<li><code>mapper-locations</code>：XML 映射文件的位置。多模块工程建议写成 <code>classpath*:mapper/**/*.xml</code>，<code>classpath*:</code> 会扫描所有 jar 与输出目录，只写 <code>classpath:</code> 容易在打成 jar 后找不到映射文件。</li>
+<li><code>type-aliases-package</code>：实体类包路径，配置后 XML 中的 <code>parameterType</code> 与 <code>resultType</code> 可以直接写类名。别名不区分大小写，但同一别名对应两个类时会直接抛异常，包路径不要跨模块重叠。</li>
+<li><code>map-underscore-to-camel-case</code>：下划线列名自动映射到驼峰属性，<code>city_name</code> 对应 <code>cityName</code>；但这只在没有手写 <code>resultMap</code> 时生效，一旦使用 <code>resultMap</code>，映射完全由 <code>resultMap</code> 决定。</li>
+<li><code>@MapperScan</code>：卸载启动类上批量注册 Mapper 接口，等价于给每个接口加 <code>@Mapper</code>。多数据源场景必须通过 <code>sqlSessionFactoryRef</code> 指定由哪个 SqlSessionFactory 创建代理，否则所有 Mapper 都会落到主数据源上。</li>
+<li>Mapper XML 的 <code>namespace</code> 必须与接口全限定名一致（如 <code>com.example.datasources.dao.CityMapper</code>），方法名与 <code>id</code> 一一对应，否则启动时报 <code>Invalid bound statement (not found)</code>。</li>
+</ul>
 <h3 id="项目框架">项目框架</h3>
 <figure data-type="image" tabindex="1"><img src="/post-images/1621415131656.png" alt="" loading="lazy"></figure>
 <h4 id="pomxml">pom.xml</h4>
@@ -140,6 +150,7 @@
     &lt;parent&gt;
         &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
         &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+        &lt;!-- 2.4.x 属较早版本，2021 年后已停止 OSS 维护；新项目请用 3.x 或 2.7.x，并同步升级 JDK --&gt;
         &lt;version&gt;2.4.5&lt;/version&gt;
         &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt;
     &lt;/parent&gt;
@@ -151,37 +162,21 @@
     &lt;properties&gt;
         &lt;java.version&gt;1.8&lt;/java.version&gt;
     &lt;/properties&gt;
+    &lt;!-- 整合 Druid 有两种常见写法：引入 druid-spring-boot-starter 走自动配置（spring.datasource.druid.* 直接绑定），
+         或只引 druid 后手写 DataSource Bean（本文多数据源章节采用，灵活度更高）。二选一即可，不要同时引入 --&gt;
     &lt;dependencies&gt;
         &lt;dependency&gt;
             &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
             &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
         &lt;/dependency&gt;
-
-        &lt;dependency&gt;
-            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
-            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
-            &lt;optional&gt;true&lt;/optional&gt;
-        &lt;/dependency&gt;
-        &lt;dependency&gt;
-            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
-            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
-            &lt;scope&gt;test&lt;/scope&gt;
-        &lt;/dependency&gt;
-        &lt;dependency&gt;
-            &lt;groupId&gt;mysql&lt;/groupId&gt;
-            &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;
-            &lt;version&gt;5.1.45&lt;/version&gt;
-        &lt;/dependency&gt;
+        &lt;!-- 写法一（单数据源推荐）：starter 内含 druid 与自动配置，无需再单独引 druid --&gt;
+        &lt;!--
         &lt;dependency&gt;
             &lt;groupId&gt;com.alibaba&lt;/groupId&gt;
-            &lt;artifactId&gt;druid&lt;/artifactId&gt;
-            &lt;version&gt;1.1.10&lt;/version&gt;
+            &lt;artifactId&gt;druid-spring-boot-starter&lt;/artifactId&gt;
+            &lt;version&gt;1.2.23&lt;/version&gt;
         &lt;/dependency&gt;
-        &lt;dependency&gt;
-            &lt;groupId&gt;com.baomidou&lt;/groupId&gt;
-            &lt;artifactId&gt;mybatis-plus-boot-starter&lt;/artifactId&gt;
-            &lt;version&gt;3.2.0&lt;/version&gt;
-        &lt;/dependency&gt;
+        --&gt;
     &lt;/dependencies&gt;
 
     &lt;build&gt;
@@ -219,7 +214,8 @@
       timeBetweenEvictionRunsMillis: 60000 # 关闭空闲连接的检测时间间隔.Destroy线程会检测连接的间隔时间，如果连接空闲时间大于等于minEvictableIdleTimeMillis则关闭物理连接。
       minEvictableIdleTimeMillis: 300000 # 连接的最小生存时间.连接保持空闲而不被驱逐的最小时间
       validationQuery: SELECT 1 FROM DUAL # 验证数据库服务可用性的sql.用来检测连接是否有效的sql 因数据库方言而差, 例如 oracle 应该写成 SELECT 1 FROM DUAL
-      testWhileIdle: true # 申请连接时检测空闲时间，根据空闲时间再检测连接是否有效.建议配置为true，不影响性能，并且保证安全性。申请连接的时候检测，如果空闲时间大于timeBetweenEvictionRun
+      testWhileIdle: true # 申请连接时若空闲时间超过 timeBetweenEvictionRunsMillis 才做校验，建议开启
+      # 说明：validationQuery 在各版本中保持一致，MySQL 写 SELECT 1 即可
       testOnBorrow: false # 申请连接时直接检测连接是否有效.申请连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。
       testOnReturn: false # 归还连接时检测连接是否有效.归还连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。
       poolPreparedStatements: true # 开启PSCache
@@ -253,7 +249,7 @@ public class DruidConfig {
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;(  );
 
         iniParms.put( &quot;loginUsername&quot;,&quot;admin&quot; );//登录druid的用户名
-        iniParms.put( &quot;loginPassword&quot;,&quot;123456&quot; );//登录druid的密码
+        iniParms.put( &quot;loginPassword&quot;,&quot;请替换为强口令&quot; );//监控台登录密码，禁止使用弱口令
         iniParms.put(&quot;allow&quot;,&quot;&quot;);//默认允许所有
         //iniParms.put( &quot;deny&quot;,&quot;192.168.***.***&quot; );//拒绝的ip地址
         bean.setInitParameters( iniParms );
@@ -266,7 +262,7 @@ public class DruidConfig {
         FilterRegistrationBean bean= new FilterRegistrationBean();
         bean.setFilter(new WebStatFilter());
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;();
-        iniParms.put( &quot;excliusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//使静态文件访问，还有/druid/* 的访问不被拦截
+        iniParms.put( &quot;exclusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//静态资源与监控台自身不做统计，注意键名是 exclusions
         bean.setInitParameters( iniParms );
         bean.setUrlPatterns( Arrays.asList(&quot;/*&quot;));
         return bean;
@@ -276,10 +272,22 @@ public class DruidConfig {
 </code></pre>
 <h4 id="访问druid">访问Druid</h4>
 <p><a href="http://localhost:8080/druid/login.html">http://localhost:8080/druid/login.html</a></p>
+<p>登录后可依次查看数据源、SQL 监控、SQL 防火墙等页面；登录密码写在 StatViewServlet 的初始化参数里，生产环境务必改成强口令，并用 allow/deny 限制来源 IP。</p>
+<p><img src="/post-assets/Ari4Sf8A0/02-druid-pool-metrics.svg" alt="Druid 连接池参数分层与监控指标图"></p>
+<h3 id="监控台与连接池">监控台与连接池</h3>
+<p>监控台能显示多少人、连接池该配多大，取决于下面两类参数。连接池参数决定「有多少连接、活多久」；StatFilter 与 StatViewServlet 决定「能看到哪些数字」。</p>
+<ul>
+<li><strong>容量类</strong>：<code>initialSize</code> 是启动时建立的物理连接数，<code>minIdle</code> 是保底空闲连接，<code>maxActive</code> 是并发上限，<code>maxWait</code> 是借不到连接时的最长等待时间（毫秒）。<code>maxActive</code> 不是越大越好——它必须小于数据库的 <code>max_connections</code>，否则只会把压力推给 MySQL。</li>
+<li><strong>检测类</strong>：<code>validationQuery</code> 是探活 SQL（MySQL 用 <code>SELECT 1</code>），<code>testWhileIdle</code> 建议开启，它只在空闲超过 <code>timeBetweenEvictionRunsMillis</code> 时才真正执行探活；<code>testOnBorrow</code> 与 <code>testOnReturn</code> 保持 <code>false</code>，否则每次借还都要多一次往返。</li>
+<li><strong>回收类</strong>：<code>minEvictableIdleTimeMillis</code> 定义一个连接最少能空闲多久，<code>removeAbandoned</code> 与 <code>removeAbandonedTimeout</code> 只在怀疑调用方忘记关闭连接时用作兜底——真正该做的是排查代码里漏掉的 <code>close()</code>。</li>
+<li><strong>PSCache</strong>：<code>poolPreparedStatements</code> 在 MySQL 上通常保持 <code>false</code>，Oracle 才建议打开并配合 <code>maxPoolPreparedStatementPerConnectionSize</code>；分库分表场景同样建议关闭。</li>
+<li><strong>监控指标</strong>：池状态关注空闲连接数与活跃连接数，SQL 页面关注执行次数、错误次数与慢 SQL，执行时间则用于判断该调 SQL 还是调池子大小。活跃连接长期贴着 <code>maxActive</code>，说明池子偏小；空闲连接长期为 0 且等待时间上升，也是同样的信号。</li>
+</ul>
 <figure data-type="image" tabindex="2"><img src="/post-images/1621415196405.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="3"><img src="/post-images/1621415233878.png" alt="" loading="lazy"></figure>
 <h2 id="springbootmybatisdruid多数据源整合">Spring Boot、MyBatis、Druid 多数据源整合</h2>
 <h3 id="项目架构">项目架构</h3>
+<p>多数据源的思路是把「数据源 + 事务管理器 + SqlSessionFactory」三件套各自独立成配置类，再用 <code>@Primary</code> 指定默认数据源，让 MyBatis 的 Mapper 通过 <code>@MapperScan</code> 绑定到对应的 SqlSessionFactory。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1621415260516.png" alt="" loading="lazy"></figure>
 <h4 id="pomxml-2">pom.xml</h4>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
@@ -289,6 +297,7 @@ public class DruidConfig {
     &lt;parent&gt;
         &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
         &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+        &lt;!-- 2.4.x 属较早版本，2021 年后已停止 OSS 维护；新项目请用 3.x 或 2.7.x，并同步升级 JDK --&gt;
         &lt;version&gt;2.4.5&lt;/version&gt;
         &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt;
     &lt;/parent&gt;
@@ -319,11 +328,13 @@ public class DruidConfig {
         &lt;dependency&gt;
             &lt;groupId&gt;mysql&lt;/groupId&gt;
             &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;
+            &lt;!-- 5.1.x 的驱动类是 com.mysql.jdbc.Driver；8.x 改为 com.mysql.cj.jdbc.Driver，URL 建议带 serverTimezone --&gt;
             &lt;version&gt;5.1.45&lt;/version&gt;
         &lt;/dependency&gt;
         &lt;dependency&gt;
             &lt;groupId&gt;com.alibaba&lt;/groupId&gt;
             &lt;artifactId&gt;druid&lt;/artifactId&gt;
+            &lt;!-- 手写 DataSource Bean 的写法只引 druid 本体；1.1.x 已停止维护，建议升到 1.2.x（如 1.2.23） --&gt;
             &lt;version&gt;1.1.10&lt;/version&gt;
         &lt;/dependency&gt;
         &lt;dependency&gt;
@@ -334,6 +345,7 @@ public class DruidConfig {
         &lt;dependency&gt;
             &lt;groupId&gt;com.baomidou&lt;/groupId&gt;
             &lt;artifactId&gt;mybatis-plus-boot-starter&lt;/artifactId&gt;
+            &lt;!-- 3.5.x 起类名与包路径有调整，引入前确认与 Spring Boot 版本匹配；也可改用 org.mybatis.spring.boot:mybatis-spring-boot-starter --&gt;
             &lt;version&gt;3.2.0&lt;/version&gt;
         &lt;/dependency&gt;
     &lt;/dependencies&gt;
@@ -360,66 +372,50 @@ public class DruidConfig {
 <h4 id="applicationyml-2">application.yml</h4>
 <pre><code class="language-yaml">spring:
   datasource:
-    #使用druid连接池
     type: com.alibaba.druid.pool.DruidDataSource
 
-# 自定义的主数据源配置信息
-primary:
+# 注意：这里的前缀必须与 DruidConfig 中 @ConfigurationProperties 的前缀一致，
+# 代码里用的是 master/slave，因此键名应写成 master.datasource.druid / slave.datasource.druid；
+# 若沿用 primary/back，配置将绑定不到，连接池会退化成默认参数
+master:
   datasource:
-    #druid相关配置
     druid:
-      #监控统计拦截的filters
       filters: stat
       driverClassName: com.mysql.jdbc.Driver
-      #配置基本属性
       url: jdbc:mysql://127.0.0.1:3306/primary_database?useUnicode=true&amp;characterEncoding=UTF-8&amp;allowMultiQueries=true&amp;autoReconnect=true&amp;useSSL=false
       username: root
       password: 123456
-      #配置初始化大小/最小/最大
       initialSize: 1
       minIdle: 1
       maxActive: 20
-      #获取连接等待超时时间
       maxWait: 60000
-      #间隔多久进行一次检测，检测需要关闭的空闲连接
       timeBetweenEvictionRunsMillis: 60000
-      #一个连接在池中最小生存的时间
       minEvictableIdleTimeMillis: 300000
-      validationQuery: SELECT 'x'
+      validationQuery: SELECT 1
       testWhileIdle: true
       testOnBorrow: false
       testOnReturn: false
-      #打开PSCache，并指定每个连接上PSCache的大小。oracle设为true，mysql设为false。分库分表较多推荐设置为false
       poolPreparedStatements: false
       maxPoolPreparedStatementPerConnectionSize: 20
 
-# 自定义的从数据源配置信息
-back:
+slave:
   datasource:
-    #druid相关配置
     druid:
-      #监控统计拦截的filters
       filters: stat
       driverClassName: com.mysql.jdbc.Driver
-      #配置基本属性
       url: jdbc:mysql://127.0.0.1:3306/back_database?useUnicode=true&amp;characterEncoding=UTF-8&amp;allowMultiQueries=true&amp;autoReconnect=true&amp;useSSL=false
       username: root
       password: 123456
-      #配置初始化大小/最小/最大
       initialSize: 1
       minIdle: 1
       maxActive: 20
-      #获取连接等待超时时间
       maxWait: 60000
-      #间隔多久进行一次检测，检测需要关闭的空闲连接
       timeBetweenEvictionRunsMillis: 60000
-      #一个连接在池中最小生存的时间
       minEvictableIdleTimeMillis: 300000
-      validationQuery: SELECT 'x'
+      validationQuery: SELECT 1
       testWhileIdle: true
       testOnBorrow: false
       testOnReturn: false
-      #打开PSCache，并指定每个连接上PSCache的大小。oracle设为true，mysql设为false。分库分表较多推荐设置为false
       poolPreparedStatements: false
       maxPoolPreparedStatementPerConnectionSize: 20
 </code></pre>
@@ -434,7 +430,7 @@ public class DruidConfig {
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;(  );
 
         iniParms.put( &quot;loginUsername&quot;,&quot;admin&quot; );//登录druid的用户名
-        iniParms.put( &quot;loginPassword&quot;,&quot;123456&quot; );//登录druid的密码
+        iniParms.put( &quot;loginPassword&quot;,&quot;请替换为强口令&quot; );//监控台登录密码，禁止使用弱口令
         iniParms.put(&quot;allow&quot;,&quot;&quot;);//默认允许所有
         //iniParms.put( &quot;deny&quot;,&quot;192.168.***.***&quot; );//拒绝的ip地址
         bean.setInitParameters( iniParms );
@@ -447,7 +443,7 @@ public class DruidConfig {
         FilterRegistrationBean bean= new FilterRegistrationBean();
         bean.setFilter(new WebStatFilter());
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;();
-        iniParms.put( &quot;excliusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//使静态文件访问，还有/druid/* 的访问不被拦截
+        iniParms.put( &quot;exclusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//静态资源与监控台自身不做统计，注意键名是 exclusions
         bean.setInitParameters( iniParms );
         bean.setUrlPatterns( Arrays.asList(&quot;/*&quot;));
         return bean;
@@ -456,6 +452,7 @@ public class DruidConfig {
 }
 </code></pre>
 <h4 id="primarydatabaseconfig">PrimaryDataBaseConfig</h4>
+<p>主数据源类同时承担三件事：把 <code>primary.datasource.druid.*</code> 绑定到字段、创建 <code>DruidDataSource</code>、以及创建配套的事务管理器与 SqlSessionFactory。<code>@Primary</code> 让未显式指定名称的注入点默认拿到主数据源；如果启动报 <code>required a single bean, but 2 were found</code>，通常就是漏了这个注解。</p>
 <pre><code class="language-java">/**
  * @Description: 主数据源配置类
  */
@@ -556,6 +553,7 @@ public class PrimaryDataBaseConfig {
 }
 </code></pre>
 <h4 id="backdatabaseconfig">BackDataBaseConfig</h4>
+<p>从数据源类不再标注 <code>@Primary</code>，其余结构与主数据源一致。两个数据源分别对应各自的 <code>DataSourceTransactionManager</code>，因此跨库写入不能依赖单个 <code>@Transactional</code> 保证一致性。</p>
 <pre><code class="language-java">/**
  * @Description: 从数据源配置类
  */
@@ -663,6 +661,7 @@ public class BackDataBaseConfig {
     &lt;parent&gt;
         &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
         &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+        &lt;!-- 2.4.x 属较早版本，2021 年后已停止 OSS 维护；新项目请用 3.x 或 2.7.x，并同步升级 JDK --&gt;
         &lt;version&gt;2.4.5&lt;/version&gt;
         &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt;
     &lt;/parent&gt;
@@ -696,11 +695,13 @@ public class BackDataBaseConfig {
         &lt;dependency&gt;
             &lt;groupId&gt;mysql&lt;/groupId&gt;
             &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;
+            &lt;!-- 5.1.x 的驱动类是 com.mysql.jdbc.Driver；8.x 改为 com.mysql.cj.jdbc.Driver，URL 建议带 serverTimezone --&gt;
             &lt;version&gt;5.1.45&lt;/version&gt;
         &lt;/dependency&gt;
         &lt;dependency&gt;
             &lt;groupId&gt;com.alibaba&lt;/groupId&gt;
             &lt;artifactId&gt;druid&lt;/artifactId&gt;
+            &lt;!-- 手写 DataSource Bean 的写法只引 druid 本体；1.1.x 已停止维护，建议升到 1.2.x（如 1.2.23） --&gt;
             &lt;version&gt;1.1.10&lt;/version&gt;
         &lt;/dependency&gt;
         &lt;dependency&gt;
@@ -711,6 +712,7 @@ public class BackDataBaseConfig {
         &lt;dependency&gt;
             &lt;groupId&gt;com.baomidou&lt;/groupId&gt;
             &lt;artifactId&gt;mybatis-plus-boot-starter&lt;/artifactId&gt;
+            &lt;!-- 3.5.x 起类名与包路径有调整，引入前确认与 Spring Boot 版本匹配；也可改用 org.mybatis.spring.boot:mybatis-spring-boot-starter --&gt;
             &lt;version&gt;3.2.0&lt;/version&gt;
         &lt;/dependency&gt;
     &lt;/dependencies&gt;
@@ -738,66 +740,50 @@ public class BackDataBaseConfig {
 <h4 id="applicationyml-3">application.yml</h4>
 <pre><code class="language-yaml">spring:
   datasource:
-    #使用druid连接池
     type: com.alibaba.druid.pool.DruidDataSource
 
-# 自定义的主数据源配置信息
-primary:
+# 注意：这里的前缀必须与 DruidConfig 中 @ConfigurationProperties 的前缀一致，
+# 代码里用的是 master/slave，因此键名应写成 master.datasource.druid / slave.datasource.druid；
+# 若沿用 primary/back，配置将绑定不到，连接池会退化成默认参数
+master:
   datasource:
-    #druid相关配置
     druid:
-      #监控统计拦截的filters
       filters: stat
       driverClassName: com.mysql.jdbc.Driver
-      #配置基本属性
       url: jdbc:mysql://127.0.0.1:3306/primary_database?useUnicode=true&amp;characterEncoding=UTF-8&amp;allowMultiQueries=true&amp;autoReconnect=true&amp;useSSL=false
       username: root
       password: 123456
-      #配置初始化大小/最小/最大
       initialSize: 1
       minIdle: 1
       maxActive: 20
-      #获取连接等待超时时间
       maxWait: 60000
-      #间隔多久进行一次检测，检测需要关闭的空闲连接
       timeBetweenEvictionRunsMillis: 60000
-      #一个连接在池中最小生存的时间
       minEvictableIdleTimeMillis: 300000
-      validationQuery: SELECT 'x'
+      validationQuery: SELECT 1
       testWhileIdle: true
       testOnBorrow: false
       testOnReturn: false
-      #打开PSCache，并指定每个连接上PSCache的大小。oracle设为true，mysql设为false。分库分表较多推荐设置为false
       poolPreparedStatements: false
       maxPoolPreparedStatementPerConnectionSize: 20
 
-# 自定义的从数据源配置信息
-back:
+slave:
   datasource:
-    #druid相关配置
     druid:
-      #监控统计拦截的filters
       filters: stat
       driverClassName: com.mysql.jdbc.Driver
-      #配置基本属性
       url: jdbc:mysql://127.0.0.1:3306/back_database?useUnicode=true&amp;characterEncoding=UTF-8&amp;allowMultiQueries=true&amp;autoReconnect=true&amp;useSSL=false
       username: root
       password: 123456
-      #配置初始化大小/最小/最大
       initialSize: 1
       minIdle: 1
       maxActive: 20
-      #获取连接等待超时时间
       maxWait: 60000
-      #间隔多久进行一次检测，检测需要关闭的空闲连接
       timeBetweenEvictionRunsMillis: 60000
-      #一个连接在池中最小生存的时间
       minEvictableIdleTimeMillis: 300000
-      validationQuery: SELECT 'x'
+      validationQuery: SELECT 1
       testWhileIdle: true
       testOnBorrow: false
       testOnReturn: false
-      #打开PSCache，并指定每个连接上PSCache的大小。oracle设为true，mysql设为false。分库分表较多推荐设置为false
       poolPreparedStatements: false
       maxPoolPreparedStatementPerConnectionSize: 20
 </code></pre>
@@ -807,6 +793,8 @@ public class DruidConfig {
  
     public final static String MAPPER_XML_PATH = &quot;classpath:mapper/*.xml&quot;;
  
+    // 注意：@ConfigurationProperties 绑定的是 master.datasource.druid 前缀，
+    // 而上面的 application.yml 里写的是 primary.datasource.druid，二者对不上会退化成默认参数
     @ConfigurationProperties(prefix = &quot;master.datasource.druid&quot;)
     @Bean(name = &quot;masterDataSource&quot;)
     public DataSource masterDataSource() {
@@ -820,6 +808,7 @@ public class DruidConfig {
     }
  
  
+    // 从库前缀同理，需与 yml 中的 back.datasource.druid 保持一致
     @ConfigurationProperties(prefix = &quot;slave.datasource.druid&quot;)
     @Bean
     public DataSource slaveDataSource(){
@@ -859,7 +848,7 @@ public class DruidConfig {
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;(  );
 
         iniParms.put( &quot;loginUsername&quot;,&quot;admin&quot; );//登录druid的用户名
-        iniParms.put( &quot;loginPassword&quot;,&quot;123456&quot; );//登录druid的密码
+        iniParms.put( &quot;loginPassword&quot;,&quot;请替换为强口令&quot; );//监控台登录密码，禁止使用弱口令
         iniParms.put(&quot;allow&quot;,&quot;&quot;);//默认允许所有
         //iniParms.put( &quot;deny&quot;,&quot;192.168.***.***&quot; );//拒绝的ip地址
         bean.setInitParameters( iniParms );
@@ -872,7 +861,7 @@ public class DruidConfig {
         FilterRegistrationBean bean= new FilterRegistrationBean();
         bean.setFilter(new WebStatFilter());
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;();
-        iniParms.put( &quot;excliusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//使静态文件访问，还有/druid/* 的访问不被拦截
+        iniParms.put( &quot;exclusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//静态资源与监控台自身不做统计，注意键名是 exclusions
         bean.setInitParameters( iniParms );
         bean.setUrlPatterns( Arrays.asList(&quot;/*&quot;));
         return bean;
@@ -887,7 +876,7 @@ public class DruidConfig {
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;(  );
 
         iniParms.put( &quot;loginUsername&quot;,&quot;admin&quot; );//登录druid的用户名
-        iniParms.put( &quot;loginPassword&quot;,&quot;123456&quot; );//登录druid的密码
+        iniParms.put( &quot;loginPassword&quot;,&quot;请替换为强口令&quot; );//监控台登录密码，禁止使用弱口令
         iniParms.put(&quot;allow&quot;,&quot;&quot;);//默认允许所有
         //iniParms.put( &quot;deny&quot;,&quot;192.168.***.***&quot; );//拒绝的ip地址
         bean.setInitParameters( iniParms );
@@ -900,7 +889,7 @@ public class DruidConfig {
         FilterRegistrationBean bean= new FilterRegistrationBean();
         bean.setFilter(new WebStatFilter());
         Map&lt;String,String&gt; iniParms=new HashMap&lt;&gt;();
-        iniParms.put( &quot;excliusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//使静态文件访问，还有/druid/* 的访问不被拦截
+        iniParms.put( &quot;exclusions&quot;, &quot;*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*&quot;);//静态资源与监控台自身不做统计，注意键名是 exclusions
         bean.setInitParameters( iniParms );
         bean.setUrlPatterns( Arrays.asList(&quot;/*&quot;));
         return bean;
@@ -953,7 +942,8 @@ public class DbUtil {
     public static String master=&quot;master&quot;;
     public static String slave=&quot;slave&quot;;
  
-    private static final ThreadLocal&lt;String&gt; threadLocal=new ThreadLocal();
+    // ThreadLocal 必须带泛型参数，否则取出的是 Object，需要强转且容易出错
+    private static final ThreadLocal&lt;String&gt; threadLocal=new ThreadLocal&lt;&gt;();
  
  
     public static void setDb(String db){
@@ -974,6 +964,8 @@ public class DbUtil {
 @Slf4j
 public class DynamicDataSource extends AbstractRoutingDataSource {
 
+    // 返回值作为 lookupKey 去 targetDataSources 中查找数据源；
+    // 返回 null 时使用 defaultTargetDataSource（这里配的是 master）
     @Override
     protected Object determineCurrentLookupKey() {
         log.info(&quot;当前使用数据库：{}&quot;, DbUtil.getDb());
@@ -987,6 +979,8 @@ public class DynamicDataSource extends AbstractRoutingDataSource {
   * 起到和@Mapper一样的作用
   * 添加了@Mapper注解之后这个接口在编译时会生成相应的实现类，不再需要写mapper映射文件，可以按下方@Select(&quot;select * from city where city_name like CONCAT('%', #{cityName},'%')&quot;)实现功能，@Autowired注解也需要通过@Mapper注解实现接口的动态代理实现类
   */
+// 使用 XML 映射文件时接口上只需 @Mapper（或用启动类上的 @MapperScan 批量扫描）；
+// 若改为纯注解方式，则用 @Select 直接写 SQL，两者取其一即可，不必同时保留
 @Mapper
 @Component
 public interface CityMapper {
@@ -1002,12 +996,13 @@ public interface CityMapper {
      * @param cityName 城市名
      * 默认使用从数据库
      */
-    //@Select(&quot;select * from city where city_name like CONCAT('%', #{cityName},'%')&quot;)
+    // 纯注解写法示例（与 CityMapper.xml 中的 select 等价，二选一）：
+    // @Select(&quot;select * from city where city_name like CONCAT('%', #{cityName},'%')&quot;)
     List&lt;City&gt; selectByName(@Param(&quot;cityName&quot;) String cityName);
 }
 </code></pre>
 <h4 id="citymapperxml">CityMapper.xml</h4>
-<pre><code class="language-java">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
 &lt;!DOCTYPE mapper PUBLIC &quot;-//mybatis.org//DTD Mapper 3.0//EN&quot; &quot;http://mybatis.org/dtd/mybatis-3-mapper.dtd&quot;&gt;
 &lt;mapper namespace=&quot;com.example.datasources.dao.CityMapper&quot;&gt;
     &lt;resultMap id=&quot;BaseResultMap&quot; type=&quot;com.example.datasources.entity.City&quot;&gt;
@@ -1028,53 +1023,40 @@ public interface CityMapper {
     &lt;/select&gt;
 &lt;/mapper&gt;
 </code></pre>
+<h3 id="常见坑">常见坑</h3>
+<ul>
+<li><strong>监控台 404</strong>：多数是 Servlet 没注册上——<code>@Configuration</code> 类不在组件扫描路径内，包路径不在启动类同级或子级即可导致；另外 Spring Boot 内嵌容器下访问的是 <code>/druid/login.html</code> 或 <code>/druid/index.html</code>，URL 写错也会 404。</li>
+<li><strong>SQL 监控不生效</strong>：<code>filters</code> 没配 <code>stat</code> 时连接池不采集任何 SQL；StatFilter 未启用时监控台里只会看到连接数，SQL 列表为空。想看到合并后的统计还需 <code>connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500</code>，慢 SQL 才有阈值。</li>
+<li><strong>filter 名拼写</strong>：WebStatFilter 的初始化参数键是 <code>exclusions</code>，本文早期代码写成 <code>excliusions</code>，拼错后静态资源不会被排除，监控数据会混入大量 JS、CSS 请求。</li>
+<li><strong>过滤器日志依赖</strong>：<code>filters: stat,wall,log4j2</code> 中的 <code>log4j2</code> 需要 classpath 上有对应实现，缺失时启动阶段就会报错；不打印 SQL 日志时只保留 <code>stat,wall</code> 即可。</li>
+<li><strong>密码加密</strong>：把 <code>password</code> 配成 <code>config.decrypt=true</code> 或密文后，必须同时在 <code>filters</code> 中加入 <code>config</code>，Druid 才会用 ConfigFilter 解密；只替换密文而忘了加 <code>config</code>，连接池会直接认证失败。生产环境更稳妥的做法是走配置中心或环境变量注入。</li>
+<li><strong>@ConfigurationProperties 前缀对不上</strong>：主从章节里 YAML 用的是 <code>primary.datasource.druid</code>，而 <code>@ConfigurationProperties</code> 绑定的是 <code>master.datasource.druid</code>，属性绑定不上时会静默退化成 Druid 默认参数，表现为「配置明明改了却不生效」。排查时可在启动日志中确认连接池参数。</li>
+<li><strong>多数据源事务</strong>：每个数据源各自一个 <code>DataSourceTransactionManager</code>，跨库操作不受同一个 <code>@Transactional</code> 保护；需要强一致时应改用分布式事务或业务补偿。</li>
+<li><strong>动态路由的时机</strong>：<code>AbstractRoutingDataSource</code> 在获取连接时决定数据源，因此 AOP 或注解必须在事务开启、连接获取之前完成设置；同时 <code>ThreadLocal</code> 建议在请求结束时清理，避免线程池复用导致数据源串用。</li>
+<li><strong>版本过时项</strong>：Spring Boot 2.4.5、Druid 1.1.10、MyBatis-Plus 3.2.0 与 MySQL Connector 5.1.45 均已停更，新项目建议 Spring Boot 3.x（或 2.7.x）+ Druid 1.2.x + MyBatis-Plus 3.5.x + Connector 8.x，并同步把驱动类改为 <code>com.mysql.cj.jdbc.Driver</code>。</li>
+</ul>
+
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#springbootmybatisdruid%E5%8D%95%E6%95%B0%E6%8D%AE%E6%BA%90%E6%95%B4%E5%90%88">Spring Boot、MyBatis、Druid 单数据源整合</a>
 <ul>
-<li><a href="#springbootmybatisdruid%E5%8D%95%E6%95%B0%E6%8D%AE%E6%BA%90%E6%95%B4%E5%90%88">Spring Boot、MyBatis、Druid 单数据源整合</a>
-<ul>
-<li><a href="#%E9%A1%B9%E7%9B%AE%E6%A1%86%E6%9E%B6">项目框架</a>
-<ul>
-<li><a href="#pomxml">pom.xml</a></li>
-<li><a href="#applicationyml">application.yml</a></li>
-<li><a href="#druidconfig">DruidConfig</a></li>
-<li><a href="#%E8%AE%BF%E9%97%AEdruid">访问Druid</a></li>
+<li><a href="#mybatis%E9%85%8D%E7%BD%AE">MyBatis 配置</a></li>
+<li><a href="#%E9%A1%B9%E7%9B%AE%E6%A1%86%E6%9E%B6">项目框架</a></li>
+<li><a href="#%E7%9B%91%E6%8E%A7%E5%8F%B0%E4%B8%8E%E8%BF%9E%E6%8E%A5%E6%B1%A0">监控台与连接池</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#springbootmybatisdruid%E5%A4%9A%E6%95%B0%E6%8D%AE%E6%BA%90%E6%95%B4%E5%90%88">Spring Boot、MyBatis、Druid 多数据源整合</a>
+<li>
+<a href="#springbootmybatisdruid%E5%A4%9A%E6%95%B0%E6%8D%AE%E6%BA%90%E6%95%B4%E5%90%88">Spring Boot、MyBatis、Druid 多数据源整合</a>
 <ul>
-<li><a href="#%E9%A1%B9%E7%9B%AE%E6%9E%B6%E6%9E%84">项目架构</a>
+<li><a href="#%E9%A1%B9%E7%9B%AE%E6%9E%B6%E6%9E%84">项目架构</a></li>
+</ul>
+</li>
+<li>
+<a href="#springbootmybatisdruid%E4%B8%BB%E4%BB%8E%E5%A4%87%E4%BB%BD">Spring Boot、MyBatis、Druid 主从备份</a>
 <ul>
-<li><a href="#pomxml-2">pom.xml</a></li>
-<li><a href="#applicationyml-2">application.yml</a></li>
-<li><a href="#druidconfig-2">DruidConfig</a></li>
-<li><a href="#primarydatabaseconfig">PrimaryDataBaseConfig</a></li>
-<li><a href="#backdatabaseconfig">BackDataBaseConfig</a></li>
-<li><a href="#%E8%AE%BF%E9%97%AEdruid-2">访问Druid</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#springbootmybatisdruid%E4%B8%BB%E4%BB%8E%E5%A4%87%E4%BB%BD">Spring Boot、MyBatis、Druid 主从备份</a>
-<ul>
-<li><a href="#%E9%A1%B9%E7%9B%AE%E6%9E%B6%E6%9E%84-2">项目架构</a>
-<ul>
-<li><a href="#pomxml-3">pom.xml</a></li>
-<li><a href="#applicationyml-3">application.yml</a></li>
-<li><a href="#druidconfig-3">DruidConfig</a></li>
-<li><a href="#masterdatasource">MasterDataSource</a></li>
-<li><a href="#databaseaop">DatabaseAOP</a></li>
-<li><a href="#dbutil">DbUtil</a></li>
-<li><a href="#dynamicdatasource">DynamicDataSource</a></li>
-<li><a href="#citymapper">CityMapper</a></li>
-<li><a href="#citymapperxml">CityMapper.xml</a></li>
-</ul>
-</li>
-</ul>
-</li>
+<li><a href="#%E9%A1%B9%E7%9B%AE%E6%9E%B6%E6%9E%84-2">项目架构</a></li>
+<li><a href="#%E5%B8%B8%E8%A7%81%E5%9D%91">常见坑</a></li>
 </ul>
 </li>
 </ul>
