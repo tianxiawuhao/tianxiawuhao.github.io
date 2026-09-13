@@ -127,15 +127,17 @@
           
           <h2 id="分布式问题">分布式问题</h2>
 <h3 id="redis实现分布式锁">Redis实现分布式锁</h3>
-<p>Redis 为单进程单线程模式，采用队列模式将并发访问变成串行访问，且多客户端对 Redis 的连接并不存在竞争关系。Redis 中可以使用 SETNX 命令实现分布式锁。</p>
+<p>Redis 处理命令的主线程是单线程的（Redis 4.0 起把 <code>UNLINK</code>、<code>FLUSHALL ASYNC</code> 等删除操作放到后台线程，6.0 起又引入了多线程 I/O，但<strong>命令的执行仍然是单线程串行的</strong>），所有客户端的命令按到达顺序排队执行，因此单条命令具有原子性。不过「单条命令原子」并不等于「多步操作原子」，「先判断再写入」这类组合仍然需要借助 SETNX 或 Lua 脚本。Redis 中最常用的分布式锁就是基于 SETNX 实现的。</p>
 <p>当且仅当 key 不存在，将 key 的值设为 value。 若给定的 key 已经存在，则 SETNX 不做任何动作</p>
-<p>SETNX 是『SET if Not eXists』(如果不存在，则 SET)的简写。</p>
-<p>返回值：设置成功，返回 1 。设置失败，返回 0 。</p>
+<p>SETNX 是『SET if Not eXists』(如果不存在，则 SET)的简写。返回值：设置成功返回 1，设置失败返回 0。</p>
+<p>需要注意：<code>SETNX</code> 和 <code>EXPIRE</code> 是两条独立命令，先 SETNX 再 EXPIRE 并不能保证原子性——如果加锁成功后、设置过期时间之前客户端崩溃，这把锁就永远不会释放。Redis 2.6.12 起提供了 <code>SET key value NX PX milliseconds</code>，把「不存在才设置」和「设置过期时间」合并成一条原子命令，是现在推荐的写法；较新版本的 Spring Data Redis 中，<code>setIfAbsent(key, value, timeout, unit)</code> 最终就会转换成 <code>SET ... NX PX ...</code>。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1620719853455.png" alt="" loading="lazy"></figure>
 <p>使用SETNX完成同步锁的流程及事项如下：</p>
-<p>使用SETNX命令获取锁，若返回0（key已存在，锁已存在）则获取失败，反之获取成功</p>
-<p>为了防止获取锁后程序出现异常，导致其他线程/进程调用SETNX命令总是返回0而进入死锁状态，需要为该key设置一个“合理”的过期时间</p>
-<p>释放锁，使用DEL命令将锁数据删除</p>
+<ol>
+<li>使用 SETNX 命令获取锁，若返回 0（key 已存在，锁已存在）则获取失败，反之获取成功；</li>
+<li>为了防止获取锁后程序出现异常，导致其他线程/进程调用 SETNX 命令总是返回 0 而进入死锁状态，需要为该 key 设置一个「合理」的过期时间；</li>
+<li>释放锁，使用 DEL 命令将锁数据删除（更安全的做法见下文用 Lua 脚本比对 value 再删除）。</li>
+</ol>
 <pre><code class="language-java">package com.example.redisstudy.template;
 
 import org.apache.commons.lang3.StringUtils;
@@ -190,18 +192,22 @@ public class RedisLockCommon {
     }
 }
 </code></pre>
+<p>上面这段「简易版」实现有两个必须注意的缺陷：一是<strong>解锁不是原子操作</strong>，<code>GET</code> 之后才 <code>DELETE</code>，在这两步之间锁可能刚好过期并被其它客户端重新持有，于是当前客户端会误删别人的锁；二是 <code>catch (Exception e) {}</code> 把异常吞掉了，出问题时无从排查。生产环境应把「比对 value + 删除」写成一段 Lua 脚本交给服务端原子执行（下文 RedisLock 示例中的 <code>unlockScript</code> 就是这样做的），或者直接使用 Redisson 的 <code>RLock</code>。</p>
+<p>另外，<code>EXPIRE_TIME = 3000</code> 搭配 <code>TimeUnit.SECONDS</code> 表示锁的过期时间是 3000 秒（50 分钟），并不是 3 秒；如果要按 3 秒设计，应写成 <code>3000, TimeUnit.MILLISECONDS</code>。锁的过期时间必须大于业务的正常执行时间，否则业务还没跑完锁就自动释放了。</p>
 <h3 id="如何解决-redis-的并发竞争-key-问题">如何解决 Redis 的并发竞争 Key 问题</h3>
 <p>所谓 Redis 的并发竞争 Key 的问题也就是多个系统同时对一个 key 进行操作，但是最后执行的顺序和我们期望的顺序不同，这样也就导致了结果的不同！</p>
 <p>推荐一种方案：分布式锁（zookeeper 和 redis 都可以实现分布式锁）。（如果不存在 Redis 的并发竞争 Key 问题，不要使用分布式锁，这样会影响性能）</p>
 <p>基于zookeeper临时有序节点可以实现的分布式锁。大致思想为：每个客户端对某个方法加锁时，在zookeeper上的与该方法对应的指定节点的目录下，生成一个唯一的瞬时有序节点。 判断是否获取锁的方式很简单，只需要判断有序节点中序号最小的一个。 当释放锁的时候，只需将这个瞬时节点删除即可。同时，其可以避免服务宕机导致的锁无法释放，而产生的死锁问题。完成业务流程后，删除对应的子节点释放锁。</p>
-<p>在实践中，当然是从以可靠性为主。所以首推Zookeeper。</p>
+<p>在实践中，当然是以可靠性为主，所以这里首推 Zookeeper。</p>
+<p>需要补充的是：Zookeeper 是 CP 系统，基于临时顺序节点和 Watch 机制实现，锁释放及时、语义清晰，但性能通常低于 Redis；Redis 加锁性能更好，但主从异步复制意味着主节点宕机、从节点尚未同步到锁数据时，可能出现两个客户端同时持锁的情况。选型本质上是「性能」与「绝对互斥」之间的取舍。</p>
 <p>参考：https://www.jianshu.com/p/8bddd381de06</p>
 <h3 id="分布式redis是前期做还是后期规模上来了再做好为什么">分布式Redis是前期做还是后期规模上来了再做好？为什么？</h3>
-<p>既然Redis是如此的轻量（单实例只使用1M内存），为防止以后的扩容，最好的办法就是一开始就启动较多实例。即便你只有一台服务器，你也可以一开始就让Redis以分布式的方式运行，使用分区，在同一台服务器上启动多个实例。</p>
+<p>既然 Redis 是如此的轻量（官方文档给出的经验值是：一个<strong>空</strong>实例的内存占用约 1MB，实际占用还要再加上数据本身、复制积压缓冲区和客户端缓冲区），为防止以后的扩容，最好的办法就是一开始就启动较多实例。即便你只有一台服务器，你也可以一开始就让 Redis 以分布式的方式运行，使用分区，在同一台服务器上启动多个实例。</p>
 <p>一开始就多设置几个Redis实例，例如32或者64个实例，对大多数用户来说这操作起来可能比较麻烦，但是从长久来看做这点牺牲是值得的。</p>
 <p>这样的话，当数据不断增长、需要更多 Redis 服务器时，你只需要把部分 Redis 实例从一台服务器迁移到另一台服务器即可，而不用考虑重新分区的问题。一旦你添加了另一台服务器，你需要将你一半的Redis实例从第一台机器迁移到第二台机器。</p>
+<p><strong>版本提示</strong>：上面这种「按实例整体搬运」的思路属于客户端分区时代（如 Jedis 的 ShardedJedis、Twemproxy、Codis）。Redis 3.0 起官方提供了 Redis Cluster，把数据划分为 16384 个哈希槽（slot）分配给各个主节点，扩容时迁移的是<strong>槽</strong>而不是整个实例，并且支持在线 <code>reshard</code>，这也是今天更常见的做法。</p>
 <h3 id="什么是-redlock">什么是 RedLock</h3>
-<p>Redis 官方站提出了一种权威的基于 Redis 实现分布式锁的方式名叫 <em>Redlock</em>，此种方式比原先的单节点的方法更安全。它可以保证以下特性：</p>
+<p>Redis 官方文档提出了一种基于多个独立 Redis 实例实现分布式锁的算法，名叫 <em>Redlock</em>，它比单节点加锁更安全，可以保证以下特性：</p>
 <ol>
 <li>安全特性：互斥访问，即永远只有一个 client 能拿到锁</li>
 <li>避免死锁：最终 client 都可能拿到锁，不会出现死锁的情况，即使原本锁住某资源的 client crash 了或者出现了网络分区</li>
@@ -306,6 +312,12 @@ public class RedisLock {
     }
 }
 </code></pre>
+<p>注意：上面这段 Java 代码实现的是<strong>单节点</strong>的加锁，以及「比对 token 后原子删除」的解锁逻辑，它本身并不是 Redlock 算法，只是 Redlock 在单个节点上的组成部分。</p>
+<p>Redlock 的完整流程是：准备 N 个<strong>相互独立</strong>的 Redis 主节点（官方建议 N=5，节点之间不做主从复制、也不使用 Sentinel）；客户端用相同的 key 和随机 value，依次向所有节点请求加锁，每次请求都设置远小于锁有效期的超时时间；只要在多数节点（N/2+1）上加锁成功，并且加锁总耗时小于锁的有效期，就认为加锁成功，否则要向所有节点发送解锁请求回滚。解锁时仍然要用 Lua 脚本比对 value，避免误删他人的锁。</p>
+<p>Redlock 是「算法」而不是 Redis 的服务端命令，需要在客户端实现。Java 生态里可以用 Redisson，不过 <code>RedissonRedLock</code> 从 Redisson 3.15.0 起已被标记为废弃，官方建议改用 <code>RedissonMultiLock</code>（配合多个单节点 <code>RedissonClient</code>）。</p>
+<p>关于 Redlock 的安全性，业界有过公开争论：Martin Kleppmann 认为它无法抵御长时间的 GC 停顿、时钟漂移和网络延迟造成的租约失效，主张改用 fencing token 或基于共识的协调服务；antirez（Redis 作者）则撰文回应，认为这些场景可以通过合理设置超时和监控来规避。工程上更稳妥的做法是：不要只依赖锁本身保证正确性，关键写操作应携带单调递增的 fencing token，由下游存储做校验。</p>
+<p><strong>版本提示</strong>：加锁请使用 Redis 2.6.12+ 的 <code>SET ... NX PX</code>；解锁脚本依赖 Redis 2.6+ 的 <code>EVAL</code>（Redis 7.0 起新增 <code>FUNCTION</code>/<code>FUNCTION LOAD</code> 用于预加载脚本，但 <code>EVAL</code>/<code>EVALSHA</code> 依然保留）。</p>
+<p><img src="/post-assets/Sjb64Uy0k/02-redis-lock.svg" alt="Redis 分布式锁单节点实现与 RedLock 多数派示意图"></p>
 <h3 id="缓存雪崩">缓存雪崩</h3>
 <blockquote>
 <p><strong>缓存雪崩</strong>是指缓存同一时间大面积的失效，所以，后面的请求都会落到数据库上，造成数据库短时间内承受大量请求而崩掉。</p>
@@ -315,6 +327,7 @@ public class RedisLock {
 <li>缓存数据的过期时间设置随机，防止同一时间大量数据过期现象发生。</li>
 <li>一般并发量不是特别多的时候，使用最多的解决方案是加锁排队。</li>
 <li>给每一个缓存数据增加相应的缓存标记，记录缓存的是否失效，如果缓存标记失效，则更新数据缓存。</li>
+<li>提升缓存层自身的高可用：用主从 + Sentinel（Redis 2.8 起）或 Redis Cluster（Redis 3.0 起）避免「整个缓存实例宕机」这种最严重的雪崩；同时给数据库加上熔断、限流和降级兜底。</li>
 </ol>
 <h3 id="缓存穿透">缓存穿透</h3>
 <blockquote>
@@ -328,23 +341,25 @@ public class RedisLock {
 </ol>
 <p><strong>附加</strong></p>
 <p>对于空间的利用到达了一种极致，那就是Bitmap和布隆过滤器(Bloom Filter)。</p>
-<p>Bitmap： 典型的就是哈希表</p>
+<p>Bitmap（位图）：用一个 bit 记录一个元素「有 / 无」的状态，可以理解为只存 0/1 的极简哈希表。Redis 的 Bitmap 建立在 String 之上，用 <code>SETBIT</code>、<code>GETBIT</code>、<code>BITCOUNT</code>、<code>BITOP</code> 操作具体的位。</p>
 <p>缺点是，Bitmap对于每个元素只能记录1bit信息，如果还想完成额外的功能，恐怕只能靠牺牲更多的空间、时间来完成了。</p>
 <p><strong>布隆过滤器</strong>（推荐）</p>
 <p>就是引入了k(k&gt;1)个相互独立的哈希函数，保证在给定的空间、误判率下，完成元素判重的过程。</p>
 <p>它的优点是空间效率和查询时间都远远超过一般的算法，缺点是有一定的误识别率和删除困难。</p>
-<p>Bloom-Filter算法的核心思想就是利用多个不同的Hash函数来解决“冲突”。</p>
-<p>Hash存在一个冲突（碰撞）的问题，用同一个Hash得到的两个URL的值有可能相同。为了减少冲突，我们可以多引入几个Hash，如果通过其中的一个Hash值我们得出某元素不在集合中，那么该元素肯定不在集合中。只有在所有的Hash函数告诉我们该元素在集合中时，才能确定该元素存在于集合中。这便是Bloom-Filter的基本思想。</p>
+<p>Bloom-Filter 算法的核心思想，就是利用多个不同的 Hash 函数来降低冲突带来的误判率。</p>
+<p>单个 Hash 存在冲突（碰撞）问题：用同一个 Hash 得到的两个不同元素有可能落在同一位上。为了减少冲突，可以多引入几个 Hash 函数：<strong>只要有任意一个 Hash 得出「该位为 0」，就说明元素一定不在集合中（不会漏判）</strong>；只有所有 Hash 对应的位都为 1 时，才能说元素<strong>可能存在</strong>——注意是「可能存在」，这些位也可能恰好被其它元素置成了 1，这就是布隆过滤器的误判（false positive）。因此它只适合做「挡掉一定不存在的请求」这类前置过滤，而不能用来判断元素一定存在。</p>
 <p>Bloom-Filter一般用于在大数据量的集合中判定某元素是否存在。</p>
+<p>实现提示：布隆过滤器不是 Redis 的内核命令，需要引入 RedisBloom 模块（Redis Stack 自带，命令形如 <code>BF.ADD</code>、<code>BF.EXISTS</code>）；也可以用 Guava 的 <code>BloomFilter</code> 在客户端内存中实现，或直接使用 Redisson 提供的 <code>RBloomFilter</code>。</p>
 <h3 id="缓存击穿">缓存击穿</h3>
 <blockquote>
 <p><strong>缓存击穿</strong>是指缓存中没有但数据库中有的数据（一般是缓存时间到期），这时由于并发用户特别多，同时读缓存没读到数据，又同时去数据库去取数据，引起数据库压力瞬间增大，造成过大压力。和缓存雪崩不同的是，缓存击穿指并发查同一条数据，缓存雪崩是不同数据都过期了，很多数据都查不到从而查数据库。</p>
 </blockquote>
 <p><strong>解决方案</strong></p>
 <ol>
-<li>设置热点数据永远不过期。</li>
-<li>加互斥锁，互斥锁</li>
+<li>热点数据设置较长的过期时间，或者采用「逻辑过期」：key 不设 TTL，而是在 value 里存一个逻辑过期时间，由后台线程异步刷新。</li>
+<li>加互斥锁：只允许一个线程回源数据库并重建缓存，其余线程短暂等待后重试读缓存。可以用 <code>SET key value NX PX ...</code> 实现，释放锁时同样要用 Lua 保证原子性。</li>
 </ol>
+<p><img src="/post-assets/Sjb64Uy0k/01-cache-problems.svg" alt="缓存雪崩、缓存击穿、缓存穿透对比与应对示意图"></p>
 <h3 id="缓存预热">缓存预热</h3>
 <blockquote>
 <p><strong>缓存预热</strong>就是系统上线后，将相关的缓存数据直接加载到缓存系统。这样就可以避免在用户请求的时候，先查询数据库，然后再将数据缓存的问题！用户直接查询事先被预热的缓存数据！</p>
@@ -380,11 +395,12 @@ public class RedisLock {
 <p>对缓存查询加锁，如果KEY不存在，就加锁，然后查DB入缓存，然后解锁；其他进程如果发现有锁就等待，然后等解锁后返回数据或者进入DB查询</p>
 <h2 id="常用工具">常用工具</h2>
 <h3 id="redis支持的java客户端都有哪些官方推荐用哪个">Redis支持的Java客户端都有哪些？官方推荐用哪个？</h3>
-<p>Redisson、Jedis、lettuce等等，官方推荐使用Redisson。</p>
+<p>常用的有 Jedis、Lettuce、Redisson。Redis 官网的 Java 客户端列表里三者都在；Spring Boot 2.x 起默认集成的是基于 Netty、线程安全的 Lettuce，而 Jedis 本身不是线程安全的，需要配合连接池（commons-pool2）使用。</p>
 <h3 id="redis和redisson有什么关系">Redis和Redisson有什么关系？</h3>
 <p>Redisson是一个高级的分布式协调Redis客服端，能帮助用户在分布式环境中轻松实现一些Java的对象 (Bloom filter, BitSet, Set, SetMultimap, ScoredSortedSet, SortedSet, Map, ConcurrentMap, List, ListMultimap, Queue, BlockingQueue, Deque, BlockingDeque, Semaphore, Lock, ReadWriteLock, AtomicLong, CountDownLatch, Publish / Subscribe, HyperLogLog)。</p>
 <h3 id="jedis与redisson对比有什么优缺点">Jedis与Redisson对比有什么优缺点？</h3>
-<p>Jedis是Redis的Java实现的客户端，其API提供了比较全面的Redis命令的支持；Redisson实现了分布式和可扩展的Java数据结构，和Jedis相比，功能较为简单，不支持字符串操作，不支持排序、事务、管道、分区等Redis特性。Redisson的宗旨是促进使用者对Redis的关注分离，从而让使用者能够将精力更集中地放在处理业务逻辑上。</p>
+<p>Jedis 是 Redis 的 Java 实现客户端，API 与 Redis 命令几乎一一对应，因此「命令覆盖度」最全；Redisson 则不是命令式客户端，而是把 Redis 封装成分布式对象与服务（分布式锁、布隆过滤器、延迟队列等），抽象层次更高。</p>
+<p>因此说 Redisson「不支持事务、管道、分区」并不准确：它提供了 <code>RTransaction</code>（对应 <code>MULTI/EXEC</code>）、<code>RBatch</code>（对应管道），以及集群 / 主从 / 哨兵 / 多集群等多种连接模式，只是不直接暴露 <code>SORT</code> 这类原生命令，需要时可以通过 <code>RScript</code> 执行 Lua 来调用。更准确的说法是：<strong>Jedis 面向「命令」，Redisson 面向「分布式对象」，Lettuce 面向「高并发共享连接」</strong>。Redisson 的宗旨是促进使用者对 Redis 的关注分离，从而让使用者能够将精力更集中地放在处理业务逻辑上。</p>
 <p>Redisson实现分布式锁</p>
 <pre><code class="language-java">package com.example.redisstudy.template;
 
@@ -449,20 +465,17 @@ public class RedissonLock {
 </table>
 <h3 id="redis常见性能问题和解决方案">Redis常见性能问题和解决方案？</h3>
 <ol>
-<li>Master最好不要做任何持久化工作，包括内存快照和AOF日志文件，特别是不要启用内存快照做持久化。如果采用了主从架构，那么建议必须开启 master node 的持久化，不建议用 slave node 作为 master node 的数据热备，因为那样的话，如果你关掉 master 的持久化，可能在 master 宕机重启的时候数据是空的，然后可能一经过复制， slave node 的数据也丢了。另外，master 的各种备份方案，也需要做。万一本地的所有文件丢失了，从备份中挑选一份 rdb 去恢复 master，这样才能确保启动的时候，是有数据的，即使采用了后续讲解的高可用机制，slave node 可以自动接管 master node，但也可能 sentinel 还没检测到 master failure，master node 就自动重启了，还是可能导致上面所有的 slave node 数据被清空。</li>
+<li>关于 master 的持久化：如果 master 是单机（没有从库），可以不开启持久化以换取性能；但如果采用了主从架构，建议必须开启 master node 的持久化——这两句看似矛盾，实际对应两种不同场景。原因是：不建议用 slave node 作为 master node 的数据热备，因为如果你关掉 master 的持久化，master 宕机自动重启后内存是空的，此时只要发生一次全量复制，slave node 的数据也会被一起清空。另外，master 的各种备份方案，也需要做。万一本地的所有文件丢失了，从备份中挑选一份 rdb 去恢复 master，这样才能确保启动的时候，是有数据的，即使采用了后续讲解的高可用机制，slave node 可以自动接管 master node，但也可能 sentinel 还没检测到 master failure，master node 就自动重启了，还是可能导致上面所有的 slave node 数据被清空。</li>
 <li>如果数据比较关键，某个Slave开启AOF备份数据，策略为每秒同步一次。</li>
 <li>为了主从复制的速度和连接的稳定性，Slave和Master最好在同一个局域网内。</li>
 <li>尽量避免在压力较大的主库上增加从库</li>
 <li>Master调用BGREWRITEAOF重写AOF文件，AOF在重写的时候会占大量的CPU和内存资源，导致服务load过高，出现短暂服务暂停现象。</li>
-<li>为了Master的稳定性，主从复制不要用图状结构，用单向链表结构更稳定，即主从关系为：Master&lt;–Slave1&lt;–Slave2&lt;–Slave3…，这样的结构也方便解决单点故障问题，实现Slave对Master的替换，也即，如果Master挂了，可以立马启用Slave1做Master，其他不变。</li>
+<li>为了Master的稳定性，主从复制不要用图状结构，用单向链表结构更稳定，即主从关系为：Master&lt;–Slave1&lt;–Slave2&lt;–Slave3…，这样的结构也方便解决单点故障问题，实现Slave对Master的替换，也即，如果Master挂了，可以立马启用Slave1做Master，其他不变。需要注意，链式复制的末端延迟会逐级累加，所以生产上更常见的是「一主多从」的扁平结构，并用 Sentinel（Redis 2.8 起）或 Redis Cluster（Redis 3.0 起）来做故障切换；Redis 4.0 引入的 PSYNC2 让实例在故障切换、更换主节点之后仍能进行部分重同步，避免每次切换都触发全量复制。</li>
 </ol>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E5%88%86%E5%B8%83%E5%BC%8F%E9%97%AE%E9%A2%98">分布式问题</a>
+<a href="#%E5%88%86%E5%B8%83%E5%BC%8F%E9%97%AE%E9%A2%98">分布式问题</a>
 <ul>
 <li><a href="#redis%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81">Redis实现分布式锁</a></li>
 <li><a href="#%E5%A6%82%E4%BD%95%E8%A7%A3%E5%86%B3-redis-%E7%9A%84%E5%B9%B6%E5%8F%91%E7%AB%9E%E4%BA%89-key-%E9%97%AE%E9%A2%98">如何解决 Redis 的并发竞争 Key 问题</a></li>
@@ -477,17 +490,14 @@ public class RedissonLock {
 <li><a href="#%E7%BC%93%E5%AD%98%E7%83%AD%E7%82%B9key">缓存热点key</a></li>
 </ul>
 </li>
-<li><a href="#%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7">常用工具</a>
+<li>
+<a href="#%E5%B8%B8%E7%94%A8%E5%B7%A5%E5%85%B7">常用工具</a>
 <ul>
 <li><a href="#redis%E6%94%AF%E6%8C%81%E7%9A%84java%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%83%BD%E6%9C%89%E5%93%AA%E4%BA%9B%E5%AE%98%E6%96%B9%E6%8E%A8%E8%8D%90%E7%94%A8%E5%93%AA%E4%B8%AA">Redis支持的Java客户端都有哪些？官方推荐用哪个？</a></li>
 <li><a href="#redis%E5%92%8Credisson%E6%9C%89%E4%BB%80%E4%B9%88%E5%85%B3%E7%B3%BB">Redis和Redisson有什么关系？</a></li>
 <li><a href="#jedis%E4%B8%8Eredisson%E5%AF%B9%E6%AF%94%E6%9C%89%E4%BB%80%E4%B9%88%E4%BC%98%E7%BC%BA%E7%82%B9">Jedis与Redisson对比有什么优缺点？</a></li>
 <li><a href="#%E5%A6%82%E4%BD%95%E4%BF%9D%E8%AF%81%E7%BC%93%E5%AD%98%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BA%93%E5%8F%8C%E5%86%99%E6%97%B6%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7">如何保证缓存与数据库双写时的数据一致性？</a></li>
 <li><a href="#redis%E5%B8%B8%E8%A7%81%E6%80%A7%E8%83%BD%E9%97%AE%E9%A2%98%E5%92%8C%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88">Redis常见性能问题和解决方案？</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
