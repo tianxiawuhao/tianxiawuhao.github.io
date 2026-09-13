@@ -123,12 +123,26 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/1I3syISgB_.png" alt="封面图">
+          <h2 id="零-三层框架的分工与依赖">零、三层框架的分工与依赖</h2>
+<p>大模型工程里最容易被混淆的一件事，是把不同层次的工具当成同一类东西来比较。常见说法如「PyTorch 和 Hugging Face 哪个好」「用了 LangChain 是不是就不需要 transformers 了」，都属于层次错位：它们解决的是完全不同的问题，彼此是<strong>依赖</strong>关系而不是<strong>替代</strong>关系。</p>
+<p>把常用工具按职责归成三层，关系立刻清晰：</p>
+<ul>
+<li><strong>底层：深度学习框架</strong>（PyTorch / TensorFlow / JAX）。提供张量计算、自动求导、优化器、分布式与 GPU 加速。它只认张量和计算图，不认识「模型」「数据集」这些概念。</li>
+<li><strong>中层：模型与数据平台</strong>（Hugging Face 生态：<code>transformers</code>、<code>datasets</code>、<code>Trainer</code>、<code>peft</code>）。提供开箱即用的预训练模型结构、权重、数据集与训练/微调编排，建立在底层框架之上。</li>
+<li><strong>上层：应用编排框架</strong>（LangChain / LlamaIndex）。把模型、检索、工具、记忆串成业务链路（RAG、Agent、工作流），自身不含模型权重，也不做训练。</li>
+</ul>
+<p>由此可以得到两条判断准则。<strong>其一，依赖方向永远向下</strong>：<code>transformers</code> 依赖 PyTorch 提供计算，<code>peft</code> 依赖 <code>transformers</code> 的模型结构，LangChain 依赖模型加载/推理接口；反过来都不成立。<strong>其二，可替换性只存在于同层之内</strong>：TensorFlow 可以换掉 PyTorch，ModelScope 可以换掉 Hugging Face Hub，LlamaIndex 可以换掉 LangChain，但拿 LangChain 去替代 <code>transformers</code> 是无效替换——它们根本不在同一层。</p>
+<p>还有一个高频误解：<strong><code>Trainer</code>、<code>peft</code> 不是「模型库」</strong>，而是训练侧的编排与参数高效微调工具，它们同样站在 PyTorch 之上；而 <strong>LangChain 也不是「模型库」</strong>，它是应用侧的编排框架。把 <code>Trainer</code> 与 LangChain 放在一起比较，等于把「怎么把模型训出来」和「怎么把模型用起来」混为一谈。</p>
+<p><img src="/post-assets/1I3syISgB_/01-three-layer-stack.svg" alt="大模型三层框架体系依赖图：底层 PyTorch 计算框架、中层 Hugging Face 模型与数据平台、上层 LangChain 应用编排，以及各层同层候选"></p>
+<p>下面按「模型加载 → 微调 → 算法搭建 → 训练 → 功能搭建」的真实工作流，逐环节看每一层各自做什么。</p>
+
+
           
-          <h3 id="1-大模型加载"><strong>1. 大模型加载</strong></h3>
+          <h2 id="一-大模型加载"><strong>大模型加载</strong></h2>
 <ul>
 <li>
 <p>Hugging Face：</p>
-<p>提供 <code>transformers</code> 库，通过 <code>AutoModel</code>和 <code>AutoTokenizer</code>快速加载预训练模型（如 GPT、BERT），支持多框架（PyTorch/TensorFlow）。</p>
+<p>提供 <code>transformers</code> 库，通过 <code>AutoModel</code> 和 <code>AutoTokenizer</code>快速加载预训练模型（如 GPT、BERT），支持多框架（PyTorch/TensorFlow）。</p>
 <p>依赖：直接对接模型仓库（Model Hub），依赖 PyTorch 或 TensorFlow 作为底层计算框架。</p>
 </li>
 <li>
@@ -136,11 +150,11 @@
 </li>
 </ul>
 <hr>
-<h3 id="2-微调fine-tuning"><strong>2. 微调（Fine-tuning）</strong></h3>
+<h2 id="二-微调fine-tuning"><strong>微调（Fine-tuning）</strong></h2>
 <ul>
 <li>
 <p>Hugging Face：</p>
-<p>提供 <code>Trainer</code> API 和脚本化工具（如 <code>run_glue.py</code>），封装训练循环、优化器和评估逻辑，支持高效微调。</p>
+<p>提供 <code>Trainer</code> 与 <code>TrainingArguments</code>，封装训练循环、优化器、混合精度、梯度累积与评估逻辑；底层由 <code>accelerate</code> 调度单卡/多卡，因此 <code>Trainer</code> 是「训练编排」而不是「深度学习框架」。<code>peft</code> 库则在其上提供 LoRA/QLoRA 等参数高效微调。</p>
 </li>
 <li>
 <p>PyTorch：提供底层训练支持（如自动求导、损失函数、优化器），Hugging Face 的微调工具基于 PyTorch 实现。</p>
@@ -150,7 +164,7 @@
 </li>
 </ul>
 <hr>
-<h3 id="3-算法搭建"><strong>3. 算法搭建</strong></h3>
+<h2 id="三-算法搭建"><strong>算法搭建</strong></h2>
 <ul>
 <li>
 <p>PyTorch：核心深度学习框架，提供张量操作、动态计算图（autograd）和神经网络模块（<code>torch.nn</code>），支持从零构建自定义模型。</p>
@@ -163,7 +177,7 @@
 </li>
 </ul>
 <hr>
-<h3 id="4-训练"><strong>4. 训练</strong></h3>
+<h2 id="四-训练"><strong>训练</strong></h2>
 <ul>
 <li>
 <p>PyTorch：负责训练核心流程（前向传播、损失计算、反向传播），支持分布式训练和 GPU 加速。</p>
@@ -176,7 +190,7 @@
 </li>
 </ul>
 <hr>
-<h3 id="5-功能搭建应用开发"><strong>5. 功能搭建（应用开发）</strong></h3>
+<h2 id="五-功能搭建应用开发"><strong>功能搭建（应用开发）</strong></h2>
 <ul>
 <li>
 <p>LangChain：核心优势在于整合模型、数据源和工具（如数据库、API），支持构建端到端应用（如聊天机器人、Agent）。</p>
@@ -190,7 +204,7 @@
 </li>
 </ul>
 <hr>
-<h3 id="框架关系总结"><strong>框架关系总结</strong></h3>
+<h2 id="框架关系总结"><strong>框架关系总结</strong></h2>
 <table>
 <thead>
 <tr>
@@ -213,12 +227,12 @@
 <tr>
 <td><strong>LangChain</strong></td>
 <td>应用层框架，整合模型与工具构建复杂逻辑</td>
-<td>依赖 Hugging Face（模型）和 PyTorch（计算）。</td>
+<td>依赖模型服务与推理接口（可直接调用 Hugging Face 模型或 vLLM 等推理引擎），不直接依赖 PyTorch API。</td>
 </tr>
 </tbody>
 </table>
 <hr>
-<h3 id="典型流程示例"><strong>典型流程示例</strong></h3>
+<h2 id="典型流程示例"><strong>典型流程示例</strong></h2>
 <ol>
 <li>
 <p>模型加载：通过 Hugging Face 的 <code>AutoModel</code> 加载预训练 LLM。</p>
@@ -231,19 +245,19 @@
 </li>
 </ol>
 <hr>
-<h3 id="6-pytorch-的同类框架"><strong>6. PyTorch 的同类框架</strong></h3>
+<h2 id="六-pytorch-的同类框架"><strong>PyTorch 的同类框架</strong></h2>
 <ul>
 <li>定位：深度学习基础框架，提供张量计算、自动微分和动态计算图，支持模型从训练到推理的全流程。</li>
 <li>同类框架：
 <ul>
 <li>TensorFlow：曾以静态计算图为主，2.x 起默认动态图（Eager），生产部署生态成熟，与 PyTorch 共享 Hugging Face 的模型生态。</li>
-<li>JAX：谷歌推出，以函数式编程和高性能计算著称，适合研究场景（如强化学习）。</li>
-<li>MXNet：支持多语言绑定，曾用于 AWS 的深度学习服务，现已停止活跃开发（项目已退役）。</li>
+<li>JAX：谷歌推出，纯函数式、以 <code>jit</code>/<code>vmap</code> 等变换为核心，在 TPU 与大规模并行上表现突出，生态（如 Flax、Equinox）相对年轻。</li>
+<li>MXNet：Apache 基金会项目，曾用于 AWS 的深度学习服务，2023 年进入维护终止（已退役），新项目不建议选用。</li>
 </ul>
 </li>
 </ul>
 <hr>
-<h3 id="7-hugging-face-的同类框架"><strong>7. Hugging Face 的同类框架</strong></h3>
+<h2 id="七-hugging-face-的同类框架"><strong>Hugging Face 的同类框架</strong></h2>
 <ul>
 <li>定位：模型即服务（MaaS）平台，提供预训练模型、数据集和工具链，简化大模型应用开发。</li>
 <li>同类框架：
@@ -255,19 +269,19 @@
 </li>
 </ul>
 <hr>
-<h3 id="8-langchain-的同类框架"><strong>8. LangChain 的同类框架</strong></h3>
+<h2 id="八-langchain-的同类框架"><strong>LangChain 的同类框架</strong></h2>
 <ul>
 <li>定位：大模型应用开发框架，通过链式组件、工具集成和记忆机制构建复杂应用（如 Agent）。</li>
 <li>同类框架：
 <ul>
 <li>LlamaIndex：专注检索增强生成（RAG），提供数据索引、查询优化和缓存功能，适合文档问答场景。</li>
-<li>TensorFlow Extended (TFX)：谷歌的端到端机器学习生产流水线工具（训练、验证、部署、监控），属 MLOps 工具，与 LangChain 定位不同。</li>
-<li>AutoML 工具（如 AutoKeras）：自动化模型搜索与调参，降低开发门槛，但功能范围与 LangChain 互补。</li>
+<li>TensorFlow Extended（TFX）：谷歌的端到端机器学习生产流水线工具（训练、验证、部署、监控），属 MLOps 工具，与 LangChain 并非同类，列在这是为了说明「不要混为一谈」。</li>
+<li>AutoML 工具（如 AutoKeras、Optuna）：负责模型与超参搜索，与 LangChain 是互补而非同类。</li>
 </ul>
 </li>
 </ul>
 <hr>
-<h3 id="框架关系与选择建议"><strong>框架关系与选择建议</strong></h3>
+<h2 id="框架关系与选择建议"><strong>框架关系与选择建议</strong></h2>
 <table>
 <thead>
 <tr>
@@ -286,37 +300,85 @@
 </tr>
 <tr>
 <td><strong>快速应用开发</strong></td>
-<td>应用编排：LangChain、LlamaIndex；开箱即用组件：Hugging Face Pipelines、PyTorch Lightning</td>
+<td>应用编排：LangChain、LlamaIndex；检索组件：向量库 + Embedding 模型；开箱即用组件：Hugging Face <code>pipelines</code></td>
 </tr>
 </tbody>
 </table>
 <hr>
-<h3 id="关键依赖关系"><strong>关键依赖关系</strong></h3>
+<h2 id="关键依赖关系"><strong>关键依赖关系</strong></h2>
 <ul>
 <li>PyTorch 是 Hugging Face 和 LangChain 的底层计算引擎。</li>
 <li>Hugging Face 作为模型中台，向 LangChain 提供预训练模型和工具链。</li>
-<li>LangChain 依赖 Hugging Face 和 PyTorch 实现复杂应用逻辑（如链式调用、数据库集成）。</li>
+<li>LangChain 依赖模型能力（Hugging Face 模型或 vLLM 等推理服务）和检索/工具组件实现复杂应用逻辑；它不直接依赖 PyTorch API，而是通过模型加载与推理接口间接使用下层框架。</li>
+</ul>
+<p>把三条依赖连起来就是一条单向链路：<code>PyTorch → transformers → peft → 应用编排</code>。任何一环都可以在同层内被替换，但不会出现「上层替代下层」的情况——这也是判断某个新框架属于哪一层最省事的办法：看它<strong>依赖谁</strong>、<strong>向谁提供能力</strong>。</p>
+<ul>
 </ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E9%9B%B6-%E4%B8%89%E5%B1%82%E6%A1%86%E6%9E%B6%E7%9A%84%E5%88%86%E5%B7%A5%E4%B8%8E%E4%BE%9D%E8%B5%96">零、三层框架的分工与依赖</a>
 <ul>
-<li>
-<ul>
-<li><a href="#1-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E5%8A%A0%E8%BD%BD"><strong>1. 大模型加载</strong></a></li>
-<li><a href="#2-%E5%BE%AE%E8%B0%83fine-tuning"><strong>2. 微调（Fine-tuning）</strong></a></li>
-<li><a href="#3-%E7%AE%97%E6%B3%95%E6%90%AD%E5%BB%BA"><strong>3. 算法搭建</strong></a></li>
-<li><a href="#4-%E8%AE%AD%E7%BB%83"><strong>4. 训练</strong></a></li>
-<li><a href="#5-%E5%8A%9F%E8%83%BD%E6%90%AD%E5%BB%BA%E5%BA%94%E7%94%A8%E5%BC%80%E5%8F%91"><strong>5. 功能搭建（应用开发）</strong></a></li>
-<li><a href="#%E6%A1%86%E6%9E%B6%E5%85%B3%E7%B3%BB%E6%80%BB%E7%BB%93"><strong>框架关系总结</strong></a></li>
-<li><a href="#%E5%85%B8%E5%9E%8B%E6%B5%81%E7%A8%8B%E7%A4%BA%E4%BE%8B"><strong>典型流程示例</strong></a></li>
-<li><a href="#6-pytorch-%E7%9A%84%E5%90%8C%E7%B1%BB%E6%A1%86%E6%9E%B6"><strong>6. PyTorch 的同类框架</strong></a></li>
-<li><a href="#7-hugging-face-%E7%9A%84%E5%90%8C%E7%B1%BB%E6%A1%86%E6%9E%B6"><strong>7. Hugging Face 的同类框架</strong></a></li>
-<li><a href="#8-langchain-%E7%9A%84%E5%90%8C%E7%B1%BB%E6%A1%86%E6%9E%B6"><strong>8. LangChain 的同类框架</strong></a></li>
-<li><a href="#%E6%A1%86%E6%9E%B6%E5%85%B3%E7%B3%BB%E4%B8%8E%E9%80%89%E6%8B%A9%E5%BB%BA%E8%AE%AE"><strong>框架关系与选择建议</strong></a></li>
-<li><a href="#%E5%85%B3%E9%94%AE%E4%BE%9D%E8%B5%96%E5%85%B3%E7%B3%BB"><strong>关键依赖关系</strong></a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%B8%80-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E5%8A%A0%E8%BD%BD">大模型加载</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-%E5%BE%AE%E8%B0%83fine-tuning">微调（Fine-tuning）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E7%AE%97%E6%B3%95%E6%90%AD%E5%BB%BA">算法搭建</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E8%AE%AD%E7%BB%83">训练</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E5%8A%9F%E8%83%BD%E6%90%AD%E5%BB%BA%E5%BA%94%E7%94%A8%E5%BC%80%E5%8F%91">功能搭建（应用开发）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%A1%86%E6%9E%B6%E5%85%B3%E7%B3%BB%E6%80%BB%E7%BB%93">框架关系总结</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%B8%E5%9E%8B%E6%B5%81%E7%A8%8B%E7%A4%BA%E4%BE%8B">典型流程示例</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-pytorch-%E7%9A%84%E5%90%8C%E7%B1%BB%E6%A1%86%E6%9E%B6">PyTorch 的同类框架</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-hugging-face-%E7%9A%84%E5%90%8C%E7%B1%BB%E6%A1%86%E6%9E%B6">Hugging Face 的同类框架</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AB-langchain-%E7%9A%84%E5%90%8C%E7%B1%BB%E6%A1%86%E6%9E%B6">LangChain 的同类框架</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%A1%86%E6%9E%B6%E5%85%B3%E7%B3%BB%E4%B8%8E%E9%80%89%E6%8B%A9%E5%BB%BA%E8%AE%AE">框架关系与选择建议</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%B3%E9%94%AE%E4%BE%9D%E8%B5%96%E5%85%B3%E7%B3%BB">关键依赖关系</a>
+<ul>
 </ul>
 </li>
 </ul>

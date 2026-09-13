@@ -123,34 +123,45 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/GL2xUsgbSZ.png" alt="封面图">
-          
-          <ol>
-<li><strong>模型加载</strong>：使用 4 位量化（<code>load_in_4bit=True</code>）减少显存消耗，可根据硬件情况调整。</li>
-<li><strong>LoRA 配置</strong>：
+          <h2 id="一-从-lora-到-peft-库">一、从 LoRA 到 PEFT 库</h2>
+<p>前一篇《LoRA（Low-Rank Adaptation）》从原理出发，用纯 PyTorch 从零实现了低秩旁路与训练脚本。理解原理之后，工程上并不需要自己维护这套代码：Hugging Face 的 <code>peft</code> 库把 LoRA、QLoRA、Prefix Tuning 等参数高效微调（PEFT）方法统一成一套极薄的 API，本节的实战脚本就基于它编写。</p>
+<p>需要先厘清两个容易混淆的概念：</p>
 <ul>
-<li><code>target_modules</code> 需根据模型结构调整，通常选择注意力层的 query/value 投影矩阵。</li>
-<li>秩 <code>r</code> 控制低秩矩阵的维度，通常取 8~64。</li>
-<li><code>lora_alpha</code> 为缩放系数，一般取 <code>r</code> 的 2~4 倍；LoRA 实际作用还需乘 <code>alpha / r</code>。</li>
+<li><strong>LoRA 是方法</strong>：固定基座权重 \(W_0\)，只训练低秩增量 \(\Delta W = \frac{\alpha}{r}BA\)，因此可训练参数与优化器状态降低若干个数量级。</li>
+<li><strong>PEFT 库是封装</strong>：它负责按配置把低秩旁路注入到指定层、冻结其余参数、统计可训练参数量，以及保存/加载/合并适配器。库里不止 LoRA 一种方法，同一套接口也能切换到 QLoRA 与软提示。</li>
 </ul>
-</li>
-<li><strong>数据处理</strong>：
-<ul>
-<li>确保数据集包含 <code>text</code> 字段，或根据实际数据调整预处理函数。</li>
-<li>使用 <code>DataCollatorForLanguageModeling</code> 进行动态填充。</li>
-</ul>
-</li>
-<li><strong>训练优化</strong>：
-<ul>
-<li>通过 <code>gradient_accumulation_steps</code> 模拟更大的 batch size。</li>
-<li>混合精度（<code>fp16=True</code>）减少显存占用。</li>
-<li>使用 <code>bitsandbytes</code> 库进行量化训练。</li>
-</ul>
-</li>
-</ol>
-<pre><code class="language-python"># 环境依赖（需提前安装）
-# pip install torch transformers datasets peft accelerate bitsandbytes
+<p>本节在此基础上再叠加 QLoRA：用 4-bit 量化存放冻结的基座、用 LoRA 训练适配器。两者的分工可以用一句话概括——<strong>LoRA 决定「训练哪些参数」，QLoRA 决定「冻结的基座以什么精度存放」</strong>，二者正交，可以同时使用。</p>
+<p><img src="/post-assets/GL2xUsgbSZ/01-peft-method-map.svg" alt="PEFT 方法定位图：加性方法、重参数化方法与软提示的分类，以及 LoRA 与 QLoRA 的关系与选型建议"></p>
 
-import torch
+<h2 id="二-关键超参数怎么选">二、关键超参数怎么选</h2>
+<h3 id="2-1-秩-r-与缩放系数-lora_alpha">2.1 秩 r 与缩放系数 lora_alpha</h3>
+<p>秩 <code>r</code> 是低秩矩阵的中间维度，直接决定新增参数量与表达能力，常用 8～64；任务与基座差异越大、数据越多，可以适当取大。<code>lora_alpha</code> 是缩放系数，真正进入前向计算的是 <code>alpha / r</code>（与主文中 \(h = W_0x + \frac{\alpha}{r}BAx\) 完全一致）。实践中常把 <code>lora_alpha</code> 取成 <code>r</code> 的 2～4 倍，等价于缩放倍数 2～4；若想保持缩放不变而只提高秩，可以按比例同步放大 <code>alpha</code>。</p>
+<h3 id="2-2-target_modules-该加在哪里">2.2 target_modules：该加在哪里</h3>
+<p><code>target_modules</code> 决定旁路注入到哪些线性层，是最需要按模型结构确认的参数。名称必须是模型里真实的模块名，可通过 <code>print(model)</code> 查看：</p>
+<ul>
+<li>LLaMA / Qwen2 / DeepSeek 系列：<code>["q_proj", "k_proj", "v_proj", "o_proj"]</code>，需要更强拟合时再加 MLP 的 <code>gate_proj</code>、<code>up_proj</code>、<code>down_proj</code>。</li>
+<li>BLOOM 系列：<code>["query_key_value"]</code>。</li>
+<li>ChatGLM 系列：<code>["query_key_value"]</code> 或按版本使用 <code>["q_proj", "v_proj"]</code>。</li>
+</ul>
+<p>只挂 <code>q_proj</code>、<code>v_proj</code> 是最省显存的最小配置；把注意力输出层与 MLP 一并覆盖，通常能换到更好的效果，代价是适配器体积和显存上升。</p>
+<h3 id="2-3-lora_dropout-与-bias">2.3 lora_dropout 与 bias</h3>
+<p><code>lora_dropout</code> 作用在旁路输入上，是 LoRA 层唯一的正则化手段，小数据集常用 0.05～0.1，数据充足时可设为 0。<code>bias</code> 取 <code>"none"</code> 表示不训练任何偏置，这也是 LoRA 论文的默认设置；<code>"all"</code> 会训练全部偏置，<code>"lora_only"</code> 只训练 LoRA 层的偏置，二者都会额外增加少量可训练参数，一般没必要开启。</p>
+
+<h2 id="三-与-qlora-组合-4-bit-量化训练">三、与 QLoRA 组合：4-bit 量化训练</h2>
+<p>QLoRA 的完整流程只需三个动作：</p>
+<ol>
+<li><strong>4-bit 加载基座</strong>：<code>load_in_4bit=True</code>，量化类型用 NF4，计算时反量化到 bf16。</li>
+<li><strong>准备量化训练</strong>：<code>prepare_model_for_kbit_training(model)</code> 会冻结全部基座参数、把 LayerNorm 等层提升到 fp32 以保证数值稳定，并打开输入梯度以便配合梯度检查点。</li>
+<li><strong>注入 LoRA 适配器</strong>：<code>get_peft_model(model, peft_config)</code> 按配置挂载旁路，之后只有适配器参数可训练。</li>
+</ol>
+<p>顺序不能颠倒：必须先用 <code>prepare_model_for_kbit_training</code> 处理量化模型，再调用 <code>get_peft_model</code> 注入适配器。另外，开启梯度检查点后要设置 <code>model.config.use_cache = False</code>，否则会收到关于 <code>use_cache</code> 的警告甚至报错。</p>
+
+<h2 id="四-完整实战脚本">四、完整实战脚本</h2>
+<p>下面以 DeepSeek-R1 的 1.5B 蒸馏版为例，演示「4-bit 基座 + LoRA 适配器」的全流程。换用其它模型时，只需修改模型名、数据集名与 <code>target_modules</code>。</p>
+<pre><code class="language-bash"># 环境依赖（需提前安装）
+# pip install torch transformers datasets peft accelerate bitsandbytes
+</code></pre>
+<pre><code class="language-python">import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -162,54 +173,57 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from datasets import load_dataset
 
 # ===================== 配置参数 =====================
-MODEL_NAME = &quot;deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B&quot;  # HuggingFace 模型 ID：示例取 R1 的蒸馏小模型便于本地微调；如需原版 R1（671B）请改用官方加载方式
+MODEL_NAME = &quot;deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B&quot;  # 示例取 R1 的蒸馏小模型便于本地微调；如需原版 R1（671B）请改用官方加载方式
 DATASET_NAME = &quot;your_dataset&quot;          # 数据集名称或本地路径
 OUTPUT_DIR = &quot;./deepseek-r1-lora-finetuned&quot;
-BATCH_SIZE = 2                         # 根据GPU显存调整
-MAX_LENGTH = 1024                      # 模型支持的最大上下文长度
+BATCH_SIZE = 2                         # 根据 GPU 显存调整
+MAX_LENGTH = 1024                      # 单条样本截断长度，不超过模型的上下文窗口
 NUM_EPOCHS = 3
 LEARNING_RATE = 3e-5
 
-# LoRA配置
+# LoRA 配置
 LORA_R = 16
-LORA_ALPHA = 64
+LORA_ALPHA = 64                        # 缩放系数 alpha / r = 4
 LORA_DROPOUT = 0.05
 TARGET_MODULES = [&quot;q_proj&quot;, &quot;v_proj&quot;]  # 关键参数！需根据实际模型结构调整
 
-# ===================== 模型加载 =====================
+# ===================== 模型加载（QLoRA 第 1 步）=====================
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
-    load_in_4bit=True,                  # 4bit量化节省显存
-    device_map=&quot;auto&quot;,
-    torch_dtype=torch.bfloat16,
-    attn_implementation=&quot;flash_attention_2&quot;  # 如果支持Flash Attention
+    load_in_4bit=True,                  # 4-bit 量化存放基座，节省显存
+    device_map=&quot;auto&quot;,                  # 多卡/单卡自动切分
+    torch_dtype=torch.bfloat16,         # 反量化后的计算精度
+    attn_implementation=&quot;flash_attention_2&quot;  # 需本机 flash-attn 可用，否则删掉此行
 )
 
-# 处理特殊token
+# 处理特殊 token：pad 复用 eos，避免 padding 位置参与 loss
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-# 准备量化训练
+# 量化训练准备（QLoRA 第 2 步）
 model = prepare_model_for_kbit_training(model)
+model.config.use_cache = False          # 配合梯度检查点，必须关闭 KV cache
 
-# ===================== LoRA配置 =====================
+# ===================== LoRA 配置（QLoRA 第 3 步）=====================
 peft_config = LoraConfig(
     r=LORA_R,
     lora_alpha=LORA_ALPHA,
     lora_dropout=LORA_DROPOUT,
-    target_modules=TARGET_MODULES,  # 关键配置项！
+    target_modules=TARGET_MODULES,      # 关键配置项！
     bias=&quot;none&quot;,
     task_type=&quot;CAUSAL_LM&quot;,
-    modules_to_save=[&quot;lm_head&quot;]     # 同时微调输出层
+    modules_to_save=[&quot;lm_head&quot;]         # 输出层随适配器一起保存；未扩充词表时可省略
 )
 
 model = get_peft_model(model, peft_config)
-model.print_trainable_parameters()  # 输出示例：trainable params: 21,233,664 || all params: 6,742,097,920 || trainable%: 0.3148
+model.print_trainable_parameters()
+# 输出形如：trainable params: 2,293,760 || all params: 1,783,985,152 || trainable%: 0.1286
+# 说明：trainable params 只统计 LoRA 旁路（及 modules_to_save）的参数，不含 4-bit 冻结权重
 
 # ===================== 数据处理 =====================
 def format_function(examples):
-    # 根据任务构造prompt，示例：
+    # 根据任务构造 prompt，示例：
     texts = [
         f&quot;&lt;|System|&gt;\n你是一个AI助手\n&lt;|User|&gt;\n{query}\n&lt;|Assistant|&gt;\n{answer}&quot;
         for query, answer in zip(examples[&quot;query&quot;], examples[&quot;answer&quot;])
@@ -217,6 +231,8 @@ def format_function(examples):
     return {&quot;text&quot;: texts}
 
 dataset = load_dataset(DATASET_NAME)
+if &quot;test&quot; not in dataset:
+    dataset = dataset[&quot;train&quot;].train_test_split(test_size=0.02, seed=42)
 dataset = dataset.map(format_function, batched=True)
 
 def tokenize_function(examples):
@@ -235,17 +251,18 @@ training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     num_train_epochs=NUM_EPOCHS,
     per_device_train_batch_size=BATCH_SIZE,
-    gradient_accumulation_steps=8,       # 模拟更大batch size
+    gradient_accumulation_steps=8,       # 模拟更大 batch size：有效 batch = 2 × 8 = 16
     learning_rate=LEARNING_RATE,
-    fp16=True,                            # 混合精度训练
-    optim=&quot;paged_adamw_8bit&quot;,            # 优化器选择
+    bf16=True,                           # 4-bit 基座的推荐精度；无 bf16 支持时用 fp16=True
+    optim=&quot;paged_adamw_8bit&quot;,            # QLoRA 推荐的 8-bit 分页优化器
     logging_steps=20,
     save_strategy=&quot;steps&quot;,
     save_steps=500,
-    eval_strategy=&quot;steps&quot;,              # 新版 transformers 参数；旧版请写 evaluation_strategy
+    eval_strategy=&quot;steps&quot;,               # 新版 transformers 参数；旧版请写 evaluation_strategy
     eval_steps=300,
     report_to=&quot;tensorboard&quot;,
-    gradient_checkpointing=True,          # 显存优化
+    gradient_checkpointing=True,         # 显存优化
+    gradient_checkpointing_kwargs={&quot;use_reentrant&quot;: False},  # 开启 dropout 时必须
     ddp_find_unused_parameters=False
 )
 
@@ -253,60 +270,124 @@ trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=tokenized_dataset[&quot;train&quot;],
-    eval_dataset=tokenized_dataset[&quot;test&quot;],  # 如果有验证集
+    eval_dataset=tokenized_dataset[&quot;test&quot;],
     data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
 )
 
 # ===================== 开始训练 =====================
 trainer.train()
-model.save_pretrained(OUTPUT_DIR)
+model.save_pretrained(OUTPUT_DIR)        # 只保存适配器与 modules_to_save 权重（数十 MB）
 tokenizer.save_pretrained(OUTPUT_DIR)
+</code></pre>
 
-# ===================== 推理测试 =====================
+<h2 id="五-适配器的保存与加载">五、适配器的保存与加载</h2>
+<p><code>model.save_pretrained(OUTPUT_DIR)</code> 保存的是适配器权重 <code>adapter_model.safetensors</code> 与配置 <code>adapter_config.json</code>，而不是完整的基座；这也是 LoRA 多任务部署的基础——同一份基座配多个适配器目录即可切换任务。</p>
+<p>推理时用 <code>PeftModel.from_pretrained</code> 把适配器挂回基座。有两点必须注意：</p>
+<ul>
+<li><strong>基座 ID 记录在配置里</strong>：<code>adapter_config.json</code> 的 <code>base_model_name_or_path</code> 保存了训练时的基座名称，加载时基座要与之一致，否则权重对不上。</li>
+<li><strong>精度与量化设置保持一致</strong>：适配器是在 4-bit 基座上训练的，推理时同样用 <code>load_in_4bit=True</code> 加载基座最稳妥；若要用全精度基座，则应先合并再保存完整模型。</li>
+</ul>
+<pre><code class="language-python"># ===================== 推理测试 =====================
 from peft import PeftModel
 
 base_model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
+    load_in_4bit=True,                   # 与训练时保持一致
     device_map=&quot;auto&quot;,
     torch_dtype=torch.bfloat16
 )
 model = PeftModel.from_pretrained(base_model, OUTPUT_DIR)
+model.eval()
 
-inputs = tokenizer(
-    &quot;&lt;|System|&gt;\n你是一个AI助手\n&lt;|User|&gt;\n如何学习机器学习？\n&lt;|Assistant|&gt;\n&quot;,
-    return_tensors=&quot;pt&quot;
-).to(&quot;cuda&quot;)
+prompt = &quot;&lt;|System|&gt;\n你是一个AI助手\n&lt;|User|&gt;\n如何学习机器学习？\n&lt;|Assistant|&gt;\n&quot;
+inputs = tokenizer(prompt, return_tensors=&quot;pt&quot;).to(model.device)
 
-outputs = model.generate(
-    **inputs,
-    max_new_tokens=256,
-    temperature=0.7,
-    do_sample=True
-)
+with torch.no_grad():
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=256,
+        temperature=0.7,
+        do_sample=True
+    )
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 </code></pre>
 
-          <div class="toc-container"></div>
-          <hr />
-          
-            <nav class="post-pn">
-      <a class="prev-post" href="/n7vyn_1QRC/"><span class="pn-label">← 上一篇</span><span class="pn-title">LoRA（Low-Rank Adaptation）</span></a>
-      <a class="next-post" href="/1I3syISgB_/"><span class="pn-label">下一篇 →</span><span class="pn-title">大模型框架体系</span></a>
-      </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
+<h2 id="六-合并为可独立部署的模型">六、合并为可独立部署的模型</h2>
+<p>如果要交付一个独立的模型目录，可以把适配器合并回基座权重，得到结构上与原始模型完全相同、推理时不引入额外延迟的模型：</p>
+<pre><code class="language-python">from peft import PeftModel
 
-            
-            
-          </div>
-        </div>
-      </div>
-    </div>
-  </article>
+# 合并前请用全精度（非 4-bit）基座加载，4-bit 权重无法直接合并
+base_model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.bfloat16)
+model = PeftModel.from_pretrained(base_model, OUTPUT_DIR)
+model = model.merge_and_unload()         # 把 (alpha/r)·BA 加回 W0，并移除 LoRA 分支
+
+MERGED_DIR = &quot;./deepseek-r1-merged&quot;
+model.save_pretrained(MERGED_DIR)
+tokenizer.save_pretrained(MERGED_DIR)
+# 注意：合并会丢失适配器与基座的分离性，无法再单独切换/回退适配器；
+# 若仍需多任务热插拔，请保留 adapter 目录而不做合并。
+</code></pre>
+<pre><code class="language-python"># ===================== 未合并时的多适配器切换 =====================
+from peft import PeftModel
+
+model = PeftModel.from_pretrained(base_model, &quot;./adapter-domain-a&quot;)
+model.load_adapter(&quot;./adapter-domain-b&quot;, adapter_name=&quot;domain_b&quot;)
+model.set_adapter(&quot;domain_b&quot;)            # 用哪个适配器，由这一行决定
+</code></pre>
+
+<h2 id="七-常见坑与调参建议">七、常见坑与调参建议</h2>
+<ul>
+<li><strong>target_modules 写错</strong>：模块名不存在时 <code>get_peft_model</code> 会直接报错；写成了别的层名却恰好存在，则可能只训练了无关参数，表现是 loss 不降。</li>
+<li><strong>忘记关闭 use_cache</strong>：与梯度检查点同时开启会报错或告警。</li>
+<li><strong>4-bit 基座与 fp16 混用</strong>：量化模型的参数已是 bf16/fp16 计算路径，训练精度建议统一为 <code>bf16=True</code>；老卡不支持 bf16 时再用 fp16。</li>
+<li><strong>数据太少、轮数太多</strong>：LoRA 参数虽少也会过拟合，优先观察验证集 loss，必要时降低 <code>r</code>、提高 <code>lora_dropout</code>。</li>
+<li><strong>学习率取值</strong>：LoRA 常用 1e-4～3e-4，比全参数微调高一个量级；本例的 3e-5 偏保守，适合数据量较小、希望稳定收敛的场景。</li>
+<li><strong>合并前先脱离量化</strong>：<code>merge_and_unload</code> 需要非量化基座，否则应先反量化或重新加载全精度权重。</li>
+</ul>
+<p>至此，「原理（LoRA 主文）→ 工程封装（peft）→ 显存优化（QLoRA）→ 部署（merge_and_unload）」这条链路就完整了。下一节《大模型框架体系》会把这几层工具放进整个大模型技术栈中，说明它们各自的职责边界。</p>
+
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#%E4%B8%80-%E4%BB%8E-lora-%E5%88%B0-peft-%E5%BA%93">一、从 LoRA 到 PEFT 库</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-%E5%85%B3%E9%94%AE%E8%B6%85%E5%8F%82%E6%95%B0%E6%80%8E%E4%B9%88%E9%80%89">二、关键超参数怎么选</a>
+<ul>
+<li><a href="#2-1-%E7%A7%A9-r-%E4%B8%8E%E7%BC%A9%E6%94%BE%E7%B3%BB%E6%95%B0-lora_alpha">2.1 秩 r 与缩放系数 lora_alpha</a></li>
+<li><a href="#2-2-target_modules-%E8%AF%A5%E5%8A%A0%E5%9C%A8%E5%93%AA%E9%87%8C">2.2 target_modules：该加在哪里</a></li>
+<li><a href="#2-3-lora_dropout-%E4%B8%8E-bias">2.3 lora_dropout 与 bias</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E4%B8%8E-qlora-%E7%BB%84%E5%90%88-4-bit-%E9%87%8F%E5%8C%96%E8%AE%AD%E7%BB%83">三、与 QLoRA 组合：4-bit 量化训练</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E5%AE%8C%E6%95%B4%E5%AE%9E%E6%88%98%E8%84%9A%E6%9C%AC">四、完整实战脚本</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E9%80%82%E9%85%8D%E5%99%A8%E7%9A%84%E4%BF%9D%E5%AD%98%E4%B8%8E%E5%8A%A0%E8%BD%BD">五、适配器的保存与加载</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-%E5%90%88%E5%B9%B6%E4%B8%BA%E5%8F%AF%E7%8B%AC%E7%AB%8B%E9%83%A8%E7%BD%B2%E7%9A%84%E6%A8%A1%E5%9E%8B">六、合并为可独立部署的模型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-%E5%B8%B8%E8%A7%81%E5%9D%91%E4%B8%8E%E8%B0%83%E5%8F%82%E5%BB%BA%E8%AE%AE">七、常见坑与调参建议</a>
+<ul>
+</ul>
+</li>
+</ul>
+</article>
   <!-- Footer -->
   <footer>
     <div class="container">

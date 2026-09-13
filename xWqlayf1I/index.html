@@ -124,49 +124,78 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/xWqlayf1I.png" alt="封面图">
-          
-          <h2 id="sec1-sarsa-vs-qlearning">一、Sarsa算法与Q-Learning算法（Sarsa versus Q-Learning）</h2>
-<h3 id="sub-sarsa">1）Sarsa</h3>
-<p>① Sarsa 算法用于训练动作价值函数 Qπ(s,a)。</p>
-<p>② TD Target 记作 y_t，它是当前观测到的奖励 r_t，与动作价值函数对下一状态、下一动作的预测值乘以折扣因子 γ 之和。</p>
-<p>③ 使用 Sarsa 算法更新价值网络，即 Actor-Critic 算法中的 Critic 网络。</p>
-<h3 id="sub-qlearning">2）Q-Learning</h3>
-<p>① Q-Learning 用于学习最优动作价值函数 Q*(s,a)。</p>
-<p>② TD Target 记作 y_t，是当前观测到的奖励 r_t，与价值函数对下一状态下最优动作的预测值乘以折扣因子 γ 之和。</p>
-<p>③ 使用 Q-Learning 算法更新 DQN。</p>
-<p>无论是 Sarsa 还是 Q-Learning，都只使用一个奖励 r_t，即只用一条 transition 中的奖励；下一条 transition 再用于更新动作价值 Qπ。这样计算出的 TD Target 称为 One-Step TD Target。</p>
-<h2 id="sec2-multistep-td">二、多步TD Target（Multi-Step TD Target）</h2>
-<p>其实可以使用多个奖励，例如 r_t、r_{t+1}，即用多条 transition 中的奖励去更新动作价值 Qπ；这样计算出的 TD Target 称为 Multi-Step TD Target。</p>
-<h3 id="sub-derive-return">1）推导多步回报（Derive Multi-Step Return）</h3>
-<p>我们已经知道 U_t 与 U_{t+1} 的关系，再递归一次，把 U_{t+1} 用 U_{t+2} 表示；经过多步迭代，便得到 U_t 与 U_{t+m} 的关系，这个公式就称为多步回报（Multi-Step Return）。</p>
-<h3 id="sub-sarsa-mstep">2）Sarsa算法中的多步TD Target（m-Step TD Target for Sarsa）</h3>
-<p>① 多步 TD Target 的计算公式如下。</p>
-<p>② 当 m = 1 时即为单步 TD Target，也就是经典的 TD 算法。</p>
-<p>注意：单步 TD Target 的训练效果往往不如多步 TD Target。</p>
-<h3 id="sub-qlearning-mstep">3）Q-Learning算法中的多步TD Target（m-Step TD Target for Q-Learning）</h3>
-<p>① 多步 TD Target 的计算公式如下。</p>
-<p>② 当 m = 1 时即为单步 TD Target，也就是经典的 TD 算法。</p>
-<p>同样，Q-Learning 中单步 TD Target 的训练效果通常也不如多步 TD Target。</p>
-<h2 id="sec3-comparison">三、单步TD Target与多步TD Target对比（Comparison of One-step TD target and Multi-step TD target）</h2>
-<p>Multi-Step TD Target 的表现更好：更接近真实数据，偏差更小，结果也更稳定；而单步 TD Target 只是多步的特例。</p>
+          <p>上一节把 TD Target 限定在「只用一条 transition」的情形：无论是 Sarsa 还是 Q-Learning，目标值里都只有一个即时奖励 \(r_t\)。这一节把它推广到多步——用连续 \(m\) 条 transition 上的奖励来构造目标，也就是 <strong>Multi-Step TD Target</strong>。它是理解 n-step Return、TD(λ) 与「为什么单步 TD 训练效果偏弱」的入口。</p>
 
-<div class="toc-container"><ul class="markdownIt-TOC">
-<li>
+<h2 id="sec1-sarsa-vs-qlearning">一、Sarsa 算法与 Q-Learning 算法（Sarsa versus Q-Learning）</h2>
+<p>先回顾两种算法在「学什么」上的差别，它决定了多步形式的尾部该由谁来估计。</p>
+<h3 id="sub-sarsa">1）Sarsa</h3>
+<p>① Sarsa 算法用于训练动作价值函数 \(Q_\pi(s,a)\)，即策略 \(\pi\) 下的动作价值。</p>
+<p>② TD Target 记作 \(y_t\)，它是当前观测到的奖励 \(r_t\)，与动作价值函数对下一状态、下一动作的预测值乘以折扣因子 \(\gamma\) 之和。</p>
+<p>③ 使用 Sarsa 算法更新价值网络，即 Actor-Critic 算法中的 Critic 网络。</p>
+<p>写成公式就是：</p>
+<div class="math-block">\[ y_t = r_t + \gamma\, Q_\pi(s_{t+1}, a_{t+1}) \]</div>
+<p>注意这里用到了 \(a_{t+1}\)，也就是「真正的下一个动作」，因此 Sarsa 是<strong>同策略（on-policy）</strong>算法：目标里包含了当前策略的行为。</p>
+<h3 id="sub-qlearning">2）Q-Learning</h3>
+<p>① Q-Learning 用于学习最优动作价值函数 \(Q^\*(s,a)\)，与当前策略无关。</p>
+<p>② TD Target 记作 \(y_t\)，是当前观测到的奖励 \(r_t\)，与价值函数对下一状态下<strong>最优动作</strong>的预测值乘以折扣因子 \(\gamma\) 之和。</p>
+<p>③ 使用 Q-Learning 算法更新 DQN。</p>
+<div class="math-block">\[ y_t = r_t + \gamma\, \max_{a'} Q^\*(s_{t+1}, a') \]</div>
+<p>目标里出现 \(\max\) 而不是实际执行的 \(a_{t+1}\)，所以 Q-Learning 是<strong>异策略（off-policy）</strong>算法：行为策略与目标策略可以不同。</p>
+<p>无论是 Sarsa 还是 Q-Learning，都只使用一个奖励 \(r_t\)，即只用一条 transition 中的奖励；下一条 transition 再用于更新动作价值 \(Q_\pi\)。这样计算出的 TD Target 称为 One-Step TD Target。</p>
+
+<h2 id="sec2-multistep-td">二、多步 TD Target（Multi-Step TD Target）</h2>
+<p>其实可以使用多个奖励，例如 \(r_t\)、\(r_{t+1}\)，即用多条 transition 中的奖励去更新动作价值 \(Q_\pi\)；这样计算出的 TD Target 称为 Multi-Step TD Target。</p>
+<h3 id="sub-derive-return">1）推导多步回报（Derive Multi-Step Return）</h3>
+<p>回报（Return）\(U_t\) 定义为从 \(t\) 时刻起的折扣奖励之和：</p>
+<div class="math-block">\[ U_t = r_t + \gamma\, r_{t+1} + \gamma^2 r_{t+2} + \cdots \]</div>
+<p>把第一项拆出来，就得到相邻两步回报之间的递推关系：</p>
+<div class="math-block">\[ U_t = r_t + \gamma\, U_{t+1}, \qquad U_{t+1} = r_{t+1} + \gamma\, U_{t+2} \]</div>
+<p>我们已经知道 \(U_t\) 与 \(U_{t+1}\) 的关系，再递归一次，把 \(U_{t+1}\) 用 \(U_{t+2}\) 表示；反复代入即可把 \(U_t\) 用 \(U_{t+m}\) 表示，这就是<strong>多步回报（Multi-Step Return）</strong>：</p>
+<div class="math-block">\[ U_t = r_t + \gamma\, r_{t+1} + \gamma^2 r_{t+2} + \cdots + \gamma^{m-1} r_{t+m-1} + \gamma^{m}\, U_{t+m} \]</div>
+<p>式子的结构很清晰：<strong>前 \(m\) 个奖励是真实采样到的、按 \(\gamma^k\) 加权累加；剩下的无穷多项被压缩成一个 \(U_{t+m}\)</strong>。实践中无法真的等到轨迹结束再算 \(U_{t+m}\)，于是用价值网络的估计值 \(\hat{Q}\) 去 bootstrap 它——这既带来偏差，也带来方差。下图是这个展开过程：</p>
+<p><img src="/post-assets/xWqlayf1I/01-nstep-return.svg" alt="n 步 TD 目标展开示意：前 m 个奖励按折扣累加，尾部用价值网络估计值 bootstrap，m=1 退化为单步 TD，m 趋于无穷退化为 Monte Carlo"></p>
+<h3 id="sub-sarsa-mstep">2）Sarsa 算法中的多步 TD Target（m-Step TD Target for Sarsa）</h3>
+<p>① 把多步回报中的 \(U_{t+m}\) 替换为动作价值函数的估计值，就得到 Sarsa 的多步 TD Target：</p>
+<div class="math-block">\[ y_t = \sum_{k=0}^{m-1} \gamma^{k} r_{t+k} \;+\; \gamma^{m}\, Q_\pi(s_{t+m}, a_{t+m}) \]</div>
+<p>② 当 \(m = 1\) 时，求和只剩 \(r_t\)，公式退化为 \(y_t = r_t + \gamma Q_\pi(s_{t+1}, a_{t+1})\)，即为单步 TD Target，也就是经典的 TD 算法。</p>
+<p>注意：单步 TD Target 的训练效果往往不如多步 TD Target。</p>
+<h3 id="sub-qlearning-mstep">3）Q-Learning 算法中的多步 TD Target（m-Step TD Target for Q-Learning）</h3>
+<p>① 同理，把尾部的动作价值换成最优动作价值，就得到 Q-Learning 的多步 TD Target：</p>
+<div class="math-block">\[ y_t = \sum_{k=0}^{m-1} \gamma^{k} r_{t+k} \;+\; \gamma^{m} \max_{a'} Q^\*(s_{t+m}, a') \]</div>
+<p>两者的唯一区别在尾部：Sarsa 用实际执行到的 \(a_{t+m}\)（on-policy），Q-Learning 用 \(\max_{a'}\)（off-policy）；前半段 \(m\) 个奖励的累加方式完全相同。</p>
+<p>② 当 \(m = 1\) 时即为单步 TD Target，也就是经典的 TD 算法。</p>
+<p>同样，Q-Learning 中单步 TD Target 的训练效果通常也不如多步 TD Target。</p>
+
+<h2 id="sec3-comparison">三、单步 TD Target 与多步 TD Target 对比（Comparison of One-step and Multi-step TD Target）</h2>
+<p>两种目标的本质区别在于「TD Target 里有多少来自真实数据、多少来自自身估计」：</p>
 <ul>
-<li><a href="#sec1-sarsa-vs-qlearning">一、Sarsa算法与Q-Learning算法（Sarsa versus Q-Learning）</a>
+<li><strong>单步 TD Target</strong>（\(m=1\)）：只有 \(r_t\) 来自真实数据，其余全部依赖价值网络的估计值，偏差最大；但每一步都能立即更新，方差最小、训练最稳定。</li>
+<li><strong>多步 TD Target</strong>（\(m>1\)）：回报中前 \(m\) 个奖励都是真实采样，bootstrap 的权重被压到 \(\gamma^{m}\)，因此<strong>偏差更小、更接近真实数据</strong>，结果也更稳定；代价是必须等 \(m\) 步之后才能构造目标，方差随 \(m\) 上升。</li>
+<li><strong>Monte Carlo</strong>（\(m \to \infty\)）：估值的权重被压到 0，目标完全等于真实回报 \(U_t\)，无偏但方差最大、必须等整条轨迹结束，且无法做单步在线更新。</li>
+</ul>
+<p>因此三者不是互相替代，而是同一条谱系上的不同取法：单步 TD 与 Monte Carlo 分别站在<strong>偏差-方差权衡</strong>的两端，多步 TD 用 \(m\) 在中间取值，把「多利用真实奖励」和「控制方差」折中起来。这也正是 n-step Return 与后续 TD(λ)、以及各类 n-step 变体（如 Rainbow 中的 multi-step 目标）的出发点。</p>
+<p>最后强调一点：单步 TD Target 只是多步在 \(m=1\) 时的特例。理解了多步形式，单步形式自然就包含其中了。</p>
+
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#sec1-sarsa-vs-qlearning">一、Sarsa 算法与 Q-Learning 算法（Sarsa versus Q-Learning）</a>
 <ul>
 <li><a href="#sub-sarsa">1）Sarsa</a></li>
 <li><a href="#sub-qlearning">2）Q-Learning</a></li>
 </ul>
 </li>
-<li><a href="#sec2-multistep-td">二、多步TD Target（Multi-Step TD Target）</a>
+<li>
+<a href="#sec2-multistep-td">二、多步 TD Target（Multi-Step TD Target）</a>
 <ul>
 <li><a href="#sub-derive-return">1）推导多步回报（Derive Multi-Step Return）</a></li>
-<li><a href="#sub-sarsa-mstep">2）Sarsa算法中的多步TD Target（m-Step TD Target for Sarsa）</a></li>
-<li><a href="#sub-qlearning-mstep">3）Q-Learning算法中的多步TD Target（m-Step TD Target for Q-Learning）</a></li>
+<li><a href="#sub-sarsa-mstep">2）Sarsa 算法中的多步 TD Target（m-Step TD Target for Sarsa）</a></li>
+<li><a href="#sub-qlearning-mstep">3）Q-Learning 算法中的多步 TD Target（m-Step TD Target for Q-Learning）</a></li>
 </ul>
 </li>
-<li><a href="#sec3-comparison">三、单步TD Target与多步TD Target对比（Comparison of One-step TD target and Multi-step TD target）</a></li>
+<li>
+<a href="#sec3-comparison">三、单步 TD Target 与多步 TD Target 对比（Comparison of One-step and Multi-step TD Target）</a>
+<ul>
 </ul>
 </li>
 </ul>
