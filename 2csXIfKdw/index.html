@@ -129,57 +129,59 @@
           
           <p>在本章中，我们将讨论如何将Apache Kafka与Spark Streaming API集成。</p>
 <h2 id="关于spark">关于Spark</h2>
-<p>Spark Streaming API支持实时数据流的可扩展，高吞吐量，容错流处理。 数据可以从诸如Kafka，Flume，Twitter等许多源中提取，并且可以使用复杂的算法来处理，例如地图，缩小，连接和窗口等高级功能。 最后，处理的数据可以推送到文件系统，数据库和活动仪表板。 弹性分布式数据集(RDD)是Spark的基本数据结构。 它是一个不可变的分布式对象集合。 RDD中的每个数据集划分为逻辑分区，可以在集群的不同节点上计算。</p>
+<p>Spark Streaming API 支持实时数据流的可扩展、高吞吐量、容错流处理。数据可以从 Kafka、Flume、Twitter 等多种数据源中提取，并可用 map、reduce、join、window 等算子做复杂计算；处理后的数据可以推送到文件系统、数据库和实时仪表板。</p>
+<p>弹性分布式数据集（RDD）是 Spark 的基本数据结构，它是一个不可变的分布式对象集合。RDD 中的每个数据集被划分为若干逻辑分区，可以在集群的不同节点上并行计算。</p>
 <h2 id="与spark集成">与Spark集成</h2>
-<p>Kafka是Spark流式传输的潜在消息传递和集成平台。 Kafka充当实时数据流的中心枢纽，并使用Spark Streaming中的复杂算法进行处理。 一旦数据被处理，Spark Streaming可以将结果发布到另一个Kafka主题或存储在HDFS，数据库或仪表板中。 下图描述了概念流程。</p>
-<figure data-type="image" tabindex="1"><img src="https://atts.w3cschool.cn/attachments/tuploads/apache_kafka/integration_spark.jpg" alt="Integration with Spark" loading="lazy"></figure>
-<p>现在，让我们详细了解Kafka-Spark API。</p>
+<p>Kafka 是 Spark 流式处理最常用的消息与集成平台：Kafka 充当实时数据流的中心枢纽，Spark Streaming 从中消费数据并用复杂算法处理；处理完成后，结果可以发布到另一个 Kafka 主题，或者写入 HDFS、数据库、实时仪表板。下图描述了这一概念流程。</p>
+<p><img src="/post-assets/2csXIfKdw/01-kafka-spark-flow.svg" alt="Kafka 与 Spark Streaming 集成数据流示意图"></p>
+<p>这里 Kafka 起到缓冲层的作用：下游计算变慢时消息仍能暂存在 Kafka 中，不会立刻压垮计算任务，这也是它常被放在 Spark 之前的原因。</p>
+<p>下面详细介绍 Kafka-Spark 相关 API。</p>
 <h3 id="sparkconf-api">SparkConf API</h3>
-<p>它表示Spark应用程序的配置。 用于将各种Spark参数设置为键值对。</p>
-<p>SparkConf 类有以下方法 -</p>
+<p>SparkConf 表示 Spark 应用程序的配置，用于以键值对的形式设置各种 Spark 参数。常用方法如下：</p>
 <ul>
-<li><strong>set(string key，string value)</strong> - 设置配置变量。</li>
-<li><strong>remove(string key)</strong> - 从配置中移除密钥。</li>
-<li><strong>setAppName(string name)</strong> - 设置应用程序的应用程序名称。</li>
-<li><strong>get(string key)</strong> - get key</li>
+<li><strong>set(String key, String value)</strong> - 设置配置项。</li>
+<li><strong>remove(String key)</strong> - 从配置中移除指定配置项。</li>
+<li><strong>setAppName(String name)</strong> - 设置应用程序名称，该名称会显示在集群 Web UI 上。</li>
+<li><strong>get(String key)</strong> - 获取指定配置项的值。</li>
 </ul>
 <h3 id="streamingcontext-api">StreamingContext API</h3>
-<p>这是Spark功能的主要入口点。 SparkContext表示到Spark集群的连接，可用于在集群上创建RDD，累加器和广播变量。 签名的定义如下所示。</p>
-<pre><code class="language-java">public StreamingContext(String master, String appName, Duration batchDuration, 
+<p>StreamingContext 是 Spark Streaming 功能的主要入口点，它表示到 Spark 集群的连接，可用于在集群上创建 RDD、累加器和广播变量。签名定义如下所示。</p>
+<pre><code class="language-scala">public StreamingContext(String master, String appName, Duration batchDuration, 
    String sparkHome, scala.collection.Seq&lt;String&gt; jars, 
    scala.collection.Map&lt;String,String&gt; environment)
 </code></pre>
 <ul>
-<li><strong>主</strong> - 要连接的群集网址(例如mesos:// host:port，spark:// host:port，local [4])。</li>
-<li><strong>appName</strong> - 作业的名称，以显示在集群Web UI上</li>
-<li><strong>batchDuration</strong> - 流式数据将被分成批次的时间间隔</li>
+<li><strong>master</strong> - 要连接的集群 URL（例如 mesos://host:port、spark://host:port、local[4]）。</li>
+<li><strong>appName</strong> - 作业名称，显示在集群 Web UI 上。</li>
+<li><strong>batchDuration</strong> - 流式数据被切分成批次的时间间隔。</li>
 </ul>
-<pre><code class="language-java">public StreamingContext(SparkConf conf, Duration batchDuration)
+<pre><code class="language-scala">public StreamingContext(SparkConf conf, Duration batchDuration)
 </code></pre>
-<p>通过提供新的SparkContext所需的配置创建StreamingContext。</p>
+<p>通过传入创建新 SparkContext 所需的配置来构造 StreamingContext。</p>
 <ul>
-<li><strong>conf</strong> - Spark参数</li>
-<li><strong>batchDuration</strong> - 流式数据将被分成批次的时间间隔</li>
+<li><strong>conf</strong> - Spark 参数。</li>
+<li><strong>batchDuration</strong> - 流式数据被切分成批次的时间间隔。</li>
 </ul>
 <h3 id="kafkautils-api">KafkaUtils API</h3>
-<p>KafkaUtils API用于将Kafka集群连接到Spark流。 此API具有如下定义的显着方法 createStream 。</p>
-<pre><code class="language-java">public static ReceiverInputDStream&lt;scala.Tuple2&lt;String,String&gt;&gt; createStream(
+<p>KafkaUtils API 用于把 Kafka 集群连接到 Spark 流，其中最主要的方法是 createStream，定义如下。</p>
+<pre><code class="language-scala">public static ReceiverInputDStream&lt;scala.Tuple2&lt;String,String&gt;&gt; createStream(
    StreamingContext ssc, String zkQuorum, String groupId,
    scala.collection.immutable.Map&lt;String,Object&gt; topics, StorageLevel storageLevel)
 </code></pre>
-<p>上面显示的方法用于创建从Kafka Brokers提取消息的输入流。</p>
+<p>上面的方法用于创建从 Kafka Broker 拉取消息的输入流（DStream）。各参数含义如下：</p>
 <ul>
-<li><strong>ssc</strong> - StreamingContext对象。</li>
-<li><strong>zkQuorum</strong> - Zookeeper quorum。</li>
-<li><strong>groupId</strong> - 此消费者的组ID。</li>
-<li><strong>主题</strong> - 返回要消费的主题的地图。</li>
-<li><strong>storageLevel</strong> - 用于存储接收的对象的存储级别。</li>
+<li><strong>ssc</strong> - StreamingContext 对象。</li>
+<li><strong>zkQuorum</strong> - ZooKeeper 集群地址（quorum）。</li>
+<li><strong>groupId</strong> - 该消费者的组 ID。</li>
+<li><strong>topics</strong> - 要消费的主题与消费者线程数的映射（Map）。</li>
+<li><strong>storageLevel</strong> - 接收对象的存储级别。</li>
 </ul>
-<p>KafkaUtils API有另一个方法createDirectStream，用于创建一个输入流，直接从Kafka Brokers拉取消息，而不使用任何接收器。 这个流可以保证来自Kafka的每个消息都包含在转换中一次。</p>
-<p>示例应用程序用 Scala 编写。要编译应用程序，请下载并安装 sbt（Scala 构建工具，类似于 Maven）。 主要应用程序代码如下所示。</p>
-<pre><code class="language-java">import java.util.HashMap
+<p>KafkaUtils 还有另一个方法 createDirectStream，用于创建直接从 Kafka Broker 拉取消息的输入流，不经过任何 Receiver。它配合 checkpoint 可以保证每条 Kafka 消息在转换中恰好被处理一次（exactly-once）。</p>
+<p><img src="/post-assets/2csXIfKdw/02-receiver-vs-direct.svg" alt="Receiver 模式与 Direct 模式对比示意图"></p>
+<p>下面用 Scala 编写示例应用。编译前需要先下载并安装 sbt（Scala 构建工具，作用类似 Maven）。主程序代码如下所示。</p>
+<pre><code class="language-scala">import java.util.HashMap
 
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produc-erRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.kafka._
@@ -187,7 +189,7 @@ import org.apache.spark.streaming.kafka._
 object KafkaWordCount {
    def main(args: Array[String]) {
       if (args.length &lt; 4) {
-         System.err.println(&quot;Usage: KafkaWordCount &lt;zkQuorum&gt;&lt;group&gt; &lt;topics&gt; &lt;numThreads&gt;&quot;)
+         System.err.println(&quot;Usage: KafkaWordCount &lt;zkQuorum&gt; &lt;group&gt; &lt;topics&gt; &lt;numThreads&gt;&quot;)
          System.exit(1)
       }
 
@@ -200,7 +202,7 @@ object KafkaWordCount {
       val lines = KafkaUtils.createStream(ssc, zkQuorum, group, topicMap).map(_._2)
       val words = lines.flatMap(_.split(&quot; &quot;))
       val wordCounts = words.map(x =&gt; (x, 1L))
-         .reduceByKeyAndWindow(_ &amp;plus; _, _ - _, Minutes(10), Seconds(2), 2)
+         .reduceByKeyAndWindow(_ + _, _ - _, Minutes(10), Seconds(2), 2)
       wordCounts.print()
 
       ssc.start()
@@ -209,8 +211,8 @@ object KafkaWordCount {
 }
 </code></pre>
 <h3 id="构建脚本">构建脚本</h3>
-<p>spark-kafka集成取决于Spark，Spark流和Spark与Kafka的集成jar。 创建一个新文件 build.sbt ，并指定应用程序详细信息及其依赖关系。 在编译和打包应用程序时， sbt 将下载所需的jar。</p>
-<pre><code class="language-sh">name := &quot;Spark Kafka Project&quot;
+<p>Spark-Kafka 集成依赖 Spark、Spark Streaming 和 Spark-Kafka 集成 jar 包。新建 build.sbt 文件，指定应用信息及其依赖关系；编译打包时 sbt 会自动下载所需的 jar。</p>
+<pre><code class="language-scala">name := &quot;Spark Kafka Project&quot;
 version := &quot;1.0&quot;
 scalaVersion := &quot;2.10.5&quot;
 
@@ -218,45 +220,50 @@ libraryDependencies += &quot;org.apache.spark&quot; %% &quot;spark-core&quot; % 
 libraryDependencies += &quot;org.apache.spark&quot; %% &quot;spark-streaming&quot; % &quot;1.6.0&quot;
 libraryDependencies += &quot;org.apache.spark&quot; %% &quot;spark-streaming-kafka&quot; % &quot;1.6.0&quot;
 </code></pre>
-<h3 id="编译包装">编译/包装</h3>
-<p>运行以下命令以编译和打包应用程序的jar文件。 我们需要将jar文件提交到spark控制台以运行应用程序。</p>
-<pre><code class="language-sh">sbt package
+<p>注意：这里的 Spark 1.6.0 与 Scala 2.10.5 沿用自原文，属于 Receiver 模式时代的版本组合。在新版本 Spark 中应改用与 Spark 版本一致的 spark-streaming-kafka-0-10 连接器，并把 scalaVersion 改为对应版本（例如 2.12）。</p>
+<h3 id="编译与打包">编译与打包</h3>
+<p>运行以下命令即可编译并打包出应用的 jar 文件，随后将该 jar 提交到 Spark 运行。</p>
+<pre><code class="language-bash">sbt package
 </code></pre>
 <h3 id="提交到spark">提交到Spark</h3>
-<p>启动Kafka Producer CLI(在上一章中解释)，创建一个名为 my-first-topic 的新主题，并提供一些样本消息，如下所示。</p>
-<pre><code class="language-sh">Another spark test message
+<p>先启动 Kafka Producer CLI（在上一章中介绍过），创建一个名为 my-first-topic 的新 topic，并发送几条示例消息：</p>
+<pre><code class="language-text">Another spark test message
 </code></pre>
-<p>运行以下命令将应用程序提交到spark控制台。</p>
-<pre><code class="language-sh">/usr/local/spark/bin/spark-submit --packages org.apache.spark:spark-streaming
--kafka_2.10:1.6.0 --class &quot;KafkaWordCount&quot; --master local[4] target/scala-2.10/spark
--kafka-project_2.10-1.0.jar localhost:2181 &lt;group name&gt; &lt;topic name&gt; &lt;number of threads&gt;
+<p>然后运行以下命令，把应用程序提交到 Spark：</p>
+<pre><code class="language-bash">/usr/local/spark/bin/spark-submit \
+  --packages org.apache.spark:spark-streaming-kafka_2.10:1.6.0 \
+  --class &quot;KafkaWordCount&quot; --master local[4] \
+  target/scala-2.10/spark-kafka-project_2.10-1.0.jar \
+  localhost:2181 &lt;group name&gt; &lt;topic name&gt; &lt;number of threads&gt;
 </code></pre>
-<p>此应用程序的示例输出如下所示。</p>
-<pre><code class="language-sh">spark console messages ..
+<p>该应用的示例输出如下所示。</p>
+<pre><code class="language-text">spark console messages ..
 (Test,1)
 (spark,1)
 (another,1)
 (message,1)
 spark console message ..
 </code></pre>
+<p>可以看到，每个批次中出现的单词都会被统计并打印出来。至此，一个最小的 Kafka + Spark Streaming 集成示例就完成了。</p>
 <blockquote>
 <p>原文：https://www.w3cschool.cn/apache_kafka/apache_kafka_integration_spark.html</p>
 </blockquote>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%85%B3%E4%BA%8Espark">关于Spark</a>
 <ul>
-<li><a href="#%E5%85%B3%E4%BA%8Espark">关于Spark</a></li>
-<li><a href="#%E4%B8%8Espark%E9%9B%86%E6%88%90">与Spark集成</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%8Espark%E9%9B%86%E6%88%90">与Spark集成</a>
 <ul>
 <li><a href="#sparkconf-api">SparkConf API</a></li>
 <li><a href="#streamingcontext-api">StreamingContext API</a></li>
 <li><a href="#kafkautils-api">KafkaUtils API</a></li>
 <li><a href="#%E6%9E%84%E5%BB%BA%E8%84%9A%E6%9C%AC">构建脚本</a></li>
-<li><a href="#%E7%BC%96%E8%AF%91%E5%8C%85%E8%A3%85">编译/包装</a></li>
+<li><a href="#%E7%BC%96%E8%AF%91%E4%B8%8E%E6%89%93%E5%8C%85">编译与打包</a></li>
 <li><a href="#%E6%8F%90%E4%BA%A4%E5%88%B0spark">提交到Spark</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
