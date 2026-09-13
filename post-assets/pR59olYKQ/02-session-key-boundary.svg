@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>登录态数据的存放位置与安全边界</title>
+  <rect width="900" height="400" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">登录态数据的存放位置与安全边界</text>
+  <rect x="60" y="56" width="780" height="54" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="450" y="78" font-size="13" fill="#1f2b38" text-anchor="middle">小程序端（不可信）：只保存 token，用于后续请求的 Authorization 请求头</text>
+  <text x="450" y="96" font-size="11" fill="#5b6b7c" text-anchor="middle">不保存 session_key，也无法解密用户数据</text>
+  <line x1="450" y1="112" x2="450" y2="152" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="466" y="136" font-size="11" fill="#5b6b7c">① 请求头 Authorization: token</text>
+  <rect x="60" y="156" width="780" height="54" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="450" y="178" font-size="13" fill="#1f2b38" text-anchor="middle">开发者服务器：JwtUtils.getUserClaim 解析 Claims（uid、openid）</text>
+  <text x="450" y="196" font-size="11" fill="#5b6b7c" text-anchor="middle">RedisOperator 读写登录态，session_key 不下发给前端</text>
+  <line x1="450" y1="212" x2="450" y2="252" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="466" y="236" font-size="11" fill="#5b6b7c">② 解析通过后按业务需要读取登录态</text>
+  <rect x="60" y="256" width="780" height="54" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="450" y="278" font-size="13" fill="#1f2b38" text-anchor="middle">Redis：key = token，value = session_key；用户表：openid + session_key</text>
+  <text x="450" y="296" font-size="11" fill="#5b6b7c" text-anchor="middle">openid 与 session_key 只由微信接口 auth.code2Session 在登录那一刻下发</text>
+  <rect x="60" y="330" width="780" height="48" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="450" y="352" font-size="12" fill="#1f2b38" text-anchor="middle">安全红线：session_key 只存在于服务端，绝不下发给小程序</text>
+  <text x="450" y="370" font-size="11" fill="#5b6b7c" text-anchor="middle">Redis 中的 token 建议设置与 JWT 有效期一致的过期时间</text>
+</svg>

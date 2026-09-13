@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>小程序端接入与登录态校验流程</title>
+  <rect width="900" height="400" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">小程序端接入与登录态校验流程</text>
+  <rect x="25" y="70" width="190" height="110" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="120" y="98" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">① wx.login</text>
+  <text x="120" y="124" font-size="11" fill="#5b6b7c" text-anchor="middle">获取临时凭证 code</text>
+  <text x="120" y="146" font-size="11" fill="#5b6b7c" text-anchor="middle">一次性、5 分钟有效</text>
+  <text x="120" y="166" font-size="11" fill="#5b6b7c" text-anchor="middle">不直接暴露用户身份</text>
+  <line x1="217" y1="125" x2="241" y2="125" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="245" y="70" width="190" height="110" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="340" y="98" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">② 请求 /api/wxlogin</text>
+  <text x="340" y="124" font-size="11" fill="#5b6b7c" text-anchor="middle">服务端用 code 换 openid</text>
+  <text x="340" y="146" font-size="11" fill="#5b6b7c" text-anchor="middle">签发 JWT 并写入 Redis</text>
+  <text x="340" y="166" font-size="11" fill="#5b6b7c" text-anchor="middle">返回 { token: ... }</text>
+  <line x1="437" y1="125" x2="461" y2="125" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="465" y="70" width="190" height="110" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="560" y="98" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">③ 保存 token 到本地</text>
+  <text x="560" y="124" font-size="11" fill="#5b6b7c" text-anchor="middle">wx.setStorageSync</text>
+  <text x="560" y="146" font-size="11" fill="#5b6b7c" text-anchor="middle">下次启动可直接读取</text>
+  <text x="560" y="166" font-size="11" fill="#5b6b7c" text-anchor="middle">本地不留 session_key</text>
+  <line x1="657" y1="125" x2="681" y2="125" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="685" y="70" width="190" height="110" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="780" y="98" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">④ 业务请求带 token</text>
+  <text x="780" y="124" font-size="11" fill="#5b6b7c" text-anchor="middle">header.Authorization</text>
+  <text x="780" y="146" font-size="11" fill="#5b6b7c" text-anchor="middle">= 本地存的 token</text>
+  <text x="780" y="166" font-size="11" fill="#5b6b7c" text-anchor="middle">服务端据此还原身份</text>
+  <line x1="780" y1="182" x2="780" y2="240" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="25" y="228" font-size="12" fill="#5b6b7c">服务端处理分支：</text>
+  <rect x="25" y="246" width="400" height="88" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="225" y="274" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">校验通过：签名有效且未过期</text>
+  <text x="225" y="298" font-size="11" fill="#5b6b7c" text-anchor="middle">取出 uid、openid，继续执行正常业务</text>
+  <text x="225" y="318" font-size="11" fill="#5b6b7c" text-anchor="middle">需要主动登出时再查一次 Redis 确认 token 仍在</text>
+  <rect x="475" y="246" width="400" height="88" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="675" y="274" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">校验失败：签名不合法、已过期</text>
+  <text x="675" y="298" font-size="11" fill="#5b6b7c" text-anchor="middle">或 Redis 中已查不到该 token</text>
+  <text x="675" y="318" font-size="11" fill="#5b6b7c" text-anchor="middle">返回 401，小程序清 token 后重新 wx.login</text>
+</svg>

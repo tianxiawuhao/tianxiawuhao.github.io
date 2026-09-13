@@ -148,8 +148,9 @@
 <p><img src="/post-assets/pR59olYKQ/01-wx-login-sequence.svg" alt="微信小程序授权登录时序图：小程序 wx.login 获取 code，服务端调用 auth.code2Session 换取 openid 与 session_key，签发 JWT 存入 Redis 后下发，后续业务请求在 Header 中携带 token"></p>
 <hr>
 <h2 id="sec-deps-utils">二、依赖与工具类</h2>
-<p><strong>流程理清之后，下面就用代码实现。Spring Boot 部分为了压缩篇幅，这里只贴核心代码：</strong></p>
-<p>核心技术是 HttpClient 与 JWT Token。需要在原有依赖的基础上增加这两个 Maven 依赖：</p>
+<p>流程理清之后，下面就用代码实现。Spring Boot 部分为了压缩篇幅，这里只贴核心代码。</p>
+<p>核心技术是 HttpClient 与 JWT Token。需要在原有依赖的基础上增加这两个 Maven 依赖（Apache HttpClient 4.x 目前处于维护状态，JDK 11 及以上的项目也可以改用内置的 java.net.http.HttpClient，本文沿用原依赖以便与既有代码保持一致）：</p>
+<p>另外示例使用的 jjwt 0.7.0 版本较旧，升级到 0.11.x / 0.12.x 后 JwtMap、CompressionCodecs、setPayload 等 API 变化较大，升级时需要同步改写 JwtTokenProvider 与 UserClaims。</p>
 <pre><code class="language-xml">&lt;!-- httpclient --&gt;
 &lt;dependency&gt;
     &lt;groupId&gt;org.apache.httpcomponents&lt;/groupId&gt;
@@ -254,7 +255,10 @@ public class HttpClientUtil {
             e.printStackTrace();
         } finally {
             try {
-                response.close();
+                if (response != null) {
+                    response.close();
+                }
+                httpClient.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -285,7 +289,10 @@ public class HttpClientUtil {
             e.printStackTrace();
         } finally {
             try {
-                response.close();
+                if (response != null) {
+                    response.close();
+                }
+                httpClient.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -441,6 +448,8 @@ public class UserClaims extends JwtMap implements Claims {
 }
 </code></pre>
 <h3 id="sec-jwt-utils">2.2 JWT 工具类</h3>
+<p>JwtTokenProvider 使用 HS512 对 token 签名。<strong>HS512 要求密钥长度不小于 512 位（64 字节）</strong>，密钥过短时 jjwt 会直接抛出 WeakKeyException，因此配置项 auth.jwtKey 建议使用 64 字节以上的随机字符串，而不要使用简短口令。createToken 先把 Claims 序列化成 JSON，再压缩、签名，得到 header.payload.signature 三段式的 JWT；parseToken 用同一密钥校验签名并还原 Claims。</p>
+<p>另外，示例中的 key.getBytes() 使用平台默认字符集，跨环境部署时建议显式写成 key.getBytes(StandardCharsets.UTF_8)，避免密钥字节不一致导致签名校验失败。</p>
 <p><strong>JwtTokenProvider.java</strong></p>
 <pre><code class="language-java">package com.wx.video.utils;
  
@@ -610,8 +619,59 @@ public class UserController {
 <p>5、session_key 是对用户数据做加密签名的密钥，只应保存在服务端，示例中把它写入 Redis 和用户表、不下发给小程序，这一点是正确的；另外 Redis 中的 token 建议设置与 JWT 有效期一致的过期时间，避免长期堆积。</p>
 <p>6、文中的 System.out.println 仅用于演示，实际项目建议改用 SLF4J 等日志框架，并且不要把完整的 token 打印到日志里。</p>
 </blockquote>
+<p><img src="/post-assets/pR59olYKQ/02-session-key-boundary.svg" alt="登录态数据的存放位置与安全边界：小程序端只保存 token，开发者服务器解析 Claims 并访问 Redis，openid 与 session_key 由微信接口下发后只保存在服务端的 Redis 与用户表中，不下发给小程序"></p>
 <h2 id="sec-client-verify">四、小程序端接入与登录态校验</h2>
-<p>上面的代码就足以完成微信小程序的授权登录。小程序拿到 token 后要存入本地 storage；后续需要登录态校验的请求，在 Header 中把 Authorization 设为 token 值。后台使用封装好的 JwtUtils.getUserClaim 方法，即可从 request 中直接解析出 Claims 对象（里面存放着我们封装的 uid 和 openid），然后继续处理正常业务。</p>
+<p>上面的代码就足以完成微信小程序的授权登录。小程序拿到 token 后要存入本地 Storage；后续需要登录态校验的请求，在 Header 中把 Authorization 设为 token 值。后台使用封装好的 JwtUtils.getUserClaim 方法，即可从 request 中直接解析出 Claims 对象（里面存放着我们封装的 uid 和 openid），然后继续处理正常业务。</p>
+<p>小程序端的示例代码如下（同样只保留主干）：</p>
+<pre><code class="language-js">// pages/login/login.js
+Page({
+  onLoad() {
+    this.login();
+  },
+
+  // 第一步：静默登录，把 code 换成服务端签发的 token
+  login() {
+    wx.login({
+      success: (res) =&gt; {
+        // res.code 只能使用一次，应尽快发给我们自己的服务端
+        wx.request({
+          url: 'https://your.domain/api/wxlogin',
+          method: 'POST',
+          data: {
+            code: res.code,
+            uname: '',
+            uavatar: '',
+            ugender: '',
+            address: ''
+          },
+          success: (r) =&gt; {
+            // 服务端返回结构示例：{ code: 200, data: { token: '...' } }
+            wx.setStorageSync('token', r.data.data.token);
+          }
+        });
+      }
+    });
+  },
+
+  // 第二步：需要登录态的业务请求，在请求头里带上 token
+  requestWithToken(url, data) {
+    wx.request({
+      url: url,
+      method: 'POST',
+      header: { Authorization: wx.getStorageSync('token') },
+      data: data,
+      success: (r) =&gt; {
+        if (r.statusCode === 401) {
+          // 登录态已失效：清掉本地 token 重新登录
+          wx.removeStorageSync('token');
+          this.login();
+        }
+      }
+    });
+  }
+});</code></pre>
+<p>服务端不必额外写拦截器也能完成校验：在需要登录态的接口里调用 jwtUtils.getUserClaim(request)，解析成功说明 token 的签名有效且未过期，直接取出 uid 与 openid 即可。若要支持主动登出或强制失效，还需要在解析之后再查一次 Redis——只有该 token 仍然存在于 Redis 中，登录态才算有效（示例把 token 作为 key 写入 Redis，正是为此留的余地）；查不到就返回 401，让小程序重新执行 wx.login。</p>
+<p><img src="/post-assets/pR59olYKQ/03-login-state-verify.svg" alt="小程序端登录与登录态校验流程图：小程序用 wx.login 拿到 code 后请求 /api/wxlogin，服务端换取 openid 并签发 token，小程序存入 Storage 并在后续业务请求头中携带；服务端解析 Claims 并校验 Redis，校验通过继续业务，失败则返回 401 让小程序重新登录"></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
