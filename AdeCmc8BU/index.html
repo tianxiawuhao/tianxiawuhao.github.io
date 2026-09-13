@@ -130,14 +130,28 @@
 <p>原文：https://distributedbytes.timojo.com/2016/07/23-useful-elasticsearch-example-queries.html<br>
 作者：Tim Ojo</p>
 </blockquote>
+<p><strong>版本说明</strong>：下文示例最初基于 Elasticsearch 2.x 编写，其中带文档类型的 URL（如 <code>/bookdb_index/book/_search</code>）、命中结果里的 <code>_type</code> 字段、<code>_all</code> 字段、<code>filtered</code> 查询、Groovy 评分脚本等，在 7.x/8.x 中均已移除或废弃。为保留原文脉络，本文只把请求 URL 统一改为 7.x/8.x 可直接执行的 <code>/{index}/_search</code>，其余历史写法保留并逐处标注现代替代方案（注意区分 <code>_type</code>（文档类型，已移除）和 <code>multi_match</code> 的 <code>type</code> 参数（打分策略，仍然有效））。</p>
 <p>为了演示不同类型的 ElasticSearch 的查询，我们将使用以下字段搜索书籍文档的集合（ title（标题）, authors（作者）, summary（摘要）, publish_date（发布日期）和 num_reviews（浏览数））。</p>
 <p>在这之前，首先我们应该先创建一个新的索引（index），并批量导入一些文档：</p>
 <p>创建索引：</p>
 <pre><code class="language-json">PUT /bookdb_index
     { &quot;settings&quot;: { &quot;number_of_shards&quot;: 1 }} 
 </code></pre>
-<p>批量上传文档：</p>
-<pre><code class="language-json">POST /bookdb_index/book/_bulk
+<p>在写入前先显式声明 mapping：字段类型与分词方式直接决定后面的范围查询、排序和聚合能否得到正确结果。<code>publish_date</code> 必须声明为 <code>date</code>，否则动态映射会把它当作文本；<code>publisher</code> 声明为 <code>keyword</code>，才能被 <code>term</code> / <code>terms</code> 精确匹配并用于聚合。</p>
+<pre><code class="language-json">PUT /bookdb_index/_mapping
+{
+  &quot;properties&quot;: {
+    &quot;title&quot;:        { &quot;type&quot;: &quot;text&quot; },
+    &quot;authors&quot;:      { &quot;type&quot;: &quot;text&quot; },
+    &quot;summary&quot;:      { &quot;type&quot;: &quot;text&quot; },
+    &quot;publish_date&quot;: { &quot;type&quot;: &quot;date&quot; },
+    &quot;num_reviews&quot;:  { &quot;type&quot;: &quot;integer&quot; },
+    &quot;publisher&quot;:    { &quot;type&quot;: &quot;keyword&quot; }
+  }
+}
+</code></pre>
+<p>批量上传文档（7.x 起一个索引只能有一种文档类型，写入路径统一为 <code>POST /&lt;index&gt;/_bulk</code>，不再带 <code>/book</code>）：</p>
+<pre><code class="language-json">POST /bookdb_index/_bulk
     { &quot;index&quot;: { &quot;_id&quot;: 1 }}
     { &quot;title&quot;: &quot;Elasticsearch: The Definitive Guide&quot;, &quot;authors&quot;: [&quot;clinton gormley&quot;, &quot;zachary tong&quot;], &quot;summary&quot; : &quot;A distibuted real-time search and analytics engine&quot;, &quot;publish_date&quot; : &quot;2015-02-07&quot;, &quot;num_reviews&quot;: 20, &quot;publisher&quot;: &quot;oreilly&quot; }
     { &quot;index&quot;: { &quot;_id&quot;: 2 }}
@@ -147,11 +161,12 @@
     { &quot;index&quot;: { &quot;_id&quot;: 4 }}
     { &quot;title&quot;: &quot;Solr in Action&quot;, &quot;authors&quot;: [&quot;trey grainger&quot;, &quot;timothy potter&quot;], &quot;summary&quot; : &quot;Comprehensive guide to implementing a scalable search engine using Apache Solr&quot;, &quot;publish_date&quot; : &quot;2014-04-05&quot;, &quot;num_reviews&quot;: 23, &quot;publisher&quot;: &quot;manning&quot; }
 </code></pre>
+<p><img src="/post-assets/AdeCmc8BU/01-query-dsl-structure.svg" alt="Elasticsearch Query DSL 请求体结构与 bool 查询树：query 打分、post_filter、from/size、sort、_source、aggs、highlight，以及 must、should、must_not、filter 与 minimum_should_match 的关系"></p>
 <h2 id="例子">例子</h2>
 <h3 id="1基本比对查询">1.基本比对查询</h3>
 <p>执行基本的全文本（匹配）查询有两种方式：使用Search Lite API（它希望所有搜索参数都作为URL的一部分传入），或使用完整的JSON请求正文（允许您使用完整的Elasticsearch DSL)。</p>
 <p>这是一个基本的匹配查询，它在所有字段中搜索字符串“ guide”</p>
-<pre><code class="language-json">GET /bookdb_index/book/_search?q=guide
+<pre><code class="language-json">GET /bookdb_index/_search?q=guide
 
 [Results]
 &quot;hits&quot;: [
@@ -197,15 +212,16 @@
     &quot;query&quot;: {
         &quot;multi_match&quot; : {
             &quot;query&quot; : &quot;guide&quot;,
-            &quot;fields&quot; : [&quot;_all&quot;]
+            &quot;fields&quot; : [&quot;*&quot;]
         }
     }
 }
  
 </code></pre>
-<p>使用<code>multi_match</code>关键字代替关键字<code>match</code>是对多个字段运行相同查询的便捷快捷方式。该<code>fields</code>属性指定要查询的字段，在这种情况下，我们要查询文档中的所有字段。<br>
+<p>使用<code>multi_match</code>关键字代替关键字<code>match</code>是对多个字段运行相同查询的便捷快捷方式。该<code>fields</code>属性指定要查询的字段，在这种情况下，我们要查询文档中的所有字段。本文已把示例中的 <code>_all</code> 统一替换为 <code>&quot;*&quot;</code>。<br>
+<strong>7.x/8.x 提示</strong>：<code>_all</code> 字段在 6.0 中废弃、7.0 中移除。要用通配符查询所有字段可写 <code>&quot;fields&quot;: [&quot;*&quot;]</code>，也可以显式列出字段，或在 mapping 中用 <code>copy_to</code> 把多个字段汇聚到自定义字段再查询。<br>
 这两个API均允许您指定要搜索的字段。例如，要在标题字段中搜索带有“in action”字样的图书，请执行以下操作：</p>
-<pre><code class="language-java">GET /bookdb_index/book/_search?q=title:in action
+<pre><code class="language-java">GET /bookdb_index/_search?q=title:in action
 
 [Results]
 &quot;hits&quot;: [
@@ -248,7 +264,7 @@
  
 </code></pre>
 <p>但是，完整的查询 DSL 在创建更复杂的查询（如我们将在后面看到）以及指定您希望如何返回结果方面给您更大的灵活性。在下面的示例中，我们指定要返回的结果数，开始的偏移量（用于分页），要返回的文档字段以及术语突出显示。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;match&quot; : {
@@ -309,7 +325,7 @@
 <p><strong>注意</strong>：对于多字查询，该<code>match</code>查询使您可以指定是否使用<code>and</code>运算符而不是默认<code>or</code>运算符。您还可以指定<code>minimum_should_match</code>选项来调整返回结果的相关性。可以在<a href="https://www.elastic.co/guide/en/elasticsearch/guide/current/match-multi-word.html">这里</a>找到详细信息。</p>
 <h3 id="2多字段搜索">2.多字段搜索</h3>
 <p>正如我们已经看到的，要在搜索中查询多个文档字段（例如，在标题和摘要中搜索相同的查询字符串），则可以使用该<code>multi_match</code>查询。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;multi_match&quot; : {
@@ -383,7 +399,7 @@
 <p>请注意，命中数字3相匹配，因为在摘要中找到了“指南”一词。</p>
 <h3 id="3提高字段重要性">3.提高字段重要性</h3>
 <p>由于我们正在多个字段中进行搜索，因此我们可能希望提高特定字段中的得分。在以下人为设计的示例中，我们将摘要字段的得分提高了3倍，以提高摘要字段的重要性，这反过来又会增加文档<code>_id 4</code>的相关性。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;multi_match&quot; : {
@@ -435,16 +451,16 @@
 <p><strong>注意</strong> ：Boosting不仅仅意味着计算出的分数会乘以Boosting系数。实际应用的升压值经过归一化和一些内部优化。有关增强工作原理的更多信息，请参见 <a href="https://www.elastic.co/guide/en/elasticsearch/guide/current/query-time-boosting.html">Elasticsearch指南</a>。</p>
 <h3 id="4布尔查询">4.布尔查询</h3>
 <p>AND / OR / NOT运算符可用于微调我们的搜索查询，以提供更相关或更具体的结果。这是在搜索API中作为<code>bool</code>查询实现的。该<code>bool</code>查询接受一个<code>must</code>参数（等同于AND），一个<code>must_not</code>参数（等同于NOT）和一个<code>should</code>参数（等同于OR）。例如，如果我要搜索书名中带有“ Elasticsearch”或“ Solr”字样的书，则AND由“克林顿·戈姆利”（clinton gormley）创作，而不由“ radu gheorge”（radu gheorge）创作：</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;bool&quot;: {
-            &quot;must&quot;: {
-                &quot;bool&quot; : { &quot;should&quot;: [
-                      { &quot;match&quot;: { &quot;title&quot;: &quot;Elasticsearch&quot; }},
-                      { &quot;match&quot;: { &quot;title&quot;: &quot;Solr&quot; }} ] }
-            },
-            &quot;must&quot;: { &quot;match&quot;: { &quot;authors&quot;: &quot;clinton gormely&quot; }},
+            &quot;must&quot;: [
+              { &quot;bool&quot; : { &quot;should&quot;: [
+                    { &quot;match&quot;: { &quot;title&quot;: &quot;Elasticsearch&quot; }},
+                    { &quot;match&quot;: { &quot;title&quot;: &quot;Solr&quot; }} ] }},
+              { &quot;match&quot;: { &quot;authors&quot;: &quot;clinton gormley&quot; }}
+            ],
             &quot;must_not&quot;: { &quot;match&quot;: {&quot;authors&quot;: &quot;radu gheorge&quot; }}
         }
     }
@@ -472,10 +488,12 @@
     ]
  
 </code></pre>
+<p><strong>修正说明</strong>：原文示例里出现了两个同名的 <code>must</code> 键，这既不是合法 JSON（多数解析器只保留最后一个），也表达不出“标题命中 Elasticsearch 或 Solr 且作者是 clinton gormley”的意图。上面已改为用数组承载多个 <code>must</code> 子句，并把 <code>clinton gormely</code> 的拼写改成与索引数据一致的 <code>clinton gormley</code>。</p>
 <p><strong>注意</strong>：如您所见，布尔查询可以包装任何其他查询类型，包括其他布尔查询，以创建任意复杂或深度嵌套的查询。</p>
+<p><strong>关于 minimum_should_match</strong>：<code>should</code> 的默认行为取决于同级子句。当 <code>bool</code> 中只有 <code>should</code> 时，默认 <code>minimum_should_match=1</code>，至少要命中一个；一旦同级出现 <code>must</code> 或 <code>filter</code>，默认值就变成 <code>0</code>，此时 <code>should</code> 只参与打分、不影响文档是否被召回。本例内层 <code>bool</code> 只有 <code>should</code>，所以仍然要求标题命中 Elasticsearch 或 Solr 之一；若希望“至少命中 2 个”，需要显式写 <code>&quot;minimum_should_match&quot;: 2</code>。</p>
 <h3 id="5模糊查询">5.模糊查询</h3>
 <p>可以在“匹配”和“多匹配”查询中启用模糊匹配，以捕获拼写错误。模糊程度是根据距原始单词的Levenshtein距离指定的。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;multi_match&quot; : {
@@ -504,10 +522,10 @@
     ]
  
 </code></pre>
-<p><strong>注意</strong>：模糊度值<code>&quot;AUTO&quot;</code>等于指定<code>2</code>术语长度大于5时的值。但是，设置80％的人类拼写错误的编辑距离为<code>1</code>，并将模糊度设置为<code>1</code>可以改善整体搜索性能。有关更多信息，请参见《Elasticsearch最终指南》的“<a href="https://www.elastic.co/guide/en/elasticsearch/guide/current/fuzziness.html">错别字和拼写错误”</a>一章。</p>
+<p><strong>注意</strong>：<code>fuzziness: &quot;AUTO&quot;</code> 会按词长自动选择编辑距离：0–2 个字符为 <code>0</code>，3–5 个字符为 <code>1</code>，超过 5 个字符为 <code>2</code>。但约 80% 的人为拼写错误编辑距离只有 <code>1</code>，把模糊度固定为 <code>1</code> 通常能在召回率和性能之间取得更好的平衡。模糊匹配要为每个词项展开大量候选词，本身开销不低，不要在长文本字段上对大查询串滥用。更多说明参见 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/common-options.html#fuzziness">Elasticsearch 参考文档</a>。</p>
 <h3 id="6通配符查询">6.通配符查询</h3>
-<p>通配符查询使您可以指定要匹配的模式，而不是整个术语。<code>?</code>匹配任何字符并<code>*</code>匹配零个或多个字符。例如，要查找所有作者姓名以字母“ t”开头的记录</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<p>通配符查询让您可以指定要匹配的模式，而不是一个完整的词项：<code>?</code> 匹配任意单个字符，<code>*</code> 匹配零个或多个字符。注意它匹配的是分词之后的词项（<code>authors</code> 为 <code>text</code> 字段，词项已被转成小写），而不是整个字段值。例如，要查找所有作者姓名以字母 “t” 开头的记录：</p>
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;wildcard&quot; : {
@@ -583,9 +601,10 @@
     ] 
  
 </code></pre>
+<p><strong>性能提示</strong>：<code>wildcard</code>、<code>prefix</code>、<code>regexp</code> 都是 term 级查询，不分词，也无法利用倒排索引的前缀优化：以 <code>*</code> 或 <code>?</code> 开头的模式（如 <code>*t</code>）需要扫描全部词项，代价极高；即使不以通配符开头，一次查询也可能展开成大量词项。生产环境应优先使用 <code>match_phrase_prefix</code>、completion suggester，或在索引期用 edge-ngram 过滤器预处理，并且绝不要把用户输入直接拼进模式串。</p>
 <h3 id="7正则表达式查询">7.正则表达式查询</h3>
 <p>正则表达式查询使您可以指定比通配符查询更复杂的模式。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;regexp&quot; : {
@@ -624,9 +643,10 @@
     ]
  
 </code></pre>
+<p><strong>注意</strong>：Elasticsearch 的 <code>regexp</code> 查询使用受限的自动机语法，并不是完整的 PCRE，只支持一部分操作符，而且模式始终是对整个词项做匹配（相当于自动加上 <code>^</code> 和 <code>$</code>）。它同样属于高开销查询，只应在必要时使用。</p>
 <h3 id="8匹配词组查询">8.匹配词组查询</h3>
 <p>匹配词组查询要求查询字符串中的所有术语都存在于文档中，并按照查询字符串中指定的顺序并且彼此接近。默认情况下，术语必须彼此完全平行，但是您可以指定一个<code>slop</code>值，该值指示在仍将文档视为匹配项时允许相隔多远的术语。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;multi_match&quot; : {
@@ -669,7 +689,7 @@
 <p><strong>注意</strong>：在上面的示例中，对于非短语类型查询，文档的<code>_id 1</code>得分通常更高，并且<code>_id 4</code>由于其字段长度较短而出现在文档的前面。但是，在进行短语查询时，会考虑到术语的接近度，因此文档<code>_id 4</code>得分会更高。</p>
 <h3 id="9匹配词组前缀">9.匹配词组前缀</h3>
 <p>匹配词组前缀查询可在查询时提供“按需输入”或“穷人”版本的自动完成功能，而无需以任何方式准备数据。像match_phrase查询一样，它接受一个<code>slop</code>参数以使单词顺序和相对位置的刚性降低一些。它还接受该 <code>max_expansions</code> 参数来限制匹配项的数量，以降低资源开销。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;match_phrase_prefix&quot; : {
@@ -710,15 +730,16 @@
     ]
  
 </code></pre>
-<p><strong>注意</strong>：“按类型查询时搜索”会降低性能。更好的解决方案是按类型进行索引时间搜索。请查看<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/search-suggesters-completion.html">完成提示API</a>或使用<a href="https://www.elastic.co/guide/en/elasticsearch/guide/current/_index_time_search_as_you_type.html">Edge-Ngram过滤器</a>以获取更多信息。</p>
+<p><strong>注意</strong>：这种“边输入边搜索”（search-as-you-type）的查询方式会显著降低性能。更好的方案是在索引期就把数据准备好，例如使用 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/search-suggesters-completion.html">completion suggester</a>，或者使用 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-edgengram-tokenfilter.html">edge-ngram 过滤器</a>。</p>
 <h3 id="10请求参数">10.请求参数</h3>
-<p>该<code>query_string</code>查询提供了一种以简洁的速记语法执行多重匹配查询，布尔查询，增强查询，模糊匹配，通配符，正则表达式和范围查询的方法。在下面的示例中，我们对术语“ saerch算法”执行模糊搜索，其中作者之一是“ grant ingersoll”或“ tom morton”。我们搜索所有字段，但对摘要字段加2。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<p><code>query_string</code> 查询用一套简写语法同时表达多字段匹配、布尔、加权、模糊、通配符、正则和范围查询。下面的示例对 “saerch algorithm” 做模糊搜索（<code>~1</code> 表示允许 1 个编辑距离的拼写错误），要求作者是 “grant ingersoll” 或 “tom morton”；查询覆盖所有字段，同时把 <code>summary</code> 的权重提高 2 倍。</p>
+<p><strong>注意</strong>：<code>query_string</code> 的语法对用户输入非常敏感，一个未转义的 <code>:</code>、<code>*</code> 或括号就会改变查询语义甚至直接报错，因此它只适合受控的查询串；面向用户的搜索框应改用 <code>simple_query_string</code>（见下一节）。</p>
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;query_string&quot; : {
             &quot;query&quot;: &quot;(saerch~1 algorithm~1) AND (grant ingersoll)  OR (tom morton)&quot;,
-            &quot;fields&quot;: [&quot;_all&quot;, &quot;summary^2&quot;]
+            &quot;fields&quot;: [&quot;*&quot;, &quot;summary^2&quot;]
         }
     },
     &quot;_source&quot;: [ &quot;title&quot;, &quot;summary&quot;, &quot;authors&quot; ],
@@ -756,12 +777,12 @@
 </code></pre>
 <h3 id="11简单查询字符串">11.简单查询字符串</h3>
 <p><code>simple_query_string</code> 查询是 <code>query_string</code> 查询的一种版本，更适合在暴露给用户的单个搜索框中使用。它分别用+ / | /-代替了AND / OR / NOT的使用，并且丢弃了查询的无效部分，而不是在用户犯错时抛出异常。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;simple_query_string&quot; : {
             &quot;query&quot;: &quot;(saerch~1 algorithm~1) + (grant ingersoll)  | (tom morton)&quot;,
-            &quot;fields&quot;: [&quot;_all&quot;, &quot;summary^2&quot;]
+            &quot;fields&quot;: [&quot;*&quot;, &quot;summary^2&quot;]
         }
     },
     &quot;_source&quot;: [ &quot;title&quot;, &quot;summary&quot;, &quot;authors&quot; ],
@@ -775,7 +796,7 @@
 </code></pre>
 <h3 id="12术语查询">12.术语查询</h3>
 <p>以上示例是全文搜索的示例。有时，我们对结构化搜索更感兴趣，在结构化搜索中我们希望找到完全匹配并返回结果。<code>term</code> 与 <code>terms</code> 查询可以帮到我们。在下面的示例中，我们正在搜索Manning Publications出版的索引中的所有书籍。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;term&quot; : {
@@ -833,9 +854,10 @@
 } 
  
 </code></pre>
+<p><strong>注意</strong>：<code>term</code> / <code>terms</code> 属于结构化精确匹配，不对输入做分词，而是直接去倒排表里找词项。因此如果字段是 <code>text</code> 类型（默认 standard 分词器会转小写），查 <code>&quot;Manning&quot;</code> 会一无所获，必须写小写 <code>&quot;manning&quot;</code>；要做精确匹配，正确做法是把字段映射为 <code>keyword</code>，例如本文的 <code>publisher</code>。另外，<code>terms</code> 数组中的元素之间是“或”的关系，单次查询的词项数默认上限为 65536（<code>index.max_terms_count</code>）。</p>
 <h3 id="13字词查询-排序">13.字词查询-排序</h3>
 <p>术语查询结果（与任何其他查询结果一样）可以轻松地进行排序。也允许多级排序</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;term&quot; : {
@@ -899,9 +921,10 @@
     ]
  
 </code></pre>
+<p><strong>注意</strong>：示例结果中的 <code>_score</code> 为 <code>null</code>，因为一旦显式按字段排序，Elasticsearch 默认就不再计算相关性分数（跳过评分能显著降低开销）。如果排序时仍需要分数，请加 <code>&quot;track_scores&quot;: true</code>。另外，用于排序的字段最好是 <code>date</code>、数值或 <code>keyword</code> 类型：对 <code>text</code> 字段排序需要开启 <code>fielddata</code>，不仅排序结果按词项字典序排列，内存开销也很大，7.x/8.x 中默认会直接报错。</p>
 <h3 id="14范围查询">14.范围查询</h3>
 <p>另一个结构化查询示例是范围查询。在此示例中，我们搜索2015年出版的图书。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;range&quot; : {
@@ -941,10 +964,11 @@
     ]
  
 </code></pre>
-<p><strong>注意</strong>：范围查询适用于日期，数字和字符串类型字段。</p>
+<p><strong>注意</strong>：范围查询适用于 <code>date</code>、数字和 <code>keyword</code>（字符串）类型字段，默认两端都是闭区间（<code>gte</code>/<code>lte</code>），也可以用 <code>gt</code>/<code>lt</code>。日期字段还支持日期数学表达式，例如 <code>&quot;gte&quot;: &quot;now-1y/d&quot;</code>，以及 <code>format</code>、<code>time_zone</code> 参数。不要在 <code>text</code> 字段上做范围查询：那是对分词后的词项逐个做字典序比较，结果通常没有意义。</p>
 <h3 id="15过滤查询">15.过滤查询</h3>
-<p>筛选查询允许您筛选查询结果。对于我们的示例，我们正在查询标题或摘要中带有“ Elasticsearch”一词的图书，但我们希望将搜索结果过滤为仅包含20条或更多评论的图书。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<p><strong>版本提示</strong>：<code>filtered</code> 查询在 Elasticsearch 5.0 中已被移除，下面的写法只能在 2.x 上执行；5.x 及以后请直接使用 <code>bool</code> 查询的 <code>filter</code> 子句，本节末尾给出了等价改写。</p>
+<p>筛选查询允许您先筛选查询结果。在我们的示例中，我们查询标题或摘要中带有 “Elasticsearch” 一词的图书，但希望把结果过滤为仅包含 20 条或更多评论的图书。</p>
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;filtered&quot;: {
@@ -983,9 +1007,10 @@
     ]
  
 </code></pre>
-<p><strong>注意</strong>：筛选查询并不要求存在要对其进行筛选的查询。如果未指定<code>match_all</code>查询，则运行查询，该查询基本上返回索引中的所有文档，然后对其进行过滤。实际上，首先运行过滤器，以减少需要查询的表面积。此外，过滤器在首次使用后会被缓存，这使其性能非常好。</p>
-<p><strong>更新</strong>：已过滤的查询已从即将推出的Elasticsearch 5.0中删除，以支持bool查询。这是与上面相同的示例，改写为使用bool查询。返回的结果完全相同。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<p><strong>注意</strong>：筛选查询并不要求一定存在被筛选的查询；只写 <code>filter</code> 时相当于 <code>match_all</code> 加上过滤条件。</p>
+<p><strong>5.x 之后的变化</strong>：<code>filtered</code> 查询本身已移除，过滤条件改为写在 <code>bool</code> 的 <code>filter</code>（或 <code>must_not</code>）子句里。这类“过滤上下文”不参与打分，因此可以复用 Lucene 的 bitset 缓存，但不打分并不等于一定更快，最终仍取决于过滤条件本身的代价。此外，<code>size: 0</code> 的聚合请求还会使用节点级 request cache，这与过滤上下文是两套不同的缓存机制，早期文档中“过滤器首次使用后即被缓存”的说法已经过时。</p>
+<p><strong>更新</strong>：<code>filtered</code> 查询已在 Elasticsearch 5.0 中被删除，由 <code>bool</code> 查询取代。下面是上面示例的等价改写，返回结果完全相同；查询与过滤都放在 <code>bool</code> 里，其中 <code>must</code> 参与打分、<code>filter</code> 不参与打分，两者都可以接受数组。</p>
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;bool&quot;: {
@@ -1009,33 +1034,22 @@
 </code></pre>
 <p>在下面的示例中，这也适用于多个过滤器。</p>
 <h3 id="16多个过滤器">16.多个过滤器</h3>
-<p>可以通过使用过滤器来组合多个过滤 <code>bool</code> 条件。在下一个示例中，过滤器确定返回的结果必须至少具有20条评论，不得在2015年之前发布，而应由oreilly发布。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<p>多个过滤条件可以组合在同一个 <code>bool</code> 查询里：<code>must</code> / <code>filter</code> 表示“必须满足”，<code>must_not</code> 表示“必须不满足”，而 <code>should</code> 在同时存在 <code>must</code> 或 <code>filter</code> 时默认只影响打分、不构成筛选条件。因此“必须由 oreilly 出版”应当写成 <code>filter</code> 里的 <code>term</code> 查询，而不是原文中只起加分作用的 <code>should</code>。下面的示例要求：至少有 20 条评论、2015 年之前未出版、且由 oreilly 出版。</p>
+<pre><code class="language-json">POST /bookdb_index/_search
 {
-    &quot;query&quot;: {
-        &quot;filtered&quot;: {
-            &quot;query&quot; : {
-                &quot;multi_match&quot;: {
-                    &quot;query&quot;: &quot;elasticsearch&quot;,
-                    &quot;fields&quot;: [&quot;title&quot;,&quot;summary&quot;]
-                }
-            },
-            &quot;filter&quot;: {
-                &quot;bool&quot;: {
-                    &quot;must&quot;: {
-                        &quot;range&quot; : { &quot;num_reviews&quot;: { &quot;gte&quot;: 20 } }
-                    },
-                    &quot;must_not&quot;: {
-                        &quot;range&quot; : { &quot;publish_date&quot;: { &quot;lte&quot;: &quot;2014-12-31&quot; } }
-                    },
-                    &quot;should&quot;: {
-                        &quot;term&quot;: { &quot;publisher&quot;: &quot;oreilly&quot; }
-                    }
-                }
-            }
-        }
-    },
-    &quot;_source&quot; : [&quot;title&quot;,&quot;summary&quot;,&quot;publisher&quot;, &quot;num_reviews&quot;, &quot;publish_date&quot;]
+  &quot;query&quot;: {
+    &quot;bool&quot;: {
+      &quot;must&quot;: [
+        { &quot;multi_match&quot;: { &quot;query&quot;: &quot;elasticsearch&quot;, &quot;fields&quot;: [&quot;title&quot;, &quot;summary&quot;] } }
+      ],
+      &quot;filter&quot;: [
+        { &quot;range&quot;: { &quot;num_reviews&quot;: { &quot;gte&quot;: 20 } } },
+        { &quot;range&quot;: { &quot;publish_date&quot;: { &quot;gt&quot;: &quot;2014-12-31&quot; } } },
+        { &quot;term&quot;: { &quot;publisher&quot;: &quot;oreilly&quot; } }
+      ]
+    }
+  },
+  &quot;_source&quot;: [&quot;title&quot;, &quot;summary&quot;, &quot;publisher&quot;, &quot;num_reviews&quot;, &quot;publish_date&quot;]
 }
 
 [Results]
@@ -1058,7 +1072,7 @@
 </code></pre>
 <h3 id="17功能评分字段值因子">17.功能评分：字段值因子</h3>
 <p>在某些情况下，您可能希望将文档中特定字段的值纳入相关性分数的计算中。在您希望根据文档的受欢迎程度提高其相关性的情况下，这是典型的情况。在我们的示例中，我们希望增加受欢迎的书籍（根据评论数判断）。使用<code>field_value_factor</code>功能评分可以做到这一点。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;function_score&quot;: {
@@ -1133,9 +1147,10 @@
 </code></pre>
 <p><strong>注意1</strong>：我们本来可以运行常规<code>multi_match</code>查询并按num_reviews字段进行排序，但是这样就失去了进行相关性评分的好处。<br>
 <strong>注意2</strong>：还有许多其他参数可以调整对原始相关性得分的增强效果，例如“修饰符”，“因子”，“ boost_mode”等。这些参数在<a href="https://www.elastic.co/guide/en/elasticsearch/guide/current/boosting-by-popularity.html">Elasticsearch指南</a>中进行了详细探讨。</p>
+<p><strong>提示</strong>：<code>field_value_factor</code> 要求字段是数值类型（示例中的 <code>num_reviews</code> 为 <code>integer</code>），并按每个命中文档取值；如果字段可能缺失，应设置 <code>&quot;missing&quot;: 1</code>，否则这些文档的分数会变成 0。另外要留意：该函数的作用是把相关性分数乘以（或替换为）字段值，字段值过小或为 0 时可能把分数压到 0，必要时配合 <code>modifier</code>（如 <code>log1p</code>）和 <code>boost_mode</code> 使用。这些参数在 7.x/8.x 中保持不变。</p>
 <h3 id="18作用分值衰减功能">18.作用分值：衰减功能</h3>
 <p>假设您不想以某个字段的值递增，而希望拥有理想的目标值，并且希望该增益因子随着距离该值的增加而衰减。这通常在基于纬度/经度，价格或日期等数字字段的提升中很有用。在我们精心设计的示例中，我们正在搜索理想情况下于2014年6月左右出版的“搜索引擎”书籍。</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;function_score&quot;: {
@@ -1216,8 +1231,8 @@
  
 </code></pre>
 <h3 id="19功能评分脚本评分">19.功能评分：脚本评分</h3>
-<p>如果内置的评分功能无法满足您的需求，则可以选择指定Groovy脚本进行评分。在我们的示例中，我们希望指定一个脚本，该脚本在决定要考虑评论数量的因素之前，先考虑publish_date。较新的书可能没有那么多的评论，因此不应因此受到惩罚。<br>
-评分脚本如下所示：</p>
+<p>如果内置的评分功能无法满足您的需求，还可以自己写评分脚本。在我们的示例中，希望脚本先考虑 <code>publish_date</code>，再决定评论数量该以什么方式计入分数：较新的书不太可能积累很多评论，不应该因此被惩罚。<br>
+下面这块是 Elasticsearch 2.x 时代的 Groovy 写法——Groovy 动态脚本已在 5.0 中移除，7.x/8.x 请使用默认的 Painless 脚本：</p>
 <pre><code class="language-java">publish_date = doc['publish_date'].value
 num_reviews = doc['num_reviews'].value
 
@@ -1229,8 +1244,30 @@ if (publish_date &gt; Date.parse('yyyy-MM-dd', threshold).getTime()) {
 return my_score
  
 </code></pre>
-<p>要动态使用评分脚本，我们使用<code>script_score</code>参数</p>
-<pre><code class="language-java">POST /bookdb_index/book/_search
+<p>下面是等价的 Painless 写法。脚本里 <code>doc['publish_date'].value</code> 已经是 <code>ZonedDateTime</code>，这里把它转成毫秒时间戳，阈值也以毫秒参数传入，从而避免在脚本中解析日期字符串：</p>
+<pre><code class="language-json">GET /bookdb_index/_search
+{
+  &quot;query&quot;: {
+    &quot;function_score&quot;: {
+      &quot;query&quot;: { &quot;multi_match&quot;: { &quot;query&quot;: &quot;search engine&quot;, &quot;fields&quot;: [&quot;title&quot;, &quot;summary&quot;] } },
+      &quot;functions&quot;: [
+        {
+          &quot;script_score&quot;: {
+            &quot;script&quot;: {
+              &quot;lang&quot;: &quot;painless&quot;,
+              &quot;params&quot;: { &quot;threshold_millis&quot;: 1438214400000 },
+              &quot;source&quot;: &quot;long pd = doc['publish_date'].value.toInstant().toEpochMilli(); double n = doc['num_reviews'].value; return pd &gt; params.threshold_millis ? Math.log(2.5 + n) : Math.log(1.0 + n);&quot;
+            }
+          }
+        }
+      ]
+    }
+  },
+  &quot;_source&quot;: [&quot;title&quot;, &quot;summary&quot;, &quot;publish_date&quot;, &quot;num_reviews&quot;]
+}
+</code></pre>
+<p>原文使用 <code>script_score</code> 传入内联 Groovy 脚本的写法如下，仅适用于 2.x（其中 <code>Date.parse</code> 之类的 API 在 Painless 中也不存在），请对照上面的 Painless 版本阅读：</p>
+<pre><code class="language-java">POST /bookdb_index/_search
 {
     &quot;query&quot;: {
         &quot;function_score&quot;: {
@@ -1312,13 +1349,40 @@ return my_score
   }
  
 </code></pre>
-<p><strong>注意1</strong>：要使用动态脚本，必须为<code>config/elasticsearch.yaml</code>文件中的Elasticsearch实例启用动态脚本。也可以使用存储在Elasticsearch服务器上的脚本。查阅<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting.html">Elasticsearch参考文档</a>了解更多信息。</p>
+<p><strong>注意1</strong>：在 2.x 中必须先在 <code>config/elasticsearch.yml</code> 里开启动态脚本；从 5.0 起沙箱化的 Painless 默认可用，不再需要 <code>script.inline</code> 之类的开关。但脚本评分要为每个命中文档执行一次，属于高开销操作：能用 <code>field_value_factor</code>、衰减函数等内置能力表达的需求就不要写脚本，并且尽量先用 <code>filter</code> 缩小候选集。脚本参数应通过 <code>params</code> 传入而不是拼接字符串，既更安全也能让 ES 缓存编译后的脚本。也可以使用存储在服务端的脚本（stored script）。查阅 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting.html">Elasticsearch 参考文档</a>了解更多信息。</p>
 <p><strong>注意2</strong> ：JSON无法包含嵌入的换行符，因此分号用于分隔语句。</p>
 
-          <div class="toc-container"><ul class="markdownIt-TOC">
+          <h3 id="20分页聚合与性能实践">20.分页、聚合与性能实践</h3>
+<p>正文第 1 节的完整 DSL 示例中已经用到了 <code>from</code> / <code>size</code>，这是最常用的分页方式：<code>from</code> 是要跳过的文档数，<code>size</code> 是返回的文档数，两者之和不能超过 <code>index.max_result_window</code>（默认 10000），否则请求会被直接拒绝。深分页时，每个分片都要取出并排序 <code>from + size</code> 条文档，再由协调节点归并，开销随页码近似线性增长，因此它只适合浅分页、需要跳页或需要总数（<code>hits.total</code>）的场景。</p>
+<p><img src="/post-assets/AdeCmc8BU/02-deep-pagination.svg" alt="深分页方案对比：from+size 适合浅分页且开销随页码线性增长，search_after 无状态、每页代价恒定、只能向后翻，scroll 基于快照适合全量导出"></p>
+<p>需要向后翻页、滚动加载时应当使用 <code>search_after</code>：先用一次查询拿到排序值，再把最后一条的排序值作为下一次查询的 <code>search_after</code>。它不需要维护游标状态，每页代价恒定，但只能单向前进，并且必须有一个能唯一确定文档的排序键（常用 <code>_id</code> 作为最后的 tie-breaker）。</p>
+<pre><code class="language-json">GET /bookdb_index/_search
+{
+  &quot;size&quot;: 10,
+  &quot;query&quot;: { &quot;range&quot;: { &quot;publish_date&quot;: { &quot;gte&quot;: &quot;2014-01-01&quot; } } },
+  &quot;sort&quot;: [
+    { &quot;publish_date&quot;: &quot;desc&quot; },
+    { &quot;_id&quot;: &quot;asc&quot; }
+  ],
+  &quot;search_after&quot;: [1449100800000, &quot;3&quot;]
+}
+</code></pre>
+<p>需要一次性遍历大量数据（全量导出、重建索引）时使用 <code>scroll</code> 或 <code>PIT + search_after</code>。<code>scroll</code> 在快照上保持上下文，首次请求返回 <code>_scroll_id</code>，随后用 <code>POST /_search/scroll</code> 分批取；快照会长时间占用分片资源，务必在结束后用 <code>DELETE /_search/scroll</code> 显式清理。<code>scroll</code> 在 7.x 中已不再推荐，官方建议改用带 <code>keep_alive</code> 的 PIT（point-in-time）配合 <code>search_after</code>。</p>
+<p>聚合方面有几个常见坑：只做聚合时把 <code>size</code> 设为 <code>0</code>，避免把命中文档也取回来；对 <code>text</code> 字段做 <code>terms</code> 聚合会因分词把一个短语拆成多个桶，应当对 <code>keyword</code> 字段（或 <code>keyword</code> 子字段）聚合；桶数量很大时要用 <code>composite</code> 聚合分页，而不是不断加大 <code>terms.size</code>；<code>terms</code> 聚合的计数默认是近似的，可以用返回值里的 <code>doc_count_error_upper_bound</code> 判断误差上界。例如统计每个出版社的图书数量：</p>
+<pre><code class="language-json">GET /bookdb_index/_search
+{
+  &quot;size&quot;: 0,
+  &quot;aggs&quot;: {
+    &quot;by_publisher&quot;: {
+      &quot;terms&quot;: { &quot;field&quot;: &quot;publisher&quot;, &quot;size&quot;: 10 }
+    }
+  }
+}
+</code></pre>
+<p>最后是几个在 7.x/8.x 中依然常见的性能陷阱：以 <code>*</code> 或 <code>?</code> 开头的 <code>wildcard</code> / <code>regexp</code> 查询要扫描全部词项；脚本查询与脚本字段（<code>script_score</code>、<code>script_fields</code>）对每个命中文档都要执行一次，属于高开销操作；深分页请改用 <code>search_after</code>；能用过滤上下文（<code>bool.filter</code>、<code>constant_score</code>）表达的条件就不要放进 <code>must</code> 参与打分。字段类型同样关键：把日期或数字误映射成 <code>text</code>（动态映射的默认行为）会让排序变成字典序、让范围查询失效，所以建议像本文开头那样显式声明 mapping。</p>
+<div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E4%BE%8B%E5%AD%90">例子</a>
+<a href="#%E4%BE%8B%E5%AD%90">例子</a>
 <ul>
 <li><a href="#1%E5%9F%BA%E6%9C%AC%E6%AF%94%E5%AF%B9%E6%9F%A5%E8%AF%A2">1.基本比对查询</a></li>
 <li><a href="#2%E5%A4%9A%E5%AD%97%E6%AE%B5%E6%90%9C%E7%B4%A2">2.多字段搜索</a></li>
@@ -1339,8 +1403,7 @@ return my_score
 <li><a href="#17%E5%8A%9F%E8%83%BD%E8%AF%84%E5%88%86%E5%AD%97%E6%AE%B5%E5%80%BC%E5%9B%A0%E5%AD%90">17.功能评分：字段值因子</a></li>
 <li><a href="#18%E4%BD%9C%E7%94%A8%E5%88%86%E5%80%BC%E8%A1%B0%E5%87%8F%E5%8A%9F%E8%83%BD">18.作用分值：衰减功能</a></li>
 <li><a href="#19%E5%8A%9F%E8%83%BD%E8%AF%84%E5%88%86%E8%84%9A%E6%9C%AC%E8%AF%84%E5%88%86">19.功能评分：脚本评分</a></li>
-</ul>
-</li>
+<li><a href="#20%E5%88%86%E9%A1%B5%E8%81%9A%E5%90%88%E4%B8%8E%E6%80%A7%E8%83%BD%E5%AE%9E%E8%B7%B5">20.分页、聚合与性能实践</a></li>
 </ul>
 </li>
 </ul>
