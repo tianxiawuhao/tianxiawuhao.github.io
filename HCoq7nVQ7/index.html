@@ -36,7 +36,10 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
   <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
-<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
 
 <body>
   <!-- Navigation -->
@@ -130,37 +133,43 @@
 <figure data-type="image" tabindex="1"><img src="https://pic1.zhimg.com/80/v2-d820f4eff9ee528737342ba651cedb90_720w.webp" alt="img" loading="lazy"></figure>
 <p>接下来是最优动作价值函数和最优状态价值函数：</p>
 <figure data-type="image" tabindex="2"><img src="https://pic2.zhimg.com/80/v2-82750c659dd5cc084dce02cc5bcaab89_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里引入一个新的概念：最优优势函数。它由最优动作价值函数与最优状态价值函数确定：A*(s,a) = Q*(s,a) − V*(s,a)，即以最优状态价值函数 V* 作为基线，衡量动作 a 相对基线的优势——动作越好，优势越大。</p>
-<p>为了推导出Dueling Network，我们需要分析优势函数的一个理论性质。</p>
-<p>这需要一个定理：</p>
+<p>在此基础上引入一个新概念：<strong>最优优势函数</strong>（optimal advantage function）。它由最优动作价值函数与最优状态价值函数确定，以最优状态价值函数 \(V^*(s)\) 作为基线，衡量动作 \(a\) 相对基线好多少：</p>
+<div class="math-block">\[ A^*(s,a) = Q^*(s,a) - V^*(s) \]</div>
+<p>动作越好，优势越大；当动作 \(a\) 恰好是最优动作时，它的价值就等于基线，优势为 0。因此最优优势函数满足：</p>
+<div class="math-block">\[ \max_{a} A^*(s,a) = 0 \]</div>
+<p>为了推导出 Dueling Network，我们需要分析优势函数的这个理论性质。先看下面这个定理：</p>
 <figure data-type="image" tabindex="3"><img src="https://pic2.zhimg.com/80/v2-7e4074d135afcee28f02ce2426da5c65_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里有一个推导：</p>
+<p>这里给出它的推导：</p>
 <figure data-type="image" tabindex="4"><img src="https://pic2.zhimg.com/80/v2-edaedae9b4686f070b2849a37532b815_720w.webp" alt="img" loading="lazy"></figure>
-<p>将A*(s,a)变换一下，可以得到：</p>
+<p>把 \(A^*(s,a)\) 的表达式变换一下，可以得到：</p>
 <figure data-type="image" tabindex="5"><img src="https://pic3.zhimg.com/80/v2-d05f54910a2eec57f8dd81fb34933536_720w.webp" alt="img" loading="lazy"></figure>
-<p>又因为 max_a A*(s,a) = 0，所以可以得到定理 2</p>
+<p>又因为 \(\max_{a} A^*(s,a) = 0\)，所以可以得到定理 2：</p>
 <figure data-type="image" tabindex="6"><img src="https://pic3.zhimg.com/80/v2-8fa04e8631eedadbfe52ebbacf53f592_720w.webp" alt="img" loading="lazy"></figure>
 <h2 id="二-dueling-network">二、Dueling Network</h2>
-<p>回顾一下DQN：</p>
+<p>Dueling Network 的核心思路是：不直接让网络输出 Q 值，而是让网络分别输出「状态本身有多好」和「每个动作相对这个状态好多少」，再把两者合成 Q 值。它的结构与 DQN 相似，但输出分支被拆成了两支，下面这张图先给出整体结构。</p>
+<p><img src="/post-assets/HCoq7nVQ7/01-dueling-network-structure.svg" alt="Dueling Network 结构示意图：共享卷积主干分出优势分支与价值分支，再合成 Q 值"></p>
+<p>回顾一下 DQN：</p>
 <figure data-type="image" tabindex="7"><img src="https://pic3.zhimg.com/80/v2-eb2e57a157c727d87f8ee61ff811d1a6_720w.webp" alt="img" loading="lazy"></figure>
-<p>这里我们采用一个神经网络对优势函数A*(s,a;w^A)的近似：</p>
+<p>这里我们用一个神经网络来近似优势函数 \(A^*(s,a;\boldsymbol{w}^A)\)：</p>
 <figure data-type="image" tabindex="8"><img src="https://pic3.zhimg.com/80/v2-d9af266013b4fe57965a13de14d5a5d2_720w.webp" alt="img" loading="lazy"></figure>
-<p>我们需要一个神经网络来近似最优状态价值函数 V*(s; w^V)</p>
+<p>再用一个神经网络来近似最优状态价值函数 \(V^*(s;\boldsymbol{w}^V)\)：</p>
 <figure data-type="image" tabindex="9"><img src="https://pic4.zhimg.com/80/v2-37a6fea54193b9580aa13b11b034ad33_720w.webp" alt="img" loading="lazy"></figure>
 <p>可以看到，这两个神经网络结构相似，都是先用卷积层对输入提取特征；因此在真正实现时，可以让它们共享主干网络的参数。</p>
-<p>有了这两个近似，我们就可以得到这如下公式：</p>
-<p>这里的 Q(s, a; w) 即 Dueling Network 的输出，其中 w 表示合并后的参数 (w^A, w^V)。</p>
-<figure data-type="image" tabindex="10"><img src="https://pic4.zhimg.com/80/v2-e0a14dc2619a5720d71a5dd9aa55a2a7_720w.webp" alt="img" loading="lazy"></figure>
+<p>有了这两个近似，就可以合成 Q 值的近似：</p>
+<div class="math-block">\[ Q(s,a;\boldsymbol{w}) = V^*(s;\boldsymbol{w}^V) + A^*(s,a;\boldsymbol{w}^A) - \max_{a'} A^*(s,a';\boldsymbol{w}^A) \]</div>
+<p>这里的 \(Q(s,a;\boldsymbol{w})\) 即 Dueling Network 的输出，\(\boldsymbol{w}\) 表示合并后的参数 \((\boldsymbol{w}^A,\boldsymbol{w}^V)\)；减去 \(\max\) 项是为了让 \(V\) 与 \(A\) 的分解唯一，下一节会详细说明。</p>
 <p>如下就是整体流程：</p>
 <figure data-type="image" tabindex="11"><img src="https://pic3.zhimg.com/80/v2-bb7d9b9338ba114fdddc5590b7ed3a46_720w.webp" alt="img" loading="lazy"></figure>
 <p>Dueling Network 与 DQN 结构相似，但前者把 Q 值分解为状态价值与优势之和，网络结构更好，实际效果也更优。</p>
 <p>值得一提的是，训练 Dueling Network 时可以采用 PER、DDQN、Multi-Step TD target 等进阶方法。</p>
 <figure data-type="image" tabindex="12"><img src="https://pic1.zhimg.com/80/v2-f75930ba028cd99bf1dbc5f59db336fc_720w.webp" alt="img" loading="lazy"></figure>
 <h2 id="三-解决不唯一性overcome-non-identifiability">三、解决不唯一性（Overcome Non-identifiability）</h2>
-<p>如果不加最大化项，可能出现 V 与 A 都训练不好的情况。举个例子，如果记V' = V*+10，A' = A*-10，两者相加并不影响 Q；但实际上，V* 与 A* 都发生了大幅偏移，导致它们对应的神经网络都难以训练好。</p>
+<p>如果不加最大化项，可能出现 V 与 A 都训练不好的情况。举个例子：记 \(V' = V^* + 10\)、\(A' = A^* - 10\)，两者相加并不影响 Q，即 \(Q' = V' + A' = Q^*\)；但实际上 \(V^*\) 与 \(A^*\) 都发生了大幅偏移，导致它们对应的神经网络都难以训练好。</p>
 <figure data-type="image" tabindex="13"><img src="https://pic2.zhimg.com/80/v2-8e4cdf7e1cc5cea2b56782bc97c70845_720w.webp" alt="img" loading="lazy"></figure>
-<p>而加入最大化项后，可以很好地保持 V 与 A 对应神经网络的平衡</p>
+<p>而加入最大化项后，可以很好地保持 V 与 A 对应神经网络的平衡。</p>
 <figure data-type="image" tabindex="14"><img src="https://pic2.zhimg.com/80/v2-64b48e47f8889656d55513e32a3db8dd_720w.webp" alt="img" loading="lazy"></figure>
+<p>下面这张图把「不加 \(\max\)」与「加入 \(\max\)」两种情形放在一起对比：左侧的 V 与 A 可以同时任意偏移而 Q 不变，网络难以收敛到唯一解；右侧用 \(\max_a A^*(s,a) = 0\) 把基线钉死，V 与 A 就与 Q 一一对应了。</p>
+<p><img src="/post-assets/HCoq7nVQ7/02-non-identifiability.svg" alt="对比图：不加 max 项时 V 与 A 的分解不唯一，加入 max 项后分解唯一"></p>
 <h2 id="四-总结summary">四、总结（Summary）</h2>
 <p>要点：应把 Dueling Network 当作一个整体来训练，而不是分别单独训练其中的神经网络。</p>
 <figure data-type="image" tabindex="15"><img src="https://pic3.zhimg.com/80/v2-143b46369caa301883196f34d3e6b4aa_720w.webp" alt="img" loading="lazy"></figure>
@@ -168,11 +177,23 @@
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E4%BC%98%E5%8A%BF%E5%87%BD%E6%95%B0advantage-function">一、优势函数（Advantage Function）</a>
 <ul>
-<li><a href="#%E4%B8%80-%E4%BC%98%E5%8A%BF%E5%87%BD%E6%95%B0advantage-function">一、优势函数（Advantage Function）</a></li>
-<li><a href="#%E4%BA%8C-dueling-network">二、Dueling Network</a></li>
-<li><a href="#%E4%B8%89-%E8%A7%A3%E5%86%B3%E4%B8%8D%E5%94%AF%E4%B8%80%E6%80%A7overcome-non-identifiability">三、解决不唯一性（Overcome Non-identifiability）</a></li>
-<li><a href="#%E5%9B%9B-%E6%80%BB%E7%BB%93summary">四、总结（Summary）</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-dueling-network">二、Dueling Network</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E8%A7%A3%E5%86%B3%E4%B8%8D%E5%94%AF%E4%B8%80%E6%80%A7overcome-non-identifiability">三、解决不唯一性（Overcome Non-identifiability）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E6%80%BB%E7%BB%93summary">四、总结（Summary）</a>
+<ul>
 </ul>
 </li>
 </ul>
@@ -270,6 +291,17 @@
   <script src="/media/scripts/tocScript.js"></script>
 
 <script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "\\(", right: "\\)", display: false}, {left: "\\[", right: "\\]", display: true}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
 </body>
 
 </html>
