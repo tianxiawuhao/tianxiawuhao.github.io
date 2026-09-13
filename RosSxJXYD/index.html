@@ -155,7 +155,7 @@
 <p>Spring Boot的自动配置是一个运行时（更准确地说，是应用程序启动时）的过程，考虑了众多因素，才决定Spring配置应该用哪个，不该用哪个。该过程是Spring自动完成的。</p>
 </li>
 </ul>
-<p>	注意：起步依赖和自动配置的原理剖析会在第三章《SpringBoot原理分析》进行详细讲解</p>
+<p>注意：起步依赖和自动配置的原理剖析会在第三章《SpringBoot原理分析》进行详细讲解。本文示例以 Spring Boot 2.x（2.7.x 为 2.x 末代版本）为主线，2.x 与 3.x 的差异集中在第六章 6.4 节说明。</p>
 <h1 id="二-springboot快速入门">二、SpringBoot快速入门</h1>
 <h2 id="21-代码实现">2.1 代码实现</h2>
 <h3 id="211-创建maven工程">2.1.1 创建Maven工程</h3>
@@ -165,12 +165,27 @@
 <img src="/post-images/1621326301646.png" alt="" loading="lazy"><br>
 <img src="/post-images/1621326307461.png" alt="" loading="lazy"></p>
 <h3 id="212-添加springboot的起步依赖">2.1.2 添加SpringBoot的起步依赖</h3>
-<p>SpringBoot要求，项目要继承SpringBoot的起步依赖spring-boot-starter-parent</p>
+<p>SpringBoot 官方推荐让工程继承 spring-boot-starter-parent（父 POM）。父 POM 本身并不引入任何依赖，它做三件事：<strong>继承 spring-boot-dependencies 做版本统一管理（dependencyManagement）、导入插件管理（pluginManagement）、预置合理的 Maven 配置</strong>（如编译插件版本、资源过滤、UTF-8 编码）。因此继承父 POM 后，引入起步依赖时通常无需再写 version。</p>
 <pre><code class="language-xml">&lt;parent&gt;
     &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
     &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
-    &lt;version&gt;2.0.1.RELEASE&lt;/version&gt;
+    &lt;!-- 2.x 主线示例：最后一个小版本为 2.7.18；3.x 可改为 3.2.x / 3.3.x --&gt;
+    &lt;version&gt;2.7.18&lt;/version&gt;
+    &lt;relativePath/&gt; &lt;!-- 留空表示从仓库查找父 POM --&gt;
 &lt;/parent&gt;
+</code></pre>
+<p>若工程已有自己的父 POM（不能多继承），可以改为“导入 BOM”的方式，效果等价：</p>
+<pre><code class="language-xml">&lt;dependencyManagement&gt;
+    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-dependencies&lt;/artifactId&gt;
+            &lt;version&gt;2.7.18&lt;/version&gt;
+            &lt;type&gt;pom&lt;/type&gt;
+            &lt;scope&gt;import&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+&lt;/dependencyManagement&gt;
 </code></pre>
 <p>SpringBoot要集成SpringMVC进行Controller的开发，所以项目要导入web的启动依赖</p>
 <pre><code class="language-xml">&lt;dependencies&gt;
@@ -248,6 +263,7 @@ o.s.w.s.handler.SimpleUrlHandlerMapping  : Mapped URL path [/**] onto handler of
 &lt;dependency&gt;
     &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
     &lt;artifactId&gt;spring-boot-devtools&lt;/artifactId&gt;
+    &lt;optional&gt;true&lt;/optional&gt; &lt;!-- 不传递给依赖本项目的其它模块 --&gt;
 &lt;/dependency&gt;
 </code></pre>
 <p>注意：IDEA进行SpringBoot热部署失败原因</p>
@@ -317,6 +333,7 @@ o.s.w.s.handler.SimpleUrlHandlerMapping  : Mapped URL path [/**] onto handler of
 <p>可以使用快速入门的方式创建Controller进行访问，此处不再赘述</p>
 <h1 id="三-springboot原理分析">三、SpringBoot原理分析</h1>
 <h2 id="31-起步依赖原理分析">3.1 起步依赖原理分析</h2>
+<p>关于“版本锁定”需要强调：spring-boot-dependencies 只管理版本，<strong>不会自动引入坐标</strong>；真正引入依赖的是各个 starter。</p>
 <p><strong>3.1.1 分析spring-boot-starter-parent</strong></p>
 <p>按住Ctrl点击pom.xml中的spring-boot-starter-parent，跳转到了spring-boot-starter-parent的pom.xml，xml配置如下（只摘抄了部分重点配置）：</p>
 <pre><code class="language-xml">&lt;parent&gt;
@@ -507,7 +524,9 @@ protected List&lt;String&gt; getCandidateConfigurations(AnnotationMetadata metad
 }
 
 </code></pre>
-<p>SpringFactoriesLoader.loadFactoryNames 方法的作用就是从META-INF/spring.factories文件中读取指定类对应的类名称列表</p>
+<p>SpringFactoriesLoader.loadFactoryNames 方法的作用就是从 META-INF/spring.factories 文件中读取指定类对应的类名称列表。</p>
+<p><strong>版本提示：</strong>Spring Boot 2.7 起，自动配置类的注册文件已迁移为 <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>（纯类名列表，一行一个，不再使用 spring.factories 中的 EnableAutoConfiguration 键），3.x 沿用该机制；spring.factories 仍用于其他扩展点。</p>
+<p><img src="/post-assets/RosSxJXYD/01-auto-configuration-flow.svg" alt="Spring Boot 自动配置的触发、加载、条件筛选与生效流程示意图"></p>
 <figure data-type="image" tabindex="9"><img src="/post-images/1621326779183.png" alt="" loading="lazy"></figure>
 <p>spring.factories 文件中有关自动配置的配置信息如下：</p>
 <pre><code class="language-text">... ... ...
@@ -562,7 +581,7 @@ public class ServerProperties {
 <h2 id="41-springboot配置文件类型">4.1 SpringBoot配置文件类型</h2>
 <h3 id="411-springboot配置文件类型和作用">4.1.1 SpringBoot配置文件类型和作用</h3>
 <p>SpringBoot是基于约定的，所以很多配置都有默认值，但如果想使用自己的配置替换默认配置的话，就可以使用application.properties或者application.yml（application.yaml）进行配置。</p>
-<p>SpringBoot默认会从Resources目录下加载application.properties或application.yml（application.yaml）文件</p>
+<p>SpringBoot默认会从类路径根目录（src/main/resources）下加载 application.properties 或 application.yml（application.yaml）文件；两者同时存在时 <strong>.properties 优先于 .yml</strong>，且属性会合并而非整体覆盖。Spring Boot 2.4 起配置文件加载顺序为：<code>application</code> → <code>application-{profile}</code>，并支持 <code>spring.config.import</code> 显式导入其它配置（如 config server、额外文件）。</p>
 <p>其中，application.properties文件是键值对类型的文件，之前一直在使用，所以此处不在对properties文件的格式进行阐述。除了properties文件外，SpringBoot还可以使用yml文件进行配置，下面对yml文件进行讲解。</p>
 <h3 id="412-applicationyml配置文件">4.1.2 application.yml配置文件</h3>
 <p><strong>4.1.2.1 yml配置文件简介</strong></p>
@@ -670,7 +689,8 @@ spring.quartz.properties.*= # Additional Quartz Scheduler properties.
 # EMBEDDED SERVER CONFIGURATION (ServerProperties)
 server.port=8080 # Server HTTP port.
 server.servlet.context-path= # Context path of the application.
-server.servlet.path=/ # Path of the main dispatcher servlet.
+server.servlet.encoding.charset=UTF-8 # Charset of HTTP requests and responses.
+spring.mvc.servlet.path=/ # Path of the main dispatcher servlet (2.x).
 
 # HTTP encoding (HttpEncodingProperties)
 spring.http.encoding.charset=UTF-8 # Charset of HTTP requests and responses. Added to the &quot;Content-Type&quot; header if not set explicitly.
@@ -714,17 +734,16 @@ server.servlet.context-path=demo
 <h3 id="421-使用注解value映射">4.2.1 使用注解@Value映射</h3>
 <p>我们可以通过@Value注解将配置文件中的值映射到一个Spring管理的Bean的字段上</p>
 <p>例如：</p>
-<p>application.properties配置如下：</p>
+<p>application.properties 配置如下：</p>
+<pre><code class="language-properties">person.name=zhangsan
+person.age=18
+</code></pre>
+<p>或者，application.yml 配置如下：</p>
 <pre><code class="language-yaml">person:
   name: zhangsan
   age: 18
 </code></pre>
-<p>或者，application.yml配置如下：</p>
-<pre><code class="language-yaml">person:
-  name: zhangsan
-  age: 18
-</code></pre>
-<p>实体Bean代码如下：</p>
+<p>实体Bean代码如下（必须是 Spring 容器管理的 Bean，@Controller/@Component/@Service 均可）：</p>
 <pre><code class="language-java">@Controller
 public class QuickStartController {
 
@@ -746,12 +765,11 @@ public class QuickStartController {
 <figure data-type="image" tabindex="11"><img src="/post-images/1621326747717.png" alt="" loading="lazy"></figure>
 <h3 id="422-使用注解configurationproperties映射">4.2.2 使用注解@ConfigurationProperties映射</h3>
 <p>通过注解@ConfigurationProperties(prefix=&quot;配置文件中的key的前缀&quot;)可以将配置文件中的配置自动与实体进行映射</p>
-<p>application.properties配置如下：</p>
-<pre><code class="language-yaml">person:
-  name: zhangsan
-  age: 18
+<p>application.properties 配置如下：</p>
+<pre><code class="language-properties">person.name=zhangsan
+person.age=18
 </code></pre>
-<p>或者，application.yml配置如下：</p>
+<p>或者，application.yml 配置如下：</p>
 <pre><code class="language-yaml">person:
   name: zhangsan
   age: 18
@@ -781,7 +799,17 @@ public class QuickStartController {
 </code></pre>
 <p>浏览器访问地址：http://localhost:8080/quick 结果如下：</p>
 <figure data-type="image" tabindex="12"><img src="/post-images/1621326821666.png" alt="" loading="lazy"></figure>
-<p>注意：使用@ConfigurationProperties方式可以进行配置文件与实体字段的自动映射，但需要字段必须提供set方法才可以，而使用@Value注解修饰的字段不需要提供set方法</p>
+<p>注意：使用 @ConfigurationProperties 方式可以进行配置文件与实体字段的自动映射，但需要字段提供 set 方法（或使用构造器绑定），而使用 @Value 注解修饰的字段不需要提供 set 方法。两者的选用建议：</p>
+<table>
+<thead><tr><th>对比项</th><th>@ConfigurationProperties</th><th>@Value</th></tr></thead>
+<tbody>
+<tr><td>批量绑定前缀下的多个属性</td><td>支持（松散绑定，person-name / person_name / PERSON_NAME 均可）</td><td>不支持，需逐个书写 SpEL 表达式</td></tr>
+<tr><td>复杂类型（List、Map、嵌套对象）</td><td>支持</td><td>仅能写简单值</td></tr>
+<tr><td>SpEL 表达式 / 默认值</td><td>不支持 #{}</td><td>支持 <code>@Value("${person.age:18}")</code></td></tr>
+<tr><td>JSR-303 校验</td><td>配合 @Validated + @NotNull 等生效</td><td>不适用</td></tr>
+</tbody>
+</table>
+<p>注册方式：@ConfigurationProperties 类可以由 <code>@Component</code> 直接注册，也可以在配置类上用 <code>@EnableConfigurationProperties(PersonProperties.class)</code> 注册，或由 <code>@ConfigurationPropertiesScan</code> 批量扫描。<code>@Value</code> 与 <code>@ConfigurationProperties</code> 都只能作用于 Spring 容器中的 Bean。</p>
 <h1 id="五-springboot与整合其他技术">五、SpringBoot与整合其他技术</h1>
 <h2 id="51-springboot整合mybatis">5.1 SpringBoot整合Mybatis</h2>
 <p><strong>5.1.1 添加Mybatis的起步依赖</strong></p>
@@ -789,7 +817,8 @@ public class QuickStartController {
 &lt;dependency&gt;
     &lt;groupId&gt;org.mybatis.spring.boot&lt;/groupId&gt;
     &lt;artifactId&gt;mybatis-spring-boot-starter&lt;/artifactId&gt;
-    &lt;version&gt;1.1.1&lt;/version&gt;
+    &lt;!-- 2.x 工程用 2.x 版本；Spring Boot 3.x 需用 3.0.x+ --&gt;
+    &lt;version&gt;2.3.2&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
 <p><strong>5.1.2 添加数据库驱动坐标</strong></p>
@@ -802,11 +831,12 @@ public class QuickStartController {
 <p><strong>5.1.3 添加数据库连接信息</strong></p>
 <p>在application.properties中添加数据量的连接信息</p>
 <pre><code class="language-yaml">#DB Configuration:
-spring.datasource.driverClassName=com.mysql.jdbc.Driver
-spring.datasource.url=jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&amp;characterEncoding=utf8
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&amp;characterEncoding=utf8&amp;serverTimezone=Asia/Shanghai&amp;useSSL=false
 spring.datasource.username=root
 spring.datasource.password=root
 </code></pre>
+<p>说明：<code>com.mysql.cj.jdbc.Driver</code> 是 MySQL Connector/J 8.x 的驱动类（<code>mysql-connector-j</code>）；若仍使用 5.1.x 驱动，类名为 <code>com.mysql.jdbc.Driver</code>，且 8.x 起 URL 建议显式指定 <code>serverTimezone</code>。当配置了 url 时，驱动类名一般可省略（由 URL 自动推断）。</p>
 <p><strong>5.1.4 创建user表</strong></p>
 <p>在test数据库中创建user表</p>
 <pre><code class="language-sql">-- ----------------------------
@@ -922,8 +952,24 @@ public class MapperTest {
 
 }
 </code></pre>
-<p>其中，</p>
-<p>SpringRunner继承自SpringJUnit4ClassRunner，使用哪一个Spring提供的测试测试引擎都可以</p>
+<p>Spring Boot 2.2 之前测试基于 JUnit 4，需要 <code>@RunWith(SpringRunner.class)</code>；2.2 起测试栈升级为 JUnit 5（JUnit Jupiter），此时<strong>不再需要 @RunWith</strong>，直接写 <code>@SpringBootTest</code> 即可，测试方法使用 <code>org.junit.jupiter.api.Test</code>：</p>
+<pre><code class="language-java">import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest // 默认从当前包向上查找 @SpringBootApplication，无需显式指定 classes
+class MapperTest {
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Test
+    void test() {
+        System.out.println(userMapper.queryUserList());
+    }
+}
+</code></pre>
+<p>若仍要使用 JUnit 4，需保留 <code>@RunWith(SpringRunner.class)</code> 并额外引入 junit-vintage-engine。SpringRunner 继承自 SpringJUnit4ClassRunner：</p>
 <pre><code class="language-java">public final class SpringRunner extends SpringJUnit4ClassRunner 
 </code></pre>
 <p>@SpringBootTest的属性指定的是引导类的字节码对象</p>
@@ -956,7 +1002,7 @@ spring.jpa.database=MySQL
 spring.jpa.show-sql=true
 spring.jpa.generate-ddl=true
 spring.jpa.hibernate.ddl-auto=update
-spring.jpa.hibernate.naming_strategy=org.hibernate.cfg.ImprovedNamingStrategy
+spring.jpa.properties.hibernate.physical_naming_strategy=org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy
 </code></pre>
 <p><strong>5.3.4 创建实体配置实体</strong></p>
 <pre><code class="language-java">@Entity
@@ -1002,12 +1048,18 @@ public class JpaTest {
 <figure data-type="image" tabindex="16"><img src="/post-images/1621326901468.png" alt="" loading="lazy"></figure>
 <p>原因：jdk缺少相应的jar</p>
 <p>解决方案：手动导入对应的maven坐标，如下：</p>
-<pre><code class="language-xml">&lt;!--jdk9需要导入如下坐标--&gt;
+<pre><code class="language-xml">&lt;!--JDK 9 及以上缺少 JAXB，需要手动导入如下坐标--&gt;
 &lt;dependency&gt;
     &lt;groupId&gt;javax.xml.bind&lt;/groupId&gt;
     &lt;artifactId&gt;jaxb-api&lt;/artifactId&gt;
-    &lt;version&gt;2.3.0&lt;/version&gt;
+    &lt;version&gt;2.3.1&lt;/version&gt;
 &lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.glassfish.jaxb&lt;/groupId&gt;
+    &lt;artifactId&gt;jaxb-runtime&lt;/artifactId&gt;
+    &lt;version&gt;2.3.1&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;!--注意：Spring Boot 2.7+/3.x 内置的 Spring Data JPA（Hibernate 5.6+）已自带 JAXB 依赖，一般无需手动添加--&gt;
 </code></pre>
 <h2 id="54-springboot整合redis">5.4 SpringBoot整合Redis</h2>
 <p><strong>5.4.1 添加redis的起步依赖</strong></p>
@@ -1018,9 +1070,12 @@ public class JpaTest {
 &lt;/dependency&gt;
 </code></pre>
 <p><strong>5.4.2 配置redis的连接信息</strong></p>
-<pre><code class="language-yaml">#Redis
+<pre><code class="language-properties"># Spring Boot 2.x
 spring.redis.host=127.0.0.1
 spring.redis.port=6379
+# Spring Boot 3.x 前缀已改为 spring.data.redis.*
+# spring.data.redis.host=127.0.0.1
+# spring.data.redis.port=6379
 </code></pre>
 <p><strong>5.4.3 注入RedisTemplate测试redis操作</strong></p>
 <pre><code class="language-java">@RunWith(SpringRunner.class)
@@ -1031,7 +1086,7 @@ public class RedisTest {
     private UserRepository userRepository;
 
     @Autowired
-    private RedisTemplate&lt;String, String&gt; redisTemplate;
+    private RedisTemplate&lt;String, String&gt; redisTemplate; // 需 spring-boot-starter-data-redis
 
     @Test
     public void test() throws JsonProcessingException {
@@ -1058,16 +1113,143 @@ public class RedisTest {
 }
 </code></pre>
 
+<h1 id="六-springboot进阶常用能力与版本差异">六、SpringBoot进阶：常用能力与版本差异</h1>
+<h2 id="61-配置绑定-profile-与配置优先级">6.1 配置绑定、Profile 与配置优先级</h2>
+<h3 id="611-profile-多环境配置">6.1.1 Profile 多环境配置</h3>
+<p>Profile 用于把“同一份代码在不同环境下使用不同配置”这件事标准化：把公共配置留在 application.yml，把环境差异放到 application-{profile}.yml（或 application-{profile}.properties）中。</p>
+<pre><code class="language-yaml"># application.yml —— 公共配置 + 激活哪套环境
+spring:
+  profiles:
+    active: dev          # 2.4 之前写法；2.4 起推荐 spring.config.activate.on-profile + 分组
+server:
+  port: 8080
+---
+spring:
+  config:
+    activate:
+      on-profile: dev    # 2.4+ 推荐写法：文档块级 profile 条件
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/test
+logging:
+  level:
+    com.itheima: debug
+</code></pre>
+<p>也可以在命令行、环境变量或 IDE 中激活，优先级从低到高依次为：配置文件 spring.profiles.active → JVM 参数 <code>-Dspring.profiles.active=prod</code> → 命令行 <code>--spring.profiles.active=prod</code> → 环境变量 <code>SPRING_PROFILES_ACTIVE=prod</code>。编程方式可用 <code>SpringApplication.setAdditionalProfiles("prod")</code> 兜底。</p>
+<h3 id="612-配置优先级">6.1.2 配置优先级（由低到高）</h3>
+<p>官方文档给出的常见来源优先级（后面的覆盖前面的）为：默认属性 → <code>@PropertySource</code> → 配置文件（application.yml/properties，jar 外 &gt; jar 内）→ 随机值 RandomValuePropertySource → 操作系统环境变量 → Java 系统属性（-D）→ JNDI → <code>ServletContext</code> / <code>ServletConfig</code> 初始化参数 → <code>SPRING_APPLICATION_JSON</code> → 命令行参数 → 测试中的 <code>@TestPropertySource</code> / <code>@SpringBootTest(properties=…)</code> → <code>@DynamicPropertySource</code> → <code>@SpringBootTest(args=…)</code>。记住三条实用结论：命令行 &gt; 环境变量 &gt; 配置文件；jar 包外的 config/ 目录 &gt; jar 包内；带 profile 的配置 &gt; 不带 profile 的配置。</p>
+<p>另外，同一位置的 <code>.properties</code> 优先级高于 <code>.yml</code>；<code>spring.config.location</code> 是整体替换默认位置，<code>spring.config.additional-location</code> 是追加。</p>
+<h2 id="62-常用注解与rest开发">6.2 常用注解与 REST 开发</h2>
+<h3 id="621-常用注解速查">6.2.1 常用注解速查</h3>
+<table>
+<thead><tr><th>分类</th><th>注解</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td>启动与配置</td><td>@SpringBootApplication</td><td>= @SpringBootConfiguration + @EnableAutoConfiguration + @ComponentScan</td></tr>
+<tr><td>启动与配置</td><td>@Configuration / @Bean</td><td>声明配置类 / 把方法返回值注册为 Bean</td></tr>
+<tr><td>启动与配置</td><td>@ConfigurationProperties / @Value</td><td>配置绑定（见 4.2 节）</td></tr>
+<tr><td>组件注册</td><td>@Component / @Service / @Repository / @Controller</td><td>语义化地把类交由容器管理</td></tr>
+<tr><td>依赖注入</td><td>@Autowired / @Qualifier / @Resource</td><td>按类型 / 按名称注入</td></tr>
+<tr><td>REST 控制器</td><td>@RestController</td><td>= @Controller + @ResponseBody，返回对象自动序列化为 JSON</td></tr>
+<tr><td>REST 控制器</td><td>@RequestMapping / @GetMapping / @PostMapping / @PutMapping / @DeleteMapping</td><td>路径与 HTTP 方法映射</td></tr>
+<tr><td>REST 控制器</td><td>@PathVariable / @RequestParam / @RequestBody / @RequestHeader</td><td>取路径变量 / 查询参数 / 请求体 / 请求头</td></tr>
+<tr><td>REST 控制器</td><td>@ResponseStatus / @ExceptionHandler / @RestControllerAdvice</td><td>状态码、局部与全局异常处理</td></tr>
+<tr><td>条件装配</td><td>@ConditionalOnClass 等</td><td>自动配置的条件判断（见 6.3 节）</td></tr>
+<tr><td>测试</td><td>@SpringBootTest / @MockBean（3.4 起推荐 @MockitoBean）</td><td>启动容器做集成测试</td></tr>
+</tbody>
+</table>
+<h3 id="622-rest-风格接口示例">6.2.2 REST 风格接口示例（可编译）</h3>
+<pre><code class="language-java">package com.itheima.controller;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@RestController
+@RequestMapping(&quot;/api/users&quot;)
+public class UserController {
+
+    private final List&lt;String&gt; users = new ArrayList&lt;&gt;(List.of(&quot;zhangsan&quot;, &quot;lisi&quot;));
+
+    @GetMapping
+    public List&lt;String&gt; list() {
+        return users;
+    }
+
+    @GetMapping(&quot;/{id}&quot;)
+    public ResponseEntity&lt;String&gt; getById(@PathVariable int id) {
+        if (id &lt; 0 || id &gt;= users.size()) {
+            return ResponseEntity.notFound().build();   // 404
+        }
+        return ResponseEntity.ok(users.get(id));
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)                 // 201
+    public String create(@RequestBody String name) {
+        users.add(name);
+        return name;
+    }
+
+    @DeleteMapping(&quot;/{id}&quot;)
+    public void delete(@PathVariable int id) {
+        users.remove(id);
+    }
+}
+</code></pre>
+<p>关于 @Controller 与 @RestController：前者返回视图名，需要视图解析器；后者直接写响应体，配合 Jackson 把对象序列化为 JSON，是前后端分离项目的主流选择。参数校验可配合 <code>spring-boot-starter-validation</code> 使用 <code>@Valid</code> + <code>@NotBlank</code> 等注解，Bean Validation 3.0 起注解包名为 <code>jakarta.validation.constraints</code>。</p>
+<h2 id="63-actuator-与可观测性">6.3 Actuator 与可观测性</h2>
+<p>Actuator 通过一组 HTTP 端点（endpoint）暴露运行状态，是 Spring Boot 生产可用的重要组成。</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+&lt;/dependency&gt;
+</code></pre>
+<pre><code class="language-yaml">management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers   # 2.x 默认只暴露 health（5.2 前）与 info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  server:
+    port: 8081          # 可让管理端点走独立端口，便于只在内网暴露
+</code></pre>
+<p>常用端点：<code>/actuator/health</code>（健康检查，K8s 探针常用）、<code>/actuator/info</code>、<code>/actuator/metrics</code>、<code>/actuator/loggers</code>（可在运行时动态调整日志级别）、<code>/actuator/env</code>、<code>/actuator/threaddump</code>、<code>/actuator/heapdump</code>。</p>
+<p>安全提醒：除 health 外，端点默认大多不暴露；一旦开启务必配合 Spring Security 做鉴权，切勿在生产环境无保护地开放 <code>/env</code>、<code>/heapdump</code> 这类敏感端点。自定义健康检查可实现 HealthIndicator 接口并注册为 Bean。</p>
+<h2 id="64-spring-boot-2x-与-3x-的主要差异">6.4 Spring Boot 2.x 与 3.x 的主要差异</h2>
+<table>
+<thead><tr><th>维度</th><th>Spring Boot 2.x</th><th>Spring Boot 3.x</th></tr></thead>
+<tbody>
+<tr><td>Java 基线</td><td>2.x 早期 Java 8，2.7 要求 Java 8+</td><td>Java 17 起（3.0 要求 17，可用 17/21）</td></tr>
+<tr><td>Spring 版本</td><td>Spring Framework 5.x</td><td>Spring Framework 6.x</td></tr>
+<tr><td>命名空间</td><td>javax.*（如 javax.servlet、javax.persistence）</td><td>jakarta.*（Jakarta EE 9+，包名整体迁移）</td></tr>
+<tr><td>自动配置注册</td><td>2.6-：META-INF/spring.factories；2.7 起改为 AutoConfiguration.imports</td><td>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</td></tr>
+<tr><td>配置前缀</td><td>spring.redis.*、spring.datasource.* 等</td><td>spring.data.redis.*（Redis 前缀迁移），其余大部分不变</td></tr>
+<tr><td>JUnit</td><td>2.2 起默认 JUnit 5，2.4 起 vintage 引擎不再默认引入</td><td>默认 JUnit 5</td></tr>
+<tr><td>GraalVM 原生镜像</td><td>需 Spring Native 实验性支持</td><td>官方 AOT + native-image 支持</td></tr>
+<tr><td>可观测性</td><td>Micrometer + Spring Cloud Sleuth</td><td>Micrometer Observation + Micrometer Tracing（Sleuth 停止演进）</td></tr>
+</tbody>
+</table>
+<p>升级要点：先升级到 2.7.x 并消除所有过时 API 警告，再切换到 3.x；重点检查 javax→jakarta 的导入、第三方 starter 是否有 3.x 版本（如 mybatis-spring-boot-starter 3.x、druid-spring-boot-3-starter）、以及被移除的配置项（如 <code>spring.mvc.pathmatch.matching-strategy</code> 的旧默认值）。</p>
+<p>更多差异可参考官方迁移指南：https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.0-Migration-Guide</p>
+
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li><a href="#%E4%B8%80-springboot%E7%AE%80%E4%BB%8B">一、SpringBoot简介</a>
+<li>
+<a href="#11-%E5%8E%9F%E6%9C%89spring%E4%BC%98%E7%BC%BA%E7%82%B9%E5%88%86%E6%9E%90">1.1 原有Spring优缺点分析</a>
 <ul>
-<li><a href="#11-%E5%8E%9F%E6%9C%89spring%E4%BC%98%E7%BC%BA%E7%82%B9%E5%88%86%E6%9E%90">1.1  原有Spring优缺点分析</a></li>
-<li><a href="#12-springboot%E7%9A%84%E6%A6%82%E8%BF%B0">1.2 SpringBoot的概述</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-springboot%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8">二、SpringBoot快速入门</a>
+<li>
+<a href="#12-springboot%E7%9A%84%E6%A6%82%E8%BF%B0">1.2 SpringBoot的概述</a>
 <ul>
-<li><a href="#21-%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0">2.1 代码实现</a>
+</ul>
+</li>
+<li>
+<a href="#21-%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0">2.1 代码实现</a>
 <ul>
 <li><a href="#211-%E5%88%9B%E5%BB%BAmaven%E5%B7%A5%E7%A8%8B">2.1.1 创建Maven工程</a></li>
 <li><a href="#212-%E6%B7%BB%E5%8A%A0springboot%E7%9A%84%E8%B5%B7%E6%AD%A5%E4%BE%9D%E8%B5%96">2.1.2 添加SpringBoot的起步依赖</a></li>
@@ -1076,44 +1258,81 @@ public class RedisTest {
 <li><a href="#215-%E6%B5%8B%E8%AF%95">2.1.5 测试</a></li>
 </ul>
 </li>
-<li><a href="#22-%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8%E8%A7%A3%E6%9E%90">2.2 快速入门解析</a>
+<li>
+<a href="#22-%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8%E8%A7%A3%E6%9E%90">2.2 快速入门解析</a>
 <ul>
 <li><a href="#222-springboot%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90">2.2.2 SpringBoot代码解析</a></li>
 <li><a href="#223-springboot%E5%B7%A5%E7%A8%8B%E7%83%AD%E9%83%A8%E7%BD%B2">2.2.3 SpringBoot工程热部署</a></li>
 <li><a href="#224-%E4%BD%BF%E7%94%A8idea%E5%BF%AB%E9%80%9F%E5%88%9B%E5%BB%BAspringboot%E9%A1%B9%E7%9B%AE">2.2.4 使用idea快速创建SpringBoot项目</a></li>
 </ul>
 </li>
+<li>
+<a href="#31-%E8%B5%B7%E6%AD%A5%E4%BE%9D%E8%B5%96%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90">3.1 起步依赖原理分析</a>
+<ul>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-springboot%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90">三、SpringBoot原理分析</a>
+<li>
+<a href="#32-%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E5%8E%9F%E7%90%86%E8%A7%A3%E6%9E%90">3.2 自动配置原理解析</a>
 <ul>
-<li><a href="#31-%E8%B5%B7%E6%AD%A5%E4%BE%9D%E8%B5%96%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90">3.1 起步依赖原理分析</a></li>
-<li><a href="#32-%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E5%8E%9F%E7%90%86%E8%A7%A3%E6%9E%90">3.2 自动配置原理解析</a></li>
 </ul>
 </li>
-<li><a href="#%E5%9B%9B-springboot%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">四、SpringBoot的配置文件</a>
-<ul>
-<li><a href="#41-springboot%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B">4.1 SpringBoot配置文件类型</a>
+<li>
+<a href="#41-springboot%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B">4.1 SpringBoot配置文件类型</a>
 <ul>
 <li><a href="#411-springboot%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B%E5%92%8C%E4%BD%9C%E7%94%A8">4.1.1 SpringBoot配置文件类型和作用</a></li>
 <li><a href="#412-applicationyml%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">4.1.2 application.yml配置文件</a></li>
 <li><a href="#413-springboot%E9%85%8D%E7%BD%AE%E4%BF%A1%E6%81%AF%E7%9A%84%E6%9F%A5%E8%AF%A2">4.1.3 SpringBoot配置信息的查询</a></li>
 </ul>
 </li>
-<li><a href="#42-%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%B8%8E%E9%85%8D%E7%BD%AE%E7%B1%BB%E7%9A%84%E5%B1%9E%E6%80%A7%E6%98%A0%E5%B0%84%E6%96%B9%E5%BC%8F">4.2 配置文件与配置类的属性映射方式</a>
+<li>
+<a href="#42-%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%B8%8E%E9%85%8D%E7%BD%AE%E7%B1%BB%E7%9A%84%E5%B1%9E%E6%80%A7%E6%98%A0%E5%B0%84%E6%96%B9%E5%BC%8F">4.2 配置文件与配置类的属性映射方式</a>
 <ul>
 <li><a href="#421-%E4%BD%BF%E7%94%A8%E6%B3%A8%E8%A7%A3value%E6%98%A0%E5%B0%84">4.2.1 使用注解@Value映射</a></li>
 <li><a href="#422-%E4%BD%BF%E7%94%A8%E6%B3%A8%E8%A7%A3configurationproperties%E6%98%A0%E5%B0%84">4.2.2 使用注解@ConfigurationProperties映射</a></li>
 </ul>
 </li>
+<li>
+<a href="#51-springboot%E6%95%B4%E5%90%88mybatis">5.1 SpringBoot整合Mybatis</a>
+<ul>
 </ul>
 </li>
-<li><a href="#%E4%BA%94-springboot%E4%B8%8E%E6%95%B4%E5%90%88%E5%85%B6%E4%BB%96%E6%8A%80%E6%9C%AF">五、SpringBoot与整合其他技术</a>
+<li>
+<a href="#52-springboot%E6%95%B4%E5%90%88junit">5.2 SpringBoot整合Junit</a>
 <ul>
-<li><a href="#51-springboot%E6%95%B4%E5%90%88mybatis">5.1 SpringBoot整合Mybatis</a></li>
-<li><a href="#52-springboot%E6%95%B4%E5%90%88junit">5.2 SpringBoot整合Junit</a></li>
-<li><a href="#53-springboot%E6%95%B4%E5%90%88spring-data-jpa">5.3 SpringBoot整合Spring Data JPA</a></li>
-<li><a href="#54-springboot%E6%95%B4%E5%90%88redis">5.4 SpringBoot整合Redis</a></li>
+</ul>
+</li>
+<li>
+<a href="#53-springboot%E6%95%B4%E5%90%88spring-data-jpa">5.3 SpringBoot整合Spring Data JPA</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#54-springboot%E6%95%B4%E5%90%88redis">5.4 SpringBoot整合Redis</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#61-%E9%85%8D%E7%BD%AE%E7%BB%91%E5%AE%9A-profile-%E4%B8%8E%E9%85%8D%E7%BD%AE%E4%BC%98%E5%85%88%E7%BA%A7">6.1 配置绑定、Profile 与配置优先级</a>
+<ul>
+<li><a href="#611-profile-%E5%A4%9A%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE">6.1.1 Profile 多环境配置</a></li>
+<li><a href="#612-%E9%85%8D%E7%BD%AE%E4%BC%98%E5%85%88%E7%BA%A7">6.1.2 配置优先级（由低到高）</a></li>
+</ul>
+</li>
+<li>
+<a href="#62-%E5%B8%B8%E7%94%A8%E6%B3%A8%E8%A7%A3%E4%B8%8Erest%E5%BC%80%E5%8F%91">6.2 常用注解与 REST 开发</a>
+<ul>
+<li><a href="#621-%E5%B8%B8%E7%94%A8%E6%B3%A8%E8%A7%A3%E9%80%9F%E6%9F%A5">6.2.1 常用注解速查</a></li>
+<li><a href="#622-rest-%E9%A3%8E%E6%A0%BC%E6%8E%A5%E5%8F%A3%E7%A4%BA%E4%BE%8B">6.2.2 REST 风格接口示例（可编译）</a></li>
+</ul>
+</li>
+<li>
+<a href="#63-actuator-%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7">6.3 Actuator 与可观测性</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#64-spring-boot-2x-%E4%B8%8E-3x-%E7%9A%84%E4%B8%BB%E8%A6%81%E5%B7%AE%E5%BC%82">6.4 Spring Boot 2.x 与 3.x 的主要差异</a>
+<ul>
 </ul>
 </li>
 </ul>

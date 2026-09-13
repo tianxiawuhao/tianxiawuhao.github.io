@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Seata AT 模式的一阶段提交与二阶段提交/回滚流程，以及全局锁与 undo_log 的作用</title>
+  <rect width="900" height="600" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">Seata AT 模式：两个阶段与全局锁</text>
+
+  <rect x="40" y="55" width="820" height="56" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="450" y="80" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">TM 发起全局事务：@GlobalTransactional（订单服务 saveOrder）</text>
+  <text x="450" y="100" font-size="11" fill="#5b6b7c" text-anchor="middle">TC 生成全局唯一 XID，经 RPC 调用链透传给下游分支事务</text>
+
+  <line x1="450" y1="111" x2="450" y2="138" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="40" y="140" width="820" height="185" rx="8" fill="#f7f9fc" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="60" y="165" font-size="13" font-weight="700" fill="#1f2b38">一阶段（各 RM 独立完成，本地事务就已经提交）</text>
+  <rect x="60" y="180" width="180" height="48" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="150" y="200" font-size="11.5" fill="#1f2b38" text-anchor="middle">查询前置镜像</text>
+  <text x="150" y="217" font-size="11" fill="#5b6b7c" text-anchor="middle">beforeImage</text>
+  <rect x="262" y="180" width="180" height="48" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="352" y="200" font-size="11.5" fill="#1f2b38" text-anchor="middle">执行并提交本地事务</text>
+  <text x="352" y="217" font-size="11" fill="#5b6b7c" text-anchor="middle">再取 afterImage</text>
+  <rect x="464" y="180" width="180" height="48" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="554" y="200" font-size="11.5" fill="#1f2b38" text-anchor="middle">写入 undo_log</text>
+  <text x="554" y="217" font-size="11" fill="#5b6b7c" text-anchor="middle">前后镜像 + XID + branchId</text>
+  <rect x="666" y="180" width="174" height="48" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="753" y="200" font-size="11.5" fill="#1f2b38" text-anchor="middle">注册分支并申请全局锁</text>
+  <text x="753" y="217" font-size="11" fill="#5b6b7c" text-anchor="middle">lock_table: 表名 + 主键</text>
+  <line x1="240" y1="204" x2="256" y2="204" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="442" y1="204" x2="458" y2="204" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="644" y1="204" x2="660" y2="204" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="450" y1="252" x2="450" y2="272" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="450" y="290" font-size="11.5" font-weight="700" fill="#2f6fd0" text-anchor="middle">全局锁：只阻止其它全局事务改同一行，不阻塞本地事务提交</text>
+  <text x="450" y="310" font-size="11" fill="#5b6b7c" text-anchor="middle">因此 AT 模式在写隔离上依赖业务尽量避开热点行，读未提交现象需业务自行取舍</text>
+
+  <line x1="450" y1="325" x2="450" y2="352" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="40" y="354" width="395" height="215" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="237" y="379" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">二阶段 · 全局提交（全部成功）</text>
+  <rect x="60" y="394" width="355" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="237" y="420" font-size="11.5" fill="#1f2b38" text-anchor="middle">TC 通知各 RM：异步删除 undo_log</text>
+  <line x1="237" y1="436" x2="237" y2="458" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="60" y="460" width="355" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="237" y="486" font-size="11.5" fill="#1f2b38" text-anchor="middle">释放全局锁，事务结束</text>
+  <text x="237" y="525" font-size="11" fill="#5b6b7c" text-anchor="middle">开销很小，不占用额外锁等待</text>
+  <text x="237" y="545" font-size="11" fill="#5b6b7c" text-anchor="middle">日志：Branch Commit result: PhaseTwo_Committed</text>
+
+  <rect x="465" y="354" width="395" height="215" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="662" y="379" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">二阶段 · 全局回滚（任一分支失败或超时）</text>
+  <rect x="485" y="394" width="355" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="662" y="420" font-size="11.5" fill="#1f2b38" text-anchor="middle">TC 按 XID 反向通知各 RM 回滚</text>
+  <line x1="662" y1="436" x2="662" y2="458" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="485" y="460" width="355" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="662" y="486" font-size="11.5" fill="#1f2b38" text-anchor="middle">校验后置镜像，用前置镜像生成反向 SQL 补偿</text>
+  <text x="662" y="525" font-size="11" fill="#5b6b7c" text-anchor="middle">校验失败说明脏写，需人工介入；补偿后删除 undo_log</text>
+  <text x="662" y="545" font-size="11" fill="#5b6b7c" text-anchor="middle">日志：Branch Rollbacked result: PhaseTwo_Rollbacked</text>
+</svg>
