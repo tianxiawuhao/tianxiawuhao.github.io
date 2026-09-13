@@ -416,7 +416,7 @@ select id from t where num between 1 and 3
 </li>
 <li>
 <p>6.下面的查询也将导致全表扫描：</p>
-<pre><code class="language-mysql">select id from t where name like ‘%李%’ -- 若要提高效率，可以考虑全文检索。
+<pre><code class="language-mysql">select id from t where name like '%李%' -- 若要提高效率，可以考虑全文检索。
 </code></pre>
 </li>
 <li>
@@ -435,47 +435,447 @@ select id from t where num=100*2
 </li>
 <li>
 <p>9.应尽量避免在where子句中对字段进行函数操作，这将导致引擎放弃使用索引而进行全表扫描。如：</p>
-<pre><code class="language-mysql">select id from t where substring(name,1,3)=’abc’ 
+<pre><code class="language-mysql">select id from t where substring(name,1,3)='abc' 
 -- name以abc开头的id应改为: 
-select id from t where name like ‘abc%’
+select id from t where name like 'abc%'
 </code></pre>
 </li>
 <li>
 <p>10.不要在 where 子句中的“=”左边进行函数、算术运算或其他表达式运算，否则系统将可能无法正确使用索引。</p>
 </li>
 </ul>
+<h2 id="innodb索引结构">InnoDB索引结构</h2>
+<h3 id="聚簇索引与二级索引">聚簇索引与二级索引</h3>
+<p>InnoDB 的数据组织方式是“索引即数据”。表数据本身就存放在主键索引的 B+ 树里，这棵树叫聚簇索引（clustered index）；它的叶子节点直接保存整行数据，因此按主键查询一次 B+ 树就能拿到完整记录。如果建表时没有指定主键，InnoDB 会选第一个非空的唯一索引充当聚簇索引，都没有时才生成一个 6 字节的隐藏 row_id。</p>
+<p>其他索引都是二级索引（secondary index），叶子节点只保存“索引列 + 主键值”。用二级索引查询时，先在二级索引上找到主键，再拿主键回到聚簇索引取整行，这个过程叫回表。</p>
+<p><img src="/post-assets/lbX34toJL/01-innodb-index-lock.svg" alt="InnoDB 聚簇索引、二级索引与回表示意图"></p>
+<pre><code class="language-mysql">-- 以 user 表为例
+-- create table user(
+--   id bigint primary key auto_increment,
+--   name varchar(32),
+--   age int,
+--   index idx_name(name)
+-- ) engine=InnoDB;
+
+-- 1. 聚簇索引：主键查询，一次 B+ 树即可取到整行
+select * from user where id = 15;
+
+-- 2. 二级索引 + 回表：先在 idx_name 上找到 name='李四' 对应的主键，再回聚簇索引取整行
+select * from user where name = '李四';
+
+-- 3. 覆盖索引：查询的列全部在 idx_name 中（索引列 name + 主键 id），不需要回表
+--    explain 的 Extra 会出现 Using index
+explain select id, name from user where name = '李四';
+</code></pre>
+<h3 id="最左前缀与索引失效">最左前缀与索引失效</h3>
+<p>联合索引 <code>idx_ab(a, b, c)</code> 的排序规则是“先按 a、a 相同再按 b、b 相同再按 c”，因此只能从最左边的列开始连续匹配，这就是最左前缀原则。范围条件会让它右边的列失去索引定位能力，但还能用于覆盖索引。</p>
+<pre><code class="language-mysql">-- create index idx_ab on t(a, b, c);
+
+-- 命中索引：完整使用 a、b、c
+select * from t where a = 1 and b = 2 and c = 3;
+-- 命中索引：使用 a、b
+select * from t where a = 1 and b = 2;
+-- 命中索引：只用到 a
+select * from t where a = 1;
+-- 只能用到 a：b 是范围条件，c 无法继续用于定位（但可能用于覆盖索引）
+select * from t where a = 1 and b &gt; 2 and c = 3;
+-- 不使用索引：跳过 a 直接查 b、c
+select * from t where b = 2 and c = 3;
+-- 不使用索引：对索引列做函数或运算
+select * from t where date(created_at) = '2024-01-01';
+select * from t where a + 1 = 2;
+-- 建议改写为对列本身的范围比较
+select * from t where created_at &gt;= '2024-01-01' and created_at &lt; '2024-01-02';
+select * from t where a = 1;
+</code></pre>
+<h2 id="事务与隔离级别">事务与隔离级别</h2>
+<p>事务要满足 ACID：原子性、一致性、隔离性、持久性。其中原子性由 undo log 保证，持久性由 redo log 保证，隔离性由锁和 MVCC 共同保证，一致性是最终目的。</p>
+<p>SQL 标准定义了四种隔离级别，MySQL 的默认级别是 REPEATABLE READ，这一点和 Oracle、PostgreSQL 默认的 READ COMMITTED 不同：</p>
+<table>
+<thead>
+<tr>
+<th>隔离级别</th>
+<th>脏读</th>
+<th>不可重复读</th>
+<th>幻读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>READ UNCOMMITTED</td>
+<td>可能</td>
+<td>可能</td>
+<td>可能</td>
+</tr>
+<tr>
+<td>READ COMMITTED</td>
+<td>不可能</td>
+<td>可能</td>
+<td>可能</td>
+</tr>
+<tr>
+<td>REPEATABLE READ（默认）</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>InnoDB 下基本不可能</td>
+</tr>
+<tr>
+<td>SERIALIZABLE</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>不可能</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-mysql">-- 查看当前隔离级别（MySQL 8.0 中该变量已更名为 transaction_isolation）
+select @@transaction_isolation;
+-- 修改当前会话 / 全局隔离级别
+set session transaction isolation level read committed;
+set global transaction isolation level repeatable read;
+
+-- 显式事务：InnoDB 中 DML 会自动开启事务，显式写法更清晰
+start transaction;
+update account set balance = balance - 100 where id = 1;
+update account set balance = balance + 100 where id = 2;
+commit;
+
+-- 设置保存点，出错时可以只回滚一部分
+start transaction;
+insert into account (id, balance) values (3, 100);
+savepoint sp1;
+update account set balance = 0 where id = 3;
+rollback to savepoint sp1;
+commit;
+
+-- 查看当前运行中的事务，排查长事务
+select trx_id, trx_state, trx_started,
+       timestampdiff(second, trx_started, now()) as running_seconds,
+       trx_rows_locked, trx_query
+from information_schema.innodb_trx;
+</code></pre>
+<h2 id="mvcc与锁">MVCC与锁</h2>
+<h3 id="mvcc的实现">MVCC 的实现</h3>
+<p>MVCC（多版本并发控制）让“读”和“写”互不阻塞，从而在 REPEATABLE READ 下实现一致性读。InnoDB 在每行记录上隐式维护两个列：<code>DB_TRX_ID</code> 记录最后一次修改该行的事务 ID，<code>DB_ROLL_PTR</code> 是指向 undo log 的回滚指针。读取旧版本时，就顺着回滚指针在 undo log 里找到之前的版本，这个过程叫快照读。</p>
+<p>InnoDB 主要使用两种读：</p>
+<ul>
+<li>快照读（一致性读）：普通 <code>select</code>，不加锁，读取 undo log 构造出的历史版本，因此不会阻塞其他事务的写入。</li>
+<li>当前读：<code>select ... for update</code>、<code>select ... lock in share mode</code> 以及 insert、update、delete，读取最新版本并加锁。</li>
+</ul>
+<pre><code class="language-mysql">-- 当前读：加排他锁，其他事务无法修改这些行
+select * from account where id = 1 for update;
+-- 加共享锁
+select * from account where id = 1 lock in share mode;   -- MySQL 8.0 推荐写法：for share
+-- MySQL 8.0 的 for update 还支持不等待 / 跳过被锁行
+select * from account where id = 1 for update nowait;
+select * from account where id = 1 for update skip locked;
+</code></pre>
+<h3 id="记录锁间隙锁与临键锁">记录锁、间隙锁与临键锁</h3>
+<p>InnoDB 的行锁是加在索引记录上的，按范围可以分成三种：</p>
+<ul>
+<li>记录锁（Record Lock）：锁住索引上的一条记录，用于等值命中的行。</li>
+<li>间隙锁（Gap Lock）：锁住两条记录之间的间隙，阻止其他事务在间隙中插入新行，只在 REPEATABLE READ 下生效。</li>
+<li>临键锁（Next-Key Lock）：记录锁 + 前面的间隙锁，锁定左开右闭区间，InnoDB 默认用这种方式加锁，用来防止幻读。</li>
+</ul>
+<pre><code class="language-mysql">-- 假设 age 上有普通索引，表中存在 age = 10、20、30 三行
+-- 在 REPEATABLE READ 下，下面这条当前读会锁定 (10, 20] 区间：
+-- 既锁住 age = 20 这条记录，也锁住 10 到 20 之间的间隙，其他事务无法插入 age = 15
+start transaction;
+select * from user where age = 20 for update;
+commit;
+
+-- 范围查询会锁定扫描到的整个区间 (10, 30]
+start transaction;
+select * from user where age &gt; 10 and age &lt; 30 for update;
+commit;
+
+-- 如果查询条件上没有索引，InnoDB 会对所有记录加临键锁，效果接近锁表
+-- 因此加锁查询必须走索引，且尽量使用主键或唯一索引做等值查询
+select * from user where name = '张三' for update;
+
+-- 查看锁等待情况，定位是谁阻塞了谁
+select * from performance_schema.data_locks;
+select * from performance_schema.data_lock_waits;
+</code></pre>
+<p>理解锁的关键点有三个：一是行锁锁的是索引记录，条件列没有索引就会退化成锁全表；二是等值查询命中唯一索引时，InnoDB 会把临键锁退化为记录锁，锁的范围最小；三是 READ COMMITTED 会关闭间隙锁，只有记录锁，所以高并发写入场景常把隔离级别调成 RC 来减少锁冲突。</p>
+<h2 id="binlogredolog与undolog">binlog、redolog与undolog</h2>
+<p>MySQL 的日志体系里，redo log 和 undo log 属于 InnoDB 引擎层，binlog 属于 MySQL Server 层。理解这三者的分工，才能理解崩溃恢复和主从复制。</p>
+<table>
+<thead>
+<tr>
+<th>日志</th>
+<th>归属</th>
+<th>记录内容</th>
+<th>写入方式</th>
+<th>主要作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>undo log</td>
+<td>InnoDB</td>
+<td>数据被修改前的旧值（逻辑日志）</td>
+<td>随机写，存在回滚段中</td>
+<td>事务回滚、MVCC 快照读</td>
+</tr>
+<tr>
+<td>redo log</td>
+<td>InnoDB</td>
+<td>数据页的物理修改</td>
+<td>固定大小、循环写，顺序 I/O</td>
+<td>崩溃恢复，保证持久性</td>
+</tr>
+<tr>
+<td>binlog</td>
+<td>Server 层</td>
+<td>逻辑日志，记录修改数据的语句或行变更事件</td>
+<td>追加写，写满一个换下一个</td>
+<td>主从复制、数据恢复</td>
+</tr>
+</tbody>
+</table>
+<p>redo log 采用 WAL（Write-Ahead Logging）机制：修改数据页前先写 redo log 并刷盘，脏页可以延迟写回，这样即使宕机也不会丢失已提交的事务。它由 <code>innodb_log_file_size</code> 与 <code>innodb_log_files_in_group</code> 决定总大小（MySQL 8.0.30 起改为 <code>innodb_redo_log_capacity</code>），空间被循环复用，因此不能像 binlog 那样长期归档。</p>
+<p>binlog 有三种格式，由 <code>binlog_format</code> 控制：STATEMENT 记录 SQL 语句，日志量小但某些函数（如 <code>now()</code>、<code>uuid()</code>）在主从上结果可能不一致；ROW 记录每行数据的前后镜像，最安全，是 MySQL 5.7.7 之后的默认值；MIXED 由 MySQL 自行判断，在 STATEMENT 与 ROW 之间切换。</p>
+<p>一次事务提交，redo log 与 binlog 之间必须保持一致，否则主从或恢复就会出现数据错乱。为此 MySQL 使用两阶段提交（2PC）：</p>
+<ol>
+<li>写入 redo log，标记为 prepare 状态。</li>
+<li>写入 binlog。</li>
+<li>提交事务，把 redo log 标记为 commit。</li>
+</ol>
+<p>如果步骤 2 之后、步骤 3 之前崩溃，重启恢复时只要发现 redo log 是 prepare 状态、且对应的 binlog 完整存在，就提交该事务；如果 binlog 不完整，就回滚。这样两边要么都生效，要么都不生效。</p>
+<pre><code class="language-mysql">-- 查看 redo log 与 binlog 的关键参数
+show variables like 'innodb_log_file_size';
+show variables like 'innodb_redo_log_capacity';   -- MySQL 8.0.30 及以上
+show variables like 'innodb_flush_log_at_trx_commit';
+show variables like 'sync_binlog';
+show variables like 'binlog_format';              -- ROW / STATEMENT / MIXED
+show variables like 'log_bin';
+
+-- 查看 binlog 文件列表与当前正在写的文件
+show binary logs;
+show master status;
+-- 查看某个 binlog 的内容（ROW 格式需要加 -v 才能看到行变更）
+-- mysqlbinlog -v --base64-output=decode-rows /var/lib/mysql/binlog.000001
+
+-- 写满一个 binlog 文件时切换
+flush logs;
+</code></pre>
+<p>两个刷盘参数直接决定性能与安全性的平衡：<code>innodb_flush_log_at_trx_commit = 1</code> 表示每次提交都把 redo log 刷盘，最安全；设为 0 或 2 能显著提升写入性能，但宕机时可能丢失最近 1 秒左右的事务。<code>sync_binlog = 1</code> 表示每次提交都把 binlog 刷盘，在主从架构下建议保持为 1，否则主库宕机可能导致从库丢失数据。</p>
+<h2 id="explain字段深入解读">explain字段深入解读</h2>
+<p>前面已经介绍了 explain 的主要字段，这里把几个容易误读的字段再展开一层。explain 输出的是优化器的估算结果，MySQL 8.0.18 起还可以用 <code>explain analyze</code> 得到真实执行耗时。</p>
+<ul>
+<li><strong>id</strong>：查询块的编号。id 相同表示同一组，按从上到下执行；id 越大越先执行；id 为 NULL 表示这是一个结果集（如 UNION RESULT），不需要用它去查表。</li>
+<li><strong>select_type</strong>：查询类型。常见的有 SIMPLE、PRIMARY、SUBQUERY、DERIVED（衍生表，即 from 中的子查询）、UNION、UNION RESULT，MySQL 8.0.22 起还可能出现 MATERIALIZED。</li>
+<li><strong>type</strong>：访问类型，直接反映有没有走索引。由好到差大致是 system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL。其中 index 表示扫描整棵索引树，虽然叫“使用索引”，实际代价接近全表扫描；ALL 是全表扫描，必须优化。</li>
+<li><strong>key_len</strong>：实际使用到的索引字节长度，可以用来判断联合索引用上了几列。以 utf8mb4 的 varchar(32) 为例，一列约 32×4+2=130 字节；如果 key_len 只等于第一列的长度，说明后面的列没有参与定位。另外，索引列允许 NULL 会额外占 1 字节，这也是建议字段 not null 的原因之一。</li>
+<li><strong>rows</strong>：估算需要扫描的行数，不是精确值。这个值明显失真时，先执行 <code>analyze table</code> 更新统计信息。</li>
+<li><strong>filtered</strong>：按条件过滤后剩余行的百分比。filtered 很低（如 10%）且 rows 很大时，说明大部分扫描都是浪费，值得优化。</li>
+<li><strong>Extra</strong>：附加信息。Using index 表示覆盖索引，是好消息；Using where 表示在 Server 层还要过滤；Using filesort 表示无法用索引完成排序，需要额外的排序过程；Using temporary 表示使用了临时表（常见于 group by、distinct、union）。后两者是重点优化对象。</li>
+</ul>
+<pre><code class="language-mysql">-- 估算执行计划
+explain select * from user where name = '张三';
+-- MySQL 8.0.18 及以上：真正执行并输出实际耗时与行数
+explain analyze select * from user where name = '张三';
+-- 8.0.16 及以上：查看执行计划的树形结构
+explain format = tree select * from user where name = '张三';
+-- 8.0 及以上：以 JSON 格式输出，信息最全
+explain format = json select * from user where name = '张三';
+
+-- 慢查询日志：先开启，再设置阈值（单位秒）
+set global slow_query_log = on;
+set global long_query_time = 0.5;
+-- 未使用索引的查询也记入慢查询日志（生产环境慎开，会显著增加日志量）
+set global log_queries_not_using_indexes = on;
+-- 查看统计：慢查询条数、是否开启，以及日志文件位置
+show global status like 'Slow_queries';
+show variables like 'slow_query_log%';
+
+-- 用 mysqldumpslow 汇总慢查询日志
+-- mysqldumpslow -s t -t 10 /var/lib/mysql/slow.log
+</code></pre>
+<h2 id="常见参数含义">常见参数含义</h2>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>含义</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>innodb_buffer_pool_size</td>
+<td>InnoDB 缓存数据页与索引页的内存大小</td>
+<td>最重要的参数，专用服务器可设为物理内存的 50%~70%</td>
+</tr>
+<tr>
+<td>innodb_log_file_size / innodb_redo_log_capacity</td>
+<td>redo log 的大小，越大写入越平缓、恢复越慢</td>
+<td>8.0.30 起推荐设置 innodb_redo_log_capacity</td>
+</tr>
+<tr>
+<td>innodb_flush_log_at_trx_commit</td>
+<td>每次提交是否刷 redo log</td>
+<td>要求不丢数据时保持 1，可接受少量丢失再考虑 2</td>
+</tr>
+<tr>
+<td>sync_binlog</td>
+<td>每次提交是否刷 binlog</td>
+<td>主从架构建议为 1</td>
+</tr>
+<tr>
+<td>max_connections</td>
+<td>最大连接数</td>
+<td>不是越大越好，每个连接都要占用内存，需配合连接池</td>
+</tr>
+<tr>
+<td>innodb_io_capacity</td>
+<td>InnoDB 后台刷脏页的 I/O 能力上限</td>
+<td>按磁盘能力设置，SSD 可显著提高，8.0 起默认由系统自动检测</td>
+</tr>
+<tr>
+<td>slow_query_log / long_query_time</td>
+<td>慢查询日志开关与阈值（秒）</td>
+<td>线上开启并设置 0.5~1 秒，定期用 mysqldumpslow 分析</td>
+</tr>
+<tr>
+<td>tmp_table_size / max_heap_table_size</td>
+<td>内存临时表的大小上限</td>
+<td>两者要一起调；超出后会落盘成磁盘临时表，性能骤降</td>
+</tr>
+<tr>
+<td>sort_buffer_size</td>
+<td>每个连接排序时使用的缓冲区</td>
+<td>是“每连接”参数，连接多时不能调太大</td>
+</tr>
+<tr>
+<td>join_buffer_size</td>
+<td>关联查询中无法用索引时使用的缓冲区</td>
+<td>同样是每连接参数，注意内存总量</td>
+</tr>
+<tr>
+<td>transaction_isolation</td>
+<td>事务隔离级别</td>
+<td>默认 REPEATABLE READ；高并发写入可评估改为 READ COMMITTED</td>
+</tr>
+</tbody>
+</table>
+
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#sql%E4%BC%98%E5%8C%96">SQL优化</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#sql%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F">SQL执行顺序</a>
 <ul>
-<li><a href="#sql%E4%BC%98%E5%8C%96">SQL优化</a></li>
-<li><a href="#sql%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F">SQL执行顺序</a></li>
-<li><a href="#sql%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F">SQL的生命周期</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96%E5%A4%A7%E8%A1%A8%E6%95%B0%E6%8D%AE%E6%9F%A5%E8%AF%A2">优化大表数据查询</a></li>
-<li><a href="#%E8%B6%85%E5%A4%A7%E5%88%86%E9%A1%B5%E6%80%8E%E4%B9%88%E5%A4%84%E7%90%86">超大分页怎么处理</a></li>
-<li><a href="#mysql-%E5%88%86%E9%A1%B5">mysql 分页</a></li>
-<li><a href="#%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97">慢查询日志</a>
+</ul>
+</li>
+<li>
+<a href="#sql%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F">SQL的生命周期</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96%E5%A4%A7%E8%A1%A8%E6%95%B0%E6%8D%AE%E6%9F%A5%E8%AF%A2">优化大表数据查询</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%B6%85%E5%A4%A7%E5%88%86%E9%A1%B5%E6%80%8E%E4%B9%88%E5%A4%84%E7%90%86">超大分页怎么处理</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mysql-%E5%88%86%E9%A1%B5">mysql 分页</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97">慢查询日志</a>
 <ul>
 <li><a href="#%E6%85%A2%E6%9F%A5%E8%AF%A2%E5%A4%84%E7%90%86">慢查询处理</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%BB%E9%94%AE%E5%BF%85%E8%A6%81%E6%80%A7">主键必要性</a>
+<li>
+<a href="#%E4%B8%BB%E9%94%AE%E5%BF%85%E8%A6%81%E6%80%A7">主键必要性</a>
 <ul>
 <li><a href="#%E4%B8%BB%E9%94%AE%E4%BD%BF%E7%94%A8%E8%87%AA%E5%A2%9Eid%E8%BF%98%E6%98%AFuuid">主键使用自增ID还是UUID</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BC%98%E5%8C%96%E6%9F%A5%E8%AF%A2%E8%BF%87%E7%A8%8B%E4%B8%AD%E7%9A%84%E6%95%B0%E6%8D%AE%E8%AE%BF%E9%97%AE">优化查询过程中的数据访问</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96%E9%95%BF%E9%9A%BE%E7%9A%84%E6%9F%A5%E8%AF%A2%E8%AF%AD%E5%8F%A5">优化长难的查询语句</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96%E7%89%B9%E5%AE%9A%E7%B1%BB%E5%9E%8B%E7%9A%84%E6%9F%A5%E8%AF%A2%E8%AF%AD%E5%8F%A5">优化特定类型的查询语句</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96%E5%85%B3%E8%81%94%E6%9F%A5%E8%AF%A2">优化关联查询</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96%E5%AD%90%E6%9F%A5%E8%AF%A2">优化子查询</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96limit%E5%88%86%E9%A1%B5">优化LIMIT分页</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96union%E6%9F%A5%E8%AF%A2">优化UNION查询</a></li>
-<li><a href="#%E4%BC%98%E5%8C%96where%E5%AD%90%E5%8F%A5">优化WHERE子句</a></li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96%E6%9F%A5%E8%AF%A2%E8%BF%87%E7%A8%8B%E4%B8%AD%E7%9A%84%E6%95%B0%E6%8D%AE%E8%AE%BF%E9%97%AE">优化查询过程中的数据访问</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96%E9%95%BF%E9%9A%BE%E7%9A%84%E6%9F%A5%E8%AF%A2%E8%AF%AD%E5%8F%A5">优化长难的查询语句</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96%E7%89%B9%E5%AE%9A%E7%B1%BB%E5%9E%8B%E7%9A%84%E6%9F%A5%E8%AF%A2%E8%AF%AD%E5%8F%A5">优化特定类型的查询语句</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96%E5%85%B3%E8%81%94%E6%9F%A5%E8%AF%A2">优化关联查询</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96%E5%AD%90%E6%9F%A5%E8%AF%A2">优化子查询</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96limit%E5%88%86%E9%A1%B5">优化LIMIT分页</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96union%E6%9F%A5%E8%AF%A2">优化UNION查询</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BC%98%E5%8C%96where%E5%AD%90%E5%8F%A5">优化WHERE子句</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#innodb%E7%B4%A2%E5%BC%95%E7%BB%93%E6%9E%84">InnoDB索引结构</a>
+<ul>
+<li><a href="#%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%8E%E4%BA%8C%E7%BA%A7%E7%B4%A2%E5%BC%95">聚簇索引与二级索引</a></li>
+<li><a href="#%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E4%B8%8E%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88">最左前缀与索引失效</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB">事务与隔离级别</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mvcc%E4%B8%8E%E9%94%81">MVCC与锁</a>
+<ul>
+<li><a href="#mvcc%E7%9A%84%E5%AE%9E%E7%8E%B0">MVCC 的实现</a></li>
+<li><a href="#%E8%AE%B0%E5%BD%95%E9%94%81%E9%97%B4%E9%9A%99%E9%94%81%E4%B8%8E%E4%B8%B4%E9%94%AE%E9%94%81">记录锁、间隙锁与临键锁</a></li>
+</ul>
+</li>
+<li>
+<a href="#binlogredolog%E4%B8%8Eundolog">binlog、redolog与undolog</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#explain%E5%AD%97%E6%AE%B5%E6%B7%B1%E5%85%A5%E8%A7%A3%E8%AF%BB">explain字段深入解读</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B8%B8%E8%A7%81%E5%8F%82%E6%95%B0%E5%90%AB%E4%B9%89">常见参数含义</a>
+<ul>
 </ul>
 </li>
 </ul>

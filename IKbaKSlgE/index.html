@@ -635,6 +635,102 @@ select array[1,2] &lt;@ array[1,2,4];
 -- 是否有相同元素
 select array[2,4,4,45,1] &amp;&amp; array[1];
 </code></pre>
+<h3 id="812-json-与-jsonb-的常用操作">8.12 JSON 与 JSONB 的常用操作</h3>
+<p>JSONB 把 JSON 解析成二进制结构并去掉多余空格、重复 key，因此能建立索引、也能用操作符直接按 key 取值；JSON 只是原样保存文本。正因为如此，实际项目里几乎都用 JSONB。</p>
+<p>先看四种基本结构在 JSON 中的映射关系：</p>
+<pre><code class="language-sql">-- 字符串、null、布尔、数字都是合法的 json 值
+select '9'::json, 'null'::json, '"laozheng"'::json, 'true'::json;
+-- 同样的字面量转成 jsonb，语义一致
+select '9'::jsonb, 'null'::jsonb, '"laozheng"'::jsonb, 'true'::jsonb;
+-- 数组
+select '[9,true,null,"我是字符串"]'::jsonb;
+-- 对象
+select '{"name": "张三","age": 23,"gender": null}'::jsonb;
+</code></pre>
+<p>建一张同时保存 json 与 jsonb 的表，对比查询写法：</p>
+<pre><code class="language-sql">drop table if exists tb_json_test;
+create table tb_json_test(
+    id bigserial primary key,
+    info json,
+    infob jsonb
+);
+insert into tb_json_test (info, infob) values (
+    '{"name":   "张三",  "age": 23, "tags": ["a","b"], "gender": null}',
+    '{"name":   "张三",  "age": 23, "tags": ["a","b"], "gender": null}'
+);
+-- json 按文本原样保存，jsonb 会去掉多余空格
+select info, infob from tb_json_test;
+
+-- -> 取出的是 json/jsonb，->> 取出的是 text
+select infob -> 'name' as j_name,
+       infob ->> 'name' as t_name
+from tb_json_test;
+-- #> / #>> 按路径取嵌套值
+select infob #>> '{tags,0}' as first_tag from tb_json_test;
+-- 判断顶层是否包含指定键值对
+select * from tb_json_test where infob @> '{"age": 23}';
+-- 查询某个键是否存在：? 针对字符串，?| 任一存在，?&amp; 全部存在
+select * from tb_json_test where infob ? 'tags';
+select * from tb_json_test where infob ?| array['tags','gender'];
+-- 修改与删除键
+update tb_json_test set infob = infob || '{"city":"杭州"}'::jsonb where id = 1;
+update tb_json_test set infob = infob - 'gender' where id = 1;
+select infob from tb_json_test;
+</code></pre>
+<p>JSONB 的索引需要 GIN：数组包含、键存在（<code>@&gt;</code>、<code>? </code>）这类操作符才能走索引；而 <code>info</code> 这种 json 类型只能建 B-tree 且基本用不上，这也是强调"JSON 无法建索引"的原因。</p>
+<pre><code class="language-sql">-- json 列只能建普通索引，实际查询很难命中
+create index idx_json_test_info on tb_json_test(info);
+-- jsonb 列建 GIN 索引，@&gt;、?、?|、?&amp; 都能用上
+create index idx_json_test_infob on tb_json_test using gin(infob);
+explain select * from tb_json_test where infob @&gt; '{"age": 23}';
+</code></pre>
+<p>如果只想按某个固定 key 的取值查询，也可以给该表达式单独建 B-tree 索引：</p>
+<pre><code class="language-sql">-- 只针对 name 这个键建表达式索引，等值/范围查询都能命中
+create index idx_json_test_infob_name on tb_json_test((infob ->> 'name'));
+explain select * from tb_json_test where infob ->> 'name' = '张三';
+</code></pre>
+<h3 id="813-范围类型与-uuid-类型">8.13 范围类型与 UUID 类型</h3>
+<p>范围类型（range）用来表达"一段区间"，比如会议时间段、票价区间、IP 段。内置的有 int4range、int8range、numrange、tsrange、tstzrange、daterange，区间的开闭用 <code>[]</code>、<code>()</code> 表示。</p>
+<pre><code class="language-sql">-- 左闭右开：包含下界、不包含上界
+select '[1,10)'::int4range;
+-- 判断元素或区间是否被包含
+select '[1,10)'::int4range @&gt; 5;
+select '[1,10)'::int4range @&gt; '[2,3]'::int4range;
+-- 区间是否重叠
+select '[1,10)'::int4range &amp;&amp; '[5,20)'::int4range;
+-- 交集、并集、差集
+select '[1,10)'::int4range * '[5,20)'::int4range;
+select '[1,10)'::int4range + '[10,20)'::int4range;
+-- 上下界
+select lower('[1,10)'::int4range), upper('[1,10)'::int4range);
+
+-- 日程表：同一间会议室的时间段不允许重叠，可用排他约束兜底
+drop table if exists booking;
+create table booking(
+    id bigserial primary key,
+    room_id int not null,
+    period tsrange not null,
+    exclude using gist (room_id with =, period with &amp;&amp;)
+);
+insert into booking (room_id, period)
+values (1, '[2024-01-01 09:00, 2024-01-01 10:00)');
+-- 与上一条时间段重叠，会被排他约束拒绝
+insert into booking (room_id, period)
+values (1, '[2024-01-01 09:30, 2024-01-01 11:00)');
+-- 查询与指定时间有交集的预订
+select * from booking where period &amp;&amp; '[2024-01-01 09:15, 2024-01-01 09:45)'::tsrange;
+</code></pre>
+<p>UUID 类型占 16 字节，比用 varchar(36) 存字符串更省空间、比较也更快。如果只用 UUID 做唯一标识、并不要求随机分布，更推荐用 <code>gen_random_uuid()</code>；PostgreSQL 13 起该函数已内置在核心中，更早的版本需要执行 <code>create extension if not exists "uuid-ossp";</code> 后使用 <code>uuid_generate_v4()</code>。</p>
+<pre><code class="language-sql">create table tb_uuid(
+    id uuid primary key default gen_random_uuid(),
+    name varchar(32)
+);
+insert into tb_uuid (name) values ('张三'), ('李四');
+select * from tb_uuid;
+-- uuid 之间可以直接比较大小、参与排序
+select * from tb_uuid order by id;
+</code></pre>
+<p>UUID 的取值是随机的，作为主键时写入位置分散，容易造成 B-tree 页分裂和索引膨胀，所以在写入量大的表上，更常见的做法是"自增 bigint 做聚簇主键 + 额外一列 uuid 做业务唯一标识"。</p>
 <h2 id="九-表">九、表</h2>
 <p>表的构建语句，基本都会。</p>
 <p>核心在于构建表时，要指定上一些约束。</p>
@@ -982,24 +1078,379 @@ update test set name = '汤圆' where id = 5;
 insert into test values (5,'猪头肉',99,40);
 select * from test;
 </code></pre>
+<h2 id="十三-索引类型与执行计划">十三、索引类型与执行计划</h2>
+<h3 id="131-b-tree-索引与部分索引表达式索引">13.1 B-tree 索引、部分索引与表达式索引</h3>
+<p>B-tree 是 PostgreSQL 的默认索引，适用面最广：等值比较、范围比较、排序以及唯一约束都靠它完成。索引在磁盘上是一棵平衡的多路搜索树，查找复杂度是 O(log n)（对数级别），所以即使表有上亿行，定位一条记录也只需要读取几层页面。</p>
+<p>在使用 B-tree 之前，先要理解哪些写法会让索引失效，这比背语法更重要。</p>
+<pre><code class="language-sql">drop table if exists tb_account;
+create table tb_account(
+    id bigserial primary key,
+    username varchar(64) not null,
+    age int not null,
+    city varchar(32),
+    status varchar(16) not null default 'active',
+    balance numeric(12,2) not null default 0,
+    created_at timestamp not null default current_timestamp
+);
+insert into tb_account (username, age, city, status, balance)
+select 'user_' || g, 20 + (g % 30), '城市' || (g % 10), 'active', g * 1.5
+from generate_series(1, 100000) as g;
+analyze tb_account;
+
+-- 唯一索引：可以承担唯一约束的职责
+create unique index uk_tb_account_username on tb_account(username);
+-- 普通索引
+create index idx_tb_account_age on tb_account(age);
+
+-- 能命中索引：列上直接做等值比较
+explain select * from tb_account where age = 30;
+-- 能命中索引：范围查询
+explain select * from tb_account where age between 30 and 40;
+-- 无法命中索引：列被函数包裹，idx_tb_account_age 用不上
+explain select * from tb_account where age + 1 = 31;
+-- 无法命中索引：隐式类型转换，age 被转成 text 比较
+explain select * from tb_account where age::text = '30';
+-- 无法命中索引：like 以通配符开头
+explain select * from tb_account where username like '%user_1%';
+-- 索引失效时，把条件改写成对列本身的操作即可
+explain select * from tb_account where age = 30;
+</code></pre>
+<p>如果某条查询的过滤条件长期固定，可以只把满足条件的行放进索引，这样的索引叫部分索引（partial index），体积更小、维护代价更低。反过来，如果查询条件本身就是对列做计算，可以把这个表达式做成表达式索引。</p>
+<pre><code class="language-sql">-- 部分索引：只索引未删除的订单；where 条件必须与查询中的条件匹配才会被使用
+drop table if exists tb_order;
+create table tb_order(
+    id bigserial primary key,
+    user_id int not null,
+    amount numeric(12,2) not null,
+    is_delete boolean not null default false,
+    created_at timestamp not null default current_timestamp
+);
+create index idx_tb_order_alive on tb_order(user_id) where is_delete = false;
+explain select * from tb_order where user_id = 10 and is_delete = false;
+
+-- 表达式索引：建的时候要写两遍括号，查询写法必须与索引表达式完全一致
+create index idx_tb_order_month on tb_order((date_trunc('month', created_at)));
+explain select * from tb_order where date_trunc('month', created_at) = date '2024-01-01';
+
+-- 索引并非越多越好：每个索引都会占空间，并拖慢 insert/update/delete
+select pg_size_pretty(pg_relation_size('idx_tb_account_age')) as index_size;
+-- 找出长期未被使用的索引（需要先开启统计收集）
+select relname, indexrelname, idx_scan
+from pg_stat_user_indexes
+where idx_scan = 0
+order by relname;
+</code></pre>
+<h3 id="132-gin-gist-brin-与索引选型">13.2 GIN、GiST、BRIN 与索引选型</h3>
+<p>PostgreSQL 内置的索引方法各有分工，选错方法等于没建索引。</p>
+<pre><code class="language-sql">drop table if exists tb_article;
+create table tb_article(
+    id bigserial primary key,
+    title varchar(128) not null,
+    tags text[] not null,
+    content text not null,
+    price_range numrange,
+    created_at timestamp not null default current_timestamp
+);
+insert into tb_article (title, tags, content, price_range)
+values ('PostgreSQL 索引', array['pg','index','gin'],
+        'PostgreSQL 支持多种索引方法', '[1,100)');
+
+-- GIN：为数组、jsonb、全文检索这类"一个字段多个值"的类型准备
+create index idx_tb_article_tags on tb_article using gin(tags);
+explain select * from tb_article where tags @&gt; array['pg'];
+-- GIN 也能加速全文检索
+create index idx_tb_article_content on tb_article
+    using gin(to_tsvector('simple', content));
+explain select * from tb_article
+    where to_tsvector('simple', content) @@ to_tsquery('simple', 'PostgreSQL');
+
+-- GiST：几何、范围、以及需要排他约束的场景
+create index idx_tb_article_price on tb_article using gist(price_range);
+explain select * from tb_article where price_range &amp;&amp; '[50,60)'::numrange;
+
+-- BRIN：只记录每个数据块的取值范围，体积非常小
+-- 只有当数据在物理上大致按该列有序时才有效（例如按时间顺序写入的日志表）
+create index idx_tb_article_created_brin on tb_article using brin(created_at);
+-- Hash：只支持等值查询，通常被 B-tree 覆盖，实际很少使用
+create index idx_tb_article_title_hash on tb_article using hash(title);
+</code></pre>
+<p>选型可以按下面的顺序判断。</p>
+<ul>
+<li>等值、范围、排序、唯一约束：直接用默认的 B-tree。</li>
+<li>字段里存的是数组、jsonb，或用全文检索：用 GIN。</li>
+<li>几何类型、范围类型，或需要"区间不重叠"这类排他约束：用 GiST。</li>
+<li>超大表且数据天然按某列递增（时间、自增 ID）：用 BRIN，索引体积可能只有 B-tree 的百分之几。</li>
+<li>只有等值查询、且值分布离散：才考虑 Hash。</li>
+</ul>
+<h3 id="133-用-explain-看懂执行计划">13.3 用 EXPLAIN 看懂执行计划</h3>
+<p>索引建好了，但到底用没用上，要靠执行计划确认。<code>explain</code> 只输出估算结果，<code>explain analyze</code> 会真正执行并给出实际耗时与行数；<code>explain (analyze, buffers)</code> 还能看到读了多少数据块。</p>
+<pre><code class="language-sql">explain (analyze, buffers, costs off)
+select * from tb_account where age = 30;
+
+-- 常见的扫描节点，效率由高到低大致为：
+-- Index Only Scan 仅索引扫描：查询列都在索引里，不用回表
+-- Index Scan      索引扫描：先在索引定位，再回表取数据
+-- Bitmap Index Scan + Bitmap Heap Scan：先收集候选行号再批量回表
+-- Seq Scan        全表扫描：没有可用索引，或优化器认为走索引更慢
+-- 两个重要指标：
+--   rows：优化器"估算"的行数；如果与实际行数相差很大，先执行 analyze 更新统计信息
+--   actual time / actual rows：真实耗时(毫秒)与真实行数
+
+-- 估算明显失真时更新统计信息
+analyze tb_account;
+-- 查看某列的数据分布，直方图能帮助判断优化器的估算依据
+select * from pg_stats where tablename = 'tb_account' and attname = 'age';
+</code></pre>
+<p><img src="/post-assets/IKbaKSlgE/01-pg-index-types.svg" alt="PostgreSQL 索引类型与适用场景示意图"></p>
+<h2 id="十四-mvcc-与隔离级别">十四、MVCC 与隔离级别</h2>
+<h3 id="141-mvcc-是怎么实现的">14.1 MVCC 是怎么实现的</h3>
+<p>PostgreSQL 用多版本并发控制（MVCC）解决读写冲突：更新一行时并不会原地覆盖旧数据，而是写入一个新的行版本，旧版本仍然保留在数据文件中。每个事务在开始时拿到一个快照，只读取对自己可见的版本。</p>
+<p>每行记录都带有几个系统列：<code>xmin</code> 是创建该版本的事务号，<code>xmax</code> 是删除或更新该版本的事务号（未被删除时为 0）。判断可见性的规则是：<code>xmin</code> 对应的事务已提交、且早于当前快照，同时 <code>xmax</code> 为空或对应事务不可见，这行数据才可见。</p>
+<p>这套机制带来的最大好处是"读不阻塞写、写不阻塞读"：读操作只读快照，不需要等待写事务释放锁，也就不会出现脏读。代价是旧版本需要靠 VACUUM 清理，所以 MVCC 与 VACUUM 是配套的一对概念。</p>
+<p><img src="/post-assets/IKbaKSlgE/02-pg-mvcc-vacuum.svg" alt="PostgreSQL MVCC 多版本可见性与 VACUUM 回收示意图"></p>
+<h3 id="142-四种隔离级别">14.2 四种隔离级别</h3>
+<table>
+<thead>
+<tr>
+<th>隔离级别</th>
+<th>脏读</th>
+<th>不可重复读</th>
+<th>幻读</th>
+<th>序列化异常</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read Uncommitted</td>
+<td>PG 中不会发生</td>
+<td>可能</td>
+<td>可能</td>
+<td>可能</td>
+</tr>
+<tr>
+<td>Read Committed（默认）</td>
+<td>不可能</td>
+<td>可能</td>
+<td>可能</td>
+<td>可能</td>
+</tr>
+<tr>
+<td>Repeatable Read</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>可能</td>
+</tr>
+<tr>
+<td>Serializable</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>不可能</td>
+</tr>
+</tbody>
+</table>
+<p>PostgreSQL 实际上只实现三种隔离级别：指定 Read Uncommitted 会自动按 Read Committed 处理。各隔离级别的差异在于取快照的时机：Read Committed 每条语句开始时取一个新快照，所以同一事务内前后两次查询可能看到不同结果；Repeatable Read 只在事务的第一条语句取一次快照，之后整个事务都复用这个快照。</p>
+<pre><code class="language-sql">-- 查看与设置当前事务的隔离级别
+show transaction_isolation;
+begin transaction isolation level repeatable read;
+select * from tb_account where id = 1;
+commit;
+
+-- 在同一个连接内修改默认隔离级别
+set session characteristics as transaction isolation level serializable;
+set default_transaction_isolation = 'read committed';
+</code></pre>
+<p>需要特别注意的是写冲突的处理方式。在 Read Committed 下，两个事务同时更新同一行时，后到的事务会等待，等前者提交后重新读取最新版本再尝试更新；而在 Repeatable Read 下，后到的事务会直接失败并报 <code>could not serialize access due to concurrent update</code>，必须由应用回滚整个事务后重试。</p>
+<p>PostgreSQL 的 Serializable 是基于快照的串行化（SSI）：它通过跟踪事务之间读写依赖形成的环来发现异常，一旦发现就中止其中一个事务，报 <code>could not serialize access due to read/write dependencies among transactions</code>。这和 MySQL 的 Serializable（主要靠加锁）是两种不同的实现思路。</p>
+<h2 id="十五-vacuum-与表膨胀">十五、VACUUM、autovacuum 与表膨胀</h2>
+<h3 id="151-为什么需要-vacuum">15.1 为什么需要 VACUUM</h3>
+<p>前面说到 UPDATE 会产生新版本、DELETE 只是把旧版本标记为删除，这些不再被任何事务需要的版本叫作死元组（dead tuple）。它们占据的空间不会自动释放，日积月累表就会膨胀，扫描时要读的页面越来越多，查询自然变慢。</p>
+<pre><code class="language-sql">-- 回收死元组空间：可以与业务并发执行，通常不把空间归还操作系统
+vacuum tb_account;
+-- 回收空间并更新统计信息
+vacuum analyze tb_account;
+-- 重写整表并把空间归还操作系统，需要排他锁，执行期间阻塞读写
+vacuum full tb_account;
+-- 只更新统计信息
+analyze tb_account;
+
+-- 查看表的死元组数量、上次清理时间与自动清理次数
+select relname, n_live_tup, n_dead_tup, last_vacuum, last_autovacuum, vacuum_count
+from pg_stat_user_tables
+where relname = 'tb_account';
+-- 查看表与索引占用的空间
+select pg_size_pretty(pg_total_relation_size('tb_account')) as total_size;
+-- 查看当前数据库中的长事务；长事务会拖住回收水位，导致死元组无法清理
+select pid, state, xact_start, now() - xact_start as duration, left(query, 60) as query
+from pg_stat_activity
+where xact_start is not null
+order by xact_start;
+</code></pre>
+<h3 id="152-autovacuum-的触发条件与调优">15.2 autovacuum 的触发条件与调优</h3>
+<p>正常情况下不需要手工执行 VACUUM，autovacuum 后台进程会按阈值自动触发。对某张表来说，当死元组数量超过下面这个值时就会启动清理：</p>
+<p>某个表的触发阈值 = autovacuum_vacuum_threshold（基准行数，默认 50） + autovacuum_vacuum_scale_factor（放大比例，默认 0.2）× 表的活元组数。</p>
+<p>默认 <code>autovacuum_vacuum_threshold</code> 为 50、<code>autovacuum_vacuum_scale_factor</code> 为 0.2，也就是说一张 1000 万行的表要累积到约 200 万行死元组才会被清理，这在写入频繁的表上显然太迟，需要针对单表调小比例。</p>
+<pre><code class="language-sql">-- 全局参数（修改后需要 reload；autovacuum 相关参数属于 sighup 级别）
+-- autovacuum = on                                  -- 总开关
+-- autovacuum_vacuum_threshold = 50                 -- 基准阈值
+-- autovacuum_vacuum_scale_factor = 0.2             -- 按表大小放大的比例
+-- autovacuum_naptime = 1min                        -- 巡检间隔
+-- autovacuum_max_workers = 3                       -- 工作进程数
+
+-- 针对写入频繁的单表单独调优：死元组达到 1 万行或 5% 就触发
+alter table tb_order set (
+    autovacuum_vacuum_scale_factor = 0.05,
+    autovacuum_vacuum_threshold = 10000,
+    autovacuum_analyze_scale_factor = 0.02
+);
+-- 查看表上生效的存储参数
+select relname, reloptions from pg_class where relname = 'tb_order';
+-- 手工清理并输出每个阶段的详细信息，便于排查清理慢的原因
+vacuum (verbose) tb_order;
+</code></pre>
+<p>如果表已经严重膨胀，<code>vacuum full</code> 又不能在业务高峰期执行，可以使用 pg_repack 这类扩展：它以在线方式重建表并切换文件，只在收尾阶段持有极短的排他锁。</p>
+<h2 id="十六-wal-与归档">十六、WAL 与归档</h2>
+<h3 id="161-wal-的作用与查看方式">16.1 WAL 的作用与查看方式</h3>
+<p>WAL（Write-Ahead Log，预写式日志）是 PostgreSQL 保证持久性和崩溃恢复的基础。它的核心原则是：数据页的任何修改，必须先把对应的日志记录刷到 WAL 文件，之后才允许把脏页写回数据文件。这样即使数据库进程或主机在任意时刻断电，重启后也能用 WAL 把已提交的事务重放出来。</p>
+<p>WAL 文件位于数据目录的 <code>pg_wal</code>（PostgreSQL 10 之前叫 <code>pg_xlog</code>）下，默认每个 16MB，写满一个就切换到下一个。检查点（checkpoint）会把内存中的脏页刷盘，并记录一个位置（LSN），崩溃恢复只需要从最近一次检查点开始重放，从而缩短恢复时间。因此 checkpoint 间隔太短会导致频繁刷盘、影响性能，太长则会让恢复变慢、WAL 占用变多。</p>
+<pre><code class="language-sql">-- 查看当前 WAL 的写入位置（LSN）与最近一次检查点信息
+select pg_current_wal_lsn();
+select * from pg_control_checkpoint();
+-- 查看 WAL 相关参数
+show wal_level;          -- minimal / replica / logical，默认 replica
+show max_wal_size;
+show min_wal_size;
+show checkpoint_timeout;
+show archive_mode;
+</code></pre>
+<h3 id="162-开启归档与时间点恢复">16.2 开启归档与时间点恢复</h3>
+<p>只靠 WAL 循环写入，旧日志被覆盖后就再也找不回来了。开启归档（archive_mode）后，PostgreSQL 会在每个 WAL 段写满并切换时，把它交给 <code>archive_command</code> 指定的命令保存到别处，这些归档再加上一份基础备份，就能把数据库恢复到任意时间点。</p>
+<pre><code class="language-sql">-- 修改 postgresql.conf（需要重启生效的参数：archive_mode）
+-- wal_level = replica
+-- archive_mode = on
+-- archive_command = 'test ! -f /var/lib/pgsql/12/archive/%f &amp;&amp; cp %p /var/lib/pgsql/12/archive/%f'
+
+-- 手工触发一次 WAL 切换，验证归档是否配置成功
+select pg_switch_wal();
+-- 查看归档统计：成功、失败的数量以及最近归档的文件
+select * from pg_stat_archiver;
+-- 列出 pg_wal 目录大小，判断是否需要调整 max_wal_size
+select pg_size_pretty(sum(size)) from pg_ls_waldir();
+</code></pre>
+<p>做时间点恢复时，把基础备份解压到数据目录，在 <code>postgresql.conf</code> 或 <code>postgresql.auto.conf</code> 中配置 <code>restore_command</code>，再指定恢复目标，启动后数据库就会重放归档日志：</p>
+<pre><code class="language-sql">-- 恢复配置示例（写在 postgresql.auto.conf 中）
+-- restore_command = 'cp /var/lib/pgsql/12/archive/%f %p'
+-- recovery_target_time = '2024-01-01 12:00:00'
+-- recovery_target_action = 'promote'
+</code></pre>
+<h2 id="十七-函数触发器与权限管理">十七、函数、触发器与权限管理</h2>
+<h3 id="171-pl-pgsql-函数与-call">17.1 PL/pgSQL 函数与 CALL</h3>
+<p>9.2 节已经用过 PL/pgSQL 的触发器函数，这里把普通函数补全。函数体用美元引用（dollar quoting，如 <code>$$ ... $$</code>）包起来，好处是函数体内部的单引号不需要再做转义；<code>$$</code> 也可以写成 <code>$body$</code> 这种带标签的形式，当函数体内部还要嵌套美元引用时用标签区分会更清晰。</p>
+<pre><code class="language-sql">create or replace function fn_add(a int, b int) returns int as $$
+begin
+    return a + b;
+end;
+$$ language plpgsql;
+
+-- 带出参的函数，调用时用 select
+create or replace function fn_user_total(uid int, out total numeric)
+as $$
+begin
+    select coalesce(sum(balance), 0) into total from tb_account where id = uid;
+end;
+$$ language plpgsql;
+
+select fn_add(1, 2);
+select fn_user_total(1);
+-- 查看函数定义
+select proname, pg_get_functiondef(oid) from pg_proc where proname = 'fn_add';
+</code></pre>
+<p>函数适合"有返回值、需要嵌入 SQL 中使用"的场景；如果只是执行一段过程、不需要返回值，可以用存储过程配合 <code>call</code> 调用，过程内部还允许提交或回滚事务。</p>
+<pre><code class="language-sql">create or replace procedure sp_reset_balance(uid int) as $$
+begin
+    update tb_account set balance = 0 where id = uid;
+    commit;
+end;
+$$ language plpgsql;
+
+call sp_reset_balance(1);
+</code></pre>
+<h3 id="172-触发器的完整套路">17.2 触发器的完整套路</h3>
+<p>触发器的构成是"触发时机 + 事件 + 粒度 + 触发器函数"。9.2 节里的级联删除示例已经演示过 <code>after delete ... for each row</code>，下面补充行级触发器里最常用的几个要点。</p>
+<pre><code class="language-sql">-- 在删除学生之前记录日志：before 行级触发器可以直接返回 old 阻止删除
+create table if not exists student_del_log(
+    id bigserial primary key,
+    student_id int,
+    deleted_at timestamp default current_timestamp
+);
+
+create or replace function fn_log_student_delete() returns trigger as $$
+begin
+    insert into student_del_log (student_id) values (old.id);
+    return old;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_student_delete_log on student;
+create trigger trg_student_delete_log
+before delete on student
+for each row
+execute function fn_log_student_delete();
+
+select * from student;
+delete from student where id = 2;
+select * from student_del_log;
+</code></pre>
+<p>需要记住的几点：行级触发器会为每一行执行一次，数据量大时开销明显；<code>before</code> 触发器返回 <code>old</code> 或 <code>new</code> 才会继续执行原操作，返回 <code>null</code> 表示跳过这一行；<code>new</code> 在 delete 事件中为 null，<code>old</code> 在 insert 事件中为 null；语句级触发器用 <code>for each statement</code>，每个语句只执行一次。</p>
+<h3 id="173-schema-组织与权限管理">17.3 Schema 组织与权限管理</h3>
+<p>当多个业务共用同一个数据库时，可以用 schema 做命名空间隔离，避免表名冲突，权限也能按 schema 授予。</p>
+<pre><code class="language-sql">-- 建立专用的 schema 与登录角色
+create schema if not exists app;
+create role app_rw login password 'ChangeMe_123';
+create role app_ro login password 'ChangeMe_456';
+
+-- 允许使用（进入）该 schema，否则连表名都无法解析
+grant usage on schema app to app_rw, app_ro;
+-- 现有对象的权限
+grant select, insert, update, delete on all tables in schema app to app_rw;
+grant select on all tables in schema app to app_ro;
+grant usage, select on all sequences in schema app to app_rw;
+-- 之后新建的对象也自动套用同样的权限
+alter default privileges in schema app
+    grant select, insert, update, delete on tables to app_rw;
+alter default privileges in schema app
+    grant select on tables to app_ro;
+
+-- 让角色默认先在 app 下搜索对象
+alter role app_rw set search_path = app, public;
+-- 查看权限
+select table_schema, table_name, privilege_type, grantee
+from information_schema.role_table_grants
+where grantee in ('app_rw', 'app_ro');
+</code></pre>
+<p>落到表级或列级的授权、以及属主变更也很常用：</p>
+<pre><code class="language-sql">grant select (username, city) on tb_account to app_ro;   -- 只开放部分列
+revoke delete on tb_account from app_rw;                  -- 收回权限
+alter table tb_account owner to app_rw;                   -- 变更属主，属主拥有全部权限
+-- 查看某张表上的全部授权
+select * from information_schema.table_privileges where table_name = 'tb_account';
+</code></pre>
+<p>另外，PostgreSQL 15 起 <code>public</code> schema 默认不再允许所有用户创建对象（<code>pg_database_owner</code> 才有 CREATE 权限），因此在新版本上给业务角色建对象时，需要显式 <code>grant create on schema app to app_rw;</code>，并且建议让业务对象都落在专用 schema 中，而不是 public。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%83-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">七、数据类型</a>
 <ul>
-<li><a href="#%E4%B8%83-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">七、数据类型</a></li>
-<li><a href="#%E5%85%AB-postgresql%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">八、PostgreSQL基本操作&amp;数据类型</a>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AB-postgresql%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B">八、PostgreSQL基本操作&amp;数据类型</a>
 <ul>
 <li><a href="#81-%E5%8D%95%E5%BC%95%E5%8F%B7%E5%92%8C%E5%8F%8C%E5%BC%95%E5%8F%B7">8.1 单引号和双引号</a></li>
 <li><a href="#82-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B%E8%BD%AC%E6%8D%A2">8.2 数据类型转换</a></li>
 <li><a href="#sec83-boolean">8.3 布尔类型</a></li>
-<li><a href="#84-%E6%95%B0%E5%80%BC%E7%B1%BB%E5%9E%8B">8.4 数值类型</a>
-<ul>
-<li><a href="#841-%E6%95%B4%E5%9E%8B">8.4.1 整型</a></li>
-<li><a href="#842-%E6%B5%AE%E7%82%B9%E5%9E%8B">8.4.2 浮点型</a></li>
-<li><a href="#843-%E5%BA%8F%E5%88%97">8.4.3 序列</a></li>
-<li><a href="#844-%E6%95%B0%E5%80%BC%E7%9A%84%E5%B8%B8%E8%A7%81%E6%93%8D%E4%BD%9C">8.4.4 数值的常见操作</a></li>
-</ul>
-</li>
+<li><a href="#84-%E6%95%B0%E5%80%BC%E7%B1%BB%E5%9E%8B">8.4 数值类型</a></li>
 <li><a href="#85-%E5%AD%97%E7%AC%A6%E4%B8%B2%E7%B1%BB%E5%9E%8B">8.5 字符串类型</a></li>
 <li><a href="#86-%E6%97%A5%E6%9C%9F%E7%B1%BB%E5%9E%8B">8.6 日期类型</a></li>
 <li><a href="#87-%E6%9E%9A%E4%B8%BE%E7%B1%BB%E5%9E%8B">8.7 枚举类型</a></li>
@@ -1007,9 +1458,12 @@ select * from test;
 <li><a href="#89-jsonjsonb%E7%B1%BB%E5%9E%8B">8.9 JSON&amp;JSONB类型</a></li>
 <li><a href="#810-%E5%A4%8D%E5%90%88%E7%B1%BB%E5%9E%8B">8.10 复合类型</a></li>
 <li><a href="#811-%E6%95%B0%E7%BB%84%E7%B1%BB%E5%9E%8B">8.11 数组类型</a></li>
+<li><a href="#812-json-%E4%B8%8E-jsonb-%E7%9A%84%E5%B8%B8%E7%94%A8%E6%93%8D%E4%BD%9C">8.12 JSON 与 JSONB 的常用操作</a></li>
+<li><a href="#813-%E8%8C%83%E5%9B%B4%E7%B1%BB%E5%9E%8B%E4%B8%8E-uuid-%E7%B1%BB%E5%9E%8B">8.13 范围类型与 UUID 类型</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B9%9D-%E8%A1%A8">九、表</a>
+<li>
+<a href="#%E4%B9%9D-%E8%A1%A8">九、表</a>
 <ul>
 <li><a href="#91-%E7%BA%A6%E6%9D%9F">9.1 约束</a></li>
 <li><a href="#92-%E8%A7%A6%E5%8F%91%E5%99%A8">9.2 触发器</a></li>
@@ -1019,6 +1473,41 @@ select * from test;
 <li><a href="#96-%E7%89%A9%E5%8C%96%E8%A7%86%E5%9B%BE">9.6 物化视图</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E5%8D%81%E4%B8%89-%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92">十三、索引类型与执行计划</a>
+<ul>
+<li><a href="#131-b-tree-%E7%B4%A2%E5%BC%95%E4%B8%8E%E9%83%A8%E5%88%86%E7%B4%A2%E5%BC%95%E8%A1%A8%E8%BE%BE%E5%BC%8F%E7%B4%A2%E5%BC%95">13.1 B-tree 索引、部分索引与表达式索引</a></li>
+<li><a href="#132-gin-gist-brin-%E4%B8%8E%E7%B4%A2%E5%BC%95%E9%80%89%E5%9E%8B">13.2 GIN、GiST、BRIN 与索引选型</a></li>
+<li><a href="#133-%E7%94%A8-explain-%E7%9C%8B%E6%87%82%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92">13.3 用 EXPLAIN 看懂执行计划</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E5%9B%9B-mvcc-%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB">十四、MVCC 与隔离级别</a>
+<ul>
+<li><a href="#141-mvcc-%E6%98%AF%E6%80%8E%E4%B9%88%E5%AE%9E%E7%8E%B0%E7%9A%84">14.1 MVCC 是怎么实现的</a></li>
+<li><a href="#142-%E5%9B%9B%E7%A7%8D%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB">14.2 四种隔离级别</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%BA%94-vacuum-%E4%B8%8E%E8%A1%A8%E8%86%A8%E8%83%80">十五、VACUUM、autovacuum 与表膨胀</a>
+<ul>
+<li><a href="#151-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-vacuum">15.1 为什么需要 VACUUM</a></li>
+<li><a href="#152-autovacuum-%E7%9A%84%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6%E4%B8%8E%E8%B0%83%E4%BC%98">15.2 autovacuum 的触发条件与调优</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E5%85%AD-wal-%E4%B8%8E%E5%BD%92%E6%A1%A3">十六、WAL 与归档</a>
+<ul>
+<li><a href="#161-wal-%E7%9A%84%E4%BD%9C%E7%94%A8%E4%B8%8E%E6%9F%A5%E7%9C%8B%E6%96%B9%E5%BC%8F">16.1 WAL 的作用与查看方式</a></li>
+<li><a href="#162-%E5%BC%80%E5%90%AF%E5%BD%92%E6%A1%A3%E4%B8%8E%E6%97%B6%E9%97%B4%E7%82%B9%E6%81%A2%E5%A4%8D">16.2 开启归档与时间点恢复</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81%E4%B8%83-%E5%87%BD%E6%95%B0%E8%A7%A6%E5%8F%91%E5%99%A8%E4%B8%8E%E6%9D%83%E9%99%90%E7%AE%A1%E7%90%86">十七、函数、触发器与权限管理</a>
+<ul>
+<li><a href="#171-pl-pgsql-%E5%87%BD%E6%95%B0%E4%B8%8E-call">17.1 PL/pgSQL 函数与 CALL</a></li>
+<li><a href="#172-%E8%A7%A6%E5%8F%91%E5%99%A8%E7%9A%84%E5%AE%8C%E6%95%B4%E5%A5%97%E8%B7%AF">17.2 触发器的完整套路</a></li>
+<li><a href="#173-schema-%E7%BB%84%E7%BB%87%E4%B8%8E%E6%9D%83%E9%99%90%E7%AE%A1%E7%90%86">17.3 Schema 组织与权限管理</a></li>
 </ul>
 </li>
 </ul>
