@@ -125,19 +125,19 @@
           
           <img class="post-feature-header-image" src="/post-images/E_iSRsJL1.png" alt="封面图">
           
-          <p>Spring的启动流程可以归纳为三个步骤：</p>
+          <p>Spring 的启动流程可以归纳为三个步骤：</p>
 <ul>
 <li>
-<p>1、初始化Spring容器，注册内置BeanPostProcessor的BeanDefinition到容器中</p>
+<p>1、初始化 Spring 容器，把内置 BeanPostProcessor 的 BeanDefinition 注册到容器中；</p>
 </li>
 <li>
-<p>2、将配置类的BeanDefinition注册到容器中</p>
+<p>2、把配置类的 BeanDefinition 注册到容器中；</p>
 </li>
 <li>
-<p>3、调用refresh()方法刷新容器</p>
+<p>3、调用 refresh() 方法刷新容器。</p>
 </li>
 </ul>
-<p>因为是基于 java-config 技术分析源码，所以这里的入口是 AnnotationConfigApplicationContext ，如果是使用 xml 分析，那么入口即为 ClassPathXmlApplicationContext ，它们俩的共同特征便是都继承了 AbstractApplicationContext 类，而大名鼎鼎的 refresh()便是在这个类中定义的。我们接着分析 AnnotationConfigApplicationContext 类，源码如下：</p>
+<p>本文基于 java-config 技术分析源码，因此入口是 AnnotationConfigApplicationContext；如果使用 XML 配置，入口则是 ClassPathXmlApplicationContext。两者的共同特征是都继承自 AbstractApplicationContext，而大名鼎鼎的 refresh() 正是在这个类中定义的。我们接着分析 AnnotationConfigApplicationContext 类，源码如下：</p>
 <pre><code class="language-java">// 初始化容器
 public AnnotationConfigApplicationContext(Class&lt;?&gt;... annotatedClasses) {
     // 注册 Spring 内置后置处理器的 BeanDefinition 到容器
@@ -148,19 +148,29 @@ public AnnotationConfigApplicationContext(Class&lt;?&gt;... annotatedClasses) {
     refresh();
 }
 </code></pre>
-<p>所以整个Spring容器的启动流程可以绘制成如下流程图：</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1663068697343.png" alt="" loading="lazy"></figure>
-<p>接着我们主要从这三个入口详细分析一下Spring的启动流程：</p>
+<p>所以整个 Spring 容器的启动流程可以绘制成如下流程图（原图为早期手绘稿，可与下面重新绘制的步骤图对照阅读）：</p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1663068697343.png" alt="Spring 容器启动流程手绘示意图" loading="lazy"></figure>
+<p>把这套流程按阶段重新梳理，可以得到下面这张图：构造容器、refresh() 十二步依次执行、容器可用，三步走完 Spring 才算启动完成。图中同时标出了 BeanFactoryPostProcessor 与 BeanPostProcessor 的执行时机，这两个接口是后文最容易混淆的地方。</p>
+<p><img src="/post-assets/E_iSRsJL1/01-spring-refresh-flow.svg" alt="Spring 启动阶段与 refresh() 十二步流程图"></p>
+<p>接着我们主要从这三个入口详细分析 Spring 的启动流程：</p>
 <h2 id="一-初始化流程">一、初始化流程：</h2>
-<p><strong>1、spring容器的初始化时，通过this()调用了无参构造函数，主要做了以下三个事情：</strong></p>
-<p>（1）实例化BeanFactory【DefaultListableBeanFactory】工厂，用于生成Bean对象<br>
-（2）实例化BeanDefinitionReader注解配置读取器，用于对特定注解（如@Service、@Repository）的类进行读取转化成  BeanDefinition 对象，（BeanDefinition 是 Spring 中极其重要的一个概念，它存储了 bean 对象的所有特征信息，如是否单例，是否懒加载，factoryBeanName 等）<br>
-（3）实例化ClassPathBeanDefinitionScanner路径扫描器，用于对指定的包目录进行扫描查找 bean 对象<br>
+<p><strong>1、Spring 容器初始化时，通过 this() 调用了无参构造函数，主要做了以下三个事情：</strong></p>
+<p>（1）实例化 BeanFactory【DefaultListableBeanFactory】工厂，用于生成 Bean 对象<br>
+（2）实例化 BeanDefinitionReader 注解配置读取器【AnnotatedBeanDefinitionReader】，用于对特定注解（如 @Service、@Repository）的类进行读取，转化成 BeanDefinition 对象。BeanDefinition 是 Spring 中极其重要的一个概念，它存储了 bean 对象的所有特征信息，如是否单例、是否懒加载、factoryBeanName 等；<br>
+（3）实例化 ClassPathBeanDefinitionScanner 路径扫描器，用于对指定的包目录进行扫描查找 bean 对象<br>
 <strong>2、核心代码剖析：</strong></p>
-<p>（1）向容器添加内置组件：org.springframework.context.annotation.AnnotationConfigUtils#registerAnnotationConfigProcessors：</p>
-<p>根据上图分析，代码运行到这里时，Spring 容器已经构造完毕，就可以为容器添加一些内置组件了。其中最主要的组件是 ConfigurationClassPostProcessor 和 AutowiredAnnotationBeanPostProcessor：前者是 beanFactory 后置处理器，负责 bean 的扫描与配置类解析；后者是 bean 后置处理器，负责 @Autowired 自动注入。</p>
-<h2 id="二-注册springconfig配置类到容器中">二、注册SpringConfig配置类到容器中：</h2>
-<p>1、将SpringConfig注册到容器中：org.springframework.context.annotation.AnnotatedBeanDefinitionReader#doRegisterBean：</p>
+<p>（1）向容器添加内置组件：org.springframework.context.annotation.AnnotationConfigUtils#registerAnnotationConfigProcessors。该方法默认注册的组件并不只有“两个后置处理器”，完整清单如下：</p>
+<ul>
+<li>ConfigurationClassPostProcessor：BeanDefinitionRegistryPostProcessor（同时实现了 BeanFactoryPostProcessor），负责配置类解析与 @ComponentScan 扫描；</li>
+<li>AutowiredAnnotationBeanPostProcessor：BeanPostProcessor，负责 @Autowired、@Value 的注入；</li>
+<li>CommonAnnotationBeanPostProcessor：BeanPostProcessor，负责 @Resource、@PostConstruct、@PreDestroy 等 JSR-250 注解；</li>
+<li>PersistenceAnnotationBeanPostProcessor：BeanPostProcessor，负责 @PersistenceContext 等 JPA 注解（未引入 JPA 时也会注册，实际不生效）；</li>
+<li>EventListenerMethodProcessor 与 DefaultEventListenerFactory：负责把 @EventListener 方法适配成 ApplicationListener。</li>
+</ul>
+<p>注意这里注册的只是 <strong>BeanDefinition</strong>，此刻容器中还没有任何 Bean 实例；真正把这些后置处理器实例化并调用，要等到 refresh() 的第 5 步和第 6 步。</p>
+<p>根据上图分析，代码运行到这里时，Spring 容器已经构造完毕，接下来就可以为容器添加内置组件了。其中最关键的两个组件是 ConfigurationClassPostProcessor 和 AutowiredAnnotationBeanPostProcessor：前者是 beanFactory 后置处理器，负责 bean 的扫描与配置类解析；后者是 bean 后置处理器，负责 @Autowired 自动注入。也正因为 ConfigurationClassPostProcessor 实现的是 BeanFactoryPostProcessor 体系，@ComponentScan、@Bean 注册进来的 BeanDefinition 才能在 refresh() 第 5 步集中生效，早于任何 Bean 的实例化。</p>
+<h2 id="二-注册springconfig配置类到容器中">二、注册 SpringConfig 配置类到容器中：</h2>
+<p>1、将 SpringConfig（示例中自定义的 @Configuration 配置类）注册到容器中，入口为 org.springframework.context.annotation.AnnotatedBeanDefinitionReader#doRegisterBean：</p>
 <p>这个步骤主要是用来解析用户传入的 Spring 配置类，解析成一个 BeanDefinition 然后注册到容器中，主要源码如下：</p>
 <pre><code class="language-java">&lt;T&gt; void doRegisterBean(Class&lt;T&gt; annotatedClass, @Nullable Supplier&lt;T&gt; instanceSupplier, @Nullable String name,
 		@Nullable Class&lt;? extends Annotation&gt;[] qualifiers, BeanDefinitionCustomizer... definitionCustomizers) {
@@ -204,7 +214,7 @@ public AnnotationConfigApplicationContext(Class&lt;?&gt;... annotatedClasses) {
 }
 </code></pre>
 <h2 id="三-refresh容器刷新流程">三、refresh()容器刷新流程：</h2>
-<p>refresh()主要用于容器的刷新，Spring 中的每一个容器都会调用 refresh() 方法进行刷新，无论是 Spring 的父子容器，还是 Spring Cloud Feign 中的 feign 隔离容器，每一个容器都会调用这个方法完成初始化。refresh()可划分为12个步骤，其中比较重要的步骤下面会有详细说明。</p>
+<p>refresh() 主要用于容器的刷新，Spring 中的每一个容器都会调用 refresh() 方法进行刷新，无论是 Spring 的父子容器，还是 Spring Cloud Feign 中的 feign 隔离容器，每一个容器都会调用这个方法完成初始化。整个方法体包在 <code>synchronized (this.startupShutdownMonitor)</code> 同步块中，保证同一个容器不会被并发刷新。refresh() 可划分为 12 个步骤，其中比较重要的步骤下面会有详细说明。</p>
 <p><strong>1、refresh()方法的源码：org.springframework.context.support.AbstractApplicationContext#refresh：</strong></p>
 <pre><code class="language-java">public void refresh() throws BeansException, IllegalStateException {
 	synchronized (this.startupShutdownMonitor) {
@@ -283,9 +293,14 @@ public AnnotationConfigApplicationContext(Class&lt;?&gt;... annotatedClasses) {
 （2）先注册实现了PriorityOrdered优先级接口的BeanPostProcessor；<br>
 （3）再注册实现了Ordered优先级接口的BeanPostProcessor；<br>
 （4）最后注册没有实现任何优先级接口的BeanPostProcessor；<br>
-（5）最r终注册MergedBeanDefinitionPostProcessor类型的BeanPostProcessor：beanFactory.addBeanPostProcessor(postProcessor);<br>
-（6）给容器注册一个ApplicationListenerDetector：用于在Bean创建完成后检查是否是ApplicationListener，如果是，就把Bean放到容器中保存起来：applicationContext.addApplicationListener((ApplicationListener&lt;?&gt;) bean);<br>
-此时容器中默认有6个默认的BeanProcessor(无任何代理模式下)：【ApplicationContextAwareProcessor】、【ConfigurationClassPostProcessorsAwareBeanPostProcessor】、【PostProcessorRegistrationDelegate】、【CommonAnnotationBeanPostProcessor】、【AutowiredAnnotationBeanPostProcessor】、【ApplicationListenerDetector】</p>
+（5）最终注册 MergedBeanDefinitionPostProcessor 类型的 BeanPostProcessor：beanFactory.addBeanPostProcessor(postProcessor);<br>
+（6）给容器注册一个 ApplicationListenerDetector：用于在 Bean 创建完成后检查它是否是 ApplicationListener，如果是，就把 Bean 放到容器中保存起来：applicationContext.addApplicationListener((ApplicationListener&lt;?&gt;) bean);</p>
+<p>这里要区分两类“默认后置处理器”，不要混为一谈：</p>
+<ul>
+<li><strong>BeanFactoryPostProcessor 共 3 个</strong>（其中 1 个同时是 BeanDefinitionRegistryPostProcessor）：ConfigurationClassPostProcessor、PropertySourcesPlaceholderConfigurer、EventListenerMethodProcessor；它们在 refresh() 第 5 步执行，作用于 BeanDefinition。</li>
+<li><strong>BeanPostProcessor 共 5 个</strong>（无代理模式下）：AnnotationConfigUtils 注册的 AutowiredAnnotationBeanPostProcessor、CommonAnnotationBeanPostProcessor、PersistenceAnnotationBeanPostProcessor 与 prepareBeanFactory 注册的 ApplicationContextAwareProcessor、ApplicationListenerDetector；它们在 refresh() 第 6 步注册、在第 11 步创建每个 Bean 时回调，作用于 Bean 实例。</li>
+</ul>
+<p>如果项目引入了 AOP（例如开启 @EnableAspectJAutoProxy），数量还会增加 AnnotationAwareAspectJAutoProxyCreator、InfrastructureAdvisorAutoProxyCreator 等；如果引入了 Spring Boot，还会有 ConfigurationPropertiesBindingPostProcessor 等。具体数量取决于依赖，不必死记。</p>
 <h3 id="7initmessagesource初始化messagesource组件主要用于做国际化功能消息绑定与消息解析">7,initMessageSource()：初始化MessageSource组件，主要用于做国际化功能，消息绑定与消息解析：</h3>
 <p>（1）看BeanFactory容器中是否有id为messageSource 并且类型是MessageSource的组件：如果有，直接赋值给messageSource；如果没有，则创建一个DelegatingMessageSource；<br>
 （2）把创建好的MessageSource注册在容器中，以后获取国际化配置文件的值的时候，可以自动注入MessageSource；</p>
@@ -302,20 +317,123 @@ public AnnotationConfigApplicationContext(Class&lt;?&gt;... annotatedClasses) {
 （2）获取Bean的定义信息RootBeanDefinition，它表示自己的BeanDefinition和可能存在父类的BeanDefinition合并后的对象<br>
 （3）如果Bean满足这三个条件：非抽象的，单实例，非懒加载，则执行单例Bean创建流程：<br>
 （4）所有Bean都利用getBean()创建完成以后，检查所有的Bean是否为SmartInitializingSingleton接口的，如果是；就执行afterSingletonsInstantiated()；</p>
+<p>这一步是整条启动链路上真正“造对象”的地方：前面 10 步都在准备 BeanDefinition 与各种后置处理器，只有走到 finishBeanFactoryInitialization()，Spring 才会遍历所有 BeanDefinition，把非抽象、单实例、非懒加载的 Bean 逐个通过 getBean() 创建出来。每个 Bean 的创建过程，就是我们常说的 Bean 生命周期：</p>
+<p><img src="/post-assets/E_iSRsJL1/02-bean-lifecycle-circular-dependency.svg" alt="Bean 生命周期与三级缓存解决循环依赖示意图"></p>
 <h3 id="12finishrefresh发布beanfactory容器刷新完成事件">12,finishRefresh()：发布BeanFactory容器刷新完成事件：</h3>
-<p>（12）initLifecycleProcessor()：初始化与生命周期有关的后置处理器：默认从容器中找是否有 lifecycleProcessor 组件（LifecycleProcessor），如果没有则创建一个 DefaultLifecycleProcessor 加入容器。<br>
+<p>（1）initLifecycleProcessor()：初始化与生命周期有关的后置处理器：默认从容器中找是否有 lifecycleProcessor 组件（LifecycleProcessor），如果没有则创建一个 DefaultLifecycleProcessor 加入容器。<br>
 （2）getLifecycleProcessor().onRefresh()：拿到前面定义的生命周期处理器（LifecycleProcessor）回调onRefresh()方法<br>
 （3）publishEvent(new ContextRefreshedEvent(this))：发布容器刷新完成事件；<br>
 （4）liveBeansView.registerApplicationContext(this);</p>
+<p>走到这里，refresh() 全部执行完毕，容器正式对外提供服务：所有单实例 Bean 都已创建、依赖已注入、代理已生效，监听器也能收到 ContextRefreshedEvent 了。</p>
+<h2 id="四-bean的生命周期细节与-autowired-注入时机">四、Bean 的生命周期细节与 @Autowired 注入时机</h2>
+<p>getBean() 的完整调用链较长，可以按“实例化 → 属性填充 → 初始化 → 销毁”四个阶段来记。其中三级缓存相关的逻辑集中在 doCreateBean() 与 populateBean()：</p>
+<pre><code class="language-java">// AbstractAutowireCapableBeanFactory#doCreateBean（简化后）
+protected Object doCreateBean(String beanName, RootBeanDefinition mbd, Object[] args) {
+    BeanWrapper instanceWrapper = null;
+    if (mbd.isSingleton()) {
+        instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
+    }
+    if (instanceWrapper == null) {
+        // 1. 实例化：反射调用构造器，此时对象字段全是 null
+        instanceWrapper = createBeanInstance(beanName, mbd, args);
+    }
+    Object bean = instanceWrapper.getWrappedInstance();
+
+    // 2. 提前暴露：把 ObjectFactory 放进三级缓存 singletonFactories
+    //    只有单实例 + 允许循环依赖 + 当前正在创建时才暴露
+    boolean earlySingletonExposure = (mbd.isSingleton() &amp;&amp; this.allowCircularReferences
+            &amp;&amp; isSingletonCurrentlyInCreation(beanName));
+    if (earlySingletonExposure) {
+        addSingletonFactory(beanName, () -&gt; getEarlyBeanReference(beanName, mbd, bean));
+    }
+
+    // 3. 属性填充：@Autowired / @Resource / XML property 在这里注入
+    populateBean(beanName, mbd, instanceWrapper);
+
+    // 4. 初始化：Aware 回调、BeanPostProcessor 前置处理、
+    //    afterPropertiesSet / init-method、BeanPostProcessor 后置处理
+    Object exposedObject = initializeBean(beanName, bean, mbd);
+    return exposedObject;
+}
+</code></pre>
+<p>@Autowired 的注入时机就在第 3 步 populateBean。具体由 AutowiredAnnotationBeanPostProcessor（它实现了 InstantiationAwareBeanPostProcessor）在 postProcessProperties() 中完成：先通过反射拿到标注了 @Autowired 的字段与方法，再调用 beanFactory.resolveDependency() 去容器中找依赖，找不到就递归触发 getBean() 创建依赖，最后通过反射 set 进字段或调用 setter。这解释了两个常见现象：</p>
+<ul>
+<li>字段注入时，Bean 的构造方法执行完，字段仍然是 null；只有 populateBean 之后字段才有值。如果在构造方法里使用 @Autowired 字段，必然拿到 null。</li>
+<li>@Autowired(required = true) 找不到依赖时，抛出的异常发生在属性填充阶段，而不是实例化阶段。</li>
+</ul>
+<h3 id="41-三级缓存如何解决循环依赖">4.1 三级缓存如何解决循环依赖</h3>
+<p>DefaultSingletonBeanRegistry 中维护了三个 Map，也就是常说的“三级缓存”：</p>
+<pre><code class="language-java">// DefaultSingletonBeanRegistry
+// 一级：成品单例，完整注入并完成代理后的对象
+private final Map&lt;String, Object&gt; singletonObjects = new ConcurrentHashMap&lt;&gt;(256);
+// 二级：半成品，尚未完成属性填充与初始化的早期引用
+private final Map&lt;String, Object&gt; earlySingletonObjects = new ConcurrentHashMap&lt;&gt;(16);
+// 三级：ObjectFactory 工厂，延迟调用，需要时才生成早期引用
+private final Map&lt;String, ObjectFactory&lt;?&gt;&gt; singletonFactories = new HashMap&lt;&gt;(16);
+</code></pre>
+<p>以 A 依赖 B、B 又依赖 A 为例：</p>
+<ul>
+<li>getBean(A) → 实例化 A → 把 A 的 ObjectFactory 放进三级缓存 → populateBean(A) 发现需要 B；</li>
+<li>getBean(B) → 实例化 B → 把 B 的 ObjectFactory 放进三级缓存 → populateBean(B) 发现需要 A；</li>
+<li>getSingleton(A) 依次查一级、二级、三级，三级命中工厂，回调工厂拿到 A 的早期引用，并把它升级到二级缓存；</li>
+<li>B 完成初始化进入一级缓存，A 拿到 B 后继续完成初始化，也进入一级缓存，循环解开。</li>
+</ul>
+<p>为什么必须是三级而不是两级？关键在于第 7 步的 AOP 代理：被 @Transactional、@Async 或切面命中的 Bean，最终放进容器的是代理对象。三级缓存的工厂在 getEarlyBeanReference() 中会调用 SmartInstantiationAwareBeanPostProcessor#getEarlyBeanReference()，让 AnnotationAwareAspectJAutoProxyCreator 有机会提前创建代理。如果只暴露原始对象，B 注入的 A 就可能是未被代理的裸对象，导致事务、缓存等切面失效；有了工厂，注入方可拿到与最终一致的对象（细节上仍属于早期引用，Spring 只在必要时才提前生成代理）。</p>
+<p>同时也要清楚它的边界：</p>
+<ul>
+<li>只适用于<strong>单实例</strong> Bean，且依赖通过字段或 setter 注入；prototype 作用域的循环依赖无法解决，直接抛 BeanCurrentlyInCreationException。</li>
+<li>构造器注入的循环依赖无法解决：对象尚未实例化，没有早期引用可暴露，同样抛 BeanCurrentlyInCreationException。Spring 官方也更推荐构造器注入，遇到循环依赖时应优先重构设计。</li>
+<li>@Async 代理场景在早期版本中可能触发“Bean 尚未完全初始化”的警告，此时需要让被代理对象提前初始化。</li>
+<li>Spring Boot 2.6 起，spring.main.allow-circular-references 默认为 false，循环依赖会直接启动失败，需要显式打开才能沿用上述机制；Spring Framework 层面允许循环依赖的行为本身没有改变。</li>
+</ul>
+<h3 id="42-beanfactorypostprocessor-与-beanpostprocessor-的区别">4.2 BeanFactoryPostProcessor 与 BeanPostProcessor 的区别</h3>
+<p>这两个接口名字很像，执行时机和作用对象完全不同，也是面试与排错中的高频问题：</p>
+<ul>
+<li><strong>BeanFactoryPostProcessor</strong>：在 BeanFactory 标准初始化之后、任何 Bean 实例化之前执行（refresh() 第 5 步），处理的是 BeanDefinition。典型实现是 ConfigurationClassPostProcessor（解析配置类、扫描 BeanDefinition）和 PropertySourcesPlaceholderConfigurer（解析占位符）。它的子接口 BeanDefinitionRegistryPostProcessor 还能直接向容器注册新的 BeanDefinition。此时容器里一个业务 Bean 都还没有。</li>
+<li><strong>BeanPostProcessor</strong>：在每个 Bean 实例化之后执行（refresh() 第 6 步注册、第 11 步回调），处理的是 Bean 实例。postProcessBeforeInitialization() 在初始化方法之前回调，postProcessAfterInitialization() 在初始化方法之后回调，AOP 代理通常就在后者中生成。典型实现是 AutowiredAnnotationBeanPostProcessor、CommonAnnotationBeanPostProcessor、ApplicationContextAwareProcessor。</li>
+</ul>
+<p>一句话概括：<strong>BeanFactoryPostProcessor 管“图纸”（BeanDefinition），BeanPostProcessor 管“房子”（Bean 实例）</strong>。顺序上一定是前者先、后者后。</p>
+<h2 id="五-与-spring-boot-启动流程的对应关系与版本差异">五、与 Spring Boot 启动流程的对应关系与版本差异</h2>
+<h3 id="51-springapplicationrun-的关键阶段">5.1 SpringApplication.run() 的关键阶段</h3>
+<p>Spring Boot 应用的入口是 SpringApplication.run()（或 new SpringApplication(Main.class).run(args)）。它并没有另起炉灶，最终仍然要落到本文分析的 refresh() 上，只是在外层多了一圈准备工作。关键阶段依次是：</p>
+<ul>
+<li>创建 SpringApplication 实例：推断应用类型（Servlet / Reactive / None）、从 spring.factories（Boot 2.x）或 META-INF/spring/*.imports（Boot 2.7+ / 3.x）加载 ApplicationContextInitializer 与 ApplicationListener（Boot 3.x 还加载 SpringApplicationRunListener）、推断主启动类。</li>
+<li>调用 run(args)：启动计时器与 StartupStep、发布 ApplicationStartingEvent、准备 Environment（prepareEnvironment，加载配置文件与命令行参数、发布 ApplicationEnvironmentPreparedEvent）、创建并准备 ApplicationContext（createApplicationContext / prepareContext，设置 Environment、执行 Initializer、发布 ApplicationContextInitializedEvent 与 ApplicationPreparedEvent）。</li>
+<li>refreshContext(context)：真正调用 AbstractApplicationContext#refresh()，也就是本文详述的 12 步。Boot 在这里把主配置类注册为 BeanDefinition（通过 BeanDefinitionLoader），并把 ApplicationConversionService、ConfigurationPropertiesBindingPostProcessor 等加入容器。</li>
+<li>afterRefresh() 与 started 阶段：调用 callRunners() 执行 ApplicationRunner 与 CommandLineRunner，发布 ApplicationStartedEvent，随后发布 ApplicationReadyEvent。</li>
+<li>异常处理链路：启动过程中任何异常都会经 handleRunFailure() 处理，发布 ApplicationFailedEvent，并把异常包装后抛出。</li>
+</ul>
+<p>所以理解 Spring 原生启动流程之后，看 Spring Boot 的启动源码就只是“在外层补齐 Environment、监听器与 Runner”而已，核心仍然是 refresh()。</p>
+<h3 id="52-spring-boot-2x-与-3x-的差异">5.2 Spring Boot 2.x 与 3.x 的差异</h3>
+<ul>
+<li><strong>Java 与基线</strong>：Spring Boot 2.x 最低 Java 8，兼容到 Java 17；Spring Boot 3.x 要求 Java 17 起，推荐 Java 17/21，并基于 Spring Framework 6。</li>
+<li><strong>jakarta 命名空间迁移</strong>：Spring Boot 3.x 把 Java EE 的 javax.* 全部换成 Jakarta EE 9+ 的 jakarta.*。例如 javax.servlet.Filter 变成 jakarta.servlet.Filter，javax.annotation.Resource 变成 jakarta.annotation.Resource，JPA 的 javax.persistence.Entity 变成 jakarta.persistence.Entity。升级时必须同步升级依赖版本，代码里的 import 也要一起替换。注意 javax.annotation.PostConstruct 这类注解同名的很多，容易漏改。</li>
+<li><strong>AOT 与 GraalVM 原生镜像</strong>：Spring Boot 3.x 引入 AOT（Ahead-Of-Time）处理与 Spring AOT 引擎，构建期就能生成 BeanDefinition 与代理类，从而支持 GraalVM Native Image 快速启动。这与 refresh() 不冲突：AOT 只是把原本运行期做的部分工作（扫描、代理、条件判断）提前到构建期，运行期仍然会走容器的 refresh() 流程，但耗时显著缩短。</li>
+<li><strong>可观测性</strong>：Boot 3.x 用 Micrometer Observation 与 Micrometer Tracing 取代了 Spring Cloud Sleuth；启动过程本身也暴露 StartupStep 指标，方便排查“启动慢在哪一步”。</li>
+<li><strong>配置加载顺序</strong>：Boot 2.4 起引入 ConfigData API，2.4 之前的 bootstrap.yml 机制在 2.4+ 默认关闭，需要引入 spring-cloud-starter-bootstrap 才能继续使用；Boot 3.x 延续 ConfigData 方案。</li>
+<li><strong>路径匹配与默认值</strong>：Boot 3.x 中 spring.mvc.pathmatch.matching-strategy 默认为 PathPatternParser；同时大量 spring.mvc、spring.jpa 的旧属性被移除或改名，升级时最好结合 spring-boot-properties-migrator 检查。</li>
+</ul>
+<h3 id="53-常见误区备忘">5.3 常见误区备忘</h3>
+<ul>
+<li>refresh() 的 12 步顺序不能随意调整：BeanFactoryPostProcessor 必须早于 BeanPostProcessor，BeanPostProcessor 必须早于所有业务 Bean 的实例化，否则后置处理器对已创建的 Bean 不生效。</li>
+<li>BeanFactoryPostProcessor 中不要过早 getBean()：这会导致该 Bean 绕过后置处理器的增强，Spring 也会给出“not eligible for getting processed by all BeanPostProcessors”的警告。</li>
+<li>单实例 Bean 的创建时机是容器启动阶段（第 11 步），prototype 与 @Lazy 的 Bean 则推迟到第一次 getBean() 时创建。</li>
+<li>容器关闭时会调用 destroy 流程（DisposableBean、@PreDestroy、destroy-method），前提是容器被正确 close()，或由 Spring Boot 通过关机钩子统一关闭。</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B">一、初始化流程：</a>
 <ul>
+</ul>
+</li>
 <li>
+<a href="#%E4%BA%8C-%E6%B3%A8%E5%86%8Cspringconfig%E9%85%8D%E7%BD%AE%E7%B1%BB%E5%88%B0%E5%AE%B9%E5%99%A8%E4%B8%AD">二、注册 SpringConfig 配置类到容器中：</a>
 <ul>
-<li><a href="#%E4%B8%80-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B">一、初始化流程：</a></li>
-<li><a href="#%E4%BA%8C-%E6%B3%A8%E5%86%8Cspringconfig%E9%85%8D%E7%BD%AE%E7%B1%BB%E5%88%B0%E5%AE%B9%E5%99%A8%E4%B8%AD">二、注册SpringConfig配置类到容器中：</a></li>
-<li><a href="#%E4%B8%89-refresh%E5%AE%B9%E5%99%A8%E5%88%B7%E6%96%B0%E6%B5%81%E7%A8%8B">三、refresh()容器刷新流程：</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-refresh%E5%AE%B9%E5%99%A8%E5%88%B7%E6%96%B0%E6%B5%81%E7%A8%8B">三、refresh()容器刷新流程：</a>
 <ul>
 <li><a href="#1preparerefresh%E5%88%B7%E6%96%B0%E5%89%8D%E7%9A%84%E9%A2%84%E5%A4%84%E7%90%86">1,prepareRefresh()刷新前的预处理：</a></li>
 <li><a href="#2obtainfreshbeanfactory%E8%8E%B7%E5%8F%96%E5%9C%A8%E5%AE%B9%E5%99%A8%E5%88%9D%E5%A7%8B%E5%8C%96%E6%97%B6%E5%88%9B%E5%BB%BA%E7%9A%84beanfactory">2,obtainFreshBeanFactory()：获取在容器初始化时创建的BeanFactory：</a></li>
@@ -331,8 +449,19 @@ public AnnotationConfigApplicationContext(Class&lt;?&gt;... annotatedClasses) {
 <li><a href="#12finishrefresh%E5%8F%91%E5%B8%83beanfactory%E5%AE%B9%E5%99%A8%E5%88%B7%E6%96%B0%E5%AE%8C%E6%88%90%E4%BA%8B%E4%BB%B6">12,finishRefresh()：发布BeanFactory容器刷新完成事件：</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E5%9B%9B-bean%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%BB%86%E8%8A%82%E4%B8%8E-autowired-%E6%B3%A8%E5%85%A5%E6%97%B6%E6%9C%BA">四、Bean 的生命周期细节与 @Autowired 注入时机</a>
+<ul>
+<li><a href="#41-%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%A6%82%E4%BD%95%E8%A7%A3%E5%86%B3%E5%BE%AA%E7%8E%AF%E4%BE%9D%E8%B5%96">4.1 三级缓存如何解决循环依赖</a></li>
+<li><a href="#42-beanfactorypostprocessor-%E4%B8%8E-beanpostprocessor-%E7%9A%84%E5%8C%BA%E5%88%AB">4.2 BeanFactoryPostProcessor 与 BeanPostProcessor 的区别</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%94-%E4%B8%8E-spring-boot-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E7%9A%84%E5%AF%B9%E5%BA%94%E5%85%B3%E7%B3%BB%E4%B8%8E%E7%89%88%E6%9C%AC%E5%B7%AE%E5%BC%82">五、与 Spring Boot 启动流程的对应关系与版本差异</a>
+<ul>
+<li><a href="#51-springapplicationrun-%E7%9A%84%E5%85%B3%E9%94%AE%E9%98%B6%E6%AE%B5">5.1 SpringApplication.run() 的关键阶段</a></li>
+<li><a href="#52-spring-boot-2x-%E4%B8%8E-3x-%E7%9A%84%E5%B7%AE%E5%BC%82">5.2 Spring Boot 2.x 与 3.x 的差异</a></li>
+<li><a href="#53-%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA%E5%A4%87%E5%BF%98">5.3 常见误区备忘</a></li>
 </ul>
 </li>
 </ul>
