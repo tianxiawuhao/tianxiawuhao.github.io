@@ -125,8 +125,10 @@
           
           <img class="post-feature-header-image" src="/post-images/0yWpE16Ha.png" alt="封面图">
           
-          <p>树型层级结构查询</p>
-<h2 id="数据sql">数据sql</h2>
+          <p>树形（层级）结构在数据库里没有原生类型，必须用某种“存储模型”把父子关系表达出来。本文先给出组织表与 DTO 的定义，再把主流的四种模型——<strong>邻接表、路径枚举、嵌套集、闭包表</strong>——放在一起比较，最后给出可执行的递归查询写法、环检测手段，以及 MySQL 与 PostgreSQL 的差异。</p>
+
+<h2 id="邻接表建表">一、邻接表建表</h2>
+<p>邻接表只用一列 <code>parent_id</code> 指向本表的父节点，是最贴近直觉、也是绝大多数业务系统实际采用的模型。下面的 <code>sys_company</code> 就是典型的邻接表（<code>pid</code> 即 parent id）：</p>
 <pre><code class="language-sql">CREATE TABLE `sys_company` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `code` varchar(36) NOT NULL COMMENT '标识主键',
@@ -140,10 +142,24 @@
   `update_by` varchar(50) DEFAULT NULL COMMENT '修改者',
   `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,
-  KEY `code_index` (`code`) USING BTREE COMMENT '简单索引'
+  KEY `code_index` (`code`) USING BTREE COMMENT '简单索引',
+  KEY `idx_pid` (`pid`) USING BTREE COMMENT '递归查询按父节点展开，必须建索引'
 ) ENGINE=InnoDB AUTO_INCREMENT=119 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='组织详情'
 </code></pre>
-<h2 id="dto">DTO</h2>
+<p>两点说明：<code>pid</code> 为根节点时存 <code>NULL</code>（也有系统用 <code>0</code>，此时需注意 <code>0</code> 不能作为真实主键）；<strong>递归查询的性能几乎完全取决于 <code>pid</code> 上的索引</strong>，缺索引时每一层递归都会退化为全表扫描。另外 <code>pname</code>（上级组织名称）是冗余字段，改名时必须同步维护，否则会出现父子名称不一致，建议只作为展示缓存使用。</p>
+
+<h3 id="四种存储模型对比">四种存储模型对比</h3>
+<p>同样一棵树，可以用四种方式落库，它们在“查询成本”和“更新成本”上此消彼长：</p>
+<p><img src="/post-assets/0yWpE16Ha/01-tree-models.svg" alt="邻接表、路径枚举、嵌套集、闭包表四种树形存储模型的对比图"></p>
+<ul>
+<li><strong>邻接表：</strong>写便宜、读贵。插入和移动节点只改一行；但取整棵子树必须递归，深度大、并发多时开销明显。</li>
+<li><strong>路径枚举：</strong>读写折中。子树查询变成一次 <code>LIKE '前缀%'</code> 的索引范围扫描；但移动子树要批量更新所有后代的 path，且路径列必须有长度上限。</li>
+<li><strong>嵌套集：</strong>读最便宜、写最贵。子树用 <code>lft BETWEEN</code> 一次搞定，完全不需要递归；但任何插入或移动都要重排左右值，需要锁住较大范围，只适合“读多写极少”的场景（如商品分类）。</li>
+<li><strong>闭包表：</strong>读便宜、写最贵且需要事务。多存一张祖先-后代关系表，任意深度的子树/祖先/层级限制查询都无递归；代价是行数按 <code>节点数 × 平均深度</code> 膨胀，且每写一个节点要成组写入关系行，一致性必须靠事务或触发器保证。</li>
+</ul>
+<p>选择建议：变更频繁、规模中等，用邻接表加递归查询；层级固定且读多写少（分类、目录），用嵌套集或路径枚举；需要频繁做“任意节点间关系/层级统计”的复杂查询，用闭包表。三种非邻接表方案都属于“用写入成本换查询成本”，不要在没有实测依据时提前引入。</p>
+
+<h2 id="dto">二、DTO</h2>
 <pre><code class="language-java">@Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
@@ -190,22 +206,198 @@ public class CompanyDTO {
 
     @ApiModelProperty(value = &quot;编辑删除操作权限标识 true:有 false:无&quot;)
     private Boolean modAndDelFlag = false;
-    
-    private CompanyDTO CompanyDTO;
 }
 
 </code></pre>
-<h2 id="service">service</h2>
+<h2 id="service">三、service</h2>
+<p>下例存在两个问题：<code>List&lt;CompanyDTO&gt; companyDTO</code> 与上面的 <code>CompanyDTO companyDTO</code> 同名，Java 不允许在同一作用域内重复声明，代码无法编译；而且它用循环沿 DTO 上溯去找根节点，完全没有使用查询结果。改为下面这样：</p>
 <pre><code class="language-java">public List&lt;CompanyDTO&gt; getCompanyList(Integer companyId) {
-    CompanyDTO companyDTO = sysCompanyMapper.queryTopData(companyId);
-   
-    while (companyDTO.getCompanyDTO()!=null){
-        companyDTO = companyDTO.getCompanyDTO();
+    // 1. 沿 DTO 的父指针向上找到根节点（每次 queryTopData 只查一层）
+    CompanyDTO current = sysCompanyMapper.queryTopData(companyId);
+    while (current != null &amp;&amp; current.getPid() != null) {
+        current = sysCompanyMapper.queryTopData(current.getPid());
     }
-    List&lt;CompanyDTO&gt; companyDTO = sysCompanyMapper.querySimpleTopData(companyDTO.getId());
+    if (current == null) {
+        return Collections.emptyList();
+    }
+    // 2. 从根节点出发，用嵌套 select 递归装配子树
+    return sysCompanyMapper.querySimpleTopData(current.getId());
 }
 </code></pre>
-<h2 id="xml">xml</h2>
+<p>这种写法每次只查一层，节点一多就是典型的 N+1 查询。更彻底的做法是<strong>在数据库里一次递归取回整棵子树</strong>，再在内存里按 <code>pid</code> 组装成树（见第四节）。</p>
+
+<h2 id="邻接表递归查询">四、邻接表递归查询</h2>
+<p>邻接表的查询痛点只有一个：<strong>递归</strong>。SQL 标准为此提供了 <code>WITH RECURSIVE</code>（公用表表达式递归），PostgreSQL 8.4 起支持，MySQL 则要 8.0 起才支持。</p>
+<h3 id="自顶向下-查子树">自顶向下：查子树</h3>
+<pre><code class="language-sql">-- 查询 id = 1 的节点及其全部后代，并用 depth 记录层级
+WITH RECURSIVE subtree AS (
+    -- 锚点成员：只执行一次，产出种子行
+    SELECT id, pid, company_name, 1 AS depth
+    FROM sys_company
+    WHERE id = 1
+    UNION ALL
+    -- 递归成员：反复执行，直到返回 0 行
+    SELECT c.id, c.pid, c.company_name, t.depth + 1
+    FROM sys_company c
+    JOIN subtree t ON c.pid = t.id
+)
+SELECT * FROM subtree ORDER BY depth, id;
+</code></pre>
+<p>执行流程是：先算出锚点结果集，然后不断把“上一轮的产出”当作输入去 JOIN 本表，把新命中的行加入结果并作为下一轮输入；某一轮返回 0 行时递归自然终止——<strong>终止条件不需要手写，也无法手写</strong>。这也意味着一旦数据里存在环（例如 A→B→A），递归将永不停止。</p>
+<h3 id="自底向上-查祖先链">自底向上：查祖先链</h3>
+<p>面包屑导航需要“从当前节点到根”的路径，把 JOIN 条件反过来即可，且终止条件变成 <code>pid IS NULL</code>：</p>
+<pre><code class="language-sql">-- 查询 id = 4 的节点及其所有祖先（面包屑）
+WITH RECURSIVE ancestors AS (
+    SELECT id, pid, company_name, 1 AS depth
+    FROM sys_company
+    WHERE id = 4
+    UNION ALL
+    SELECT p.id, p.pid, p.company_name, a.depth + 1
+    FROM sys_company p
+    JOIN ancestors a ON p.id = a.pid   -- 与子树查询方向相反
+)
+SELECT * FROM ancestors ORDER BY depth DESC;   -- 根在前，即 A → B → D
+</code></pre>
+<h3 id="环检测与保护">环检测与保护</h3>
+<p>只要 <code>pid</code> 没有约束保证不成环，就必须给递归加一道保险。<code>UNION</code>（去重）只能缓解、不能根治有环数据，正确的做法是显式记录已访问节点：</p>
+<pre><code class="language-sql">-- PostgreSQL：使用标准 CYCLE 子句（PG 14 起支持）
+WITH RECURSIVE subtree AS (
+    SELECT id, pid, company_name, 1 AS depth
+    FROM sys_company WHERE id = 1
+    UNION ALL
+    SELECT c.id, c.pid, c.company_name, t.depth + 1
+    FROM sys_company c JOIN subtree t ON c.pid = t.id
+) CYCLE id SET is_cycle USING path
+SELECT * FROM subtree WHERE NOT is_cycle;
+
+-- MySQL 8.0：没有 CYCLE 子句，自行传递路径并用 FIND_IN_SET 判环
+WITH RECURSIVE subtree AS (
+    SELECT id, pid, company_name, 1 AS depth, CAST(id AS CHAR(1000)) AS path
+    FROM sys_company WHERE id = 1
+    UNION ALL
+    SELECT c.id, c.pid, c.company_name, t.depth + 1,
+           CONCAT(t.path, ',', c.id)
+    FROM sys_company c JOIN subtree t ON c.pid = t.id
+    WHERE FIND_IN_SET(c.id, t.path) = 0   -- 已在路径中的节点不再展开
+)
+SELECT * FROM subtree ORDER BY depth, id;
+</code></pre>
+<p>除判环外，还应加一道“兜底”上限，避免异常数据把数据库拖垮：PostgreSQL 可设置 <code>SET statement_timeout = '5s'</code>；MySQL 8.0 可设置 <code>SET SESSION cte_max_recursion_depth = 1000</code>（默认 1000），也可以对 <code>depth</code> 加 <code>WHERE t.depth &lt; 20</code> 的硬限制。</p>
+<p><img src="/post-assets/0yWpE16Ha/02-recursive-cte.svg" alt="WITH RECURSIVE 求子树的锚点、递归成员执行流程与环检测示意图"></p>
+
+<h2 id="路径枚举">五、路径枚举</h2>
+<p>路径枚举把“祖先链”直接物化成字符串存进每一行（如 <code>/1/2/4/</code>），于是查询不再需要递归：</p>
+<pre><code class="language-sql">CREATE TABLE sys_company_path (
+  id   INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  path VARCHAR(1000) NOT NULL,      -- 形如 /1/2/4/，末尾带分隔符
+  depth INT NOT NULL DEFAULT 0,
+  KEY idx_path (path)
+);
+
+-- 整棵子树：一次索引范围扫描，无需递归
+SELECT * FROM sys_company_path
+WHERE path LIKE '/1/2/%'
+ORDER BY path;
+
+-- 直接父节点：用 SUBSTRING_INDEX 截取
+SELECT * FROM sys_company_path
+WHERE id = SUBSTRING_INDEX(SUBSTRING_INDEX('/1/2/4/', '/', -3), '/', 1);
+</code></pre>
+<p>关键细节是<strong>末尾一定要带分隔符</strong>，否则 <code>LIKE '/1/2%'</code> 会错误命中 <code>/1/20/</code>；同时 <code>path</code> 有长度上限（<code>VARCHAR(1000)</code> 约支持几十层），层级很深时不适用。移动子树需要批量改写所有后代行的 <code>path</code>，一条 <code>UPDATE … SET path = REPLACE(path, 旧前缀, 新前缀) WHERE path LIKE '旧前缀%'</code> 即可，但仍是一次范围写。</p>
+
+<h2 id="嵌套集">六、嵌套集</h2>
+<p>嵌套集为每个节点记录左右值 <code>lft</code> / <code>rgt</code>，用区间包含关系表达“祖先-后代”，是四种模型里查询最快的一种：</p>
+<pre><code class="language-sql">CREATE TABLE sys_company_ns (
+  id   INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  lft  INT NOT NULL,
+  rgt  INT NOT NULL,
+  KEY idx_lft (lft),
+  KEY idx_rgt (rgt)
+);
+
+-- 整棵子树（含自身）：A 的 lft=1、rgt=8，一次范围查询完成
+SELECT * FROM sys_company_ns WHERE lft BETWEEN 1 AND 8 ORDER BY lft;
+
+-- 某节点的所有祖先：区间反过来包含它即可
+SELECT parent.* FROM sys_company_ns parent, sys_company_ns node
+WHERE node.id = 4 AND parent.lft &lt; node.lft AND parent.rgt &gt; node.rgt
+ORDER BY parent.lft;
+
+-- 只取直接子节点：区间内没有中间层
+SELECT * FROM sys_company_ns child
+WHERE child.lft &gt; 1 AND child.rgt &lt; 8
+  AND NOT EXISTS (
+      SELECT 1 FROM sys_company_ns mid
+      WHERE mid.lft &gt; 1 AND mid.rgt &lt; 8
+        AND child.lft &gt; mid.lft AND child.rgt &lt; mid.rgt
+  );
+</code></pre>
+<p>代价在写入侧：在 A 与 B 之间插入一个新节点，需要把所有 <code>lft &gt; 插入点</code> 的值加 2、<code>rgt &gt; 插入点</code> 的值加 2，还要给新节点腾出两个号；移动子树则要整体平移区间。这类操作必须放在事务里，并锁住被影响的行，因此<strong>嵌套集只适合读多写极少的场景</strong>（分类目录、菜单树）。另外并发写入下容易出现左右值不连续或交叉，建议再配一条校验查询定期体检。</p>
+
+<h2 id="闭包表">七、闭包表</h2>
+<p>闭包表把“祖先-后代”的每一对可达关系都单独存一行，用一张关系表换掉所有递归：</p>
+<pre><code class="language-sql">CREATE TABLE sys_company_closure (
+  ancestor   INT NOT NULL,
+  descendant INT NOT NULL,
+  depth      INT NOT NULL,           -- 自身为 0，直接子节点为 1
+  PRIMARY KEY (ancestor, descendant),
+  KEY idx_descendant (descendant)
+);
+
+-- 写入 A→B：既要写 A-B，也要写 A-A、B-B 这两条自身关系
+INSERT INTO sys_company_closure (ancestor, descendant, depth)
+VALUES (1, 1, 0), (2, 2, 0), (1, 2, 1);
+
+-- A 的整棵子树（含自身，去掉 depth = 0 即为后代）
+SELECT c.* FROM sys_company c
+JOIN sys_company_closure cl ON cl.descendant = c.id
+WHERE cl.ancestor = 1
+ORDER BY cl.depth, c.id;
+
+-- id = 4 的所有祖先
+SELECT c.* FROM sys_company c
+JOIN sys_company_closure cl ON cl.ancestor = c.id
+WHERE cl.descendant = 4 AND cl.depth &gt; 0
+ORDER BY cl.depth DESC;
+
+-- 只查三层以内，无需任何递归即可精确控制
+SELECT c.* FROM sys_company c
+JOIN sys_company_closure cl ON cl.descendant = c.id
+WHERE cl.ancestor = 1 AND cl.depth &lt;= 3;
+</code></pre>
+<p>移动子树时，先删掉“旧祖先 × 该子树后代”的关系行，再插入“新祖先 × 新后代”的关系行，必须在一个事务里完成，否则中途失败会留下断裂的层级。行数约为 <code>节点数 × (平均深度 + 1)</code>，节点多且深时该表会显著膨胀，需要评估存储成本。</p>
+
+<h2 id="查询与更新成本对比">八、查询与更新成本对比</h2>
+<p>把四种模型放在统一口径下比较（<code>n</code> 为节点总数，<code>d</code> 为树深，<code>s</code> 为子树规模）：</p>
+<ul>
+<li><strong>子树查询复杂度：</strong>邻接表为 O(s)（但要付出 d 次递归往返）、闭包表为 O(s)、路径枚举为 O(s log n) 的前缀范围扫描、嵌套集为 O(s) 的纯区间扫描。</li>
+<li><strong>祖先链查询复杂度：</strong>邻接表与四者同为 O(d)，但只有邻接表需要递归展开。</li>
+<li><strong>写入复杂度：</strong>插入节点与移动子树，邻接表为 O(1) 行、路径枚举为 O(1) 行 + 可能的后代批量改写、嵌套集为 O(n) 的左右值重排、闭包表为 O(d) 行或 O(s·d) 行的关系增删。</li>
+</ul>
+<ul>
+<li><strong>子树查询：</strong>嵌套集与闭包表是纯索引范围扫描；邻接表必须递归展开，实际开销随 <code>d</code> 增长而放大（每层一次索引查找）；路径枚举依赖前缀索引，效率介于两者之间。</li>
+<li><strong>祖先查询：</strong>路径枚举与闭包表最快；嵌套集用区间包含，可接受；邻接表同样要递归，且方向相反。</li>
+<li><strong>插入节点：</strong>邻接表与闭包表都是常数级写入（闭包表为 <code>O(d)</code> 行）；路径枚举只需写一行；嵌套集要更新一批 <code>lft</code>/<code>rgt</code>，最贵。</li>
+<li><strong>移动子树：</strong>邻接表只改一行 <code>pid</code>（最便宜）；路径枚举批量改 path；嵌套集批量平移区间；闭包表按子树规模成组增删关系行。<strong>这是邻接表最大的优势</strong>，也因此它是变更频繁的业务表的默认选择。</li>
+<li><strong>存储成本：</strong>邻接表最小；路径枚举多了 path 列；嵌套集只多两列整数；闭包表要多存 <code>O(n·d)</code> 行，最占空间。</li>
+</ul>
+<p>一句话总结：<strong>写多读少、结构会变 → 邻接表；读多写极少、层级稳定 → 嵌套集；既要免递归又要能控层级 → 闭包表；层级浅且想少建表 → 路径枚举。</strong></p>
+
+<h2 id="mysql-与-postgresql-的差异">九、MySQL 与 PostgreSQL 的差异</h2>
+<ul>
+<li><strong>递归 CTE 版本要求：</strong>MySQL 需要 8.0 及以上（5.7 完全没有 <code>WITH RECURSIVE</code>，只能用存储过程循环或应用层递归）；PostgreSQL 从 8.4 起就支持。</li>
+<li><strong>关键字写法：</strong>MySQL 8.0 允许省略 <code>RECURSIVE</code>（写了也不报错）；PostgreSQL 必须写 <code>WITH RECURSIVE</code>。</li>
+<li><strong>环检测：</strong>PostgreSQL 14 起支持标准 <code>CYCLE … SET … USING …</code> 子句；MySQL 8.0 没有，需要自行用 <code>FIND_IN_SET</code> 传递路径判环，或用 <code>cte_max_recursion_depth</code> 兜底（默认 1000，超出直接报错）。</li>
+<li><strong>层级排序输出：</strong>PostgreSQL 支持 <code>SEARCH DEPTH FIRST BY id SET ordercol</code> 自动生成层级排序键；MySQL 只能自己维护 <code>depth</code> 或 <code>path</code> 列来排序。</li>
+<li><strong>标识符引用与类型：</strong>MySQL 用反引号 <code>`col`</code>，PostgreSQL 用双引号 <code>"col"</code> 且默认折叠为小写；MySQL 的 <code>INT(11)</code> 显示宽度写法在 8.0.17 起已弃用，建议直接写 <code>INT</code>。</li>
+<li><strong>路径枚举的专用类型：</strong>PostgreSQL 有 <code>ltree</code> 扩展，可用 <code>&lt;@</code> 操作符做前缀包含判断并走 GiST 索引，性能与可读性都优于 <code>LIKE</code>；MySQL 没有等价类型，只能靠 <code>LIKE</code> 加前缀索引。</li>
+<li><strong>递归的实现差异：</strong>PostgreSQL 的递归项可以引用递归 CTE 一次、且不允许在递归项里使用聚合、<code>ORDER BY</code>、<code>LIMIT</code>；MySQL 同样禁止在递归项中使用 <code>GROUP BY</code>、聚合与窗口函数，写复杂递归时要注意把聚合放到最外层。</li>
+</ul>
+
+<h2 id="xml">十、xml（MyBatis 嵌套查询）</h2>
+<p>下面这段 MyBatis 映射用嵌套 select 来“拼树”，思路是可行的，但有几处需要注意的硬伤：</p>
 <pre><code class="language-xml">	&lt;resultMap id=&quot;BaseResultAllMap&quot; type=&quot;com.haier.dtosplat.entity.DTO.company.CompanyDTO&quot;&gt;
         &lt;id column=&quot;id&quot; property=&quot;id&quot; /&gt;
         &lt;result column=&quot;code&quot; property=&quot;code&quot; /&gt;
@@ -263,18 +455,69 @@ public class CompanyDTO {
         WHERE pid = #{id}
     &lt;/select&gt;
 </code></pre>
+<h3 id="映射存在的问题">映射存在的问题</h3>
+<ul>
+<li><code>association property=&quot;companyDTO&quot;</code> 与 DTO 中原来的字段 <code>private CompanyDTO CompanyDTO;</code> 对应，而该字段是<strong>多余且不规范的</strong>：字段名与类名同名（Java 允许但极易混淆），且与 <code>children</code> 语义重叠。本文已在 DTO 中将其删除，因此该 association 需要改为指向 <code>pid</code>（父节点）或整体删掉。</li>
+<li><code>column=&quot;{pid = pid}&quot;</code> 是多余的：单参数时直接写 <code>column=&quot;pid&quot;</code> 即可，花括号形式只在多个参数时使用；写成 <code>{pid = pid}</code> 虽能运行，但容易被误读成“参数名 = 属性名”。</li>
+<li><code>collection column=&quot;{id = id}&quot;</code> 其中 <code>id</code> 正是 <code>querySon</code> 里的 <code>#{id}</code>，<strong>这种写法会把 <code>id</code> 同时当作参数名和列名，语义重叠</strong>，建议改为 <code>column=&quot;childId&quot;</code> 并同步把 SQL 里的 <code>#{id}</code> 改成 <code>#{childId}</code>。</li>
+<li><strong>N+1 问题最需要警惕：</strong>嵌套 select 会对结果集的每一行再发一次查询，查一棵 n 个节点的树就是 1 + n 次往返，层级越深越慢。数据量稍大就应改为单条递归 SQL（第四节）或 <code>LEFT JOIN</code> 一次性取出后手工组装。</li>
+<li><code>queryTopData</code> 与 <code>querySimpleTopData</code> 的 SQL 完全相同，只是 resultMap 不同，功能重复；二者可以合并，用不同 resultMap 的同一 select 会更好维护。</li>
+</ul>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E9%82%BB%E6%8E%A5%E8%A1%A8%E5%BB%BA%E8%A1%A8">一、邻接表建表</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E6%95%B0%E6%8D%AEsql">数据sql</a></li>
-<li><a href="#dto">DTO</a></li>
-<li><a href="#service">service</a></li>
-<li><a href="#xml">xml</a></li>
+<li><a href="#%E5%9B%9B%E7%A7%8D%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B%E5%AF%B9%E6%AF%94">四种存储模型对比</a></li>
 </ul>
 </li>
+<li>
+<a href="#dto">二、DTO</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#service">三、service</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%82%BB%E6%8E%A5%E8%A1%A8%E9%80%92%E5%BD%92%E6%9F%A5%E8%AF%A2">四、邻接表递归查询</a>
+<ul>
+<li><a href="#%E8%87%AA%E9%A1%B6%E5%90%91%E4%B8%8B-%E6%9F%A5%E5%AD%90%E6%A0%91">自顶向下：查子树</a></li>
+<li><a href="#%E8%87%AA%E5%BA%95%E5%90%91%E4%B8%8A-%E6%9F%A5%E7%A5%96%E5%85%88%E9%93%BE">自底向上：查祖先链</a></li>
+<li><a href="#%E7%8E%AF%E6%A3%80%E6%B5%8B%E4%B8%8E%E4%BF%9D%E6%8A%A4">环检测与保护</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E8%B7%AF%E5%BE%84%E6%9E%9A%E4%B8%BE">五、路径枚举</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B5%8C%E5%A5%97%E9%9B%86">六、嵌套集</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%97%AD%E5%8C%85%E8%A1%A8">七、闭包表</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%9F%A5%E8%AF%A2%E4%B8%8E%E6%9B%B4%E6%96%B0%E6%88%90%E6%9C%AC%E5%AF%B9%E6%AF%94">八、查询与更新成本对比</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mysql-%E4%B8%8E-postgresql-%E7%9A%84%E5%B7%AE%E5%BC%82">九、MySQL 与 PostgreSQL 的差异</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#xml">十、xml（MyBatis 嵌套查询）</a>
+<ul>
+<li><a href="#%E6%98%A0%E5%B0%84%E5%AD%98%E5%9C%A8%E7%9A%84%E9%97%AE%E9%A2%98">映射存在的问题</a></li>
 </ul>
 </li>
 </ul>

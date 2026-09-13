@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="560" fill="#ffffff"/>
+  <defs>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">WITH RECURSIVE 求子树：执行流程与环检测</text>
+
+  <!-- 锚点 -->
+  <rect x="40" y="56" width="820" height="66" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="58" y="80" font-size="14" font-weight="700" fill="#1f2b38">① 锚点成员（anchor member）：只执行一次</text>
+  <text x="58" y="102" font-size="12" fill="#5b6b7c">SELECT id, parent_id, name, 1 AS depth FROM sys_company WHERE id = 1</text>
+  <text x="58" y="118" font-size="11" fill="#2f6fd0">产出：{1, A, depth=1} —— 递归的种子行</text>
+
+  <line x1="450" y1="122" x2="450" y2="146" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#b)"/>
+
+  <!-- 递归 -->
+  <rect x="40" y="150" width="820" height="104" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="58" y="174" font-size="14" font-weight="700" fill="#1f2b38">② 递归成员（recursive member）：反复执行，直到返回 0 行为止</text>
+  <text x="58" y="196" font-size="12" fill="#5b6b7c">JOIN sys_company c ON c.parent_id = t.id</text>
+  <text x="58" y="216" font-size="12" fill="#5b6b7c">UNION ALL 累积结果 → 第 1 轮得 B、C（depth=2）；第 2 轮得 D（depth=3）；第 3 轮 0 行，终止</text>
+  <text x="58" y="238" font-size="11" fill="#2e9e5b">终止条件即“working table 为空”，不需要也不能手写停止判断</text>
+
+  <line x1="450" y1="254" x2="450" y2="278" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#b)"/>
+
+  <!-- 环检测 -->
+  <rect x="40" y="282" width="820" height="124" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <text x="58" y="306" font-size="14" font-weight="700" fill="#1f2b38">③ 环检测：数据中出现 A→B→A 时递归永不终止</text>
+  <text x="58" y="328" font-size="12" fill="#5b6b7c">PostgreSQL：WITH RECURSIVE … AS ( … ) CYCLE id SET is_cycle USING path</text>
+  <text x="58" y="348" font-size="12" fill="#5b6b7c">MySQL 8.0：无 CYCLE 子句，需自行传递路径并判断</text>
+  <text x="58" y="368" font-size="12" fill="#7a5bd0">WHERE FIND_IN_SET(c.id, t.path) = 0 且路径拼接 CONCAT(t.path, ',', c.id)</text>
+  <text x="58" y="390" font-size="11" fill="#e08a1e">保护性上限：PostgreSQL 可 SET statement_timeout；MySQL 可 SET SESSION cte_max_recursion_depth</text>
+
+  <!-- 两种语句 -->
+  <rect x="40" y="420" width="402" height="118" rx="8" fill="#f7f9fc" stroke="#2f6fd0"/>
+  <text x="58" y="444" font-size="13" font-weight="700" fill="#1f2b38">自顶向下（查子树）</text>
+  <text x="58" y="466" font-size="11" fill="#5b6b7c">锚点：WHERE id = :rootId</text>
+  <text x="58" y="486" font-size="11" fill="#5b6b7c">递归：JOIN c.parent_id = t.id</text>
+  <text x="58" y="506" font-size="11" fill="#5b6b7c">从已知根出发，结果含整棵子树</text>
+  <text x="58" y="526" font-size="11" fill="#5b6b7c">常用于“查某部门及其所有下级”</text>
+
+  <rect x="458" y="420" width="402" height="118" rx="8" fill="#f7f9fc" stroke="#2e9e5b"/>
+  <text x="476" y="444" font-size="13" font-weight="700" fill="#1f2b38">自底向上（查祖先链/面包屑）</text>
+  <text x="476" y="466" font-size="11" fill="#5b6b7c">锚点：WHERE id = :leafId</text>
+  <text x="476" y="486" font-size="11" fill="#5b6b7c">递归：JOIN c.id = t.parent_id</text>
+  <text x="476" y="506" font-size="11" fill="#5b6b7c">从叶子向上走到 parent_id IS NULL</text>
+  <text x="476" y="526" font-size="11" fill="#5b6b7c">输出时按 depth DESC 排序即为路径</text>
+</svg>
