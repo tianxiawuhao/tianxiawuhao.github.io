@@ -133,7 +133,7 @@
 <h2 id="ch1-tsinghua">一、使用清华镜像源安装</h2>
 <p>清华镜像源：https://mirrors.tuna.tsinghua.edu.cn/gitlab-ce/yum/</p>
 <p>清华镜像源给的使用教程：https://mirror.tuna.tsinghua.edu.cn/help/gitlab-ce/</p>
-<p>开始安装！</p>
+<p>开始安装！顺带提一句，GitLab 对资源有一定要求，官方建议至少 4 核 CPU、4 GB 内存，否则 <code>reconfigure</code> 阶段容易长时间卡住。</p>
 <p><strong>1、配置yum源：</strong></p>
 <pre><code class="language-shell">vim /etc/yum.repos.d/gitlab-ce.repo
  
@@ -162,6 +162,7 @@ yum remove gitlab-ce
 sudo yum install gitlab-ce-14.7.0-ce.0.el7.x86_64
 </code></pre>
 <hr>
+<p>上面的版本号（14.7.0）、系统代号（el7）和架构（x86_64）都要按实际情况替换，可以先到镜像源目录确认有哪些可用版本。</p>
 <h2 id="ch2-commands">二、GitLab 的启动和常用命令</h2>
 <p><strong>1、Gitlab的配置文件位置：/etc/gitlab/gitlab.rb</strong></p>
 <pre><code class="language-shell">vim /etc/gitlab/gitlab.rb
@@ -182,7 +183,7 @@ Password stored to /etc/gitlab/initial_root_password. This file will be cleaned 
 # 查看状态
 gitlab-ctl status
 </code></pre>
-<p><strong>3、gitlab的其它常用命令：</strong></p>
+<p><strong>3、GitLab 的其它常用命令：</strong></p>
 <pre><code class="language-shell">gitlab-ctl start    # 启动所有 gitlab 组件；
 gitlab-ctl stop        # 停止所有 gitlab 组件；
 gitlab-ctl restart        # 重启所有 gitlab 组件；
@@ -197,6 +198,7 @@ gitlab-ctl tail nginx/gitlab_access.log
 <h2 id="ch3-502">三、GitLab 502 问题解决思路</h2>
 <figure data-type="image" tabindex="1"><img src="/post-images/1643085368291752.png" alt="image.png" loading="lazy"></figure>
 <p>GitLab 内部涉及的服务太多，可能导致 502 的原因也很多，这里只讲思路：</p>
+<p><img src="/post-assets/DfTPV-OWf/01-502-troubleshoot.svg" alt="GitLab 502 常见原因与排查路径"></p>
 <p><strong>1、纯粹就是启动慢，一定要给它时间！</strong></p>
 <p><strong>2、正常情况下最容易碰到的问题是，端口被占用：</strong></p>
 <p><strong>2.1、查看服务状态</strong></p>
@@ -236,8 +238,8 @@ run: sidekiq: (pid 60222) 585s; run: log: (pid 38910) 4658s
 ## 罪魁祸首在这里，puma服务默认需要使用8080端口，但是8080端口被占用了
 </code></pre>
 <p><strong>2.3、解决问题</strong></p>
-<p>如果不是主要服务，可以先把它停掉；</p>
-<p>如果不能停，就去修改 puma 服务默认监听的端口。</p>
+<p>先用 <code>ss -lntp | grep 8080</code> 找出占用端口的进程：如果不是主要服务，可以直接把它停掉；</p>
+<p>如果不能停，就去修改 puma 服务默认监听的端口，或者让它只监听 unix socket。</p>
 <pre><code class="language-shell">vim /etc/gitlab/gitlab.rb
  
 # 修改puma服务默认的端口
@@ -270,7 +272,7 @@ data数据目录：/var/opt/gitlab/
 <p><strong>1、手动备份：</strong></p>
 <pre><code class="language-shell">gitlab-rake gitlab:backup:create
  
-# 上面的命令会将gitlab的数据备份到//var/opt/gitlab/backups目录下，包含：gitlab仓库、数据库、用户、用户组、用户密钥、权限等完整信息。
+# 上面的命令会将 GitLab 的数据备份到 /var/opt/gitlab/backups 目录下，包含：GitLab 仓库、数据库、用户、用户组、用户密钥、权限等完整信息。
 [root@tcosmo-szls01 backups]# pwd
 /var/opt/gitlab/backups
 [root@tcosmo-szls01 backups]# ll -h
@@ -279,7 +281,8 @@ total 243M
 </code></pre>
 <figure data-type="image" tabindex="4"><img src="/post-images/1650363718267634.png" alt="image.png" loading="lazy"></figure>
 <p><strong>2、自动备份（每天凌晨4点执行备份，且只保留7天）</strong></p>
-<p><strong>2.1、修改备份有效期，只保留7天</strong></p>
+<p><strong>2.1、修改备份有效期，只保留 7 天</strong></p>
+<p><code>backup_keep_time</code> 的单位是秒，604800 秒正好是 7 天；每次执行备份时会顺带清理超过该时长的旧备份文件。</p>
 <pre><code class="language-shell">vim /etc/gitlab/gitlab.rb
 # 显示行号 :set nu
  
@@ -291,7 +294,8 @@ gitlab_rails['backup_keep_time'] = 604800   ##配置为7天
 <pre><code class="language-shell">gitlab-ctl reconfigure
 </code></pre>
 <figure data-type="image" tabindex="6"><img src="/post-images/1650364844953219.png" alt="image.png" loading="lazy"></figure>
-<p><strong>2.2、借助系统crontab命令实现每天凌晨4点定时备份：</strong></p>
+<p><strong>2.2、借助系统 crontab 命令实现每天凌晨 4 点定时备份：</strong></p>
+<p>其中 <code>CRON=1</code> 表示静默执行，避免 cron 每次跑完都发一封邮件。</p>
 <pre><code class="language-shell">vim /etc/crontab
 0 4 * * * root /opt/gitlab/bin/gitlab-rake gitlab:backup:create CRON=1
 </code></pre>
@@ -346,7 +350,8 @@ GitLab version mismatch:
 <p>这里的意思是：目标 GitLab 版本与备份文件版本不一致。因此 GitLab 的备份恢复必须保持版本一致！</p>
 <p>请切换成对应的 GitLab 版本吧！</p>
 </blockquote>
-<p><strong>3.4、最后重启下Gitlab吧：</strong></p>
+<p>注意 <code>BACKUP=</code> 后面只写备份文件名里去掉 <code>_gitlab_backup.tar</code> 的那一段，本例即 <code>1652558427_2022_05_15_14.7.0</code>。</p>
+<p><strong>3.4、最后重启下 GitLab 吧：</strong></p>
 <pre><code class="language-shell">gitlab-ctl start
 </code></pre>
 <hr>
@@ -363,7 +368,7 @@ gitlab-ctl reconfigure
 <hr>
 <h2 id="supp3-lfs">补充三：GitLab 之 Git LFS 大文件存储</h2>
 <p><strong>1、修改 GitLab 核心配置文件：</strong></p>
-<pre><code class="language-shell">vim config/gitlab.yml:
+<pre><code class="language-shell">vim /etc/gitlab/gitlab.rb
   
 ### Git LFS
 gitlab_rails['lfs_enabled'] = true
@@ -373,10 +378,10 @@ gitlab_rails['lfs_storage_path'] = &quot;/data/gitlab/lfs-objects&quot;
 <p><strong>2、重启gitlab：</strong></p>
 <pre><code class="language-shell">gitlab-ctl reconfigure
 </code></pre>
-<p><strong>3、之后正常情况下，所有的项目就都支持LFS了，也可以关闭：</strong></p>
+<p><strong>3、之后正常情况下，所有项目就都支持 LFS 了（客户端需先安装 git-lfs 并执行 <code>git lfs install</code>），也可以在项目设置里单独关闭：</strong></p>
 <p><img src="/post-images/1657787443722860.png" alt="image.png" loading="lazy"></p>
 <p><strong>4、通过管理员账号进入 Admin Area → Overview → Projects，可以看到项目的详细预览信息：</strong></p>
-<p><strong>5、在推送代码时，需要执行git lfs track 命令指定存入lfs的文件后缀：</strong></p>
+<p><strong>5、在推送代码时，需要执行 <code>git lfs track</code> 命令指定存入 LFS 的文件后缀：</strong></p>
 <p>现在测试向 GitLab 上传一个大文件 + 一个小文件，让大文件存放到“/data/gitlab/lfs-objects”。</p>
 <pre><code class="language-shell"># 标记哪些文件需要通过lfs存储
 $ git lfs track &quot;*.vep&quot;
@@ -470,19 +475,43 @@ info: detecting host provider for 'http://10.206.73.159/'...
 info: detecting host provider for 'http://10.206.73.159/'...
 Downloading LFS objects: 100% (1/1), 1.3 GB | 1.6 MB/s
 </code></pre>
-<p>大文件Clone正常：</p>
-<figure data-type="image" tabindex="8"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20220714/1657791653691842.png" alt="image.png" loading="lazy"></figure>
+<p>大文件 Clone 正常。顺带说明：<code>git lfs clone</code> 自 Git LFS 2.3 起已废弃，新版本直接用 <code>git clone</code> 就会自动拉取 LFS 对象。整个 LFS 的存取流程可以归纳为下图：</p>
+<p><img src="/post-assets/DfTPV-OWf/02-lfs-flow.svg" alt="Git LFS 大文件的存储与拉取流程"></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#ch1-tsinghua">一、使用清华镜像源安装</a>
 <ul>
-<li><a href="#ch1-tsinghua">一、使用清华镜像源安装</a></li>
-<li><a href="#ch2-commands">二、GitLab 的启动和常用命令</a></li>
-<li><a href="#ch3-502">三、GitLab 502 问题解决思路</a></li>
-<li><a href="#ch4-usage">四、GitLab 的使用</a></li>
-<li><a href="#supp1-backup">补充一：GitLab 的数据备份</a></li>
-<li><a href="#supp2-config">补充二：GitLab 的一些细节配置</a></li>
-<li><a href="#supp3-lfs">补充三：GitLab 之 Git LFS 大文件存储</a></li>
+</ul>
+</li>
+<li>
+<a href="#ch2-commands">二、GitLab 的启动和常用命令</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch3-502">三、GitLab 502 问题解决思路</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch4-usage">四、GitLab 的使用</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#supp1-backup">补充一：GitLab 的数据备份</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#supp2-config">补充二：GitLab 的一些细节配置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#supp3-lfs">补充三：GitLab 之 Git LFS 大文件存储</a>
+<ul>
 </ul>
 </li>
 </ul>
