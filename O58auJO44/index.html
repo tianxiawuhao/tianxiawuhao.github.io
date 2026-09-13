@@ -140,7 +140,6 @@
 <p><code>@ComponentScan</code>：Spring组件扫描。</p>
 <p>三个注解各司其职，把它们拆开来看会更清楚：</p>
 <ul>
-<p><img src="/post-assets/O58auJO44/01-startup-flow.svg" alt="Spring Boot 启动流程：三大阶段、关键事件与内嵌容器创建时机"></p>
 <li><code>@SpringBootConfiguration</code>：本质上是 Spring 标准注解 <code>@Configuration</code> 的“改名版”，作用只有一个——声明“当前类是一个配置类”，即一个 JavaConfig 形式的 Bean 定义来源。Spring Boot 之所以不直接用它而另起一个注解，是为了让框架能在测试或工具中识别“这是应用的主配置类”。一个应用中通常只应出现一次。</li>
 <li><code>@EnableAutoConfiguration</code>：自动配置的总开关。它通过 <code>@Import(AutoConfigurationImportSelector.class)</code> 把所有候选自动配置类批量导入容器，再由这些配置类上的 <code>@Conditional</code> 条件决定“到底生不生效”。所以它带来的是“有条件的选择性装配”，而不是无条件地把所有组件都创建出来。</li>
 <li><code>@ComponentScan</code>：开启组件扫描。默认扫描<b>当前类所在包及其所有子包</b>，这也是官方建议把启动类放在最外层根包（如 <code>com.example.demo</code>）的原因。</li>
@@ -167,7 +166,7 @@ spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSou
  * prefix = &quot;user&quot; 表示 将配置文件中 key 为 user 的下面所有的属性与本类属性进行一一映射注入值，如果配置文件中
  * 不存在 &quot;user&quot; 的 key，则不会为 POJO 注入值，属性值仍然为默认值
  * @Component 将本来标识为一个 Spring 组件，因为只有是容器中的组件，容器才会为 @ConfigurationProperties 提供此注入功能
- * @PropertySource (value = { &quot; classpath : user.properties &quot; }) 指明加载类路径下的哪个配置文件来注入值
+ * @PropertySource(value = &quot;classpath:user.properties&quot;) 指明加载类路径下的哪个配置文件来注入值
  */
 @PropertySource(value = {&quot;classpath:user.properties&quot;})
 @Component
@@ -186,36 +185,39 @@ public class User {
 @PropertySource(value = {&quot;classpath:user.properties&quot;})
 @Configuration
 public class User {
-    @Value(${user.id})
+    @Value(&quot;${user.id}&quot;)
     private Integer id;
-     @Value(${user.lastName})
+    @Value(&quot;${user.lastName}&quot;)
     private String lastName;
-     @Value(${user.age})
+    @Value(&quot;${user.age}&quot;)
     private Integer age;
-     @Value(${user.birthday})
+    @Value(&quot;${user.birthday}&quot;)
+    @DateTimeFormat(pattern = &quot;yyyy/MM/dd&quot;)   // 非 ISO 格式日期必须声明格式，否则转换失败
     private Date birthday;
-     @Value(${user.colorList})
+    @Value(&quot;${user.colorList}&quot;)                 // 逗号分隔的字符串可直接转成 List&lt;String&gt;
     private List&lt;String&gt; colorList;
-     @Value(${user.maps})
+    @Value(&quot;#{${user.maps}}&quot;)                    // Map 必须借 SpEL 解析，写成 ${user.maps} 会转换失败
     private Map&lt;String, String&gt; cityMap;
 }
 </code></pre>
 <p><strong>user.properties</strong></p>
-<pre><code class="language-java">user.id=111
+<pre><code class="language-properties">user.id=111
 user.lastName=张无忌
 user.age=120
 user.birthday=2018/07/11
-user.colorList=red,yellow,green,blacnk
+user.colorList=red,yellow,green,black
 user.cityMap.mapK1=长沙市
 user.cityMap.mapK2=深圳市
 user.maps=&quot;{mapK1: '长沙市', mapK2: '深圳市'}&quot;
 </code></pre>
+<p>这里有三处细节容易翻车：一是 <code>@Value</code> 的占位符<strong>必须带引号</strong>，写成 <code>@Value(&quot;${user.id}&quot;)</code>，漏掉引号连编译都过不去；二是 <code>@Value</code> 只能注入单个值，<code>user.cityMap.mapK1</code> 这种带层级的键<strong>绑不到 <code>Map</code> 字段</strong>上，要么用 <code>@Value(&quot;#{${user.maps}}&quot;)</code> 借 SpEL 解析，要么直接用 <code>@ConfigurationProperties(prefix = &quot;user&quot;)</code> 批量绑定——后者才是「一组属性 → 一个对象」的正确姿势，<code>@Value</code> 更适合零散注入；三是 <code>user.birthday=2018/07/11</code> 不是 ISO 格式，需要配 <code>@DateTimeFormat(pattern = &quot;yyyy/MM/dd&quot;)</code> 才能注入成功。</p>
 <h2 id="内嵌容器与启动流程">内嵌容器与启动流程</h2>
 <h3 id="内嵌容器">内嵌容器</h3>
 <p>传统 Spring 项目把 war 包交给外部的 Tomcat 部署，容器先启动、再由容器加载应用；Spring Boot 反过来——<b>由应用的 main 方法启动，过程中把 Web 容器“当作一个普通组件”创建出来并启动</b>。所以启动方式变成直接运行 <code>SpringApplication.run(...)</code>，打出来的是可执行 jar（<code>java -jar app.jar</code>），可以独立运行，也更贴合容器化部署。默认容器是 Tomcat，通过排除并替换依赖可换成 Jetty 或 Undertow；WebFlux 场景默认是 Reactor Netty。</p>
 <p>这里有一个容易踩坑的版本差异：<b>Spring Boot 3.x 基于 Jakarta EE 9+，Servlet API 包名由 <code>javax.servlet.*</code> 变为 <code>jakarta.servlet.*</code></b>（内嵌容器为 Tomcat 10+）。因此本文后面示例中的 <code>import javax.servlet.*</code> 只在 Spring Boot 2.x（Tomcat 9、Servlet 4.0）下可直接编译；迁移到 3.x 时需整体替换为 <code>jakarta.servlet</code>，同时 <code>@WebServlet</code> 等注解所在包也随之改变。</p>
 <h3 id="springapplicationrun-的关键步骤">SpringApplication.run 的关键步骤</h3>
 <p>把 <code>SpringApplication.run(DemoApplication.class, args)</code> 拆开，主要分三大阶段：</p>
+<p><img src="/post-assets/O58auJO44/01-startup-flow.svg" alt="Spring Boot 启动流程：三大阶段、关键事件与内嵌容器创建时机"></p>
 <ol>
 <li><b>启动引导</b>：构造 <code>SpringApplication</code> 并推断应用类型。<code>WebApplicationType.deduceFromClasspath()</code> 判断类路径：有 Servlet 相关类则为 SERVLET（Web 应用），只有 WebFlux 相关类则为 REACTIVE，两者都没有则为 NONE（普通应用）。同时通过 <code>setInitializers</code> / <code>setListeners</code> 从 <code>spring.factories</code> 加载 <code>ApplicationContextInitializer</code> 与 <code>ApplicationListener</code>。</li>
 <li><b>Environment 准备</b>：创建 <code>Environment</code>（Web 应用为 StandardServletEnvironment），发布 <code>ApplicationEnvironmentPreparedEvent</code>，由 EnvironmentPostProcessor / ConfigData 机制读取命令行参数、系统属性、环境变量、application.yml / properties 以及 profile 相关文件，构造出完整的有序属性源。随后 <code>environmentPrepared</code> 完成绑定。<b>这一步之后，配置值就已经全部就绪</b>，后续的自动配置才能按配置条件决定是否生效。</li>
@@ -358,7 +360,7 @@ public class HelloProperties {
 <p>需要替换默认内嵌容器时，用 <code>&lt;exclusions&gt;</code> 排掉再引入目标容器即可（如 <code>spring-boot-starter-jetty</code>、<code>spring-boot-starter-undertow</code>）。另外要注意：第三方 starter 的命名规范是 <code>xxx-spring-boot-starter</code>，而官方 starter 是 <code>spring-boot-starter-xxx</code>，看名字就能区分。</p>
 <h2 id="spring-boot-配置加载顺序">Spring Boot 配置加载顺序</h2>
 <p>Spring Boot 支持多种外部配置方式，如下所示，从上往下加载优先级由高到低，内容相同时覆盖，不相同时累加。</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1622190707004.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1622190707004.png" alt="Spring Boot 外部化配置方式优先级示意（自上而下由高到低）" loading="lazy"></figure>
 <p>配置文件所在位置同样影响优先级（后面的覆盖前面的）：jar 包外的 <code>./config/</code> → jar 包外的 <code>./</code> → jar 包内 classpath 的 <code>/config</code> 包 → jar 包内 classpath 根路径。同一目录下 <code>.properties</code> 优先于 <code>.yml</code>。常见内置配置位置与覆盖关系如下：</p>
 <pre><code class="language-text">1. file:./config/application.properties   （jar 同级 config 目录，优先级最高，适合运维改配置）
 2. file:./config/application.yml
@@ -386,8 +388,9 @@ public class HelloProperties {
 <li>bootstrap（.yml 或者 .properties）：bootstrap 由父 ApplicationContext 加载，比 application 优先加载，配置在应用程序上下文的引导阶段生效。一般来说我们在 Spring Cloud Config 或者 Nacos 中会用到它。且 bootstrap 里面的属性不能被覆盖；</li>
 <li>application（.yml 或者 .properties）：由 ApplicationContext 加载，用于 Spring Boot 项目的自动化配置。</li>
 </ul>
+<p><strong>版本提醒</strong>：bootstrap 是 Spring Cloud 提供的能力，不是 Spring Boot 自带的。自 Spring Cloud 2020.0.0（Ilford）起 bootstrap 上下文默认关闭，官方推荐改用 <code>spring.config.import=optional:configserver:</code> 直接在主上下文里导入远程配置；若仍想用 <code>bootstrap.yml</code>，必须额外引入 <code>spring-cloud-starter-bootstrap</code>，否则该文件根本不会被读取。</p>
 <h2 id="spring-profiles">Spring Profiles</h2>
-<figure data-type="image" tabindex="2"><img src="/post-images/1622190724869.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1622190724869.png" alt="Spring Profiles 按环境切换配置示意" loading="lazy"></figure>
 <p>Profile 用于区分不同环境的配置。除“按文件拆分”（<code>application-dev.yml</code>、<code>application-prod.yml</code>）外，还可以在同一个文件里用 <code>---</code> 分隔多个文档块，每个块用 profile 表达式限定生效条件。</p>
 <pre><code class="language-yaml"># Spring Boot 2.4 及以后推荐写法：用 spring.config.activate.on-profile 限定文档块
 spring:
@@ -452,7 +455,7 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping(&quot;/**&quot;)
-                .allowedOrigins(&quot;*&quot;)
+                .allowedOriginPatterns(&quot;*&quot;)   // 开启凭证时必须用 OriginPatterns，allowedOrigins(&quot;*&quot;) 会抛异常
                 .allowCredentials(true)
                 .allowedMethods(&quot;GET&quot;, &quot;POST&quot;, &quot;PUT&quot;, &quot;DELETE&quot;, &quot;OPTIONS&quot;)
                 .maxAge(3600);
@@ -460,6 +463,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
 }
 </code></pre>
+<p>注意 <code>allowCredentials(true)</code> 与 <code>allowedOrigins(&quot;*&quot;)</code> <strong>不能同时使用</strong>：Spring 会直接抛出 <code>IllegalArgumentException</code>（提示 <code>When allowCredentials is true, allowedOrigins cannot contain the special value &quot;*&quot;</code>），因为携带凭证的响应不允许对任意来源开放。需要「任意来源 + 携带 Cookie」时，改用 <code>allowedOriginPatterns(&quot;*&quot;)</code>（Spring 5.3+ 提供），或显式列出可信域名。</p>
 <p>项目中前后端分离部署，所以需要解决跨域的问题。</p>
 <p>我们使用cookie存放用户登录的信息，在spring拦截器进行权限控制，当权限不符合时，直接返回给用户固定的json结果。</p>
 <p>当用户登录以后，正常使用；当用户退出登录状态时或者token过期时，由于拦截器和跨域的顺序有问题，出现了跨域的现象。</p>
@@ -469,7 +473,7 @@ public class CorsConfig {
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.addAllowedOrigin(&quot;*&quot;);
+        corsConfiguration.addAllowedOriginPattern(&quot;*&quot;);   // 同理：与 setAllowCredentials(true) 同用时不能写 addAllowedOrigin(&quot;*&quot;)
         corsConfiguration.addAllowedHeader(&quot;*&quot;);
         corsConfiguration.addAllowedMethod(&quot;*&quot;);
         corsConfiguration.setAllowCredentials(true);
@@ -482,6 +486,7 @@ public class CorsConfig {
 <h2 id="spring-boot-中的监视器">Spring Boot 中的监视器</h2>
 <p>Spring boot actuator 是 spring 启动框架中的重要功能之一。Spring boot 监视器可帮助您访问生产环境中正在运行的应用程序的当前状态。有几个指标必须在生产环境中进行检查和监控。即使一些外部应用程序可能正在使用这些服务来向相关人员触发警报消息。监视器模块公开了一组可直接作为 HTTP URL 访问的REST 端点来检查状态。</p>
 <h2 id="注册-servlet-三大组件-servlet-filter-listener">注册 Servlet 三大组件 Servlet、Filter、Listener</h2>
+<p><img src="/post-assets/O58auJO44/03-servlet-components.svg" alt="Servlet、Filter、Listener 两种注册方式对比：继承接口 + RegistrationBean，与注解 + @ServletComponentScan"></p>
 <h3 id="继承接口实现方式">继承，接口实现方式</h3>
 <h4 id="servletregistrationbean-注册-servlet">ServletRegistrationBean 注册 Servlet</h4>
 <p>1、自定义类继承 javax.servlet.http.HttpServlet，然后重写其 doGet 与 doPost 方法，在方法中编写控制代码；</p>
@@ -508,7 +513,7 @@ public class BookServlet extends HttpServlet {
     }
 }
 </code></pre>
-<p>3、上面 Serlvet 转发到下面的 UserControllr 控制器中</p>
+<p>3、上面这个 Servlet 会把请求转发到 <code>user/users</code>，交给对应的 Controller 处理</p>
 <p>4、@Configuration 配置类相当于以前的 beans.xml 中的配置，将 ServletRegistrationBean 也添加到 Spring 容器中来</p>
 <pre><code class="language-java">import com.lct.component.MyLocaleResolve;
 import com.lct.servlet.BookServlet;
@@ -531,7 +536,7 @@ public class MyMvcConfig {
     @Bean
     public ServletRegistrationBean myServlet() {
         /**第二个参数是个不定参数组，可以配置映射多个请求
-         * 相当于以前在 web.xml中配置的 &lt;servlet-mapptin&gt;&lt;/servlet-mapptin&gt;*/
+         * 相当于以前在 web.xml中配置的 &lt;servlet-mapping&gt;&lt;/servlet-mapping&gt;*/
         ServletRegistrationBean registrationBean = new ServletRegistrationBean(new
                 BookServlet(), &quot;/bookServlet&quot;);
         return registrationBean;
@@ -539,7 +544,7 @@ public class MyMvcConfig {
 }
 </code></pre>
 <p>5、运行测试：</p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1622190757311.gif" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1622190757311.gif" alt="ServletRegistrationBean 注册 Servlet 后的运行测试结果" loading="lazy"></figure>
 <h4 id="filterregistrationbean-注册-filter">FilterRegistrationBean 注册 Filter</h4>
 <p>1、Filter(过滤器) 是 Servlet 技术中最实用的技术之一</p>
 <p>2、Web 开发人员通过 Filter 技术，对 web 服务器管理的所有 web 资源(如动态的 Jsp、 Servlet，以及静态的 image、 html、CSS、JS 文件等) 进行过滤拦截，从而实现一些特殊的功能(如实现 URL 级别的权限访问控制、过滤敏感词汇、压缩响应信息等)</p>
@@ -547,10 +552,10 @@ public class MyMvcConfig {
 <p>4、Filter 使用完整流程：Filter 对用户请求进行预处理，接着将请求交给 Servlet 进行处理并生成响应，最后 Filter 再对服务器响应进行后处理。</p>
 <p>5、Servlet 的 Filter 经常会拿来与 Spring MVC 的 Interceptor(拦截器) 做对比</p>
 <p>	1）拦截器是基于 Java 的反射机制的，而过滤器是基于函数回调</p>
-<p>	2）拦截器不依赖与 servle t容器，过滤器依赖与 servlet 容器</p>
+<p>	2）拦截器不依赖于 Servlet 容器，过滤器依赖于 Servlet 容器</p>
 <p>	3）拦截器可以访问 action 上下文、值栈里的对象，而过滤器不能访问</p>
-<p>	4）在 action 的生命周期中，拦截器可以多次被调用，而过滤器只能在容器初始化时被调用一次</p>
-<p>	5）拦截器可以获取 IOC 容器中的各个 bean，而过滤器就不行，这点很重要，在拦截器里注入一个 service，可以调用业务逻辑</p>
+<p>	4）同一个请求里，拦截器会在 action 生命周期的不同阶段被多次调用（preHandle、postHandle、afterCompletion），而过滤器对一次请求只执行一次 <code>doFilter</code>；只有 <code>init</code> 与 <code>destroy</code> 是容器启动/关闭时各执行一次</p>
+<p>	5）拦截器由 Spring 容器管理，可以注入并使用各个 Bean；过滤器由 Servlet 容器创建，默认不在 Spring 容器里（除非注册成 Bean），这点对「在拦截器里注入 Service 调用业务逻辑」很关键</p>
 <p>	6）SpringMVC 有自己的拦截器</p>
 <pre><code class="language-java">import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
@@ -609,11 +614,11 @@ public class MyMvcConfig {
         FilterRegistrationBean registrationBean = new FilterRegistrationBean();
         /**同样添加自定义的 Filter*/
         registrationBean.setFilter(new SystemFilter());
-        /**然后设置过滤的路径，参数是个集合 ,相当于 web.xml中配置的 &lt;filter-mapptin&gt;&lt;/filter-mapptin&gt;
+        /**然后设置过滤的路径，参数是个集合 ,相当于 web.xml中配置的 &lt;filter-mapping&gt;&lt;/filter-mapping&gt;
          * &quot;/*&quot;: 表示过滤所有 get 与 post 请求*/
         registrationBean.setUrlPatterns(Arrays.asList(&quot;/*&quot;));
         /**
-         * setDispatcherTypes 相当于 web.xml 配置中 &lt;filter-mapptin&gt; 下的 &lt;dispatcher&gt; 标签
+         * setDispatcherTypes 相当于 web.xml 配置中 &lt;filter-mapping&gt; 下的 &lt;dispatcher&gt; 标签
          * 用于过滤非常规的 get 、post 请求
          * REQUEST：默认方式，写了之后会过滤所有静态资源的请求
          * FORWARD：过滤所有的转发请求，无论是 jsp 中的 &lt;jsp:forward&lt;/&gt;、&lt;%@ page errorPage= %&gt;、还是后台的转发
@@ -668,7 +673,7 @@ import java.util.Arrays;
 @Configuration
 public class MyMvcConfig {
     /**
-     * 注册 Servlet 三大组件 之  Listner
+     * 注册 Servlet 三大组件 之  Listener
      * 添加 ServletListenerRegistrationBean ，就相当于以前在 web.xml 中配置的 &lt;listener&gt;&lt;/listener&gt;标签
      */
     @Bean
@@ -681,8 +686,7 @@ public class MyMvcConfig {
 }
 </code></pre>
 <h3 id="注解方式">注解方式</h3>
-<p>1、Servlet 三大组件 Servlet、Filter、Listener 在传统项目中需要在 web.xml 中进行相应的配置。Servlet 3.0 开始在 javax.servlet.annotation 包下提供 3 个对应</p>
-<p>的 @WebServlet、@WebFilter、@WebListener 注解来简化操作。</p>
+<p>1、Servlet 三大组件 Servlet、Filter、Listener 在传统项目中都要在 web.xml 里逐项配置。Servlet 3.0 开始在 <code>javax.servlet.annotation</code> 包下提供了 <code>@WebServlet</code>、<code>@WebFilter</code>、<code>@WebListener</code> 三个注解来简化这些配置（Spring Boot 3.x 对应的包名是 <code>jakarta.servlet.annotation</code>）。</p>
 <p>2、Spring Boot 应用中这三个注解默认是不被扫描的，需要在项目启动类上添加 @ServletComponentScan 注解, 表示对 Servlet 组件扫描。</p>
 <h4 id="webservlet">@WebServlet</h4>
 <pre><code class="language-java">import javax.servlet.ServletException;
@@ -773,7 +777,7 @@ public class SystemListener implements ServletContextListener {
 }
 </code></pre>
 <h4 id="servletcomponentscan">@ServletComponentScan</h4>
-<p>Spring Boot 应用中这三个注解默认是不被扫描的，需要在项目启动类上添加 @ServletComponentScan 注解, 表示对 Servlet 组件扫描。</p>
+<p>注意：这三个注解在 Spring Boot 里默认<strong>不会被扫描</strong>，必须在启动类上补一个 <code>@ServletComponentScan</code> 才会生效。它与前面「注册 Bean」的方式可以共存，区别在于注解方式下 Servlet 组件的名称来自注解的 <code>name</code> / <code>filterName</code> 属性，而 Bean 方式下由 <code>@Bean</code> 方法名或 <code>RegistrationBean.setName()</code> 决定。</p>
 <pre><code class="language-java">import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.ServletComponentScan;
@@ -786,7 +790,7 @@ public class RedisStuWebApplication {
     }
 }
 </code></pre>
-<figure data-type="image" tabindex="4"><img src="/post-images/1622190795511.gif" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1622190795511.gif" alt="@WebServlet 等注解方式注册组件后的运行测试结果" loading="lazy"></figure>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>

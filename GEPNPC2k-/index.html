@@ -147,15 +147,16 @@
 可信任的证书实体（trusted certificate entries）——只包含公钥</p>
 </blockquote>
 <p>在接触代码前，我们先来大概熟悉下密钥生成的流程吧</p>
+<p><img src="/post-assets/GEPNPC2k-/03-keytool-keypair-flow.svg" alt="keytool 三步生成密钥对：生成私钥库、导出证书、导入公钥库，以及各产物的交付归属"></p>
 <ul>
 <li>
 <p>首先用 JDK 自带的 <code>keytool</code> 生成私钥库（<code>-alias</code> 是别名，<code>-validity 3650</code> 表示 10 年有效）：</p>
-<pre><code class="language-shell">keytool -genkeypair -alias privatekey -keystore privateKeys.store -keysize 2048 -validity 3650 -storepass &quot;pri2022key&quot; -keypass &quot;pri2022key&quot; -dname &quot;CN=test, OU=test, O=Space, L=SH, ST=SH, C=CN&quot;
+<pre><code class="language-bash">keytool -genkeypair -alias privatekey -keystore privateKeys.store -keysize 2048 -validity 3650 -storepass &quot;pri2022key&quot; -keypass &quot;pri2022key&quot; -dname &quot;CN=test, OU=test, O=Space, L=SH, ST=SH, C=CN&quot;
 </code></pre>
 
 <blockquote>
 <p>几个容易踩的坑：</p>
-<p>1. keytool 的默认密码策略要求口令<strong>至少 6 位</strong>，并且要求字母与数字组合，不满足会直接报错；示例中的口令请务必替换成自己的强口令。<br>
+<p>1. keytool 要求库口令<strong>至少 6 位</strong>，过短会直接报错，命中弱口令规则时还会给出警告；示例中的口令请务必替换成自己的强口令。<br>
 2. <code>-genkey</code> 在 JDK 9 之后已被标记为废弃，建议改用 <code>-genkeypair</code>。<br>
 3. JDK 9 起默认密钥库类型为 PKCS12，而 PKCS12 不支持 <code>-storepass</code> 与 <code>-keypass</code> 取不同值，此时 keytool 会给出警告并把密钥口令对齐为库口令；若确实需要两个口令不同，请显式指定 <code>-storetype JKS</code>。<br>
 4. 密钥长度建议 <strong>2048 位及以上</strong>，1024 位 RSA 已不再被认为是安全的。</p>
@@ -164,7 +165,7 @@
 </li>
 <li>
 <p>然后把私钥库内的证书导出到一个文件当中：</p>
-<pre><code class="language-shell">keytool -export -alias privatekey -file certfile.cer -keystore privateKeys.store -storepass &quot;pri2022key&quot;
+<pre><code class="language-bash">keytool -export -alias privatekey -file certfile.cer -keystore privateKeys.store -storepass &quot;pri2022key&quot;
 </code></pre>
 
 <blockquote>
@@ -173,7 +174,7 @@
 </li>
 <li>
 <p>然后再把这个证书文件导入到公钥库：</p>
-<pre><code class="language-shell">keytool -import -alias publiccert -file certfile.cer -keystore publicCerts.store -storepass &quot;pri2022key&quot; -noprompt
+<pre><code class="language-bash">keytool -import -alias publiccert -file certfile.cer -keystore publicCerts.store -storepass &quot;pri2022key&quot; -noprompt
 </code></pre>
 
 <blockquote>
@@ -206,6 +207,7 @@ certfile.cer：中间产物，导入公钥库之后即可删除。
 &lt;/dependency&gt;
 </code></pre>
 <p>除了 <code>truelicense-core</code>，示例代码还用到了 <code>lombok</code>（<code>@Data</code>）和 <code>log4j2</code>，请一并加入依赖；不想用 log4j2 的话也可以换成 slf4j 或 <code>java.util.logging</code>。</p>
+<h3 id="sec-custom-keystore-param">自定义密钥库读取：CustomKeyStoreParam</h3>
 <p>首先从整个流程上来讲，现在这步是证书生成，证书生成需要私钥库和证书参数<br>
 在这个引擎中，公/私钥库默认是存储在项目中的。<strong>但是，我们实际生产环境中，都是将配置文件等脱离项目部署的</strong>，所以我们需要重写它获取公/私钥库的地方。<br>
 <code>CustomKeyStoreParam.java</code></p>
@@ -370,6 +372,7 @@ public class LicenseExtraModel implements Serializable {
     }
 }
 </code></pre>
+<h3 id="sec-custom-license-manager">扩展校验：自定义 CustomLicenseManager</h3>
 <p>由于引擎默认只验证有效期，当需要自定义校验逻辑时，可以写一个继承 LicenseManager 的自定义证书管理器。<br>
 额外的信息的校验可以加在validate()方法里</p>
 <p><code>CustomLicenseManager.java</code></p>
@@ -518,7 +521,8 @@ public class CustomLicenseManager extends LicenseManager {
 
 }
 </code></pre>
-<p>前面的所有可以说都是为了整个流程在铺垫，现在开始是真正开始生成License证书的代码</p>
+<h3 id="sec-license-creator">签发入口：LicenseCreator</h3>
+<p>前面的所有可以说都是为了整个流程在铺垫，现在开始是真正开始生成 License 证书的代码</p>
 <p><code>LicenseCreator.java</code></p>
 <pre><code class="language-java">import de.schlichtherle.license.*;
 import org.apache.logging.log4j.LogManager;
@@ -765,12 +769,14 @@ public class LicenseVerify {
 
 }
 </code></pre>
+<h3 id="sec-verify-keypoints">有效期与防篡改的三个要点</h3>
 <p>关于<strong>有效期</strong>与<strong>防篡改</strong>，有三点需要澄清：</p>
 <ul>
 <li><strong>防篡改靠签名，不靠加密</strong>。license 的内容（含有效期、机器码）是明文可读的，但任何改动都会导致验签失败，客户端无法通过编辑文件来延长授权。</li>
 <li><strong>有效期依赖本地系统时间</strong>。用户把机器时间改回授权期内，父类的 <code>validate()</code> 是拦不住的。安全性要求高时，应叠加服务端时间校验、记录“最后运行时间”并在检测到时间回拨时告警，或者引入在线激活与心跳校验。</li>
 <li><strong>机器码校验要放在 <code>validate()</code> 中并抛异常</strong>。校验不通过必须让启动失败（例如抛出异常终止 Spring 容器的启动），只记录日志然后继续运行等于没有校验。</li>
 </ul>
+<h3 id="sec-spring-integration">与 Spring Boot 集成</h3>
 <p>前面提过：除了项目本身的许多配置文件外，一般还需要把公钥库、私钥库以及验证所需的参数，放到服务器上单独的路径下</p>
 <p><code>application.yml</code></p>
 <pre><code class="language-yaml"># License 相关配置
@@ -778,8 +784,8 @@ license:
   subject: licenseTest        # 主体，必须与生成证书时的 subject 完全一致，否则校验不通过
   publicAlias: publiccert     # 公钥别名，对应 keytool -import 时使用的 -alias
   storePass: pri2022key       # 公钥库口令；同时用于解密 license.lic，需与生成端 storePass 相同
-  licensePath: E:\license2\license.lic                # license 文件位置
-  publicKeysStorePath: E:\license\publicCerts.store   # 公钥库位置
+  licensePath: 'E:\license2\license.lic'                # license 文件位置
+  publicKeysStorePath: 'E:\license\publicCerts.store'   # 公钥库位置
 </code></pre>
 <blockquote>
 <p>这里的 <code>publicAlias</code> 要与导入公钥时使用的 <code>-alias</code> 写法保持一致（keystore 别名本身大小写不敏感，但统一写法可以避免困惑）；<code>subject</code> 则必须与生成端 <code>param.setSubject(...)</code> 的值一致，否则会因为主体不匹配而校验失败。</p>
@@ -830,8 +836,9 @@ public class LicenseConfig {
 </code></pre>
 <p>以上代码是读取<code>yml</code>的配置，以及将<code>LicenseConfig</code>加入<code>Spring</code>容器，在加入<code>Spring</code>容器的同时，执行<code>licenseVerify</code>里的安装方法</p>
 <p>这样，程序就会在启动时，自动安装证书，校验时就可以用了</p>
-<pre><code class="language-java">@SpringBootTest
-@RunWith(SpringRunner.class)
+<p>还要清楚「安装」到底装到了哪里：<code>DefaultLicenseParam</code> 接收的是 <code>Preferences.userNodeForPackage(...)</code>，安装时 license key 会被写进 Java Preferences（Windows 对应注册表 <code>HKEY_CURRENT_USER\Software\JavaSoft\Prefs</code>，Linux 对应 <code>~/.java/.userPrefs</code>），<code>verify()</code> 再从这里读回来。因此换运行账户（例如改成以 Windows 服务、SYSTEM 账户启动）会出现「明明装过却读不到」的 <code>NoLicenseInstalledException</code>，排查时先确认运行账户是否一致。</p>
+<pre><code class="language-java">@SpringBootTest   // Spring Boot 2.2+ 默认集成 JUnit 5，写 @SpringBootTest 就够了
+// 若仍在用 JUnit 4，才需要额外加 @RunWith(SpringRunner.class)（org.junit.runner.RunWith）
 public class LicenseVerifyTest {
 
     private LicenseVerify licenseVerify;
@@ -869,6 +876,9 @@ public class LicenseVerifyTest {
 <li>
 <a href="#sec-gen-code">实现代码 - 证书生成</a>
 <ul>
+<li><a href="#sec-custom-keystore-param">自定义密钥库读取：CustomKeyStoreParam</a></li>
+<li><a href="#sec-custom-license-manager">扩展校验：自定义 CustomLicenseManager</a></li>
+<li><a href="#sec-license-creator">签发入口：LicenseCreator</a></li>
 </ul>
 </li>
 <li>
@@ -879,6 +889,8 @@ public class LicenseVerifyTest {
 <li>
 <a href="#sec-verify">代码实现 - 证书安装和校验</a>
 <ul>
+<li><a href="#sec-verify-keypoints">有效期与防篡改的三个要点</a></li>
+<li><a href="#sec-spring-integration">与 Spring Boot 集成</a></li>
 </ul>
 </li>
 </ul>
