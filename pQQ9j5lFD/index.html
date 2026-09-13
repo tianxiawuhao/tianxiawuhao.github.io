@@ -266,17 +266,16 @@
     }
 }
 </code></pre>
-<p>整个流式计算的过程分为以下几步。</p>
-<p>首先创建一个流式计算环境：</p>
+<p>整个流式计算的过程可以分为两步：先创建流式计算环境，再接入数据流并完成转换与输出。</p>
+<p>第一步是创建流式计算环境，注意这里使用的是 <code>StreamExecutionEnvironment</code>，与批处理中的 <code>ExecutionEnvironment</code> 相对应：</p>
 <p><code>StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();</code></p>
-<p>然后监听本地 9000 端口，把接收到的数据依次做拆分、分组、窗口计算和聚合输出。这里使用的是<strong>滑动窗口</strong>：<code>timeWindow(Time.seconds(5), Time.seconds(1))</code> 的第一个参数是窗口长度 5 秒，第二个参数是滑动步长 1 秒，因此每秒都会输出一次「最近 5 秒」的统计结果，相邻窗口之间相互重叠。窗口函数在后面的课程中会详细讲解。</p>
+<p>第二步是监听本地 9000 端口，把接收到的数据依次做拆分、分组、窗口计算和聚合输出。这里使用的是<strong>滑动窗口</strong>：<code>timeWindow(Time.seconds(5), Time.seconds(1))</code> 的第一个参数是窗口长度 5 秒，第二个参数是滑动步长 1 秒，因此每秒都会输出一次「最近 5 秒」的统计结果，相邻窗口之间相互重叠。窗口函数在后面的课程中会详细讲解。</p>
 <p><img src="/post-assets/pQQ9j5lFD/02-streaming-window-flow.svg" alt="流处理 WordCount 的处理链路与滑动窗口示意：socketTextStream 接入数据，flatMap 拆词，keyBy 分组，timeWindow 以 5 秒窗口、1 秒滑动聚合，reduce 后打印结果"></p>
-<p>我们在本地使用 netcat 命令启动一个端口：</p>
+<p>程序启动前，先在 Linux 本地用 netcat 监听 9000 端口：</p>
 <pre><code class="language-sh">nc -lk 9000
 </code></pre>
-<p>然后直接运行 main 方法。测试时，先在 Linux 系统中用 netcat 命令发送数据，在 nc 中输入：</p>
-<pre><code class="language-sh">$ nc -lk 9000
-Flink Flink Flink 
+<p>然后运行 <code>StreamingJob</code> 的 main 方法，在 nc 会话中逐行输入以下内容（每行回车发送）：</p>
+<pre><code class="language-sh">Flink Flink Flink
 Flink Spark Storm
 </code></pre>
 <p>可以在控制台看到：</p>
@@ -285,6 +284,8 @@ Spark : 1
 Storm : 1
 </code></pre>
 <p><img src="/post-images/1618469926125.png" alt="流处理 WordCount 运行结果截图" loading="lazy"></p>
+<p>最后把两套 API 放在一起对照，可以更清楚地看出批处理与流处理在编程模型上的对应关系：</p>
+<p><img src="/post-assets/pQQ9j5lFD/03-batch-vs-stream-api.svg" alt="Flink 批处理 DataSet API 与流处理 DataStream API 对照：执行环境、数据源、数据抽象、分组与计算、输出与提交逐项对应"></p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>

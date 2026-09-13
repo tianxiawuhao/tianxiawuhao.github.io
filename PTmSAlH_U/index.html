@@ -126,8 +126,10 @@
           <img class="post-feature-header-image" src="/post-images/PTmSAlH_U.png" alt="封面图">
           
           <h2 id="一-在亚马逊云s3创建一个存储桶并设置权限">一 在亚马逊云S3创建一个存储桶，并设置权限</h2>
+<p>整篇文章分三步走：先在 S3 控制台把存储桶配置成可公开读取的图床，再用 Java 代码把文件写进存储桶，最后拿到一个可以直接访问的地址。先看整体流程：</p>
+<p><img src="/post-assets/PTmSAlH_U/01-s3-upload-overview.svg" alt="上传文件到 Amazon S3 的整体流程：控制台完成存储桶、策略、跨域三项配置，后端接口调用 SDK 上传，返回公开访问地址"></p>
 <h3 id="1-创建一个存储桶并将权限设置为公开因为我平时用它来存放网站图片">1 创建一个存储桶，并将权限设置为公开，因为我平时用它来存放网站图片</h3>
-<figure data-type="image" tabindex="1"><img src="/post-images/1658665353168.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1658665353168.png" alt="创建存储桶并将权限设置为公开" loading="lazy"></figure>
 <h3 id="2-配置存储桶策略">2 配置存储桶策略</h3>
 <pre><code class="language-json">{
     &quot;Version&quot;: &quot;2012-10-17&quot;,
@@ -142,7 +144,7 @@
     ]
 }
 </code></pre>
-<figure data-type="image" tabindex="2"><img src="/post-images/1658665363503.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="/post-images/1658665363503.png" alt="在存储桶权限页面配置存储桶策略" loading="lazy"></figure>
 <h3 id="3-配置跨域策略">3 配置跨域策略</h3>
 <pre><code class="language-json">[
     {
@@ -166,9 +168,10 @@
     }
 ]
 </code></pre>
-<figure data-type="image" tabindex="3"><img src="/post-images/1658665372479.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1658665372479.png" alt="配置存储桶的跨域 CORS 规则" loading="lazy"></figure>
 <blockquote>
-<p><strong>到这里，存储卷的配置就算是OK啦，满足正常网站图片的使用了！</strong></p>
+<p><strong>到这里，存储桶的配置就算是完成啦，满足正常网站图片的使用了！</strong></p>
+<p>需要留意：上面的存储桶策略用 <code>Principal: "*"</code> 放开了 <code>s3:GetObject</code>，跨域规则里 <code>AllowedOrigins</code> 也写成了 <code>"*"</code>，等于桶内所有对象都能被任何人读取。当图床用没问题，但不要往这个桶里放私密文件；更稳妥的做法是把 <code>Resource</code> 收窄到某个前缀（例如 <code>arn:aws:s3:::test.jiguiquan.com/public/*</code>），把 <code>AllowedOrigins</code> 限定为自己的域名，并开启服务端加密与访问日志。</p>
 </blockquote>
 <hr>
 <h2 id="二-编写java类完成文件的上传">二 编写Java类，完成文件的上传</h2>
@@ -179,7 +182,16 @@
     &lt;version&gt;1.11.347&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
+<p>上面用的是 AWS SDK for Java 1.x 的 <code>aws-java-sdk-s3</code>。<code>1.11.347</code> 是 2019 年的版本，1.x 分支后续持续更新到 1.12.x，接口保持兼容，直接升到最新的 1.12.x 即可；新项目更建议使用 AWS SDK for Java v2（Maven 坐标 <code>software.amazon.awssdk:s3</code>，包名为 <code>software.amazon.awssdk.*</code>），本文代码仍是 1.x 的写法。</p>
 <h3 id="2-编写上传文件的接口">2 编写上传文件的接口</h3>
+<p>接口里通过 <code>@Value</code> 注入了 4 个参数，需要先在配置文件里补上，否则容器启动时会因为占位符解析失败直接报错：</p>
+<pre><code class="language-yaml">s3:
+  accessKeyId: 你的 Access Key ID
+  accessKeySecret: 你的 Access Key Secret
+  bucketName: test.jiguiquan.com
+  region: ap-northeast-2
+</code></pre>
+<p>其中 <code>region</code> 必须和创建存储桶时选择的区域一致（示例为首尔 <code>ap-northeast-2</code>）。Access Key 属于敏感凭据，不要提交到代码仓库，推荐用环境变量或配置中心注入。</p>
 <pre><code class="language-java">@Api(tags = &quot;Auth——第三方服务模块&quot;)
 @RestController
 @RequiredArgsConstructor
@@ -247,11 +259,13 @@ public class ThirdpartyController {
     }
 }
 </code></pre>
+<p>整个接口的处理顺序如下，任何一个环节出错都会统一转成 <code>FILE_UPLOAD_FAILED</code> 返回：</p>
+<p><img src="/post-assets/PTmSAlH_U/02-upload-steps.svg" alt="上传接口的执行步骤：参数校验、生成对象键、设置元数据、putObject 上传、返回访问地址、异常处理与关闭流"></p>
 <hr>
 <h2 id="三-测试文件的上传与访问">三 测试文件的上传与访问</h2>
-<figure data-type="image" tabindex="4"><img src="/post-images/1658665387619.png" alt="" loading="lazy"></figure>
-<p>浏览器访问：</p>
-<figure data-type="image" tabindex="5"><img src="/post-images/1658665394203.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="/post-images/1658665387619.png" alt="调用上传接口后的返回结果" loading="lazy"></figure>
+<p>接口返回的就是文件的公开访问地址，贴进浏览器就能看到图片：</p>
+<figure data-type="image" tabindex="5"><img src="/post-images/1658665394203.png" alt="浏览器访问上传后返回的图片地址" loading="lazy"></figure>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>

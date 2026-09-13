@@ -125,32 +125,34 @@
           
           <img class="post-feature-header-image" src="/post-images/8j32dqs0d.png" alt="封面图">
           
-          <h2 id="ch1-intro">一、FastDFS 的介绍与原理</h2>
-<p>官方Github地址：https://github.com/happyfish100</p>
+          <p class="post-lead">FastDFS 是用 C 语言编写的轻量级分布式文件系统，适合存放图片、文档这类中小文件。本文记录在 CentOS 7 上从零部署单机版 FastDFS 的完整过程：四大组件的编译安装、tracker / storage / client / nginx 的配置、上传与访问测试，以及开机自启动。</p>
+<h2 id="ch1-intro">一、FastDFS 的介绍与原理</h2>
+<p>官方 GitHub 地址：<a href="https://github.com/happyfish100" target="_blank" rel="noopener">https://github.com/happyfish100</a>，FastDFS 本体仓库为 <code>happyfish100/fastdfs</code>。</p>
 <blockquote>
 <p>FastDFS 是一个开源的高性能分布式文件系统（DFS）。 它的主要功能包括：<strong>文件存储，文件同步和文件访问，以及高容量和负载平衡</strong>。</p>
 <p>主要解决了海量数据存储问题，特别适合以中小文件（建议范围：4KB &lt; file_size &lt;500MB）为载体的在线服务。</p>
 </blockquote>
 <p>FastDFS 系统有三个角色：跟踪服务器(Tracker Server)、存储服务器(Storage Server)和客户端(Client)。</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1644804508252852.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1644804508252852.png" alt="FastDFS 中 Tracker、Storage 与 Client 三个角色相互通信的示意图" loading="lazy"></figure>
 <ul>
-<li>**Tracker Server：**跟踪服务器，主要做调度工作，起到均衡的作用；负责管理所有的 storage server和 group，<strong>每个 storage 在启动后会连接 Tracker，告知自己所属 group 等信息，并保持周期性心跳</strong>。</li>
-<li>**Storage Server：**存储服务器，主要提供容量和备份服务；<strong>以 group 为单位，每个 group 内可以有多台 storage server，数据互为备份</strong>。</li>
+<li><strong>Tracker Server：</strong>跟踪服务器，主要做调度工作，起到均衡的作用；负责管理所有的 storage server 和 group，<strong>每个 storage 在启动后会连接 Tracker，告知自己所属 group 等信息，并保持周期性心跳</strong>。</li>
+<li><strong>Storage Server：</strong>存储服务器，主要提供容量和备份服务；<strong>以 group 为单位，每个 group 内可以有多台 storage server，数据互为备份</strong>。</li>
 <li><strong>Client：</strong>客户端，即上传/下载数据的服务器，也就是我们自己的项目所部署的服务器；使用过程中只需配置 Tracker 的地址即可。</li>
 </ul>
+<p><img src="/post-assets/8j32dqs0d/01-fastdfs-architecture.svg" alt="FastDFS 中 Tracker、Storage、Client 三角色架构与文件上传访问链路示意图"></p>
 <hr>
 <h2 id="ch2-env-prep">二、FastDFS 安装前的环境准备</h2>
 <p>需要用到的相关软件与简单介绍</p>
 <table>
 <thead>
 <tr>
-<th>centos</th>
-<th>7.x</th>
+<th>软件</th>
+<th>版本 / 说明</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>libfatscommon</td>
+<td>libfastcommon</td>
 <td>FastDFS分离出的一些公用函数包</td>
 </tr>
 <tr>
@@ -189,17 +191,17 @@
 </tr>
 </tbody>
 </table>
-<p><strong>data/logs都存在了dfs</strong></p>
+<p><strong>数据和日志统一放在 /data/fastdfs 下，安装包统一放在 /usr/local/fastdfs 下。</strong></p>
 <pre><code class="language-shell">[root@tcosmo-test-szls-baas01 /]# mkdir /usr/local/fastdfs
 [root@tcosmo-test-szls-baas01 /]# mkdir -p /data/fastdfs
- 
-## 进入
-[root@tcosmo-test-szls-baas01 fastdfs]# cd /usr/local/fastdfs/
+
+## 进入安装包目录
+[root@tcosmo-test-szls-baas01 /]# cd /usr/local/fastdfs/
 </code></pre>
 <hr>
 <h2 id="ch3-install">三、安装 FastDFS 的四大软件</h2>
 <p>由于 GitHub 经常无法访问，可以提前下载好，拷贝进 /usr/local/fastdfs 目录下</p>
-<p><strong>1、下载并安装libfatscommon：</strong></p>
+<p><strong>1、下载并安装libfastcommon：</strong></p>
 <pre><code class="language-shell">git clone https://github.com/happyfish100/libfastcommon.git --depth 1
  
 cd libfastcommon/
@@ -234,18 +236,17 @@ total 8
 cp /usr/local/fastdfs/fastdfs-nginx-module/src/mod_fastdfs.conf /etc/fdfs
 </code></pre>
 <p><strong>4、安装Nginx并添加fastdfs-nginx-module：</strong></p>
-<pre><code class="language-shell">## 下载
-wget 
- 
+<pre><code class="language-shell">## 下载 nginx 源码包（与上表中的版本保持一致）
+cd /usr/local/fastdfs
+wget http://nginx.org/download/nginx-1.20.2.tar.gz
+
 ## 解压 &amp; 进入：
 tar -zxvf nginx-1.20.2.tar.gz
 cd nginx-1.20.2/
- 
-  
- 
+
 ## 添加fastdfs-nginx-module模块
-./configure --add-module=/usr/local/fastdfs/fastdfs-nginx-module/src/
- 
+./configure --add-module=/usr/local/fastdfs/fastdfs-nginx-module/src/ --prefix=/usr/local/nginx
+
 ## 编译安装
 make &amp;&amp; make install
 </code></pre>
@@ -272,13 +273,15 @@ http.server_port=8888  # http访问文件的端口(默认8888,看情况修改,�
 </code></pre>
 <p><strong>3、nginx的配置：</strong></p>
 <pre><code class="language-shell">vim /etc/fdfs/mod_fastdfs.conf
- 
+
 #需要修改的内容如下
 tracker_server=139.198.191.246:22122  #tracker服务器IP和端口
-url_have_group_name=true
-store_path0=/data/fastdfs
- 
-#配置nginx.config
+group_name=group1                     #文件所属的组，要与返回的 group1/M00/... 路径一致
+url_have_group_name=true              #访问 URL 中带上组名
+store_path0=/data/fastdfs             #与 storage.conf 中的 store_path0 保持一致
+store_path_count=1
+
+#配置nginx.conf
 vim /usr/local/nginx/conf/nginx.conf
 #添加如下配置
 server {
@@ -294,20 +297,24 @@ server {
 }
 </code></pre>
 <p><strong>4、启动服务：</strong></p>
-<pre><code class="language-shell"># 关闭防火墙
+<pre><code class="language-shell"># 关闭防火墙（生产环境更推荐只放行需要的端口）
 systemctl stop firewalld.service
- 
+
 # 启动tracker
 /usr/local/fastdfs/fastdfs/init.d/fdfs_trackerd start
-Starting FastDFS tracker server: 
- 
+Starting FastDFS tracker server:
+
 # 启动storage
 /usr/local/fastdfs/fastdfs/init.d/fdfs_storaged start
-Starting FastDFS storage server: 
- 
+Starting FastDFS storage server:
+
 # 重启nginx
 nginx -s reload
+
+# 确认端口已监听：22122(tracker)、23000(storage)、8888(nginx)
+ss -lunpt | grep -E '22122|23000|8888'
 </code></pre>
+<p>如果不想直接关掉防火墙，也可以把用到的端口放行：<code>firewall-cmd --add-port=22122/tcp --add-port=23000/tcp --add-port=8888/tcp --permanent</code>，再执行 <code>firewall-cmd --reload</code>。</p>
 <hr>
 <h2 id="ch5-client-test">五、用自带 client 测试文件上传与访问</h2>
 <p><strong>1、配置自带的client的配置文件：</strong></p>
@@ -330,9 +337,11 @@ group1/M00/00/00/i8a_9mIKAMKAPKgPAAA2E69InJY486.jpg
 [root@i-zqovu8av 00]# ls
 i8a_9mIKAMKAPKgPAAA2E69InJY486.jpg
 </code></pre>
-<p><strong>4、我们还可以通过配置的Nginx对文件进行直接访问：</strong></p>
-<p>http://139.198.191.246:8888/group1/M00/00/00/i8a_9mIKAMKAPKgPAAA2E69InJY486.jpg</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1644822991389647.png" alt="image.png" loading="lazy"></figure>
+<p><strong>4、我们还可以通过配置的 Nginx 对文件进行直接访问：</strong></p>
+<p>访问地址的格式为 <code>http://服务器IP:8888/group1/M00/00/00/文件名</code>，例如：<a href="http://139.198.191.246:8888/group1/M00/00/00/i8a_9mIKAMKAPKgPAAA2E69InJY486.jpg" target="_blank" rel="noopener">http://139.198.191.246:8888/group1/M00/00/00/i8a_9mIKAMKAPKgPAAA2E69InJY486.jpg</a></p>
+<figure data-type="image" tabindex="2"><img src="/post-images/1644822991389647.png" alt="在浏览器中通过 Nginx 的 8888 端口直接访问 FastDFS 中已上传图片的效果" loading="lazy"></figure>
+<p>整条链路的对应关系是：storage 把文件写到 <code>store_path0</code> 对应的磁盘目录，Nginx 通过 <code>fastdfs-nginx-module</code> 按 URL 里的组名和路径直接读本地文件；也正因为如此，<code>url_have_group_name</code> 必须为 true，访问地址里才能带 group1。</p>
+<p><img src="/post-assets/8j32dqs0d/02-component-config-reference.svg" alt="Tracker、Storage、Client、Nginx 四个组件的配置文件、关键参数与端口对照图"></p>
 <p>至此，FastDFS 单机版安装与测试完成。</p>
 <hr>
 <h2 id="ch6-autostart">补充一：FastDFS 与 Nginx 开机自启动</h2>
@@ -353,13 +362,33 @@ i8a_9mIKAMKAPKgPAAA2E69InJY486.jpg
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#ch1-intro">一、FastDFS 的介绍与原理</a>
 <ul>
-<li><a href="#ch1-intro">一、FastDFS 的介绍与原理</a></li>
-<li><a href="#ch2-env-prep">二、FastDFS 安装前的环境准备</a></li>
-<li><a href="#ch3-install">三、安装 FastDFS 的四大软件</a></li>
-<li><a href="#ch4-single-deploy">四、FastDFS 单机部署配置</a></li>
-<li><a href="#ch5-client-test">五、用自带 client 测试文件上传与访问</a></li>
-<li><a href="#ch6-autostart">补充一：FastDFS 与 Nginx 开机自启动</a></li>
+</ul>
+</li>
+<li>
+<a href="#ch2-env-prep">二、FastDFS 安装前的环境准备</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch3-install">三、安装 FastDFS 的四大软件</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch4-single-deploy">四、FastDFS 单机部署配置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch5-client-test">五、用自带 client 测试文件上传与访问</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch6-autostart">补充一：FastDFS 与 Nginx 开机自启动</a>
+<ul>
 </ul>
 </li>
 </ul>

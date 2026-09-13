@@ -126,6 +126,7 @@
           <img class="post-feature-header-image" src="/post-images/wYNztHepH.png" alt="封面图">
           
           <h2 id="logging">Logging</h2>
+<p>Gradle 内置了日志系统，构建脚本与插件都可以通过它输出信息：既能在构建失败时给出排查线索，也能在持续集成中反馈进度。Gradle 把日志划分为若干级别，实际输出哪些日志由命令行选项或 <em>gradle.properties</em> 决定，默认只输出 LIFECYCLE 及重要程度更高的级别。</p>
 <h2 id="日志级别">日志级别</h2>
 <table>
 <thead>
@@ -176,7 +177,7 @@
 <td style="text-align:left">LIFECYCLE及更高</td>
 </tr>
 <tr>
-<td style="text-align:left">-q or--quiet</td>
+<td style="text-align:left">-q or --quiet</td>
 <td style="text-align:left">QUIET及更高</td>
 </tr>
 <tr>
@@ -189,11 +190,13 @@
 </tr>
 <tr>
 <td style="text-align:left">-d or --debug</td>
-<td style="text-align:left">DEBUG及更高版本（即所有日志消息）</td>
+<td style="text-align:left">DEBUG 及更高（即所有日志消息）</td>
 </tr>
 </tbody>
 </table>
+<p><img src="/post-assets/wYNztHepH/01-log-levels.svg" alt="Gradle 日志级别与命令行选项输出范围对照图"></p>
 <h2 id="stacktrace命令行选项">Stacktrace命令行选项</h2>
+<p>构建失败时可以用下面的选项打印堆栈信息，便于判断问题出在哪个插件或脚本上。</p>
 <p><strong>-s or --stacktrace</strong></p>
 <p>打印简洁的堆栈跟踪信息，推荐使用</p>
 <p><strong>-S or --full-stacktrace</strong></p>
@@ -202,6 +205,7 @@
 <h3 id="使用stdout编写日志消息">使用stdout编写日志消息</h3>
 <pre><code class="language-shell">println 'A message which is logged at QUIET level'
 </code></pre>
+<p>println 输出的消息按 QUIET 级别记录，属于默认输出范围（LIFECYCLE 及重要程度更高的级别），因此在默认构建中就能看到。</p>
 <h3 id="编写自己的日志消息">编写自己的日志消息</h3>
 <pre><code class="language-java">logger.quiet('An info log message which is always logged.')
 logger.error('An error log message.')
@@ -214,7 +218,7 @@ logger.trace('A trace log message.') // Gradle never logs TRACE level logs
 // 用占位符写一条日志消息
 logger.info('A {} log message', 'info')
 </code></pre>
-<p>logger 是构建脚本提供的一个属性，它是 Logger 接口的实例。该接口扩展了 SLF4JLogger 接口，并向其中添加了一些 Gradle 特有的方法</p>
+<p>logger 是构建脚本提供的一个属性，它是 Logger 接口的实例。该接口扩展了 SLF4J 的 Logger 接口，并向其中添加了一些 Gradle 特有的方法（如 quiet、lifecycle）。需要注意的是，Gradle 没有 TRACE 级别，因此 logger.trace() 输出的日志永远不会被打印。</p>
 <h2 id="使用slf4j写入日志消息">使用SLF4J写入日志消息</h2>
 <pre><code class="language-java">import org.slf4j.LoggerFactory
  
@@ -222,7 +226,8 @@ def slf4jLogger = LoggerFactory.getLogger('some-logger')
 slf4jLogger.info('An info log message logged using SLF4j')
 </code></pre>
 <h2 id="构建生命周期">构建生命周期</h2>
-<p>Gradle 的核心是一种基于依赖关系的编程模型，这意味着你可以定义任务以及任务之间的依赖关系。 Gradle保证这些任务按照其依赖关系的顺序执行，并且每个任务只执行一次。 这些任务形成一个定向无环图。</p>
+<p>Gradle 的核心是一种基于依赖关系的编程模型，这意味着你可以定义任务以及任务之间的依赖关系。 Gradle保证这些任务按照其依赖关系的顺序执行，并且每个任务只执行一次。 这些任务形成一个有向无环图（DAG）。</p>
+<p><img src="/post-assets/wYNztHepH/02-build-lifecycle.svg" alt="Gradle 构建的初始化、配置、执行三个阶段"></p>
 <h3 id="构建阶段">构建阶段</h3>
 <p>Gradle构建具有三个不同的阶段。</p>
 <ul>
@@ -272,7 +277,7 @@ Running tests for project ':project-a'
 <h3 id="使用初始化脚本">使用初始化脚本</h3>
 <p>有几种使用初始化脚本的方法：</p>
 <ul>
-<li>在命令行中指定一个文件。命令行选项是-I或-init-script，后面是脚本的路径。</li>
+<li>在命令行中指定一个文件。命令行选项是 -I 或 --init-script，后面是脚本的路径。</li>
 </ul>
 <p>命令行选项可以出现一次以上，每次都会添加另一个 init 脚本。 如果命令行上指定的文件不存在，编译将失败。</p>
 <ul>
@@ -306,6 +311,7 @@ task showRepos {
 <pre><code class="language-shell">gradle --init-script init.gradle -q showRepos
 </code></pre>
 <h3 id="初始化脚本里面依赖添加依赖">初始化脚本里面依赖添加依赖</h3>
+<p>初始化脚本自身也可以依赖第三方库，此时需要在脚本的 initscript 块中声明仓库与 classpath 依赖，这些依赖会在脚本执行之前解析完成。</p>
 <p>init.gradle</p>
 <pre><code class="language-java">initscript {
     repositories {
