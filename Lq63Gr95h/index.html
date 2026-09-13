@@ -128,7 +128,7 @@
           <p>随着互联网的不断发展，企业的业务系统变得越来越复杂，原本单一的单体应用系统已经无法满足企业业务发展的需要。于是，很多企业开始了对项目的分布式与微服务改造，新项目也在开始的时候就会采用分布式与微服务的架构模式。</p>
 <p>一个系统采用分布式与微服务架构后，会被拆分成许多服务模块，这些服务模块之间的调用关系错综复杂，对于客户端请求的分析与处理就会显得异常复杂。此时，就需要一种技术来解决这些问题，而这种技术就是分布式链路追踪技术。</p>
 <h2 id="分布式链路追踪">分布式链路追踪</h2>
-<p>随着互联网业务快速扩展，企业的业务系统变得越来越复杂，不少企业开始向分布式、微服务方向发展，将原本的单体应用拆分成分布式、微服务。这也使得客户端请求系统接口时，原本在同一个系统内部的请求逻辑，变成了需要在多个微服务之间流转的处理过程。</p>
+<p>在分布式与微服务架构下，一次客户端请求往往要在多个服务模块之间流转，原本集中在同一个系统内部完成的请求逻辑，被拆散到了多个进程中。</p>
 <p>单体架构中可以使用AOP在调用具体的业务逻辑前后分别打印一下时间即可计算出整体的调用时间，使用 AOP捕获异常也可知道是哪里的调用导致的异常。</p>
 <p>但是在分布式微服务场景下，使用AOP技术是无法追踪到各个微服务的调用情况的，也就无法知道系统中处理一次请求的整体调用链路。</p>
 <p>另外，在分布式与微服务场景下，我们需要解决如下问题：</p>
@@ -144,28 +144,29 @@
 <p>在分布式链路追踪中，可以统计调用每个微服务的耗时，请求会经过哪些微服务的流转，每个微服务的运行状况等信息。</p>
 <h2 id="核心原理">核心原理</h2>
 <p>假定三个微服务调用的链路如下图所示：Service 1 调用 Service 2，Service 2 调用 Service 3 和 Service 4。</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1658669279892.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1658669279892.png" alt="微服务调用链路示意：Service 1 调用 Service 2，Service 2 再调用 Service 3 与 Service 4" loading="lazy"></figure>
 <p>那么链路追踪会在每个服务调用的时候加上 Trace ID 和 Span ID。如下图所示：</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1658669287303.png" alt="" loading="lazy"></figure>
-<p>小伙伴注意上面的颜色，相同颜色的代表是同一个 Span ID，说明是链路追踪中的一个节点。</p>
+<p>注意图中颜色：颜色相同的标注属于同一个 Span ID，也就是链路追踪中的一个节点。</p>
 <ul>
 <li>第一步：用户端调用 Service 1，生成一个 Request，Trace ID 和 Span ID 为空，那个时候请求还没有到 Service 1。</li>
 <li>第二步：请求到达 Service 1，记录了 Trace ID = X，Span ID 等于 A。</li>
-<li>第三步：Service 1 发送请求给 Service 2，Span ID 等于 B，被称作 Client Sent，即用户端发送一个请求。</li>
-<li>第四步：请求到达 Service 2，Span ID 等于 B，Trace ID 不会改变，被称作 Server Received，即服务端取得请求并准备开始解决它。</li>
-<li>第五步：Service 2 开始解决这个请求，解决完之后，Trace ID 不变，Span ID = C。</li>
-<li>第六步：Service 2 开始发送这个请求给 Service 3，Trace ID 不变，Span ID = D，被称作 Client Sent，即用户端发送一个请求。</li>
-<li>第七步：Service 3 接收到这个请求，Span ID = D，被称作 Server Received。</li>
-<li>第八步：Service 3 开始解决这个请求，解决完之后，Span ID = E。</li>
-<li>第九步：Service 3 开始发送响应给 Service 2，Span ID = D，被称作 Server Sent，即服务端发送响应。</li>
-<li>第十步：Service 3 收到 Service 2 的响应，Span ID = D，被称作 Client Received，即用户端接收响应。</li>
-<li>第十一步：Service 2 开始返回响应给 Service 1，Span ID = B，和第三步的 Span ID 相同，被称作 Client Received，即用户端接收响应。</li>
-<li>第十二步：Service 1 解决完响应，Span ID = A，和第二步的 Span ID 相同。</li>
+<li>第三步：Service 1 发送请求给 Service 2，Span ID 等于 B，被称作 Client Send，即客户端发送请求。</li>
+<li>第四步：请求到达 Service 2，Span ID 等于 B，Trace ID 不会改变，被称作 Server Receive，即服务端收到请求并准备开始处理。</li>
+<li>第五步：Service 2 开始处理这个请求，处理过程中的 Trace ID 不变，Span ID = C。</li>
+<li>第六步：Service 2 开始发送这个请求给 Service 3，Trace ID 不变，Span ID = D，被称作 Client Send，即客户端发送请求。</li>
+<li>第七步：Service 3 接收到这个请求，Span ID = D，被称作 Server Receive。</li>
+<li>第八步：Service 3 开始处理这个请求，处理完成后 Span ID = E。</li>
+<li>第九步：Service 3 开始发送响应给 Service 2，Span ID = D，被称作 Server Send，即服务端发送响应。</li>
+<li>第十步：Service 2 收到 Service 3 的响应，Span ID = D，被称作 Client Receive，即调用方接收响应。</li>
+<li>第十一步：Service 1 收到 Service 2 的响应，Span ID = B，和第三步的 Span ID 相同，被称作 Client Receive，即客户端接收响应。</li>
+<li>第十二步：Service 1 处理完响应，Span ID = A，和第二步的 Span ID 相同。</li>
 <li>第十三步：Service 1 开始向用户端返回响应，Span ID = A。</li>
 <li>Service 3 向 Service 4 发送请求的过程与上面的流程相似（对应的 Span ID 是 F 和 G），可以参照前文第六步到第十步。</li>
 </ul>
+<p><img src="/post-assets/Lq63Gr95h/02-span-annotations.svg" alt="一次跨服务调用的时间线：cs、sr、ss、cr 四个注解出现的位置"></p>
 <p><strong>把以上的相同颜色的步骤简化为下面的链路追踪图：</strong></p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1658669296206.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1658669296206.png" alt="简化后的链路追踪图：Span A 到 Span G 以及各自的 Parent ID" loading="lazy"></figure>
 <ul>
 <li>第一个节点：Span ID = A，Parent ID = null，Service 1 接收到请求。</li>
 <li>第二个节点：Span ID = B，Parent ID= A，Service 1 发送请求到 Service 2 返回响应给Service 1 的过程。</li>
@@ -175,8 +176,9 @@
 <li>第六个节点：Span ID = F，Parent ID= C，Service 3 发送请求到 Service 4 返回响应给 Service 3 的过程。</li>
 <li>第七个节点：Span ID = G，Parent ID= F，Service 4 的中间解决过程。</li>
 </ul>
+<p><img src="/post-assets/Lq63Gr95h/01-trace-span-table.svg" alt="同一个 Trace ID 串起所有 Span，Parent ID 标明父子关系"></p>
 <p>通过 Parent ID 就可找到父节点，整个链路即可以进行跟踪追溯了。</p>
-<p>备注：核心原理部分内容来源：cnblogs.com/jackson0714/p/sleuth_zipkin.html</p>
+<p>备注：核心原理部分内容参考 <a href="https://www.cnblogs.com/jackson0714/p/sleuth_zipkin.html" target="_blank" rel="noopener">jackson0714 的博客</a>。</p>
 <h2 id="解决方案">解决方案</h2>
 <p>目前，行业内比较成熟的分布式链路追踪技术解决方案如下所示。</p>
 <table>
@@ -213,10 +215,18 @@
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%88%86%E5%B8%83%E5%BC%8F%E9%93%BE%E8%B7%AF%E8%BF%BD%E8%B8%AA">分布式链路追踪</a>
 <ul>
-<li><a href="#%E5%88%86%E5%B8%83%E5%BC%8F%E9%93%BE%E8%B7%AF%E8%BF%BD%E8%B8%AA">分布式链路追踪</a></li>
-<li><a href="#%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86">核心原理</a></li>
-<li><a href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88">解决方案</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86">核心原理</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88">解决方案</a>
+<ul>
 </ul>
 </li>
 </ul>
