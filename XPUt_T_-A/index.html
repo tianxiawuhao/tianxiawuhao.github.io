@@ -222,7 +222,7 @@ java -Dserver.port=8080 -Dcsp.sentinel.dashboard.server=localhost:8080 -Dproject
 <ul>
 <li>在 application.yml 中增加 sentinel 的数据源配置：</li>
 </ul>
-<pre><code class="language-xml">spring:
+<pre><code class="language-yaml">spring:
   application:
     name: orderservice
   cloud:
@@ -427,7 +427,8 @@ public class UserClientFallbackFactory implements FallbackFactory&lt;UserClient&
 <p>熔断时长为 5 秒；</p>
 <p><strong>5秒后，进入HALF-OPEN状态，放行一次请求做测试</strong>，如果OK，则断路器重新CLOSE闭合，开始正常工作！<br>
 <img src="/post-images/1658666926145.png" alt="" loading="lazy"></p>
-<p><strong>4、授权规则（对请求的来源做控制）</strong></p>
+<p><img src="/post-assets/XPUt_T_-A/01-circuit-breaker-states.svg" alt="Sentinel 断路器 CLOSED、OPEN、HALF-OPEN 三态转换示意图"></p>
+<h3 id="4-授权规则对请求的来源做控制">4 授权规则（对请求的来源做控制）</h3>
 <p>有时候，我们担心由于服务暴露，导致有些请求会越过Gateway，而直接访问我们的服务，这时候，我们就可以通过Sentinel授权只允许从Gateway过来的请求访问我们的服务。</p>
 <figure data-type="image" tabindex="10"><img src="/post-images/1658666936655.png" alt="" loading="lazy"></figure>
 <p>在gateway中通过filter为经过的请求增加一个header值 origin = gateway：</p>
@@ -458,7 +459,7 @@ public class HeaderOriginParser implements RequestOriginParser {
         // 1.获取请求头
         String origin = request.getHeader(&quot;origin&quot;);
         // 2.非空判断
-        if (StringUtils.isEmpty(origin)) {
+        if (!StringUtils.hasText(origin)) {
             origin = &quot;blank&quot;;
         }
         return origin;
@@ -494,7 +495,7 @@ public class SentinelExceptionHandler implements BlockExceptionHandler {
  
         response.setContentType(&quot;application/json;charset=utf-8&quot;);
         response.setStatus(status);
-        response.getWriter().println(&quot;{\&quot;msg\&quot;: &quot; + msg + &quot;, \&quot;status\&quot;: &quot; + status + &quot;}&quot;);
+        response.getWriter().println(&quot;{\&quot;msg\&quot;:\&quot;&quot; + msg + &quot;\&quot;,\&quot;status\&quot;:&quot; + status + &quot;}&quot;);
     }
 }
 </code></pre>
@@ -509,17 +510,15 @@ public class SentinelExceptionHandler implements BlockExceptionHandler {
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E4%B8%80-sentinel%E6%98%AF%E4%BB%80%E4%B9%88%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%BC%95%E5%85%A5sentinel">一 Sentinel 是什么，为什么要引入 Sentinel</a>
+<a href="#%E4%B8%80-sentinel%E6%98%AF%E4%BB%80%E4%B9%88%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%BC%95%E5%85%A5sentinel">一 Sentinel 是什么，为什么要引入 Sentinel</a>
 <ul>
 <li><a href="#1-%E4%BB%80%E4%B9%88%E6%98%AF%E6%9C%8D%E5%8A%A1%E9%9B%AA%E5%B4%A9">1 什么是“服务雪崩”？</a></li>
 <li><a href="#2-%E6%9C%8D%E5%8A%A1%E9%9B%AA%E5%B4%A9%E5%A6%82%E4%BD%95%E8%A7%A3%E5%86%B3">2 “服务雪崩”如何解决？</a></li>
 <li><a href="#3-%E9%98%BF%E9%87%8C%E7%9A%84sentinel%E5%92%8C%E7%BD%91%E9%A3%9E%E7%9A%84hystrix%E7%9A%84%E5%AF%B9%E6%AF%94">3 阿里的Sentinel和网飞的Hystrix的对比？</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-sentinel%E7%9A%84%E7%AE%80%E5%8D%95%E4%BD%BF%E7%94%A8%E5%92%8C">二 Sentinel 的简单使用</a>
+<li>
+<a href="#%E4%BA%8C-sentinel%E7%9A%84%E7%AE%80%E5%8D%95%E4%BD%BF%E7%94%A8%E5%92%8C">二 Sentinel 的简单使用</a>
 <ul>
 <li><a href="#1-%E5%9C%A8spring-cloud-alibaba%E6%A1%86%E6%9E%B6%E4%B8%AD%E7%9A%84%E7%AE%80%E5%8D%95%E4%BD%BF%E7%94%A8sentinel">1 在spring-cloud-alibaba框架中的简单使用Sentinel</a></li>
 <li><a href="#2-%E5%BC%80%E5%90%AFsentinel%E5%AF%B9feign%E8%B0%83%E7%94%A8%E7%9A%84%E6%94%AF%E6%8C%81">2 开启Sentinel对Feign调用的支持</a></li>
@@ -527,21 +526,20 @@ public class SentinelExceptionHandler implements BlockExceptionHandler {
 <li><a href="#4-sentinel%E7%9A%84%E4%B8%89%E7%A7%8D%E8%A7%84%E5%88%99%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86%E6%A8%A1%E5%BC%8F">4 Sentinel的三种规则配置管理模式</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-sentinel-dashboard%E4%B8%AD%E5%BE%97%E5%90%84%E7%A7%8D%E8%A7%84%E5%88%99%E9%85%8D%E7%BD%AE%E4%B8%8E%E8%A7%A3%E8%AF%BB">三 Sentinel Dashboard中得各种规则配置与解读</a>
+<li>
+<a href="#%E4%B8%89-sentinel-dashboard%E4%B8%AD%E5%BE%97%E5%90%84%E7%A7%8D%E8%A7%84%E5%88%99%E9%85%8D%E7%BD%AE%E4%B8%8E%E8%A7%A3%E8%AF%BB">三 Sentinel Dashboard中得各种规则配置与解读</a>
 <ul>
 <li><a href="#1-%E6%B5%81%E6%8E%A7%E8%A7%84%E5%88%99%E8%A7%81%E5%90%8D%E7%9F%A5%E6%84%8F%E6%B5%81%E9%87%8F%E6%8E%A7%E5%88%B6">1 流控规则：见名知意，流量控制</a></li>
 <li><a href="#2-%E7%83%AD%E7%82%B9%E8%A7%84%E5%88%99%E7%83%AD%E7%82%B9%E9%99%90%E6%B5%81%E8%A7%84%E5%88%99-%E7%89%B9%E6%AE%8A%E7%9A%84%E6%B5%81%E6%8E%A7%E8%A7%84%E5%88%99">2 热点规则（热点限流规则）—— 特殊的流控规则</a></li>
 <li><a href="#3-%E9%99%8D%E7%BA%A7%E8%A7%84%E5%88%99%E7%86%94%E6%96%AD%E9%99%8D%E7%BA%A7">3 降级规则（熔断降级）</a></li>
+<li><a href="#4-%E6%8E%88%E6%9D%83%E8%A7%84%E5%88%99%E5%AF%B9%E8%AF%B7%E6%B1%82%E7%9A%84%E6%9D%A5%E6%BA%90%E5%81%9A%E6%8E%A7%E5%88%B6">4 授权规则（对请求的来源做控制）</a></li>
 </ul>
 </li>
-<li><a href="#%E5%9B%9B-%E8%A1%A5%E5%85%85%E5%85%B6%E4%BB%96%E7%9F%A5%E8%AF%86%E7%82%B9">四 补充其他知识点</a>
+<li>
+<a href="#%E5%9B%9B-%E8%A1%A5%E5%85%85%E5%85%B6%E4%BB%96%E7%9F%A5%E8%AF%86%E7%82%B9">四 补充其他知识点</a>
 <ul>
 <li><a href="#1-%E9%BB%98%E8%AE%A4%E6%83%85%E5%86%B5%E4%B8%8B%E5%8F%91%E7%94%9F%E9%99%90%E6%B5%81-%E6%8E%88%E6%9D%83%E6%8B%A6%E6%88%AA%E6%97%B6%E4%BC%9A%E7%9B%B4%E6%8E%A5%E6%8A%9B%E5%87%BA%E5%BC%82%E5%B8%B8%E5%88%B0%E8%B0%83%E7%94%A8%E6%96%B9%E5%BE%88%E4%B8%8D%E5%8F%8B%E5%A5%BD%E6%9C%80%E5%A5%BD%E8%A6%81%E8%87%AA%E5%AE%9A%E4%B9%89%E5%BC%82%E5%B8%B8%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C">1 默认情况下，发生限流、授权拦截时，会直接抛出异常到调用方，很不友好，最好要自定义异常返回结果</a></li>
 <li><a href="#2-%E4%B8%8D%E5%90%8C%E7%9A%84%E6%B5%81%E6%8E%A7%E8%A7%84%E5%88%99%E4%BD%BF%E7%94%A8%E7%9A%84%E6%8A%80%E6%9C%AF%E5%AE%9E%E7%8E%B0%E6%96%B9%E6%A1%88%E4%B8%8D%E4%B8%80%E6%A0%B7">2 不同的流控规则，使用的技术实现方案不一样</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
