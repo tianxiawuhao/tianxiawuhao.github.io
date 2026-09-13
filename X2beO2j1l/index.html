@@ -174,26 +174,28 @@ Buffer 就是一个内存块 ， 底层是有一个数组<br>
 <h3 id="32-常用buffer子类一览">3.2. 常用Buffer子类一览</h3>
 <blockquote>
 <p>ByteBuffer，存储字节数据到缓冲区 =<mark>最常用</mark>=<br>
-ShortBuffer，存储字符串数据到缓冲区<br>
+ShortBuffer，存储短整型数据到缓冲区<br>
 CharBuffer，存储字符数据到缓冲区<br>
 IntBuffer，存储整数数据到缓冲区<br>
 LongBuffer，存储长整型数据到缓冲区<br>
-DoubleBuffer，存储小数到缓冲区<br>
-FloatBuffer，存储小数到缓冲区</p>
+FloatBuffer，存储单精度小数到缓冲区<br>
+DoubleBuffer，存储双精度小数到缓冲区</p>
 </blockquote>
+<p>除 boolean 外，每种基本类型都有一个对应的 Buffer 实现；网络编程中真正用到的基本只有 ByteBuffer，因为 SocketChannel 的 read/write 只接受 ByteBuffer，字节序可用 <code>order(ByteOrder.BIG_ENDIAN/LITTLE_ENDIAN)</code> 指定（默认大端）。</p>
 <h3 id="33-buffer常用方法">3.3. buffer常用方法</h3>
 <pre><code class="language-java">public abstract class Buffer { 
 	//JDK1.4时，引入的api 
-	public final int capacity( )// ★ 返回此缓冲区的容量 
-	public final int position( )// ★ 返回此缓冲区的位置 
+	public final int capacity( )// ★ 返回此缓冲区的容量，创建后不可变 
+	public final int position( )// ★ 返回此缓冲区的位置，即「下一个要被读/写的元素下标」 
 	public final Buffer position (int newPositio)// ★ 设置此缓冲区的位置 
-	public final int limit( )// ★ 返回此缓冲区的限制 
+	public final int limit( )// ★ 返回此缓冲区的限制，即「第一个不应该被读/写的元素下标」 
 	public final Buffer limit (int newLimit)// ★ 设置此缓冲区的限制 
 	public final Buffer mark( )//在此缓冲区的位置设置标记 
 	public final Buffer reset( )//将此缓冲区的位置重置为以前标记的位置 
-	public final Buffer clear( )// ★ 清除此缓冲区, 即将各个标记恢复到初始状态，但是数据并没有真正擦除, 后面操作会覆盖 
+	public final Buffer clear( )// ★ 复位缓冲区：position=0，limit=capacity，mark 被丢弃；数据并没有真正擦除, 后面操作会覆盖 
 	public final Buffer flip( )// ★ 反转此缓冲区 
-	public final Buffer rewind( )//重绕此缓冲区 
+	public final Buffer rewind( )//重绕此缓冲区：position=0，limit 不变，mark 被丢弃 
+	public abstract Buffer compact( )// ★ 压缩此缓冲区：把 position..limit 之间的剩余数据复制到头部，然后转入写模式 
 	public final int remaining( )//返回当前位置与限制之间的元素数 
 	public final boolean hasRemaining( )// ★ 告知在当前位置和限制之间是否有元素 
 	public abstract boolean isReadOnly( );// ★ 告知此缓冲区是否为只读缓冲区 
@@ -204,13 +206,21 @@ FloatBuffer，存储小数到缓冲区</p>
     public abstract boolean isDirect();//告知此缓冲区是否为直接缓冲区 
 }
 </code></pre>
+<p>这三个指针必须始终满足 <code>0 &lt;= mark &lt;= position &lt;= limit &lt;= capacity</code>，flip/clear/compact/rewind 干的事就是在这条约束下搬动它们：</p>
+<p><img src="/post-assets/X2beO2j1l/02-buffer-pointer-changes.svg" alt="Buffer 的 position/limit/capacity 在 flip、读取、clear、compact、rewind 前后的变化对比"></p>
+<ul>
+<li><strong>写完后想读出来</strong>：必须 <code>flip()</code>，否则 limit 仍是 capacity，会把缓冲区尾部没写过的填充字节也读出来（典型现象是打印出一串乱码或空格，这就是「忘记 flip」这个头号坑）。</li>
+<li><strong>读完想复用这个 Buffer</strong>：用 <code>clear()</code> 整体重写；如果还有没处理完的数据，用 <code>compact()</code> 把剩余数据挪到头部再继续写，不会丢数据。</li>
+<li><code>rewind()</code> 只把 position 归零、limit 不动，用于把同一份数据重读一遍；<code>mark()/reset()</code> 用于中途打点、回退到标记处。</li>
+<li>网络读写的推荐循环是：<code>read()</code> 后 <code>flip()</code> → 消费 → <code>compact()</code>（一次没读完）或 <code>clear()</code>（已读完）。</li>
+</ul>
 <h3 id="34-通道channel">3.4. 通道(Channel)</h3>
 <p><em>1：基本介绍</em><br>
 NIO的通道类似于流，但有些区别如下：</p>
 <blockquote>
-<p>• 通道可以同时进行读写，而流只能读或者只能写<br>
-• 通道可以实现异步读写数据<br>
-• 通道可以从缓冲读数据，也可以写数据到缓冲:</p>
+<p>• 通道可以同时进行读写，而流只能读或者只能写（单向）<br>
+• 通道可以配合 Selector 实现非阻塞读写（这里的「异步」指不阻塞线程的多路复用；真正的异步 I/O 是 AIO 的 AsynchronousChannel）<br>
+• 通道的数据总是先读到 Buffer、或从 Buffer 写出，不能直接对 byte[] 操作</p>
 </blockquote>
 <p>FileChannel主要用来对本地文件进行 IO 操作，常见的方法有</p>
 <pre><code class="language-java">public int read(ByteBuffer dst) ，从通道读取数据并放到缓冲区中
@@ -218,16 +228,32 @@ public int write(ByteBuffer src) ，把缓冲区的数据写到通道中
 public long transferFrom(ReadableByteChannel src, long position, long count)，从目标通道 中复制数据到当前通道
 public long transferTo(long position, long count, WritableByteChannel target)，把数据从当 前通道复制给目标通道
 </code></pre>
-<p>首先channel与文件联立，判断是输入输出流看channel与buffer之间的关系</p>
+<p>使用时的判断方法：先看 Channel 与文件/网络如何关联，再看数据是从 Channel 进 Buffer（读）还是从 Buffer 出 Channel（写）。</p>
+<p>其中 <code>transferTo</code> / <code>transferFrom</code> 就是常说的<strong>零拷贝</strong>：它们直接把文件描述符和 Socket 描述符对接，数据不经过用户态缓冲区，省掉「内核缓冲区 → 用户缓冲区 → Socket 缓冲区」中的两次拷贝和两次上下文切换。</p>
+<pre><code class="language-java">// 零拷贝示例：把本地文件直接推给客户端，中间不出现 byte[] / ByteBuffer
+try (FileChannel fileChannel = FileChannel.open(Paths.get(&quot;big.zip&quot;), StandardOpenOption.READ);
+     SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress(&quot;127.0.0.1&quot;, 6666))) {
+    long total = fileChannel.size();
+    long position = 0;
+    while (position &lt; total) {   // transferTo 不保证一次传完，必须循环
+        long written = fileChannel.transferTo(position, total - position, socketChannel);
+        if (written &lt;= 0) {
+            break;
+        }
+        position += written;
+    }
+}
+</code></pre>
+<p>另外 <code>FileChannel.map()</code> 返回的 MappedByteBuffer（mmap）也能避免显式的 read/write 拷贝：它把文件的一段直接映射成堆外内存，读写这块内存就等于读写文件，适合大文件随机访问；代价是映射关系要等 GC 才解除，且映射期间文件被外部进程修改会有不确定性。</p>
 <h3 id="35-关于buffer-和-channel的注意事项和细节">3.5. 关于Buffer 和 Channel的注意事项和细节</h3>
-<p>1：ByteBuffer 支持类型化的 put 和 get, put 放入的是什么数据类型，get 就应该使用相应的数据类型来取出（取出的顺序也要和存入的顺序一致），否则可能有 BufferUnderflowException 异常。</p>
-<p>2： 可以将一个普通Buffer 转成只读Buffer，如果对一个只读类型的 Buffer 进行写操作会报错 ReadOnlyBufferException</p>
+<p>1. ByteBuffer 支持类型化的 put 和 get, put 放入的是什么数据类型，get 就应该使用相应的数据类型来取出（取出的顺序也要和存入的顺序一致），否则可能有 BufferUnderflowException 异常。</p>
+<p>2. 可以将一个普通 Buffer 转成只读 Buffer，如果对一个只读类型的 Buffer 进行写操作会报错 ReadOnlyBufferException</p>
 <pre><code class="language-java">ByteBuffer buffer = ByteBuffer.allocate(3);
 ByteBuffer byteBuffer = buffer.asReadOnlyBuffer();
 System.out.println(buffer);
 System.out.println(byteBuffer);
 </code></pre>
-<p>3：NIO 还提供了 MappedByteBuffer， 可以让文件直接在内存（堆外的内存）中进行修改， 而如何同步到文件由NIO 来完成.</p>
+<p>3. NIO 还提供了 MappedByteBuffer， 可以让文件直接在内存（堆外的内存）中进行修改， 而如何同步到文件由NIO 来完成.</p>
 <pre><code class="language-java">/* 说明
     1. MappedByteBuffer 可以让文件直接在内存中修改，这样操作系统并不需要拷贝一次
     2. MappedByteBuffer 实际类型是 DirectByteBuffer
@@ -246,8 +272,16 @@ public static void main(String[] args) throws Exception {
    channel.close();
 }
 </code></pre>
-<p>4：前面我们讲的读写操作，都是通过一个Buffer 完成的，NIO 还支持 通过多个 Buffer (即 Buffer 数组) 完成读写操作，即 Scattering 和 Gathering ，遵循 依次写入，依次读取。</p>
-<pre><code class="language-java">public static void main(String[] args) throws Exception {
+<p>4. 前面我们讲的读写操作，都是通过一个Buffer 完成的，NIO 还支持 通过多个 Buffer (即 Buffer 数组) 完成读写操作，即 Scattering 和 Gathering ，遵循 依次写入，依次读取。</p>
+<pre><code class="language-java">import java.net.InetSocketAddress;
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.Arrays;
+
+public class ScatteringGatheringServer {
+  public static void main(String[] args) throws Exception {
     // 使用 ServerSocketChannel 和 InetSocketAddress 网络
     ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
     InetSocketAddress inetSocketAddress = new InetSocketAddress(7000);
@@ -293,17 +327,20 @@ public static void main(String[] args) throws Exception {
         System.out.println(&quot;{byteRead: &quot;+byteRead+&quot;, byteWrite: &quot;+byteWrite+&quot;}&quot;);
 
     }
+  }
 }
 </code></pre>
 <h3 id="36-selector选择器">3.6. Selector选择器</h3>
-<h4 id="1-基本介绍">1. 基本介绍</h4>
+<h4 id="36-1-基本介绍">3.6.1. 基本介绍</h4>
 <blockquote>
-<p>1: Java 的 NIO，用非阻塞的 IO 方式。可以用一个线程，处理多个的客户端连接，就会使用到Selector(选择器)<br>
-2: Selector 能够检测多个注册的通道上是否有事件发生(注意:多个Channel以事件的方式可以注册到同一个Selector)，如果有事件发生，便获取事件然 后针对每个事件进行相应的处理。这样就可以只用一个单线程去管理多个通道，也就是管理多个连接和请求。<br>
-3: 只有在 连接/通道 真正有读写事件发生时，才会进行读写，就大大地减少 了系统开销，并且不必为每个连接都创建一个线程，不用去维护多个线程<br>
-4: 避免了多线程之间的上下文切换导致的开销</p>
+<p>1. Java 的 NIO，用非阻塞的 IO 方式。可以用一个线程，处理多个的客户端连接，就会使用到Selector(选择器)<br>
+2. Selector 能够检测多个注册的通道上是否有事件发生(注意:多个Channel以事件的方式可以注册到同一个Selector)，如果有事件发生，便获取事件然 后针对每个事件进行相应的处理。这样就可以只用一个单线程去管理多个通道，也就是管理多个连接和请求。<br>
+3. 只有在 连接/通道 真正有读写事件发生时，才会进行读写，就大大地减少 了系统开销，并且不必为每个连接都创建一个线程，不用去维护多个线程<br>
+4. 避免了多线程之间的上下文切换导致的开销</p>
 </blockquote>
-<h4 id="2-selector选择器">2. Selector(选择器)</h4>
+<h4 id="36-2-selector选择器">3.6.2. Selector(选择器)</h4>
+<p><img src="/post-assets/X2beO2j1l/01-nio-components-selector-loop.svg" alt="Selector 事件循环：一个线程轮询多个注册通道，仅对就绪的事件做读写"></p>
+<p>如图所示，Selector 的循环只有三步：<code>select()</code> 阻塞等待 → 取出就绪的 <code>selectedKeys()</code> → 逐个处理并 <strong>必须</strong> <code>iterator.remove()</code>，否则同一个 key 会在下一轮被重复处理。</p>
 <p>示意图</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1656504430406.png" alt="" loading="lazy"></figure>
 <p>说明:</p>
@@ -314,7 +351,7 @@ public static void main(String[] args) throws Exception {
 由于读写操作都是非阻塞的，这就可以充分提升 IO 线程的运行效率，避免由于频繁 I/O 阻塞导致的线程 挂起。<br>
 一个 I/O 线程可以并发处理 N 个客户端连接和读写操作，这从根本上解决了传统同步阻塞 I/O 一连接一线 程模型，架构的性能、弹性伸缩能力和可靠性都得到 了极大的提升。</p>
 </blockquote>
-<h4 id="3-selector类相关方法">3. Selector类相关方法</h4>
+<h4 id="36-3-selector类相关方法">3.6.3. Selector类相关方法</h4>
 <p>Selector 类是一个抽象类, 常用方法和说明如下</p>
 <pre><code class="language-java">public abstract class Selector implements Closeable { 
 	public static Selector open();//得到一个选择器对象 
@@ -322,25 +359,63 @@ public static void main(String[] args) throws Exception {
 	public Set&lt;SelectionKey&gt; selectedKeys();//从内部集合中得 到所有的 SelectionKey 
 }
 </code></pre>
-<h4 id="4-注意事项">4. 注意事项</h4>
-<p>NIO 中的 ServerSocketChannel 功能类似 ServerSocket，SocketChannel 功能类似 Socket</p>
+<h4 id="36-4-注意事项">3.6.4. 注意事项</h4>
+<p>NIO 中的 ServerSocketChannel 功能类似 ServerSocket，SocketChannel 功能类似 Socket；前者只能注册 OP_ACCEPT，后者可以注册 OP_READ / OP_WRITE / OP_CONNECT。</p>
 <p>selector 相关方法说明</p>
-<pre><code class="language-java">selector.select()//阻塞
-selector.select(1000);//阻塞1000毫秒，在1000毫秒后返回
-selector.wakeup();//唤醒
-selector selector.selectNow();//不阻塞，立马返还
+<pre><code class="language-java">int select();          // 阻塞，直到至少有一个通道就绪、被 wakeup() 唤醒或线程被中断
+int select(long ms);   // 最多阻塞 ms 毫秒，超时返回 0
+int selectNow();       // 不阻塞，立即返回就绪的通道数（可能是 0）
+Selector wakeup();     // 唤醒阻塞在 select() 上的线程，让本次 select() 立即返回
+void close();          // 关闭选择器，释放其占用的资源
 </code></pre>
+<p><strong>select() 返回 0 不等于出错</strong>：它可能只是超时，也可能是「空轮询」（spurious wakeup）——明明没有事件，select() 却反复立即返回 0，把循环变成 100% CPU 的忙等。JDK 在 Linux 上默认使用 epoll 的水平触发（LT）：只要缓冲区里还有数据没读完，下一轮 select() 仍会报告该通道可读，所以一次读不完也不会丢事件，代价是每轮都要真正消费数据。Netty 处理空轮询的做法是统计连续空转次数，超过阈值（默认 512）就重建 Selector，把通道摘出来重新注册一遍。</p>
+<pre><code class="language-java">// 健壮的 select 循环：区分超时/空轮询，并把线程中断当作退出信号
+int emptyCount = 0;
+while (!Thread.currentThread().isInterrupted()) {
+    int ready = selector.select(1000);
+    if (ready == 0) {
+        if (++emptyCount &gt; 512) {  // 连续空转过多，怀疑触发空轮询 bug
+            emptyCount = 0;        // 生产代码在此重建 Selector（Netty 的做法）
+        }
+        continue;
+    }
+    emptyCount = 0;
+    Iterator&lt;SelectionKey&gt; it = selector.selectedKeys().iterator();
+    while (it.hasNext()) {
+        SelectionKey key = it.next();
+        it.remove();               // 必须先移除，否则下一轮会重复处理
+        if (!key.isValid()) {
+            continue;
+        }
+        // ... 按 isAcceptable / isReadable / isWritable 分发处理
+    }
+}
+</code></pre>
+<p><strong>水平触发与边缘触发</strong>：Linux 的 epoll 支持 LT 和 ET 两种模式。ET（边缘触发）只在状态「变化」的那一刻通知一次，因此必须一次把数据读干净（一直 read 到返回 -1 / 暂时无数据），否则残留数据永远等不到下一次通知——这也是 Netty 提供 <code>EpollEventLoopGroup</code> 与 <code>EpollChannelOption</code>（用 <code>Epoll.isAvailable()</code> 判断是否可用）的原因。Java 标准 NIO 的 Selector 固定为 LT，写业务代码时不需要自己处理 ET。</p>
 <h3 id="37-nio-非阻塞-网络编程原理分析">3.7. NIO 非阻塞 网络编程原理分析</h3>
 <p>NIO 非阻塞网络编程相关的（Selector、SelectionKey、ServerSocketChannel 和 SocketChannel）关系梳理图</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1656504451263.png" alt="" loading="lazy"></figure>
 <p>说明：</p>
 <blockquote>
-<p>ServerSocketChannel 需要在selector注册，一旦有register事件（客户端一旦连接）就会建立SocketChannel<br>
-客户端连接时需要会通过ServerSocketChannel 在selector注册，一旦有读写事件，反向获取通道channel，把channel数据读出到buffer<br>
-事件发生通过SelectorKey来判断</p>
+<p>ServerSocketChannel 需要先注册到 selector 并关注 OP_ACCEPT，一旦有客户端连接，accept() 就会得到对应的 SocketChannel<br>
+客户端连接时会通过 ServerSocketChannel 在 selector 上完成注册，之后一旦该连接可读，就由 SelectionKey 反向拿到对应的 channel，把数据读进 buffer<br>
+到底发生了什么事件，由 SelectionKey 的就绪位来判断（isAcceptable / isReadable / isWritable）</p>
 </blockquote>
+<p><strong>两个必须注意的细节</strong>：<code>FileChannel.transferTo()</code> 只在源通道是阻塞模式或目标通道是非阻塞但内核缓冲区足够大时，才能保证一次传完全部字节；对非阻塞 SocketChannel 必须像前面的零拷贝示例那样循环，直到返回值 &lt;= 0 为止。<code>OP_WRITE</code> 则几乎总是就绪的——只要内核发送缓冲区还有空间，它就会一直报告可写——所以绝不能一开始就注册 OP_WRITE，否则 select() 会永远立即返回，把 CPU 跑满。正确做法是发送缓冲区写满（<code>write()</code> 返回 0）时才用 <code>interestOps()</code> 加上 OP_WRITE，剩下的数据写完后再取消。</p>
 <p><strong>代码演示：server端</strong></p>
-<pre><code class="language-java">public static void main(String[] args) throws Exception {
+<pre><code class="language-java">import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+import java.util.Set;
+
+public class NioServer {
+
+    public static void main(String[] args) throws Exception {
     //服务器端创建ServerSocketChannel -&gt;ServerSocketChannel
     ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();   
 	//得到一个Selector对象
@@ -385,19 +460,33 @@ selector selector.selectNow();//不阻塞，立马返还
             if(key.isReadable()){//发生OP_READ
                 //通过key 反向获取对应的channel
                 SocketChannel channel = (SocketChannel) key.channel();
-                //获取改channel关联的buffer
+                //获取该channel关联的buffer
                 ByteBuffer buffer = (ByteBuffer) key.attachment();
-                channel.read(buffer);
-                System.out.println(&quot;form client &quot;+ new String(buffer.array()));
+                int read = channel.read(buffer);
+                if(read &gt; 0){
+                    // 先 flip 切到读模式，再按 position/limit 转字符串，绝不能直接用 array()
+                    buffer.flip();
+                    String msg = StandardCharsets.UTF_8.decode(buffer).toString();
+                    System.out.println(&quot;form client &quot; + msg);
+                    // 本轮消息已消费完，复位以便下次 read 继续写入
+                    buffer.clear();
+                }else if(read == -1){
+                    // 读到 -1 表示对端正常关闭，必须注销 key 并关闭通道
+                    System.out.println(channel.getRemoteAddress() + &quot; 离线了&quot;);
+                    key.cancel();
+                    channel.close();
+                }
             }
-            //手动从集合中移动当前的selectionKey,防止重复操作
+            //手动从集合中移除当前的selectionKey,防止重复操作
             keyIterator.remove();
 
         }
 
     }
+    }
 }
 </code></pre>
+<p>这段代码里有两处最容易写错的地方：一是 <code>read()</code> 之后必须 <code>flip()</code>，并用 position/limit（而不是 <code>array()</code> 整个数组）来构造字符串，否则每次都会打印出上一次的残留数据和一堆空字符；二是 <code>read()</code> 返回 -1 表示对端关闭，此时要 <code>key.cancel()</code> + <code>channel.close()</code>，否则会一直收到可读事件。示例为了简短每次只处理一条消息（Buffer 用 <code>clear()</code> 复位），生产代码应使用 <code>compact()</code> 处理粘包/半包，或像 Netty 那样引入解码器。</p>
 <p><strong>client端：</strong></p>
 <pre><code class="language-java">public static void main(String[] args) throws Exception {
     //得到一个网络通道
@@ -437,6 +526,17 @@ public static final int OP_WRITE = 1 &lt;&lt; 2;<br>
 public static final int OP_CONNECT = 1 &lt;&lt; 3;<br>
 public static final int OP_ACCEPT = 1 &lt;&lt; 4;</p>
 </blockquote>
+<p>四个常量按位定义，可以用 <code>|</code> 组合成一个 key 同时关心多个事件，也可以用 <code>interestOps()</code> 在运行期增删关注的事件；每次 <code>select()</code> 返回后，key 上的就绪位表示「这一轮发生了什么」，而 <code>interestOps()</code> 表示「我关心什么」，两者不要混淆。</p>
+<pre><code class="language-java">// OP_WRITE 的正确用法：写不出去时才关注它，写完立刻取消
+if (buffer.hasRemaining()) {
+    channel.write(buffer);                   // 非阻塞，可能只写出去一部分
+    if (buffer.hasRemaining()) {             // 内核发送缓冲区满了
+        key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
+    }
+} else {
+    key.interestOps(key.interestOps() &amp; ~SelectionKey.OP_WRITE);
+}
+</code></pre>
 <p>SelectionKey相关方法</p>
 <pre><code class="language-java">public abstract class SelectionKey { 
 	public abstract Selector selector();//得到与之关联的 Selector 对象 
@@ -473,6 +573,17 @@ public static final int OP_ACCEPT = 1 &lt;&lt; 4;</p>
 	public final void close();//关闭通道 
 }
 </code></pre>
+<h4 id="3101-nio-常见坑小结">3.10.1. NIO 常见坑小结</h4>
+<blockquote>
+<p><strong>忘记 flip</strong>：写完就读、或读完又直接写同一个 Buffer，都会得到错误的数据。记住「写完 flip 再读，读完 clear/compact 再写」。<br>
+<strong>把 array() 当作有效数据</strong>：<code>array()</code> 返回的是整个底层数组，包含未写入的残留字节和长度不定的有效数据，必须用 <code>position()</code>/<code>limit()</code> 或 <code>flip()</code> 后再解码。<br>
+<strong>误用 OP_WRITE</strong>：前面已说明，注册 OP_WRITE 会导致 select() 永远立即返回，把 CPU 跑满。<br>
+<strong>忘记 iterator.remove()</strong>：selectedKeys() 返回的是 Selector 内部集合的视图，不手动移除就会在下一轮重复处理同一个事件。<br>
+<strong>select() 空轮询</strong>：见 3.6.4 节，Linux 上偶发的 spurious wakeup 需要用重建 Selector 的方式兜底。<br>
+<strong>Buffer 复用与并发</strong>：Buffer 内部只有一组 position/limit/mark，不是线程安全的；同一个 Buffer（尤其是 channel 的 attachment）绝不能被多个线程同时读写，否则会出现数据错乱。多线程下应让「一个 Selector + 一组 Channel/Buffer」只属于一个 I/O 线程，这也是 Netty EventLoop 的设计前提——一个 Channel 只绑定一个 EventLoop 线程。<br>
+<strong>直接内存与堆内存</strong>：<code>ByteBuffer.allocate()</code> 分配在 JVM 堆上，创建快但做 Socket 读写时多一次「堆内 → 堆外」的拷贝；<code>ByteBuffer.allocateDirect()</code> 分配在堆外（直接内存），读写可以少一次拷贝，但创建/销毁代价高、不受堆内存参数约束，要用 <code>-XX:MaxDirectMemorySize</code> 限制并通过池化复用（Netty 的 ByteBuf 池就是干这个的）。<br>
+<strong>NIO 与 BIO/AIO 的取舍</strong>：BIO 一连接一线程，连接少、逻辑简单时最合适；NIO 一线程多连接，适合连接多、单次数据量不大的场景；AIO 异步非阻塞，适合连接多且操作重的场景，但 Linux 上实现和生态都不如 NIO 成熟，实际生产中以 NIO（Netty）为主。</p>
+</blockquote>
 <h3 id="311-nio-网络编程应用实例-群聊系统">3.11. NIO 网络编程应用实例-群聊系统</h3>
 <blockquote>
 <p>要求:<br>
@@ -536,7 +647,7 @@ public class GroupChatServer {
                         else if(key.isReadable()){//read事件
                             readDate(key);
                         }
-                        //手动从集合中移动当前的selectionKey,防止重复操作
+                        //手动从集合中移除当前的selectionKey,防止重复操作
                         iterator.remove();
                     }
 
@@ -562,10 +673,11 @@ public class GroupChatServer {
             ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
             int count = socketChannel.read(byteBuffer);
             if(count&gt;0){
-                //buffer的数据转成字符串
-                String msg = new String(byteBuffer.array());
+                // 先 flip 切到读模式，再按 position/limit 解码，不能直接用 array()
+                byteBuffer.flip();
+                String msg = java.nio.charset.StandardCharsets.UTF_8.decode(byteBuffer).toString();
                 //输出msg
-                System.out.println(&quot;form client&quot;+msg);
+                System.out.println(&quot;form client&quot; + msg);
                 //向其他客户端转发消息
                 sendInfoToOtherClient(msg,socketChannel);
             }
@@ -670,11 +782,16 @@ public class GroupChatClient {
                         SocketChannel channel = (SocketChannel) key.channel();
                         ByteBuffer buffer = ByteBuffer.allocate(1024);
                         channel.read(buffer);
-                        String msg = new String(buffer.array());
-                        System.out.println(msg.trim());
+                        // 先 flip，再按 position/limit 解码，最后 clear 以便下次复用
+                        buffer.flip();
+                        String msg = java.nio.charset.StandardCharsets.UTF_8.decode(buffer).toString();
+                        if (!msg.trim().isEmpty()) {
+                            System.out.println(msg.trim());
+                        }
+                        buffer.clear();
+                        iterator.remove();//处理完必须移除，防止下一轮重复处理
                     }
                 }
-                iterator.remove();//删除当前的selectionKey
             }else {
             //                System.out.println(&quot;没有可用的通道&quot;);
      		}
@@ -716,40 +833,31 @@ public class GroupChatClient {
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#1-%E7%AE%80%E4%BB%8B">1. 简介</a>
 <ul>
+</ul>
+</li>
 <li>
-<ul>
-<li><a href="#1-%E7%AE%80%E4%BB%8B">1. 简介</a></li>
-<li><a href="#2-io-%E6%A8%A1%E5%9E%8B%E5%9F%BA%E6%9C%AC%E8%AF%B4%E6%98%8E">2. I/O 模型基本说明</a>
+<a href="#2-io-%E6%A8%A1%E5%9E%8B%E5%9F%BA%E6%9C%AC%E8%AF%B4%E6%98%8E">2. I/O 模型基本说明</a>
 <ul>
 <li><a href="#21-java%E5%85%B1%E6%94%AF%E6%8C%813%E7%A7%8D%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8Bio%E6%A8%A1%E5%BC%8F">2.1. Java共支持3种网络编程模型/IO模式：</a></li>
 <li><a href="#22-bio-nio-aio%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF%E5%88%86%E6%9E%90">2.2. BIO、NIO、AIO适用场景分析</a></li>
 </ul>
 </li>
-<li><a href="#3-nio%E5%85%B7%E4%BD%93%E4%BB%8B%E7%BB%8D">3. NIO具体介绍</a>
+<li>
+<a href="#3-nio%E5%85%B7%E4%BD%93%E4%BB%8B%E7%BB%8D">3. NIO具体介绍</a>
 <ul>
 <li><a href="#31-nio-%E4%B8%89%E5%A4%A7%E6%A0%B8%E5%BF%83">3.1. NIO 三大核心</a></li>
 <li><a href="#32-%E5%B8%B8%E7%94%A8buffer%E5%AD%90%E7%B1%BB%E4%B8%80%E8%A7%88">3.2. 常用Buffer子类一览</a></li>
 <li><a href="#33-buffer%E5%B8%B8%E7%94%A8%E6%96%B9%E6%B3%95">3.3. buffer常用方法</a></li>
 <li><a href="#34-%E9%80%9A%E9%81%93channel">3.4. 通道(Channel)</a></li>
 <li><a href="#35-%E5%85%B3%E4%BA%8Ebuffer-%E5%92%8C-channel%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9%E5%92%8C%E7%BB%86%E8%8A%82">3.5. 关于Buffer 和 Channel的注意事项和细节</a></li>
-<li><a href="#36-selector%E9%80%89%E6%8B%A9%E5%99%A8">3.6. Selector选择器</a>
-<ul>
-<li><a href="#1-%E5%9F%BA%E6%9C%AC%E4%BB%8B%E7%BB%8D">1. 基本介绍</a></li>
-<li><a href="#2-selector%E9%80%89%E6%8B%A9%E5%99%A8">2. Selector(选择器)</a></li>
-<li><a href="#3-selector%E7%B1%BB%E7%9B%B8%E5%85%B3%E6%96%B9%E6%B3%95">3. Selector类相关方法</a></li>
-<li><a href="#4-%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9">4. 注意事项</a></li>
-</ul>
-</li>
+<li><a href="#36-selector%E9%80%89%E6%8B%A9%E5%99%A8">3.6. Selector选择器</a></li>
 <li><a href="#37-nio-%E9%9D%9E%E9%98%BB%E5%A1%9E-%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90">3.7. NIO 非阻塞 网络编程原理分析</a></li>
 <li><a href="#38-selectionkey">3.8. SelectionKey</a></li>
 <li><a href="#39-serversocketchannel">3.9. ServerSocketChannel</a></li>
 <li><a href="#310-socketchannel">3.10. SocketChannel</a></li>
 <li><a href="#311-nio-%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B%E5%BA%94%E7%94%A8%E5%AE%9E%E4%BE%8B-%E7%BE%A4%E8%81%8A%E7%B3%BB%E7%BB%9F">3.11. NIO 网络编程应用实例-群聊系统</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
