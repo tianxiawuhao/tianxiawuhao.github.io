@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="760" viewBox="0 0 900 760" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="760" fill="#ffffff"/>
+  <text x="450" y="32" font-size="17" font-weight="700" text-anchor="middle" fill="#1f2b38">MinIO 新版（RELEASE.2023+）部署与数据迁移链路</text>
+
+  <text x="40" y="78" font-size="13" font-weight="700" fill="#2f6fd0">① 部署选型</text>
+  <rect x="40" y="90" width="390" height="132" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="58" y="116" font-size="12.5" fill="#1f2b38">单机单盘  minio server /data</text>
+  <text x="58" y="138" font-size="12.5" fill="#1f2b38">单机多盘  minio server /data{1...4}</text>
+  <text x="58" y="160" font-size="12.5" fill="#1f2b38">4 节点分布式 4 盘/节点（纠删码下限）</text>
+  <text x="58" y="184" font-size="11.5" fill="#5b6b7c">API 端口 9000，控制台端口 9001</text>
+  <text x="58" y="204" font-size="11.5" fill="#5b6b7c">MINIO_ROOT_USER / MINIO_ROOT_PASSWORD 至少 8 位</text>
+
+  <rect x="470" y="90" width="390" height="132" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="488" y="116" font-size="12.5" font-weight="700" fill="#1f2b38">启动方式与环境变量</text>
+  <text x="488" y="138" font-size="12" fill="#1f2b38">docker run --console-address ":9001"</text>
+  <text x="488" y="158" font-size="12" fill="#1f2b38">systemd + /etc/default/minio</text>
+  <text x="488" y="178" font-size="12" fill="#1f2b38">MINIO_VOLUMES、MINIO_OPTS</text>
+  <text x="488" y="200" font-size="11.5" fill="#7a5bd0">控制台与 API 走不同端口，切勿混用</text>
+
+  <line x1="450" y1="228" x2="450" y2="252" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <text x="40" y="276" font-size="13" font-weight="700" fill="#2e9e5b">② mc 客户端接入</text>
+  <rect x="40" y="288" width="820" height="116" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="58" y="314" font-size="12.5" fill="#1f2b38">mc alias set oldminio http://10.0.0.11:9000 admin '旧密码'  →  ~/.mc/config.json</text>
+  <text x="58" y="336" font-size="12.5" fill="#1f2b38">mc alias set newminio http://10.0.0.22:9000 admin '新密码'</text>
+  <text x="58" y="358" font-size="12.5" fill="#1f2b38">mc admin info newminio   ·   mc ls oldminio   ·   mc du oldminio/bucket</text>
+  <text x="58" y="382" font-size="11.5" fill="#5b6b7c">Windows 下配置在 %USERPROFILE%\mc\config.json，拷贝该文件即可复用全部别名</text>
+
+  <line x1="450" y1="408" x2="450" y2="428" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <text x="40" y="452" font-size="13" font-weight="700" fill="#e08a1e">③ 迁移（mc mirror / rclone）</text>
+  <rect x="40" y="464" width="820" height="120" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <text x="58" y="490" font-size="12.5" fill="#1f2b38">mc mirror --preserve --overwrite oldminio/bucket newminio/bucket --summary</text>
+  <text x="58" y="512" font-size="12.5" fill="#1f2b38">mc mirror --watch 持续增量追平；重跑同一命令即续传，已一致对象自动跳过</text>
+  <text x="58" y="534" font-size="12.5" fill="#1f2b38">rclone sync --checksum --transfers=16 --s3-chunk-size=64M -P 旧:桶 新:桶</text>
+  <text x="58" y="560" font-size="11.5" fill="#5b6b7c">大对象靠 multipart 分片续传；先用 --dry-run 预演，避免误删目标端独有对象</text>
+
+  <line x1="450" y1="588" x2="450" y2="608" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <text x="40" y="632" font-size="13" font-weight="700" fill="#7a5bd0">④ 校验与切换</text>
+  <rect x="40" y="644" width="390" height="92" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="58" y="670" font-size="12.5" fill="#1f2b38">mc diff oldminio/bucket newminio/bucket</text>
+  <text x="58" y="692" font-size="12.5" fill="#1f2b38">mc ls --recursive --summarize 对比对象数与总量</text>
+  <text x="58" y="716" font-size="11.5" fill="#5b6b7c">无输出即完全一致</text>
+
+  <rect x="470" y="644" width="390" height="92" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="488" y="670" font-size="12.5" fill="#1f2b38">mc anonymous set download newminio/bucket</text>
+  <text x="488" y="692" font-size="12.5" fill="#1f2b38">mc admin user / mc admin policy 收敛权限</text>
+  <text x="488" y="716" font-size="11.5" fill="#7a5bd0">旧版 mc policy 已被 mc anonymous 取代</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="780" viewBox="0 0 900 780" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="780" fill="#ffffff"/>
+  <text x="450" y="32" font-size="17" font-weight="700" text-anchor="middle" fill="#1f2b38">Docker 批量操作流程与风险提示</text>
+
+  <text x="40" y="76" font-size="13" font-weight="700" fill="#2f6fd0">① 拉取 / 导出</text>
+  <rect x="40" y="88" width="820" height="104" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="58" y="114" font-size="12.5" fill="#1f2b38">docker pull 逐个拉取失败可续；docker save -o 一次导出多镜像</text>
+  <text x="58" y="136" font-size="12.5" fill="#1f2b38">docker load -i 导入后标签保持不变；gzip 压缩可省一半体积</text>
+  <text x="58" y="158" font-size="12.5" fill="#1f2b38">docker save 不支持 --filter，导出列表必须来自 docker images</text>
+  <text x="58" y="180" font-size="11.5" fill="#5b6b7c">镜像名含 registry:port 与 tag 时必须按“仓库:标签”成对取出</text>
+
+  <line x1="450" y1="200" x2="450" y2="224" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <text x="40" y="248" font-size="13" font-weight="700" fill="#2e9e5b">② 日常批量操作（建议加白名单）</text>
+  <rect x="40" y="260" width="820" height="126" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="58" y="286" font-size="12.5" fill="#1f2b38">docker stop $(docker ps -q --filter "name=^/web-")   优雅停止</text>
+  <text x="58" y="308" font-size="12.5" fill="#1f2b38">docker rm -v $(docker ps -aq --filter "label=app=demo") 连匿名卷一起删</text>
+  <text x="58" y="330" font-size="12.5" fill="#1f2b38">docker rmi $(docker images -q --filter "dangling=true") 只清悬空镜像</text>
+  <text x="58" y="352" font-size="12.5" fill="#1f2b38">docker image prune -a --filter "until=168h"   按时间裁剪未使用镜像</text>
+  <text x="58" y="374" font-size="11.5" fill="#5b6b7c">把 docker ps -q 的结果先落盘成清单，删除前用 xargs -o 逐行确认更稳妥</text>
+
+  <line x1="450" y1="394" x2="450" y2="418" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <text x="40" y="442" font-size="13" font-weight="700" fill="#e08a1e">③ 日志导出与批量打标签推送</text>
+  <rect x="40" y="454" width="820" height="104" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <text x="58" y="480" font-size="12.5" fill="#1f2b38">docker logs 不支持 --filter，用 docker ps --format '{{.Names}}' 遍历更可靠</text>
+  <text x="58" y="502" font-size="12.5" fill="#1f2b38">docker tag 源 目标；docker push 目标（EOF 逐条推送可控制并发）</text>
+  <text x="58" y="524" font-size="12.5" fill="#1f2b38">日志按容器名落盘：logs/&lt;容器名&gt;-&lt;日期&gt;.log，便于检索与轮转</text>
+  <text x="58" y="546" font-size="11.5" fill="#5b6b7c">推送前先 docker login，私有仓库注意命名空间权限</text>
+
+  <line x1="450" y1="566" x2="450" y2="590" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <text x="40" y="614" font-size="13" font-weight="700" fill="#7a5bd0">④ 风险提示</text>
+  <rect x="40" y="626" width="820" height="132" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="58" y="652" font-size="12.5" fill="#1f2b38">变量为空：$(docker ps -q) 无输出会让 rm -rf / 之类命令失去参数保护</text>
+  <text x="58" y="674" font-size="12.5" fill="#1f2b38">docker system prune -a 会删除所有未被容器使用的镜像，先在测试机验证</text>
+  <text x="58" y="696" font-size="12.5" fill="#1f2b38">xargs 默认按空白分词，镜像名含空格或引号会拆错，务必用 -0 配合 -print0</text>
+  <text x="58" y="718" font-size="12.5" fill="#1f2b38">docker rm -f 不会走优雅停机，可能丢数据；生产先 stop 再 rm</text>
+  <text x="58" y="744" font-size="11.5" fill="#7a5bd0">动手前 docker ps -a &gt; backup.txt 留一份现场快照，出错可回溯</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+</svg>
