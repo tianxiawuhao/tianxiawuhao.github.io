@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="710" viewBox="0 0 900 710">
+<rect width="900" height="710" fill="#ffffff"/>
+<text x="450" y="30" font-size="17" font-weight="700" text-anchor="middle" fill="#1f2b38" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">CAS 自旋重试：compareAndSwapInt 的调用链与失败重试</text>
+<rect x="25" y="50" width="850" height="230" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+<text x="45" y="76" font-size="12" font-weight="700" fill="#1f2b38" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">一、从 Java API 到 CPU 指令</text>
+<rect x="45" y="92" width="270" height="30" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="180" y="112" font-size="11" text-anchor="middle" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">AtomicInteger.getAndSet(newValue)</text>
+<rect x="335" y="92" width="250" height="30" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="460" y="112" font-size="11" text-anchor="middle" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">Unsafe.getAndSetInt(obj, offset, x)</text>
+<rect x="605" y="92" width="250" height="30" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+<text x="730" y="112" font-size="11" text-anchor="middle" fill="#2e9e5b" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">compareAndSwapInt(...) native</text>
+<path d="M315 107 L331 107" stroke="#2f6fd0" stroke-width="1.5" marker-end="url(#c-blue)"/>
+<path d="M585 107 L601 107" stroke="#2e9e5b" stroke-width="1.5" marker-end="url(#c-green)"/>
+<rect x="45" y="138" width="810" height="30" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="450" y="158" font-size="11" text-anchor="middle" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">valueOffset = unsafe.objectFieldOffset(AtomicInteger.class.getDeclaredField(「value」))　// 字段偏移量，类加载时初始化一次</text>
+<rect x="45" y="184" width="810" height="30" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+<text x="450" y="204" font-size="11" text-anchor="middle" fill="#e08a1e" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">最终落到 CPU 的原子指令：x86 上为 LOCK CMPXCHG，ARM 上为 LDREX / STREX 独占访问对</text>
+<rect x="45" y="220" width="810" height="46" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+<text x="60" y="240" font-size="11" fill="#2e9e5b" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">指令语义：比较内存地址处的当前值与期望值 A，相等才写入新值 B 并返回成功，整个过程由硬件保证不可分割——</text>
+<text x="60" y="258" font-size="11" fill="#2e9e5b" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">不需要操作系统加锁，失败时也不会阻塞线程，这是「无锁算法」的硬件基础。</text>
+<rect x="25" y="300" width="850" height="240" rx="8" fill="#ffffff" stroke="#c8d3e0"/>
+<text x="45" y="326" font-size="12" font-weight="700" fill="#1f2b38" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">二、自旋重试：三个线程竞争同一个 AtomicInteger（初值 100）</text>
+<line x1="130" y1="345" x2="130" y2="522" stroke="#c8d3e0" stroke-width="1.5"/>
+<line x1="400" y1="345" x2="400" y2="522" stroke="#c8d3e0" stroke-width="1.5"/>
+<line x1="670" y1="345" x2="670" y2="522" stroke="#c8d3e0" stroke-width="1.5"/>
+<line x1="760" y1="345" x2="760" y2="522" stroke="#c8d3e0" stroke-width="1"/>
+<text x="60" y="376" font-size="11" font-weight="700" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">线程 A</text>
+<text x="330" y="376" font-size="11" font-weight="700" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">线程 B</text>
+<text x="600" y="376" font-size="11" font-weight="700" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">线程 C</text>
+<text x="855" y="376" font-size="11" font-weight="700" text-anchor="middle" fill="#1f2b38" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">内存值</text>
+<rect x="75" y="388" width="110" height="28" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="130" y="406" font-size="11" text-anchor="middle" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">读 V = 100</text>
+<rect x="345" y="388" width="110" height="28" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="400" y="406" font-size="11" text-anchor="middle" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">读 V = 100</text>
+<rect x="615" y="388" width="110" height="28" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+<text x="670" y="406" font-size="11" text-anchor="middle" fill="#2f6fd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">读 V = 100</text>
+<rect x="800" y="388" width="60" height="28" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+<text x="830" y="406" font-size="11" text-anchor="middle" fill="#1f2b38" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">100</text>
+<rect x="345" y="428" width="260" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+<text x="475" y="446" font-size="11" text-anchor="middle" fill="#2e9e5b" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">CAS(100,101) 成功，内存值变为 101</text>
+<rect x="800" y="428" width="60" height="28" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+<text x="830" y="446" font-size="11" text-anchor="middle" fill="#2e9e5b" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">101</text>
+<rect x="610" y="468" width="230" height="28" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+<text x="725" y="486" font-size="11" text-anchor="middle" fill="#e08a1e" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">CAS(100,101) 失败</text>
+<rect x="75" y="468" width="470" height="28" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+<text x="310" y="486" font-size="11" text-anchor="middle" fill="#e08a1e" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">CAS(100,101) 失败：V 已经是 101，自旋重试</text>
+<rect x="75" y="508" width="470" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+<text x="310" y="526" font-size="11" text-anchor="middle" fill="#2e9e5b" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">重新读取 V = 101，执行 CAS(101,102) 成功</text>
+<rect x="800" y="508" width="60" height="28" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+<text x="830" y="526" font-size="11" text-anchor="middle" fill="#7a5bd0" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">102</text>
+<rect x="25" y="562" width="850" height="125" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+<text x="45" y="588" font-size="12" font-weight="700" fill="#e08a1e" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">代价与优化：自旋不是免费的</text>
+<text x="45" y="612" font-size="11" fill="#5b6b7c" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">竞争激烈时失败重试会空转 CPU，还可能造成缓存行在多个核心之间反复失效（cache line ping-pong）；</text>
+<text x="45" y="634" font-size="11" fill="#5b6b7c" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">高并发计数场景因此改用 LongAdder：把热点拆成 base 加多个 Cell，各线程更新各自的 Cell 再求和（分段思想）；</text>
+<text x="45" y="656" font-size="11" fill="#5b6b7c" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">读多写少、竞争不激烈的场景仍推荐 AtomicLong，因为 LongAdder 的求和结果不是某一瞬间的精确快照。</text>
+<defs>
+<marker id="c-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2f6fd0"/></marker>
+<marker id="c-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2e9e5b"/></marker>
+</defs>
+</svg>
