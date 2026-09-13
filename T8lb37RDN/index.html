@@ -125,7 +125,14 @@
           
           <img class="post-feature-header-image" src="/post-images/T8lb37RDN.png" alt="封面图">
           
-          <h2 id="读excel">读Excel</h2>
+          <p>EasyExcel 是阿里已开源的 Excel 处理工具，它没有重写 POI，而是把 POI 的流式能力（读用 SAX 事件模型、写用 SXSSF 行窗口）包装成了可以用注解描述的 API。因此它最大的价值不是“写得快”，而是“写得省”：内存占用与文件行数基本无关。</p>
+<p>它的模型分三层，读写对称：一个 Excel（<code>ReadWorkbook</code> / <code>WriteWorkbook</code>）包含若干工作表（<code>ReadSheet</code> / <code>WriteSheet</code>），一张工作表里又可以放多个表格（<code>WriteTable</code>）。参数会沿着这三层向下继承：层级上没设置的，自动取上一级的值。</p>
+<p><img src="/post-assets/T8lb37RDN/01-read-write-flow.svg" alt="EasyExcel 读写流程与内存模型：读走 SAX 逐行回调，写走磁盘缓存加分页写入"></p>
+<p>接下来的内容分为“读”和“写”两大块，每块都先看注解、再看参数，最后给出可直接编译运行的完整示例。篇末还有一节“常见坑与最佳实践”，把多数人踩过的坑集中列了一遍。</p>
+<blockquote>
+<p>本文示例基于 EasyExcel 3.x（3.1.1 及以上）。EasyExcel 1.x 的 <code>ExcelUtil</code> 写法（带 <code>Sheet</code>、<code>BaseRowModel</code>、<code>readBySax</code> 的那一套）在 3.x 里已经被删除，直接拷贝会编译失败，详见后文“从 1.x 的 ExcelUtil 迁移到 3.x”一节。</p>
+</blockquote>
+<h2 id="读excel">读Excel</h2>
 <h3 id="注解">注解</h3>
 <p>使用注解很简单，只要在对应的实体类上面加上注解即可。</p>
 <h4 id="excelproperty"><code>ExcelProperty</code></h4>
@@ -161,10 +168,34 @@
 </tr>
 </tbody>
 </table>
+<p>三个属性的优先级为 <code>index</code> &gt; <code>order</code> &gt; <code>value</code>：按下标定位最稳定，按表头文本匹配最灵活。一般建议只用其中一种，混用时容易出现“字段没丢，但值错位”的情况。</p>
+<pre><code class="language-java">public class DemoData {
+    // 按下标定位第 0 列，最稳，表头改名也不影响
+    @ExcelProperty(index = 0)
+    private String name;
+
+    // 按表头文本匹配，支持多行表头（会匹配最后一行）
+    @ExcelProperty("姓名")
+    private String nickName;
+
+    // order 控制列顺序：多个字段都写 order 时按 order 升序排列
+    @ExcelProperty(value = "\u5e74\u9f84", order = 2)
+    private Integer age;
+
+    // 自定义转换器：读 excel 文本 -> Java 枚举
+    @ExcelProperty(value = "\u72b6\u6001", converter = StatusConverter.class)
+    private Status status;
+
+    // 完全不参与读写
+    @ExcelIgnore
+    private String internalRemark;
+}
+</code></pre>
+<p>注意：<code>value</code> 默认为空，不写 <code>value</code> 也不写 <code>index</code> 时，该字段仍会参与匹配，只是没有表头依据，实际顺序由字段声明顺序决定。</p>
 <h4 id="excelignore"><code>ExcelIgnore</code></h4>
-<p>默认所有字段都会和excel去匹配，加了这个注解会忽略该字段</p>
+<p>默认所有字段都会和excel去匹配，加了这个注解会忽略该字段。读写都生效，读时表里有这一列也不会被映射到对象上。</p>
 <h4 id="excelignoreunannotated"><code>ExcelIgnoreUnannotated</code></h4>
-<p>默认不加<code>ExcelProperty</code> 的注解的都会参与读写，加了不会参与</p>
+<p>默认不加<code>ExcelProperty</code> 的注解的都会参与读写，加了不会参与。它是加在类上的，适合“只导出我明确标记过的字段”这种场景。</p>
 <h4 id="datetimeformat"><code>DateTimeFormat</code></h4>
 <p>日期转换，用<code>String</code>去接收excel日期格式的数据会调用这个注解,参数如下：</p>
 <table>
@@ -211,6 +242,78 @@
 </tr>
 </tbody>
 </table>
+<h4 id="日期数字与早举转换">日期、数字与枚举转换</h4>
+<p>Excel 单元格只有字符串、数值、日期、布尔几种基本类型，日期在底层就是一个双精度浮点数。因此“Excel 与 Java 怎么互转”是最常见的需求，也是最容易出错的地方。</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>写法</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>日期字符串↔Date</td>
+<td><code>@DateTimeFormat("yyyy-MM-dd HH:mm:ss")</code></td>
+<td>参照 <code>SimpleDateFormat</code> 书写，写入时按此格式输出，读取时按此格式解析</td>
+</tr>
+<tr>
+<td>金额与小数位</td>
+<td><code>@NumberFormat("#,##0.00")</code></td>
+<td>参照 <code>DecimalFormat</code>；写入时也会作为单元格格式生效</td>
+</tr>
+<tr>
+<td>枚举</td>
+<td><code>converter = XxxConverter.class</code></td>
+<td>EasyExcel 不认识业务枚举，必须自定义转换器</td>
+</tr>
+<tr>
+<td>单元格原始值</td>
+<td>用 <code>String</code> 接收，配 <code>@ExcelProperty(index = n)</code></td>
+<td>不想让 EasyExcel 做类型推断时最保险</td>
+</tr>
+</tbody>
+</table>
+<p>一个自定义枚举转换器长这样（读写共用一个类）：</p>
+<pre><code class="language-java">import com.alibaba.excel.converters.Converter;
+import com.alibaba.excel.converters.ReadConverterContext;
+import com.alibaba.excel.converters.WriteConverterContext;
+import com.alibaba.excel.enums.CellDataTypeEnum;
+import com.alibaba.excel.metadata.data.WriteCellData;
+
+public class StatusConverter implements Converter&lt;Status&gt; {
+
+    @Override
+    public Class&lt;Status&gt; supportJavaTypeKey() {
+        return Status.class;
+    }
+
+    @Override
+    public CellDataTypeEnum supportExcelTypeKey() {
+        return CellDataTypeEnum.STRING;
+    }
+
+    /** 读：Excel 单元格 -> Java 枚举 */
+    @Override
+    public Status convertToJavaData(ReadConverterContext&lt;?&gt; context) {
+        String value = context.getReadCellData().getStringValue();
+        for (Status status : Status.values()) {
+            if (status.getLabel().equals(value)) {
+                return status;
+            }
+        }
+        return Status.UNKNOWN;
+    }
+
+    /** 写：Java 枚举 -> Excel 单元格 */
+    @Override
+    public WriteCellData&lt;?&gt; convertToExcelData(WriteConverterContext&lt;Status&gt; context) {
+        return new WriteCellData&lt;&gt;(context.getValue().getLabel());
+    }
+}
+</code></pre>
+<p>只需要实现 <code>convertToJavaData</code> 或 <code>convertToExcelData</code> 其一也能编译，但只要这个转换器同时用于读和写，就建议两个方法都实现，否则反向会回退到默认转换器。</p>
 <h3 id="参数">参数</h3>
 <h4 id="概念介绍">概念介绍</h4>
 <ul>
@@ -353,6 +456,91 @@
 </tr>
 </tbody>
 </table>
+<h4 id="读监听器与doreadsync">读监听器与 doReadSync</h4>
+<p>EasyExcel 读文件是一行一行回调的，因此它不会把整个文件读进内存。接收数据的方式有两种：</p>
+<ul>
+<li><strong>推模式：</strong>传入自定义 <code>ReadListener</code>，每读一行调一次 <code>invoke</code>，自己决定何时入库、何时清空缓存。</li>
+<li><strong>拉模式：</strong>调 <code>doReadSync()</code>，它内部帮你收集数据并一次性返回 <code>List&lt;T&gt;</code>。写法最短，但内存与行数成正比，只适合小文件或工具类脚本。</li>
+</ul>
+<pre><code class="language-java">import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.read.listener.ReadListener;
+import com.alibaba.excel.util.ListUtils;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+
+@Slf4j
+public class DemoDataListener implements ReadListener&lt;DemoData&gt; {
+
+    /** 每积攒 100 条就入库一次，防止几万条数据在内存里 OOM */
+    private static final int BATCH_COUNT = 100;
+
+    private List&lt;DemoData&gt; cachedDataList = ListUtils.newArrayListWithExpectedSize(BATCH_COUNT);
+
+    private final DemoDataDao demoDataDao;
+
+    /** 监听器是有状态的，每次读取都要 new，所以依赖通过构造方法传入 */
+    public DemoDataListener(DemoDataDao demoDataDao) {
+        this.demoDataDao = demoDataDao;
+    }
+
+    @Override
+    public void invoke(DemoData data, AnalysisContext context) {
+        cachedDataList.add(data);
+        if (cachedDataList.size() &gt;= BATCH_COUNT) {
+            saveData();
+            // 入库后重新 new 一个，帮助 GC 回收旧引用
+            cachedDataList = ListUtils.newArrayListWithExpectedSize(BATCH_COUNT);
+        }
+    }
+
+    @Override
+    public void doAfterAllAnalysed(AnalysisContext context) {
+        // 最后一批不足 BATCH_COUNT 的数据也要落库
+        if (!cachedDataList.isEmpty()) {
+            saveData();
+        }
+        log.info("所有数据解析完成！");
+    }
+
+    @Override
+    public void onException(Exception exception, AnalysisContext context) throws Exception {
+        // 单行转换失败等异常默认会直接抛出中断整个读取，
+        // 这里可以记录日志后继续读，不再 throw
+        log.error("解析第 {} 行失败", context.readRowHolder().getRowIndex(), exception);
+    }
+
+    private void saveData() {
+        demoDataDao.save(cachedDataList);
+    }
+}
+</code></pre>
+<p>完整的读取调用与常见组合如下：</p>
+<pre><code class="language-java">// 1. 最常用：读第一张表，逐行回调
+EasyExcel.read(fileName, DemoData.class, new DemoDataListener(demoDataDao))
+        .sheet()
+        .doRead();
+
+// 2. 按下标或名字指定工作表，并指定表头行数
+EasyExcel.read(fileName, DemoData.class, new DemoDataListener(demoDataDao))
+        .sheet(1)
+        .headRowNumber(2)
+        .doRead();
+
+// 3. 一次读完所有工作表（每张表都会回调同一个监听器）
+EasyExcel.read(fileName, DemoData.class, new DemoDataListener(demoDataDao)).doReadAll();
+
+// 4. 不建模型，直接读成 Map：适合表头不固定的临时导入
+List&lt;Map&lt;Integer, String&gt;&gt; rows = EasyExcel.read(fileName).sheet().doReadSync();
+
+// 5. 小文件直接拿 List（内存与行数成正比，大文件请用方式 1）
+List&lt;DemoData&gt; all = EasyExcel.read(fileName, DemoData.class, new DemoDataListener(demoDataDao))
+        .sheet()
+        .doReadSync();
+</code></pre>
+<blockquote>
+<p>常见误区：把监听器交给 Spring 管理（比如加 <code>@Component</code>）。监听器里有缓存列表这种状态，被复用会串数据；正确做法是每次读取 <code>new</code> 一个，把 DAO 通过构造方法传进去。</p>
+</blockquote>
 <h4 id="readsheet">ReadSheet</h4>
 <p>设置方法如下，找不到参数的看下通用参数里面是否存在。</p>
 <pre><code class="language-java"> EasyExcel.read(fileName, DemoData.class, new DemoDataListener())
@@ -381,6 +569,16 @@
 </tr>
 </tbody>
 </table>
+<h3 id="读excel的常见坑">读 Excel 的常见坑</h3>
+<ul>
+<li><strong>表头行数写错</strong>：<code>headRowNumber</code> 默认是 1。如果 Excel 有标题行、说明行，或者多级表头，真实数据从第 3 行才开始，就必须显式写 <code>headRowNumber(2)</code> 或 <code>(3)</code>。不写的话表头会被当成数据读进来，或者字段全是 <code>null</code>。</li>
+<li><strong>多行表头与 value 的对应</strong>：<code>@ExcelProperty</code> 的 <code>value</code> 写成数组时表示多级表头，匹配的是最后一行；数组长度要和表头层数一致，否则按 <code>index</code> 或声明顺序兜底，容易错列。</li>
+<li><strong>合并单元格</strong>：EasyExcel 默认只把值放在合并区域的左上角单元格，其余行是空的。需要把合并区域的值补齐到每一行时，用 <code>extraReadSet</code> 声明要额外读取的内容，或在 <code>invoke</code> 里根据上一行自行回填。</li>
+<li><strong>大数据量用 doReadSync 等于白省内存</strong>：<code>doReadSync</code> 最终还是把数据堆进一个 <code>List</code> 返回，行数一大就 OOM，请改回监听器分批入库。</li>
+<li><strong>表名/表序号笔误</strong>：<code>sheetNo</code> 和 <code>sheetName</code> 建议只选一个，都写时以 <code>sheetNo</code> 为准；<code>sheetNo</code> 是下标，从 0 开始，不是 Excel 界面上显示的顺序号。</li>
+<li><strong>日期读出来是个数字</strong>：底层存的是序列号，给 <code>Date</code> 字段加 <code>@DateTimeFormat</code>，或者改用 <code>String</code> 加 <code>@DateTimeFormat</code> 接收。</li>
+<li><strong>csv 编码</strong>：读 csv 时通过 <code>charset</code> 指定编码，否则中文表头会乱码；xls/xlsx 不需要这个参数。</li>
+</ul>
 <h2 id="写excel">写Excel</h2>
 <h3 id="注解-2">注解</h3>
 <p>使用注解很简单，只要在对应的实体类上面加上注解即可。</p>
@@ -664,6 +862,69 @@
 </tr>
 </tbody>
 </table>
+<h3 id="批量写入与sheet分页">批量写入与 Sheet 分页</h3>
+<p>导出几十万行时，最容易犯的错误是先把全部数据查成一个 <code>List</code> 再 <code>doWrite</code>。正确姿势是：<strong>一个</strong> <code>ExcelWriter</code> + <strong>分页</strong>多次 <code>write</code>，表头只会写一次，数据逐页追加。</p>
+<pre><code class="language-java">import java.io.File;
+import java.io.InputStream;
+import java.util.Map;
+
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.ExcelWriter;
+import com.alibaba.excel.write.metadata.WriteSheet;
+
+public class BatchWriteDemo {
+
+    private static final int PAGE_SIZE = 5000;
+    private static final int SHEET_MAX_ROWS = 100_000;
+
+    public static void main(String[] args) {
+        String fileName = "/tmp/demo/batch.xlsx";
+        // 1. 构建 writer：只创建一次，Excel 的写入上下文都在它手里
+        ExcelWriter excelWriter = EasyExcel.write(fileName, DemoData.class).build();
+        try {
+            int pageNo = 0;
+            // 2. 每张 sheet 只建一次，后续可以反复 write 到同一张 sheet
+            WriteSheet writeSheet = EasyExcel.writerSheet(0, "第1批").build();
+            while (true) {
+                List&lt;DemoData&gt; page = queryPage(pageNo++, PAGE_SIZE);
+                if (page.isEmpty()) {
+                    break;
+                }
+                excelWriter.write(page, writeSheet);
+                // 3. 写满一页上限就换一张 sheet，避免单表行数过多
+                if (pageNo % (SHEET_MAX_ROWS / PAGE_SIZE) == 0) {
+                    int sheetNo = pageNo / (SHEET_MAX_ROWS / PAGE_SIZE);
+                    writeSheet = EasyExcel.writerSheet(sheetNo, "第" + (sheetNo + 1) + "批").build();
+                }
+            }
+        } finally {
+            // 4. 无论成功失败都要 finish：它负责刷盘、合并临时文件、关闭输出流
+            excelWriter.finish();
+        }
+    }
+
+    private static List&lt;DemoData&gt; queryPage(int pageNo, int pageSize) {
+        // 用 limit/offset 或游标分页查询，每次只返回一页，别查全量
+        return demoDataDao.selectPage(pageNo * pageSize, pageSize);
+    }
+}
+</code></pre>
+<p>几个必须记住的规则：</p>
+<ul>
+<li><strong>同一个 <code>ExcelWriter</code> 复用到最后</strong>。每次 <code>EasyExcel.write(...).sheet().doWrite()</code> 都是一份新工作簿，放在循环里只会不断覆盖文件。</li>
+<li><strong><code>write(data, sheet)</code> 可以调用多次</strong>，同一张 <code>WriteSheet</code> 的第一页写完后，后面的页只追加数据行，表头不会重复。</li>
+<li><strong><code>finish()</code> 必须执行且只执行一次</strong>，放在 <code>finally</code> 里。它内部会 flush 临时文件并结束工作簿，不调用的话文件不完整甚至打不开。</li>
+<li><strong>顺序是 <code>finish()</code> 在前、关流在后</strong>。如果自己 new 了 <code>FileOutputStream</code> 交给 EasyExcel 使用，就不要再在 <code>finish()</code> 之前抢先 <code>close()</code>，否则抛 <code>IOException: Stream closed</code>；<code>autoCloseStream</code> 默认 <code>true</code>，EasyExcel 会负责关流。更稳妥的是直接用 <code>EasyExcel.write(File, ...)</code> 让它自己管流。</li>
+<li><strong>Web 下载不要手动关 <code>response.getOutputStream()</code></strong>，<code>doWrite</code> 结束后 EasyExcel 已经处理完毕；确实需要自己控制时用 <code>autoCloseStream(Boolean.FALSE)</code>。</li>
+</ul>
+<h3 id="写excel的常见坑">写 Excel 的常见坑</h3>
+<ul>
+<li><strong><code>needHead(false)</code> 时列顺序仍由注解决定</strong>：不写表头，列的先后依然由 <code>index</code>、<code>order</code>、字段声明顺序决定。</li>
+<li><strong>区分 <code>WriteSheet</code> 与 <code>WriteTable</code></strong>：同一张 sheet 内需要多段彼此独立的表格（各带各的表头）时才用 <code>WriteTable</code>；页面分页追加数据只需复用同一个 <code>WriteSheet</code>。</li>
+<li><strong>样式不要逐单元格设置</strong>：用 <code>HorizontalCellStyleStrategy</code>、<code>LongestMatchColumnWidthStyleStrategy</code> 或自定义 <code>WriteHandler</code>，否则 POI 样式对象数量暴涨，内存和文件体积都会失控。</li>
+<li><strong>长数字被写成科学计数法或丢精度</strong>：订单号、身份证号这类值用 <code>String</code> 承接，不要用 <code>Double</code>。</li>
+<li><strong>公式单元格</strong>：写出公式直接赋字符串 <code>"=SUM(A1:A10)"</code> 即可，但计算值是 Excel 打开时才生成的，代码里读不到。</li>
+</ul>
 <h4 id="writetable">WriteTable</h4>
 <p>设置方法如下，找不到参数的看下通用参数里面是否存在。</p>
 <pre><code class="language-java">        EasyExcel.write(fileName, DemoData.class)
@@ -691,12 +952,48 @@
 </tr>
 </tbody>
 </table>
-<pre><code class="language-java">&lt;dependency&gt;
+<h4 id="追加写入已有文件">追加写入已有文件</h4>
+<p>EasyExcel 不提供“打开已有 xlsx 继续追加”的 API，但可以用模板方式实现：先读出原文件已有的行数，把它作为新数据的起始行，同时关闭表头写出。</p>
+<pre><code class="language-java">public static void append(File file, Class&lt;?&gt; clazz, List&lt;?&gt; data) {
+    // 1. 数出原文件的数据行数（不含表头）
+    List&lt;?&gt; exists = EasyExcel.read(file, clazz, null).sheet().doReadSync();
+    // 2. 把原文件当模板，新数据写在已有内容后面，且不再重复写表头
+    ExcelWriter excelWriter = EasyExcel.write(file)
+            .withTemplate(file)
+            .build();
+    try {
+        WriteSheet writeSheet = EasyExcel.writerSheet()
+                .needHead(Boolean.FALSE)
+                .relativeHeadRowIndex(exists.size())
+                .build();
+        excelWriter.write(data, writeSheet);
+    } finally {
+        excelWriter.finish();
+    }
+}
+</code></pre>
+<p>追加写入要先全量读一遍原文件来判断位置，开销不小；导出量很大时，更推荐“分批导出到多个文件”，而不是不断往同一个文件里追加。</p>
+<h3 id="与原生poi的取舍">与原生 POI 的取舍</h3>
+<p><img src="/post-assets/T8lb37RDN/02-easyexcel-vs-poi.svg" alt="EasyExcel 与原生 POI 在底层实现、内存模型、开发效率、样式能力上的对比与选型建议"></p>
+<p>一句话总结：<strong>只是导入导出业务数据，用 EasyExcel；需要图表、透视表、复杂样式或直接操作底层对象，用 POI</strong>。两者并不冲突，EasyExcel 的 <code>WriteHandler</code>、<code>Converter</code> 都能拿到 POI 的 <code>Sheet</code>、<code>Cell</code>、<code>Workbook</code>，可以在需要的地方“下沉”到 POI。</p>
+<h3 id="常见坑与最佳实践">常见坑与最佳实践</h3>
+<ol>
+<li><strong>版本别混用</strong>：EasyExcel 1.x 的 <code>Sheet</code>、<code>BaseRowModel</code>、<code>EasyExcelFactory.readBySax</code>、<code>ExcelWriter.write1</code> 在 3.x 已全部移除，依赖统一用 3.x，不要照着老博客抄代码。</li>
+<li><strong>POI 版本冲突</strong>：EasyExcel 3.3.x 依赖 POI 5.2.x，项目里若另有旧版 <code>poi-ooxml</code>（如 3.17、4.1.2），运行时会报 <code>NoSuchMethodError</code>，用 <code>mvn dependency:tree</code> 排掉旧版本。</li>
+<li><strong>监听器、转换器不要交给 Spring 单例管理</strong>：它们要么有状态，要么每次读写都需要新建，用构造方法注入依赖即可。</li>
+<li><strong>导出接口要兜住异常</strong>：写出过程中抛异常会留下半截文件或半截响应。要么让异常冒泡（Web 场景按 <code>downloadFailedUsingJson</code> 那样重置 response 返回 JSON），要么开启 <code>writeExcelOnException(true)</code> 尽量把已写数据落盘。</li>
+<li><strong>临时文件与磁盘</strong>：<code>inMemory(false)</code>（默认）会在系统临时目录写文件，容器里要确认 <code>/tmp</code> 空间充足；<code>inMemory(true)</code> 只是把压力转回堆内存，大导出不要开。</li>
+<li><strong>线程安全</strong>：<code>ExcelWriter</code> 不是线程安全的，一个导出任务一个 writer，不要放进线程池共享。</li>
+<li><strong>列宽自适应要谨慎</strong>：自动列宽策略需要缓存每列最宽的字符串，超大文件反而吃内存，固定列宽 <code>@ColumnWidth</code> 更稳。</li>
+</ol>
+<h4 id="依赖">依赖</h4>
+<pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.alibaba&lt;/groupId&gt;
     &lt;artifactId&gt;easyexcel&lt;/artifactId&gt;
-    &lt;version&gt;3.1.1&lt;/version&gt;
+    &lt;version&gt;3.3.4&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
+<p>EasyExcel 已经传递依赖了 POI 与 ehcache，一般不需要再单独声明；如果项目里已有 <code>poi</code>、<code>poi-ooxml</code>，注意把版本对齐到它传递依赖的版本。</p>
 <h2 id="webtest">WebTest</h2>
 <pre><code class="language-java">import java.io.IOException;
 import java.net.URLEncoder;
@@ -709,7 +1006,7 @@ import javax.servlet.http.HttpServletResponse;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.util.ListUtils;
 import com.alibaba.excel.util.MapUtils;
-import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -774,7 +1071,7 @@ public class WebTest {
             Map&lt;String, String&gt; map = MapUtils.newHashMap();
             map.put(&quot;status&quot;, &quot;failure&quot;);
             map.put(&quot;message&quot;, &quot;下载文件失败&quot; + e.getMessage());
-            response.getWriter().println(JSON.toJSONString(map));
+            response.getWriter().println(new ObjectMapper().writeValueAsString(map));
         }
     }
 
@@ -794,11 +1091,14 @@ public class WebTest {
         return &quot;success&quot;;
     }
 
+    /**
+     * 这里只演示 10 条；真实导出请改成“分批查库 + ExcelWriter 多次 write”，见“批量写入与 Sheet 分页”一节
+     */
     private List&lt;DownloadData&gt; data() {
         List&lt;DownloadData&gt; list = ListUtils.newArrayList();
         for (int i = 0; i &lt; 10; i++) {
             DownloadData data = new DownloadData();
-            data.setString(&quot;字符串&quot; + 0);
+            data.setString(&quot;字符串&quot; + i);
             data.setDate(new Date());
             data.setDoubleData(0.56);
             list.add(data);
@@ -852,6 +1152,9 @@ public class UploadDAO {
 <h2 id="uploaddata">UploadData</h2>
 <pre><code class="language-java">import java.util.Date;
 
+import com.alibaba.excel.annotation.ExcelProperty;
+import com.alibaba.excel.annotation.format.DateTimeFormat;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -864,8 +1167,13 @@ import lombok.Setter;
 @Setter
 @EqualsAndHashCode
 public class UploadData {
+    /** 不写 value 时按字段声明顺序对应第 0、1、2 列；写成 index 更明确 */
+    @ExcelProperty(index = 0)
     private String string;
+    @ExcelProperty(index = 1)
+    @DateTimeFormat("yyyy-MM-dd HH:mm:ss")
     private Date date;
+    @ExcelProperty(index = 2)
     private Double doubleData;
 }
 </code></pre>
@@ -951,15 +1259,12 @@ public class UploadDataListener implements ReadListener&lt;UploadData&gt; {
 }
 </code></pre>
 <h2 id="excelutil">ExcelUtil</h2>
-<pre><code class="language-java">import com.alibaba.excel.EasyExcelFactory;
+<pre><code class="language-java">import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
-import com.alibaba.excel.context.AnalysisContext;
-import com.alibaba.excel.event.AnalysisEventListener;
-import com.alibaba.excel.metadata.BaseRowModel;
-import com.alibaba.excel.metadata.Sheet;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import com.alibaba.excel.write.metadata.WriteSheet;
+import com.alibaba.excel.write.metadata.style.WriteCellStyle;
+import com.alibaba.excel.write.metadata.style.WriteFont;
+import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -972,344 +1277,193 @@ import java.util.List;
 @Slf4j
 public class ExcelUtil {
 
-   private static Sheet initSheet;
+    private ExcelUtil() {
+    }
 
-   static {
-      initSheet = new Sheet(1, 0);
-      initSheet.setSheetName(&quot;sheet&quot;);
-      //设置自适应宽度
-      initSheet.setAutoWidth(Boolean.TRUE);
-   }
+    /* ------------------------------ 读 ------------------------------ */
 
-   /**
-    * 读取少于1000行数据
-    * @param filePath 文件绝对路径
-    * @return
-    */
-   public static List&lt;Object&gt; readLessThan1000Row(String filePath){
-      return readLessThan1000RowBySheet(filePath,null);
-   }
+    /**
+     * 读第一张 sheet 的全部数据，一次性返回
+     * 注意：数据全部堆在内存里，只适合小文件；大文件请用分批入库的 ReadListener
+     */
+    public static List&lt;DemoData&gt; readAll(File file) {
+        return EasyExcel.read(file, DemoData.class, null).sheet().doReadSync();
+    }
 
-   /**
-    * 读小于1000行数据, 带样式
-    * filePath 文件绝对路径
-    * initSheet ：
-    *      sheetNo: sheet页码，默认为1
-    *      headLineMun: 从第几行开始读取数据，默认为0, 表示从第一行开始读取
-    *      clazz: 返回数据List&lt;Object&gt; 中Object的类名
-    */
-   public static List&lt;Object&gt; readLessThan1000RowBySheet(String filePath, Sheet sheet){
-      if(!StringUtils.hasText(filePath)){
-         return null;
-      }
+    /**
+     * 读指定 sheet，并指定表头占几行
+     *
+     * @param sheetNo       工作表下标，从 0 开始
+     * @param headRowNumber 表头行数，默认 1；有标题行/多级表头时必须显式指定
+     */
+    public static List&lt;DemoData&gt; readSheet(File file, int sheetNo, int headRowNumber) {
+        return EasyExcel.read(file, DemoData.class, null)
+                .sheet(sheetNo)
+                .headRowNumber(headRowNumber)
+                .doReadSync();
+    }
 
-      sheet = sheet != null ? sheet : initSheet;
+    /**
+     * 不建模，按行列下标读取；适合表头不固定、只需要搬运数据的场景
+     */
+    public static List&lt;Map&lt;Integer, String&gt;&gt; readRaw(InputStream inputStream) {
+        return EasyExcel.read(inputStream).sheet().doReadSync();
+    }
 
-      InputStream fileStream = null;
-      try {
-         fileStream = new FileInputStream(filePath);
-         return EasyExcelFactory.read(fileStream, sheet);
-      } catch (FileNotFoundException e) {
-         log.info(&quot;找不到文件或文件路径错误, 文件：{}&quot;, filePath);
-      }finally {
-         try {
-            if(fileStream != null){
-               fileStream.close();
+    /* ------------------------------ 写 ------------------------------ */
+
+    /**
+     * 写单张 sheet，数据量不大时可用
+     */
+    public static void writeSingleSheet(File file, List&lt;?&gt; data, Class&lt;?&gt; clazz, String sheetName) {
+        EasyExcel.write(file, clazz)
+                .sheet(sheetName)
+                .doWrite(data);
+    }
+
+    /**
+     * 写多张 sheet：不同数据写进同一个工作簿的不同工作表
+     */
+    public static &lt;T&gt; void writeMultiSheet(File file, List&lt;SheetData&lt;T&gt;&gt; sheetDataList) {
+        ExcelWriter excelWriter = EasyExcel.write(file).build();
+        try {
+            for (SheetData&lt;T&gt; sheetData : sheetDataList) {
+                WriteSheet writeSheet = EasyExcel.writerSheet(sheetData.getSheetName())
+                        .head(sheetData.getClazz())
+                        .build();
+                excelWriter.write(sheetData.getData(), writeSheet);
             }
-         } catch (IOException e) {
-            log.info(&quot;excel文件读取失败, 失败原因：{}&quot;, e);
-         }
-      }
-      return null;
-   }
+        } finally {
+            // finish() 会自动关闭底层输出流，不要在此之前手动关闭
+            excelWriter.finish();
+        }
+    }
 
-   /**
-    * 读大于1000行数据
-    * @param filePath 文件觉得路径
-    * @return
-    */
-   public static List&lt;Object&gt; readMoreThan1000Row(String filePath){
-      return readMoreThan1000RowBySheet(filePath,null);
-   }
+    /** 一张 sheet 的数据与类型 */
+    public static class SheetData&lt;T&gt; {
+        private final String sheetName;
+        private final Class&lt;T&gt; clazz;
+        private final List&lt;T&gt; data;
 
-   /**
-    * 读大于1000行数据, 带样式
-    * @param filePath 文件觉得路径
-    * @return
-    */
-   public static List&lt;Object&gt; readMoreThan1000RowBySheet(String filePath, Sheet sheet){
-      if(!StringUtils.hasText(filePath)){
-         return null;
-      }
+        public SheetData(String sheetName, Class&lt;T&gt; clazz, List&lt;T&gt; data) {
+            this.sheetName = sheetName;
+            this.clazz = clazz;
+            this.data = data;
+        }
 
-      sheet = sheet != null ? sheet : initSheet;
+        public String getSheetName() {
+            return sheetName;
+        }
 
-      InputStream fileStream = null;
-      try {
-         fileStream = new FileInputStream(filePath);
-         ExcelListener excelListener = new ExcelListener();
-         EasyExcelFactory.readBySax(fileStream, sheet, excelListener);
-         return excelListener.getDatas();
-      } catch (FileNotFoundException e) {
-         log.error(&quot;找不到文件或文件路径错误, 文件：{}&quot;, filePath);
-      }finally {
-         try {
-            if(fileStream != null){
-               fileStream.close();
+        public Class&lt;T&gt; getClazz() {
+            return clazz;
+        }
+
+        public List&lt;T&gt; getData() {
+            return data;
+        }
+    }
+
+    /**
+     * 带样式的写：表头灰底加粗、内容自动列宽
+     */
+    public static void writeWithStyle(File file, List&lt;?&gt; data, Class&lt;?&gt; clazz, String sheetName) {
+        WriteCellStyle headStyle = new WriteCellStyle();
+        WriteFont headFont = new WriteFont();
+        headFont.setBold(true);
+        headFont.setFontHeightInPoints((short) 12);
+        headStyle.setWriteFont(headFont);
+
+        WriteCellStyle contentStyle = new WriteCellStyle();
+
+        EasyExcel.write(file, clazz)
+                .registerWriteHandler(new HorizontalCellStyleStrategy(headStyle, contentStyle))
+                .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
+                .sheet(sheetName)
+                .doWrite(data);
+    }
+
+    /**
+     * 分页写同一张 sheet：一个 ExcelWriter 反复 write，表头只写一次
+     *
+     * @param pageSize 每页条数，建议 1000～5000
+     */
+    public static void writeByPage(File file, PageQuery&lt;?&gt; pageQuery, Class&lt;?&gt; clazz,
+                                   String sheetName, int pageSize) {
+        ExcelWriter excelWriter = EasyExcel.write(file, clazz).build();
+        try {
+            WriteSheet writeSheet = EasyExcel.writerSheet(sheetName).build();
+            int pageNo = 0;
+            while (true) {
+                List&lt;?&gt; page = pageQuery.query(pageNo++, pageSize);
+                if (page == null || page.isEmpty()) {
+                    break;
+                }
+                excelWriter.write(page, writeSheet);
             }
-         } catch (IOException e) {
-            log.error(&quot;excel文件读取失败, 失败原因：{}&quot;, e);
-         }
-      }
-      return null;
-   }
+        } finally {
+            excelWriter.finish();
+        }
+    }
 
-   /**
-    * 生成excle
-    * @param filePath  绝对路径, 如：/home/chenmingjian/Downloads/aaa.xlsx
-    * @param data 数据源
-    * @param head 表头
-    */
-   public static void writeBySimple(String filePath, List&lt;List&lt;Object&gt;&gt; data, List&lt;String&gt; head){
-      writeSimpleBySheet(filePath,data,head,null);
-   }
-
-   /**
-    * 生成excle
-    * @param filePath 绝对路径, 如：/home/chenmingjian/Downloads/aaa.xlsx
-    * @param data 数据源
-    * @param sheet excle页面样式
-    * @param head 表头
-    */
-   public static void writeSimpleBySheet(String filePath, List&lt;List&lt;Object&gt;&gt; data, List&lt;String&gt; head, Sheet sheet){
-      sheet = (sheet != null) ? sheet : initSheet;
-
-      if(head != null){
-         List&lt;List&lt;String&gt;&gt; list = new ArrayList&lt;&gt;();
-         head.forEach(h -&gt; list.add(Collections.singletonList(h)));
-         sheet.setHead(list);
-      }
-
-      OutputStream outputStream = null;
-      ExcelWriter writer = null;
-      try {
-         outputStream = new FileOutputStream(filePath);
-         writer = EasyExcelFactory.getWriter(outputStream);
-         writer.write1(data,sheet);
-      } catch (FileNotFoundException e) {
-         log.error(&quot;找不到文件或文件路径错误, 文件：{}&quot;, filePath);
-      }finally {
-         try {
-            if(writer != null){
-               writer.finish();
-            }
-
-            if(outputStream != null){
-               outputStream.close();
-            }
-
-         } catch (IOException e) {
-            log.error(&quot;excel文件导出失败, 失败原因：{}&quot;, e);
-         }
-      }
-
-   }
-
-   /**
-    * 生成excle
-    * @param filePath 绝对路径, 如：/home/chenmingjian/Downloads/aaa.xlsx
-    * @param data 数据源
-    */
-   public static void writeWithTemplate(String filePath, List&lt;? extends BaseRowModel&gt; data){
-      writeWithTemplateAndSheet(filePath,data,null);
-   }
-
-   /**
-    * 生成excle
-    * @param filePath 绝对路径, 如：/home/chenmingjian/Downloads/aaa.xlsx
-    * @param data 数据源
-    * @param sheet excle页面样式
-    */
-   public static void writeWithTemplateAndSheet(String filePath, List&lt;? extends BaseRowModel&gt; data, Sheet sheet){
-      if(CollectionUtils.isEmpty(data)){
-         return;
-      }
-
-      sheet = (sheet != null) ? sheet : initSheet;
-      sheet.setClazz(data.get(0).getClass());
-
-      OutputStream outputStream = null;
-      ExcelWriter writer = null;
-      try {
-         outputStream = new FileOutputStream(filePath);
-         writer = EasyExcelFactory.getWriter(outputStream);
-         writer.write(data,sheet);
-      } catch (FileNotFoundException e) {
-         log.error(&quot;找不到文件或文件路径错误, 文件：{}&quot;, filePath);
-      }finally {
-         try {
-            if(writer != null){
-               writer.finish();
-            }
-
-            if(outputStream != null){
-               outputStream.close();
-            }
-         } catch (IOException e) {
-            log.error(&quot;excel文件导出失败, 失败原因：{}&quot;, e);
-         }
-      }
-
-   }
-
-   /**
-    * 生成多Sheet的excle
-    * @param filePath 绝对路径, 如：/home/chenmingjian/Downloads/aaa.xlsx
-    * @param multipleSheelPropetys
-    */
-   public static void writeWithMultipleSheel(String filePath,List&lt;MultipleSheelPropety&gt; multipleSheelPropetys){
-      if(CollectionUtils.isEmpty(multipleSheelPropetys)){
-         return;
-      }
-
-      OutputStream outputStream = null;
-      ExcelWriter writer = null;
-      try {
-         outputStream = new FileOutputStream(filePath);
-         writer = EasyExcelFactory.getWriter(outputStream);
-         for (MultipleSheelPropety multipleSheelPropety : multipleSheelPropetys) {
-            Sheet sheet = multipleSheelPropety.getSheet() != null ? multipleSheelPropety.getSheet() : initSheet;
-            if(!CollectionUtils.isEmpty(multipleSheelPropety.getData())){
-               sheet.setClazz(multipleSheelPropety.getData().get(0).getClass());
-            }
-            writer.write(multipleSheelPropety.getData(), sheet);
-         }
-
-      } catch (FileNotFoundException e) {
-         log.error(&quot;找不到文件或文件路径错误, 文件：{}&quot;, filePath);
-      }finally {
-         try {
-            if(writer != null){
-               writer.finish();
-            }
-
-            if(outputStream != null){
-               outputStream.close();
-            }
-         } catch (IOException e) {
-            log.error(&quot;excel文件导出失败, 失败原因：{}&quot;, e);
-         }
-      }
-
-   }
-
-
-   /*********************匿名内部类开始，可以提取出去******************************/
-
-   @Data
-   public static class MultipleSheelPropety{
-
-      private List&lt;? extends BaseRowModel&gt; data;
-
-      private Sheet sheet;
-   }
-
-   /**
-    * 解析监听器，
-    * 每解析一行会回调invoke()方法。
-    * 整个excel解析结束会执行doAfterAllAnalysed()方法
-    */
-   @Getter
-   @Setter
-   public static class ExcelListener extends AnalysisEventListener {
-
-      private List&lt;Object&gt; datas = new ArrayList&lt;&gt;();
-
-      /**
-       * 逐行解析
-       * object : 当前行的数据
-       */
-      @Override
-      public void invoke(Object object, AnalysisContext context) {
-         //当前行
-         // context.getCurrentRowNum()
-         if (object != null) {
-            datas.add(object);
-         }
-      }
-
-
-      /**
-       * 解析完所有数据后会调用该方法
-       */
-      @Override
-      public void doAfterAllAnalysed(AnalysisContext context) {
-         //解析结束销毁不用的资源
-      }
-
-   }
-
-   /************************匿名内部类结束，可以提取出去***************************/
-
+    /**
+     * 分页查询回调，避免 ExcelUtil 依赖具体的 DAO 实现
+     */
+    @FunctionalInterface
+    public interface PageQuery&lt;T&gt; {
+        List&lt;T&gt; query(int pageNo, int pageSize);
+    }
 }
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E8%AF%BBexcel">读Excel</a>
 <ul>
+<li><a href="#%E6%B3%A8%E8%A7%A3">注解</a></li>
+<li><a href="#%E5%8F%82%E6%95%B0">参数</a></li>
+<li><a href="#%E8%AF%BBexcel%E7%9A%84%E5%B8%B8%E8%A7%81%E5%9D%91">读 Excel 的常见坑</a></li>
+</ul>
+</li>
 <li>
+<a href="#%E5%86%99excel">写Excel</a>
 <ul>
-<li><a href="#%E8%AF%BBexcel">读Excel</a>
-<ul>
-<li><a href="#%E6%B3%A8%E8%A7%A3">注解</a>
-<ul>
-<li><a href="#excelproperty"><code>ExcelProperty</code></a></li>
-<li><a href="#excelignore"><code>ExcelIgnore</code></a></li>
-<li><a href="#excelignoreunannotated"><code>ExcelIgnoreUnannotated</code></a></li>
-<li><a href="#datetimeformat"><code>DateTimeFormat</code></a></li>
-<li><a href="#numberformat"><code>NumberFormat</code></a></li>
+<li><a href="#%E6%B3%A8%E8%A7%A3-2">注解</a></li>
+<li><a href="#%E5%8F%82%E6%95%B0-2">参数</a></li>
+<li><a href="#%E6%89%B9%E9%87%8F%E5%86%99%E5%85%A5%E4%B8%8Esheet%E5%88%86%E9%A1%B5">批量写入与 Sheet 分页</a></li>
+<li><a href="#%E5%86%99excel%E7%9A%84%E5%B8%B8%E8%A7%81%E5%9D%91">写 Excel 的常见坑</a></li>
+<li><a href="#%E4%B8%8E%E5%8E%9F%E7%94%9Fpoi%E7%9A%84%E5%8F%96%E8%88%8D">与原生 POI 的取舍</a></li>
+<li><a href="#%E5%B8%B8%E8%A7%81%E5%9D%91%E4%B8%8E%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5">常见坑与最佳实践</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8F%82%E6%95%B0">参数</a>
+<li>
+<a href="#webtest">WebTest</a>
 <ul>
-<li><a href="#%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D">概念介绍</a></li>
-<li><a href="#%E9%80%9A%E7%94%A8%E5%8F%82%E6%95%B0">通用参数</a></li>
-<li><a href="#readworkbook">ReadWorkbook</a></li>
-<li><a href="#readsheet">ReadSheet</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E5%86%99excel">写Excel</a>
+<li>
+<a href="#downloaddata">DownloadData</a>
 <ul>
-<li><a href="#%E6%B3%A8%E8%A7%A3-2">注解</a>
+</ul>
+</li>
+<li>
+<a href="#uploaddao">UploadDAO</a>
 <ul>
-<li><a href="#excelproperty-2"><code>ExcelProperty</code></a></li>
-<li><a href="#excelignore-2"><code>ExcelIgnore</code></a></li>
-<li><a href="#excelignoreunannotated-2"><code>ExcelIgnoreUnannotated</code></a></li>
-<li><a href="#datetimeformat-2"><code>DateTimeFormat</code></a></li>
-<li><a href="#numberformat-2"><code>NumberFormat</code></a></li>
 </ul>
 </li>
-<li><a href="#%E5%8F%82%E6%95%B0-2">参数</a>
+<li>
+<a href="#uploaddata">UploadData</a>
 <ul>
-<li><a href="#%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D-2">概念介绍</a></li>
-<li><a href="#%E9%80%9A%E7%94%A8%E5%8F%82%E6%95%B0-2">通用参数</a></li>
-<li><a href="#writeworkbook">WriteWorkbook</a></li>
-<li><a href="#writesheet">WriteSheet</a></li>
-<li><a href="#writetable">WriteTable</a></li>
 </ul>
 </li>
+<li>
+<a href="#uploaddatalistener">UploadDataListener</a>
+<ul>
 </ul>
 </li>
-<li><a href="#webtest">WebTest</a></li>
-<li><a href="#downloaddata">DownloadData</a></li>
-<li><a href="#uploaddao">UploadDAO</a></li>
-<li><a href="#uploaddata">UploadData</a></li>
-<li><a href="#uploaddatalistener">UploadDataListener</a></li>
-<li><a href="#excelutil">ExcelUtil</a></li>
-</ul>
-</li>
+<li>
+<a href="#excelutil">ExcelUtil</a>
+<ul>
 </ul>
 </li>
 </ul>

@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="470" fill="#ffffff"/>
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#5b6b7c"/>
+    </marker>
+    <marker id="arB" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#2f6fd0"/>
+    </marker>
+    <marker id="arG" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#2e9e5b"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">EasyExcel 读写流程与内存模型</text>
+
+  <!-- 读 -->
+  <rect x="24" y="52" width="412" height="248" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="44" y="76" font-size="14" font-weight="700" fill="#2f6fd0">读 Excel（SAX 逐行解析）</text>
+
+  <rect x="44" y="92" width="168" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="128" y="110" font-size="12" fill="#1f2b38" text-anchor="middle">xlsx / xls / csv</text>
+  <text x="128" y="126" font-size="11" fill="#5b6b7c" text-anchor="middle">磁盘文件或输入流</text>
+
+  <line x1="212" y1="113" x2="252" y2="113" stroke="#2f6fd0" marker-end="url(#arB)"/>
+  <text x="232" y="105" font-size="11" fill="#5b6b7c" text-anchor="middle">逐行</text>
+
+  <rect x="254" y="92" width="162" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="335" y="110" font-size="12" fill="#1f2b38" text-anchor="middle">内存中只留 1 行</text>
+  <text x="335" y="126" font-size="11" fill="#5b6b7c" text-anchor="middle">ReadCellData / 实体</text>
+
+  <line x1="335" y1="134" x2="335" y2="164" stroke="#2f6fd0" marker-end="url(#arB)"/>
+
+  <rect x="254" y="166" width="162" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="335" y="184" font-size="12" fill="#1f2b38" text-anchor="middle">invoke(data, context)</text>
+  <text x="335" y="200" font-size="11" fill="#5b6b7c" text-anchor="middle">ReadListener 回调</text>
+
+  <line x1="335" y1="208" x2="335" y2="236" stroke="#2e9e5b" marker-end="url(#arG)"/>
+
+  <rect x="254" y="238" width="162" height="48" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="335" y="256" font-size="12" fill="#1f2b38" text-anchor="middle">攒够 BATCH_COUNT</text>
+  <text x="335" y="272" font-size="11" fill="#5b6b7c" text-anchor="middle">批量入库并 list.clear()</text>
+
+  <rect x="44" y="166" width="168" height="42" rx="8" fill="#ffffff" stroke="#c8d3e0"/>
+  <text x="128" y="184" font-size="12" fill="#1f2b38" text-anchor="middle">doReadSync()</text>
+  <text x="128" y="200" font-size="11" fill="#5b6b7c" text-anchor="middle">一次性返回 List，占内存</text>
+  <line x1="128" y1="208" x2="128" y2="238" stroke="#c8d3e0" marker-end="url(#ar)"/>
+  <rect x="44" y="238" width="168" height="48" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="128" y="256" font-size="12" fill="#1f2b38" text-anchor="middle">仅小数据量可用</text>
+  <text x="128" y="272" font-size="11" fill="#5b6b7c" text-anchor="middle">大文件请用监听器</text>
+
+  <text x="44" y="300" font-size="11" fill="#5b6b7c">读取峰值内存 ≈ 单行对象 + 一批缓存，与总行数无关。</text>
+
+  <!-- 写 -->
+  <rect x="464" y="52" width="412" height="248" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="484" y="76" font-size="14" font-weight="700" fill="#2e9e5b">写 Excel（磁盘缓存 + 分页写入）</text>
+
+  <rect x="484" y="92" width="168" height="42" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="568" y="110" font-size="12" fill="#1f2b38" text-anchor="middle">分页查数据</text>
+  <text x="568" y="126" font-size="11" fill="#5b6b7c" text-anchor="middle">每页 1000～5000 条</text>
+
+  <line x1="652" y1="113" x2="692" y2="113" stroke="#2e9e5b" marker-end="url(#arG)"/>
+  <text x="672" y="105" font-size="11" fill="#5b6b7c" text-anchor="middle">write</text>
+
+  <rect x="694" y="92" width="162" height="42" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="775" y="110" font-size="12" fill="#1f2b38" text-anchor="middle">POI SXSSF 行窗口</text>
+  <text x="775" y="126" font-size="11" fill="#5b6b7c" text-anchor="middle">超出窗口的行落盘</text>
+
+  <line x1="775" y1="134" x2="775" y2="164" stroke="#2e9e5b" marker-end="url(#arG)"/>
+
+  <rect x="694" y="166" width="162" height="42" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="775" y="184" font-size="12" fill="#1f2b38" text-anchor="middle">临时文件</text>
+  <text x="775" y="200" font-size="11" fill="#5b6b7c" text-anchor="middle">inMemory=false 默认</text>
+
+  <line x1="775" y1="208" x2="775" y2="236" stroke="#5b6b7c" marker-end="url(#ar)"/>
+
+  <rect x="694" y="238" width="162" height="48" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="775" y="256" font-size="12" fill="#1f2b38" text-anchor="middle">finish()</text>
+  <text x="775" y="272" font-size="11" fill="#5b6b7c" text-anchor="middle">刷盘、合并、关流</text>
+
+  <rect x="484" y="166" width="168" height="42" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="568" y="184" font-size="12" fill="#1f2b38" text-anchor="middle">数据源迭代器 / 分页函数</text>
+  <text x="568" y="200" font-size="11" fill="#5b6b7c" text-anchor="middle">不要先查全量 List</text>
+  <line x1="568" y1="208" x2="568" y2="238" stroke="#e08a1e" marker-end="url(#ar)"/>
+  <rect x="484" y="238" width="168" height="48" rx="8" fill="#ffffff" stroke="#c8d3e0"/>
+  <text x="568" y="256" font-size="12" fill="#1f2b38" text-anchor="middle">一次 write 一页</text>
+  <text x="568" y="272" font-size="11" fill="#5b6b7c" text-anchor="middle">同一 WriteSheet 可复用</text>
+
+  <text x="484" y="300" font-size="11" fill="#5b6b7c">写入峰值内存 ≈ 行窗口 + 单页数据，与总行数无关。</text>
+
+  <!-- 底部对比 -->
+  <rect x="24" y="318" width="852" height="130" rx="8" fill="#ffffff" stroke="#c8d3e0"/>
+  <text x="44" y="342" font-size="14" font-weight="700" fill="#1f2b38">内存占用对比：全量模型 vs 流式模型</text>
+
+  <text x="44" y="368" font-size="12" fill="#5b6b7c">普通 POI / doReadSync</text>
+  <rect x="196" y="356" width="650" height="18" rx="4" fill="#e08a1e"/>
+  <text x="521" y="369" font-size="11" fill="#ffffff" text-anchor="middle">整份工作簿（10 万行）常驻堆内存 → 极易 OOM</text>
+
+  <text x="44" y="404" font-size="12" fill="#5b6b7c">EasyExcel 监听器 / 分页写</text>
+  <rect x="196" y="392" width="96" height="18" rx="4" fill="#2e9e5b"/>
+  <text x="252" y="405" font-size="11" fill="#ffffff" text-anchor="middle">一行</text>
+  <text x="306" y="405" font-size="11" fill="#5b6b7c">内存曲线近似水平，行数再多也不变</text>
+
+  <text x="44" y="434" font-size="11" fill="#5b6b7c">注意：doReadSync、inMemory(true)、一次性 doWrite(全量 List) 都会退回全量模型，失去流式优势。</text>
+</svg>
