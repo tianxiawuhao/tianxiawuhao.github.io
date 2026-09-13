@@ -125,8 +125,8 @@
           
           <img class="post-feature-header-image" src="/post-images/awhwcpAEp.png" alt="封面图">
           
-          <p>git工作流程图</p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1641954851042.jpg" alt="" loading="lazy"></figure>
+          <p>先看一张 Git 工作流程图，理清文件在各个区域之间的流转。</p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1641954851042.jpg" alt="Git 工作流程图：文件在工作区、暂存区、本地仓库与远程仓库之间的流转" loading="lazy"></figure>
 <p>下面是常用的 Git 命令清单。几个专用名词的译名如下：</p>
 <ul>
 <li>Workspace：工作区</li>
@@ -134,6 +134,8 @@
 <li>Repository：仓库区（或本地仓库）</li>
 <li>Remote：远程仓库</li>
 </ul>
+<p>下图把这四个区域之间的数据流向和最常用的几条命令串在一起，后文清单按功能分类展开，可以对照查阅。</p>
+<p><img src="/post-assets/awhwcpAEp/01-git-four-areas.svg" alt="Git 四大区域流转示意图：工作区经 git add 进入暂存区，经 git commit 进入本地仓库，再经 git push 推送到远程仓库"></p>
 <h2 id="一-新建代码库">一、新建代码库</h2>
 <pre><code class="language-shell"># 在当前目录新建一个Git代码库
 $ git init
@@ -228,7 +230,7 @@ $ git checkout [branch-name]
 $ git checkout -
 
 # 建立追踪关系，在现有分支与指定的远程分支之间
-$ git branch --set-upstream [branch] [remote-branch]
+$ git branch --set-upstream-to=[remote-branch] [branch]
 
 # 合并指定分支到当前分支
 $ git merge [branch]
@@ -236,11 +238,13 @@ $ git merge [branch]
 # 选择一个commit，合并进当前分支
 $ git cherry-pick [commit]
 
-# 删除分支
+# 删除本地分支（-D 可强制删除尚未合并的分支）
 $ git branch -d [branch-name]
 
 # 删除远程分支
 $ git push origin --delete [branch-name]
+
+# 删除本地保存的远程跟踪分支（不会影响远程仓库）
 $ git branch -dr [remote/branch]
 </code></pre>
 <h2 id="六-标签">六、标签</h2>
@@ -298,7 +302,7 @@ $ git whatchanged [file]
 $ git log -p [file]
 
 # 显示过去5次提交
-$ git log -5 --pretty --oneline
+$ git log -5 --oneline
 
 # 显示所有提交过的用户，按提交次数排序
 $ git shortlog -sn
@@ -359,6 +363,8 @@ $ git push [remote] --force
 $ git push [remote] --all
 </code></pre>
 <h2 id="九-撤销">九、撤销</h2>
+<p>撤销类命令容易误伤数据，先弄清 <code>git reset</code> 的三种模式分别影响哪些区域，再决定用哪一条。另外 <code>git checkout</code> 身兼两职，Git 2.23 起已拆分为语义更明确的 <code>git restore</code>（恢复文件）和 <code>git switch</code>（切换分支），下面的旧写法目前仍然可用。</p>
+<p><img src="/post-assets/awhwcpAEp/02-git-reset-modes.svg" alt="git reset 的 --soft、--mixed、--hard 三种模式对 HEAD、暂存区和工作区的影响对比表"></p>
 <pre><code class="language-shell"># 恢复暂存区的指定文件到工作区
 $ git checkout [file]
 
@@ -390,29 +396,67 @@ $ git revert [commit]
 # 暂时将未提交的变化移除，稍后再移入
 $ git stash
 $ git stash pop
+
+# 撤销工作区中指定文件的修改（Git 2.23+）
+$ git restore [file]
+
+# 取消暂存：把文件移出暂存区，工作区改动仍然保留（Git 2.23+）
+$ git restore --staged [file]
 </code></pre>
 <h2 id="十-其他">十、其他</h2>
-<pre><code class="language-shell"># 生成一个可供发布的压缩包
-$ git archive
+<pre><code class="language-shell"># 生成一个可供发布的压缩包（格式由输出文件后缀决定，需指定要打包的提交）
+$ git archive --format=tar.gz -o release.tar.gz HEAD
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E6%96%B0%E5%BB%BA%E4%BB%A3%E7%A0%81%E5%BA%93">一、新建代码库</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E4%B8%80-%E6%96%B0%E5%BB%BA%E4%BB%A3%E7%A0%81%E5%BA%93">一、新建代码库</a></li>
-<li><a href="#%E4%BA%8C-%E9%85%8D%E7%BD%AE">二、配置</a></li>
-<li><a href="#%E4%B8%89-%E5%A2%9E%E5%8A%A0%E5%88%A0%E9%99%A4%E6%96%87%E4%BB%B6">三、增加/删除文件</a></li>
-<li><a href="#%E5%9B%9B-%E4%BB%A3%E7%A0%81%E6%8F%90%E4%BA%A4">四、代码提交</a></li>
-<li><a href="#%E4%BA%94-%E5%88%86%E6%94%AF">五、分支</a></li>
-<li><a href="#%E5%85%AD-%E6%A0%87%E7%AD%BE">六、标签</a></li>
-<li><a href="#%E4%B8%83-%E6%9F%A5%E7%9C%8B%E4%BF%A1%E6%81%AF">七、查看信息</a></li>
-<li><a href="#%E5%85%AB-%E8%BF%9C%E7%A8%8B%E5%90%8C%E6%AD%A5">八、远程同步</a></li>
-<li><a href="#%E4%B9%9D-%E6%92%A4%E9%94%80">九、撤销</a></li>
-<li><a href="#%E5%8D%81-%E5%85%B6%E4%BB%96">十、其他</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-%E9%85%8D%E7%BD%AE">二、配置</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E5%A2%9E%E5%8A%A0%E5%88%A0%E9%99%A4%E6%96%87%E4%BB%B6">三、增加/删除文件</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E4%BB%A3%E7%A0%81%E6%8F%90%E4%BA%A4">四、代码提交</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-%E5%88%86%E6%94%AF">五、分支</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-%E6%A0%87%E7%AD%BE">六、标签</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-%E6%9F%A5%E7%9C%8B%E4%BF%A1%E6%81%AF">七、查看信息</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AB-%E8%BF%9C%E7%A8%8B%E5%90%8C%E6%AD%A5">八、远程同步</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B9%9D-%E6%92%A4%E9%94%80">九、撤销</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%8D%81-%E5%85%B6%E4%BB%96">十、其他</a>
+<ul>
 </ul>
 </li>
 </ul>
