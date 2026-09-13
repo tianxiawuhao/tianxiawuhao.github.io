@@ -132,8 +132,7 @@
 <h2 id="ch1-why-minio">一、为什么要使用 MinIO</h2>
 <p>其实抛开Ceph这类复杂的存储解决方案外，小公司小团队的选择一般都会是FastDFS或者MinIO，那么这里我们就简单对比下MinIO相较于FastDFS的优势！</p>
 <p><strong>1、安装部署(运维)复杂度</strong></p>
-<p>虽然我觉得FastDFS安装也不算很复杂，但是MinIO的安装可以说更简单；</p>
-<p>FastDFS安装：</p>
+<p>虽然我觉得 FastDFS 的安装也不算很复杂，但 MinIO 的安装可以说更简单。</p>
 <p><strong>2、文档</strong></p>
 <p>FastDFS可以说发展了十几年几乎没有官方文档，都是靠热心网友投稿；</p>
 <p>而MinIO文档还是比较全的，中文文档：http://docs.minio.org.cn/docs/master/minio-monitoring-guide</p>
@@ -155,8 +154,9 @@
 <p>什么意思？就是说你现在为了节约成本使用MinIO，等你的公司壮大了、有钱了。不想自己运维基础设施了，你就可以把对象存储放到云上，只要云厂商支持S3标准，你的应用程序是不需要重新开发的。</p>
 <hr>
 <h2 id="ch2-centos">二、MinIO 的部署之 CentOS 单机部署</h2>
+<p><img src="/post-assets/CIqmuU7wS/01-deploy-modes.svg" alt="MinIO 单机、纠删码与分布式三种部署模式对比"></p>
 <blockquote>
-<p>此单机模式下，每份对象数据都直接存储在 data 目录下：不建立副本、不启用纠删码机制，存在单点故障风险。</p>
+<p>此单机模式下，每份对象数据都直接存放在数据目录（本文示例为 <code>/mnt/data</code>）下：不建立副本、不启用纠删码机制，存在单点故障风险。</p>
 </blockquote>
 <p><strong>1、直接下载二进制执行文件，并启动：</strong></p>
 <p>文件下载地址：https://min.io/download#/linux</p>
@@ -356,6 +356,7 @@ Created symlink from /etc/systemd/system/multi-user.target.wants/minio.service t
 </ul>
 </blockquote>
 <p>比如我打算用三台机器部署分布式集群，挂载6块盘</p>
+<p><img src="/post-assets/CIqmuU7wS/02-distributed-arch.svg" alt="MinIO 分布式集群部署架构：客户端经负载均衡访问三节点集群"></p>
 <p><strong>1、首先，在三台机器的 /usr/local/minio 目录下下载好我们的minio程序，并添加环境变量：</strong></p>
 <pre><code class="language-shell">chmod +x minio
 export MINIO_ROOT_USER=admin 
@@ -363,10 +364,11 @@ export MINIO_ROOT_PASSWORD=Haier2022
 </code></pre>
 <p><strong>2、在每台机器上，都执行以下命令，启动集群：</strong></p>
 <pre><code class="language-shell">nohup /usr/local/minio/minio server --config-dir /minio/config --address ':9000' --console-address ':9001' \
-http://10.206.73.154/minio/data1 http://10.206.73.154/minio/data2\
-http://10.206.73.155/minio/data1 http://10.206.73.155/minio/data2\
-http://10.206.73.156/minio/data1 http://10.206.73.156/minio/data2&gt; /usr/local/minio/log.file 2&gt;&amp;1 &amp;
+http://10.206.73.154/minio/data1 http://10.206.73.154/minio/data2 \
+http://10.206.73.155/minio/data1 http://10.206.73.155/minio/data2 \
+http://10.206.73.156/minio/data1 http://10.206.73.156/minio/data2 &gt; /usr/local/minio/log.file 2&gt;&amp;1 &amp;
 </code></pre>
+<p>注意：反斜杠续行时行尾<strong>必须留一个空格</strong>（写成 <code>data2 \</code>），否则 shell 会把两行直接拼成 <code>data2http://…</code> 这种错误地址；重定向符 <code>&gt;</code> 前同样要留空格。另外，<code>--config-dir</code> 是旧版本的参数，较新的 MinIO 版本已用环境变量 <code>MINIO_CONFIG_ENV_FILE</code> 取代它，升级后请对照官方文档调整。</p>
 <p>但是当我们执行时，经常会碰到这个问题：</p>
 <figure data-type="image" tabindex="7"><img src="/post-images/1645147392632219.png" alt="image.png" loading="lazy"></figure>
 <blockquote>
@@ -376,7 +378,7 @@ http://10.206.73.156/minio/data1 http://10.206.73.156/minio/data2&gt; /usr/local
 <pre><code class="language-shell">nohup /usr/local/minio/minio server --config-dir /minio/config --address ':9000' --console-address ':9001' \
 http://10.206.73.156/minio/data1 http://10.206.73.156/minio/data2 \
 http://10.206.73.156/minio/data3 http://10.206.73.156/minio/data4 \
-http://10.206.73.156/minio/data5 http://10.206.73.156/minio/data6&gt; /usr/local/minio/log.file 2&gt;&amp;1 &amp;
+http://10.206.73.156/minio/data5 http://10.206.73.156/minio/data6 &gt; /usr/local/minio/log.file 2&gt;&amp;1 &amp;
 </code></pre>
 <figure data-type="image" tabindex="8"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20220222/1645530765327519.png" alt="image.png" loading="lazy"></figure>
 <p><strong>4、在minio的9001面板中，对服务进行监控：</strong></p>
@@ -384,12 +386,28 @@ http://10.206.73.156/minio/data5 http://10.206.73.156/minio/data6&gt; /usr/local
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#ch1-why-minio">一、为什么要使用 MinIO</a>
 <ul>
-<li><a href="#ch1-why-minio">一、为什么要使用 MinIO</a></li>
-<li><a href="#ch2-centos">二、MinIO 的部署之 CentOS 单机部署</a></li>
-<li><a href="#ch3-docker">三、MinIO 的部署之 Docker 单机部署</a></li>
-<li><a href="#ch4-erasure">四、MinIO 的部署之纠删码模式部署</a></li>
-<li><a href="#ch5-distributed">五、MinIO 的部署之分布式集群部署</a></li>
+</ul>
+</li>
+<li>
+<a href="#ch2-centos">二、MinIO 的部署之 CentOS 单机部署</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch3-docker">三、MinIO 的部署之 Docker 单机部署</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch4-erasure">四、MinIO 的部署之纠删码模式部署</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#ch5-distributed">五、MinIO 的部署之分布式集群部署</a>
+<ul>
 </ul>
 </li>
 </ul>
