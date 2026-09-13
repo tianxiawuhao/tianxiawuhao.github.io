@@ -123,12 +123,14 @@
           
           <img class="post-feature-header-image" src="/post-images/xWe8SRVUm.png" alt="封面图">
           
-          <h2 id="graalvm-native-image-springboot3实战">GraalVM + Native-Image + Springboot3（实战）</h2>
-<p><strong>一、首先准备一个 Spring Boot 项目</strong></p>
-<p><strong>1、新建一个项目，JDK 使用 GraalVM JDK 17：</strong></p>
-<figure data-type="image" tabindex="1"><img src="/post-images/1693568495479.png" alt="" loading="lazy"></figure>
-<p>Spring Boot 版本我选择 3.1.1，以一个 Web 项目为例：</p>
-<figure data-type="image" tabindex="2"><img src="/post-images/1693568509351.png" alt="" loading="lazy"></figure>
+          <h2 id="graalvm-native-image-springboot3实战">GraalVM + Native-Image + Spring Boot 3（实战）</h2>
+<p class="post-lead">GraalVM Native Image 可以把 Spring Boot 3 应用提前编译（AOT）成不依赖 JVM 的原生可执行文件，换来毫秒级启动与更低的内存占用。本文以 Windows 为例，从一个最小的 Web 项目出发，走完「打包 → AOT 处理 → native 编译 → 双击运行验证」的完整流程，并记录 Windows 下最容易卡住的 MSVC 环境变量配置。</p>
+
+<h3 id="一-准备-spring-boot-项目">一、准备 Spring Boot 项目</h3>
+<p><strong>1、新建项目，JDK 选择 GraalVM JDK 17。</strong>Spring Boot 3 要求 JDK 17 及以上，而 <code>native-image</code> 命令由 GraalVM 发行版提供，所以这里直接把 <code>JAVA_HOME</code> 指向 GraalVM 自带的 JDK：</p>
+<figure data-type="image" tabindex="1"><img src="/post-images/1693568495479.png" alt="在 IDEA 中新建项目并选择 GraalVM JDK 17" loading="lazy"></figure>
+<p>Spring Boot 版本选择 3.1.1，以一个 Web 项目为例：</p>
+<figure data-type="image" tabindex="2"><img src="/post-images/1693568509351.png" alt="选择 Spring Boot 3.1.1 与 Spring Web 依赖" loading="lazy"></figure>
 <p>自动生成核心的 pom.xml 文件：</p>
 <pre><code class="language-xml">&lt;!-- 核心依赖示例 --&gt;
 &lt;dependency&gt;
@@ -155,59 +157,61 @@ public class GraalController {
     }
 }
 </code></pre>
-<p><strong>3、常规运行并访问该 demo 接口：</strong></p>
-<figure data-type="image" tabindex="3"><img src="/post-images/1693568523479.png" alt="" loading="lazy"></figure>
+<p><strong>3、常规运行并访问该 demo 接口。</strong>先在 JVM 模式下确认业务代码本身没问题，这样后面原生编译失败时，就能判断问题出在 native-image 的编译环境上，而不是代码：</p>
+<figure data-type="image" tabindex="3"><img src="/post-images/1693568523479.png" alt="JVM 模式启动后访问接口返回 Hello Springboot3 AOT" loading="lazy"></figure>
 <p>项目运行无问题，可用于测试。</p>
 <hr>
-<p><strong>二、使用native-image命令编译Springboot项目（Windows）</strong></p>
-<p>核心命令：</p>
-<pre><code class="language-text">1、先对原项目进行一次package打包：mvn clean package -DskipTests
-2、运行aot提前处理命令：mvn spring-boot:process-aot
-3、运行native打包：mvn -Pnative native:build
-当然，也可以在Idea的界面上进行操作！
-</code></pre>
-<p><strong>1、但是如果在Windows环境下，直接运行 native:build 命令，会报如下的错误：</strong></p>
+
+<h3 id="二-核心编译命令">二、核心编译命令</h3>
+<p>Spring Boot 3 已经内置了原生编译的 Maven 支持，按顺序执行下面三条命令即可（在 IDEA 的 Maven 面板里执行对应插件目标，效果相同）：</p>
+<pre><code class="language-bash"># 1、先对原项目进行一次 package 打包
+mvn clean package -DskipTests
+
+# 2、运行 AOT 提前处理命令，生成 GraalVM 需要的元数据
+mvn spring-boot:process-aot
+
+# 3、运行 native 编译，产物是原生可执行文件
+mvn -Pnative native:compile</code></pre>
+<p>注意 <code>native:compile</code> 是 native-maven-plugin 较新版本中的目标名（更早的版本写作 <code>native:build</code>，在新版本中已标记为过时）。如果执行时报「找不到该目标」，把 <code>native:compile</code> 换成插件版本对应的写法即可。另外，使用 <code>-Pnative</code> 时插件生命周期内通常已自动完成 AOT 处理，第 2 步主要用于单独检查 AOT 生成结果。</p>
+<p><strong>1、如果在 Windows 环境下直接运行编译命令，会报如下的错误：</strong></p>
 <pre><code class="language-text">Execution of C:\installation\graalvm-jdk17\graalvm-community-openjdk-17.0.8\bin\native-image.cmd @target\tmp\native-image-16043596690894935382.args returned non-zero result
 </code></pre>
-<p>这个错误解决起来比较麻烦，需要配置一系列环境变量。</p>
+<p>原因是 native-image 在 Windows 上要调用 MSVC 的 C/C++ 编译器（<code>cl.exe</code>）和链接器，必须让 native-image 找到 MSVC 与 Windows SDK 的头文件、库文件目录。这个错误解决起来比较麻烦，需要修改 3 个环境变量：<strong>Path、INCLUDE、LIB</strong>。</p>
 <blockquote>
-<p><strong>需要修改 3 个环境变量：Path、INCLUDE、LIB</strong></p>
-<p><strong>首先需要知道自己机器上 Visual Studio 与 Windows Kits 的安装位置，我的如下：</strong></p>
+<p><strong>首先需要知道自己机器上 Visual Studio 与 Windows Kits 的安装位置，我的如下（版本号会因安装版本而不同）：</strong></p>
 <ul>
-<li><strong>Visual Studio安装目录：C:\Program Files\Microsoft Visual Studio\2022\Community</strong></li>
-<li><strong>其中MSVC的include目录位置：C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\include</strong></li>
-<li><strong>其中MSVC的lib目录位置：C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\lib\x64</strong></li>
-<li><strong>Windows工具包的include目录位置：C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0</strong></li>
-<li><strong>Windows工具包的lib目录位置：C:\Program Files (x86)\Windows Kits\10\Lib\10.0.22000.0</strong></li>
+<li><strong>Visual Studio 安装目录：C:\Program Files\Microsoft Visual Studio\2022\Community</strong></li>
+<li><strong>其中 MSVC 的 include 目录位置：C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\include</strong></li>
+<li><strong>其中 MSVC 的 lib 目录位置：C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\lib\x64</strong></li>
+<li><strong>Windows 工具包的 include 目录位置：C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0</strong></li>
+<li><strong>Windows 工具包的 lib 目录位置：C:\Program Files (x86)\Windows Kits\10\Lib\10.0.22000.0</strong></li>
 </ul>
 </blockquote>
-<ul>
-<li><strong>配置第1个环境变量，在Path中添加：</strong></li>
-</ul>
-<pre><code class="language-yaml">C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\bin\Hostx64\x64
+<figure data-type="image" tabindex="4"><img src="/post-assets/xWe8SRVUm/01-windows-native-env.svg" alt="Windows 下 native-image 编译需要配置的 Path、INCLUDE、LIB 三个环境变量及各自取值" loading="lazy"></figure>
+
+<h3 id="三-配置三个环境变量">三、配置三个环境变量</h3>
+<p><strong>配置第 1 个环境变量，在 Path 中添加 cl.exe 所在目录：</strong></p>
+<pre><code class="language-text">C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\bin\Hostx64\x64
 </code></pre>
-<figure data-type="image" tabindex="4"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20230713/1689242677999870.png" alt="1689242677999870.png" loading="lazy"></figure>
-<ul>
-<li><strong>配置第2个环境变量，新增INCLUDE环境变量：</strong></li>
-</ul>
-<pre><code class="language-yaml">C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\include;
+<p><strong>配置第 2 个环境变量，新增 INCLUDE 环境变量（MSVC 与 Windows SDK 的头文件目录）：</strong></p>
+<pre><code class="language-text">C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\include;
 C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\shared;
 C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\ucrt;
 C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\um;
 C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\winrt;
 </code></pre>
-<figure data-type="image" tabindex="5"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20230713/1689242721790191.png" alt="1689242721790191.png" loading="lazy"></figure>
-<ul>
-<li><strong>配置第3个环境变量，新增lib环境变量：</strong></li>
-</ul>
-<pre><code class="language-yaml">C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\lib\x64;
+<p><strong>配置第 3 个环境变量，新增 LIB 环境变量（与上面头文件对应的库目录）：</strong></p>
+<pre><code class="language-text">C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.35.32215\lib\x64;
 C:\Program Files (x86)\Windows Kits\10\Lib\10.0.22000.0\um\x64;
 C:\Program Files (x86)\Windows Kits\10\Lib\10.0.22000.0\ucrt\x64;
 </code></pre>
-<figure data-type="image" tabindex="6"><img src="https://www.jiguiquan.com/wp-content/uploads/image/20230713/1689242019176787.png" alt="1689242019176787.png" loading="lazy"></figure>
-<p><strong>2、上面的环境变量正确配置完成后，我们就可以执行最初的命令了：</strong></p>
-<p>为了保险起见，我们在本地 Native 工具中执行 native 编译操作：</p>
-<pre><code class="language-yaml">------------------------------------------------------------------------------------------------------------------------
+<blockquote>
+<p><strong>改完环境变量要重启命令行窗口或 IDEA，否则新进程读到的仍是旧值。</strong>更省事的替代做法是直接使用 Visual Studio 提供的「x64 Native Tools Command Prompt for VS 2022」，该窗口已经预设好这些变量，在其中执行 native 编译即可。</p>
+</blockquote>
+
+<h3 id="四-编译并验证结果">四、编译并验证结果</h3>
+<p><strong>1、上面的环境变量正确配置完成后，我们就可以执行最初的命令了。</strong>为了保险起见，我们在本地 Native 工具中执行 native 编译操作，产物输出在 <code>target</code> 目录：</p>
+<pre><code class="language-text">------------------------------------------------------------------------------------------------------------------------
 Recommendations:
  HEAP: Set max heap for improved and more predictable memory usage.
  CPU:  Enable more CPU features with '-march=native' for improved performance.
@@ -227,16 +231,22 @@ Finished generating 'graalvm' in 57.1s.
 
 </code></pre>
 <p>最终生成了一个可执行文件 graalvm.exe。</p>
-<p><strong>3、我们直接双击运行 graalvm.exe 文件，验证打包是否成功：</strong></p>
-<figure data-type="image" tabindex="7"><img src="/post-images/1693568544330.png" alt="" loading="lazy"></figure>
+<p><strong>2、我们直接双击运行 graalvm.exe 文件，验证打包是否成功：</strong></p>
+<figure data-type="image" tabindex="5"><img src="/post-images/1693568544330.png" alt="双击运行 graalvm.exe 后应用在 0.1 秒内启动完成" loading="lazy"></figure>
 <blockquote>
 <p><strong>整个项目在 0.1 秒内完成启动，这正验证了 AOT 打成可执行文件后运行速度非常快。</strong></p>
 </blockquote>
+<figure data-type="image" tabindex="6"><img src="/post-assets/xWe8SRVUm/02-native-image-flow.svg" alt="Spring Boot 3 原生镜像编译流程，以及 JVM 模式与原生可执行文件在启动速度和内存占用上的差异" loading="lazy"></figure>
+<p>最后补充一点取舍：原生可执行文件的优势集中在<strong>启动速度</strong>与<strong>内存占用</strong>上，但它并非在所有场景都更快——静态编译的峰值吞吐通常不如经过 JIT 长期优化的 JVM，反射、动态代理、动态类加载等运行期动态特性也受到限制，构建时间更长。因此它更适合 Serverless、命令行工具、需要快速伸缩的短生命周期容器等场景，而不是无差别地替换 JVM 部署。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#graalvm-native-image-springboot3%E5%AE%9E%E6%88%98">GraalVM + Native-Image + Spring Boot 3（实战）</a>
 <ul>
-<li><a href="#graalvm-native-image-springboot3%E5%AE%9E%E6%88%98">GraalVM + Native-Image + Springboot3（实战）</a></li>
+<li><a href="#%E4%B8%80-%E5%87%86%E5%A4%87-spring-boot-%E9%A1%B9%E7%9B%AE">一、准备 Spring Boot 项目</a></li>
+<li><a href="#%E4%BA%8C-%E6%A0%B8%E5%BF%83%E7%BC%96%E8%AF%91%E5%91%BD%E4%BB%A4">二、核心编译命令</a></li>
+<li><a href="#%E4%B8%89-%E9%85%8D%E7%BD%AE%E4%B8%89%E4%B8%AA%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F">三、配置三个环境变量</a></li>
+<li><a href="#%E5%9B%9B-%E7%BC%96%E8%AF%91%E5%B9%B6%E9%AA%8C%E8%AF%81%E7%BB%93%E6%9E%9C">四、编译并验证结果</a></li>
 </ul>
 </li>
 </ul>
