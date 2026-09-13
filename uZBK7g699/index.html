@@ -126,7 +126,13 @@
           <img class="post-feature-header-image" src="/post-images/uZBK7g699.png" alt="封面图">
           
           <h2 id="工具类">工具类</h2>
+<p>「工具类」是项目里复用度最高、也最容易失控的一类代码：同一个功能，有人用 <code>StringUtils.isEmpty</code>，有人用 <code>StrUtil.isBlank</code>，有人手写 <code>a == null || a.length() == 0</code>；同一个判空，写法能有五六种。结果就是依赖越引越多，边界行为各不相同，出问题时排查成本很高。</p>
+<p>下面按用途把工具类分成四类，分别给出这一篇里收录的 <code>HttpUtil</code>、<code>JavaScriptUtil</code>、<code>MinioUtil</code> 三个实现，以及它们各自需要留意的坑。</p>
+<p><img src="/post-assets/uZBK7g699/01-utility-map.svg" alt="Java 工具类按用途分类图：HTTP 远程调用、字符串集合判空、对象存储文件 IO、脚本表达式引擎"></p>
+<p>通用原则只有两条：能只用 JDK 和 Spring 自带能力解决的，就不要引入第三方库；确实要引，就全项目统一一套，禁止同一功能同时存在多套实现。判空和默认值的选择路径可以归纳成下面这张图。</p>
+<p><img src="/post-assets/uZBK7g699/02-null-default.svg" alt="判空与默认值的选择路径图：判空、替换默认值、链式取值三种场景的工具选择"></p>
 <h3 id="httputil">HttpUtil</h3>
+<p>下面这个 <code>HttpUtil</code> 把 <code>RestTemplate</code> 包了一层，统一设置 JSON 请求头、统一把异常翻译成业务错误码。它要作为一个 <code>@Component</code> 交给 Spring 管理，同时又要提供静态调用入口，所以用 <code>@PostConstruct</code> 把容器里的 <code>restTemplate</code> 回填到静态字段上。</p>
 <pre><code class="language-java">import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import dt.logincenter.exception.BusinessException;
@@ -326,55 +332,14 @@ public class HttpUtil {
      */
     public InputStream sendGet(String url) {
         try {
-            String path=ResourceUtils.getURL(&quot;classpath:&quot;).getPath();
-            File file = new File(path);
-            if (!file.exists())		{
-                file.mkdirs();
-            }
-            //创造文件
-            path=path+&quot;temp.excel&quot;;
-            File tempFile = new File(path);
-            if (!tempFile.exists())		{
-                tempFile.createNewFile();
-            }
-            ResponseEntity&lt;byte[]&gt; rsp = restTemplate.getForEntity(url, byte[].class);
-            System.out.println(&quot;文件下载请求结果状态码：&quot; + rsp.getStatusCode());
-            // 将下载下来的文件内容保存到本地
-            Files.write(Paths.get(path.substring(1)), Objects.requireNonNull(rsp.getBody(), &quot;未获取到下载文件&quot;));
-            return new FileInputStream(path);
-        } catch (Exception e) {
-            if (e.toString().contains(&quot;timed out&quot;)) {
-                throw new BusinessException(ResponseCode.CONNECTION_TIMEOUT);
-            }
-            log.error(&quot;接口调用失败{}&quot;,e);
-            throw new BusinessException(ResponseCode.GETDATA_FAIL);
-        }
-
-    }
-
-      /**
-     * 发送请求Get请求获取流文件
-     *
-     * @param url   请求接口
-     */
-    public InputStream sendGet(String url) {
-        try {
             ResponseEntity&lt;byte[]&gt; entity = restTemplate.getForEntity(url, byte[].class);
             Objects.requireNonNull(entity.getBody());
-            String path=ResourceUtils.getURL(&quot;classpath:&quot;).getPath()+&quot;temp.excel&quot;;
-            BufferedOutputStream bos;
-            FileOutputStream fos;
-            File file;
-            File dir = new File(path);
-            if (!dir.exists()) {// 判断文件目录是否存在
-                dir.mkdirs();
+            // 下载到临时目录，避免污染 classpath 下的编译输出目录
+            File file = File.createTempFile(&quot;download-&quot;, &quot;.tmp&quot;);
+            file.deleteOnExit();
+            try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(file))) {
+                bos.write(Objects.requireNonNull(entity.getBody()));
             }
-            file = new File(path);
-            fos = new FileOutputStream(file);
-            bos = new BufferedOutputStream(fos);
-            bos.write(Objects.requireNonNull(entity.getBody()));
-            bos.close();
-            fos.close();
 
             return new FileInputStream(file);
         } catch (Exception e) {
@@ -388,12 +353,19 @@ public class HttpUtil {
     }
 }
 </code></pre>
+<p>HttpUtil 里有几个值得单独拿出来说的点：</p>
+<ul>
+<li>拼接查询参数时用了 <code>StringBuffer</code>，但它在方法内部创建、不存在跨线程共享，用 <code>StringBuilder</code> 更合适；拼接时也没有做 URL 编码，参数里出现 <code>&amp;</code>、空格或中文就会拼出错误的 URL，建议用 <code>UriComponentsBuilder</code> 来构建。</li>
+<li>判断超时用的是 <code>e.toString().contains(&quot;timed out&quot;)</code>，这依赖异常文案，JDK 或 HTTP 客户端升级后文案一变就失效。应当直接 <code>catch (SocketTimeoutException e)</code>，或按 <code>ResourceAccessException</code> 的 cause 类型判断。</li>
+<li><code>HttpEntity</code> 没有写泛型，编译只产生警告，但可读性差；建议统一写成 <code>HttpEntity&lt;String&gt;</code>。</li>
+<li>方法内 <code>System.out.println</code> 应改为 <code>log.debug</code>；临时文件下载到 classpath 输出目录里，容易污染构建产物，也不便于清理，建议改用 <code>File.createTempFile</code> 并配合 <code>try-with-resources</code> 关流。</li>
+</ul>
 <h3 id="javascriptutil">JavaScriptUtil</h3>
+<p>业务里经常需要把一段可配置的规则（比如「公司类型为 1，或者金额大于 100 就返回 true」）做成表达式，而不是每次改需求都发版。<code>JavaScriptUtil</code> 就是让 Java 直接执行一段 JavaScript 片段，并把结果读回来的工具类。</p>
 <pre><code class="language-java">import org.apache.tomcat.util.buf.StringUtils;
 
 import javax.script.*;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * java执行javaScript代码的工具类
@@ -403,17 +375,30 @@ import java.util.Set;
 public class JavaScriptUtil {
 
     /**
-     * 单例的JavaScript解析引擎
+     * 解析引擎不是线程安全的，这里用 ThreadLocal 让每个线程持有自己的引擎
      */
-    private static final ScriptEngine javaScriptEngine;
-
-    static {
-        ScriptEngineManager manager = new ScriptEngineManager();
-        ScriptEngine scriptEngine = manager.getEngineByName(&quot;js&quot;);
+    private static final ThreadLocal&lt;ScriptEngine&gt; ENGINE_HOLDER = ThreadLocal.withInitial(() -&gt; {
+        ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName(&quot;nashorn&quot;);
         if (scriptEngine == null) {
-            throw new RuntimeException(&quot;获取JavaScript解析引擎失败&quot;);
+            throw new IllegalStateException(&quot;获取JavaScript解析引擎失败&quot;);
         }
-        javaScriptEngine = scriptEngine;
+        return scriptEngine;
+    });
+
+    private JavaScriptUtil() {
+    }
+
+    private static ScriptEngine newEngine() {
+        return ENGINE_HOLDER.get();
+    }
+
+    /**
+     * 复用线程内引擎时，先清空上一次执行残留的变量，避免脚本之间互相干扰
+     */
+    private static ScriptEngine freshEngine() {
+        ScriptEngine engine = newEngine();
+        engine.getBindings(ScriptContext.ENGINE_SCOPE).clear();
+        return engine;
     }
 
 
@@ -425,7 +410,7 @@ public class JavaScriptUtil {
      * @throws ScriptException JavaScript代码运行异常
      */
     public static Object execute(String script) throws ScriptException {
-        return javaScriptEngine.eval(script);
+        return freshEngine().eval(script);
     }
 
 
@@ -438,8 +423,9 @@ public class JavaScriptUtil {
      * @throws ScriptException JavaScript代码运行异常
      */
     public static Object executeForAttribute(String script, String attributeName) throws ScriptException {
-        javaScriptEngine.eval(script);
-        return javaScriptEngine.getContext().getAttribute(attributeName);
+        ScriptEngine engine = freshEngine();
+        engine.eval(script);
+        return engine.getContext().getAttribute(attributeName);
     }
 
     /**
@@ -451,14 +437,8 @@ public class JavaScriptUtil {
      */
     public static Object executeForFirstAttribute(String script) throws ScriptException {
 
-        //这里重新获取一个JavaScript解析引擎是为了避免代码中有其他调用工具类的地方的变量干扰
-        //重新获取后,这个JavaScript解析引擎只执行了这次传入的代码,不会保存其他地方的变量
-        //全局的解析器中会保存最大200个变量,JavaScript解析引擎本身最大保存100个变量
-        ScriptEngineManager manager = new ScriptEngineManager();
-        ScriptEngine scriptEngine = manager.getEngineByName(&quot;js&quot;);
-        if (scriptEngine == null) {
-            throw new RuntimeException(&quot;获取JavaScript解析引擎失败&quot;);
-        }
+        //每个线程复用一个引擎，执行前清空变量，避免和其他调用的变量互相干扰
+        ScriptEngine scriptEngine = freshEngine();
 
         scriptEngine.eval(script);
         ScriptContext context = scriptEngine.getContext();
@@ -469,11 +449,7 @@ public class JavaScriptUtil {
         if (bindings == null) {
             return null;
         }
-        Set&lt;Map.Entry&lt;String, Object&gt;&gt; entrySet = bindings.entrySet();
-        if (entrySet.isEmpty()) {
-            return null;
-        }
-        for (Map.Entry&lt;String, Object&gt; entry : entrySet) {
+        for (Map.Entry&lt;String, Object&gt; entry : bindings.entrySet()) {
             if (entry.getValue() != null) {
                 return entry.getValue();
             }
@@ -487,17 +463,12 @@ public class JavaScriptUtil {
      * Map&lt;String, Object&gt; params = Maps.newHashMap();
      * params.put(&quot;x&quot;, 10);
      * params.put(&quot;y&quot;, 2);
-     * &lt;p&gt;
-     * String script = ”if (company == 1) {
-     * return true;
-     * } else if (company == 2 &amp;&amp; amt &gt; 100) {
-     * return true;
-     * } else if (company == 3 &amp;&amp; amt &gt; 200) {
-     * return true;
-     * } else {
-     * return false;
-     * }“
-     * &lt;p&gt;
+     *
+     * String script = &quot;if (company == 1) { return true; }&quot;
+     *         + &quot; else if (company == 2 &amp;&amp; amt &gt; 100) { return true; }&quot;
+     *         + &quot; else if (company == 3 &amp;&amp; amt &gt; 200) { return true; }&quot;
+     *         + &quot; else { return false; }&quot;;
+     *
      * params.put(&quot;company&quot;, 1);
      * params.put(&quot;amt&quot;, 100);
      *
@@ -507,20 +478,24 @@ public class JavaScriptUtil {
      */
     public static String execute(String script, Map&lt;String, Object&gt; params) {
         try {
-            String paramsName = StringUtils.join(params.keySet(), ',');
+            //注意：参数值由引擎的绑定机制传入，不要直接拼接进脚本文本，否则会有注入风险
+            String paramsName = org.apache.commons.lang3.StringUtils.join(params.keySet(), &quot;,&quot;);
             String executeScript = String.format(&quot;function execute(%s) { %s }&quot;, paramsName, script);
+            ScriptEngine javaScriptEngine = freshEngine();
             javaScriptEngine.eval(executeScript);
             Invocable jsInvoke = (Invocable) javaScriptEngine;
             Object execute = jsInvoke.invokeFunction(&quot;execute&quot;, params.values().toArray());
-            return execute.toString();
+            return String.valueOf(execute);
         } catch (ScriptException | NoSuchMethodException e) {
-            System.out.println(&quot;表达式runtime错误:&quot; + e.getMessage());
+            //不要把异常吞掉返回 null，否则调用方无法区分「结果为 null」和「执行失败」
+            throw new IllegalStateException(&quot;表达式执行失败: &quot; + e.getMessage(), e);
         }
-        return null;
     }
 }
 </code></pre>
+<p>JavaScriptUtil 有三个必须知道的限制。第一，<code>javax.script.ScriptEngine</code> 不是线程安全的，把它做成 static 单例后，多个请求同时执行脚本会互相覆盖 <code>ScriptContext</code> 里的变量，必须用 <code>ThreadLocal</code> 隔离，或者每次执行前清空绑定。第二，Nashorn 引擎在 JDK 11 被标记废弃、JDK 15 已移除，新项目应当改用 GraalJS 等独立引擎，或直接换成表达式引擎（如 Aviator、QLExpress）。第三，脚本内容来自外部配置时，绝不能用字符串拼接的方式把参数塞进脚本文本，否则等同于打开了代码注入的口子。</p>
 <h3 id="minioutil">MinioUtil</h3>
+<p>最后一个是对 MinIO 对象存储的封装，承担桶的创建与检查、文件上传、分片合并、预签名 URL 生成这几件事。</p>
 <pre><code class="language-java">
 import io.minio.*;
 import io.minio.errors.*;
@@ -548,6 +523,9 @@ public class MinioUtil {
     private MinioClient minioClient;
 
     private static final int DEFAULT_EXPIRY_TIME = 7 * 24 * 3600;
+
+    /** MinIO 单个对象最多允许合并的分片数 */
+    private static final int MAX_COMPOSE_PARTS = 10000;
 
     /**
      * 检查存储桶是否存在
@@ -585,28 +563,40 @@ public class MinioUtil {
     /**
      * 文件上传
      *
-     * @param bucketName
-     * @param multipartFile
+     * @param bucketName    存储桶名称
+     * @param multipartFile 上传的文件
+     * @param filename      对象名
+     * @param secretKey     自定义加密密钥，可为 null
      */
     public void putObject(String bucketName, MultipartFile multipartFile, String filename, SecretKey secretKey) throws Exception {
         makeBucket(bucketName);
-        PutObjectOptions putObjectOptions = new PutObjectOptions(multipartFile.getSize(), PutObjectOptions.MIN_MULTIPART_SIZE);
-        putObjectOptions.setContentType(multipartFile.getContentType());
+        PutObjectArgs.Builder builder = PutObjectArgs.builder()
+                .bucket(bucketName)
+                .object(filename)
+                .stream(multipartFile.getInputStream(), multipartFile.getSize(), -1)
+                .contentType(multipartFile.getContentType());
         if (null != secretKey) {
-            putObjectOptions.setSse(ServerSideEncryption.withCustomerKey(secretKey));
+            builder.sse(ServerSideEncryption.withCustomerKey(secretKey));
         }
-        minioClient.putObject(bucketName, filename, multipartFile.getInputStream(), putObjectOptions);
+        minioClient.putObject(builder.build());
     }
 
 
     /**
      * 普通文件上传
-     * @param bucketName
-     * @param \
+     *
+     * @param bucketName  存储桶名称
+     * @param inputStream 文件流，由调用方负责关闭
+     * @param filename    对象名
+     * @param fileSize    文件大小；未知时传 -1，此时必须指定分片大小
      */
-    public void putObject(String bucketName, InputStream inputStream, String filename, SecretKey secretKey,long fileSize) throws Exception {
-        PutObjectOptions putObjectOptions = new PutObjectOptions(fileSize, 0);
-        minioClient.putObject(bucketName, filename, inputStream, putObjectOptions);
+    public void putObject(String bucketName, InputStream inputStream, String filename, SecretKey secretKey, long fileSize) throws Exception {
+        minioClient.putObject(
+                PutObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(filename)
+                        .stream(inputStream, fileSize, -1)
+                        .build());
     }
 
     /**
@@ -615,38 +605,50 @@ public class MinioUtil {
      * @param bucketName 存储桶名称
      * @param objectName 存储桶里的对象名称
      * @param expires    失效时间（以秒为单位），默认是7天，不得大于七天
-     * @return
+     * @return 预签名下载地址；桶不存在时返回 null
      */
-    public String getPresignedObjectUrl(String bucketName, String objectName, Integer expires) throws Exception {
-        boolean flag = bucketExists(bucketName);
-        if (flag) {
-            if (null == expires) {
-                expires = DEFAULT_EXPIRY_TIME;
-            }
-            if (expires &lt; 1 || expires &gt; DEFAULT_EXPIRY_TIME) {
-                throw new RuntimeException(&quot;expires must be in range of 1 to &quot; + DEFAULT_EXPIRY_TIME);
-            }
-            try {
-                return minioClient.getPresignedObjectUrl(Method.GET, bucketName, objectName, expires, null);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+    public String getPresignedObjectUrl(String bucketName, String objectName, Integer expires) {
+        if (!bucketExists(bucketName)) {
+            return null;
         }
-        return null;
+        if (null == expires) {
+            expires = DEFAULT_EXPIRY_TIME;
+        }
+        if (expires &lt; 1 || expires &gt; DEFAULT_EXPIRY_TIME) {
+            throw new IllegalArgumentException(&quot;expires must be in range of 1 to &quot; + DEFAULT_EXPIRY_TIME);
+        }
+        try {
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .expiry(expires)
+                            .build());
+        } catch (Exception e) {
+            log.error(&quot;获取预签名地址失败, bucket={}, object={}&quot;, bucketName, objectName, e);
+            throw new RuntimeException(&quot;获取预签名地址失败&quot;, e);
+        }
     }
 
     /**
      * 获取一个临时可以上传的url
-     * @param bucketName
-     * @param objectName
-     * @return
-     * @throws Exception
+     *
+     * @param bucketName 存储桶名称
+     * @param objectName 对象名
      */
     public String presignedPutObject(String bucketName, String objectName) {
         try {
-            return minioClient.presignedPutObject(bucketName, objectName);
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.PUT)
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .expiry(DEFAULT_EXPIRY_TIME)
+                            .build());
         } catch (Exception e) {
-            throw new RuntimeException(&quot;获取临时文件上传地址异常&quot;);
+            log.error(&quot;获取临时文件上传地址异常, bucket={}, object={}&quot;, bucketName, objectName, e);
+            throw new RuntimeException(&quot;获取临时文件上传地址异常&quot;, e);
         }
     }
 
@@ -660,90 +662,109 @@ public class MinioUtil {
      */
     public List&lt;ComposeSource&gt; listObjectsSource(String bucketName, String objectNamePrefix) throws Exception {
         List&lt;ComposeSource&gt; sources = new ArrayList&lt;&gt;();
-        Iterable&lt;Result&lt;Item&gt;&gt; results = minioClient.listObjects(bucketName, objectNamePrefix);
+        Iterable&lt;Result&lt;Item&gt;&gt; results = minioClient.listObjects(
+                ListObjectsArgs.builder()
+                        .bucket(bucketName)
+                        .prefix(objectNamePrefix)
+                        .recursive(true)
+                        .build());
         for (Result&lt;Item&gt; result : results) {
             Item item = result.get();
-            sources.add(ComposeSource.builder().bucket(bucketName).object(objectNamePrefix).build());
-
-
+            //必须用每个对象真实的 objectName，直接用 prefix 会导致所有分片指向同一个对象
+            sources.add(ComposeSource.builder()
+                    .bucket(bucketName)
+                    .object(item.objectName())
+                    .build());
         }
-
-//        minioClient.listIncompleteUploads()
         return sources;
     }
 
     /**
      * 文件合并
      *
-     * @param bucketName
-     * @param objectName
-     * @param sources
-     * @param secretKey
-     * @throws Exception
+     * 若 sourceObjectList 直接来自 {@link #listObjectsSource}，就是按分片顺序列出后合并。
+     * 合并完成后删除分片对象；合并成功后 deleteParts=false 可保留分片以便排查。
+     *
+     * @param bucketName       存储桶名称
+     * @param objectName       合并后的对象名
+     * @param sourceObjectList 待合并的分片对象列表
+     * @throws IllegalArgumentException 分片数量超出 MinIO 上限（10000）
      */
-    public void composeObject(String bucketName, String objectName, List&lt;ComposeSource&gt; sources, SecretKey secretKey) throws Exception {
-        List&lt;ComposeSource&gt; sourceObjectList = new ArrayList&lt;&gt;(sources.size());
-        for (int i=0;i&lt;sources.size();i++){
-           sourceObjectList.add(
-                    ComposeSource.builder()
-                            .bucket(bucketName)
-                            .object(sources.get(i).object()+&quot;_&quot; + i)
-                            .build()
-            );
+    public void composeObject(String bucketName, String objectName, List&lt;ComposeSource&gt; sourceObjectList) throws Exception {
+        if (sourceObjectList == null || sourceObjectList.size() &lt; 2) {
+            throw new IllegalArgumentException(&quot;合并至少需要 2 个分片对象&quot;);
         }
-        ObjectWriteResponse objectWriteResponse = minioClient.composeObject(
+        if (sourceObjectList.size() &gt; MAX_COMPOSE_PARTS) {
+            throw new IllegalArgumentException(&quot;分片数量不能超过 &quot; + MAX_COMPOSE_PARTS);
+        }
+        minioClient.composeObject(
                 ComposeObjectArgs.builder()
                         .bucket(bucketName)
                         .object(objectName)
                         .sources(sourceObjectList)
                         .build());
         for (ComposeSource source : sourceObjectList) {
-            minioClient.removeObject(source.bucket(), source.object());
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(source.bucket())
+                            .object(source.object())
+                            .build());
         }
     }
 
     /**
-     * 查询已经上传成功的文件
-     * @param bucketName
-     * @param prefix
+     * 查询分片上传已经成功的分片序号
+     *
+     * @param bucketName 存储桶名称
+     * @param prefix     分片对象名前缀
+     * @return 已上传成功的分片序号列表
      */
-    public List&lt;Integer&gt;  listIncompleteUploads(String bucketName,String prefix){
-        List&lt;Integer&gt; rslt=new ArrayList&lt;&gt;();
+    public List&lt;Integer&gt; listUploadedParts(String bucketName, String prefix) {
+        List&lt;Integer&gt; rslt = new ArrayList&lt;&gt;();
         try {
-            Iterable&lt;Result&lt;Item&gt;&gt; results=minioClient.listObjects(
+            Iterable&lt;Result&lt;Item&gt;&gt; results = minioClient.listObjects(
                     ListObjectsArgs.builder()
                             .bucket(bucketName)
                             .prefix(prefix)
                             .maxKeys(1000)
                             .build());
             for (Result&lt;Item&gt; result : results) {
-                String obectName = result.get().objectName();
-                String[] split = StringUtils.split(obectName, &quot;_&quot;);
-                rslt.add(Integer.parseInt(split[split.length-1]));
+                String objectName = result.get().objectName();
+                //按最后一个下划线截取，前缀里本身带下划线时 lenientSplit 也能取对
+                String[] split = StringUtils.split(objectName, &quot;_&quot;, 2);
+                if (null == split) {
+                    continue;
+                }
+                try {
+                    rslt.add(Integer.parseInt(split[split.length - 1]));
+                } catch (NumberFormatException e) {
+                    log.warn(&quot;分片对象名不符合命名规范，已跳过: {}&quot;, objectName);
+                }
             }
-        }catch (Exception e) {
-            log.error(&quot;调用minio查询已经分片上传信息异常&quot;,e);
-            throw new RuntimeException(&quot;调用minio查询已经分片上传信息异常&quot;);
+        } catch (Exception e) {
+            log.error(&quot;调用minio查询已经分片上传信息异常&quot;, e);
+            throw new RuntimeException(&quot;调用minio查询已经分片上传信息异常&quot;, e);
         }
         return rslt;
     }
 }
 </code></pre>
+<p>MinioUtil 最需要注意的是版本一致性。<code>PutObjectOptions</code>、<code>getPresignedObjectUrl(Method, String, String, int, Map)</code>、<code>presignedPutObject</code> 都是 7.x 时代的 API，在 8.x 里已经移除，必须换成 <code>PutObjectArgs</code>、<code>GetPresignedObjectUrlArgs</code> 这类 <code>Args</code> 构造器；而 <code>ListObjectsArgs</code>、<code>ComposeObjectArgs</code> 又是 8.x 才有的写法，两种风格混在一起是编译不过的。此外还有几处容易踩的点：</p>
+<ul>
+<li><code>listObjectsSource</code> 里取了 <code>item</code> 却把 <code>objectNamePrefix</code> 当成对象名塞进 <code>ComposeSource</code>，会让所有分片都指向同一个对象，合并结果必然错误；</li>
+<li>合并的对象名不能靠 <code>objectName + &quot;_&quot; + i</code> 去猜，分片命名规则应由上传方保证，合并方只负责按 <code>listObjects</code> 返回的顺序合并；</li>
+<li><code>listIncompleteUploads</code> 这个名字指的是「列出分片上传过程中产生的对象」，但实现只是按前缀列出对象并解析末尾序号，命名和实现不符，容易误导调用方；</li>
+<li>捕获异常后抛 <code>new RuntimeException(msg)</code> 会丢掉 cause，应当传入原始异常，便于定位是网络问题还是权限问题。</li>
+</ul>
+<p>三个工具类串起来看，工具类的价值在于把重复的样板逻辑收口，而不是把复杂度藏起来。凡是涉及线程安全（共享引擎）、资源释放（流与临时文件）、版本兼容（第三方 SDK 大版本升级）的地方，都要在工具类里一次性处理干净，否则每个调用方都得重复踩一遍。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E5%B7%A5%E5%85%B7%E7%B1%BB">工具类</a>
+<a href="#%E5%B7%A5%E5%85%B7%E7%B1%BB">工具类</a>
 <ul>
 <li><a href="#httputil">HttpUtil</a></li>
 <li><a href="#javascriptutil">JavaScriptUtil</a></li>
 <li><a href="#minioutil">MinioUtil</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
