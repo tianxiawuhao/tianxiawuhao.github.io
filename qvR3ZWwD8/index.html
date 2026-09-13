@@ -126,14 +126,17 @@
           <img class="post-feature-header-image" src="/post-images/qvR3ZWwD8.png" alt="封面图">
           
           <h2 id="docker-overlay2磁盘占用过高">Docker overlay2磁盘占用过高</h2>
-<p>Docker overlay2磁盘占用过高主要有以下三个原因：<br>
-  - 1、容器日志文件过大，未做限制<br>
-  - 2、无用的容器、镜像、缓存等过多<br>
-  - 3、Docker 默认路径存放不合理</p>
+<p>Docker 默认使用 overlay2 作为存储驱动，镜像层、容器可写层、容器日志、数据卷都集中在同一个数据目录（data-root）下。生产上磁盘被写满，绝大多数可以归到下面三类原因：</p>
+<ul>
+<li><strong>容器日志文件过大</strong>：默认的 json-file 日志驱动不做轮转，容器一直跑日志就一直在涨；</li>
+<li><strong>无用资源堆积</strong>：已停止的容器、悬空镜像、构建缓存、无人使用的数据卷；</li>
+<li><strong>默认路径不合理</strong>：Docker 默认把数据放在 <code>/var/lib/docker</code>，而根分区容量普遍偏小。</li>
+</ul>
+<p>排查思路是「先定位、再处置」：先用容量与目录统计命令找到大头，再针对日志、历史数据、运行目录分别处理。</p>
 <h3 id="一-磁盘容量查询">一、磁盘容量查询</h3>
-<p>通过以下两条命令可以定位磁盘占用过高原因，可根据查询结果做相应处置。</p>
+<p>通过以下命令可以定位磁盘占用过高的具体原因，再根据查询结果做相应处置。</p>
 <h4 id="1-df-h-容量查询">1、df -h 容量查询</h4>
-<pre><code class="language-shell">[root@hostname ~]# df -h
+<pre><code class="language-bash">[root@hostname ~]# df -h
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda1        50G   50G   35M 100% /
 overlay          50G   50G   35M 100% /data/docker/overlay2/770abd1b64f51f05a0f7c5c71d7349f54c9c152c8f58263ea9dda4960a722d61/merged
@@ -141,8 +144,10 @@ overlay          50G   50G   35M 100% /data/docker/overlay2/19de54ababc18c2eb4c0
 overlay          50G   50G   35M 100% /data/docker/overlay2/78f613526719dd1eabd3fe1f383ca55f065182e538f81cb719dd53d01055e849/merged
 overlay          50G   50G   35M 100% /data/docker/overlay2/a18694da44feba8f8379f422fdf67c00a1ac97efb281f8578770b7da4d55ad6a/merged
 </code></pre>
+<p>读法：每一行 <code>overlay</code> 挂载点对应一个<strong>正在运行</strong>的容器，容量统计的是它所在分区的整体使用量，所以多个 overlay 行显示同样的 50G/100% 是正常的，并不代表被重复占用。真正的信号是 <code>/dev/vda1</code> 这一行——根分区 100%，已经写满。</p>
 <h4 id="2-du-sh-文件大小查询">2、du -sh * 文件大小查询</h4>
-<pre><code class="language-shell">#逐级排查大文件位置
+<p>确认根分区写满后，从 <code>/</code> 开始逐级向下统计，定位占用最大的目录：</p>
+<pre><code class="language-bash">#逐级排查大文件位置
 [root@hostname ~]# du -sh /*
 7.2G    /var
 [root@hostname ~]# du -sh /var/*
@@ -150,42 +155,102 @@ overlay          50G   50G   35M 100% /data/docker/overlay2/a18694da44feba8f8379
 [root@hostname ~]# du -sh /var/lib/*
 6.6G    /var/lib/docker
 </code></pre>
+<p>如果 <code>/var/lib/docker</code> 是大头，继续按下面的方法拆分到具体子目录。</p>
+<h4 id="3-定位-docker-数据目录的占用构成">3、定位 Docker 数据目录的占用构成</h4>
+<p>先了解 overlay2 的目录结构，才能看懂统计结果：</p>
+<pre><code class="language-text">/var/lib/docker/                 # data-root，默认位置
+├── containers/                  # 容器元数据，含 &lt;id&gt;/&lt;id&gt;-json.log 日志
+├── image/overlay2/              # 镜像元数据、层与镜像的对应关系
+├── overlay2/                    # 镜像层与容器可写层的真实数据
+│   ├── &lt;layer-id&gt;/
+│   │   ├── diff/                # 该层的内容（真正占空间的地方）
+│   │   ├── link                 # 该层的短链接标识
+│   │   ├── lower                # 该层依赖的下层列表
+│   │   └── merged/              # 联合挂载后的视图，仅运行中的容器才有
+│   └── l/                       # 短链接 -> ../&lt;layer-id&gt;/diff
+├── volumes/                     # 数据卷，容器删除后依然保留
+├── buildkit/                    # 构建缓存（Docker 23 起默认由 BuildKit 管理）
+└── network/                     # 网络配置
+</code></pre>
+<p><img src="/post-assets/qvR3ZWwD8/01-overlay2-layers.svg" alt="overlay2 分层结构与磁盘空间占用来源"></p>
+<p>关键点：<code>merged</code> 只是挂载视图，不额外占空间；<code>diff</code> 才是该层实际写入的数据。删除文件时 overlay2 只在上层打一个 whiteout 标记，下层的原始数据依旧占用空间，所以「容器里删过文件」并不等于「磁盘被释放」。</p>
+<p>接着用 Docker 自带的统计和目录统计交叉验证：</p>
+<pre><code class="language-bash"># 存储驱动、数据目录、日志驱动
+[root@test ~]# docker info | grep -E 'Storage Driver|Docker Root Dir|Logging Driver'
+ Storage Driver: overlay2
+ Docker Root Dir: /var/lib/docker
+ Logging Driver: json-file
+
+# 分类汇总：镜像/容器/数据卷/构建缓存各自占用与可回收空间
+[root@test ~]# docker system df
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          24        8         6.2GB     4.1GB (66%)
+Containers      11        9         1.3GB     120MB (9%)
+Local Volumes   6         2         2.4GB     1.8GB (75%)
+Build Cache     135       0         3.7GB     3.7GB
+
+# 需要明细时加 -v，会逐个列出镜像、容器、数据卷的大小
+[root@test ~]# docker system df -v
+
+# 找出占用最大的层目录
+[root@test ~]# du -sh /var/lib/docker/overlay2/*/diff 2&gt;/dev/null | sort -rh | head -n 10
+
+# 查看每个运行中容器的可写层大小
+[root@test ~]# docker ps -s --format 'table {{.ID}}\t{{.Names}}\t{{.Size}}'
+</code></pre>
 <h3 id="二-磁盘占用过高处理方法">二、磁盘占用过高处理方法</h3>
+<p>按「日志 → 历史数据 → 运行目录」的顺序处理，前两步风险低、见效快，第三步需要停机迁移。</p>
 <h4 id="1-日志文件清理">1、日志文件清理</h4>
-<p>docker容器运行时会产生大量日志，默认路径：/var/lib/docker/containers/id-json.log，随着容器运行该日志文件会占用大量磁盘空间。</p>
+<p>Docker 容器运行时会把标准输出重定向到 json 日志文件，默认路径为 <code>/var/lib/docker/containers/&lt;容器ID&gt;/&lt;容器ID&gt;-json.log</code>。该文件默认没有大小上限，长期运行的容器很容易把它写到几十 GB。先定位大日志：</p>
+<pre><code class="language-bash"># 按大小排序，找出最大的容器日志
+[root@test ~]# du -sh /var/lib/docker/containers/*/*-json.log | sort -rh | head -n 10
+
+# 筛选超过 100MB 的日志文件
+[root@test ~]# find /var/lib/docker/containers -name '*-json.log' -size +100M -exec ls -lh {} \;
+</code></pre>
 <p><strong>1.1 日志清空</strong></p>
-<pre><code class="language-shell">[root@test ~]# echo '' &gt; 容器id-json.log
+<pre><code class="language-bash"># 用 truncate 清空（推荐），或 echo '' &gt; 文件
+[root@test ~]# truncate -s 0 /var/lib/docker/containers/&lt;容器ID&gt;/&lt;容器ID&gt;-json.log
+# 容器运行中也可以用 docker 命令读取日志路径
+[root@test ~]# ls -lh $(docker inspect --format='{{.LogPath}}' &lt;容器名或ID&gt;)
 </code></pre>
 <blockquote>
-<p>注：不要直接删除日志文件，否则可能会影响新日志产生。</p>
+<p>注：不要直接 <code>rm</code> 删除日志文件。文件被容器进程持有，直接删除会造成句柄悬空，磁盘空间不会释放，新日志也无法正常写入，通常需要重启容器才能恢复。</p>
 </blockquote>
-<p><strong>1.2 限制日志文件大小</strong><br>
-  以上方法只能暂时解决日志占用空间过大问题，如果想一劳永逸可修改docker配置文件，增加日志文件大小限制。</p>
-<pre><code class="language-shell">[root@test ~]# vi /etc/docker/daemon.json 
+<p><strong>1.2 限制日志文件大小</strong></p>
+<p>清空只能临时缓解，要一劳永逸需修改 Docker 配置，为日志加上轮转上限：</p>
+<pre><code class="language-bash">[root@test ~]# vi /etc/docker/daemon.json
 {
-    &quot;log-driver&quot;:&quot;json-file&quot;,
-    &quot;log-opts&quot;:{
-        &quot;max-size&quot; :&quot;50m&quot;,
-        &quot;max-file&quot;:&quot;1&quot;
+    "log-driver": "json-file",
+    "log-opts": {
+        "max-size": "50m",
+        "max-file": "3"
     }
 }
 </code></pre>
+<p>含义：单个日志文件最大 50MB，最多保留 3 个，即每个容器日志上限约 150MB。补充两点：</p>
+<ul>
+<li><code>local</code> 日志驱动（Docker 18.09 及以上）默认自带轮转，格式更紧凑，新集群可直接使用 <code>"log-driver": "local"</code> 并配合 <code>max-size</code>/<code>max-file</code>；</li>
+<li>也可在单容器维度限制：<code>docker run --log-opt max-size=50m --log-opt max-file=3 ...</code>，适合只对个别容器单独约束。</li>
+</ul>
 <p><strong>1.3 重启 docker</strong></p>
-<pre><code class="language-shell">[root@test ~]# systemctl daemon-reload
+<pre><code class="language-bash">[root@test ~]# systemctl daemon-reload
 [root@test ~]# systemctl restart docker
+# 确认日志驱动与参数已生效
+[root@test ~]# docker info --format '{{.LoggingDriver}}'
+[root@test ~]# docker inspect --format='{{.HostConfig.LogConfig}}' &lt;容器名或ID&gt;
 </code></pre>
 <blockquote>
-<p>注：配置对已存在的容器不会生效，需要重建该容器才会按新配置运行</p>
+<p>注：日志配置只在容器<strong>创建</strong>时写入，对已存在的容器不会生效，需要删除后重建该容器才会按新配置运行。</p>
 </blockquote>
 <h4 id="2-历史数据清理">2、历史数据清理</h4>
-<p>Docker长时间运行，会产生大量无用的镜像、容器、网络等缓存信息，占用大量磁盘空间。此时我们可以使用prune命令清理。</p>
+<p>Docker 长时间运行会积累大量无用的镜像、容器、网络与构建缓存，可以用 prune 系列命令回收：</p>
 <p><strong>2.1 释放所有未使用资源</strong></p>
-<pre><code class="language-shell">[root@test ~]# docker system prune
+<pre><code class="language-bash">[root@test ~]# docker system prune
 WARNING! This will remove:
-
   - all stopped containers    //清理停止容器
   - all networks not used by at least one container  //清理未使用网络
-  - all dangling images    //清理废弃镜像
+  - all dangling images    //清理悬空镜像
   - all dangling build cache   //清理构建缓存
 
 Are you sure you want to continue? [y/N] y
@@ -195,110 +260,128 @@ Deleted Containers:
 Total reclaimed space: 202.4kB
 </code></pre>
 <blockquote>
-<p>注：数据清理前一定要检查是否还有需要使用的容器和镜像，避免误清理。</p>
+<p>注：清理前务必确认没有还需要使用的容器和镜像。Docker 23 起 <code>docker system prune</code> 也会清理未被引用的构建缓存；加 <code>-a</code> 会进一步删除所有未被容器使用的镜像，加 <code>--volumes</code> 会删除无人使用的数据卷，<strong>数据卷可能承载业务数据，务必先确认再执行</strong>。</p>
 </blockquote>
 <p><strong>2.2 按需清理</strong></p>
-<pre><code class="language-shell">[root@test ~]# docker image prune  //清理废弃镜像
-[root@test ~]# docker container prune //清理停止容器
-[root@test ~]# docker network prune   //清理未使用网络
-[root@test ~]# docker system prune   //清理构建缓存
+<pre><code class="language-bash">[root@test ~]# docker image prune        # 清理悬空镜像（&lt;none&gt; 标签）
+[root@test ~]# docker image prune -a     # 清理所有未被容器使用的镜像
+[root@test ~]# docker container prune    # 清理已停止容器
+[root@test ~]# docker network prune      # 清理未使用网络
+[root@test ~]# docker builder prune      # 清理构建缓存
+[root@test ~]# docker volume prune       # 清理无主数据卷（危险，先确认）
+# 清理后确认回收效果
+[root@test ~]# docker system df
 </code></pre>
 <h4 id="3-修改docker运行路径">3、修改Docker运行路径</h4>
 <blockquote>
 <p>注：此方法需要停止容器并迁移 Docker 运行目录，请在业务空闲期、备份好数据后再操作。<br>
-  Docker 运行时使用的目录默认为 “/var/lib/docker”，该目录占用根目录的磁盘空间，而根目录容量普遍较小。日常生产环境 Linux 常会挂载大容量数据盘，</p>
+Docker 运行时使用的目录默认为 <code>/var/lib/docker</code>（data-root），该目录占用根目录的磁盘空间，而根目录容量普遍较小，生产环境通常会另外挂载一块大容量数据盘。</p>
 </blockquote>
-<p>可以将Docker默认运行目录修改到数据盘。<br>
- 修改Docker运行路径有两种方法：<br>
-  - 1、迁移/var/lib/docker数据，创建软链接。此种方法不需要改配置文件。<br>
-  - 2、迁移/var/lib/docker数据，修改docker配置文件。</p>
+<p>可以把 Docker 默认运行目录迁移到数据盘。迁移前先确认目标目录所在分区确实是大盘，而不是和根目录同处一个分区：</p>
+<pre><code class="language-bash">[root@test ~]# df -h /var/lib/docker /opt
+[root@test ~]# docker info --format '{{.DockerRootDir}}'
+</code></pre>
+<p>迁移有两种做法：</p>
+<ul>
+<li>迁移 <code>/var/lib/docker</code> 数据后创建软链接，不改配置文件；</li>
+<li>迁移数据并修改 <code>daemon.json</code> 的 <code>data-root</code>，这是官方推荐方式。</li>
+</ul>
 <p><strong>3.1 迁移/var/lib/docker数据，创建软链接</strong></p>
-<pre><code class="language-shell">#docker运行目录在/var/lib/docker下
-[root@test ~]# df -h    
+<pre><code class="language-bash">#docker运行目录在/var/lib/docker下
+[root@test ~]# df -h
 文件系统                 容量  已用  可用 已用% 挂载点
 overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/c9de256d8ded736cf99dddda4c4f68e9c5e5162e1b7e70abdb0cd3fbfbbb7a19/merged
 overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/4e844541eb13d9c7af1c01f0b4681915e617c650c22a20e52f4b77e1e90dc369/merged
 overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/176c72f3913eea50a7bded4ad65363280680615c083140c725cfa63e4287cc51/merged
-#停止所有容器，避免迁移时影响业务
-[root@test ~]# docker stop $(docker ps -a | awk '{ print $1}' | tail -n +2)
-#将docker默认运行目录剪切到opt目录
+#停止 docker 服务与容器，避免迁移时文件被占用
+[root@test ~]# systemctl stop docker
+[root@test ~]# systemctl stop docker.socket
+#将 docker 默认运行目录整体移动到数据盘目录
 [root@test ~]# mv /var/lib/docker /opt/
-#查询是否已剪切完成
+#查询是否已移动完成
 [root@test ~]# ls /opt/
 containerd  docker  hio  rh
 #新运行目录创建软链接
-[root@test ~]# ln -s /opt/docker  /var/lib/docker
-#重启docker服务
-[root@test ~]# systemctl restart docker
-#启动所有容器
-[root@test ~]# docker start $(docker ps -a | awk '{ print $1}' | tail -n +2)
+[root@test ~]# ln -s /opt/docker /var/lib/docker
+#重启 docker 服务
+[root@test ~]# systemctl start docker
 #检查原镜像是否存在
 [root@test ~]# docker images
 #检查容器是否运行正常
-[root@test ~]# docker ps 
-#检查docker默认路径是否切换成功，已切换到/opt/docker下
+[root@test ~]# docker ps
+#检查 docker 默认路径是否切换成功，已切换到 /opt/docker 下
 [root@test ~]# df -h
 文件系统                 容量  已用  可用 已用% 挂载点
 overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/176c72f3913eea50a7bded4ad65363280680615c083140c725cfa63e4287cc51/merged
 overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/4e844541eb13d9c7af1c01f0b4681915e617c650c22a20e52f4b77e1e90dc369/merged
 overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/c9de256d8ded736cf99dddda4c4f68e9c5e5162e1b7e70abdb0cd3fbfbbb7a19/merged
 </code></pre>
+<p>跨分区迁移建议用 <code>rsync -aP /var/lib/docker/ /opt/docker/</code> 代替 <code>mv</code>，可以在中断后增量续传；确认无误后再删除源目录。<code>mv</code> 仅在升级失败时靠软链接兜底，但要注意部分 Docker 版本对软链接形式的 data-root 支持并不一致。</p>
 <p><strong>3.2 迁移/var/lib/docker数据，修改docker配置</strong></p>
-<blockquote>
-<p>#docker运行目录在/var/lib/docker下</p>
-</blockquote>
-<pre><code class="language-shell">[root@test ~]# df -h    
-文件系统                 容量  已用  可用 已用% 挂载点
-overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/c9de256d8ded736cf99dddda4c4f68e9c5e5162e1b7e70abdb0cd3fbfbbb7a19/merged
-overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/4e844541eb13d9c7af1c01f0b4681915e617c650c22a20e52f4b77e1e90dc369/merged
-overlay                   50G  5.8G   45G   12% /var/lib/docker/overlay2/176c72f3913eea50a7bded4ad65363280680615c083140c725cfa63e4287cc51/merged
-#停止所有容器，避免迁移时影响业务
-[root@test ~]# docker stop $(docker ps -a | awk '{ print $1}' | tail -n +2)
-#将docker默认运行目录剪切到opt目录
-[root@test ~]# mv /var/lib/docker /opt/
-#查询是否已剪切完成
-[root@test ~]# ls /opt/
-containerd  docker  hio  rh
-#修改docker配置文件，添加 &quot;data-root&quot;路径
+<p>这是官方推荐的做法：把数据迁到新盘后，通过 <code>data-root</code> 显式指定目录，不再依赖软链接。</p>
+<pre><code class="language-bash">[root@test ~]# systemctl stop docker
+[root@test ~]# systemctl stop docker.socket
+# 停止所有容器，避免迁移时影响业务
+[root@test ~]# docker stop $(docker ps -q)
+# 用 rsync 保留权限与硬链接，跨盘迁移数据
+[root@test ~]# mkdir -p /opt/docker
+[root@test ~]# rsync -aP /var/lib/docker/ /opt/docker/
+#查询是否已迁移完成
+[root@test ~]# ls /opt/docker
+containerd  containers  image  network  overlay2  plugins  volumes  buildkit
+#修改 docker 配置文件，添加 data-root 路径
 [root@test ~]# vi /etc/docker/daemon.json
 {
-   &quot;data-root&quot;: &quot;/opt/docker&quot;
+   "data-root": "/opt/docker"
 }
-#重启docker服务
+#重启 docker 服务
 [root@test ~]# systemctl daemon-reload
-[root@test ~]# systemctl restart docker
-#启动所有容器
-[root@test ~]# docker start $(docker ps -a | awk '{ print $1}' | tail -n +2)
+[root@test ~]# systemctl start docker
+#确认 data-root 已切换成功
+[root@test ~]# docker info -f '{{.DockerRootDir}}'
+/opt/docker
 #检查原镜像是否存在
 [root@test ~]# docker images
 #检查容器是否运行正常
-[root@test ~]# docker ps 
-#检查docker默认路径是否切换成功，已切换到/opt/docker下
-[root@test ~]# df -h
-文件系统                 容量  已用  可用 已用% 挂载点
-overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/176c72f3913eea50a7bded4ad65363280680615c083140c725cfa63e4287cc51/merged
-overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/4e844541eb13d9c7af1c01f0b4681915e617c650c22a20e52f4b77e1e90dc369/merged
-overlay                   50G  5.8G   45G   12% /opt/docker/overlay2/c9de256d8ded736cf99dddda4c4f68e9c5e5162e1b7e70abdb0cd3fbfbbb7a19/merged
+[root@test ~]# docker ps
+#确认无误后再删除旧目录，释放根分区空间
+[root@test ~]# rm -rf /var/lib/docker
 </code></pre>
+<blockquote>
+<p>注：<code>daemon.json</code> 必须是合法 JSON（不能带注释、不能用单引号），否则 Docker 无法启动。若该文件原本已有 <code>log-driver</code> 等配置，请合并到同一个 JSON 对象中，不要写两个 <code>{}</code> 块。<code>data-root</code> 是 Docker 17.05 起的配置项，对应的 <code>graph</code>（<code>-g</code> 参数）在 17.05 之后已废弃，不要再混用。</p>
+</blockquote>
+<h4 id="4-inode-与磁盘配额">4、inode 与磁盘配额</h4>
+<p>空间没满却写不进文件，常见原因是 <strong>inode 耗尽</strong>。overlay2 会为每个层目录生成不少小文件，反复构建、频繁创建临时容器的机器容易先耗尽 inode：</p>
+<pre><code class="language-bash"># 查看 inode 使用率，IUse% 接近 100% 即为 inode 耗尽
+[root@test ~]# df -i
+Filesystem       Inodes  IUsed    IFree IUse% Mounted on
+/dev/vda1      3276800 3276800        0  100% /
+
+# 统计 overlay2 下文件数量，确认是否小文件过多
+[root@test ~]# find /var/lib/docker/overlay2 -xdev -type f | wc -l
+# 清理无用镜像、容器与构建缓存后重建
+[root@test ~]# docker system prune -a
+</code></pre>
+<p>如果希望<strong>限制单个容器可写层的上限</strong>，overlay2 支持按容器设置存储配额，前提是底层文件系统为 XFS 且挂载时开启了 <code>pquota</code>（同时 overlay2 要求 XFS 的 <code>ftype=1</code>）：</p>
+<pre><code class="language-bash"># 确认 XFS 挂载参数中带 pquota
+[root@test ~]# mount | grep xfs
+/dev/vdb1 on /data type xfs (rw,relatime,prjquota)
+
+# 启动容器时限制可写层大小
+[root@test ~]# docker run -d --storage-opt size=10G --name app nginx:1.27
+# 查看容器可写层实际大小
+[root@test ~]# docker ps -s --format 'table {{.Names}}\t{{.Size}}'
+</code></pre>
+<blockquote>
+<p>注：<code>--storage-opt size</code> 未开启 pquota 时会直接报错，不要在不满足条件的环境上使用；此外配额只约束容器可写层，容器日志、数据卷不受其限制，仍需各自设置上限。</p>
+</blockquote>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#docker-overlay2%E7%A3%81%E7%9B%98%E5%8D%A0%E7%94%A8%E8%BF%87%E9%AB%98">Docker overlay2磁盘占用过高</a>
 <ul>
-<li><a href="#docker-overlay2%E7%A3%81%E7%9B%98%E5%8D%A0%E7%94%A8%E8%BF%87%E9%AB%98">Docker overlay2磁盘占用过高</a>
-<ul>
-<li><a href="#%E4%B8%80-%E7%A3%81%E7%9B%98%E5%AE%B9%E9%87%8F%E6%9F%A5%E8%AF%A2">一、磁盘容量查询</a>
-<ul>
-<li><a href="#1-df-h-%E5%AE%B9%E9%87%8F%E6%9F%A5%E8%AF%A2">1、df -h 容量查询</a></li>
-<li><a href="#2-du-sh-%E6%96%87%E4%BB%B6%E5%A4%A7%E5%B0%8F%E6%9F%A5%E8%AF%A2">2、du -sh * 文件大小查询</a></li>
-</ul>
-</li>
-<li><a href="#%E4%BA%8C-%E7%A3%81%E7%9B%98%E5%8D%A0%E7%94%A8%E8%BF%87%E9%AB%98%E5%A4%84%E7%90%86%E6%96%B9%E6%B3%95">二、磁盘占用过高处理方法</a>
-<ul>
-<li><a href="#1-%E6%97%A5%E5%BF%97%E6%96%87%E4%BB%B6%E6%B8%85%E7%90%86">1、日志文件清理</a></li>
-$1
-<li><a href="#3-%E4%BF%AE%E6%94%B9docker%E8%BF%90%E8%A1%8C%E8%B7%AF%E5%BE%84">3、修改Docker运行路径</a></li>$2
-</ul>
-</li>
+<li><a href="#%E4%B8%80-%E7%A3%81%E7%9B%98%E5%AE%B9%E9%87%8F%E6%9F%A5%E8%AF%A2">一、磁盘容量查询</a></li>
+<li><a href="#%E4%BA%8C-%E7%A3%81%E7%9B%98%E5%8D%A0%E7%94%A8%E8%BF%87%E9%AB%98%E5%A4%84%E7%90%86%E6%96%B9%E6%B3%95">二、磁盘占用过高处理方法</a></li>
 </ul>
 </li>
 </ul>

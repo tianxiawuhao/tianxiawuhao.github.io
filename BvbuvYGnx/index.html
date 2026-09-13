@@ -188,6 +188,15 @@
 </ul>
 </li>
 </ul>
+<h3 id="核心概念-topic-queue-与-tag">核心概念：Topic、Queue 与 Tag</h3>
+<ul>
+<li><strong>Topic（主题）</strong>：消息的逻辑分类，生产者发送、消费者订阅都以 Topic 为单位。一个 Topic 在物理上由多个队列组成，这些队列分散在不同的 Master 上，从而实现水平扩展与负载均衡。</li>
+<li><strong>Queue（MessageQueue，消息队列）</strong>：消息存储与负载均衡的最小单位，由 <code>brokerName + queueId</code> 唯一标识。队列数量在创建 Topic 时通过 <code>-r</code>（读队列数）和 <code>-w</code>（写队列数）指定，队列数决定了消费并发度的上限。生产者按轮询或自定义选择器挑选队列，消费者则通过 Rebalance 按队列分配消费任务。</li>
+<li><strong>Tag（标签）</strong>：同一 Topic 下的二级分类。消费者用 <code>consumer.subscribe(&quot;topic&quot;, &quot;TagA || TagB&quot;)</code> 过滤；Broker 端先用 ConsumeQueue 中保存的标签哈希值做粗过滤，消费端再做一次精确匹配，因此订阅一个不存在的 Tag 不会报错，只是收不到消息。</li>
+<li><strong>Key（业务键）</strong>：通过 <code>message.setKeys(...)</code> 设置，写入 IndexFile，用于按业务唯一标识精确查询消息，也常作为消费幂等的依据。</li>
+<li><strong>Group（分组）</strong>：Producer Group 用于标识一类生产者；Consumer Group 更重要——消费位点、重试队列 <code>%RETRY%{group}</code>、死信队列 <code>%DLQ%{group}</code> 都以消费组为单位维护。</li>
+</ul>
+<p>需要注意的是，顺序消息只保证<strong>同一个队列内</strong>的先后顺序。因此做分区顺序消息时，生产端要用 <code>MessageQueueSelector</code> 按 Sharding Key 把同一业务实体的消息投到同一个队列，消费端则使用 <code>MessageListenerOrderly</code>。</p>
 <h3 id="部署架构">部署架构</h3>
 <p>RocketMQ的Broker有三种集群部署方式：</p>
 <ul>
@@ -213,6 +222,7 @@
 <li>Producer发送消息，启动时先跟NameServer集群中的其中一台建立长连接，并从NameServer中获取当前发送的Topic存在哪些Broker上，轮询从队列列表中选择一个队列，然后与队列所在的Broker建立长连接从而向Broker发消息。</li>
 <li>Consumer跟Producer类似，跟其中一台NameServer建立长连接，获取当前订阅Topic存在哪些Broker上，然后直接跟Broker建立连接通道，开始消费消息。</li>
 </ul>
+<p><img src="/post-assets/BvbuvYGnx/01-rocketmq-architecture.svg" alt="RocketMQ 架构与消息流转图"></p>
 <h3 id="汇总rocketmq-集群部署模式">汇总：RocketMQ 集群部署模式</h3>
 <p>前面介绍到，RocketMQ的Broker有三种集群部署方式：</p>
 <ul>
@@ -243,6 +253,16 @@
 <li>
 <p>4.<strong>多 master 多 slave 同步双写模式</strong> 同多 master 多 slave 异步复制模式类似，区别在于 master 和 slave 之间的数据同步方式。 优点：同步双写的同步模式能保证数据不丢失。 缺点：发送单个消息 RT 会略长，性能相比异步复制低10%左右。 刷盘策略：同步刷盘和异步刷盘（指的是节点自身数据是同步还是异步存储） 注意：要保证数据可靠，需采用同步刷盘和同步双写的方式，但性能会较其他方式低。</p>
 </li>
+</ul>
+<h3 id="4-集群部署要点">4、集群部署要点</h3>
+<ul>
+<li><strong>NameServer 至少 2 台</strong>：NameServer 无状态且节点间互不通信，Broker 会向每一台 NameServer 注册，客户端只需连上其中一台即可获得全量路由，因此部署 2 台以上就能规避单点。</li>
+<li><strong>brokerName 与 brokerId</strong>：同一组 Master/Slave 使用相同的 <code>brokerName</code>，用 <code>brokerId</code> 区分角色，<code>brokerId=0</code> 为 Master，非 0 为 Slave；4.x 中只有 <code>brokerId=1</code> 的 Slave 会参与读负载。</li>
+<li><strong>刷盘与复制策略</strong>：<code>brokerRole</code> 取 <code>ASYNC_MASTER</code>、<code>SYNC_MASTER</code> 或 <code>SLAVE</code>，<code>flushDiskType</code> 取 <code>ASYNC_FLUSH</code> 或 <code>SYNC_FLUSH</code>。要求消息不丢就用 <code>SYNC_MASTER</code> + <code>SYNC_FLUSH</code>，代价是发送 RT 变长、吞吐下降。</li>
+<li><strong>队列要均匀分布</strong>：创建 Topic 时用 <code>-c</code> 让其在集群所有 Master 上自动创建，或用 <code>-b</code> 指定 Broker，避免队列只落在单个 Master 上形成热点。</li>
+<li><strong>磁盘与页缓存</strong>：CommitLog 为顺序写，建议数据盘使用 SSD 并预留 30% 以上空间；<code>osPageCacheBusyTimeOutMills</code> 默认 1000ms，页缓存不足时会抛出 <code>system busy</code>、<code>broker busy</code> 之类的错误。</li>
+<li><strong>主从自动切换</strong>：RocketMQ 4.5 起提供 DLedger 模式（<code>enableDLegerCommitLog=true</code>），基于 Raft 实现 Master 故障自动切换；5.x 推荐改用 Controller 模式（<code>enableControllerMode=true</code>），新集群不要再依赖手工修改配置文件来提升 Slave。</li>
+<li><strong>版本一致性</strong>：客户端与 Broker 的大版本尽量保持一致，混用不同大版本时注意兼容性说明，例如 5.x 的新版 gRPC 客户端需要 Broker 开启对应协议支持。</li>
 </ul>
 <h2 id="rocketmq与zookeeper的爱恨纠葛">RocketMQ与ZooKeeper的爱恨纠葛</h2>
 <p>说到高性能消息中间件，第一个想到的肯定是LinkedIn开源的Kafka，虽然最初Kafka是为日志传输而生，但也非常适合互联网公司消息服务的应用场景，他们不要求数据实时的强一致性（事务），更多是希望达到数据的最终一致性。</p>
@@ -288,12 +308,12 @@
 <p><strong>Consumer集群:</strong></p>
 <p>消息的消费者，通过NameServer集群获得Topic的路由信息，连接到对应的Broker上消费消息。注意，由于Master和Slave都可以读取消息，因此Consumer会与Master和Slave都建立连接。</p>
 <p>总之：</p>
-<p>Name Server 是专为 RocketMQ 设计的轻量级注册中心，具有简单、可集群横吐扩展、无状态，节点之间互不通信等特点。</p>
+<p>Name Server 是专为 RocketMQ 设计的轻量级注册中心，具有简单、可集群横向扩展、无状态，节点之间互不通信等特点。</p>
 <h3 id="rocketmq为什么不使用zookeeper">RocketMQ为什么不使用ZooKeeper</h3>
 <p>来看看RocketMQ为什么不使用ZooKeeper？</p>
 <p>ZooKeeper可以提供Master选举功能。比如Kafka用来给每个分区选一个broker作为leader。</p>
 <p>但对于RocketMQ来说，topic的数据在每个Master上是对等的，没有哪个Master上有topic上的全部数据，所以这里选举leader没有意义；</p>
-<p>RockeqMQ集群中，需要有构件来处理一些通用数据，比如broker列表，broker刷新时间。</p>
+<p>RocketMQ集群中，需要有构件来处理一些通用数据，比如broker列表，broker刷新时间。</p>
 <p>虽然ZooKeeper也能存放数据，并有一致性保证。但处理数据之间的一些逻辑关系却比较麻烦，而且数据的逻辑解析操作得交给ZooKeeper客户端来做，如果有多种角色的客户端存在，自己解析多级数据确实是个麻烦事情；</p>
 <p>既然RocketMQ集群中没有用到ZooKeeper的一些重量级的功能，只是使用ZooKeeper的数据一致性和发布订阅的话，与其依赖重量级的ZooKeeper，还不如写个轻量级的NameServer，NameServer也可以集群部署，NameServer与NameServer之间无任何信息同步，不需要保障数据一致性， 比zk简单太多。</p>
 <h3 id="nameserver特性">NameServer特性</h3>
@@ -310,8 +330,40 @@
 <li>定时/延时消息：消息可以延迟一段特定时间进行消费。</li>
 <li>事务消息：二阶段事务消息，先进行prepare投递消息，此时不能进行消息消费，当二阶段发出commit或者rollback的时候才会进行消息的消费或者回滚。</li>
 </ul>
-<p>虽然配置种类比较繁多，但是使用的还是普通消息和分区顺序消息。</p>
-<p>本文的主要介绍高可用，主要介绍普通消息，其他消息的高可用策略，也是类似侧。</p>
+<p>虽然消息类型比较繁多，但生产环境最常用的还是普通消息和分区顺序消息。</p>
+<p>本文主要介绍高可用与常用消息类型的落地要点，其他消息类型的高可用策略与此类似。</p>
+<h3 id="事务消息">事务消息</h3>
+<p>事务消息用于解决「本地事务与消息发送的一致性」问题。生产者先发送一条<strong>半消息</strong>（Half Message，早期称为 prepare 消息），此时消息已到达 Broker 但对消费者<strong>不可见</strong>；Broker 确认半消息写入成功后应答生产者，生产者再执行本地事务，并根据本地事务的结果向 Broker 发送 Commit 或 Rollback：</p>
+<ul>
+<li><strong>Commit</strong>：半消息转为正常消息，写入真实 Topic，消费者可以消费；</li>
+<li><strong>Rollback</strong>：删除半消息，消费者永远看不到这条消息；</li>
+<li><strong>本地事务结果未知</strong>（进程崩溃、网络中断等）：Broker 会定期回查生产者的本地事务状态，生产者需要实现 <code>TransactionListener</code> 的 <code>checkLocalTransaction</code> 方法给出最终结论。</li>
+</ul>
+<p>RocketMQ 4.x 客户端的使用方式如下：</p>
+<pre><code class="language-java">// 1. 创建事务生产者
+TransactionMQProducer producer = new TransactionMQProducer(&quot;tx_producer_group&quot;);
+producer.setNamesrvAddr(&quot;192.168.0.128:9876&quot;);
+// 2. 设置事务监听器：执行本地事务，并供 Broker 回查
+producer.setTransactionListener(new TransactionListener() {
+    @Override
+    public LocalTransactionState executeLocalTransaction(Message msg, Object arg) {
+        // 执行本地事务，例如扣减库存、写订单表
+        return LocalTransactionState.COMMIT_MESSAGE; // 也可返回 ROLLBACK_MESSAGE / UNKNOW
+    }
+
+    @Override
+    public LocalTransactionState checkLocalTransaction(MessageExt msg) {
+        // Broker 回查：查本地事务表，决定提交还是回滚
+        return LocalTransactionState.COMMIT_MESSAGE;
+    }
+});
+producer.start();
+// 3. 发送事务消息（第二个参数会透传给 executeLocalTransaction 的 arg）
+producer.sendMessageInTransaction(new Message(&quot;tx_topic&quot;, &quot;订单创建&quot;.getBytes()), null);
+</code></pre>
+<blockquote>
+<p>注：Broker 端 <code>transactionCheckMax</code> 默认 15，即回查超过 15 次仍拿不到明确结果的消息会被回滚；回查间隔由 <code>transactionCheckInterval</code> 控制（默认 60000ms）。RocketMQ 5.x 推出了基于 gRPC 的新版 Java 客户端，事务消息改为 <code>Producer</code> 配合 <code>TransactionChecker</code> 实现，升级时接口名有变化，需要留意。</p>
+</blockquote>
 <h2 id="rocketmq高可用">RocketMQ高可用</h2>
 <figure data-type="image" tabindex="6"><img src="/post-images/1657628078933.png" alt="" loading="lazy"></figure>
 <h3 id="nameserver-高可用">NameServer 高可用</h3>
@@ -477,13 +529,13 @@ consumer.registerMessageListener(new MessageListenerConcurrently() {
 <p>这个时候，消息会进入到 RocketMQ 的重试队列中。</p>
 <h3 id="重试队列">重试队列</h3>
 <p>比如说消费者所属的消息组名称为<strong>AAAConsumerGroup</strong><br>
-其重试队列名称就叫做**%RETRY%AAAConsumerGroup**<br>
+其重试队列名称为 <code>%RETRY%AAAConsumerGroup</code>，每个消费组各有一个重试队列<br>
 重试队列中的消息过一段时间会再次发送给消费者，如果还是无法正常执行会再次进入重试队列<br>
 默认重试16次，还是无法执行，消息就会从重试队列进入到死信队列</p>
 <h3 id="死信队列">死信队列</h3>
 <p>重试队列中的消息重试16次任然无法执行，将会进入到死信队列<br>
 死信队列的名字是 <strong>%DLQ%AAAConsumerGroup</strong><br>
-死信队列中的消息可以后台开一个线程，订阅**%DLQ%AAAConsumerGroup**，并不停重试</p>
+死信队列中的消息可以在后台另起线程订阅 <code>%DLQ%AAAConsumerGroup</code>，做人工或自动补偿</p>
 <h2 id="customer-负载均衡">Customer 负载均衡</h2>
 <h3 id="集群模式">集群模式</h3>
 <p>在集群消费模式下，存在多个消费者同时消费消息，同一条消息只会被某一个消费者获取。即消息只需要被投递到订阅了这个 Topic 的消费者Group下的一个实例中即可。</p>
@@ -704,7 +756,7 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 <p>结合三种情况，可以发现消息重发的最后结果都是，消费者接收到了重复消息，那么，我们只需要在消费者端统一进行幂等处理就能够实现消息幂等。</p>
 <h3 id="处理方式">处理方式</h3>
 <h4 id="消费端实现消息幂等性">消费端实现消息幂等性</h4>
-<p>RocketMQ 只能够保证消息丢失，但不能保证消息不重复投递，且由于高可用和高性能的考虑，应该在消费端实现消息幂等性。</p>
+<p>RocketMQ 只能保证消息不丢失（至少投递一次），但无法保证消息不重复投递；出于高可用和高性能的考虑，去重应当在消费端实现。</p>
 <p>那么 RocketMQ 是怎样解决消息重复的问题呢？还是“恰好”不解决。</p>
 <p>造成消息重复的根本原因是：网络不可达。只要通过网络交换数据，就无法避免这个问题。所以解决这个问题的办法就是绕过这个问题。那么问题就变成了：如果消费端收到两条一样的消息，应该怎样处理？</p>
 <blockquote>
@@ -724,7 +776,10 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 <p>注：如果需要彻底了解雪花算法，以及里边的位运算逻辑，请参见尼恩的秒杀视频。</p>
 </blockquote>
 <p>在发送消息时，可以对 Message 设置标识唯一标识：</p>
-<pre><code class="language-java">Message message = new Message(); # 设置唯一标识，标识由雪花算法生成message.setKey(idWorker.nextId());
+<pre><code class="language-java">// 发送消息时设置唯一标识（Key），这里用雪花算法生成
+Message message = new Message(&quot;order_topic&quot;, body);
+message.setKeys(String.valueOf(idWorker.nextId()));
+SendResult result = producer.send(message);
 </code></pre>
 <p>订阅方收到消息时，可以获取到这个 Key</p>
 <pre><code class="language-java">consumer.registerMessageListener(new MessageListenerConcurrently()
@@ -753,7 +808,9 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 <p>适用于性能要求不高，所有的消息严格按照 FIFO 原则来发布和消费的场景。</p>
 <h4 id="112-示例">1.1.2、示例</h4>
 <p>要确保全局顺序消息，需要先把 Topic 的读写队列数设置为 1，然后生产者和消费者的并发设置也是 1。</p>
-<pre><code class="language-shell">mqadmin update Topic -t AllOrder -c DefaultCluster -r 1 -w 1 -n 127.0.0.1:9876
+<pre><code class="language-bash"># -r / -w 指定读、写队列数；-c 表示 Topic 不存在时自动创建
+sh mqadmin updateTopic -n 127.0.0.1:9876 -c DefaultCluster -t AllOrder -r 1 -w 1
+# 同时把消费者的并发线程数设为 1，才能真正做到全局顺序消费
 </code></pre>
 <p>在证券处理中，以人民币兑换美元为 Topic，在价格相同的情况下，先出价者优先处理，则可以按照 FIFO 的方式发布和消费全局顺序消息。</p>
 <h3 id="12-部分顺序消息">1.2、部分顺序消息</h3>
@@ -762,18 +819,18 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 <h3 id="21-概念介绍">2.1、概念介绍</h3>
 <p><strong>延时消息</strong>：Producer 将消息发送到消息队列 RocketMQ 服务端，但并不期望这条消息立马投递，而是延迟一定时间后才投递到 Consumer 进行消费， 该消息即延时消息。</p>
 <h3 id="22-适用场景">2.2、适用场景</h3>
-<p>消息生产和消费有时间窗口要求：比如在电商交易中超时未支付关闭订单的场景，在订单创建时会发送一条延时消息。这条消息将会在 30 分钟以 后投递给消费者，消费者收到此消息后需要判断对应的订单是否已完成支付。 如支付未完成，则关闭订单。如已完成支付则忽略。</p>
+<p>消息的生产和消费之间往往存在时间窗口要求，例如电商交易中「超时未支付则关闭订单」的场景：订单创建时发送一条延时消息，该消息在 30 分钟后才投递给消费者；消费者收到后先查询订单的真实支付状态——若这笔订单仍未支付，就执行关单；若已经支付成功，则直接忽略这条消息。</p>
 <h3 id="23-使用方式">2.3、使用方式</h3>
 <p>Apache RocketMQ 目前只支持固定精度的定时消息，因为如果要支持任意的时间精度，在 Broker 层面，必须要做消息排序，如果再涉及到持久化， 那么消息排序要不可避免的产生巨大性能开销。<strong>（阿里云 RocketMQ 提供了任意时刻的定时消息功能，Apache 的 RocketMQ 并没有,阿里并没有开源）</strong><br>
 发送延时消息时需要设定一个延时时间长度，消息将从当前发送时间点开始延迟固定时间之后才开始投递。<br>
-延迟消息是根据延迟队列的 level 来的，延迟队列默认是<br>
-**msg.setDelayTimeLevel(5)**代表延迟一分钟<br>
-<strong>&quot;1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h&quot;</strong><br>
+延迟消息通过延迟级别（delay level）实现：<br>
+<code>msg.setDelayTimeLevel(5)</code> 表示延迟 1 分钟投递。RocketMQ 4.x 默认提供 18 个延迟级别：<br>
+<code>1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h</code><br>
 是这 18 个等级（秒（s）、分（m）、小时（h）），level 为 1，表示延迟 1 秒后消费，level 为 5 表示延迟 1 分钟后消费，level 为 18 表示延迟 2 个 小时消费。生产消息跟普通的生产消息类似，只需要在消息上设置延迟队列的 level 即可。消费消息跟普通的消费消息一致。</p>
 <h2 id="三-死信队列">三、死信队列</h2>
 <h3 id="31-概念介绍">3.1、概念介绍</h3>
 <p>死信队列用于处理无法被正常消费的消息。当一条消息初次消费失败，消息队列 <strong>MQ</strong> 会自动进行消息重试；达到最大重试次数后，若消费依然失败， 则表明<strong>Consumer</strong> 在正常情况下无法正确地消费该消息。此时，消息队列<strong>MQ</strong>不会立刻将消息丢弃，而是将这条消息发送到该 <strong>Consumer</strong> 对应的特殊队列中。<br>
-消息队列 <strong>MQ <strong>将这种正常情况下无法被消费的消息称为死信消息</strong>（Dead-Letter Message）</strong>，将存储死信消息的特殊队列称为死信队列 <strong>（Dead-Letter Queue)</strong>。</p>
+消息队列 MQ 将这种正常情况下无法被消费的消息称为<strong>死信消息</strong>（Dead-Letter Message），将存储死信消息的特殊队列称为<strong>死信队列</strong>（Dead-Letter Queue）。</p>
 <h3 id="32适用场景">3.2适用场景</h3>
 <h4 id="321-死信消息的特性">3.2.1、死信消息的特性</h4>
 <p>不会再被消费者正常消费。 有效期与正常消息相同，均为 3 天，3 天后会被自动删除。因此，请在死信消息产生后的 3 天内及时处理。</p>
@@ -796,9 +853,9 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 例如，在支付场景下，消费者消费扣款消息，对一笔订单执行扣款操作，扣款金额为 100 元。如果因网络不稳定等原因导致扣款消息重复投递，消 费者重复消费了该扣款消息，但最终的业务结果是只扣款一次，扣费 100 元，且用户的扣款记录中对应的订单只有一条扣款流水，不会多次扣除费用。 那么这次扣款操作是符合要求的，整个消费过程实现了消费幂等。</p>
 <h3 id="42-需要处理的场景">4.2、需要处理的场景</h3>
 <p>在互联网应用中，尤其在网络不稳定的情况下，消息队列 MQ 的消息有可能会出现重复。如果消息重复会影响您的业务处理，请对消息做幂等处理。 消息重复的场景如下：<br>
-**1. 发送时消息重复 **<br>
+<strong>1. 发送时消息重复</strong><br>
 当一条消息已被成功发送到服务端并完成持久化，此时出现了网络闪断或者客户端宕机，导致服务端对客户端应答失败。 如果此时生产者意识到消 息发送失败并尝试再次发送消息，消费者后续会收到两条内容相同并且 Message ID 也相同的消息。<br>
-**2. 投递时消息重复 **<br>
+<strong>2. 投递时消息重复</strong><br>
 消息消费的场景下，消息已投递到消费者并完成业务处理，当客户端给服务端反馈应答的时候网络闪断。为了保证消息至少被消费一次，消息队列 MQ 的服务端将在网络恢复后再次尝试投递之前已被处理过的消息，消费者后续会收到两条内容相同并且 Message ID 也相同的消息。<br>
 <strong>3. 负载均衡时消息重复（包括但不限于网络抖动、Broker 重启以及消费者应用重启）</strong><br>
 当消息队列 MQ 的 Broker 或客户端重启、扩容或缩容时，会触发 Rebalance，此时消费者可能会收到重复消息。</p>
@@ -821,20 +878,73 @@ Consumer consumer =ONSFactory.createConsumer(properties);
     } });
 </code></pre>
 
+          <h2 id="五-消息堆积与消费位点">五、消息堆积与消费位点</h2>
+<p>消息堆积是 RocketMQ 运维中最常见的问题：消息在 Broker 端持续写入，消费端却跟不上，Diff 不断增大，最终可能撑爆磁盘。要处理它，先要理解位点与堆积的度量方式。</p>
+<h3 id="51-消息堆积的常见原因">5.1、消息堆积的常见原因</h3>
+<ul>
+<li><strong>消费能力不足</strong>：消费者实例少、消费线程数少（<code>consumeThreadMin</code>/<code>consumeThreadMax</code> 配置过小），或单条消息处理逻辑耗时过长；</li>
+<li><strong>消费线程被阻塞</strong>：消费逻辑里做了同步远程调用、大事务或出现了锁等待，线程被长时间占住；</li>
+<li><strong>流量突增</strong>：大促、定时批量任务或上游异常重发导致写入量短时间远超消费能力；</li>
+<li><strong>持续消费失败</strong>：失败消息不断进入重试队列 <code>%RETRY%{group}</code> 反复投递，进一步挤占正常消费能力；</li>
+<li><strong>Rebalance 抖动</strong>：消费者频繁上下线、实例数与队列数不匹配，导致队列反复重新分配；</li>
+<li><strong>下游瓶颈</strong>：数据库、缓存或第三方接口变慢，消费端整体被拖垮。</li>
+</ul>
+<h3 id="52-消费位点与堆积排查命令">5.2、消费位点与堆积排查命令</h3>
+<p>集群消费模式下，每个消费组对每个 Topic 的每个队列都维护一个<strong>消费位点</strong>（offset），位点保存在 Broker 端；广播消费模式的位点则保存在消费者本地。</p>
+<pre><code class="language-text">Topic  ---- 多个 MessageQueue（brokerName + queueId）
+                  |
+        CommitLog（所有消息顺序追加，单文件默认 1GB）
+                  |
+        ConsumeQueue（每个队列一个逻辑队列，存 offset + size + tag hash）
+                  |
+        IndexFile（按 Message Key 建立索引，支持按业务键查询）
+</code></pre>
+<p>消费进度 = Broker 端该队列的最大位点（Broker Offset）与消费组已提交位点（Consumer Offset）之差，这个差值就是堆积量 Diff。常用排查命令：</p>
+<pre><code class="language-bash"># 1. 查看指定消费组对某个 Topic 的堆积情况，Diff Total 即堆积总量
+sh mqadmin consumerProgress -n 192.168.0.128:9876 -g AAAConsumerGroup
+
+# 2. 查看所有 Topic 的 TPS 与堆积（不指定 -t 时输出全量）
+sh mqadmin statsAll -n 192.168.0.128:9876
+
+# 3. 查看某个 Topic 各队列的最小/最大位点
+sh mqadmin topicStatus -n 192.168.0.128:9876 -t order_topic
+
+# 4. 查看消费组在线实例与订阅关系
+sh mqadmin consumerStatus -n 192.168.0.128:9876 -g AAAConsumerGroup
+
+# 5. 重置消费位点：-s now 表示直接跳到最新位点，跳过全部堆积
+sh mqadmin resetOffsetByTime -n 192.168.0.128:9876 -g AAAConsumerGroup -t order_topic -s now
+</code></pre>
+<blockquote>
+<p>注：<code>resetOffsetByTime</code> 的 <code>-s</code> 除 <code>now</code> 外也可传时间戳或 <code>yyyy-MM-dd#HH:mm:ss</code> 形式。重置位点会让已消费过的消息再次被消费，务必确认消费端已经做好幂等。</p>
+</blockquote>
+<h3 id="53-堆积的处理思路">5.3、堆积的处理思路</h3>
+<ul>
+<li><strong>应急止血</strong>：确认业务可以接受后，用 <code>resetOffsetByTime -s now</code> 跳过历史堆积，先把实时链路恢复；</li>
+<li><strong>提升并发</strong>：增加消费者实例数并同步调大消费线程数，注意实例数与队列数要匹配——队列数不足时新增实例分不到队列，需要先扩容队列（<code>mqadmin updateTopic -r</code> / <code>-w</code>）；</li>
+<li><strong>优化消费逻辑</strong>：批量拉取（<code>consumeMessageBatchMaxSize</code>）、异步化耗时操作、去掉消费逻辑中的同步远程调用；</li>
+<li><strong>隔离重试流量</strong>：把反复失败的消息尽快转入死信队列，避免重试消息持续占用消费能力；</li>
+<li><strong>容量与监控</strong>：对 Diff、消费 TPS、Broker 磁盘使用率设置告警，堆积早发现早处理。</li>
+</ul>
+
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%8F%AF%E7%94%A8%E6%80%A7%E8%AF%84%E4%BC%B0">可用性评估</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E5%8F%AF%E7%94%A8%E6%80%A7%E8%AF%84%E4%BC%B0">可用性评估</a></li>
-<li><a href="#rocketmq%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1">RocketMQ架构设计</a>
-<ul>
-<li><a href="#%E6%8A%80%E6%9C%AF%E6%9E%B6%E6%9E%84">技术架构</a></li>
-<li><a href="#%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84">部署架构</a></li>
-<li><a href="#%E6%B1%87%E6%80%BBrocketmq-%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E6%A8%A1%E5%BC%8F">汇总：RocketMQ 集群部署模式</a></li>
 </ul>
 </li>
-<li><a href="#rocketmq%E4%B8%8Ezookeeper%E7%9A%84%E7%88%B1%E6%81%A8%E7%BA%A0%E8%91%9B">RocketMQ与ZooKeeper的爱恨纠葛</a>
+<li>
+<a href="#rocketmq%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1">RocketMQ架构设计</a>
+<ul>
+<li><a href="#%E6%8A%80%E6%9C%AF%E6%9E%B6%E6%9E%84">技术架构</a></li>
+<li><a href="#%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5-topic-queue-%E4%B8%8E-tag">核心概念：Topic、Queue 与 Tag</a></li>
+<li><a href="#%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84">部署架构</a></li>
+<li><a href="#%E6%B1%87%E6%80%BBrocketmq-%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E6%A8%A1%E5%BC%8F">汇总：RocketMQ 集群部署模式</a></li>
+<li><a href="#4-%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E8%A6%81%E7%82%B9">4、集群部署要点</a></li>
+</ul>
+</li>
+<li>
+<a href="#rocketmq%E4%B8%8Ezookeeper%E7%9A%84%E7%88%B1%E6%81%A8%E7%BA%A0%E8%91%9B">RocketMQ与ZooKeeper的爱恨纠葛</a>
 <ul>
 <li><a href="#rocketmq%E7%9A%84broker%E6%9C%89%E4%B8%89%E7%A7%8D%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E6%96%B9%E5%BC%8F">RocketMQ的Broker有三种集群部署方式</a></li>
 <li><a href="#nameserver%E7%9A%84%E5%8A%9F%E8%83%BD">NameServer的功能</a></li>
@@ -843,8 +953,14 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 <li><a href="#nameserver%E7%89%B9%E6%80%A7">NameServer特性</a></li>
 </ul>
 </li>
-<li><a href="#rocketmq-%E7%9A%84%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B">RocketMQ 的消息类型</a></li>
-<li><a href="#rocketmq%E9%AB%98%E5%8F%AF%E7%94%A8">RocketMQ高可用</a>
+<li>
+<a href="#rocketmq-%E7%9A%84%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B">RocketMQ 的消息类型</a>
+<ul>
+<li><a href="#%E4%BA%8B%E5%8A%A1%E6%B6%88%E6%81%AF">事务消息</a></li>
+</ul>
+</li>
+<li>
+<a href="#rocketmq%E9%AB%98%E5%8F%AF%E7%94%A8">RocketMQ高可用</a>
 <ul>
 <li><a href="#nameserver-%E9%AB%98%E5%8F%AF%E7%94%A8">NameServer 高可用</a></li>
 <li><a href="#brokerserver-%E9%AB%98%E5%8F%AF%E7%94%A8">BrokerServer 高可用</a></li>
@@ -852,105 +968,124 @@ Consumer consumer =ONSFactory.createConsumer(properties);
 <li><a href="#producer%E9%AB%98%E5%8F%AF%E7%94%A8">producer高可用</a></li>
 </ul>
 </li>
-<li><a href="#%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%9B%86%E7%BE%A4%E5%A4%9A%E5%89%AF%E6%9C%AC%E7%9A%84%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F">实现分布式集群多副本的三种方式</a>
+<li>
+<a href="#%E5%AE%9E%E7%8E%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%9B%86%E7%BE%A4%E5%A4%9A%E5%89%AF%E6%9C%AC%E7%9A%84%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F">实现分布式集群多副本的三种方式</a>
 <ul>
 <li><a href="#ms%E6%A8%A1%E5%BC%8F">M/S模式</a></li>
 <li><a href="#%E5%9F%BA%E4%BA%8Ezookeeper%E6%9C%8D%E5%8A%A1">基于zookeeper服务</a></li>
 <li><a href="#%E5%9F%BA%E4%BA%8Eraft">基于raft</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8F%AF%E7%94%A8%E6%80%A7%E4%B8%8E%E5%8F%AF%E9%9D%A0%E6%80%A7">可用性与可靠性</a></li>
-<li><a href="#broker%E6%B6%88%E6%81%AF%E7%9A%84%E9%9B%B6%E4%B8%A2%E5%A4%B1%E6%96%B9%E6%A1%88">Broker消息的零丢失方案</a>
+<li>
+<a href="#%E5%8F%AF%E7%94%A8%E6%80%A7%E4%B8%8E%E5%8F%AF%E9%9D%A0%E6%80%A7">可用性与可靠性</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#broker%E6%B6%88%E6%81%AF%E7%9A%84%E9%9B%B6%E4%B8%A2%E5%A4%B1%E6%96%B9%E6%A1%88">Broker消息的零丢失方案</a>
 <ul>
 <li><a href="#%E5%90%8C%E6%AD%A5%E5%88%B7%E7%9B%98-%E5%BC%82%E6%AD%A5%E5%88%B7%E7%9B%98">同步刷盘、异步刷盘</a></li>
 <li><a href="#%E5%90%8C%E6%AD%A5%E5%A4%8D%E5%88%B6-%E5%BC%82%E6%AD%A5%E5%A4%8D%E5%88%B6">同步复制、异步复制</a></li>
 <li><a href="#%E6%B6%88%E6%81%AF%E9%9B%B6%E4%B8%A2%E5%A4%B1%E6%96%B9%E6%A1%88">消息零丢失方案</a></li>
 </ul>
 </li>
-<li><a href="#producer%E9%AB%98%E5%8F%AF%E7%94%A8-2">producer高可用</a></li>
-<li><a href="#%E6%B6%88%E6%81%AF%E8%80%85%E4%B8%9A%E5%8A%A1%E4%BB%A3%E7%A0%81%E5%87%BA%E7%8E%B0%E5%BC%82%E5%B8%B8%E6%80%8E%E4%B9%88%E5%8A%9E">消息者业务代码出现异常怎么办？</a>
+<li>
+<a href="#producer%E9%AB%98%E5%8F%AF%E7%94%A8-2">producer高可用</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%B6%88%E6%81%AF%E8%80%85%E4%B8%9A%E5%8A%A1%E4%BB%A3%E7%A0%81%E5%87%BA%E7%8E%B0%E5%BC%82%E5%B8%B8%E6%80%8E%E4%B9%88%E5%8A%9E">消息者业务代码出现异常怎么办？</a>
 <ul>
 <li><a href="#%E9%87%8D%E8%AF%95%E9%98%9F%E5%88%97">重试队列</a></li>
 <li><a href="#%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97">死信队列</a></li>
 </ul>
 </li>
-<li><a href="#customer-%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1">Customer 负载均衡</a>
+<li>
+<a href="#customer-%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1">Customer 负载均衡</a>
 <ul>
 <li><a href="#%E9%9B%86%E7%BE%A4%E6%A8%A1%E5%BC%8F">集群模式</a></li>
 <li><a href="#%E5%B9%BF%E6%92%AD%E6%A8%A1%E5%BC%8F">广播模式</a></li>
 </ul>
 </li>
-<li><a href="#%E6%B6%88%E8%B4%B9%E8%80%85%E7%9A%84%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95">消费者的消息重试</a></li>
-<li><a href="#%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95">顺序消息重试</a></li>
-<li><a href="#%E6%97%A0%E5%BA%8F%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95">无序消息重试</a>
+<li>
+<a href="#%E6%B6%88%E8%B4%B9%E8%80%85%E7%9A%84%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95">消费者的消息重试</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95">顺序消息重试</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%97%A0%E5%BA%8F%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95">无序消息重试</a>
 <ul>
 <li><a href="#%E6%A6%82%E8%BF%B0">概述</a></li>
 <li><a href="#%E9%87%8D%E8%AF%95%E6%AC%A1%E6%95%B0">重试次数</a></li>
-<li><a href="#%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95%E7%9B%B8%E5%85%B3%E7%9A%84%E5%A4%84%E7%90%86%E6%96%B9%E5%BC%8F">消息重试相关的处理方式</a>
-<ul>
-<li><a href="#%E6%B6%88%E8%B4%B9%E5%A4%B1%E8%B4%A5%E5%90%8E%E9%9C%80%E8%A6%81%E9%87%8D%E8%AF%95%E7%9A%84%E5%A4%84%E7%90%86%E6%96%B9%E5%BC%8F">消费失败后，需要重试的处理方式</a></li>
-<li><a href="#%E6%B6%88%E8%B4%B9%E5%A4%B1%E8%B4%A5%E5%90%8E%E6%97%A0%E9%9C%80%E9%87%8D%E8%AF%95%E7%9A%84%E5%A4%84%E7%90%86%E6%96%B9%E5%BC%8F">消费失败后，无需重试的处理方式</a></li>
-<li><a href="#%E8%8E%B7%E5%8F%96%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95%E6%AC%A1%E6%95%B0">获取消息重试次数</a></li>
+<li><a href="#%E6%B6%88%E6%81%AF%E9%87%8D%E8%AF%95%E7%9B%B8%E5%85%B3%E7%9A%84%E5%A4%84%E7%90%86%E6%96%B9%E5%BC%8F">消息重试相关的处理方式</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97-2">死信队列</a>
+<li>
+<a href="#%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97-2">死信队列</a>
 <ul>
 <li><a href="#%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97%E6%A6%82%E5%BF%B5">死信队列概念</a></li>
 </ul>
 </li>
-<li><a href="#%E6%AD%BB%E4%BF%A1%E7%89%B9%E6%80%A7">死信特性</a></li>
-<li><a href="#%E6%9F%A5%E7%9C%8B%E6%AD%BB%E4%BF%A1%E4%BF%A1%E6%81%AF%E5%92%8C%E9%87%8D%E5%8F%91">查看死信信息和重发</a></li>
-<li><a href="#%E6%B6%88%E6%81%AF%E5%B9%82%E7%AD%89%E6%80%A7">消息幂等性</a>
+<li>
+<a href="#%E6%AD%BB%E4%BF%A1%E7%89%B9%E6%80%A7">死信特性</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%9F%A5%E7%9C%8B%E6%AD%BB%E4%BF%A1%E4%BF%A1%E6%81%AF%E5%92%8C%E9%87%8D%E5%8F%91">查看死信信息和重发</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%B6%88%E6%81%AF%E5%B9%82%E7%AD%89%E6%80%A7">消息幂等性</a>
 <ul>
 <li><a href="#%E6%B6%88%E8%B4%B9%E5%B9%82%E7%AD%89">消费幂等</a></li>
 <li><a href="#%E6%B6%88%E8%B4%B9%E5%B9%82%E7%AD%89%E7%9A%84%E5%BF%85%E8%A6%81%E6%80%A7">消费幂等的必要性</a></li>
-<li><a href="#%E5%A4%84%E7%90%86%E6%96%B9%E5%BC%8F">处理方式</a>
-<ul>
-<li><a href="#%E6%B6%88%E8%B4%B9%E7%AB%AF%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E5%B9%82%E7%AD%89%E6%80%A7">消费端实现消息幂等性</a></li>
+<li><a href="#%E5%A4%84%E7%90%86%E6%96%B9%E5%BC%8F">处理方式</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E4%B8%80-%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF">一、顺序消息</a>
+<li>
+<a href="#%E4%B8%80-%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF">一、顺序消息</a>
 <ul>
-<li><a href="#11-%E5%85%A8%E5%B1%80%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF">1.1、全局顺序消息</a>
-<ul>
-<li><a href="#111-%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF">1.1.1、适用场景</a></li>
-<li><a href="#112-%E7%A4%BA%E4%BE%8B">1.1.2、示例</a></li>
-</ul>
-</li>
+<li><a href="#11-%E5%85%A8%E5%B1%80%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF">1.1、全局顺序消息</a></li>
 <li><a href="#12-%E9%83%A8%E5%88%86%E9%A1%BA%E5%BA%8F%E6%B6%88%E6%81%AF">1.2、部分顺序消息</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-%E5%BB%B6%E6%97%B6%E6%B6%88%E6%81%AF">二、延时消息</a>
+<li>
+<a href="#%E4%BA%8C-%E5%BB%B6%E6%97%B6%E6%B6%88%E6%81%AF">二、延时消息</a>
 <ul>
 <li><a href="#21-%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D">2.1、概念介绍</a></li>
 <li><a href="#22-%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF">2.2、适用场景</a></li>
 <li><a href="#23-%E4%BD%BF%E7%94%A8%E6%96%B9%E5%BC%8F">2.3、使用方式</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97">三、死信队列</a>
+<li>
+<a href="#%E4%B8%89-%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97">三、死信队列</a>
 <ul>
 <li><a href="#31-%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D">3.1、概念介绍</a></li>
-<li><a href="#32%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF">3.2适用场景</a>
-<ul>
-<li><a href="#321-%E6%AD%BB%E4%BF%A1%E6%B6%88%E6%81%AF%E7%9A%84%E7%89%B9%E6%80%A7">3.2.1、死信消息的特性</a></li>
-<li><a href="#322-%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97%E7%9A%84%E7%89%B9%E6%80%A7">3.2.2、死信队列的特性</a></li>
+<li><a href="#32%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF">3.2适用场景</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li><a href="#%E5%9B%9B-%E6%B6%88%E8%B4%B9%E5%B9%82%E7%AD%89">四、消费幂等</a>
+<li>
+<a href="#%E5%9B%9B-%E6%B6%88%E8%B4%B9%E5%B9%82%E7%AD%89">四、消费幂等</a>
 <ul>
 <li><a href="#41-%E4%BB%80%E4%B9%88%E6%98%AF%E6%B6%88%E6%81%AF%E5%B9%82%E7%AD%89">4.1、什么是消息幂等</a></li>
 <li><a href="#42-%E9%9C%80%E8%A6%81%E5%A4%84%E7%90%86%E7%9A%84%E5%9C%BA%E6%99%AF">4.2、需要处理的场景</a></li>
 <li><a href="#43-%E5%A4%84%E7%90%86%E6%96%B9%E6%B3%95">4.3、处理方法</a></li>
 </ul>
 </li>
-</ul>
-</li>
+<li>
+<a href="#%E4%BA%94-%E6%B6%88%E6%81%AF%E5%A0%86%E7%A7%AF%E4%B8%8E%E6%B6%88%E8%B4%B9%E4%BD%8D%E7%82%B9">五、消息堆积与消费位点</a>
+<ul>
+<li><a href="#51-%E6%B6%88%E6%81%AF%E5%A0%86%E7%A7%AF%E7%9A%84%E5%B8%B8%E8%A7%81%E5%8E%9F%E5%9B%A0">5.1、消息堆积的常见原因</a></li>
+<li><a href="#52-%E6%B6%88%E8%B4%B9%E4%BD%8D%E7%82%B9%E4%B8%8E%E5%A0%86%E7%A7%AF%E6%8E%92%E6%9F%A5%E5%91%BD%E4%BB%A4">5.2、消费位点与堆积排查命令</a></li>
+<li><a href="#53-%E5%A0%86%E7%A7%AF%E7%9A%84%E5%A4%84%E7%90%86%E6%80%9D%E8%B7%AF">5.3、堆积的处理思路</a></li>
 </ul>
 </li>
 </ul>
