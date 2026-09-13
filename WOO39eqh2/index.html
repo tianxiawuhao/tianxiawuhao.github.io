@@ -158,6 +158,8 @@ DNS1=114.114.114.114 #DNS解析
 <pre><code class="language-shell">service network restart
 </code></pre>
 <h2 id="安装环境">安装环境</h2>
+<p>先给出本文的整体部署路线，便于对照执行：Harbor 主机完成主机名、静态网络与 Docker 环境准备后，用自签证书和 <code>harbor.yml</code> 离线安装 Harbor；随后各客户端与 K8s 节点解析 <code>hub.test.com</code>，再通过 <code>docker login / tag / push / pull</code> 使用仓库。</p>
+<p><img src="/post-assets/WOO39eqh2/01-harbor-quickstart-flow.svg" alt="Harbor 自建镜像仓库部署与使用流程图"></p>
 <h3 id="1安装docker-ce">1.安装Docker-CE</h3>
 <pre><code class="language-shell"># 卸载旧版本
 yum remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine  
@@ -238,6 +240,8 @@ tar zxvf harbor-offline-installer-v2.5.0.tgz
 <p>将http端口改成10086，因为默认用的80端口已经被占用，http可以指定任意端口；</p>
 </blockquote>
 <figure data-type="image" tabindex="1"><img src="/post-images/1654235318168.png" alt="" loading="lazy"></figure>
+<p>下面这张图说明 Harbor 各容器组件之间的关系，以及镜像 push / pull 的走向：nginx 负责对外反代与证书卸载，core、portal 与 jobservice 负责鉴权、项目与元数据管理，registry 实际存放镜像层，PostgreSQL 与 Redis 分别保存元数据和缓存。</p>
+<p><img src="/post-assets/WOO39eqh2/02-harbor-architecture.svg" alt="Harbor 组件架构与镜像推拉路径图"></p>
 <p>接下来运行install.sh安装和启动harbor</p>
 <pre><code class="language-shell">./prepare
 ./install.sh
