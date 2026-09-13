@@ -125,184 +125,388 @@
           
           <img class="post-feature-header-image" src="/post-images/Y9SH6oPXI.png" alt="封面图">
           
-          <p>Spring使用ThreadLocal存储内存泄露风险<br>
-Spring 中有时候我们需要存储一些和 Request 相关联的变量，例如用户的登陆有关信息等，它的生命周期和 Request 相同。</p>
-<p>一个容易想到的实现办法是使用ThreadLocal</p>
+          <p>Spring 中有时候需要存储一些和 Request 相关联的变量，例如用户登录信息等，它们的生命周期与 Request 相同。一个容易想到的实现办法是使用 ThreadLocal。</p>
+<h2 id="spring-request-context">Spring 中保存请求上下文的常见做法</h2>
+<p>先写一个基于 ThreadLocal 的工具类：</p>
 <pre><code class="language-java">@Slf4j
 public class CurrentUserHelper {
-    //存储用户信息
-    private static final InheritableThreadLocal&lt;SysUser&gt; CURRENT_USER = new InheritableThreadLocal&lt;SysUser&gt;();
 
-    public static void setCurrentUser(SysUser currentUserInfo) {
-        CURRENT_USER.set(currentUserInfo);
+    // 注意：InheritableThreadLocal 只在线程「被创建」时把值复制给子线程，
+    // 线程池中的线程是复用的，详见后文「InheritableThreadLocal 与 TTL」一节
+    private static final InheritableThreadLocal&lt;SysUser&gt; CURRENT_USER =
+            new InheritableThreadLocal&lt;&gt;();
+
+    public static void setCurrentUser(SysUser user) {
+        CURRENT_USER.set(user);
     }
 
     public static SysUser getCurrentUser() {
-        return (SysUser)CURRENT_USER.get();
+        return CURRENT_USER.get();
     }
 
     public static void clear() {
         CURRENT_USER.remove();
     }
-
 }
 </code></pre>
-<p>使用一个自定义的HandlerInterceptor将有关信息注入进去</p>
+<p>再写一个 HandlerInterceptor，在请求开始时把用户信息注入进去：</p>
 <pre><code class="language-java">@Slf4j
 @Component
 public class RequestInterceptor implements HandlerInterceptor {
 
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws
-            Exception {
-        try {
-            CurrentUserHelper.setCurrentUser(retrieveUserInfo(request));
-        } catch (Exception ex) {
-            log.warn(&quot;读取请求信息失败&quot;, ex);
-        }
-        return true;
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        CurrentUserHelper.setCurrentUser(retrieveUserInfo(request));
+        return true;   // 返回 true 之后，本拦截器才会被登记为 preHandle 成功
     }
-    
+
     @Override
-    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, @Nullable
-            ModelAndView modelAndView) throws Exception {
+    public void postHandle(HttpServletRequest request, HttpServletResponse response,
+                           Object handler, @Nullable ModelAndView modelAndView) {
+        // 只覆盖「Controller 正常返回」的情况：抛异常时 postHandle 不会被调用
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
+                                Object handler, @Nullable Exception ex) {
+        // 正常返回或抛异常，DispatcherServlet 都会回调这里
         CurrentUserHelper.clear();
+    }
 
+    private SysUser retrieveUserInfo(HttpServletRequest request) {
+        // 从 Token / Session 中解析用户信息
+        return null;
+    }
 }
 </code></pre>
-<p>通过这样，我们就可以在 Controller 中直接使用这个 context，很方便的获取到有关用户的信息</p>
+<p>这样在 Controller 里就能直接取到当前用户，不用一层层传参：</p>
 <pre><code class="language-java">@Slf4j
 @RestController
-class Controller {
-  public Result get() {
-     SysUser user = CurrentUserHelper.get();
-     // ...
-  }
+@RequestMapping("/api")
+public class UserController {
 
+    @GetMapping("/me")
+    public Result&lt;SysUser&gt; me() {
+        SysUser user = CurrentUserHelper.getCurrentUser();
+        // 直接使用
+        return Result.ok(user);
+    }
 }
 </code></pre>
-<p>这个方法也是很多博客中使用的。然而这个方法却存在着一个很隐蔽的坑： HandlerInterceptor 的 postHandle 并不总是会调用。</p>
-<p>当Controller中出现Exception</p>
-<pre><code class="language-java">@Slf4j
-@RestController
-class Controller {
-
-  public Result get() {
-      SysUser user = CurrentUserHelper.get();
-     // ...
-     throw new RuntimeException();
-  }
+<p>这个写法在很多博客里都能看到，但它藏着一个很隐蔽的坑：<b>HandlerInterceptor 的 postHandle 并不总是会被调用</b>，而清理逻辑一旦放在 postHandle 里，就会漏掉异常路径。</p>
+<h3 id="posthandle-not-always-called">坑：postHandle 并不总会被调用</h3>
+<p>第一种情况是 Controller 抛出了异常：</p>
+<pre><code class="language-java">@GetMapping("/boom")
+public Result&lt;Void&gt; boom() {
+    SysUser user = CurrentUserHelper.getCurrentUser();
+    log.info("current user = {}", user == null ? null : user.getId());
+    throw new IllegalStateException("业务异常");   // postHandle 不会被调用
 }
 </code></pre>
-<p>或者在HandlerInterceptor的preHandle中出现Exception</p>
+<p>第二种情况是在 preHandle 里设置完值之后又抛出了异常：</p>
+<pre><code class="language-java">@Override
+public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+    CurrentUserHelper.setCurrentUser(retrieveUserInfo(request));
+    if (!checkPermission(request)) {
+        // 本拦截器的 afterCompletion 不会被调用：interceptorIndex 只在
+        // preHandle 返回 true 之后才前移，此时它还没轮到本拦截器
+        throw new IllegalStateException("权限校验失败");
+    }
+    return true;
+}
+</code></pre>
+<p>这两条路径都绕过了 postHandle（第二条连 afterCompletion 也一起绕过了），ThreadLocal 里的值因此没有被清掉。在普通的 Java 环境里，ThreadLocal 变量会随 Thread 一起销毁；但 Spring Web 用的是线程池，响应请求的线程会一直常驻，于是变量既不能被 GC 回收，又会在后续请求中被同一线程读到——线程池复用直接把上一个请求的数据「串」到了下一个请求里。</p>
+<p>更危险的是，文章开头那份示例代码把异常吞掉了：</p>
+<pre><code class="language-java">try {
+    CurrentUserHelper.setCurrentUser(retrieveUserInfo(request));
+} catch (Exception ex) {
+    log.warn("读取请求信息失败", ex);   // 解析失败时不 set，也不 clear
+}
+return true;
+</code></pre>
+<p>一旦解析用户信息失败，本线程上残留的仍是上一个请求的用户对象。如果这时来的是一个匿名请求，<code>getCurrentUser()</code> 就会返回上一个请求的用户——这不是单纯的「内存泄漏」，而是实实在在的越权隐患。</p>
+<p>因此清理动作有两个可靠落点：</p>
+<ul>
+<li>拦截器里放在 <code>afterCompletion</code>（正常和异常都会回调），同时保证 preHandle 在 set 之后不再抛异常；</li>
+<li>更稳妥的是用 Filter 包住整条链路：</li>
+</ul>
 <pre><code class="language-java">@Slf4j
 @Component
-public class RequestInterceptor implements HandlerInterceptor {
+public class CurrentUserFilter extends OncePerRequestFilter {
 
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws
-            Exception {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain chain) throws ServletException, IOException {
         try {
             CurrentUserHelper.setCurrentUser(retrieveUserInfo(request));
-        } catch (Exception ex) {
-            log.warn(&quot;读取请求信息失败&quot;, ex);
+            chain.doFilter(request, response);
+        } finally {
+            // Filter 位于 DispatcherServlet 之外，无论异常、转发还是正常返回都会执行
+            CurrentUserHelper.clear();
         }
-    
-        // ...
-        throw new RuntimeException();
-        //...
-        return true;
     }
 }
 </code></pre>
-<p>这些情况下， postHandle 并不会调用。这就导致了 ThreadLocal 变量不能被清理。</p>
-<p>在平常的 Java 环境中，ThreadLocal 变量随着 Thread 本身的销毁，是可以被销毁掉的。但 Spring 由于采用了线程池的设计，响应请求的线程可能会一直常驻，这就导致了变量一直不能被 GC 回收。更糟糕的是，这个没有被正确回收的变量，由于线程池对线程的复用，可能会串到别的 Request 当中，进而直接导致代码逻辑的错误。</p>
-<p>为了解决这个问题，我们可以使用 Spring 自带的 RequestContextHolder ，它背后的原理也是 ThreadLocal，不过它总会被更底层的 Servlet 的 Filter 清理掉，因此不存在泄露的问题。</p>
-<p>下面是一个使用RequestContextHolder重写的例子</p>
-<pre><code class="language-java">public class SecurityContextHolder {
+<h3 id="requestcontextholder">更省心的方案：RequestContextHolder</h3>
+<p>Spring 自带的 <code>RequestContextHolder</code> 底层同样是 ThreadLocal，但它的生命周期由框架自己管理：<code>FrameworkServlet#processRequest</code> 会在 finally 中调用 <code>resetContextHolders(...)</code>，<code>RequestContextListener</code>、<code>RequestContextFilter</code> 也会在请求结束时清理，所以它不会跨请求残留。</p>
+<pre><code class="language-java">public abstract class SecurityContextHolder {
 
-    private static final String SECURITY_CONTEXT_ATTRIBUTES = &quot;SECURITY_CONTEXT&quot;;
-    
-    public static void setContext(SysUser context) {
-        RequestContextHolder.currentRequestAttributes().setAttribute(
-                SECURITY_CONTEXT_ATTRIBUTES,
-                context,
-                RequestAttributes.SCOPE_REQUEST);
-    
+    private static final String SECURITY_CONTEXT_ATTRIBUTES = "SECURITY_CONTEXT";
+
+    public static void setContext(SysUser user) {
+        RequestContextHolder.currentRequestAttributes()
+                .setAttribute(SECURITY_CONTEXT_ATTRIBUTES, user, RequestAttributes.SCOPE_REQUEST);
     }
-    
-    public static SecurityContext get() {
-        return (SysUser)RequestContextHolder.currentRequestAttributes()
+
+    public static SysUser getContext() {
+        Object value = RequestContextHolder.currentRequestAttributes()
                 .getAttribute(SECURITY_CONTEXT_ATTRIBUTES, RequestAttributes.SCOPE_REQUEST);
+        return (SysUser) value;
     }
 }
 </code></pre>
-<p>项目中实现WebMvcConfigurer接口或者WebMvcConfigurationSupport接口实现跨域资源访问配置时，要重写addInterceptors方法</p>
+<p>注意 <code>SCOPE_REQUEST</code> 实际是把对象写进 <code>HttpServletRequest</code> 的属性表（<code>SCOPE_SESSION</code> 才会写进 Session），随请求一起被回收；<code>currentRequestAttributes()</code> 在没有绑定请求的线程（例如自己 new 出来的线程或 <code>@Async</code> 线程）上会抛 <code>IllegalStateException: No thread-bound request found</code>。</p>
+<p>注册拦截器时，实现 <code>WebMvcConfigurer</code>（或 <code>WebMvcConfigurationSupport</code>）并重写 <code>addInterceptors</code>：</p>
 <pre><code class="language-java">@Configuration
-public class CorsConfig implements WebMvcConfigurer {
+public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        //配置允许跨域访问的路径
-        registry.addMapping(&quot;/**&quot;)
-                .allowedOrigins(&quot;*&quot;)
-                // 允许提交请求的方法，*表示全部允许
-                .allowedMethods(&quot;GET&quot;, &quot;POST&quot;, &quot;DELETE&quot;, &quot;PUT&quot;)
-                .allowedHeaders(&quot;*&quot;)
-                .exposedHeaders(&quot;Access-Control-Allow-Origin&quot;)
-                //是否允许证书 不再默认开启
+        // 配置允许跨域访问的路径
+        registry.addMapping("/**")
+                .allowedOrigins("*")
+                .allowedMethods("GET", "POST", "DELETE", "PUT")
+                .allowedHeaders("*")
+                .exposedHeaders("Access-Control-Allow-Origin")
                 .allowCredentials(true)
                 .maxAge(3600);
     }
 
     @Override
-    public void addInterceptors(InterceptorRegistry interceptor) {
-        interceptor.addInterceptor(new RequestInterceptor()).addPathPatterns(&quot;/**&quot;);
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new RequestInterceptor()).addPathPatterns("/**");
     }
-
 }
 </code></pre>
-<p>除了使用 RequestContextHolder 还可以使用 Request Scope 的 Bean，或者使用 ThreadLocalTargetSource ，原理上是类似的。</p>
-<p>需要时刻注意 ThreadLocal 相当于线程内部的 static 变量，是一个非常容易产生泄露的点，因此使用 ThreadLocal 应该额外小心。</p>
-<h2 id="tl-leak-theory">ThreadLocal 可能会产生内存泄露的问题及原理</h2><p>刚遇到一个关于 ThreadLocal 的内存泄漏问题，刚好总结一下。</p>
-<p>比较常用的这里先不提，直接提比较重要的部分</p>
+<p>除了 RequestContextHolder，还可以使用 Request Scope 的 Bean，或者 <code>ThreadLocalTargetSource</code>，原理类似：把「每个请求一份」的状态交给框架按请求生命周期管理，而不是自己在线程上挂东西。</p>
+<p>需要时刻记住：ThreadLocal 相当于把变量挂在线程对象上，是一个很容易泄漏的位置；而且只要用了线程池，清理责任就完全在使用者身上。</p>
+<h2 id="tl-leak-theory">ThreadLocal 可能会产生内存泄露的问题及原理</h2>
+<p>下面从源码角度看清楚「为什么必须 remove」。</p>
 <h3 id="tl-why">为什么会产生内存泄露？</h3>
 <pre><code class="language-java">public void set(T value) {
-
     Thread t = Thread.currentThread();
     ThreadLocalMap map = getMap(t);
-    if (map != null)
+    if (map != null) {
         map.set(this, value);
-    else
+    } else {
         createMap(t, value);
+    }
+}
+
+ThreadLocalMap getMap(Thread t) {
+    return t.threadLocals;   // 每个线程私有的一个字段
 }
 </code></pre>
-<p>在 set 方法中，会先获取当前线程（thread）：每个线程都有一个 threadLocals 成员变量，指向对应的 ThreadLocalMap；然后以 ThreadLocal 对象作为 key，与给定的 value 一起保存起来。</p>
-<p>当外部引用解除后，对应的 ThreadLocal 对象仍被内部的 ThreadLocalMap 引用，无法被 GC 回收，可能会导致内存泄露。</p>
+<p>可以看到，值并没有存在 ThreadLocal 对象里，而是存在<b>当前线程</b>的 <code>threadLocals</code> 字段（一个 <code>ThreadLocalMap</code>）中，以 ThreadLocal 实例自身作为 key。于是引用链变成了：</p>
+<pre><code class="language-text">GC Roots(Thread) → Thread.threadLocals → ThreadLocalMap → Entry[] table → Entry → value
+</code></pre>
+<p>线程不结束，这条链就一直存在。线程池里的工作线程（默认不超时回收）几乎与进程同寿，所以哪怕请求早已结束，value 依然被强引用着——这就是「内存泄漏」的来源。</p>
 <h3 id="tl-jvm">JVM 解决的办法</h3>
+<p>为了不让 ThreadLocal 实例本身拖住整个 Map，JDK 把 Entry 的 key 设计成了弱引用：</p>
 <pre><code class="language-java">static class Entry extends WeakReference&lt;ThreadLocal&lt;?&gt;&gt; {
 
     /** The value associated with this ThreadLocal. */
     Object value;
-    
+
     Entry(ThreadLocal&lt;?&gt; k, Object v) {
-        super(k);
-        value = v;
-    }  
+        super(k);       // key 是弱引用（WeakReference），不是软引用
+        value = v;      // value 是强引用
+    }
 }
 </code></pre>
-<p>继承了一个软引用，在系统进行gc的时候就可以回收</p>
-<p>但回收后 key 变成 null，value 也无法被访问，仍可能存在内存泄露。因此一旦不再使用，必须把对应的 key-value 对 remove 掉；另外，ThreadLocal 源码在每次 get/set 时也会清理 key 为 null 的记录。</p>
-
-          <div class="toc-container"><ul class="markdownIt-TOC">
-<li>
+<p>注意这里是<b>弱引用</b>（WeakReference）而不是软引用（SoftReference）：外部不再持有 ThreadLocal 实例时，只要发生一次 GC，这个实例就会被回收，Entry 的 key 随之变成 <code>null</code>。问题是 <b>value 仍然是强引用</b>，Entry 又仍被线程的 <code>threadLocals</code> 强引用着，所以 value 不可能被回收，只是变得「不可访问」而已。</p>
+<p>至于这些 key 为 null 的 Entry，只能靠 ThreadLocalMap 的探测式清理顺带回收：<code>get()</code> 命中时会调用 <code>expungeStaleEntry</code>，<code>set()</code> 会调用 <code>cleanSomeSlots</code>，<code>rehash()</code> 会调用 <code>expungeStaleEntries</code>，<code>remove()</code> 也会调用 <code>expungeStaleEntry</code>。也就是说，清理是「下次访问时顺手做」的启发式行为，而不是 GC 主动完成的。</p>
+<p><img src="/post-assets/Y9SH6oPXI/01-threadlocalmap-leak.svg" alt="ThreadLocalMap 的引用链与内存泄漏路径示意图"></p>
+<p>由此可以得到两个结论，也回答了「为什么必须 remove」：</p>
 <ul>
-<li><a href="#tl-leak-theory">ThreadLocal 可能会产生内存泄露的问题及原理</a>
+<li><b>ThreadLocal 是 static final 时（最常见）</b>：实例被类强引用，key 永远不会变成 null，弱引用一点忙都帮不上，Entry 永远不是 stale 的。此时 value 的唯一释放途径就是 <code>remove()</code>（或线程结束）。泄漏规模有上界——线程数 × 单个 value 的大小，但只要 value 本身很大（例如整棵权限树、整个 Request、大 List），常驻内存就非常可观。</li>
+<li><b>ThreadLocal 是动态创建时</b>：例如每次请求 <code>new ThreadLocal&lt;&gt;()</code>，或把它当作缓存的 key。实例一旦不可达，GC 后 key 变 null，但 Entry 与 value 仍留在数组里；只有当该线程<b>再次</b>执行 get/set/remove 触发清理时才会被回收。线程池中那些不再被调度到的空闲线程，就会长期保留这些 stale Entry 和它们的 value，泄漏几乎没有上界。</li>
+</ul>
+<h2 id="threadpool-two-failures">线程池下的两种故障：内存泄漏与数据串号</h2>
+<p>下面的程序可以同时观察到「泄漏」和「串号」两个现象：</p>
+<pre><code class="language-java">public class ThreadLocalLeakDemo {
+
+    /** 模拟请求上下文（这里用 16MB 的字节数组代替权限树之类的大对象） */
+    private static final ThreadLocal&lt;byte[]&gt; USER_CONTEXT = new ThreadLocal&lt;&gt;();
+
+    public static void main(String[] args) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(4);   // 4 个常驻线程
+        CountDownLatch latch = new CountDownLatch(200);
+        for (int i = 0; i &lt; 200; i++) {
+            pool.execute(() -&gt; {
+                try {
+                    USER_CONTEXT.set(new byte[16 * 1024 * 1024]);   // 只 set，不 remove
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        System.out.println("任务都执行完了，但 4 个工作线程仍各强引用一份 16MB 上下文");
+        System.in.read();   // 阻塞，方便用 jmap / MAT 观察
+    }
+}
+</code></pre>
+<pre><code class="language-bash"># 堆只有 64MB，而 4 个工作线程各常驻 16MB：很快 OOM 或频繁 Full GC
+java -Xmx64m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=./ ThreadLocalLeakDemo
+</code></pre>
+<p>关键在于：这 200 个任务早已执行完毕，<b>没有任何一个对象还被业务代码引用</b>，但 4 份 16MB 的数据依然活着。占用的多少与请求量无关，只取决于「线程数 × value 大小」。</p>
+<p>数据串号则更隐蔽：</p>
+<pre><code class="language-java">// 任务 A：用户 1 的请求，set 之后没有清理
+pool.execute(() -&gt; CurrentUserHelper.setCurrentUser(user1));
+
+// 任务 B：用户 2 的匿名请求。解析失败走了 catch 分支，没有 set，
+// 于是同一线程上的 getCurrentUser() 返回了 user1
+pool.execute(() -&gt; System.out.println(CurrentUserHelper.getCurrentUser()));
+</code></pre>
+<p>所以「忘记 remove」的后果不只是内存，还可能是权限判断、租户隔离、审计日志全部串到别的用户身上。</p>
+<h2 id="mat-threadlocal">用 MAT 定位 ThreadLocal 泄漏</h2>
+<p>先在堆上把它抓下来：</p>
+<pre><code class="language-bash"># 1) 推荐：OOM 时自动 dump
+java -Xmx64m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=./ ThreadLocalLeakDemo
+
+# 2) 进程还活着时手工 dump（live 只导出存活对象，更适合排查泄漏）
+jcmd &lt;pid&gt; GC.heap_dump /tmp/heap.hprof
+jmap -dump:live,format=b,file=/tmp/heap.hprof &lt;pid&gt;
+
+# 3) 先粗看对象数量与占用，确认怀疑对象
+jmap -histo:live &lt;pid&gt; | head -20
+</code></pre>
+<p>然后用 Eclipse MAT 打开 hprof，按下面的顺序定位：</p>
+<ol>
+<li>先看 <b>Leak Suspects</b>（泄漏疑点报告）：ThreadLocal 泄漏通常会把 <code>java.lang.Thread</code> 报成 suspect，并给出「一个线程实例 retained heap 异常大」的提示。</li>
+<li>打开 <b>Histogram</b>，搜索 <code>ThreadLocalMap$Entry</code> 或直接搜业务对象类名（例如 <code>byte[]</code>、<code>SysUser</code>），按 retained heap 排序。</li>
+<li>在 Histogram 中找到 <code>java.lang.Thread</code> → 右键 <b>List objects</b> → <b>with outgoing references</b>，展开 <code>threadLocals</code> → <code>ThreadLocalMap</code> → <code>table</code>（即 <code>Entry[]</code>）→ <code>Entry</code> → <code>value</code>，这就是被泄漏的对象。</li>
+<li>对可疑的 <code>value</code> 执行 <b>Path to GC Roots</b>，并勾选 <b>exclude weak references</b>；根路径会呈现为 <code>Thread → threadLocals → ThreadLocalMap → Entry[] → Entry → value</code>，与前面的引用链完全对应。</li>
+<li>如果怀疑是「动态 ThreadLocal 造成的 stale Entry」，在 Histogram 里留意 <code>Entry</code> 的数量是否远大于线程数，并检查这些 Entry 的 key 是否为 null；MAT 的 <code>ThreadLocal</code> 相关查询可以辅助确认。</li>
+</ol>
+<p>一个容易踩的坑：<code>ThreadLocal</code> 对象自身的 retained heap 通常很小，不要因为它「看起来不大」就排除嫌疑，真正的大头在 <code>Entry.value</code> 上。</p>
+<h2 id="inheritable-ttl">InheritableThreadLocal 与 TTL</h2>
+<h3 id="inheritable-threadlocal">InheritableThreadLocal 为什么在线程池里失效</h3>
+<p><code>InheritableThreadLocal</code> 的机制在 Thread 的构造函数里：创建子线程时会调用 <code>ThreadLocal.createInheritedMap(parent.inheritableThreadLocals)</code>，把父线程的值复制一份给子线程（可通过 <code>childValue()</code> 定制）。它解决的是「父线程创建子线程时把上下文带过去」，只在<b>线程创建的那一刻</b>生效。</p>
+<p>线程池里工作线程只在第一次提交任务（或预热）时创建，之后反复复用，于是：</p>
+<ul>
+<li>后续任务根本不会发生「继承」，拿到的要么是创建时那份陈旧的值，要么是 null；</li>
+<li>第一个任务留下的值会一直被后续所有任务读到，串号比普通 ThreadLocal 更严重；</li>
+<li>它同样是 ThreadLocal，忘了 remove 一样会泄漏。</li>
+</ul>
+<p>因此在线程池场景下，<code>InheritableThreadLocal</code> 基本可以视为错误选择。</p>
+<h3 id="ttl-usage">TransmittableThreadLocal 的用法</h3>
+<p>阿里开源的 <code>transmittable-thread-local</code>（TTL，坐标 <code>com.alibaba:transmittable-thread-local</code>，版本以 Maven Central 上的最新版为准）正是为解决这个问题而生：<code>TransmittableThreadLocal</code> 继承自 <code>InheritableThreadLocal</code>，但值的传递不依赖线程创建，而是由 <code>Transmitter</code> 在<b>任务提交时</b>抓取快照、在<b>任务执行前</b>回放到工作线程、执行结束后再恢复工作线程原有的值。</p>
+<pre><code class="language-java">public final class UserContext {
+
+    /** 用 TTL 替换 InheritableThreadLocal */
+    private static final TransmittableThreadLocal&lt;SysUser&gt; CURRENT_USER =
+            new TransmittableThreadLocal&lt;&gt;();
+
+    public static void set(SysUser user) {
+        CURRENT_USER.set(user);
+    }
+
+    public static SysUser get() {
+        return CURRENT_USER.get();
+    }
+
+    public static void remove() {
+        CURRENT_USER.remove();
+    }
+}
+</code></pre>
+<pre><code class="language-java">// 1) 包装线程池：提交任务时 capture，执行时 replay，执行后 restore
+ExecutorService pool = TtlExecutors.getTtlExecutorService(Executors.newFixedThreadPool(4));
+pool.execute(() -&gt; System.out.println(UserContext.get()));
+
+// 2) 也可以只包装单个任务
+pool.execute(TtlRunnable.get(() -&gt; System.out.println(UserContext.get())));
+// 有返回值的任务用 TtlCallable.get(...)
+
+// 3) 生产环境更省事的做法：启动参数挂上 java agent，自动装饰所有线程池
+//    -javaagent:path/to/transmittable-thread-local-x.y.z.jar
+</code></pre>
+<p>要注意 TTL 只是「把值正确地传过去」，并不会替你清理；<code>remove()</code> 依然要写在 finally 或框架的回收点里，否则值会跟着池化线程一直活下去。</p>
+<h3 id="spring-async">Spring @Async 与线程池场景</h3>
+<p><code>@Async</code> 方法最终跑在 <code>TaskExecutor</code> 上（Spring Boot 2.1 之后默认会自动配置名为 <code>applicationTaskExecutor</code> 的 <code>ThreadPoolTaskExecutor</code>）。由此带来三件事：</p>
+<ul>
+<li>异步线程里不能再依赖 <code>RequestContextHolder</code>：默认的 request attributes 存在普通 ThreadLocal 中，<code>currentRequestAttributes()</code> 会抛 <code>No thread-bound request found</code>；</li>
+<li>调用 <code>RequestContextHolder.setRequestAttributes(attrs, true)</code> 虽然会启用 inheritable 的 holder，但正如上文所述，池化线程下依然会串号、会泄漏，只适合线程不复用的场景；</li>
+<li>推荐做法：要么把需要的参数显式作为方法参数传进异步任务，要么用 TTL，并把它接到 Spring 的 <code>TaskDecorator</code> 上。</li>
+</ul>
+<pre><code class="language-java">@Configuration
+public class AsyncConfig {
+
+    @Bean("taskExecutor")
+    public ThreadPoolTaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(8);
+        executor.setMaxPoolSize(32);
+        executor.setQueueCapacity(1000);
+        executor.setThreadNamePrefix("async-");
+        // 关键：任务提交时捕获上下文，在池化线程中回放
+        executor.setTaskDecorator(TtlRunnable::get);
+        executor.initialize();
+        return executor;
+    }
+}
+</code></pre>
+<h2 id="best-practices">最佳实践清单</h2>
+<ul>
+<li>声明成 <code>private static final ThreadLocal&lt;T&gt;</code>，不要每次请求 <code>new ThreadLocal</code>（避免制造 stale Entry）。</li>
+<li>谁 set 谁 remove，<code>remove()</code> 放在 <code>finally</code> 里，不要在多个分支里零散地清。</li>
+<li>Web 层优先用 Filter 的 try-finally；用 HandlerInterceptor 时把清理放在 <code>afterCompletion</code>，并保证 preHandle 在 set 之后不再抛异常。</li>
+<li>线程池侧兜底：自定义 <code>ThreadPoolTaskExecutor</code> 的 <code>TaskDecorator</code>，或在 <code>ThreadPoolExecutor#afterExecute</code> 里做清理/断言。</li>
+<li>异步传递上下文优先显式传参或用 TTL（<code>TtlRunnable</code>/<code>TtlExecutors</code>/TaskDecorator，必要时挂 java agent），不要依赖 <code>InheritableThreadLocal</code>。</li>
+<li>value 尽量存不可变的小对象；不要把整个 Request、Session 或大集合塞进去。</li>
+<li>能交给框架就别自己管：请求级状态优先用 <code>RequestContextHolder</code>、Request Scope Bean 或 <code>ThreadLocalTargetSource</code>。</li>
+<li>线上开启 <code>-XX:+HeapDumpOnOutOfMemoryError</code>，并定期用 <code>jmap -histo:live</code> 观察 <code>Entry</code>/<code>ThreadLocalMap</code> 的数量趋势。</li>
+</ul>
+<p>一句话总结：ThreadLocal 的 key 是弱引用、value 是强引用，而线程池让线程「长生不老」，所以清理 ThreadLocal 从来不是可选项，必须依靠 try-finally 或框架的回收点。</p>
+
+<div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#spring-request-context">Spring 中保存请求上下文的常见做法</a>
+<ul>
+<li><a href="#posthandle-not-always-called">坑：postHandle 并不总会被调用</a></li>
+<li><a href="#requestcontextholder">更省心的方案：RequestContextHolder</a></li>
+</ul>
+</li>
+<li>
+<a href="#tl-leak-theory">ThreadLocal 可能会产生内存泄露的问题及原理</a>
 <ul>
 <li><a href="#tl-why">为什么会产生内存泄露？</a></li>
 <li><a href="#tl-jvm">JVM 解决的办法</a></li>
 </ul>
 </li>
+<li>
+<a href="#threadpool-two-failures">线程池下的两种故障：内存泄漏与数据串号</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#mat-threadlocal">用 MAT 定位 ThreadLocal 泄漏</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#inheritable-ttl">InheritableThreadLocal 与 TTL</a>
+<ul>
+<li><a href="#inheritable-threadlocal">InheritableThreadLocal 为什么在线程池里失效</a></li>
+<li><a href="#ttl-usage">TransmittableThreadLocal 的用法</a></li>
+<li><a href="#spring-async">Spring @Async 与线程池场景</a></li>
+</ul>
+</li>
+<li>
+<a href="#best-practices">最佳实践清单</a>
+<ul>
 </ul>
 </li>
 </ul>

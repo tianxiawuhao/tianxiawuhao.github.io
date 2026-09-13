@@ -126,10 +126,11 @@
           <img class="post-feature-header-image" src="/post-images/uA0v93Wq7.png" alt="封面图">
           
           <h2 id="名称">名称</h2>
-<p>git-worktree - 管理附加到同一存储库的多个工作树。</p>
+<p>git-worktree - 管理附加到同一存储库的多个工作树。<code>git worktree</code> 自 Git 2.5.0 引入（当时属于实验特性），Git 2.17 起 <code>remove</code>、<code>move</code> 齐备，已可用于日常工作流；各子命令的版本要求见文末「版本要求」一节。</p>
 <h2 id="语法">语法</h2>
-<pre><code class="language-shell">git worktree add [-f] [--detach] [--checkout] [--lock [--reason &lt;string&gt;]] [-b &lt;new-branch&gt;] &lt;path&gt; [&lt;commit-ish&gt;]
-git worktree list [--porcelain]
+<pre><code class="language-bash">git worktree add [-f] [--detach] [--checkout] [--lock [--reason &lt;string&gt;]]
+                 [--orphan] [-b &lt;new-branch&gt; | -B &lt;new-branch&gt;] &lt;path&gt; [&lt;commit-ish&gt;]
+git worktree list [-v | --porcelain [-z]]
 git worktree lock [--reason &lt;string&gt;] &lt;worktree&gt;
 git worktree move &lt;worktree&gt; &lt;new-path&gt;
 git worktree prune [-n] [-v] [--expire &lt;expire&gt;]
@@ -137,88 +138,135 @@ git worktree remove [-f] &lt;worktree&gt;
 git worktree repair [&lt;path&gt;…]
 git worktree unlock &lt;worktree&gt;
 </code></pre>
+<p>与旧版手册相比，<code>list</code> 增加了 <code>-v</code>/<code>--porcelain</code>，<code>add</code> 增加了 <code>--orphan</code> 与 <code>-B</code>（重置同名分支）。用 <code>git worktree -h</code> 可以直接确认本机 Git 支持的子命令与选项。</p>
 <h2 id="描述">描述</h2>
-<p>管理附加到同一存储库的多个工作树。一个 git 存储库可以支持多个工作树，允许您一次检出多个分支。 使用 git worktree 添加一个新的工作树与存储库相关联。 这个新的工作树被称为“链接工作树”，而不是 git-init(1) 或 git-clone(1) 准备的“主工作树”。 一个存储库有一个主工作树（如果它不是一个裸存储库）和零个或多个链接工作树。 完成链接工作树后，使用 git worktree remove 将其删除。</p>
-<p>最简单的用法是：git worktree add &lt;path&gt; 会自动创建一个新分支，分支名取 &lt;path&gt; 的最后一个组成部分（basename），适合用于开启一个新主题。例如，git worktree add ../hotfix 会创建分支 hotfix，并在路径 ../hotfix 处检出。如果想在新工作树中检出某个已存在的分支，可用 git worktree add &lt;path&gt; &lt;branch&gt; 指定。另外，如果只想做一些实验性改动或测试、又不想干扰现有开发，创建一个不与任何分支关联的一次性工作树会更方便，例如 git worktree add --detach &lt;path&gt; 会在与当前分支相同的提交处创建一个带分离 HEAD 的新工作树。</p>
-<p>如果在不使用 git worktree remove 的情况下删除了工作树，则其位于存储库中的相关管理文件（请参阅下面的“详细信息”）最终将被自动删除（可参阅 git-config(1) 中的 gc.worktreePruneExpire 配置项），也可以在主工作树或任一链接工作树中运行 git worktree prune，清理陈旧的管理文件。</p>
-<p>如果链接的工作树存储在不总是挂载的便携式设备或网络共享上，您可以通过发出 git worktree lock 命令来防止其管理文件被修剪，并可选用 --reason 说明工作树被锁定的原因。</p>
+<p>一个 Git 仓库可以同时挂载多棵工作树，从而一次检出多个分支。用 <code>git worktree add</code> 新建的目录称为「链接工作树」（linked worktree），而 <code>git init</code>、<code>git clone</code> 建立的那个称为「主工作树」（main worktree）。非裸仓库有且只有一个主工作树，外加零个或多个链接工作树；裸仓库没有主工作树，所有工作树都是链接工作树。链接工作树用完后应当用 <code>git worktree remove</code> 删除，而不是直接删目录。</p>
+<p>与「把仓库 clone 成多份」相比，工作树共享同一个对象库、分支与标签等引用，只占一份仓库历史与对象存储；每棵工作树又各自拥有独立的工作区、索引（index）与 <code>HEAD</code>。因此可以一边在主工作树跑构建，一边在链接工作树里改 hotfix，切换成本为零，也不会出现多份 clone「各 fetch 各推」的分支漂移。</p>
+<p>最简单的用法是 <code>git worktree add &lt;path&gt;</code>：它会自动创建一个新分支，分支名取 <code>&lt;path&gt;</code> 的最后一段（basename），适合开启一个新主题。例如 <code>git worktree add ../hotfix</code> 会创建分支 <code>hotfix</code> 并检出到 <code>../hotfix</code>。若要在新工作树里检出已存在的分支，用 <code>git worktree add &lt;path&gt; &lt;branch&gt;</code>。如果只想做实验或测试、又不干扰现有开发，可以创建不与任何分支关联的一次性工作树：<code>git worktree add --detach &lt;path&gt;</code> 会在当前分支所在的提交处创建一棵游离 <code>HEAD</code> 的工作树。</p>
+<p>如果绕开 <code>git worktree remove</code> 直接删除了工作树目录，其管理文件（见下文「共享与独占的元数据」）会残留下来；它们最终会被自动清理（由 git-config(1) 的 <code>gc.worktreePruneExpire</code> 控制），也可以在任一工作树中运行 <code>git worktree prune</code> 立即清理。</p>
+<p>如果链接工作树存放在不常挂载的移动设备或网络共享上，可以用 <code>git worktree lock</code> 阻止其管理文件被修剪，并可用 <code>--reason</code> 说明锁定原因。</p>
 <h3 id="初始化一个仓库">初始化一个仓库</h3>
-<pre><code class="language-shell">$ git init 
+<pre><code class="language-bash">$ git init
 Initialized empty Git repository in D:/VSCode/testGit/.git/
 
-user@NAME MINGW64 /d/VSCode/testGit (master)
-$ git status 
+$ git status
 $ git add .
 $ git commit -m 'f commit'
 [master (root-commit) f7f05d0] f commit
- 3 files changed, 18 insertions(+)     
- create mode 100644 blob.config        
+ 3 files changed, 18 insertions(+)
+ create mode 100644 blob.config
  create mode 100644 copy.sh
  create mode 100644 fff.txt
- 
- ## 新建两个分支后
- user@NAME MINGW64 /d/VSCode/testGit (master)
-$ git branch -a 
+
+## 再新建两个分支
+$ git branch dev
+$ git branch release
+$ git branch -a
   dev
 * master
   release
 </code></pre>
 <h3 id="新建工作树-add">新建工作树 add</h3>
-<pre><code class="language-shell">git worktree add [-f] [--detach] [--checkout] [--lock [--reason &lt;string&gt;]] [-b &lt;new-branch&gt;] &lt;path&gt; [&lt;commit-ish&gt;]
+<pre><code class="language-bash">git worktree add [-f] [--detach] [--checkout] [--lock [--reason &lt;string&gt;]] &lt;path&gt; [&lt;commit-ish&gt;]
 </code></pre>
-<pre><code class="language-shell">## 创建一个新工作树wtree1
-$ git worktree add ./wtree1 
+<pre><code class="language-bash">## 1) 新建分支：分支名默认取 path 的最后一段
+$ git worktree add ./wtree1
 Preparing worktree (new branch 'wtree1')
 HEAD is now at f7f05d0 f commit
 
-user@NAME MINGW64 /d/VSCode/testGit (master)
 $ git worktree list
 D:/VSCode/testGit         f7f05d0 [master]
 D:/VSCode/testGit/wtree1  f7f05d0 [wtree1]
+
+## 2) 检出已存在的分支
+$ git worktree add ../wt-dev dev
+Preparing worktree (checking out 'dev')
+HEAD is now at 2c05e7a ...
+
+## 3) 一次性实验：游离 HEAD，不占用分支名
+$ git worktree add --detach ../try-idea
+Preparing worktree (detached HEAD f7f05d0)
+HEAD is now at f7f05d0 f commit
+
+## 4) 指定新分支名与起点（-B 会重置同名分支）
+$ git worktree add -b nb-wtree4 ../wt/wtree4 master
+Preparing worktree (new branch 'nb-wtree4')
 </code></pre>
+<p>除上面四种用法外，还有几个常用选项：<code>--no-checkout</code>（Git 2.9+）只建立管理目录、不检出文件，适合配合 sparse-checkout 按需拉取；<code>--lock</code>（Git 2.13+，<code>--reason</code> 需 2.33+）在创建时就锁定；<code>--orphan</code>（Git 2.42+）基于一个尚无提交的分支创建工作树，例如为 <code>gh-pages</code> 之类的全新历史做准备。不带 <code>&lt;commit-ish&gt;</code> 时，默认以当前 <code>HEAD</code> 为起点。</p>
+<blockquote>
+<p>上面把工作树建在仓库内部（<code>./wtree1</code>）只是为了演示；实际使用建议放到仓库外的兄弟目录（如 <code>../wt-dev</code>）。仓库内部的工作树会被主工作树的 <code>git status</code> 视为一大堆未跟踪文件，<code>git add .</code> 有可能误提交其中的内容。</p>
+</blockquote>
+<h3 id="工作树与分支的关系">工作树与分支的关系：同一分支只能检出一处</h3>
+<p>分支引用（<code>refs/heads/*</code>）是所有工作树共享的，而每棵工作树都有自己的 <code>HEAD</code> 与索引。Git 因此规定：同一个分支最多只能被一棵工作树检出，否则两棵工作树会同时移动同一个分支引用，提交历史会变得难以理解。</p>
+<pre><code class="language-bash">$ git worktree add ../wt-dev2 dev
+fatal: 'dev' is already checked out at 'D:/VSCode/wt/wtdev'
+
+## 在另一棵工作树里切到已被检出的分支，同样会被拒绝
+$ git checkout dev
+fatal: 'dev' is already checked out at 'D:/VSCode/wt/wtdev'
+</code></pre>
+<p>确实需要同时查看/修改同一个分支时，可以：用 <code>git worktree add --detach &lt;path&gt; &lt;branch&gt;</code> 让游离 <code>HEAD</code> 指向该分支的提交（不占用分支名）、用 <code>-b</code> 另建一个新分支，或者先 <code>git worktree remove</code> 掉原来的工作树。<code>git worktree add -f</code> 可以强制绕过这项检查，但两棵工作树会各自推进同一个分支，除非明确知道后果，否则不要这么做。</p>
+<p>「分支已被检出」的依据是 <code>$GIT_DIR/worktrees/&lt;name&gt;/HEAD</code>：只要管理目录还在，即使工作树目录已被删除，Git 仍会认为该分支被占用，需要用 <code>git worktree prune</code> 清理记录（见下文）。</p>
+<h3 id="共享与独占的元数据">共享与独占的元数据</h3>
+<p>所有工作树共享主仓库 <code>.git</code> 下的对象库与公共引用；每棵链接工作树的私有状态则放在 <code>.git/worktrees/&lt;name&gt;/</code> 下。链接工作树里的 <code>.git</code> 不是目录，而是一个普通文本文件，内容指向管理目录：</p>
+<pre><code class="language-bash">## 在链接工作树里
+$ cat .git
+gitdir: D:/VSCode/testGit/.git/worktrees/wtree1
+
+## 管理目录中的内容
+$ ls $(git rev-parse --git-dir)
+HEAD  ORIG_HEAD  commondir  gitdir  index  logs
+</code></pre>
+<p>其中 <code>gitdir</code> 反过来记录该工作树 <code>.git</code> 文件的路径，<code>commondir</code> 的内容是 <code>../..</code>，指向公共的 <code>$GIT_DIR</code>。下图给出两棵链接工作树与主仓库之间的目录关系。</p>
+<p><img src="/post-assets/uA0v93Wq7/01-worktree-layout.svg" alt="git worktree 的工作树目录与 .git 元数据关系图"></p>
+<p>由此可以推出几条实用结论：<code>git log</code>、<code>git branch</code>、<code>git fetch</code> 得到的对象与引用立刻对所有工作树可见，无需重复 fetch；而工作区文件、索引、<code>HEAD</code>、<code>stash</code> 与 <code>bisect</code> 状态都是每棵工作树各自一份，互不影响，所以可以放心地在不同工作树里并行 rebase、bisect 或 stash。</p>
 <h3 id="锁定解锁工作树-lockunlock">锁定（解锁）工作树 lock/unlock</h3>
 <blockquote>
-<p>锁定的工作树可以防止被修剪（prune）</p>
+<p>锁定的工作树可以防止被修剪（prune），也不能被删除或移动，直到执行 <code>git worktree unlock</code>。</p>
 </blockquote>
-<pre><code class="language-shell">user@NAME MINGW64 /d/VSCode/testGit (master)
-$ git worktree lock --reason='lock reason'  wtdev
+<pre><code class="language-bash">user@NAME MINGW64 /d/VSCode/testGit (master)
+$ git worktree lock --reason='lock reason' wtdev
 
 user@NAME MINGW64 /d/VSCode/testGit (master)
-$ git worktree list 
-D:/VSCode/testGit    f4c1226 [master]       
-D:/VSCode/wt/wtdev   8ec2b56 [dev] locked   
-D:/VSCode/wt/wtree1  e14fd71 [wtree1]       
-D:/VSCode/wt/wtree2  8ec2b56 [dev]
+$ git worktree list
+D:/VSCode/testGit    f4c1226 [master]
+D:/VSCode/wt/wtdev   8ec2b56 [dev] locked
+D:/VSCode/wt/wtree1  e14fd71 [wtree1]
+D:/VSCode/wt/wtree2  2c05e7a [wtree2]
 D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD)
-D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4] 
+D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4]
 
-## 解锁
+## 解锁：允许它被 prune / move / remove
 user@NAME MINGW64 /d/VSCode/wt/wtree5 (wtree5)
 $ git worktree unlock wtdev
 </code></pre>
 <h3 id="展示工作树列表-list">展示工作树列表 list</h3>
-<pre><code class="language-shell">## git worktree list [--porcelain] 
+<pre><code class="language-bash">## git worktree list [-v | --porcelain [-z]]
 user@NAME MINGW64 /d/VSCode/testGit (master)
-$ git worktree list 
-D:/VSCode/testGit    f4c1226 [master]       
+$ git worktree list
+D:/VSCode/testGit    f4c1226 [master]
 D:/VSCode/wt/wtdev   2c05e7a [dev]
-D:/VSCode/wt/wtree1  e14fd71 [wtree1]       
-D:/VSCode/wt/wtree2  2c05e7a [dev]
+D:/VSCode/wt/wtree1  e14fd71 [wtree1]
+D:/VSCode/wt/wtree2  2c05e7a [wtree2]
 D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD)
-D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4]    
+D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4]
 D:/VSCode/wt/wtree5  f4c1226 [wtree5] locked
 D:/VSCode/wt/wtrele  7f91b4d [release]
 </code></pre>
+<p>每行依次是：工作树路径、<code>HEAD</code> 提交、分支名（游离时显示 <code>(detached HEAD)</code>），以及 <code>locked</code>、<code>prunable</code> 等状态标注。主工作树固定排在第一行，其余按路径排序。<code>--porcelain</code> 输出稳定、便于脚本解析（<code>-z</code> 以 NUL 分隔记录）；<code>-v</code> 会额外打印锁定或可修剪的原因。注意 <code>locked</code> 状态自 Git 2.30 起才直接在默认输出中显示。</p>
 <h3 id="删除工作树-remove">删除工作树 remove</h3>
-<pre><code class="language-shell">$ git worktree remove wtree2
+<p><code>remove</code> 只删除干净的工作树（没有未跟踪文件、没有已跟踪文件的修改），否则需要 <code>--force</code>；要删除被锁定的工作树需要重复两次 <code>--force</code>。它只删除工作区目录并清理管理文件，分支本身以及已提交的历史都不会丢失。</p>
+<pre><code class="language-bash">$ git worktree remove wtree2
 fatal: 'wtree2' contains modified or untracked files, use --force to delete it
 
-## 使用 -f 强制删除
+## 确认改动无用之后再强制删除
 user@NAME MINGW64 /d/VSCode/testGit (master)
-$ git worktree remove -f  wtree2
+$ git worktree remove -f wtree2
 </code></pre>
+<p>如果工作树目录已经被手工删除，<code>remove</code> 无法再进行校验，此时应当用 <code>git worktree prune</code> 清理记录。</p>
 <h3 id="修剪工作树-prune">修剪工作树 prune</h3>
-<pre><code class="language-shell">## 当前仓库中的工作树状态，wtree5 被锁定
+<p><code>prune</code> 清理 <code>$GIT_DIR/worktrees</code> 中指向已不存在目录的管理文件；被 <code>lock</code> 的工作树永远不会被修剪。<code>-n</code> 只预览不删除，<code>-v</code> 打印细节，<code>--expire &lt;time&gt;</code> 指定「目录消失多久之后才算陈旧」（默认由 <code>gc.worktreePruneExpire</code> 控制，未设置时相当于 <code>3.months.ago</code>，因此自动 gc 只会顺带清理很久以前就消失的工作树）。</p>
+<pre><code class="language-bash">## 修剪前：wtree5 被锁定
 $ git worktree list
 D:/VSCode/testGit    f4c1226 [master]
 D:/VSCode/wt/wtdev   2c05e7a [dev]
@@ -227,64 +275,103 @@ D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD)
 D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4]
 D:/VSCode/wt/wtree5  f4c1226 [wtree5] locked
 D:/VSCode/wt/wtrele  7f91b4d [release]
-## 手动删除工作树目录 D:/VSCode/wt/wtrele，并把 wtree4、wtree5 移到其他目录之后的状态
-$ git worktree list 
+
+## 手工删除了 wtrele 目录，并把 wtree4、wtree5 移到其他目录之后
+$ git worktree list
 D:/VSCode/testGit    f4c1226 [master]
 D:/VSCode/wt/wtdev   2c05e7a [dev]
 D:/VSCode/wt/wtree1  e14fd71 [wtree1]
-D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD)     
-D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4] prunable  ## 可修剪
-D:/VSCode/wt/wtree5  f4c1226 [wtree5] locked     
-D:/VSCode/wt/wtrele  7f91b4d [release] prunable  ## 可修剪
-## 修剪后 的工作树，被锁定的工作树没有变化 ，其他‘可修剪’工作树被删除
-$ git worktree prune 
-$ git worktree list                                                                         
-D:/VSCode/testGit    f4c1226 [master]       
+D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD)
+D:/VSCode/wt/wtree4  e4b08e3 [nb-wtree4] prunable
+D:/VSCode/wt/wtree5  f4c1226 [wtree5] locked
+D:/VSCode/wt/wtrele  7f91b4d [release] prunable
+
+## 先预览再修剪：prunable 的记录被清掉，锁定的工作树不受影响
+$ git worktree prune -n -v
+$ git worktree prune
+$ git worktree list
+D:/VSCode/testGit    f4c1226 [master]
 D:/VSCode/wt/wtdev   2c05e7a [dev]
-D:/VSCode/wt/wtree1  e14fd71 [wtree1]       
+D:/VSCode/wt/wtree1  e14fd71 [wtree1]
 D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD)
 D:/VSCode/wt/wtree5  f4c1226 [wtree5] locked
 </code></pre>
 <h3 id="重新关联工作树-repair">重新关联工作树 repair</h3>
-<pre><code class="language-shell">## 被修剪掉了的工作树无法被重新关联
+<p><code>repair</code>（Git 2.29+）用于修复被外部因素破坏或过期的关联信息：整个仓库被移动后，在主工作树里执行 <code>git worktree repair</code> 可以重建「链接工作树 → 主仓库」的指向；某棵链接工作树被手工移动后，在该工作树里执行 <code>git worktree repair</code>，或在任一工作树中执行 <code>git worktree repair &lt;新路径&gt;…</code>，可以重建反向的指向。<code>repair</code> 的参数是被移动的链接工作树路径；不带参数时修复当前工作树与主仓库的连接。需要注意的是：已经被 <code>prune</code> 掉的管理目录无法恢复，只能重新 <code>add</code>。</p>
+<pre><code class="language-bash">## 被修剪掉的工作树无法重新关联
 user@NAME MINGW64 /d/VSCode/wt/wtinner/wtree4
-$ git worktree repair  ../../../testGit/
+$ git worktree repair ../../../testGit/
 fatal: not a git repository: D:/VSCode/testGit/.git/worktrees/wtree4
 
-## 被锁定的工作树没有被修剪（prune）掉，所以全部重新关联上了
+## 被锁定的工作树没有被 prune 掉，所以重新关联上了
 user@NAME MINGW64 /d/VSCode/wt/wtinner/wtree5 (wtree5)
-$  git worktree repair  ../../../testGit/
+$ git worktree repair ../../../testGit/
 
-## 现在把 wtree3 移动到其他目录
-$ git worktree list 
-D:/VSCode/testGit    f4c1226 [master]
-D:/VSCode/wt/wtdev   2c05e7a [dev]
-D:/VSCode/wt/wtree1  e14fd71 [wtree1]
-D:/VSCode/wt/wtree3  e3a3c4c (detached HEAD) prunable  ## 可修剪
-D:/VSCode/wt/wtree5  f4c1226 [wtree5] locked
-
-## 在修剪之前直接repair ,也可以成功关联
-$ cd wt/wtinner/wtree3
+## 被移动到别处、但还没被 prune 的工作树同样可以修复
+$ cd /d/VSCode/wt/wtinner/wtree3
 user@NAME MINGW64 /d/VSCode/wt/wtinner/wtree3 ((e3a3c4c...))
-$  git worktree repair  ../../../testGit/
+$ git worktree repair ../../../testGit/
 </code></pre>
-
-          <div class="toc-container"><ul class="markdownIt-TOC">
-<li>
+<h3 id="与-clone-和子模块的取舍">与 clone 和子模块的取舍</h3>
 <ul>
-<li><a href="#%E5%90%8D%E7%A7%B0">名称</a></li>
-<li><a href="#%E8%AF%AD%E6%B3%95">语法</a></li>
-<li><a href="#%E6%8F%8F%E8%BF%B0">描述</a>
+<li><b>用 worktree</b>：需要同一仓库的多个分支并行工作（一边开发、一边 review 或构建或 hotfix），希望共用对象库、节省磁盘与网络。代价是分支不能重复检出，且共享的 <code>.git</code> 一旦损坏会影响全部工作树。</li>
+<li><b>用 clone</b>：需要真正独立的副本——不同的 remote、不同的凭据、交给其他用户或 CI 使用、要做破坏性实验（改写历史、彻底清理）。代价是每个副本都要 fetch，磁盘占用成倍，分支还容易漂移。</li>
+<li><b>含子模块的超级项目</b>：官方手册仍把多重检出列为实验特性，并明确「子模块支持并不完整，不建议对超级项目做多重检出」。每棵工作树下的子模块目录互相独立，需要各自执行 <code>git submodule update --init</code>；含子模块的工作树 <code>remove</code> 时需要 <code>--force</code>，<code>move</code> 则直接不支持。</li>
+</ul>
+<p>另外要记住：删除工作树只删除工作区中未提交的改动与未跟踪文件，不会删除任何分支或已提交的历史。</p>
+<h3 id="常见错误与排查">常见错误与排查</h3>
+<ul>
+<li><code>fatal: '&lt;branch&gt;' is already checked out at '&lt;path&gt;'</code>：该分支已被别的工作树检出；改用 <code>--detach</code>、另建分支，或先移除那棵工作树。</li>
+<li><code>fatal: '&lt;path&gt;' contains modified or untracked files, use --force to delete it</code>：工作树不干净；先提交或备份，确实不要了再加 <code>-f</code>。</li>
+<li><code>fatal: '&lt;path&gt;' is a main working tree</code>：主工作树既不能用 <code>remove</code> 删除，也不能用 <code>move</code> 移动。</li>
+<li><code>fatal: '&lt;path&gt;' is locked</code>：先用 <code>git worktree unlock &lt;worktree&gt;</code>，或重复两次 <code>--force</code>。</li>
+<li><code>fatal: not a git repository: .../.git/worktrees/&lt;name&gt;</code>：管理目录已被 <code>prune</code>，<code>repair</code> 无法恢复；把工作区里的改动备份出来后重新 <code>add</code>。</li>
+<li>提示 <code>git: 'worktree' is not a git command</code>：Git 版本低于 2.5，需要升级。</li>
+<li>目录已被手工删除、<code>git worktree list</code> 里残留 <code>prunable</code> 记录：执行 <code>git worktree prune</code>（锁定的需先 <code>unlock</code>）。</li>
+<li>整个仓库或某棵工作树被移动后路径失效：用 <code>git worktree repair</code>，不要手工去改 <code>.git</code> 文件。</li>
+<li>把工作树建在仓库内部：父工作树的 <code>git status</code> 会把它当成大量未跟踪文件，<code>git add .</code> 可能误提交；建议放在仓库外的兄弟目录。</li>
+</ul>
+<h3 id="版本要求">版本要求</h3>
+<ul>
+<li>Git 2.5.0+：引入 <code>git worktree</code>（实验特性，子命令很少）。</li>
+<li>Git 2.7.0+：<code>git worktree list</code>。</li>
+<li>Git 2.9.0+：<code>add --no-checkout</code>。</li>
+<li>Git 2.11.0+：<code>lock</code> / <code>unlock</code>。</li>
+<li>Git 2.13.0+：<code>add --lock</code>。</li>
+<li>Git 2.17.0+：<code>remove</code> / <code>move</code>，此后可放心用于日常工作流。</li>
+<li>Git 2.29.0+：<code>repair</code>。</li>
+<li>Git 2.30.0+：<code>git worktree list</code> 默认输出中直接显示 <code>locked</code> 状态。</li>
+<li>Git 2.33.0+：<code>lock --reason</code> 记录锁定原因。</li>
+<li>Git 2.42.0+：<code>add --orphan</code>。</li>
+</ul>
+<p>用 <code>git --version</code> 确认本机版本；日常使用建议 2.17 以上，需要在移动仓库后修复关联则建议 2.29 以上。</p>
+
+<div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#%E5%90%8D%E7%A7%B0">名称</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%AF%AD%E6%B3%95">语法</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%8F%8F%E8%BF%B0">描述</a>
 <ul>
 <li><a href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E4%B8%80%E4%B8%AA%E4%BB%93%E5%BA%93">初始化一个仓库</a></li>
 <li><a href="#%E6%96%B0%E5%BB%BA%E5%B7%A5%E4%BD%9C%E6%A0%91-add">新建工作树 add</a></li>
+<li><a href="#%E5%B7%A5%E4%BD%9C%E6%A0%91%E4%B8%8E%E5%88%86%E6%94%AF%E7%9A%84%E5%85%B3%E7%B3%BB">工作树与分支的关系：同一分支只能检出一处</a></li>
+<li><a href="#%E5%85%B1%E4%BA%AB%E4%B8%8E%E7%8B%AC%E5%8D%A0%E7%9A%84%E5%85%83%E6%95%B0%E6%8D%AE">共享与独占的元数据</a></li>
 <li><a href="#%E9%94%81%E5%AE%9A%E8%A7%A3%E9%94%81%E5%B7%A5%E4%BD%9C%E6%A0%91-lockunlock">锁定（解锁）工作树 lock/unlock</a></li>
 <li><a href="#%E5%B1%95%E7%A4%BA%E5%B7%A5%E4%BD%9C%E6%A0%91%E5%88%97%E8%A1%A8-list">展示工作树列表 list</a></li>
 <li><a href="#%E5%88%A0%E9%99%A4%E5%B7%A5%E4%BD%9C%E6%A0%91-remove">删除工作树 remove</a></li>
 <li><a href="#%E4%BF%AE%E5%89%AA%E5%B7%A5%E4%BD%9C%E6%A0%91-prune">修剪工作树 prune</a></li>
 <li><a href="#%E9%87%8D%E6%96%B0%E5%85%B3%E8%81%94%E5%B7%A5%E4%BD%9C%E6%A0%91-repair">重新关联工作树 repair</a></li>
-</ul>
-</li>
+<li><a href="#%E4%B8%8E-clone-%E5%92%8C%E5%AD%90%E6%A8%A1%E5%9D%97%E7%9A%84%E5%8F%96%E8%88%8D">与 clone 和子模块的取舍</a></li>
+<li><a href="#%E5%B8%B8%E8%A7%81%E9%94%99%E8%AF%AF%E4%B8%8E%E6%8E%92%E6%9F%A5">常见错误与排查</a></li>
+<li><a href="#%E7%89%88%E6%9C%AC%E8%A6%81%E6%B1%82">版本要求</a></li>
 </ul>
 </li>
 </ul>

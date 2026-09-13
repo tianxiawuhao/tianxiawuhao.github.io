@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/>
+    </marker>
+    <marker id="arwp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7a5bd0"/>
+    </marker>
+    <marker id="arwo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#e08a1e"/>
+    </marker>
+  </defs>
+  <rect width="900" height="560" fill="#ffffff"/>
+  <text x="450" y="32" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">ThreadLocalMap 引用链与内存泄漏路径</text>
+
+  <rect x="60" y="64" width="230" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="72" y="92" font-size="12" font-weight="700" fill="#1f2b38">Thread（池化工作线程）</text>
+  <rect x="60" y="132" width="230" height="44" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="72" y="160" font-size="12" fill="#1f2b38">threadLocals 字段</text>
+  <rect x="60" y="200" width="230" height="44" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="72" y="228" font-size="12" fill="#1f2b38">ThreadLocalMap</text>
+  <rect x="60" y="268" width="230" height="44" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="72" y="296" font-size="12" fill="#1f2b38">Entry[] table</text>
+  <rect x="60" y="336" width="230" height="44" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="72" y="364" font-size="12" fill="#1f2b38">Entry（key, value）</text>
+  <rect x="60" y="404" width="230" height="44" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="72" y="432" font-size="12" font-weight="700" fill="#1f2b38">value：业务大对象</text>
+
+  <path d="M175 110 V128" stroke="#2f6fd0" stroke-width="1.6" fill="none" marker-end="url(#arw)"/>
+  <text x="184" y="124" font-size="11" fill="#5b6b7c">强引用</text>
+  <path d="M175 178 V196" stroke="#2f6fd0" stroke-width="1.6" fill="none" marker-end="url(#arw)"/>
+  <text x="184" y="192" font-size="11" fill="#5b6b7c">强引用</text>
+  <path d="M175 246 V264" stroke="#2f6fd0" stroke-width="1.6" fill="none" marker-end="url(#arw)"/>
+  <text x="184" y="260" font-size="11" fill="#5b6b7c">强引用</text>
+  <path d="M175 314 V332" stroke="#2f6fd0" stroke-width="1.6" fill="none" marker-end="url(#arw)"/>
+  <text x="184" y="328" font-size="11" fill="#5b6b7c">强引用</text>
+  <path d="M175 382 V400" stroke="#2f6fd0" stroke-width="1.6" fill="none" marker-end="url(#arw)"/>
+  <text x="184" y="396" font-size="11" fill="#5b6b7c">强引用</text>
+
+  <path d="M470 86 H302" stroke="#e08a1e" stroke-width="1.4" fill="none" stroke-dasharray="5 3" marker-end="url(#arwo)"/>
+  <text x="480" y="90" font-size="11.5" fill="#e08a1e">线程池复用 → 线程长期存活</text>
+
+  <rect x="560" y="316" width="290" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="574" y="340" font-size="12" font-weight="700" fill="#1f2b38">ThreadLocal 实例（Entry 的 key）</text>
+  <text x="574" y="362" font-size="11" fill="#5b6b7c">static final 时被类强引用，key 永不为 null</text>
+  <path d="M558 348 H296" stroke="#7a5bd0" stroke-width="1.6" fill="none" stroke-dasharray="6 3" marker-end="url(#arwp)"/>
+  <text x="427" y="340" text-anchor="middle" font-size="11" fill="#7a5bd0">弱引用 WeakReference</text>
+
+  <rect x="560" y="396" width="290" height="72" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="574" y="420" font-size="12" font-weight="700" fill="#1f2b38">泄漏：value 被强引用住</text>
+  <text x="574" y="440" font-size="11" fill="#5b6b7c">线程存活 → Entry 不被释放</text>
+  <text x="574" y="458" font-size="11" fill="#5b6b7c">→ value 无法被 GC 回收</text>
+  <path d="M296 426 H554" stroke="#e08a1e" stroke-width="1.6" fill="none" marker-end="url(#arwo)"/>
+  <text x="427" y="418" text-anchor="middle" font-size="11" fill="#e08a1e">泄漏路径</text>
+
+  <rect x="30" y="484" width="840" height="62" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="48" y="508" font-size="12" font-weight="700" fill="#1f2b38">弱引用只能回收 key：ThreadLocal 实例被回收后 Entry 仍在，value 仍被强引用</text>
+  <text x="48" y="530" font-size="12" fill="#5b6b7c">只有 remove()，或该线程再次 get/set 触发 expungeStaleEntry，才能释放 value</text>
+</svg>
