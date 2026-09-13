@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Flink 处理函数：定时器与按键状态协同工作机制</title>
+  <rect width="900" height="560" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">Flink 处理函数：定时器与按键状态协同工作机制</text>
+  <rect x="24" y="52" width="208" height="486" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="128" y="76" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">数据流（事件时间语义）</text>
+  <rect x="38" y="96" width="180" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="128" y="115" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">事件 Event</text>
+  <text x="128" y="131" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">ts=1000</text>
+  <rect x="38" y="158" width="180" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="128" y="177" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">水位线 Watermark</text>
+  <text x="128" y="193" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">WM=999</text>
+  <rect x="38" y="220" width="180" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="128" y="239" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">事件 Event</text>
+  <text x="128" y="255" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">ts=11000</text>
+  <rect x="38" y="282" width="180" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="128" y="301" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">水位线 Watermark</text>
+  <text x="128" y="317" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">WM=10999</text>
+  <rect x="38" y="344" width="180" height="44" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="128" y="363" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">事件 Event</text>
+  <text x="128" y="379" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">ts=11001</text>
+  <rect x="38" y="406" width="180" height="44" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="128" y="425" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">水位线 Watermark</text>
+  <text x="128" y="441" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">WM=11000</text>
+  <text x="128" y="504" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">数据结束 → WM 推进到 Long.MAX_VALUE</text>
+  <text x="128" y="522" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">所有未触发的定时器一次性触发</text>
+  <rect x="252" y="52" width="232" height="486" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="368" y="76" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">处理函数实例（每个 key 一份）</text>
+  <rect x="266" y="92" width="204" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="368" y="119" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">processElement(value, ctx, out)</text>
+  <rect x="266" y="148" width="204" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="368" y="175" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">onTimer(ts, ctx, out)</text>
+  <rect x="266" y="208" width="204" height="44" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="368" y="235" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">open(Configuration)</text>
+  <rect x="266" y="268" width="204" height="60" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="368" y="289" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">TimerService（定时服务）</text>
+  <text x="368" y="306" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">register / delete</text>
+  <text x="368" y="321" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">Event / Processing Time</text>
+  <rect x="266" y="344" width="204" height="86" rx="8" fill="#f7f9fc" stroke="#7a5bd0" stroke-width="1.4"/>
+  <text x="368" y="364" font-size="11.5" font-weight="700" fill="#7a5bd0" text-anchor="middle">定时器 = 按键状态</text>
+  <text x="368" y="381" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">(key, timestamp) 唯一去重</text>
+  <text x="368" y="397" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">同 key 同时间戳只触发一次</text>
+  <text x="368" y="413" font-size="10.5" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">随 checkpoint 一起持久化</text>
+  <rect x="266" y="446" width="204" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="368" y="466" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">Keyed State（按键状态）</text>
+  <text x="368" y="483" font-size="11" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif" fill="#5b6b7c" text-anchor="middle">ValueState、ListState、MapState</text>
+  <text x="368" y="500" font-size="11" font-family="DejaVu Sans Mono, monospace" fill="#5b6b7c" text-anchor="middle">RuntimeContext.getState(...)</text>
+  <rect x="500" y="52" width="376" height="486" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="688" y="76" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">状态后端与容错</text>
+  <rect x="516" y="92" width="344" height="58" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="688" y="115" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">HashMapStateBackend</text>
+  <text x="688" y="134" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">状态存 JVM 堆内存，读写快、受内存限制</text>
+  <rect x="516" y="162" width="344" height="58" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="688" y="185" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">EmbeddedRocksDBBackend</text>
+  <text x="688" y="204" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">状态存本地 RocksDB，可超内存、读写较慢</text>
+  <rect x="516" y="232" width="344" height="58" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="688" y="255" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">Checkpoint / Savepoint</text>
+  <text x="688" y="274" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">状态 + 定时器一起做一致性快照</text>
+  <rect x="516" y="302" width="344" height="58" rx="8" fill="#f7f9fc" stroke="#5b6b7c" stroke-width="1.4"/>
+  <text x="688" y="325" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">故障恢复</text>
+  <text x="688" y="344" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">回滚状态，重建定时器</text>
+  <rect x="516" y="372" width="344" height="58" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="688" y="395" font-size="11.5" font-weight="400" fill="#1f2b38" text-anchor="middle">处理时间定时器已过期</text>
+  <text x="688" y="414" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">重启后立刻触发</text>
+  <rect x="516" y="442" width="344" height="80" rx="8" fill="#f7f9fc" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="688" y="462" font-size="11.5" font-weight="700" fill="#2f6fd0" text-anchor="middle">生产实践</text>
+  <text x="688" y="482" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">1. 降低时间戳精度，合并定时器</text>
+  <text x="688" y="500" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">2. 定时器量大时定期清理</text>
+  <text x="688" y="518" font-size="10.8" font-weight="400" fill="#5b6b7c" text-anchor="middle">3. 用 delete*Timer 删除不再需要的定时器</text>
+  <line x1="222" y1="118" x2="262" y2="114" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="222" y1="222" x2="262" y2="170" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="244" y1="474" x2="262" y2="470" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+</svg>
