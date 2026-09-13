@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="290" viewBox="0 0 900 290" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Nacos CP 集群的选举与心跳纠错流程</title>
+  <rect width="900" height="290" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">Nacos CP 集群的选举与心跳纠错流程</text>
+
+  <rect x="30" y="60" width="190" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="125" y="86" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">1 启动 init()</text>
+  <text x="125" y="105" text-anchor="middle" font-size="11" fill="#5b6b7c">加载磁盘 datum 与 term</text>
+  <text x="125" y="123" text-anchor="middle" font-size="11" fill="#5b6b7c">注册选举/心跳任务(500ms)</text>
+
+  <rect x="255" y="60" width="180" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="345" y="86" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">2 选举定时任务</text>
+  <text x="345" y="105" text-anchor="middle" font-size="11" fill="#5b6b7c">leaderDueMs 每 500ms 递减</text>
+  <text x="345" y="123" text-anchor="middle" font-size="11" fill="#5b6b7c">减到 0 才发起选举</text>
+
+  <rect x="465" y="60" width="180" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="555" y="86" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">3 sendVote()</text>
+  <text x="555" y="105" text-anchor="middle" font-size="11" fill="#5b6b7c">term+1，投票给自己</text>
+  <text x="555" y="123" text-anchor="middle" font-size="11" fill="#5b6b7c">state = CANDIDATE</text>
+
+  <rect x="680" y="60" width="190" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="775" y="86" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">4 其它节点处理</text>
+  <text x="775" y="105" text-anchor="middle" font-size="11" fill="#5b6b7c">term 小 → 仍投自己</text>
+  <text x="775" y="123" text-anchor="middle" font-size="11" fill="#5b6b7c">否则改投并重置选举超时</text>
+
+  <line x1="220" y1="98" x2="251" y2="98" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="435" y1="98" x2="461" y2="98" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="645" y1="98" x2="676" y2="98" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="775" y1="136" x2="775" y2="187" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="680" y="190" width="190" height="76" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="775" y="216" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">5 decideLeader()</text>
+  <text x="775" y="235" text-anchor="middle" font-size="11" fill="#5b6b7c">收到半数以上选票</text>
+  <text x="775" y="253" text-anchor="middle" font-size="11" fill="#5b6b7c">本节点成为 Leader</text>
+
+  <rect x="465" y="190" width="180" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="555" y="216" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2b38">6 Leader 每 5s 心跳</text>
+  <text x="555" y="235" text-anchor="middle" font-size="11" fill="#5b6b7c">POST /raft/beat</text>
+  <text x="555" y="253" text-anchor="middle" font-size="11" fill="#5b6b7c">携带全部 key+timestamp</text>
+
+  <rect x="255" y="190" width="180" height="76" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="345" y="216" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">7 Follower 对比</text>
+  <text x="345" y="235" text-anchor="middle" font-size="11" fill="#5b6b7c">缺失/过期 → 批量 GET</text>
+  <text x="345" y="253" text-anchor="middle" font-size="11" fill="#5b6b7c">多余 → 本地删除</text>
+
+  <rect x="30" y="190" width="190" height="76" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="125" y="216" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">8 心跳续期</text>
+  <text x="125" y="235" text-anchor="middle" font-size="11" fill="#5b6b7c">重置 leaderDueMs</text>
+  <text x="125" y="253" text-anchor="middle" font-size="11" fill="#5b6b7c">维持 Leader 地位</text>
+
+  <line x1="680" y1="228" x2="647" y2="228" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="465" y1="228" x2="437" y2="228" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="255" y1="228" x2="222" y2="228" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+</svg>

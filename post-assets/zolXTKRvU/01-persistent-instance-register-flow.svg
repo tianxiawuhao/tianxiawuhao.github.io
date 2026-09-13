@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="350" viewBox="0 0 900 350" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>CP 架构下持久化实例的注册链路</title>
+  <rect width="900" height="350" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">CP 架构下持久化实例的注册链路</text>
+
+  <rect x="30" y="60" width="190" height="70" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="125" y="88" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">客户端注册请求</text>
+  <text x="125" y="106" text-anchor="middle" font-size="11" fill="#5b6b7c">/nacos/v1/ns/instance</text>
+  <text x="125" y="123" text-anchor="middle" font-size="11" fill="#5b6b7c">ephemeral=false</text>
+
+  <rect x="255" y="60" width="175" height="70" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="342" y="85" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2b38">RaftConsistency</text>
+  <text x="342" y="103" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2b38">ServiceImpl</text>
+  <text x="342" y="121" text-anchor="middle" font-size="11" fill="#5b6b7c">.put(key, record)</text>
+
+  <rect x="465" y="60" width="180" height="70" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="555" y="85" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">signalPublish()</text>
+  <text x="555" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">判断本节点是否 Leader</text>
+  <text x="555" y="121" text-anchor="middle" font-size="11" fill="#5b6b7c">非 Leader 则转发给 Leader</text>
+
+  <rect x="680" y="60" width="190" height="70" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="775" y="85" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2b38">onPublish()</text>
+  <text x="775" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">写本地磁盘 + datums 缓存</text>
+  <text x="775" y="121" text-anchor="middle" font-size="11" fill="#5b6b7c">发事件更新内存注册表</text>
+
+  <line x1="220" y1="95" x2="251" y2="95" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="430" y1="95" x2="461" y2="95" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="645" y1="95" x2="676" y2="95" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="200" y="170" width="500" height="80" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="450" y="198" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2b38">CountDownLatch(majorityCount)：向各 Follower 并行 POST</text>
+  <text x="450" y="218" text-anchor="middle" font-size="12" fill="#1f2b38">/v1/ns/raft/datum/commit，收到半数以上 ack 才认为同步成功</text>
+  <text x="450" y="238" text-anchor="middle" font-size="11" fill="#5b6b7c">（Leader 已先写本地磁盘与缓存，不是两阶段提交）</text>
+
+  <path d="M 775 130 L 775 210 L 702 210" fill="none" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="450" y1="250" x2="450" y2="278" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="200" y="280" width="500" height="50" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="450" y="310" text-anchor="middle" font-size="12" fill="#1f2b38">Follower：写本地磁盘与缓存，并发布 ValueChangeEvent 更新注册表</text>
+</svg>

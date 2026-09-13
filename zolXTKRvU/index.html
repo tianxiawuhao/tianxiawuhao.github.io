@@ -142,8 +142,9 @@
         namespace: haier-iot
         group: dev
         cluster-name: BJ
-        ephemeral: true  # 持久化实例走CP架构
+        ephemeral: false  # false=持久化实例，走CP架构；true=临时实例，走AP架构
 </code></pre>
+<p>注意：<code>ephemeral</code> 是 Nacos 区分两种实例的开关——<code>false</code> 为持久化实例，走 CP 架构；<code>true</code>（默认值）为临时实例，走 AP 架构。</p>
 <h3 id="2-nacos-cp架构使用的分布式一致性协议简化版的raft">2 Nacos CP架构使用的分布式一致性协议？（简化版的Raft）</h3>
 <p>Raft分布式一致性协议 和 Zookeeper使用的ZAB原子广播协议非常相似；</p>
 <p>都是一个Leader带领多个Follower，区别在于，Leader选举时的投票机制：</p>
@@ -155,9 +156,10 @@
 <hr>
 <h2 id="二-cp架构下持久化实例的注册逻辑">二 CP架构下，持久化实例的注册逻辑</h2>
 <h3 id="1-注册实例的api接口不变nacosv1nsinstance">1 注册实例的API接口不变：/nacos/v1/ns/instance</h3>
-<figure data-type="image" tabindex="1"><img src="/post-images/1658665954910.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="1"><img src="/post-images/1658665954910.png" alt="注册实例请求进入 RaftConsistencyServiceImpl 的调用链" loading="lazy"></figure>
 <p>这里当然是选择 RaftConsistencyServiceImpl 的实现：</p>
-<pre><code class="language-java">public void put(String key, Record value) throws NacosException {
+<pre><code class="language-java">// RaftConsistencyServiceImpl
+public void put(String key, Record value) throws NacosException {
     checkIsStopWork();
     try {
         raftCore.signalPublish(key, value);  
@@ -198,7 +200,7 @@
         // 通过CountDownLatch实现半数ack的统计，如果获得到半数以上的ack，则Countdownlatch逻辑才可以继续向下走！
         final CountDownLatch latch = new CountDownLatch(peers.majorityCount());
         for (final String server : peers.allServersIncludeMyself()) {
-            if (isLeader(server)) {  // 首先自己的钥匙先用上
+            if (isLeader(server)) {  // 自己这一票先记上
                 latch.countDown();
                 continue;
             }
@@ -226,8 +228,8 @@
     }
 </code></pre>
 <p>其实Nacos实现的简单Raft协议，逻辑有点不太严谨，就是：即使本次同步不成功，但是主节点的本地磁盘文件 + 内存文件 已经都修改过了，不像Zookeeper的两阶段提交；</p>
-<p>后期Nacos的一致性协议会修改为JRaft，这点肯定会解决！</p>
-<h3 id="3-leader本节点保存数据的逻辑onpublishdatum-peerslocal">3、Leader本节点保存数据的逻辑：onPublish(datum, peers.local())</h3>
+<p>后期 Nacos 的一致性协议会修改为 JRaft，这点肯定会解决！——Nacos 2.x 已经把自研的 Raft 实现替换为 JRaft，这一问题也随之解决。</p>
+<h3 id="3-leader本节点保存数据的逻辑onpublishdatum-peerslocal">3 Leader本节点保存数据的逻辑：onPublish(datum, peers.local())</h3>
 <pre><code class="language-java">public void onPublish(Datum datum, RaftPeer source) throws Exception {
     ......
  
@@ -264,7 +266,7 @@
 <li><strong>2. 保存部分信息到缓存datums</strong></li>
 <li><strong>3. 保存文件到内存中的服务注册表（双层ConcurrentHashMap）—— 但不是同步保存，而是通过事件发布，实现异步保存</strong></li>
 </ul>
-<p>需要保存到内存中的服务注册表时，会发布一个ValueChangeEvent事件，该事件会被PersisNotifier.onEvent(ValueChangeEvent)捕捉到，并进行处理：</p>
+<p>需要保存到内存中的服务注册表时，会发布一个ValueChangeEvent事件，该事件会被 PersistentNotifier.onEvent(ValueChangeEvent) 捕捉到，并进行处理：</p>
 <pre><code class="language-java">// com.alibaba.nacos.naming.consistency.persistent.PersistentNotifier#onEvent
 public void onEvent(ValueChangeEvent event) {
     notify(event.getKey(), event.getAction(), find.apply(event.getKey()));
@@ -291,7 +293,7 @@ public &lt;T extends Record&gt; void notify(final String key, final DataOperatio
 public void onChange(String key, Instances value) throws Exception {    
     ......
     
-   // 更新注册表（这个方法，在AP架构师，重点介绍过）
+   // 更新注册表（这个方法在 AP 架构那篇里重点介绍过）
     updateIPs(value.getInstanceList(), KeyBuilder.matchEphemeralInstanceListKey(key));
      
     recalculateChecksum();
@@ -299,6 +301,7 @@ public void onChange(String key, Instances value) throws Exception {
 </code></pre>
 <p>至此，整个Leader节点的持久化节点注册逻辑就完成了！</p>
 <p>同步数据给其它Follower节点，就是HTTP调用“raft/datum/commit”接口，处理逻辑比主节点简单！</p>
+<p><img src="/post-assets/zolXTKRvU/01-persistent-instance-register-flow.svg" alt="CP 架构下持久化实例的注册链路示意图"></p>
 <hr>
 <h2 id="三-nacos-cp集群选举过程">三 Nacos CP集群选举过程</h2>
 <h3 id="1-集群节点启动时会执行raftcoreinit核心方法">1 集群节点启动时，会执行RaftCore.init()核心方法</h3>
@@ -425,7 +428,7 @@ public class RaftCore implements Closeable {
 <h3 id="3-其它节点收到投票后的处理逻辑">3 其它节点收到投票后的处理逻辑</h3>
 <ul>
 <li>如果<strong>收到的候选节点的term小于自己本地节点的term，则voteFor自己</strong>；（我更适合做Leader，这一票我投给自己）</li>
-<li><strong>否则，<strong>重置自己的election timeout，设置</strong>voteFor为收到的候选节点，更新集群周期term为候选节点的term</strong>；（我同意收到的节点做Leader）</li>
+<li><strong>否则，重置自己的 election timeout，把 voteFor 设为收到的候选节点，并把集群周期 term 更新为候选节点的 term</strong>；（我同意收到的节点做 Leader）</li>
 </ul>
 <p>给Http的调用方返回response；</p>
 <hr>
@@ -688,40 +691,38 @@ public class RaftCore implements Closeable {
 }
 </code></pre>
 
+<p><img src="/post-assets/zolXTKRvU/02-raft-election-heartbeat-flow.svg" alt="Nacos CP 集群选举与心跳纠错流程示意图"></p>
+
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E4%B8%80-nacos-cp%E9%9B%86%E7%BE%A4%E6%9E%B6%E6%9E%84%E7%9A%84%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86">一 Nacos CP集群架构的基础知识</a>
+<a href="#%E4%B8%80-nacos-cp%E9%9B%86%E7%BE%A4%E6%9E%B6%E6%9E%84%E7%9A%84%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86">一 Nacos CP集群架构的基础知识</a>
 <ul>
 <li><a href="#1-nacos%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E5%90%8E%E5%8F%AF%E4%BB%A5%E5%90%8C%E6%97%B6%E6%94%AF%E6%8C%81ap%E5%92%8Ccp%E6%B3%A8%E6%84%8F%E4%B8%8D%E6%98%AF%E5%90%8C%E6%97%B6%E6%94%AF%E6%8C%81cap">1 Nacos集群部署后，可以同时支持AP和CP（注意，不是同时支持CAP）</a></li>
 <li><a href="#2-nacos-cp%E6%9E%B6%E6%9E%84%E4%BD%BF%E7%94%A8%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE%E7%AE%80%E5%8C%96%E7%89%88%E7%9A%84raft">2 Nacos CP架构使用的分布式一致性协议？（简化版的Raft）</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%8C-cp%E6%9E%B6%E6%9E%84%E4%B8%8B%E6%8C%81%E4%B9%85%E5%8C%96%E5%AE%9E%E4%BE%8B%E7%9A%84%E6%B3%A8%E5%86%8C%E9%80%BB%E8%BE%91">二 CP架构下，持久化实例的注册逻辑</a>
+<li>
+<a href="#%E4%BA%8C-cp%E6%9E%B6%E6%9E%84%E4%B8%8B%E6%8C%81%E4%B9%85%E5%8C%96%E5%AE%9E%E4%BE%8B%E7%9A%84%E6%B3%A8%E5%86%8C%E9%80%BB%E8%BE%91">二 CP架构下，持久化实例的注册逻辑</a>
 <ul>
 <li><a href="#1-%E6%B3%A8%E5%86%8C%E5%AE%9E%E4%BE%8B%E7%9A%84api%E6%8E%A5%E5%8F%A3%E4%B8%8D%E5%8F%98nacosv1nsinstance">1 注册实例的API接口不变：/nacos/v1/ns/instance</a></li>
 <li><a href="#2-%E6%95%B4%E4%B8%AAcp%E6%9E%B6%E6%9E%84%E4%B8%8B%E7%9A%84%E4%B8%BB%E8%8A%82%E7%82%B9%E6%B3%A8%E5%86%8C%E9%80%BB%E8%BE%91%E9%83%BD%E5%9C%A8signalpublish%E6%96%B9%E6%B3%95%E4%B8%AD">2 整个CP架构下的主节点注册逻辑都在signalPublish()方法中</a></li>
-<li><a href="#3-leader%E6%9C%AC%E8%8A%82%E7%82%B9%E4%BF%9D%E5%AD%98%E6%95%B0%E6%8D%AE%E7%9A%84%E9%80%BB%E8%BE%91onpublishdatum-peerslocal">3、Leader本节点保存数据的逻辑：onPublish(datum, peers.local())</a></li>
+<li><a href="#3-leader%E6%9C%AC%E8%8A%82%E7%82%B9%E4%BF%9D%E5%AD%98%E6%95%B0%E6%8D%AE%E7%9A%84%E9%80%BB%E8%BE%91onpublishdatum-peerslocal">3 Leader本节点保存数据的逻辑：onPublish(datum, peers.local())</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-nacos-cp%E9%9B%86%E7%BE%A4%E9%80%89%E4%B8%BE%E8%BF%87%E7%A8%8B">三 Nacos CP集群选举过程</a>
+<li>
+<a href="#%E4%B8%89-nacos-cp%E9%9B%86%E7%BE%A4%E9%80%89%E4%B8%BE%E8%BF%87%E7%A8%8B">三 Nacos CP集群选举过程</a>
 <ul>
 <li><a href="#1-%E9%9B%86%E7%BE%A4%E8%8A%82%E7%82%B9%E5%90%AF%E5%8A%A8%E6%97%B6%E4%BC%9A%E6%89%A7%E8%A1%8Craftcoreinit%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95">1 集群节点启动时，会执行RaftCore.init()核心方法</a></li>
 <li><a href="#2-%E9%80%89%E4%B8%BE%E4%BB%BB%E5%8A%A1%E7%9A%84%E6%A0%B8%E5%BF%83run%E6%96%B9%E6%B3%95">2 选举任务的核心run()方法</a></li>
 <li><a href="#3-%E5%85%B6%E5%AE%83%E8%8A%82%E7%82%B9%E6%94%B6%E5%88%B0%E6%8A%95%E7%A5%A8%E5%90%8E%E7%9A%84%E5%A4%84%E7%90%86%E9%80%BB%E8%BE%91">3 其它节点收到投票后的处理逻辑</a></li>
 </ul>
 </li>
-<li><a href="#%E5%9B%9B-nacos-cp%E9%9B%86%E7%BE%A4%E7%9A%84%E5%BF%83%E8%B7%B3%E4%BB%BB%E5%8A%A1">四 Nacos CP集群的心跳任务</a>
+<li>
+<a href="#%E5%9B%9B-nacos-cp%E9%9B%86%E7%BE%A4%E7%9A%84%E5%BF%83%E8%B7%B3%E4%BB%BB%E5%8A%A1">四 Nacos CP集群的心跳任务</a>
 <ul>
 <li><a href="#1-%E5%BF%83%E8%B7%B3%E4%BB%BB%E5%8A%A1%E7%94%B1leader%E8%8A%82%E7%82%B9%E5%8F%91%E5%87%BA%E6%9C%892%E4%B8%AA%E4%BD%9C%E7%94%A8">1 心跳任务由Leader节点发出，有2个作用</a></li>
 <li><a href="#2-%E5%BF%83%E8%B7%B3%E4%BB%BB%E5%8A%A1%E7%9A%84%E6%A0%B8%E5%BF%83run%E6%96%B9%E6%B3%95%E5%8F%AA%E6%9C%89leader%E8%8A%82%E7%82%B9%E6%89%8D%E5%8F%AF%E4%BB%A5%E5%90%91%E5%85%B6%E5%AE%83%E8%8A%82%E7%82%B9%E5%8F%91%E9%80%81%E5%BF%83%E8%B7%B3%E5%8C%85">2 心跳任务的核心run()方法(只有Leader节点才可以向其它节点发送心跳包)</a></li>
 <li><a href="#3-follower%E8%8A%82%E7%82%B9%E6%94%B6%E5%88%B0%E5%BF%83%E8%B7%B3%E5%8C%85%E5%90%8E%E7%9A%84%E5%A4%84%E7%90%86%E9%80%BB%E8%BE%91">3 Follower节点收到心跳包后的处理逻辑</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
