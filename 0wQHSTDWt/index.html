@@ -128,9 +128,31 @@
           <p>saiku通过添加schema和datasource的形式管理对接入系统的数据源，然后提供界面作为直观的分析数据方式，界面产生mdx，由mondrian连接数据源，解析mdx和执行查询</p>
 <p>Kylin 提供大规模数据的 OLAP 能力，通过 saiku 与 kylin 的对接，可以利用 saiku 的友好界面来很方便地查询数据。</p>
 <p>如上的整合需要手动配置数据源、编写 schema，操作比较繁琐；可以通过修改 saiku 的代码，到 kylin 中获取 project 和 cube 的各种信息，根据一定规则转换成 schema 并作为数据源管理起来，这样就能将 saiku 与 kylin 无缝对接起来。</p>
-<h2 id="代码案例">代码案例</h2>
-<p><strong>saiku-wabapp</strong></p>
-<pre><code class="language-xml">#saiku-beans.properties
+<h2 id="一-对接思路与查询链路">一、对接思路与查询链路</h2>
+<p>先把一次查询在三个组件之间的流转看清楚：Saiku 负责界面与 MDX，Mondrian 负责把 MDX 翻译成 SQL，Kylin 负责在 cube 的存储上执行 SQL。</p>
+<p><img src="/post-assets/0wQHSTDWt/01-saiku-mondrian-kylin-chain.svg" alt="Saiku 经 Mondrian 与 Kylin JDBC 查询 Kylin 的链路图"></p>
+<p>一次查询的完整过程是：</p>
+<ol>
+<li>用户在 Saiku Web 界面拖拽维度与度量，前端生成 MDX，例如 <code>SELECT {[Measures].[人数]} ON COLUMNS, [部门].[所有部门].Children ON ROWS FROM [CUBE_NAME]</code>。</li>
+<li>Saiku Service 通过 olap4j 把 MDX 交给 Mondrian；Mondrian 读取该 cube 对应的 Mondrian Schema，解析维度、层次与度量，把 MDX 改写成关系型 SQL。</li>
+<li>Mondrian 生成的 SQL 经由 JDBC 交给 Kylin：驱动类为 <code>org.apache.kylin.jdbc.Driver</code>，连接串形如 <code>jdbc:kylin://host:7070/&lt;project&gt;</code>。</li>
+<li>Kylin 的查询服务（Calcite）在 cube 存储（HBase）上执行 SQL，结果集逐层回传给 Mondrian，再由 Saiku 渲染成交叉表或图表。</li>
+</ol>
+<p>也就是说，<strong>Mondrian 只认 Schema，Kylin 只认 SQL 与 cube 元数据</strong>，而“把 Kylin 的 cube 描述翻译成 Mondrian Schema”正是本文要自动化的部分。手工维护时，每加一个 cube 就要写一份 schema、配一个数据源；改造后的做法是：Saiku 加载数据源时调用 Kylin 的 REST 接口拉取 project/cube 信息，用 <code>SchemaUtil</code> 生成 schema 文本，再注册成 Saiku 数据源。</p>
+<p>自动化转换涉及的元数据与目标元素大致对应如下，后文两版 <code>SchemaUtil</code> 的差异（Mondrian 3.0 / 4.0）也是围绕这张映射展开的。</p>
+<p><img src="/post-assets/0wQHSTDWt/02-cube-dimension-mapping.svg" alt="Kylin Cube 维度度量与 Mondrian Schema 元素的映射结构图"></p>
+<p>其中维度类型的判定最容易出错，先单独说明：</p>
+<ul>
+<li><strong>普通维度（维表维度）</strong>：维度列在维表上，事实表通过外键关联。生成时要写 <code>foreignKey</code>，并在 <code>Hierarchy</code> 内用 <code>&lt;Table&gt;</code> 指向维表。</li>
+<li><strong>退化维度（事实表维度）</strong>：维度列直接在事实表上，对应 Kylin 中“表名等于事实表”的那些 dimension。生成时不再写 <code>foreignKey</code>，层次直接落在事实表列上。</li>
+<li><strong>派生维度（derived）</strong>：Kylin 的 <code>DimensionDesc.derived</code> 表示该维度由维表的多个列派生而来，对应 Mondrian 同一个层次下的多个 <code>&lt;Level&gt;</code>。</li>
+<li><strong>度量</strong>：Kylin 的 <code>MeasureDesc</code> 带 <code>function</code>（expression + parameter），需要映射到 <code>aggregator</code> 与 <code>column</code>；其中 <code>count_distinct</code> 必须改写成 Mondrian 的 <code>distinct-count</code>，<code>COUNT(1)</code> 这类不带列的度量则退回 cube rowkey 的第一列。</li>
+</ul>
+<p>认证方面，Kylin 的 REST 接口与 JDBC 走同一套用户体系。开启安全配置后 <code>/kylin/api/**</code> 需要 HTTP Basic 认证（默认 ADMIN/KYLIN，示例中用的是 ADMIN/ADMIN）；JDBC 则在连接属性里传 username/password。Saiku 侧的 <code>security.enabled=false</code> 表示不再叠加 Saiku 自身的 ACL 校验，权限完全交给 Kylin 判定。</p>
+
+<h2 id="二-代码案例">二、代码案例</h2>
+<h3 id="二-1-saiku-webapp-配置">2.1 saiku-webapp：属性与 Bean 配置</h3>
+<pre><code class="language-properties">#saiku-beans.properties
 sylin.user=ADMIN
 sylin.password=ADMIN
 sylin.cube.url=http://localhost:7070/kylin/api/cubes
@@ -150,7 +172,14 @@ sylin.url=localhost:7070
          &lt;property name=&quot;sylinUrl&quot; value=&quot;${sylin.url}&quot;/&gt;
  &lt;/bean&gt;
 </code></pre>
-<p><strong>saiku-service</strong></p>
+<h3 id="二-2-saiku-service-核心实现">2.2 saiku-service：拉取元数据并注册数据源</h3>
+<p><code>RepositoryDatasourceManager</code> 实现了 <code>IDatasourceManager</code>，在数据源加载阶段遍历 Kylin 的 cube 列表，把每个 cube 转换成一份 Mondrian Schema 并注册为 Saiku 的 OLAP 数据源。代码里有三个要点：</p>
+<ul>
+<li><strong>数据源命名</strong>：用 <code>project + "#" + cube</code> 作为数据源名，入参再按 <code>#</code> 拆回 project 与 cube，避免不同 project 下的同名 cube 冲突；写 schema 文件时把 <code>#</code> 换成 <code>.</code>。</li>
+<li><strong>元数据获取</strong>：先调 <code>/kylin/api/cubes</code> 取 cube 列表，再按 cube 名调 <code>/kylin/api/cube_desc/{cubeName}</code> 取 <code>CubeDesc</code>，用其中的 <code>model_name</code> 调 <code>/kylin/api/model/{modelName}</code> 取 <code>DataModelDesc</code>，最后交给 <code>SchemaUtil.createSchema()</code> 生成 schema 文本。</li>
+<li><strong>连接参数</strong>：<code>location</code> 是 olap4j 的 Mondrian 连接串，格式为 <code>jdbc:mondrian:Jdbc=...;JdbcDrivers=...;Catalog=...</code>，其中 <code>Catalog=mondrian:///datasources/xxx.xml</code> 指向刚写入 Saiku 数据目录的 schema 文件；<code>driver</code> 固定为 <code>mondrian.olap4j.MondrianOlap4jDriver</code>，用户名口令透传给 Kylin。</li>
+</ul>
+<p>HTTP 侧用 <code>HttpGet</code> 加 Basic 认证头，并设置了连接超时 30s、读超时 120s。需要留意的是：写入时用 <code>js.getString("name")</code> 作为 Map 的 key，而数据源名拼的却是 <code>project#name</code>，因此不同 project 下的同名 cube 仍可能互相覆盖，改造时建议统一按 <code>project#name</code> 做 key。</p>
 <pre><code class="language-java">public class RepositoryDatasourceManager implements IDatasourceManager, ApplicationListener&lt;HttpSessionCreatedEvent&gt; {
 	private String sylinUser;
     private String sylinPassWord;
@@ -272,7 +301,9 @@ sylin.url=localhost:7070
     }
 }
 </code></pre>
-<p><strong>mondrian3.0语法工具类</strong></p>
+<h3 id="二-3-mondrian-3-0-语法工具类">2.3 Mondrian 3.0 语法工具类</h3>
+<p>第一版工具类生成的是 Mondrian 3.0 的 schema 语法：维度用 <code>&lt;Dimension foreignKey=...&gt;</code> 承载，层次内用 <code>&lt;Table name=...&gt;</code> 指明维表，<code>&lt;Level column=...&gt;</code> 落到具体列，度量写在 <code>&lt;Measure&gt;</code> 上。转换时按“维度表是不是事实表”分成退化维度与普通维度两条路径，普通维度再通过 <code>Join</code> 把维表挂到事实表上。</p>
+<p>实现上有一处容易踩的坑：<code>aliasTableMap</code> 的键取自 join 表的别名，而查询时用的是 <code>dimensionDesc.getTable()</code>；当 Kylin 中维度表的别名与表名不一致时，<code>aliasTableMap.get(...)</code> 会返回 <code>null</code>，随后的 <code>.equals(...)</code> 会抛空指针，导致整个 cube 的数据源注册失败（排查见文末）。</p>
 <pre><code class="language-java">package org.saiku.service.util;
 
 import org.apache.kylin.cube.model.CubeDesc;
@@ -493,11 +524,14 @@ public class SchemaUtil1 {
         &lt;Level name=&quot;学历&quot; column=&quot;XUELI&quot;   uniqueMembers=&quot;true&quot; /&gt;
         &lt;/Hierarchy&gt;
     &lt;/Dimension&gt;       
-    &lt;Measure name=&quot;人数&quot; column=&quot;USERID&quot; aggregator=&quot;distinct count&quot; /&gt;       &lt;!--指标/度量，采用distinct count聚合 --&gt;
+    &lt;Measure name=&quot;人数&quot; column=&quot;USERID&quot; aggregator=&quot;distinct-count&quot; /&gt;       &lt;!--指标/度量，采用distinct count聚合 --&gt;
     &lt;/Cube&gt;
 &lt;/Schema&gt;
 </code></pre>
-<p><strong>mondrian4.0语法工具类</strong></p>
+<h3 id="二-4-mondrian-4-0-语法工具类">2.4 Mondrian 4.0 语法工具类</h3>
+<p>Mondrian 4.0 的 schema 语法变化较大，必须声明 <code>metamodelVersion='4.0'</code>，结构上拆成三层：<code>PhysicalSchema</code>（<code>Table/Key</code> 与 <code>Link/ForeignKey</code> 描述物理表及连接关系）、<code>Dimension</code>（<code>Attributes/Attribute</code> 声明字段，<code>Hierarchies/Hierarchy/Level attribute</code> 组织层次）、<code>Cube</code>（<code>Dimensions/Dimension source</code> 引用维度，<code>MeasureGroups/MeasureGroup</code> 按表分组度量，<code>DimensionLinks</code> 用 <code>FactLink</code>/<code>ForeignKeyLink</code> 声明维度如何关联）。</p>
+<p>因此这版工具类多了 <code>appendTable()</code> 生成 <code>PhysicalSchema</code>、<code>appendDimension()</code> 生成维度与层次、<code>appendCube()</code> 生成 <code>MeasureGroup</code> 与 <code>DimensionLinks</code>；度量按所属表分组，<code>COUNT(1)</code> 这类无列的度量用 rowkey 第一列兜底。用哪一版取决于 Saiku 发行包内 Mondrian 的版本：Mondrian 3.x 只认 3.0 语法，4.x 才支持 <code>metamodelVersion='4.0'</code>，版本用错会在解析 schema 阶段直接失败。</p>
+<p>下面是 4.0 工具类生成的一份实际 schema 示例，可以看到事实表与维表通过 <code>Link</code> 关联，两个 <code>MeasureGroup</code> 分别挂在 <code>TBL_CUSTOMER</code> 与事实表上。</p>
 <pre><code class="language-java">package org.saiku.service.util;
 
 import org.apache.kylin.cube.model.CubeDesc;
@@ -823,14 +857,37 @@ public class SchemaUtil {
 
 </code></pre>
 
+<h2 id="三-常见报错与排查">三、常见报错与排查</h2>
+<p>这套自动对接把“写 schema”的工作交给了代码，出错时也需要按链路分段定位：先确认 REST 能否取到元数据，再确认生成的 schema 是否符合对应 Mondrian 版本的语法，最后确认 Kylin 能否执行 Mondrian 生成的 SQL。常见现象与处理如下。</p>
+<ul>
+<li><strong>拉取 cube 列表报 401/403</strong>：Kylin 开启安全配置后 REST 接口需要 Basic 认证。核对 <code>sylin.user</code>/<code>sylin.password</code> 是否为有效账号，并确认请求已带上 <code>Authorization</code> 头；若返回体与代码假设的结构不一致，先用 <code>curl -u ADMIN:ADMIN http://host:7070/kylin/api/cubes</code> 确认实际返回，再决定解析方式（不同 Kylin 版本该接口可能返回 cube 名称数组，也可能返回带 project/name 的对象数组）。</li>
+<li><strong>数据源为空、日志里是空指针</strong>：多见于 <code>aliasTableMap.get(...)</code> 取到 <code>null</code>，即 Kylin 中维度表别名与表名不一致，或该维度表未出现在 model 的 join 列表里。对照 <code>/kylin/api/model/{model}</code> 的返回逐项检查维度表与 join 关系。</li>
+<li><strong>Schema 解析失败</strong>：若报 <code>metamodelVersion 4.0 not supported</code> 一类错误，说明 Saiku 内的 Mondrian 是 3.x，应改用 3.0 版工具类；反之用 3.0 语法配 4.x，也会在层次与度量的解析上报错。</li>
+<li><strong>Unknown aggregation type</strong>：度量聚合写法不被识别。Kylin 的 <code>count_distinct</code> 必须转成 Mondrian 的 <code>distinct-count</code>（连字符），其余 <code>sum</code>/<code>min</code>/<code>max</code>/<code>count</code> 原样使用；不在支持列表内的聚合函数会被直接跳过。</li>
+<li><strong>SQL 执行失败（表或列不存在）</strong>：Mondrian 会把 schema 中的表名、列名原样拼进 SQL，大小写与 Kylin 侧元数据不一致时 Calcite 找不到对象；并且 Kylin 只暴露 cube 中已定义为维度或度量的列，schema 引用了 cube 未定义的列同样会失败。</li>
+<li><strong>查询结果为空或提示找不到 cube</strong>：确认 JDBC 连接串中的 project 名正确、cube 已构建出 READY 状态的 segment；未构建的 cube 只有元数据，没有可查询的数据。</li>
+<li><strong>ClassNotFoundException: org.apache.kylin.jdbc.Driver</strong>：<code>kylin-jdbc</code> 及其依赖（Avatica/Calcite）没有放进 Saiku 的 <code>WEB-INF/lib</code>，补齐后重启即可。</li>
+</ul>
+<p>MDX 层面也要注意：Saiku 界面生成的都是标准 MDX，但 Mondrian 最终要把它翻译成 Kylin 能执行的 SQL，过于复杂的计算成员与集合函数可能生成 Kylin 不支持的表达式。建议先在 Saiku 的 MDX 编辑器中用简单查询验证链路，再逐步增加计算逻辑。</p>
+
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E5%AF%B9%E6%8E%A5%E6%80%9D%E8%B7%AF%E4%B8%8E%E6%9F%A5%E8%AF%A2%E9%93%BE%E8%B7%AF">一、对接思路与查询链路</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E4%BB%A3%E7%A0%81%E6%A1%88%E4%BE%8B">代码案例</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-%E4%BB%A3%E7%A0%81%E6%A1%88%E4%BE%8B">二、代码案例</a>
+<ul>
+<li><a href="#%E4%BA%8C-1-saiku-webapp-%E9%85%8D%E7%BD%AE">2.1 saiku-webapp：属性与 Bean 配置</a></li>
+<li><a href="#%E4%BA%8C-2-saiku-service-%E6%A0%B8%E5%BF%83%E5%AE%9E%E7%8E%B0">2.2 saiku-service：拉取元数据并注册数据源</a></li>
+<li><a href="#%E4%BA%8C-3-mondrian-3-0-%E8%AF%AD%E6%B3%95%E5%B7%A5%E5%85%B7%E7%B1%BB">2.3 Mondrian 3.0 语法工具类</a></li>
+<li><a href="#%E4%BA%8C-4-mondrian-4-0-%E8%AF%AD%E6%B3%95%E5%B7%A5%E5%85%B7%E7%B1%BB">2.4 Mondrian 4.0 语法工具类</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-%E5%B8%B8%E8%A7%81%E6%8A%A5%E9%94%99%E4%B8%8E%E6%8E%92%E6%9F%A5">三、常见报错与排查</a>
+<ul>
 </ul>
 </li>
 </ul>
