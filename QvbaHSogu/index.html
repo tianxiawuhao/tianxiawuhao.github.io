@@ -126,6 +126,9 @@
           <img class="post-feature-header-image" src="/post-images/QvbaHSogu.png" alt="封面图">
           </img>
           
+          <p>OOM 并不是一种异常，而是一族错误：同样是 <code>OutOfMemoryError</code>，报错关键字不同，根因、定位手段和修法完全不同。下面这张图先给出全局分类，再按图中的顺序逐个拆解。</p>
+<p><img src="/post-assets/QvbaHSogu/01-oom-types-and-tools.svg" alt="OOM 家族分类与定位路径图"></p>
+
           <h2 id="stack-overflow">Stack overflow</h2>
 <pre><code class="language-java">public class StackOverFlowErrorDemo {
     public static void main(String[] args) {
@@ -140,7 +143,11 @@
 <pre><code class="language-java">Exception in thread &quot;main&quot; java.lang.StackOverflowError
 	at com.example.interview.oom.StackOverFlowErrorDemo.StackOverFlowError(StackOverFlowErrorDemo.java:14)
 </code></pre>
-<p>递归调用自身方法，不断向栈内压入栈帧，直到撑破栈空间，重复次数不确定</p>
+<p>递归调用自身方法，不断向栈内压入栈帧，直到撑破栈空间，重复次数不确定（默认约 1 万个栈帧，取决于 <code>-Xss</code> 与每帧大小）。</p>
+<h3 id="stack-overflow-cause">原因</h3>
+<p>栈是线程私有的，栈深度由 <code>-Xss</code>（默认约 512KB~1MB）决定。栈溢出不是“内存不够”，而是调用层次太深：无限递归、递归没有正确终止条件、深层嵌套的 JSON/XML 解析都会触发。它与 <code>OutOfMemoryError: unable to create new native thread</code> 恰好相反——前者是单个线程的栈太深，后者是线程数量太多。</p>
+<h3 id="stack-overflow-locate">定位与复现</h3>
+<p>异常栈会直接打出重复的调用行，找出第一处“重复出现的自己”就是递归入口；<code>jstack &lt;pid&gt;</code> 可直接看到线程栈的完整调用链。<code>-Xss256k</code> 可以把复现所需递归次数压到更低。</p>
 <h2 id="outofmemoryerrorjava-heap-space">OutOfMemoryError：Java heap space</h2>
 <pre><code class="language-java">/**
  * @author wuhao
@@ -163,7 +170,11 @@ public class JavaHeapSpaceDemo {
 <pre><code class="language-java">Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: Java heap space
 	at com.example.interview.oom.JavaHeapSpaceDemo.main(JavaHeapSpaceDemo.java:18)
 </code></pre>
-<p>常量池，对象空间地址位于堆空间中，循环生成String或者生成超大对象会导致堆空间被占满溢出</p>
+<p>字符串常量池与普通对象都位于堆中，循环拼接 String 会产生大量临时对象，一次性申请超大数组则会直接超出剩余空间。</p>
+<h3 id="heap-space-cause">原因</h3>
+<p>一是真不够用：堆上限（<code>-Xmx</code>）小，而业务峰值对象多，扩容即可；二是内存泄漏：对象被静态集合、缓存、ThreadLocal、监听器等长期引用，GC 无法回收，堆随运行时间单调上涨；三是大对象，如一次性把整张大表或整个文件读进内存。</p>
+<h3 id="heap-space-locate">定位与复现</h3>
+<p>先用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 观察老年代使用率是否“涨上去就下不来”，再 <code>jmap -histo:live &lt;pid&gt; | head -20</code> 看实例数最多的类，最后 <code>jmap -dump:format=b,file=heap.hprof &lt;pid&gt;</code> 导出堆转储，用 MAT 打开，按 Dominator Tree 与 Leak Suspects 找到持有链；线上不便导出时可用 Arthas 的 <code>heapdump</code>、<code>dashboard</code> 代替。复现参数即上面示例的 <code>-Xmx10m -Xms10m</code>，把它调大后异常消失，说明是容量而非泄漏。</p>
 <h2 id="outofmemoryerrorgc-overhead-limit-exceeded">OutOfMemoryError：GC overhead limit exceeded</h2>
 <pre><code class="language-java">/**
  * @author wuhao
@@ -197,7 +208,10 @@ Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: GC overhead lim
 	at java.lang.String.valueOf(String.java:3099)
 	at com.example.interview.oom.GCOverHeadDemo.main(GCOverHeadDemo.java:17)
 </code></pre>
-<p>最大堆内存要大于初始堆内存，从而给 GC 创造条件；如果两值相等，就没有重新分配堆空间的操作，会直接爆出 Java heap space 异常</p>
+<p>该错误由 HotSpot 的 GC 开销判断机制抛出：并行/串行收集器若发现连续多次 GC 中，GC 线程占用 CPU 时间超过 98%，而回收到的堆空间不足 2%，就认定“再 GC 也没有意义”，直接抛出此错误，避免程序在近乎无进展的 GC 上空转。它是 Java heap space 的“近亲”，但触发条件更苛刻，通常意味着堆几乎全满且存活对象极多。</p>
+<p>因此示例中把最大堆设得比初始堆大（<code>-Xmx20m -Xms10m</code>）是为了给 GC 留出扩容空间；如果两值相等，堆无法扩张，往往直接变成 Java heap space 异常。</p>
+<h3 id="gc-overhead-locate">定位与规避</h3>
+<p>用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 查看 <code>FGC</code> 次数与 <code>FGCT</code> 总耗时，若 Full GC 每秒都在发生且老年代回收后占用不降，即可确认。定位手段与内存泄漏一致（<code>jmap -histo:live</code> + MAT）。参数 <code>-XX:-UseGCOverheadLimit</code> 可以关掉这个检查，但它只是把错误推迟成真正的 Java heap space，属于排查辅助而非解决方案。</p>
 <h2 id="outofmemoryerrordirect-buffer-memory">OutOfMemoryError：Direct buffer memory</h2>
 <pre><code class="language-java">import java.nio.ByteBuffer;
 /**
@@ -235,7 +249,11 @@ Heap
 <p>allocateDirect 分配的字节缓冲区，中文叫做直接缓冲区（DirectByteBuffer）；用 allocate 分配的 ByteBuffer 叫做堆字节缓冲区（HeapByteBuffer）。</p>
 <p>其实根据类名就可以看出，HeapByteBuffer所创建的字节缓冲区就是在jvm堆中的，即内部所维护的java字节数组。而DirectByteBuffer是直接操作操作系统本地代码创建的内存缓冲数组（c、c++的数组）。</p>
 <p>HeapByteBuffer 底层其实是 Java 的字节数组，而 Java 字节数组是一个 Java 对象，其内存由 JVM 的堆进行管理，那么不可避免的是 GC 时年轻代的 Eden、Survivor 到老年代的各种复制以及回收……当字节数组比较小的时候还好说，如果是大对象，那么对 JVM 的 GC 来说是一个很大的负担……而使用 DirectByteBuffer，则是把字节数组交给操作系统管理（堆外内存）</p>
-<h2 id="outofmemoryerrorunable-to-create-to-native-thread">OutOfMemoryError：Unable to create to native thread</h2>
+<h3 id="direct-buffer-cause">原因</h3>
+<p>直接内存不受 <code>-Xmx</code> 约束，上限由 <code>-XX:MaxDirectMemorySize</code> 决定（未显式设置时默认等于最大堆值）。NIO 网络框架、Netty 的池化缓冲、文件映射都会占用它。常见根因是 DirectByteBuffer 被回收得不够快：它依赖关联的 Cleaner 在 GC 时释放堆外内存，堆内存压力不大时 GC 很少发生，堆外就先被耗尽；也可能是 <code>-Xmx</code> 调得很大而机器物理内存有限。</p>
+<h3 id="direct-buffer-locate">定位与复现</h3>
+<p>堆转储里只能看到 <code>java.nio.DirectByteBuffer</code> 这个“壳”，真正的内存量应看 <code>jmap -histo:live &lt;pid&gt;</code> 中的 DirectByteBuffer 数量，以及 JVM 的 Native Memory Tracking（<code>-XX:NativeMemoryTracking=detail</code> 配合 <code>jcmd &lt;pid&gt; VM.native_memory summary</code>）中的 Internal 项；Arthas 的 <code>dashboard</code> 也能看到堆外内存。定位到使用方后，通常是显式设置 <code>-XX:MaxDirectMemorySize</code> 与系统 <code>-Dio.netty.maxDirectMemory</code> 之类的上限，并检查是否有缓冲区未释放。</p>
+<h2 id="outofmemoryerrorunable-to-create-new-native-thread">OutOfMemoryError：Unable to create new native thread</h2>
 <pre><code class="language-java">public class UnableToCreateToNativeThreadDemo {
    
     public static void main(String[] args) {
@@ -252,7 +270,11 @@ Heap
     }
 }
 </code></pre>
-<p>Linux 一般用户最多可以创建 1024 个线程，不要在电脑上随意尝试</p>
+<p>Linux 一般用户最多可以创建 1024 个线程，不要在电脑上随意尝试。注意异常关键字是 <em>new</em> native thread，早期资料中写作 “Unable to create to native thread” 属于笔误，以 JDK 实际输出为准。异常栈中常会附带 <code>pthread_create (1040KB stack) failed: Try again</code> 之类的信息，说明是操作系统层面拒绝创建。</p>
+<h3 id="native-thread-cause">原因</h3>
+<p>每个 Java 线程都要向操作系统申请一个真实的原生线程，并预留线程栈空间。触顶通常有三个来源：一是代码无界地 <code>new Thread()</code> 或线程池用了 <code>Executors.newCachedThreadPool()</code> 这类无上限队列/无上限线程的实现；二是用户级限制 <code>ulimit -u</code>（默认常见 1024）或 <code>/proc/sys/kernel/threads-max</code>、<code>kernel.pid_max</code> 达到上限；三是 <code>-Xss</code> 过大，导致线程栈把进程虚拟内存提前吃掉。</p>
+<h3 id="native-thread-locate">定位与复现</h3>
+<p><code>jstack &lt;pid&gt; | grep -c 'java.lang.Thread.State'</code> 统计线程数，<code>jstack -l &lt;pid&gt;</code> 观察是否大量线程卡在同一段业务代码；系统侧用 <code>ulimit -u</code>、<code>cat /proc/sys/kernel/threads-max</code>、<code>ps -eLf | wc -l</code> 交叉确认。修复方向是改用有界线程池并设置合理的最大线程数与队列，而不是简单调大 ulimit。</p>
 <h2 id="meta-space">meta space</h2>
 <pre><code class="language-java">/**
  * @author wuhao
@@ -298,20 +320,61 @@ Heap
   class space    used 884K, capacity 913K, committed 1024K, reserved 1048576K
 Exception in thread &quot;main&quot; java.lang.OutOfMemoryError: Metaspace
 </code></pre>
+<h3 id="metaspace-cause">原因</h3>
+<p>Metaspace 存放类的元数据（类结构、方法、常量池引用等），它在 JDK 8 中取代了永久代，位于本地内存而非堆，因此不受 <code>-Xmx</code> 限制。类被不断加载却无法卸载时就会溢出：CGLIB/ByteBuddy/ASM 动态生成代理类（示例中的 <code>Enhancer</code> 且 <code>setUseCache(false)</code>，每次都生成新类）、脚本引擎反复编译、热部署类加载器泄漏，都会持续推高 Metaspace。日志中的 <code>Full GC (Last ditch collection)</code> 说明 JVM 已做最后一次挣扎式回收仍未奏效。</p>
+<h3 id="metaspace-locate">定位与复现</h3>
+<p>用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 观察 <code>M</code>（Metaspace 使用率）与 <code>MC/MU</code> 容量，持续上涨即确认；<code>jmap -clstats &lt;pid&gt;</code> 列出类加载器及其加载的类数量，能直接找到“谁在造类”；必要时 <code>-verbose:class</code> 或 Arthas 的 <code>classloader</code>、<code>sc</code> 命令辅助。复现参数为 <code>-XX:MetaspaceSize=8m -XX:MaxMetaspaceSize=8m</code>；线上通常设一个合理上限（如 <code>-XX:MaxMetaspaceSize=256m</code>）让它尽早暴露问题，而不是完全不设限导致吃光机器内存。</p>
+<h2 id="permgen-space">OutOfMemoryError：PermGen space</h2>
+<p>JDK 7 及以前的永久代溢出，关键字为 <code>PermGen space</code>，对应参数 <code>-XX:PermSize</code> 与 <code>-XX:MaxPermSize</code>。永久代在堆内、由 GC 管理，存放类的元数据与字符串常量池，容量固定且难以回收。JDK 8 起永久代被移除，元数据移入 Metaspace（本地内存），字符串常量池移入堆，因此新项目看到 <code>PermGen space</code> 基本可以判定为“跑在 JDK 7 或更早的版本上”或“使用了旧版 <code>-XX:PermSize</code> 参数而在 JDK 8 被忽略”。排查思路与 Metaspace 一致，重点是找出不断加载类的元凶。</p>
+<h3 id="other-oom-types">其他常见类型</h3>
+<p>除上述类型外，JDK 还定义了 <code>OutOfMemoryError: Requested array size exceeds VM limit</code>（数组长度超过虚拟机允许的上限，通常意味着代码算错了长度）与 <code>OutOfMemoryError: Out of swap space？</code>（物理内存与交换分区都被耗尽，需要看操作系统日志与容器内存限制）。在容器中还要特别注意：JVM 若不识别 cgroup 限制（JDK 8u191 之前），会按宿主机内存计算默认堆大小，从而被 OOM Killer 直接杀死，表现为进程无异常栈地消失，此时应显式设置 <code>-Xmx</code> 或升级 JDK 并启用 <code>-XX:+UseContainerSupport</code>。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#stack-overflow">Stack overflow</a>
 <ul>
-<li>
-<ul>
-<li><a href="#stack-overflow">Stack overflow</a></li>
-<li><a href="#outofmemoryerrorjava-heap-space">OutOfMemoryError：Java heap space</a></li>
-<li><a href="#outofmemoryerrorgc-overhead-limit-exceeded">OutOfMemoryError：GC overhead limit exceeded</a></li>
-<li><a href="#outofmemoryerrordirect-buffer-memory">OutOfMemoryError：Direct buffer memory</a></li>
-<li><a href="#outofmemoryerrorunable-to-create-to-native-thread">OutOfMemoryError：Unable to create to native thread</a></li>
-<li><a href="#meta-space">meta space</a></li>
+<li><a href="#stack-overflow-cause">原因</a></li>
+<li><a href="#stack-overflow-locate">定位与复现</a></li>
 </ul>
 </li>
+<li>
+<a href="#outofmemoryerrorjava-heap-space">OutOfMemoryError：Java heap space</a>
+<ul>
+<li><a href="#heap-space-cause">原因</a></li>
+<li><a href="#heap-space-locate">定位与复现</a></li>
+</ul>
+</li>
+<li>
+<a href="#outofmemoryerrorgc-overhead-limit-exceeded">OutOfMemoryError：GC overhead limit exceeded</a>
+<ul>
+<li><a href="#gc-overhead-locate">定位与规避</a></li>
+</ul>
+</li>
+<li>
+<a href="#outofmemoryerrordirect-buffer-memory">OutOfMemoryError：Direct buffer memory</a>
+<ul>
+<li><a href="#direct-buffer-cause">原因</a></li>
+<li><a href="#direct-buffer-locate">定位与复现</a></li>
+</ul>
+</li>
+<li>
+<a href="#outofmemoryerrorunable-to-create-new-native-thread">OutOfMemoryError：Unable to create new native thread</a>
+<ul>
+<li><a href="#native-thread-cause">原因</a></li>
+<li><a href="#native-thread-locate">定位与复现</a></li>
+</ul>
+</li>
+<li>
+<a href="#meta-space">meta space</a>
+<ul>
+<li><a href="#metaspace-cause">原因</a></li>
+<li><a href="#metaspace-locate">定位与复现</a></li>
+</ul>
+</li>
+<li>
+<a href="#permgen-space">OutOfMemoryError：PermGen space</a>
+<ul>
+<li><a href="#other-oom-types">其他常见类型</a></li>
 </ul>
 </li>
 </ul>

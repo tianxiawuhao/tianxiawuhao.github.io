@@ -126,60 +126,100 @@
           <img class="post-feature-header-image" src="/post-images/I1j63ouUN.png" alt="封面图">
           </img>
           
+                    <p>Spring 框架自带了一大批工具类，绝大多数放在 <code>org.springframework.util</code> 与 <code>org.springframework.beans</code> 包下，跟着 Spring Boot 一起进入依赖，不需要再引第三方库。它们的特点是「空值安全」：方法大多接受 <code>null</code> 并返回一个可预期的结果，而不是直接抛 <code>NullPointerException</code>。下面按用途逐类整理，并在最后补充原文漏掉的 <code>BeanUtils</code>、<code>ClassUtils</code>、<code>AnnotationUtils</code>、<code>StopWatch</code> 以及使用中的易错点。文中 API 以 Spring Framework 5.3 / Spring Boot 2.x 为基准，若使用 Spring Boot 3（Spring Framework 6），请注意下文标注的废弃项。</p>
+
+          <p><img src="/post-assets/I1j63ouUN/01-spring-utils-map.svg" alt="Spring 自带工具类按用途分类速查图"></p>
+
           <h2 id="断言">断言</h2>
 <ol>
 <li>断言是一个逻辑判断，用于检查不应该发生的情况</li>
-<li>Assert 关键字在 JDK 1.4 中引入，可通过 JVM 参数 <code>-enableassertions</code> 开启</li>
-<li>Spring Boot 中提供了 Assert 断言工具类，通常用于数据合法性检查</li>
+<li>JDK 1.4 引入了 <code>assert</code> 关键字，需要通过 JVM 参数 <code>-enableassertions</code>（简写 <code>-ea</code>）开启，默认不生效，因此生产代码里很少用它做参数校验</li>
+<li>Spring 提供了 <code>org.springframework.util.Assert</code> 工具类，它是普通方法调用，永远生效，通常用于数据合法性检查</li>
 </ol>
 <pre><code class="language-java">// 要求参数 object 必须为非空（Not Null），否则抛出异常，不予放行
-// 参数 message 参数用于定制异常信息。
-void notNull(Object object, String message)
-// 要求参数必须空（Null），否则抛出异常，不予『放行』。
-// 和 notNull() 方法断言规则相反
-void isNull(Object object, String message)
-// 要求参数必须为真（True），否则抛出异常，不予『放行』。
-void isTrue(boolean expression, String message)
+// 参数 message 用于定制异常信息，只在失败时才参与拼接，不影响性能
+public static void notNull(Object object, String message)
+// 要求参数必须为空（Null），否则抛出异常，不予放行
+// 和 notNull() 断言规则相反
+public static void isNull(Object object, String message)
+// 要求参数必须为真（True），否则抛出异常，不予放行
+public static void isTrue(boolean expression, String message)
 // 要求参数（List/Set）必须非空（Not Empty），否则抛出异常，不予放行
-void notEmpty(Collection collection, String message)
-// 要求参数（String）必须有长度（即，Not Empty），否则抛出异常，不予放行
-void hasLength(String text, String message)
-// 要求参数（String）必须有内容（即，Not Blank），否则抛出异常，不予放行
-void hasText(String text, String message)
+public static void notEmpty(Collection&lt;?&gt; collection, String message)
+// 要求参数（Map）必须非空，否则抛出异常，不予放行
+public static void notEmpty(Map&lt;?, ?&gt; map, String message)
+// 要求参数（Object[]）必须非空，否则抛出异常，不予放行
+public static void notEmpty(Object[] array, String message)
+// 要求参数（String）必须有长度（即 Not Empty，只有空白符也算有长度）
+public static void hasLength(String text, String message)
+// 要求参数（String）必须有实际内容（即 Not Blank，全空白符视为不通过）
+public static void hasText(String text, String message)
 // 要求参数是指定类型的实例，否则抛出异常，不予放行
-void isInstanceOf(Class type, Object obj, String message)
-// 要求参数 `subType` 必须是参数 superType 的子类或实现类，否则抛出异常，不予放行
-void isAssignable(Class superType, Class subType, String message)
+public static void isInstanceOf(Class&lt;?&gt; type, Object obj, String message)
+// 要求参数 subType 必须是参数 superType 的子类或实现类，否则抛出异常，不予放行
+public static void isAssignable(Class&lt;?&gt; superType, Class&lt;?&gt; subType, String message)
+// 要求表达式必须为假，否则抛出异常，与 isTrue 相反
+public static void state(boolean expression, String message)
 </code></pre>
+<pre><code class="language-java">import org.springframework.util.Assert;
+
+public class UserService {
+
+    public void register(String username, String password, Integer age) {
+        // 失败时抛出 IllegalArgumentException: 用户名不能为空
+        Assert.hasText(username, "用户名不能为空");
+        Assert.hasText(password, "密码不能为空");
+        // 失败时抛出 IllegalArgumentException: 年龄不能为负数
+        Assert.isTrue(age != null &amp;&amp; age &gt;= 0, "年龄不能为负数");
+        // 类型断言：失败时抛出 IllegalArgumentException
+        Assert.isInstanceOf(CharSequence.class, username, "用户名必须是字符串");
+    }
+
+    public void checkState(boolean initialized) {
+        // state() 失败时抛出的是 IllegalStateException，语义是「对象状态不对」
+        Assert.state(initialized, "服务尚未初始化");
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：Assert 抛出的是 <code>IllegalArgumentException</code>，不是 JDK 的 <code>AssertionError</code>，也不是 Spring 自定义异常。</strong><code>Assert.state()</code> 是唯一的例外，它抛 <code>IllegalStateException</code>。因此如果全局异常处理器按 <code>IllegalArgumentException</code> 映射成 400，<code>state()</code> 的失败会被漏掉，需要单独处理。</li>
+<li><strong>易错点：不要用 <code>Assert.notNull</code> 代替业务校验。</strong>它只做非空判断，无法表达「长度在 1~20 之间」这类规则；后者更适合 Bean Validation（<code>@NotBlank</code>、<code>@Size</code>）配合 <code>@Valid</code>。建议只在「调用方违反契约」这类不该发生的情况使用 Assert。</li>
+<li>注意 <code>hasLength(String)</code> 与 <code>hasText(String)</code> 的区别：<code>"   "</code>（三个空格）对 <code>hasLength</code> 是通过，对 <code>hasText</code> 是不通过。</li>
+<li>失败信息参数在 Spring 5.x 只有 <code>String</code> 重载；Spring 6 增加了 <code>Supplier&lt;String&gt;</code> 重载，可以延迟拼接消息（如 <code>Assert.notNull(obj, () -&gt; "user " + id + " not found")</code>）。</li>
+</ol>
 <h2 id="对象-数组-集合">对象、数组、集合</h2>
 <h3 id="objectutils">ObjectUtils</h3>
 <ol>
 <li>获取对象的基本信息</li>
 </ol>
-<pre><code class="language-java">// 获取对象的类名。参数为 null 时，返回字符串：&quot;null&quot; 
-String nullSafeClassName(Object obj)
-// 参数为 null 时，返回 0
-int nullSafeHashCode(Object object)
-// 参数为 null 时，返回字符串：&quot;null&quot;
-String nullSafeToString(boolean[] array)
-// 获取对象 HashCode（十六进制形式字符串）。参数为 null 时，返回 0 
-String getIdentityHexString(Object obj)
-// 获取对象的类名和 HashCode。 参数为 null 时，返回字符串：&quot;&quot; 
-String identityToString(Object obj)
-// 相当于 toString()方法，但参数为 null 时，返回字符串：&quot;&quot;
-String getDisplayString(Object obj)
+<pre><code class="language-java">// 获取对象的类名。参数为 null 时，返回字符串 "null"
+public static String nullSafeClassName(Object obj)
+// 获取对象 HashCode。参数为 null 时，返回 0
+public static int nullSafeHashCode(Object object)
+// 数组版 nullSafeHashCode，参数为 null 时返回 0
+// 同类还有 nullSafeHashCode(boolean[]/byte[]/char[]/double[]/float[]/int[]/long[]/short[]/Object[])
+public static int nullSafeHashCode(Object[] array)
+// 数组版 nullSafeToString，参数为 null 时返回字符串 "null"
+// 同类还有 boolean[]/byte[]/char[]/double[]/float[]/int[]/long[]/short[]/Object[] 重载
+public static String nullSafeToString(Object[] array)
+// 获取对象 HashCode（十六进制形式字符串）。参数为 null 时，返回 "0"
+public static String getIdentityHexString(Object obj)
+// 获取对象的类名和 HashCode。参数为 null 时，返回空字符串 ""
+public static String identityToString(Object obj)
+// 相当于 toString() 方法，但参数为 null 时返回空字符串 ""
+public static String getDisplayString(Object obj)
 </code></pre>
 <ol>
 <li>判断工具</li>
 </ol>
-<pre><code class="language-java">// 判断数组是否为空
-boolean isEmpty(Object[] array)
+<pre><code class="language-java">// 判断数组是否为空（null 或 length == 0）
+public static boolean isEmpty(Object[] array)
 // 判断参数对象是否是数组
-boolean isArray(Object obj)
+public static boolean isArray(Object obj)
 // 判断数组中是否包含指定元素
-boolean containsElement(Object[] array, Object element)
-// 相等，或同为 null时，返回 true
-boolean nullSafeEquals(Object o1, Object o2)
+public static boolean containsElement(Object[] array, Object element)
+// 相等，或同为 null 时，返回 true
+public static boolean nullSafeEquals(Object o1, Object o2)
 /*
 判断参数对象是否为空，判断标准为：
    Optional: Optional.empty()
@@ -187,314 +227,807 @@ boolean nullSafeEquals(Object o1, Object o2)
 CharSequence: length == 0
  Collection: Collection.isEmpty()
         Map: Map.isEmpty()
+
+注意：普通 POJO（非上述类型）一律返回 false，哪怕是 new 出来的空对象
 */
-boolean isEmpty(Object obj)
+public static boolean isEmpty(Object obj)
 </code></pre>
 <ol>
 <li>其他工具方法</li>
 </ol>
 <pre><code class="language-java">// 向参数数组的末尾追加新元素，并返回一个新数组
-&lt;A, O extends A&gt; A[] addObjectToArray(A[] array, O obj)
+public static &lt;A, O extends A&gt; A[] addObjectToArray(A[] array, O obj)
 // 原生基础类型数组 --&gt; 包装类数组
-Object[] toObjectArray(Object source)
+public static Object[] toObjectArray(Object source)
 </code></pre>
+<ol>
+<li><strong>易错点：<code>ObjectUtils.isEmpty(Object)</code> 的判断标准是「容器类对象是否为空」，普通对象永远返回 <code>false</code>。</strong>如果对象是 <code>null</code>，也返回 <code>true</code>。</li>
+</ol>
 <h3 id="stringutils">StringUtils</h3>
 <ol>
 <li>字符串判断工具</li>
 </ol>
-<pre><code class="language-java">// 判断字符串是否为 null，或 &quot;&quot;。注意，包含空白符的字符串为非空
-boolean isEmpty(Object str)
-// 判断字符串是否是以指定内容结束。忽略大小写
-boolean endsWithIgnoreCase(String str, String suffix)
-// 判断字符串是否已指定内容开头。忽略大小写
-boolean startsWithIgnoreCase(String str, String prefix) 
+<pre><code class="language-java">// 判断字符串是否为 null，或 ""。注意，包含空白符的字符串为非空
+// 已废弃：Spring 5.3 起标记 @Deprecated，官方建议改用 ObjectUtils.isEmpty(Object)
+public static boolean isEmpty(Object str)
+// 判断字符串是否以指定内容结束。忽略大小写
+public static boolean endsWithIgnoreCase(String str, String suffix)
+// 判断字符串是否以指定内容开头。忽略大小写
+public static boolean startsWithIgnoreCase(String str, String prefix)
 // 是否包含空白符
-boolean containsWhitespace(String str)
-// 判断字符串非空且长度不为 0，即，Not Empty
-boolean hasLength(CharSequence str)
+public static boolean containsWhitespace(String str)
+// 判断字符串非空且长度不为 0，即 Not Empty。只有空白符也算通过
+public static boolean hasLength(CharSequence str)
 // 判断字符串是否包含实际内容，即非仅包含空白符，也就是 Not Blank
-boolean hasText(CharSequence str)
-// 判断字符串指定索引处是否包含一个子串。
-boolean substringMatch(CharSequence str, int index, CharSequence substring)
+public static boolean hasText(CharSequence str)
+// 判断字符串指定索引处是否包含一个子串
+public static boolean substringMatch(CharSequence str, int index, CharSequence substring)
 // 计算一个字符串中指定子串的出现次数
-int countOccurrencesOf(String str, String sub)
+public static int countOccurrencesOf(String str, String sub)
+</code></pre>
+<pre><code class="language-java">import org.springframework.util.StringUtils;
+
+public class TextChecker {
+
+    public static void main(String[] args) {
+        String blank = "   ";
+
+        // 易错点：isEmpty 只看长度，全空白符的字符串「不是空」
+        System.out.println(StringUtils.isEmpty(null));    // true
+        System.out.println(StringUtils.isEmpty(""));      // true
+        System.out.println(StringUtils.isEmpty(blank));   // false
+
+        // 易错点：hasLength 与 hasText 的边界不同
+        System.out.println(StringUtils.hasLength(blank)); // true
+        System.out.println(StringUtils.hasText(blank));   // false
+
+        // 最常见的误用：把 isEmpty 当成「不为空」来用
+        // if (!StringUtils.isEmpty(name)) { ... } 语义正确但已过时
+        // 推荐写法（Spring 5.3 起）：
+        if (StringUtils.hasText(blank)) {
+            System.out.println("有内容");
+        } else {
+            System.out.println("没有实际内容");
+        }
+    }
+}
 </code></pre>
 <ol>
 <li>字符串操作工具</li>
 </ol>
-<pre><code class="language-java">// 查找并替换指定子串
-String replace(String inString, String oldPattern, String newPattern)
+<pre><code class="language-java">// 查找并替换指定子串。Spring 5.3 起新增了 replace(String, String, String) 之外的重载
+public static String replace(String inString, String oldPattern, String newPattern)
 // 去除尾部的特定字符
-String trimTrailingCharacter(String str, char trailingCharacter) 
+public static String trimTrailingCharacter(String str, char trailingCharacter)
 // 去除头部的特定字符
-String trimLeadingCharacter(String str, char leadingCharacter)
+public static String trimLeadingCharacter(String str, char leadingCharacter)
 // 去除头部的空白符
-String trimLeadingWhitespace(String str)
-// 去除头部的空白符
-String trimTrailingWhitespace(String str)
+// 已废弃：Spring 5.3 起用 String.stripLeading()（JDK 11+）替代
+public static String trimLeadingWhitespace(String str)
+// 去除尾部的空白符
+// 已废弃：Spring 5.3 起用 String.stripTrailing() 替代
+public static String trimTrailingWhitespace(String str)
 // 去除头部和尾部的空白符
-String trimWhitespace(String str)
+// 已废弃：Spring 5.3 起用 String.strip() 替代
+public static String trimWhitespace(String str)
 // 删除开头、结尾和中间的空白符
-String trimAllWhitespace(String str)
+// 已废弃：Spring 5.3 起用 String.replaceAll("\\s+", "") 替代
+public static String trimAllWhitespace(String str)
 // 删除指定子串
-String delete(String inString, String pattern)
+public static String delete(String inString, String pattern)
 // 删除指定字符（可以是多个）
-String deleteAny(String inString, String charsToDelete)
+public static String deleteAny(String inString, String charsToDelete)
 // 对数组的每一项执行 trim() 方法
-String[] trimArrayElements(String[] array)
+public static String[] trimArrayElements(String[] array)
 // 将 URL 字符串进行解码
-String uriDecode(String source, Charset charset)
+public static String uriDecode(String source, Charset charset)
+</code></pre>
+<pre><code class="language-java">import java.nio.charset.StandardCharsets;
+import org.springframework.util.StringUtils;
+
+public class StringOpsDemo {
+
+    public static void main(String[] args) {
+        // 逗号分隔字符串转数组，是最常用的组合写法
+        String csv = " java , spring , boot ";
+        String[] items = StringUtils.commaDelimitedListToStringArray(csv);
+        for (String item : items) {
+            // trimArrayElements 已废弃，Spring 5.3 起建议改用 JDK 的 strip()
+            System.out.println("[" + item.strip() + "]");
+        }
+
+        // 数组转回字符串
+        System.out.println(StringUtils.arrayToCommaDelimitedString(items));
+
+        // URI 解码，常用于把查询参数还原成可读文本
+        System.out.println(StringUtils.uriDecode("%E4%B8%AD%E6%96%87", StandardCharsets.UTF_8)); // 中文
+    }
+}
 </code></pre>
 <ol>
 <li>路径相关工具方法</li>
 </ol>
-<pre><code class="language-java">// 解析路径字符串，优化其中的 “..” 
-String cleanPath(String path)
+<pre><code class="language-java">// 解析路径字符串，优化其中的 “..”
+public static String cleanPath(String path)
 // 解析路径字符串，解析出文件名部分
-String getFilename(String path)
+public static String getFilename(String path)
 // 解析路径字符串，解析出文件后缀名
-String getFilenameExtension(String path)
-// 比较两个两个字符串，判断是否是同一个路径。会自动处理路径中的 “..” 
-boolean pathEquals(String path1, String path2)
+public static String getFilenameExtension(String path)
+// 比较两个字符串，判断是否是同一个路径。会自动处理路径中的 “..”
+public static boolean pathEquals(String path1, String path2)
 // 删除文件路径名中的后缀部分
-String stripFilenameExtension(String path) 
-// 以 “. 作为分隔符，获取其最后一部分
-String unqualify(String qualifiedName)
+public static String stripFilenameExtension(String path)
+// 以 “.” 作为分隔符，获取其最后一部分
+public static String unqualify(String qualifiedName)
 // 以指定字符作为分隔符，获取其最后一部分
-String unqualify(String qualifiedName, char separator)
+public static String unqualify(String qualifiedName, char separator)
+// 把相对路径应用到基准路径上，得到规范化后的绝对路径
+public static String applyRelativePath(String path, String relativePath)
 </code></pre>
 <h3 id="collectionutils">CollectionUtils</h3>
 <ol>
 <li>集合判断工具</li>
 </ol>
-<pre><code class="language-java">// 判断 List/Set 是否为空
-boolean isEmpty(Collection&lt;?&gt; collection)
-// 判断 Map 是否为空
-boolean isEmpty(Map&lt;?,?&gt; map)
-// 判断 List/Set 中是否包含某个对象
-boolean containsInstance(Collection&lt;?&gt; collection, Object element)
+<pre><code class="language-java">// 判断 List/Set 是否为空（null 或 isEmpty()）
+public static boolean isEmpty(Collection&lt;?&gt; collection)
+// 判断 Map 是否为空（null 或 isEmpty()）
+public static boolean isEmpty(Map&lt;?, ?&gt; map)
+// 判断 List/Set 中是否包含某个对象（按 equals 比较）
+public static boolean containsInstance(Collection&lt;?&gt; collection, Object element)
 // 以迭代器的方式，判断 List/Set 中是否包含某个对象
-boolean contains(Iterator&lt;?&gt; iterator, Object element)
+public static boolean contains(Iterator&lt;?&gt; iterator, Object element)
 // 判断 List/Set 是否包含某些对象中的任意一个
-boolean containsAny(Collection&lt;?&gt; source, Collection&lt;?&gt; candidates)
-// 判断 List/Set 中的每个元素是否唯一。即 List/Set 中不存在重复元素
-boolean hasUniqueObject(Collection&lt;?&gt; collection)
+public static boolean containsAny(Collection&lt;?&gt; source, Collection&lt;?&gt; candidates)
+// 判断 List/Set 中的每个元素是否唯一，即 List/Set 中不存在重复元素
+public static boolean hasUniqueObject(Collection&lt;?&gt; collection)
 </code></pre>
 <ol>
 <li>集合操作工具</li>
 </ol>
 <pre><code class="language-java">// 将 Array 中的元素都添加到 List/Set 中
-&lt;E&gt; void mergeArrayIntoCollection(Object array, Collection&lt;E&gt; collection)  
+public static &lt;E&gt; void mergeArrayIntoCollection(Object array, Collection&lt;E&gt; collection)
 // 将 Properties 中的键值对都添加到 Map 中
-&lt;K,V&gt; void mergePropertiesIntoMap(Properties props, Map&lt;K,V&gt; map)
+public static &lt;K, V&gt; void mergePropertiesIntoMap(Properties props, Map&lt;K, V&gt; map)
 // 返回 List 中最后一个元素
-&lt;T&gt; T lastElement(List&lt;T&gt; list)  
+public static &lt;T&gt; T lastElement(List&lt;T&gt; list)
 // 返回 Set 中最后一个元素
-&lt;T&gt; T lastElement(Set&lt;T&gt; set) 
+public static &lt;T&gt; T lastElement(Set&lt;T&gt; set)
 // 返回参数 candidates 中第一个存在于参数 source 中的元素
-&lt;E&gt; E findFirstMatch(Collection&lt;?&gt; source, Collection&lt;E&gt; candidates)
-// 返回 List/Set 中指定类型的元素。
-&lt;T&gt; T findValueOfType(Collection&lt;?&gt; collection, Class&lt;T&gt; type)
+public static &lt;E&gt; E findFirstMatch(Collection&lt;?&gt; source, Collection&lt;E&gt; candidates)
+// 返回 List/Set 中指定类型的元素
+public static &lt;T&gt; T findValueOfType(Collection&lt;?&gt; collection, Class&lt;T&gt; type)
 // 返回 List/Set 中指定类型的元素。如果第一种类型未找到，则查找第二种类型，以此类推
-Object findValueOfType(Collection&lt;?&gt; collection, Class&lt;?&gt;[] types)
+public static Object findValueOfType(Collection&lt;?&gt; collection, Class&lt;?&gt;[] types)
 // 返回 List/Set 中元素的类型
-Class&lt;?&gt; findCommonElementType(Collection&lt;?&gt; collection)
+public static Class&lt;?&gt; findCommonElementType(Collection&lt;?&gt; collection)
 </code></pre>
+<pre><code class="language-java">import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.util.CollectionUtils;
+
+public class CollectionDemo {
+
+    public static void main(String[] args) {
+        // 易错点：null 和空集合都会返回 true，两者不做区分
+        System.out.println(CollectionUtils.isEmpty(null));            // true
+        System.out.println(CollectionUtils.isEmpty(new ArrayList&lt;&gt;())); // true
+
+        List&lt;String&gt; list = new ArrayList&lt;&gt;(Arrays.asList("a", "b", "c"));
+        System.out.println(CollectionUtils.isEmpty(list));             // false
+        System.out.println(CollectionUtils.lastElement(list));         // c
+        System.out.println(CollectionUtils.hasUniqueObject(list));     // true
+
+        // 易错点：Map 是单独的重载，不要传成 Collection
+        Map&lt;String, String&gt; map = new HashMap&lt;&gt;();
+        System.out.println(CollectionUtils.isEmpty(map));              // true
+        System.out.println(CollectionUtils.containsAny(list, Arrays.asList("z", "b"))); // true
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>isEmpty</code> 把 <code>null</code> 与「空集合」视为同一种情况。</strong>如果调用方需要区分「没有传」和「传了空集合」，必须自己额外判断 <code>collection == null</code>。</li>
+<li><strong>易错点：<code>lastElement(Set&lt;T&gt;)</code> 依赖迭代顺序。</strong><code>HashSet</code> 的迭代顺序本身不保证，「最后一个元素」没有业务含义，只适合调试输出；需要顺序时请用 <code>List</code> 或 <code>LinkedHashSet</code>。</li>
+<li><code>containsInstance</code> 与 <code>contains</code> 都基于 <code>equals</code>，且都不接受 <code>null</code> 元素集合的语义保证，判断前请先判空。</li>
+</ol>
 <h2 id="文件-资源-io-流">文件、资源、IO 流</h2>
 <h3 id="filecopyutils">FileCopyUtils</h3>
 <ol>
 <li>输入</li>
 </ol>
 <pre><code class="language-java">// 从文件中读入到字节数组中
-byte[] copyToByteArray(File in)
+public static byte[] copyToByteArray(File in) throws IOException
 // 从输入流中读入到字节数组中
-byte[] copyToByteArray(InputStream in)
-// 从输入流中读入到字符串中
-String copyToString(Reader in)
+public static byte[] copyToByteArray(InputStream in) throws IOException
+// 从 Reader 中读入到字符串中
+public static String copyToString(Reader in) throws IOException
 </code></pre>
 <ol>
 <li>输出</li>
 </ol>
 <pre><code class="language-java">// 从字节数组到文件
-void copy(byte[] in, File out)
-// 从文件到文件
-int copy(File in, File out)
+public static void copy(byte[] in, File out) throws IOException
+// 从文件到文件，返回拷贝的字节数
+public static int copy(File in, File out) throws IOException
 // 从字节数组到输出流
-void copy(byte[] in, OutputStream out) 
-// 从输入流到输出流
-int copy(InputStream in, OutputStream out) 
-// 从输入流到输出流
-int copy(Reader in, Writer out)
+public static void copy(byte[] in, OutputStream out) throws IOException
+// 从输入流到输出流，返回拷贝的字节数
+public static int copy(InputStream in, OutputStream out) throws IOException
+// 从 Reader 到 Writer，返回拷贝的字符数
+public static int copy(Reader in, Writer out) throws IOException
 // 从字符串到输出流
-void copy(String in, Writer out)
+public static void copy(String in, Writer out) throws IOException
 </code></pre>
+<pre><code class="language-java">import java.io.File;
+import java.io.IOException;
+import org.springframework.util.FileCopyUtils;
+
+public class FileCopyDemo {
+
+    public static void main(String[] args) throws IOException {
+        File src = new File("/tmp/src.txt");
+        File dest = new File("/tmp/dest.txt");
+
+        // 文件到文件，返回实际拷贝的字节数
+        int bytes = FileCopyUtils.copy(src, dest);
+        System.out.println("copied bytes = " + bytes);
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>copy(File, File)</code> 不是「合并」，而是覆盖写。</strong>目标文件已存在时内容会被整体替换，需要追加请自行用 <code>FileOutputStream(file, true)</code>。</li>
+<li><strong>注意：<code>FileCopyUtils</code> 的字节流方法内部会 <code>close()</code> 传入的流</strong>（这是它的历史约定）。传入 <code>ServletRequest.getInputStream()</code> 之类的容器流时，提前关闭可能影响后续读取，此时应改用 <code>StreamUtils</code>。</li>
+</ol>
 <h3 id="resourceutils">ResourceUtils</h3>
 <ol>
 <li>从资源路径获取文件</li>
 </ol>
-<pre><code class="language-java">// 判断字符串是否是一个合法的 URL 字符串。
-static boolean isUrl(String resourceLocation)
+<pre><code class="language-java">// 判断字符串是否是一个合法的 URL 字符串
+// 已废弃：Spring 6.0 起标记 @Deprecated，建议用 ResourceUtils.isUrl(Resource) 或直接判断协议前缀
+public static boolean isUrl(String resourceLocation)
 // 获取 URL
-static URL getURL(String resourceLocation) 
+public static URL getURL(String resourceLocation) throws FileNotFoundException
 // 获取文件（在 JAR 包内无法正常使用，需要是一个独立的文件）
-static File getFile(String resourceLocation)
+// 已废弃：Spring 6.0 起标记 @Deprecated(forRemoval = true)
+public static File getFile(String resourceLocation) throws FileNotFoundException
 </code></pre>
 <ol>
-<li>Resource</li>
+<li>Resource 家族</li>
 </ol>
-<pre><code class="language-java">// 文件系统资源 D:\...
+<pre><code class="language-text">// 文件系统资源 D:\...
 FileSystemResource
 // URL 资源，如 file://... http://...
 UrlResource
-// 类路径下的资源，classpth:...
+// 类路径下的资源，classpath:...
 ClassPathResource
 // Web 容器上下文中的资源（jar 包、war 包）
 ServletContextResource
-复制代码
-// 判断资源是否存在
+// 输入流资源，只读一次，适合包装临时流
+InputStreamResource
+// 字节数组资源，便于反复读取与测试
+ByteArrayResource
+</code></pre>
+<ol>
+<li>Resource 接口的常用方法</li>
+</ol>
+<pre><code class="language-java">// 判断资源是否存在
 boolean exists()
-// 从资源中获得 File 对象
-File getFile()
+// 从资源中获得 File 对象（jar 包内会抛 FileNotFoundException）
+File getFile() throws IOException
 // 从资源中获得 URI 对象
-URI getURI()
-// 从资源中获得 URI 对象
-URL getURL()
-// 获得资源的 InputStream
-InputStream getInputStream()
+URI getURI() throws IOException
+// 从资源中获得 URL 对象
+URL getURL() throws IOException
+// 获得资源的 InputStream（每次调用都会重新打开）
+InputStream getInputStream() throws IOException
 // 获得资源的描述信息
 String getDescription()
 </code></pre>
+<pre><code class="language-java">import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.util.ResourceUtils;
+
+public class ResourceReadDemo {
+
+    public static void main(String[] args) throws Exception {
+        // 推荐写法：用 Resource 抽象，打成 jar 包后依然能读到
+        ClassPathResource resource = new ClassPathResource("application.yml");
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+        }
+
+        // 仅适用于「确定的物理文件」，例如本地调试、外置配置目录
+        File file = ResourceUtils.getFile("classpath:application.yml");
+        System.out.println(file.getAbsolutePath());
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>ResourceUtils.getFile("classpath:xxx")</code> 在 jar / war 包内会抛 <code>FileNotFoundException</code>。</strong>因为打包后资源位于 jar 内，没有对应的文件系统路径。生产代码请统一使用 <code>ClassPathResource#getInputStream()</code> 或 <code>ResourceLoader</code> 注入 <code>Resource</code>。</li>
+<li><code>getInputStream()</code> 每次调用都会重新打开资源，可以反复读取；而 <code>InputStreamResource</code> 包装的流只能读一次，重复调用会抛 <code>IllegalStateException</code>。</li>
+</ol>
 <h3 id="streamutils">StreamUtils</h3>
 <ol>
-<li>输入</li>
+<li>输出（写数据）</li>
 </ol>
-<pre><code class="language-java">void copy(byte[] in, OutputStream out)
-int copy(InputStream in, OutputStream out)
-void copy(String in, Charset charset, OutputStream out)
-long copyRange(InputStream in, OutputStream out, long start, long end)
+<pre><code class="language-java">// 字节数组 --&gt; 输出流
+public static void copy(byte[] in, OutputStream out) throws IOException
+// 输入流 --&gt; 输出流，返回拷贝的字节数。注意不会关闭任何流
+public static int copy(InputStream in, OutputStream out) throws IOException
+// 字符串 --&gt; 输出流，按指定字符集编码
+public static void copy(String in, Charset charset, OutputStream out) throws IOException
+// 拷贝输入流中的指定区间 [start, end)，返回拷贝的字节数
+public static long copyRange(InputStream in, OutputStream out, long start, long end) throws IOException
 </code></pre>
 <ol>
-<li>输出</li>
+<li>输入（读数据）</li>
 </ol>
-<pre><code class="language-java">byte[] copyToByteArray(InputStream in)
-String copyToString(InputStream in, Charset charset)
-// 舍弃输入流中的内容
-int drain(InputStream in) 
+<pre><code class="language-java">// 输入流 --&gt; 字节数组
+public static byte[] copyToByteArray(InputStream in) throws IOException
+// 输入流 --&gt; 字符串，按指定字符集解码
+public static String copyToString(InputStream in, Charset charset) throws IOException
+// 舍弃输入流中的内容，返回丢弃的字节数
+public static int drain(InputStream in) throws IOException
 </code></pre>
+<pre><code class="language-java">import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import org.springframework.util.StreamUtils;
+
+public class StreamDemo {
+
+    public static void main(String[] args) throws Exception {
+        InputStream in = new ByteArrayInputStream("hello spring".getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        // StreamUtils 不负责关闭流，需要自己管理生命周期
+        int count = StreamUtils.copy(in, out);
+        System.out.println("bytes = " + count);
+        System.out.println(out.toString(StandardCharsets.UTF_8.name())); // hello spring
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>FileCopyUtils</code> 会关闭传入的流，<code>StreamUtils</code> 不会。</strong>两个类名字很像，但资源生命周期约定相反。把容器托管的流交给 <code>FileCopyUtils</code>，或者把需要复用的流交给 <code>StreamUtils</code> 后忘记关闭，都是常见故障来源。</li>
+<li><code>drain(InputStream)</code> 的用途是「把请求体读干净再返回错误响应」，否则 HTTP 连接可能无法复用。</li>
+</ol>
 <h2 id="反射-aop">反射、AOP</h2>
 <h3 id="reflectionutils">ReflectionUtils</h3>
 <ol>
 <li>获取方法</li>
 </ol>
-<pre><code class="language-java">// 在类中查找指定方法
-Method findMethod(Class&lt;?&gt; clazz, String name) 
+<pre><code class="language-java">// 在类中查找指定方法（会向上遍历父类与接口）
+public static Method findMethod(Class&lt;?&gt; clazz, String name)
 // 同上，额外提供方法参数类型作查找条件
-Method findMethod(Class&lt;?&gt; clazz, String name, Class&lt;?&gt;... paramTypes) 
+public static Method findMethod(Class&lt;?&gt; clazz, String name, Class&lt;?&gt;... paramTypes)
 // 获得类中所有方法，包括继承而来的
-Method[] getAllDeclaredMethods(Class&lt;?&gt; leafClass) 
-// 在类中查找指定构造方法
-Constructor&lt;T&gt; accessibleConstructor(Class&lt;T&gt; clazz, Class&lt;?&gt;... parameterTypes) 
+public static Method[] getAllDeclaredMethods(Class&lt;?&gt; leafClass)
+// 在类中查找指定构造方法，并设置为可访问
+public static &lt;T&gt; Constructor&lt;T&gt; accessibleConstructor(Class&lt;T&gt; clazz, Class&lt;?&gt;... parameterTypes)
 // 是否是 equals() 方法
-boolean isEqualsMethod(Method method) 
-// 是否是 hashCode() 方法 
-boolean isHashCodeMethod(Method method) 
+public static boolean isEqualsMethod(Method method)
+// 是否是 hashCode() 方法
+public static boolean isHashCodeMethod(Method method)
 // 是否是 toString() 方法
-boolean isToStringMethod(Method method) 
+public static boolean isToStringMethod(Method method)
 // 是否是从 Object 类继承而来的方法
-boolean isObjectMethod(Method method) 
+public static boolean isObjectMethod(Method method)
 // 检查一个方法是否声明抛出指定异常
-boolean declaresException(Method method, Class&lt;?&gt; exceptionType) 
+public static boolean declaresException(Method method, Class&lt;?&gt; exceptionType)
 </code></pre>
 <ol>
 <li>执行方法</li>
 </ol>
-<pre><code class="language-java">// 执行方法
-Object invokeMethod(Method method, Object target)  
+<pre><code class="language-java">// 执行方法（无参）
+public static Object invokeMethod(Method method, Object target)
 // 同上，提供方法参数
-Object invokeMethod(Method method, Object target, Object... args) 
-// 取消 Java 权限检查。以便后续执行该私有方法
-void makeAccessible(Method method) 
-// 取消 Java 权限检查。以便后续执行私有构造方法
-void makeAccessible(Constructor&lt;?&gt; ctor) 
+public static Object invokeMethod(Method method, Object target, Object... args)
+// 取消 Java 权限检查，以便后续执行该私有方法
+// 已废弃：Spring 6.0 起建议改用 method.canAccess(target) / method.trySetAccessible()
+public static void makeAccessible(Method method)
+// 取消 Java 权限检查，以便后续执行私有构造方法
+// 已废弃：Spring 6.0 起建议改用 Constructor#trySetAccessible()
+public static void makeAccessible(Constructor&lt;?&gt; ctor)
 </code></pre>
 <ol>
 <li>获取字段</li>
 </ol>
 <pre><code class="language-java">// 在类中查找指定属性
-Field findField(Class&lt;?&gt; clazz, String name) 
+public static Field findField(Class&lt;?&gt; clazz, String name)
 // 同上，多提供了属性的类型
-Field findField(Class&lt;?&gt; clazz, String name, Class&lt;?&gt; type) 
-// 是否为一个 &quot;public static final&quot; 属性
-boolean isPublicStaticFinal(Field field) 
+public static Field findField(Class&lt;?&gt; clazz, String name, Class&lt;?&gt; type)
+// 是否为一个 "public static final" 属性
+public static boolean isPublicStaticFinal(Field field)
 </code></pre>
 <ol>
 <li>设置字段</li>
 </ol>
 <pre><code class="language-java">// 获取 target 对象的 field 属性值
-Object getField(Field field, Object target) 
+public static Object getField(Field field, Object target)
 // 设置 target 对象的 field 属性值，值为 value
-void setField(Field field, Object target, Object value) 
+public static void setField(Field field, Object target, Object value)
 // 同类对象属性对等赋值
-void shallowCopyFieldState(Object src, Object dest)
-// 取消 Java 的权限控制检查。以便后续读写该私有属性
-void makeAccessible(Field field) 
+// 已废弃：Spring 6.0 起标记 @Deprecated，建议用 BeanUtils.copyProperties 或手写赋值
+public static void shallowCopyFieldState(Object src, Object dest)
+// 取消 Java 的权限控制检查，以便后续读写该私有属性
+public static void makeAccessible(Field field)
 // 对类的每个属性执行 callback
-void doWithFields(Class&lt;?&gt; clazz, ReflectionUtils.FieldCallback fc) 
-// 同上，多了个属性过滤功能。
-void doWithFields(Class&lt;?&gt; clazz, ReflectionUtils.FieldCallback fc, 
-                 ReflectionUtils.FieldFilter ff) 
+public static void doWithFields(Class&lt;?&gt; clazz, ReflectionUtils.FieldCallback fc)
+// 同上，多了个属性过滤功能
+public static void doWithFields(Class&lt;?&gt; clazz, ReflectionUtils.FieldCallback fc,
+                                ReflectionUtils.FieldFilter ff)
 // 同上，但不包括继承而来的属性
-void doWithLocalFields(Class&lt;?&gt; clazz, ReflectionUtils.FieldCallback fc) 
+public static void doWithLocalFields(Class&lt;?&gt; clazz, ReflectionUtils.FieldCallback fc)
 </code></pre>
+<pre><code class="language-java">import java.lang.reflect.Field;
+import org.springframework.util.ReflectionUtils;
+
+public class ReflectionDemo {
+
+    public static void main(String[] args) {
+        Target target = new Target();
+        // 相当于 target.setSecret("value")，绕过了 private 修饰
+        ReflectionUtils.doWithFields(Target.class, field -&gt; {
+            if ("secret".equals(field.getName())) {
+                ReflectionUtils.makeAccessible(field);
+                ReflectionUtils.setField(field, target, "value");
+            }
+        });
+
+        Field field = ReflectionUtils.findField(Target.class, "secret");
+        System.out.println(ReflectionUtils.getField(field, target)); // value
+    }
+
+    static class Target {
+        private String secret;
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>ReflectionUtils.findField</code> 返回 <code>null</code> 表示没找到，它不会抛异常。</strong>很多示例直接拿返回值调用 <code>getField</code>，字段重命名后就变成 <code>NullPointerException</code>，需要显式判空。</li>
+<li>通过反射读写 <code>private</code> 字段在 JDK 9+ 模块化环境下可能被拒绝（<code>InaccessibleObjectException</code>），Spring 自身的 <code>BeanUtils</code> 也因此改用属性描述符而非直接反射字段。</li>
+</ol>
 <h3 id="aoputils">AopUtils</h3>
 <ol>
 <li>判断代理类型</li>
 </ol>
 <pre><code class="language-java">// 判断是不是 Spring 代理对象
-boolean isAopProxy()
-// 判断是不是 jdk 动态代理对象
-isJdkDynamicProxy()
+public static boolean isAopProxy(Object object)
+// 判断是不是 JDK 动态代理对象
+public static boolean isJdkDynamicProxy(Object object)
 // 判断是不是 CGLIB 代理对象
-boolean isCglibProxy()
+public static boolean isCglibProxy(Object object)
+// 根据对象推断目标类（未代理时返回对象自身类型）
+public static Class&lt;?&gt; getTargetClass(Object candidate)
 </code></pre>
 <ol>
 <li>获取被代理对象的 class</li>
 </ol>
 <pre><code class="language-java">// 获取被代理的目标 class
-Class&lt;?&gt; getTargetClass()
+public static Class&lt;?&gt; getTargetClass(Object candidate)
+// 更精确地取出目标对象：逐层剥离代理，拿到最终的目标实例
+public static Object getTarget(Object candidate)
 </code></pre>
 <h3 id="aopcontext">AopContext</h3>
 <ol>
 <li>获取当前对象的代理对象</li>
 </ol>
-<pre><code class="language-java">Object currentProxy()
+<pre><code class="language-java">// 需要开启 @EnableAspectJAutoProxy(exposeProxy = true) 才能生效
+// 否则抛出 IllegalStateException: Cannot find current proxy
+public static Object currentProxy()
 </code></pre>
+<pre><code class="language-java">import org.springframework.aop.framework.AopContext;
 
+public class OrderService {
+
+    public void createOrder() {
+        // 同一个 Bean 内部直接调用 this.pay() 不会经过代理，事务/缓存注解会失效
+        // 通过 currentProxy() 拿到代理对象再调用，才能让 AOP 生效
+        ((OrderService) AopContext.currentProxy()).pay();
+    }
+
+    public void pay() {
+        // 真实的支付逻辑，带事务注解
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>AopContext.currentProxy()</code> 默认不可用。</strong>必须配置 <code>@EnableAspectJAutoProxy(exposeProxy = true)</code>，否则抛 <code>IllegalStateException</code>。而且它依赖 <code>ThreadLocal</code> 存代理对象，异步线程中调用会失效。</li>
+</ol>
+<h2 id="常被遗漏的其他工具类">常被遗漏的其他工具类</h2>
+<h3 id="beanutils">BeanUtils</h3>
+<pre><code class="language-java">// 把源对象的属性拷贝到目标对象。注意：第一个参数是源，第二个参数是目标
+public static void copyProperties(Object source, Object target)
+    throws BeansException
+// 忽略指定属性后拷贝
+public static void copyProperties(Object source, Object target, String... ignoreProperties)
+    throws BeansException
+// 判断类是否拥有指定属性（含 getter/setter 或公开字段）
+public static boolean isAssignable(Class&lt;?&gt; lhsType, Class&lt;?&gt; rhsType)
+// 取属性的类型
+public static Class&lt;?&gt; findPropertyType(String propertyName, Class&lt;?&gt; beanClass,
+                                        Class&lt;?&gt; targetBeanClass)
+// 读取属性描述符
+public static PropertyDescriptor getPropertyDescriptor(Class&lt;?&gt; clazz, String propertyName)
+// 实例化类（等价于 clazz.getDeclaredConstructor().newInstance()）
+public static &lt;T&gt; T instantiateClass(Class&lt;T&gt; clazz) throws BeanInstantiationException
+</code></pre>
+<pre><code class="language-java">import org.springframework.beans.BeanUtils;
+
+public class BeanCopyDemo {
+
+    public static void main(String[] args) {
+        Address address = new Address("杭州");
+        User source = new User();
+        source.setName("张三");
+        source.setAddress(address);
+
+        User target = new User();
+        // 参数顺序：源在前，目标在后
+        BeanUtils.copyProperties(source, target);
+        System.out.println(target.getName());                    // 张三
+
+        // 陷阱：嵌套对象只复制了引用，两者指向同一个 Address 实例
+        target.getAddress().setCity("上海");
+        System.out.println(source.getAddress().getCity());        // 上海，源对象被「隔空篡改」
+        System.out.println(source.getAddress() == target.getAddress()); // true
+    }
+
+    static class User {
+        private String name;
+        private Address address;
+
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public Address getAddress() { return address; }
+        public void setAddress(Address address) { this.address = address; }
+    }
+
+    static class Address {
+        private String city;
+
+        public Address(String city) { this.city = city; }
+        public String getCity() { return city; }
+        public void setCity(String city) { this.city = city; }
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：参数顺序。<code>BeanUtils.copyProperties</code> 在 Spring 里是 <code>(源, 目标)</code>，在 Apache Commons BeanUtils 里是 <code>(目标, 源)</code>，两者顺序完全相反。</strong>写反后通常不会报错，只是目标对象什么都没拷到；如果两个类结构相似且都实现了同名属性，甚至会「反向覆盖」，把目标已有的值冲掉。建议统一使用 Spring 版本，并在单元测试里断言关键字段。</li>
+<li><strong>易错点：浅拷贝。<code>copyProperties</code> 对每个属性调用 getter/setter，值类型（String、int、包装类、时间等）是值拷贝，引用类型（集合、数组、自定义对象）只复制引用。</strong>需要深度拷贝时，要么手写递归赋值，要么用序列化（如 Jackson 的 <code>objectMapper.convertValue</code>）走一遍 JSON。示意图如下。</li>
+</ol>
+<pre><code class="language-java">import org.springframework.beans.BeanUtils;
+
+public class ShallowCopyTest {
+
+    public static void main(String[] args) {
+        // 易错点：属性名相同但类型不同时，Spring 会直接抛异常并中断拷贝
+        // 典型场景：源里是 String createTime，目标里是 Date createTime
+        // 抛出的异常是 FatalBeanException，cause 为 TypeMismatchException
+        SourceBean source = new SourceBean();
+        source.setPrice("12.5");     // String
+        TargetBean target = new TargetBean(); // price 为 BigDecimal
+        try {
+            BeanUtils.copyProperties(source, target);
+        } catch (org.springframework.beans.FatalBeanException e) {
+            System.out.println("拷贝失败：" + e.getMessage());
+        }
+
+        // 易错点：源属性为 null 时同样会写目标，可能把已有值覆盖成 null
+        // 需要保留目标原值时，用忽略列表或先判断再赋值
+        BeanUtils.copyProperties(source, target, "price");
+    }
+
+    static class SourceBean {
+        private String price;
+        public String getPrice() { return price; }
+        public void setPrice(String price) { this.price = price; }
+    }
+
+    static class TargetBean {
+        private java.math.BigDecimal price;
+        public java.math.BigDecimal getPrice() { return price; }
+        public void setPrice(java.math.BigDecimal price) { this.price = price; }
+    }
+}
+</code></pre>
+          <p><img src="/post-assets/I1j63ouUN/02-beanutils-shallow-copy.svg" alt="BeanUtils.copyProperties 浅拷贝与嵌套对象陷阱示意图"></p>
+<ol>
+<li><strong>注意：Spring 的 <code>copyProperties</code> 会跳过 <code>class</code> 属性，也会跳过只读（没有 setter）的属性，不会报错。</strong>反过来，如果源对象的某个 getter 抛异常，拷贝会以 <code>FatalBeanException</code> 中止。</li>
+</ol>
+<h3 id="classutils">ClassUtils</h3>
+<pre><code class="language-java">// 获取类的短名称，如 com.example.User -&gt; User
+public static String getShortName(Class&lt;?&gt; clazz)
+// 获取类名（不含包名）的重载版本，可自定义类加载器
+public static String getShortName(String className)
+// 用「.」拼接包名与短类名
+public static String getQualifiedName(Class&lt;?&gt; clazz)
+// 返回类加载器可用的资源名，如 com/example/User.class
+public static String getClassFileName(Class&lt;?&gt; clazz)
+// 是否为内部类 / 是否为 CGLIB 生成的类
+public static boolean isInnerClass(Class&lt;?&gt; clazz)
+public static boolean isCglibProxyClass(Class&lt;?&gt; clazz)
+// 遍历类实现的全部接口（从类到接口再到父类，避免重复）
+public static void getAllInterfaces(Class&lt;?&gt; clazz, Set&lt;Class&lt;?&gt;&gt; interfaces)
+// 找出指定方法的接口声明，常用于判断 JDK 动态代理是否可用
+public static Class&lt;?&gt; getUserClass(Object instance)
+// 基础类型与包装类型互转
+public static Class&lt;?&gt; resolvePrimitiveIfNecessary(Class&lt;?&gt; clazz)
+public static Class&lt;?&gt; resolvePrimitiveClassName(String name)
+</code></pre>
+<ol>
+<li><strong>实用场景：<code>ClassUtils.getUserClass(bean)</code> 可以剥掉 CGLIB 代理外壳，拿到原始用户类</strong>，用于读取注解、判断类型，比直接 <code>bean.getClass()</code> 更可靠。</li>
+</ol>
+<h3 id="annotationutils">AnnotationUtils</h3>
+<pre><code class="language-java">// 查找注解，支持从接口、父类继承，也支持元注解（组合注解）
+public static &lt;A extends Annotation&gt; A findAnnotation(Class&lt;?&gt; clazz, Class&lt;A&gt; annotationType)
+public static &lt;A extends Annotation&gt; A findAnnotation(Method method, Class&lt;A&gt; annotationType)
+// 获取注解实例上的属性值，处理了别名（@AliasFor）与默认值
+public static Object getValue(Annotation annotation)
+public static Object getValue(Annotation annotation, String attributeName)
+// 获取注解的默认属性值
+public static Object getDefaultValue(Annotation annotation, String attributeName)
+// 以 AttributeAccessor 形式读写注解属性，支持占位符解析
+public static AnnotationAttributes getAnnotationAttributes(Annotation annotation)
+public static AnnotationAttributes getAnnotationAttributes(Annotation annotation,
+                                                           boolean classValuesAsString)
+// 判断方法上是否标注了某个注解（含元注解）
+public static boolean isAnnotated(Method method, Class&lt;? extends Annotation&gt; annotationType)
+// 合成注解，使 @AliasFor 定义的属性值可以被直接读取
+public static &lt;A extends Annotation&gt; A synthesizeAnnotation(A annotation, Object annotatedElement)
+</code></pre>
+<pre><code class="language-java">import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.springframework.core.annotation.AnnotationUtils;
+
+public class AnnotationDemo {
+
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Component {
+        String value() default "";
+    }
+
+    @Component("orderService")
+    static class OrderService {
+    }
+
+    public static void main(String[] args) {
+        // 易错点：JDK 的 getAnnotation 只能拿到「直接标注」在当前元素上的注解
+        // AnnotationUtils.findAnnotation 会沿着父类、接口和元注解继续查找
+        Component component = AnnotationUtils.findAnnotation(OrderService.class, Component.class);
+        System.out.println(AnnotationUtils.getValue(component)); // orderService
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：JDK 反射的 <code>clazz.getAnnotation()</code> 不处理元注解与继承，而 Spring 的 <code>findAnnotation</code> 会。</strong>编写自定义组合注解（如 <code>@MyTransactional</code> 上标了 <code>@Transactional</code>）时，必须用 <code>findAnnotation</code> 才能读到。</li>
+<li>已合并的注解（如 Spring 的 <code>@Transactional</code>、<code>@RequestMapping</code>）属性可能来自别名，直接读 <code>annotation.value()</code> 可能拿到默认值，稳妥做法是 <code>AnnotationUtils.getAnnotationAttributes(annotation)</code>。</li>
+</ol>
+<h3 id="stopwatch">StopWatch</h3>
+<pre><code class="language-java">// 创建计时器，id 会出现在输出报告里
+public StopWatch(String id)
+public StopWatch()
+// 启动一个任务计时。上一次计时会自动结束，不会抛异常
+public void start(String taskName) throws IllegalStateException
+// 启动或重启一个任务计时（Spring 5.2+ 新增）
+public void start() throws IllegalStateException
+// 停止当前任务
+public void stop() throws IllegalStateException
+// 获取最近一次任务的耗时（毫秒 / 纳秒）
+public long getLastTaskTimeMillis()
+public long getLastTaskTimeNanos()
+// 获取所有任务总耗时（毫秒 / 纳秒）
+public long getTotalTimeMillis()
+public long getTotalTimeNanos()
+// 生成可读报告，如 stopWatch 'order': running time = 123456789 ns
+public String prettyPrint()
+// 重置计时器，便于复用同一个实例
+public void reset()
+</code></pre>
+<pre><code class="language-java">import org.springframework.util.StopWatch;
+
+public class StopWatchDemo {
+
+    public static void main(String[] args) throws InterruptedException {
+        StopWatch stopWatch = new StopWatch("order-flow");
+
+        stopWatch.start("load-user");
+        Thread.sleep(50);
+        stopWatch.stop();
+
+        stopWatch.start("query-stock");
+        Thread.sleep(30);
+        stopWatch.stop();
+
+        // shortSummary 只输出每个任务的耗时，prettyPrint 会输出表格
+        System.out.println(stopWatch.prettyPrint());
+        System.out.println("总耗时(ms) = " + stopWatch.getTotalTimeMillis());
+        System.out.println("任务数 = " + stopWatch.getTaskCount());
+    }
+}
+</code></pre>
+<ol>
+<li><strong>易错点：<code>StopWatch</code> 不是线程安全的，也不能嵌套使用。</strong>它基于 <code>System.nanoTime()</code>，只适合单线程内的分段耗时统计。跨线程统计请用 Micrometer 的 <code>Timer</code>。</li>
+<li><code>start()</code> 会在后台自动 <code>stop()</code> 上一个任务，忘记调用 <code>stop()</code> 不会报错，但最后一个任务的时间统计会不准。</li>
+</ol>
+<h2 id="易错点总结与选择建议">易错点总结与选择建议</h2>
+<pre><code class="language-text">场景                                  推荐工具类
+-----------------------------------------------------------------------------------
+参数为空 / 条件不成立，快速失败          Assert（抛 IllegalArgumentException）
+对象判空（含集合、数组、字符串）          ObjectUtils.isEmpty
+字符串判空且排除全空白                   StringUtils.hasText
+集合判空                                 CollectionUtils.isEmpty
+类名、接口、基础类型转换                 ClassUtils
+属性拷贝                                 BeanUtils.copyProperties（浅拷贝，注意参数顺序）
+读取组合注解 / 继承注解                  AnnotationUtils.findAnnotation
+分段耗时统计                             StopWatch（单线程）
+文件与流读写                             StreamUtils（不关流） / FileCopyUtils（会关流）
+类路径资源读取                           ClassPathResource，避免 ResourceUtils.getFile
+</code></pre>
+<ol>
+<li><strong>判空优先级：</strong><code>StringUtils.isEmpty</code> 在 Spring 5.3 已废弃，新代码统一用 <code>ObjectUtils.isEmpty</code>（对象、集合、数组、字符串通吃）或 <code>StringUtils.hasText</code>（需要排除空白符时）。</li>
+<li><strong>边界差异：</strong><code>hasLength</code> 认「有长度」，<code>hasText</code> 认「有实际内容」，全空白字符串是二者唯一的分歧点，也是线上最常见的误判。</li>
+<li><strong>异常类型差异：</strong><code>Assert</code> 系列抛 <code>IllegalArgumentException</code>，<code>Assert.state</code> 抛 <code>IllegalStateException</code>，<code>BeanUtils.copyProperties</code> 抛 <code>FatalBeanException</code>，<code>ResourceUtils.getFile</code> 在 jar 内抛 <code>FileNotFoundException</code>。全局异常处理要覆盖到这几类，否则会漏成 500。</li>
+<li><strong>参数顺序差异：</strong>Spring 的 <code>BeanUtils.copyProperties(源, 目标)</code> 与 Apache Commons 的 <code>copyProperties(目标, 源)</code> 相反，是复制类 bug 的高发区。</li>
+<li><strong>拷贝深度差异：</strong><code>BeanUtils.copyProperties</code> 是浅拷贝，嵌套对象、集合仍是共享引用；需要隔离时必须显式深拷贝。</li>
+<li><strong>资源生命周期差异：</strong><code>FileCopyUtils</code> 关闭传入流，<code>StreamUtils</code> 不关闭，<code>Resource#getInputStream()</code> 可重复打开。</li>
+<li><strong>Spring 6 废弃项：</strong><code>ResourceUtils.getFile</code>、<code>ResourceUtils.isUrl</code>、<code>ReflectionUtils.makeAccessible</code>、<code>ReflectionUtils.shallowCopyFieldState</code>、<code>StringUtils</code> 的若干 trim 方法均已标记废弃，升级 Spring Boot 3 前建议先替换。</li>
+</ol>
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E6%96%AD%E8%A8%80">断言</a>
 <ul>
-<li><a href="#%E6%96%AD%E8%A8%80">断言</a></li>
-<li><a href="#%E5%AF%B9%E8%B1%A1-%E6%95%B0%E7%BB%84-%E9%9B%86%E5%90%88">对象、数组、集合</a>
+</ul>
+</li>
+<li>
+<a href="#%E5%AF%B9%E8%B1%A1-%E6%95%B0%E7%BB%84-%E9%9B%86%E5%90%88">对象、数组、集合</a>
 <ul>
 <li><a href="#objectutils">ObjectUtils</a></li>
 <li><a href="#stringutils">StringUtils</a></li>
 <li><a href="#collectionutils">CollectionUtils</a></li>
 </ul>
 </li>
-<li><a href="#%E6%96%87%E4%BB%B6-%E8%B5%84%E6%BA%90-io-%E6%B5%81">文件、资源、IO 流</a>
+<li>
+<a href="#%E6%96%87%E4%BB%B6-%E8%B5%84%E6%BA%90-io-%E6%B5%81">文件、资源、IO 流</a>
 <ul>
 <li><a href="#filecopyutils">FileCopyUtils</a></li>
 <li><a href="#resourceutils">ResourceUtils</a></li>
 <li><a href="#streamutils">StreamUtils</a></li>
 </ul>
 </li>
-<li><a href="#%E5%8F%8D%E5%B0%84-aop">反射、AOP</a>
+<li>
+<a href="#%E5%8F%8D%E5%B0%84-aop">反射、AOP</a>
 <ul>
 <li><a href="#reflectionutils">ReflectionUtils</a></li>
 <li><a href="#aoputils">AopUtils</a></li>
 <li><a href="#aopcontext">AopContext</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E5%B8%B8%E8%A2%AB%E9%81%97%E6%BC%8F%E7%9A%84%E5%85%B6%E4%BB%96%E5%B7%A5%E5%85%B7%E7%B1%BB">常被遗漏的其他工具类</a>
+<ul>
+<li><a href="#beanutils">BeanUtils</a></li>
+<li><a href="#classutils">ClassUtils</a></li>
+<li><a href="#annotationutils">AnnotationUtils</a></li>
+<li><a href="#stopwatch">StopWatch</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E6%98%93%E9%94%99%E7%82%B9%E6%80%BB%E7%BB%93%E4%B8%8E%E9%80%89%E6%8B%A9%E5%BB%BA%E8%AE%AE">易错点总结与选择建议</a>
+<ul>
 </ul>
 </li>
 </ul>

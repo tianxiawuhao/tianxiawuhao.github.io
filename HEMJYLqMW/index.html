@@ -126,6 +126,10 @@
           <img class="post-feature-header-image" src="/post-images/HEMJYLqMW.png" alt="封面图">
           </img>
           
+          <p>本文整理的是 JDK 5/6 时代流传最广的一套 JVM 调优参数笔记，其中不少结论今天依然成立，但也有相当一部分已经过时（如持久代、CMS）。阅读时请对照两点：一是文中参数在 JDK 8 及以后的变化，二是“先量目标、再调参数”的顺序——堆和分代的结构见下图，选收集器的决策路径见后文。</p>
+<p><img src="/post-assets/HEMJYLqMW/01-jvm-memory-layout.svg" alt="JVM 内存结构与常用参数图"></p>
+<p>说明：文中 <code>-Xmx3550m -Xms3550m -Xmn2g</code> 这类示例保留原值以便对照历史环境，实际使用时请按机器内存与应用特征重新计算，通常堆不超过物理内存的 50%~70%，并给元空间、直接内存、线程栈和操作系统留足余量。</p>
+
           <h2 id="堆大小设置">堆大小设置</h2>
 <p>	JVM 中最大堆大小有三方面限制：操作系统数据模型（32-bit 还是 64-bit）、系统的可用虚拟内存以及系统的可用物理内存。32 位系统下一般限制在 1.5G~2G；64 位操作系统对内存无限制。我在Windows Server 2003 系统，3.5G物理内存，JDK5.0下测试，最大可设置为1478m。</p>
 <p>典型设置：</p>
@@ -149,6 +153,15 @@
 
 // -XX:MaxTenuringThreshold=0：设置垃圾最大年龄。如果设置为0的话，则年轻代对象不经过Survivor区，直接进入年老代。对于年老代比较多的应用，可以提高效率。如果将此值设置为一个较大值，则年轻代对象会在Survivor区进行多次复制，这样可以增加对象再年轻代的存活时间，增加在年轻代即被回收的概论。
 </code></pre>
+<h3 id="两处需要注意的细节">两处需要注意的细节</h3>
+<p>第一，<code>-Xmn</code> 与 <code>-XX:NewRatio</code> 是互斥的：一旦显式指定了年轻代大小，<code>NewRatio</code> 就不再生效，两个参数不要同时设置（下文 CMS 配置中“NewRatio 失效”的现象正是这个原因，而非收集器的怪癖）。想按比例分配就用 <code>NewRatio</code>，想精确控制就用 <code>-Xmn</code> 或 <code>-XX:NewSize</code>/<code>-XX:MaxNewSize</code>。</p>
+<p>第二，<code>-XX:MaxTenuringThreshold=0</code> 的实际含义是“对象在 Survivor 中一次都不复制就晋升老年代”，只适合老年代对象占比极高、且对象普遍长寿的极端场景；对绝大多数在线应用，它会让老年代迅速膨胀并引发更频繁的 Full GC。取值上限为 15（对象头中年龄位宽为 4 bit），默认值在 Parallel 下通常为 15、CMS 下为 6。</p>
+<h3 id="jdk-8-及以后的参数变化">JDK 8 及以后的参数变化</h3>
+<ul>
+<li><code>-XX:PermSize</code> / <code>-XX:MaxPermSize</code>（持久代）：JDK 8 起永久代被移除，参数不再有效（只打印忽略告警），改用 <code>-XX:MetaspaceSize</code>（首次触发 Metaspace GC 的阈值，不是上限）与 <code>-XX:MaxMetaspaceSize</code>（上限，默认无限制）。</li>
+<li>GC 日志参数：JDK 9 引入统一日志框架，<code>-XX:+PrintGCDetails</code>、<code>-Xloggc:</code> 等被 <code>-Xlog:gc*:file=gc.log:time,uptime,level,tags</code> 取代；JDK 8 及以前仍用旧参数。</li>
+<li>收集器：JDK 9 起 G1 成为默认收集器；CMS 在 JDK 9 被标记弃用、JDK 14 正式移除；ZGC 自 JDK 15 起可用于生产，堆可达数 TB 且停顿在毫秒级。</li>
+</ul>
 <h2 id="回收器选择">回收器选择</h2>
 <p>	JVM给了三种选择：<code>串行收集器</code>、<code>并行收集器</code>、<code>并发收集器</code>，但是串行收集器只适用于小数据量的情况，所以这里的选择主要针对并行收集器和并发收集器。默认情况下，JDK5.0以前都是使用串行收集器，如果想使用其他收集器需要在启动时加入相应参数。JDK5.0以后，JVM会根据当前系统配置进行判断。</p>
 <ol>
@@ -219,6 +232,39 @@
 
 -Xloggc:filename:与上面几个配合使用，把相关日志信息记录到文件以便分析。
 </code></pre>
+<h2 id="调优步骤与常见误区">调优步骤与常见误区</h2>
+<p>调优不是“抄一套参数”，而是“定目标 → 测基线 → 改一个变量 → 复测”的循环。下图给出了按瓶颈选择收集器的决策路径，本节补充日志怎么读、步骤怎么走、误区在哪里。</p>
+<p><img src="/post-assets/HEMJYLqMW/02-gc-tuning-decision.svg" alt="GC 选型与调优决策流程图"></p>
+<h3 id="gc-日志怎么读">GC 日志怎么读</h3>
+<p>以 JDK 8 的 Parallel 日志为例：</p>
+<pre><code class="language-text">[GC (Allocation Failure) [PSYoungGen: 2048K-&gt;504K(2560K)] 2048K-&gt;758K(9728K), 0.0008256 secs]
+[Full GC (Ergonomics) [PSYoungGen: 2560K-&gt;0K(4608K)] [ParOldGen: 13581K-&gt;818K(10752K)] 16141K-&gt;818K(15360K), [Metaspace: 3626K-&gt;3626K(1056768K)], 0.0078165 secs]
+</code></pre>
+<ul>
+<li><code>GC</code> / <code>Full GC</code>：前者通常只回收年轻代，后者涉及老年代甚至元空间，停顿明显更长。</li>
+<li>括号内触发原因：<code>Allocation Failure</code>（分配失败，正常）、<code>Ergonomics</code>（自适应调整）、<code>System.gc()</code>（显式调用）、<code>Metadata GC Threshold</code>（元空间达阈值）。频繁出现 <code>System.gc()</code> 应排查代码或框架是否在手动触发。</li>
+<li><code>2048K-&gt;504K(2560K)</code>：回收前 → 回收后（该区域总容量），先看分区，再看整体 <code>2048K-&gt;758K(9728K)</code>。</li>
+<li><code>0.0008256 secs</code>：本次停顿（Stop-The-World）时长，这才是影响响应时间的关键指标。</li>
+<li>老年代“回收后残留”长期接近容量上限，说明对象持续存活，大概率是内存泄漏而非参数问题。</li>
+</ul>
+<p>JDK 9 及以后改用统一日志，例如 <code>-Xlog:gc*:file=gc.log:time,uptime,level,tags</code>，日志会带时间戳与标签（<code>gc,phases</code>、<code>gc,heap</code> 等），可用 GCViewer、GCeasy 之类的工具做可视化统计。</p>
+<h3 id="调优步骤">调优步骤</h3>
+<ol>
+<li>明确目标：先写清指标，例如“吞吐 ≥ 99%”“P99 停顿 ≤ 200ms”，没有目标就没有“调好了”的标准。</li>
+<li>收集基线：用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 观察各分区使用率与 <code>FGC/FGCT</code>，结合 GC 日志统计频率与单次停顿峰值，必要时用 <code>jmap</code> + MAT 排查泄漏。</li>
+<li>先定堆与分代：<code>-Xms</code> 与 <code>-Xmx</code> 设相等；年轻代按“存活对象大小 × 期望的 Minor GC 间隔”估算，再用 <code>-Xmn</code> 或 <code>NewRatio</code> 落地（二者只取其一）。</li>
+<li>再选收集器与线程数：延迟敏感选 G1 或 ZGC，吞吐优先选 Parallel；<code>ParallelGCThreads</code> 默认按 CPU 核数推导，容器内尤其要核对核数是否符合预期。</li>
+<li>最后调细节：<code>MaxGCPauseMillis</code>、<code>GCTimeRatio</code>、<code>MetaspaceSize</code>、<code>MaxDirectMemorySize</code> 等，每次只改一个，压测复测。</li>
+<li>固化并监控：参数写进启动脚本或容器配置，接入监控告警，关注 Full GC 次数与停顿的趋势变化。</li>
+</ol>
+<h3 id="常见误区">常见误区</h3>
+<ul>
+<li>堆越大越好：堆越大，单次 Full GC 的停顿越长，且一旦发生泄漏，崩溃来得更晚也更难排查。堆大小应匹配“存活对象规模”，而不是机器内存。</li>
+<li>照抄网上的参数组合：不同的 JDK 版本、CPU 核数、容器配额下同样的参数效果可能完全相反；旧参数在新 JDK 上还会被静默忽略（如 <code>-XX:MaxPermSize</code>）。</li>
+<li>把 GC 当成根因：GC 频繁往往是代码分配过快或存在泄漏的症状。先定位对象来源，再考虑换收集器。</li>
+<li>不做压测就上线：GC 行为与负载强相关，本地空跑的日志没有参考价值。</li>
+<li>忽略容器限制：JDK 8u191 之前不识别 cgroup，容器内默认堆按宿主机内存计算，容易被 OOM Killer 杀掉；应显式设置 <code>-Xmx</code> 或启用 <code>-XX:+UseContainerSupport</code>。</li>
+</ul>
 <h2 id="常见配置汇总">常见配置汇总</h2>
 <ol>
 <li>
@@ -231,7 +277,7 @@
 <li><code>-XX:NewSize=n</code>:设置年轻代大小</li>
 <li><code>-XX:NewRatio=n</code>：设置年轻代和年老代的比值。如设为 3，表示年轻代与年老代比值为 1:3，年轻代占整个年轻代与年老代之和的 1/4</li>
 <li><code>-XX:SurvivorRatio=n</code>:年轻代中Eden区与两个Survivor区的比值。注意Survivor区有两个。如：3，表示Eden：Survivor=3：2，一个Survivor区占整个年轻代的1/5</li>
-<li><code>-XX:MaxPermSize=n</code>:设置持久代大小</li>
+<li><code>-XX:MaxPermSize=n</code>:设置持久代大小（JDK 7 及以前；JDK 8 起改为 <code>-XX:MetaspaceSize=n</code> 与 <code>-XX:MaxMetaspaceSize=n</code>）</li>
 <li><code>-XX:MaxTenuringThreshold=n</code>:设置垃圾最大年龄,年轻代复制次数</li>
 </ul>
 </li>
@@ -241,7 +287,9 @@
 <li><code>-XX:+UseSerialGC</code>:设置串行收集器</li>
 <li><code>-XX:+UseParallelGC</code>:设置并行收集器</li>
 <li><code>-XX:+UseParallelOldGC</code>：设置并行年老代收集器</li>
-<li><code>-XX:+UseConcMarkSweepGC</code>:设置并发收集器</li>
+<li><code>-XX:+UseConcMarkSweepGC</code>:设置并发收集器（CMS，JDK 9 弃用、JDK 14 移除，仅适用于老版本）</li>
+<li><code>-XX:+UseG1GC</code>:G1 收集器，JDK 9 起的默认选择，可设 <code>-XX:MaxGCPauseMillis</code> 停顿目标</li>
+<li><code>-XX:+UseZGC</code>:ZGC，超低停顿，适合大堆与延迟敏感场景（JDK 15 起可生产使用）</li>
 </ul>
 </li>
 <li>
@@ -325,19 +373,42 @@ jstat利用JVM内建的指令对Java应用程序的资源和性能进行实时�
 <code>:=</code>:被jvm或人为修改过的参数<br>
 <code>-XX:+UseParallelGC</code>:采用并行垃圾回收器<br>
 <code>-XX:+UseSerialGC</code>:采用串行垃圾回收器</p>
+<p>除了 JDK 自带的这些工具，<code>jcmd &lt;pid&gt; VM.flags</code> 可以一次性确认最终生效的参数（区分默认值与显式设置），<code>jcmd &lt;pid&gt; GC.heap_info</code> 可快速查看堆各分区与元空间占用；Arthas 的 <code>dashboard</code> 能在一个界面里同时看到线程、内存、GC 与运行时信息，适合线上快速定位。查看默认值与生效值时，注意 <code>-XX:+PrintFlagsFinal</code> 输出中带 <code>:=</code> 的才是被显式修改过的项，这一点原文已经点到，可结合 <code>jcmd</code> 交叉验证。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E5%A0%86%E5%A4%A7%E5%B0%8F%E8%AE%BE%E7%BD%AE">堆大小设置</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E5%A0%86%E5%A4%A7%E5%B0%8F%E8%AE%BE%E7%BD%AE">堆大小设置</a></li>
-<li><a href="#%E5%9B%9E%E6%94%B6%E5%99%A8%E9%80%89%E6%8B%A9">回收器选择</a></li>
-<li><a href="#%E5%B8%B8%E8%A7%81%E9%85%8D%E7%BD%AE%E6%B1%87%E6%80%BB">常见配置汇总</a></li>
-<li><a href="#%E8%B0%83%E4%BC%98%E6%80%BB%E7%BB%93">调优总结</a></li>
-<li><a href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8%E5%91%BD%E4%BB%A4">实际应用命令</a></li>
+<li><a href="#%E4%B8%A4%E5%A4%84%E9%9C%80%E8%A6%81%E6%B3%A8%E6%84%8F%E7%9A%84%E7%BB%86%E8%8A%82">两处需要注意的细节</a></li>
+<li><a href="#jdk-8-%E5%8F%8A%E4%BB%A5%E5%90%8E%E7%9A%84%E5%8F%82%E6%95%B0%E5%8F%98%E5%8C%96">JDK 8 及以后的参数变化</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E5%9B%9E%E6%94%B6%E5%99%A8%E9%80%89%E6%8B%A9">回收器选择</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%B0%83%E4%BC%98%E6%AD%A5%E9%AA%A4%E4%B8%8E%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA">调优步骤与常见误区</a>
+<ul>
+<li><a href="#gc-%E6%97%A5%E5%BF%97%E6%80%8E%E4%B9%88%E8%AF%BB">GC 日志怎么读</a></li>
+<li><a href="#%E8%B0%83%E4%BC%98%E6%AD%A5%E9%AA%A4">调优步骤</a></li>
+<li><a href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA">常见误区</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%B8%B8%E8%A7%81%E9%85%8D%E7%BD%AE%E6%B1%87%E6%80%BB">常见配置汇总</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E8%B0%83%E4%BC%98%E6%80%BB%E7%BB%93">调优总结</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8%E5%91%BD%E4%BB%A4">实际应用命令</a>
+<ul>
 </ul>
 </li>
 </ul>
