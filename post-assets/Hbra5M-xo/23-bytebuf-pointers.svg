@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="380" viewBox="0 0 900 380" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="380" fill="#ffffff"/>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">ByteBuf 读写指针与 readableBytes 示意</text>
+
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 z" fill="#1f2b38"/>
+    </marker>
+  </defs>
+
+  <rect x="40" y="96" width="120" height="56" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="100" y="120" font-size="12" fill="#5b6b7c" text-anchor="middle">已读废弃区</text>
+  <text x="100" y="139" font-size="11" fill="#5b6b7c" text-anchor="middle">discardable</text>
+
+  <rect x="160" y="96" width="300" height="56" rx="8" fill="#eaf7ef" stroke="#2e9e5b"/>
+  <text x="310" y="120" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">可读区 readableBytes</text>
+  <text x="310" y="139" font-size="11" fill="#5b6b7c" text-anchor="middle">readIndex → writeIndex，read 会推进 readIndex</text>
+
+  <rect x="460" y="96" width="220" height="56" rx="8" fill="#eef4ff" stroke="#2f6fd0"/>
+  <text x="570" y="120" font-size="12" font-weight="700" fill="#2f6fd0" text-anchor="middle">可写区 writableBytes</text>
+  <text x="570" y="139" font-size="11" fill="#5b6b7c" text-anchor="middle">writeIndex → capacity</text>
+
+  <rect x="680" y="96" width="100" height="56" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="730" y="120" font-size="12" font-weight="700" fill="#e08a1e" text-anchor="middle">可扩容区</text>
+  <text x="730" y="139" font-size="11" fill="#5b6b7c" text-anchor="middle">maxCapacity</text>
+
+  <path d="M160 88 L 160 172" stroke="#2e9e5b" stroke-width="2" marker-end="url(#a2)"/>
+  <text x="160" y="80" font-size="12" font-weight="700" fill="#2e9e5b" text-anchor="middle">readIndex</text>
+
+  <path d="M460 88 L 460 172" stroke="#2f6fd0" stroke-width="2" marker-end="url(#a2)"/>
+  <text x="460" y="80" font-size="12" font-weight="700" fill="#2f6fd0" text-anchor="middle">writeIndex</text>
+
+  <text x="40" y="66" font-size="12" fill="#1f2b38">0</text>
+  <text x="455" y="66" font-size="12" fill="#1f2b38">capacity = 64</text>
+  <text x="780" y="66" font-size="12" fill="#1f2b38">maxCapacity</text>
+  <path d="M40 88 L 780 88" stroke="#c8d3e0" stroke-width="1"/>
+
+  <rect x="40" y="200" width="360" height="152" rx="8" fill="#f7f9fc" stroke="#c8d3e0"/>
+  <text x="220" y="226" font-size="14" font-weight="700" fill="#1f2b38" text-anchor="middle">指针关系(核心结论)</text>
+  <text x="62" y="252" font-size="12" fill="#1f2b38">readableBytes() = writeIndex - readIndex</text>
+  <text x="62" y="276" font-size="12" fill="#1f2b38">writableBytes() = capacity - writeIndex</text>
+  <text x="62" y="300" font-size="12" fill="#1f2b38">isReadable() 为假时不可再 read，isWritable() 为假时需扩容</text>
+  <text x="62" y="324" font-size="12" fill="#1f2b38">getXxx / setXxx 只按索引读写，不移动任何指针</text>
+  <text x="62" y="345" font-size="11" fill="#5b6b7c">slice / duplicate / retainedSlice 共享底层内存，但各有独立指针</text>
+
+  <rect x="420" y="200" width="440" height="152" rx="8" fill="#fff6e8" stroke="#e08a1e"/>
+  <text x="640" y="226" font-size="14" font-weight="700" fill="#e08a1e" text-anchor="middle">使用与释放规则</text>
+  <text x="442" y="252" font-size="12" fill="#1f2b38">1. 只有 Pooled / Unpooled 的堆外(直接)缓冲区需要 release()</text>
+  <text x="442" y="276" font-size="12" fill="#1f2b38">2. 引用计数 refCnt 归零才真正回收/归还池</text>
+  <text x="442" y="300" font-size="12" fill="#1f2b38">3. SimpleChannelInboundHandler 自动释放入站消息</text>
+  <text x="442" y="324" font-size="12" fill="#1f2b38">4. 手动释放用 ReferenceCountUtil.release(msg)</text>
+  <text x="442" y="345" font-size="11" fill="#5b6b7c">泄漏检测参数:-Dio.netty.leakDetection.level=paranoid</text>
+
+  <text x="40" y="372" font-size="11" fill="#5b6b7c">提示:读一半留一半是粘包拆包的根源——解码器正是靠判断 readableBytes 是否满足整包长度来决定是否继续等待。</text>
+</svg>

@@ -151,7 +151,10 @@ Netty 是目前最流行的 NIO 框架，Netty 在互联网领域、大数据分
 因为Netty5出现重大bug，已经被官网废弃了，目前推荐使用的是Netty4.x的稳定版本<br>
 目前在官网可下载的版本 netty3.x netty4.0.x 和 netty4.1.x<br>
 这里使用的是 Netty4.1.x 版本<br>
-netty 下载地址： https://bintray.com/netty/downloads/netty/</p>
+netty 下载地址： https://netty.io/downloads.html （或从 Maven 中央仓库依赖 io.netty:netty-all，原 bintray 站点已于 2021 年停止服务）</p>
+<p><strong>补充说明：</strong><br>
+Netty 5 在 4.x 的基础上引入了 ForkJoinPool、更激进的 API 调整，但因复杂度高、稳定性难以保证，2015 年就被官方标记为放弃，也始终没有发布正式稳定版本。因此实际生产与本文实例统一使用 Netty 4.1.x（当前为 4.1.x 长期维护分支；4.2 正在推进，主线命名一路跳过 5，避免与已废弃的 5 混淆）。<br>
+Netty 4.1.x 支持 JDK 6 及以上（4.1.x 早期版本），对 JDK 8/11/17 等 LTS 版本均提供了适配；使用 Java 模块化工程时还需要引入 netty-transport-native-epoll 等按平台划分的 native 依赖。若运行在 JDK 9 及以上，Netty 会借助 Unsafe 或 VarHandle 等能力完成缓冲区操作，功能上与 JDK 8 一致。</p>
 <h2 id="2-各线程模式">2. 各线程模式</h2>
 <h3 id="1-传统阻塞-io-服务模型">1. 传统阻塞 I/O 服务模型</h3>
 <figure data-type="image" tabindex="2"><img src="/post-images/1656503894532.png" alt="" loading="lazy"></figure>
@@ -237,7 +240,20 @@ Reactor 模式具有如下的优点：<br>
 可以最大程度的避免复杂的多线程及同步问题，并且避免了多线程/进程 的切换开销<br>
 扩展性好，可以方便的通过增加 Reactor 实例个数来充分利用 CPU 资源<br>
 复用性好，Reactor 模型本身与具体事件处理逻辑无关，具有很高的复用性</p>
-<h2 id="3-netty模型">3. Netty模型</h2>
+<h2 id="10-主从-reactor-与-netty-的对应关系">10. 主从 Reactor 与 Netty 的对应关系</h2>
+<table>
+<thead>
+<tr><th>Reactor 模型角色</th><th>Netty 中的对应实现</th><th>职责</th></tr>
+</thead>
+<tbody>
+<tr><td>MainReactor（主反应器）</td><td>BossGroup 中的 NioEventLoop</td><td>只监听 OP_ACCEPT，处理三次握手并创建连接</td></tr>
+<tr><td>SubReactor（从反应器）</td><td>WorkerGroup 中的 NioEventLoop</td><td>监听已注册连接的 OP_READ / OP_WRITE</td></tr>
+<tr><td>Acceptor</td><td>NioServerSocketChannel 上的 handler</td><td>accept 后把 NioSocketChannel 注册到 Worker 的 Selector</td></tr>
+<tr><td>Handler</td><td>ChannelPipeline 中的 ChannelHandler</td><td>编解码与业务处理</td></tr>
+<tr><td>Worker 线程池（业务线程池）</td><td>EventLoop 的 TaskQueue 或自定义业务线程池</td><td>执行真正的耗时业务逻辑</td></tr>
+</tbody>
+</table>
+<p>对照第 2 章的模型可以看出：Netty 默认就是「主从 Reactor 多线程」模型，并且把「连接管理」和「I/O 读写」拆分到两组 EventLoopGroup 中，让 Boss 只负责握手、Worker 只负责数据，避免了单 Reactor 在高并发下的瓶颈。</p>
 <h3 id="1-简单版">1. 简单版</h3>
 <figure data-type="image" tabindex="8"><img src="/post-images/1656503977148.png" alt="" loading="lazy"></figure>
 <p><strong>说明 ：</strong></p>
@@ -259,8 +275,8 @@ Reactor 模式具有如下的优点：<br>
 5:NioEventLoopGroup(BossGroup、WorkerGroup) 可以有多个线程, 即可以含有多个 NioEventLoop<br>
 6:每个Boss 的 NioEventLoop 循环执行的步骤有3步<br>
 (1):轮询accept 事件<br>
-(2):处理accept 事件 , 与client建立连接 , 生成NioScocketChannel , 并将其注册到 Worker 的 (3):NIOEventLoop 上的 Selector<br>
-处理任务队列的任务 ， 即 runAllTasks<br>
+(2):处理accept 事件 , 与client建立连接 , 生成 NioSocketChannel , 并将其注册到 Worker 的 NioEventLoop 上的 Selector<br>
+(3):处理任务队列的任务 ， 即 runAllTasks<br>
 7：每个 Worker 的 NIOEventLoop 循环执行的步骤<br>
 (1):轮询read, write 事件<br>
 (2):处理i/o事件， 即read , write 事件，在对应NioScocketChannel 处理<br>
@@ -272,9 +288,19 @@ Reactor 模式具有如下的优点：<br>
 <p>服务器端首先创建一个ServerSocketChannel，bossGroup只处理客户端连接请求,workGroup处理读写事件，此二者为线程组，其中每一个NIOEventLoop都是线程组其中一个线程</p>
 <p>客户端发送连接请求，通过 ServerSocketChannel 被 BossGroup（NioEventLoopGroup）线程组中某个线程（NioEventLoop）的 selector 监听，事件放入 TaskQueue 队列轮询；一旦有 accept 事件，就封装成 NioSocketChannel，并注册到 WorkerGroup 线程的 selector 中让其监听</p>
 <p>一旦workGroup的线程的taskqueue轮询到读写事件，在对应的NIOSocketChannel进行处理</p>
-<h2 id="4-netty实例分析">4. Netty实例分析</h2>
+<h2 id="3-netty模型">3. Netty模型</h2>
+<h2 id="4-netty与-jdk-nio-的差异">4. Netty与 JDK NIO 的差异</h2>
+<p>Netty 并不是另起炉灶实现一套 I/O，它的底层依然是 JDK 的 NIO，但在 JDK NIO 之上补齐了工程化能力，同时规避了原生 API 的若干坑：</p>
+<blockquote>
+<p>• <strong>Epoll 空轮询 Bug</strong>：JDK 的 <code>Selector.select()</code> 在某些内核与 JDK 组合下会立即返回且没有就绪事件，导致空轮询死循环、CPU 飙到 100%。Netty 的 <code>NioEventLoop</code> 在 <code>select</code> 返回后统计空轮询次数，默认累计 512 次（<code>io.netty.selectorAutoRebuildThreshold</code>）就重建 Selector，把旧 Selector 上注册的 Channel 重新注册到新的 Selector 上，从而绕过该问题；设为 0 则关闭自动重建。<br>
+• <strong>API 易用性</strong>：JDK 需要手动管理 Selector、SelectionKey、ByteBuffer 的 flip/clear，Netty 用 EventLoop + Channel + Pipeline 把这些细节封装起来。<br>
+• <strong>缓冲区</strong>：<code>ByteBuffer</code> 读写共用一个指针、容量固定；<code>ByteBuf</code> 读写指针分离、可动态扩容、支持池化与引用计数（详见第 8 章）。<br>
+• <strong>协议栈</strong>：JDK 只给到 Socket 层，编解码、粘包拆包、心跳、SSL、HTTP/WebSocket 协议支持都需要 Netty 自己补，这也是 Spring、Dubbo、RocketMQ、Elasticsearch 都选择 Netty 的原因。<br>
+• <strong>多路复用实现可替换</strong>：除默认的 NIO 传输外，Netty 4.1 提供 <code>EpollEventLoopGroup</code>/<code>EpollServerSocketChannel</code>（Linux）与 <code>KQueueEventLoopGroup</code>（macOS），底层直接调用 epoll/kqueue，性能更好且暴露了边缘触发、SO_REUSEPORT 等原生能力；需要引入对应的 native 依赖，并且只在 Linux/macOS 上可用。</p>
+</blockquote>
+<h2 id="5-netty实例分析">5. Netty实例分析</h2>
 <h3 id="1-bossgroup-和-workgroup-怎么确定自己有多少个-nioeventloop">1. BossGroup 和 WorkGroup 怎么确定自己有多少个 NIOEventLoop</h3>
-<p>BossGroup 和 WorkerGroup 含有的子线程数（NioEventLoop）默认为 CPU 核数*2</p>
+<p>BossGroup 和 WorkerGroup 含有的子线程数（NioEventLoop）默认为 CPU 核数*2 —— <code>NioEventLoopGroup</code> 的无参构造最终调用 <code>MultithreadEventLoopGroup</code>，线程数取 <code>DEFAULT_EVENT_LOOP_THREADS</code>，即 <code>SystemPropertyUtil.getInt("io.netty.eventLoopThreads", NettyRuntime.availableProcessors() * 2)</code>。所以可以通过系统属性 <code>-Dio.netty.eventLoopThreads=8</code> 覆盖，也可以直接使用 <code>new NioEventLoopGroup(nThreads)</code>。</p>
 <p>由源码中的构造方法可知 —— 想要设置线程数只要在参数中输入即可</p>
 <h3 id="2-workergroup-是如何分配这些进程的">2. WorkerGroup 是如何分配这些进程的</h3>
 <p>设置 BossGroup 线程数为 1；WorkerGroup 线程数为 4；Client 连接数为 8</p>
@@ -284,6 +310,12 @@ Reactor 模式具有如下的优点：<br>
 <figure data-type="image" tabindex="12"><img src="/post-images/1656504060284.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="13"><img src="/post-images/1656504081513.png" alt="" loading="lazy"></figure>
 <p><strong>每个子线程都具有自己的 Selector、TaskQueue……</strong></p>
+<p>这里的「子线程」就是 NioEventLoop，它同时承担两个职责：一是作为 Selector 的持有者轮询 I/O 事件；二是作为一个单线程执行器，串行执行提交上来的任务。三者的关系可以用下面的流程图概括：</p>
+<p><img src="/post-assets/Hbra5M-xo/22-eventloop-pipeline.svg" alt="EventLoop 与 Pipeline 处理链路示意图"></p>
+<p>图中可以清楚看到：一个 Channel 注册到某个 EventLoop 后就固定由它处理，而 Channel 内部的 ChannelPipeline 则把入站、出站事件分方向串起来。</p>
+<p><strong>处理流程的细节补充：</strong><br>
+Selector 轮询到就绪事件后，先处理 I/O 事件（accept / read / write），再执行任务队列；<code>ioRatio</code> 默认 50，表示 I/O 耗时与任务耗时的目标比例为 1:1。<br>
+任务执行有数量上限（<code>io.netty.eventLoop.maxPendingTasks</code>，默认与 <code>maxTasksPerRun</code> 相关），保证不会因为任务堆积而饿死 I/O。</p>
 <h3 id="4-ctx-上下文-channel-pipeline-之间关系">4. CTX 上下文、Channel、Pipeline 之间关系</h3>
 <p>修改 <code>NettyServerHandler</code>，并添加断点</p>
 <figure data-type="image" tabindex="14"><img src="/post-images/1656504102104.png" alt="" loading="lazy"></figure>
@@ -306,10 +338,10 @@ Reactor 模式具有如下的优点：<br>
 <p><strong>SO_SNDBUF</strong><br>
   Socket参数，TCP数据发送缓冲区大小。该缓冲区即TCP发送滑动窗口，linux操作系统可使用命令：cat /proc/sys/net/ipv4/tcp_smem 查询其大小。</p>
 <p><strong>TCP_NODELAY</strong><br>
-  TCP参数，立即发送数据，默认值为Ture（Netty默认为True而操作系统默认为False）。该值设置Nagle算法的启用，改算法将小的碎片数据连接成更大的报文来最小化所发送的报文的数量，如果需要发送一些较小的报文，则需要禁用该算法。Netty默认禁用该算法，从而最小化报文传输延时。</p>
-<p>这个参数，与是否开启Nagle算法是反着来的，true表示关闭，false表示开启。通俗地说，如果要求高实时性，有数据发送时就马上发送，就关闭，如果需要减少发送次数减少网络交互，就开启。</p>
+  TCP参数，立即发送数据。Netty 中该选项默认为 true，而 JDK/操作系统默认是 false（即默认启用 Nagle 算法）。Nagle 算法会把小碎片数据攒成更大的报文再发送，以减少报文数量，代价是引入延迟。Netty 默认把 TCP_NODELAY 设为 true，等价于关闭 Nagle 算法，从而最小化报文传输延时。</p>
+<p>这个参数与「是否开启 Nagle 算法」是反着来的：true 表示关闭 Nagle（有数据就马上发，实时性高），false 表示开启 Nagle（攒包发送，减少网络交互次数）。游戏、IM、RPC 这类小包多、延迟敏感的场景必须保持 true；只有批量大包、对延迟不敏感的场景才考虑关掉它。</p>
 <p><strong>SO_KEEPALIVE</strong><br>
-  底层TCP协议的心跳机制。Socket参数，连接保活，默认值为False。启用该功能时，TCP会主动探测空闲连接的有效性。可以将此功能视为TCP的心跳机制，需要注意的是：默认的心跳间隔是7200s即2小时。Netty默认关闭该功能。</p>
+  底层TCP协议的心跳机制。Socket参数，连接保活，JDK 中默认值为 false，Netty 也默认关闭该功能。启用后 TCP 会主动探测空闲连接的有效性，可以视为传输层的心跳；但探测间隔由内核参数决定（Linux 默认 7200s 即 2 小时才开始探测，且失败重试次数较多），粒度太粗，无法满足业务级秒级保活需求。实际项目通常开启 SO_KEEPALIVE 兜底，同时再用 <code>IdleStateHandler</code> 做应用层心跳。</p>
 <p><strong>SO_REUSEADDR</strong><br>
   Socket参数，地址复用，默认值False。有四种情况可以使用：<br>
 (1).当有一个有相同本地地址和端口的socket1处于TIME_WAIT状态时，而你希望启动的程序的socket2要占用该地址和端口，比如重启服务且保持先前端口。<br>
@@ -321,7 +353,8 @@ Reactor 模式具有如下的优点：<br>
   Socket参数，服务端接受连接的队列长度，如果队列已满，客户端连接将被拒绝。默认值，Windows为200，其他为128。</p>
 <pre><code class="language-java"> b.option(ChannelOption.SO_BACKLOG, 1024) 
 </code></pre>
-<p>表示系统用于临时存放已完成三次握手的请求的队列的最大长度，如果连接建立频繁，服务器处理创建新连接较慢，可以适当调大这个参数.</p>
+<p>Linux 下这个参数并不是「只存已完成三次握手的请求」，它对应内核维护的两个队列：半连接队列（SYN queue，存放已收到 SYN、三次握手尚在进行中的连接）与全连接队列（accept queue，存放已完成三次握手、等待应用 accept 的连接）。Netty 的 <code>SO_BACKLOG</code> 写到 <code>listen(fd, backlog)</code>，主要影响全连接队列长度，并且会被内核参数 <code>net.core.somaxconn</code> 截断 —— 也就是说 <code>SO_BACKLOG</code> 设成 1024 而 somaxconn 仍是 128 时，实际生效值仍是 128。连接建立频繁、服务器 accept 较慢时可以同时调大二者：<br>
+<code>sysctl -w net.core.somaxconn=1024</code>，配合 <code>serverBootstrap.option(ChannelOption.SO_BACKLOG, 1024)</code>。</p>
 <p><strong>SO_BROADCAST</strong><br>
   Socket参数，设置广播模式。</p>
 <h2 id="5-taskqueue-任务队列">5. TaskQueue 任务队列</h2>
@@ -331,6 +364,40 @@ Reactor 模式具有如下的优点：<br>
 用户自定义定时任务<br>
 非当前 Reactor 线程调用 Channel 的各种方法</p>
 </blockquote>
+<h3 id="1-用户程序自定义普通任务">1. 用户程序自定义普通任务</h3>
+<p>Handler 中的耗时逻辑如果直接写在 <code>channelRead0</code> 里，就会阻塞当前 NioEventLoop，进而拖慢这个 EventLoop 上所有 Channel 的读写。正确做法是把业务提交到 EventLoop 的任务队列，让它按顺序异步执行：</p>
+<pre><code class="language-java">@Override
+protected void channelRead0(ChannelHandlerContext ctx, String msg) throws Exception {
+    // 提交到当前 Channel 所属 EventLoop 的 TaskQueue，由 NioEventLoop 串行执行
+    ctx.channel().eventLoop().execute(() -&gt; {
+        try {
+            Thread.sleep(5 * 1000);   // 模拟耗时的业务处理
+            ctx.writeAndFlush(&quot;处理完成: &quot; + msg);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    });
+    System.out.println(&quot;channelRead0 立即返回，不阻塞 EventLoop&quot;);
+}
+</code></pre>
+<h3 id="2-用户自定义定时任务">2. 用户自定义定时任务</h3>
+<pre><code class="language-java">@Override
+protected void channelRead0(ChannelHandlerContext ctx, String msg) throws Exception {
+    // 提交定时任务，底层封装为 ScheduledFutureTask 放入定时任务队列
+    ctx.channel().eventLoop().schedule(() -&gt; {
+        ctx.writeAndFlush(&quot;3 秒后执行的定时任务&quot;);
+    }, 3, TimeUnit.SECONDS);
+}
+</code></pre>
+<h3 id="3-非当前reactor线程调用-channel-的各种方法">3. 非当前 Reactor 线程调用 Channel 的各种方法</h3>
+<p>例如群聊系统中的推送线程、或者用 Map 保存了所有 Channel 之后由外部线程遍历发送消息，此时调用 <code>channel.writeAndFlush()</code> 并不在 Channel 所属的 EventLoop 线程中。Netty 会把这次写操作包装成任务提交回对应的 EventLoop，由它串行执行 —— 这也是「同一个 Channel 的所有操作都由同一个线程完成」这一承诺的实现方式，业务代码因此不必自己加锁。</p>
+<pre><code class="language-java">// 在推送线程（非 Reactor 线程）中广播消息
+for (Channel ch : channelGroup) {
+    // writeAndFlush 内部判断：不是 EventLoop 线程则提交任务，随后立即返回 ChannelFuture
+    ch.writeAndFlush(&quot;系统广播：服务器将在 5 分钟后维护&quot;);
+}
+</code></pre>
+<p><strong>小结：</strong>三种场景最终都落到 <code>NioEventLoop</code> 的 TaskQueue 或定时任务队列上，由同一个线程串行执行，所以既不会阻塞 I/O，也不会引入共享数据的并发问题。但要注意：任务本身如果一直阻塞，依然会把该 EventLoop 上所有 Channel 拖住，真正的重 CPU、重阻塞业务应交给独立的业务线程池，处理结果再通过 <code>ctx.writeAndFlush()</code> 回到 EventLoop 线程发送。</p>
 <h2 id="6-异步模型">6. 异步模型</h2>
 <h3 id="1-工作示意图">1. 工作示意图</h3>
 <figure data-type="image" tabindex="19"><img src="/post-images/1656504197703.png" alt="" loading="lazy"></figure>
@@ -447,6 +514,7 @@ if (&quot;/favicon.ico&quot;.equals(uri.getPath())){
 </code></pre>
 <h2 id="7-netty核心组件">7. netty核心组件</h2>
 <h3 id="1-bootstrap-和-serverbootstrap">1. Bootstrap 和 ServerBootstrap</h3>
+<p>两个引导类都继承自 <code>AbstractBootstrap</code>，区别在于：客户端只有一个 <code>EventLoopGroup</code>，服务端有 <code>parentGroup</code>（Boss）和 <code>childGroup</code>（Worker）两组，并且服务端用 <code>childHandler</code>/<code>childOption</code> 描述「每一条被 accept 出来的连接」，用 <code>handler</code>/<code>option</code> 描述 <code>ServerSocketChannel</code> 自己。混用这两个方法是初学阶段最常见的错误之一：把业务 Handler 用 <code>handler()</code> 注册到 ServerBootstrap 上，实际处理连接的 Channel 反而没有任何处理器。</p>
 <p>Bootstrap 意思是引导，一个 Netty 应用通常由一个 Bootstrap 开始，主要作用是配置整个 Netty 程序，串联各个组件，Netty 中 Bootstrap类是客户端程序的启动引导类， ServerBootstrap是服务端启动引导类<br>
 常见的方法有</p>
 <blockquote>
@@ -489,6 +557,16 @@ Channel 提供异步的网络 I/O 操作(如建立连接，读写，绑定端口
 <p>Netty 基于 Selector 对象实现 I/O 多路复用，通过 Selector 一个线程可以监听多个连接的 Channel 事件。<br>
 当向一个 Selector 中注册 Channel 后，Selector 内部的机制就可以自动不断地查询 (Select) 这些注册的 Channel 是否有已就绪的 I/O 事件（例如可读，可写，网络连接 完成等），这样程序就可以很简单地使用一个线程高效地管理多个 Channel</p>
 <h3 id="5-channelhandler">5. ChannelHandler</h3>
+<p>补充说明：<code>ChannelHandlerContext</code> 是 Pipeline 双向链表中的一个节点，它持有当前 Handler、前驱后继节点以及所属 Channel 的引用。常用 API 有：</p>
+<blockquote>
+<p>• <code>ctx.channel()</code>：取回当前 Channel，等价于从 Handler 反查连接。<br>
+• <code>ctx.pipeline()</code>：取回所属的 ChannelPipeline。<br>
+• <code>ctx.fireChannelRead(msg)</code>：把事件交给下一个入站 Handler（向后传递）。<br>
+• <code>ctx.writeAndFlush(msg)</code>：从当前节点往前（出站方向）找下一个出站 Handler，最终写回 Socket。<br>
+• <code>ctx.channel().writeAndFlush(msg)</code>：从 Pipeline 尾部开始执行出站传递，会经过当前节点之前的编码器等出站处理器。<br>
+• <code>ctx.executor()</code>：取出该 Channel 绑定的 EventLoop。</p>
+</blockquote>
+<p>因此 <code>ctx.writeAndFlush()</code> 与 <code>ctx.channel().writeAndFlush()</code> 的起点不同：前者跳过当前节点之前的出站处理器，后者则完整走一遍出站链；日常在业务 Handler 中回复消息，用 <code>ctx.writeAndFlush()</code> 更常见。</p>
 <p>我们经常需要自定义一 个 Handler 类去继承 ChannelInboundHandlerA dapter，然后通过重写相应方法实现业务逻辑</p>
 <p>常用的方法</p>
 <pre><code class="language-java">public class ChannelInboundHandlerAdapter extends ChannelHandlerAdapter implements ChannelInboundHandler { 
@@ -534,7 +612,59 @@ ChannelPipeline addFirst(ChannelHandler… handlers)
 //把一个业务处理类（handler） 添加到链中的最后一个位置
 ChannelPipeline addLast(ChannelHandler… handlers)
 </code></pre>
-<h2 id="8-netty-群聊">8. Netty 群聊</h2>
+<h2 id="8-bytebuf-详解">8. ByteBuf 详解</h2>
+<h3 id="8-1-为什么不用-jdk-的-bytebuffer">1. 为什么不用 JDK 的 ByteBuffer</h3>
+<p>Netty 没有直接使用 JDK 的 <code>ByteBuffer</code>，而是自己实现了 <code>ByteBuf</code>。原因是 <code>ByteBuffer</code> 只有一个 position 指针，读写模式之间要靠 <code>flip()</code> 切换，稍不注意就会读错数据；而且 <code>ByteBuffer</code> 的容量一旦分配就不能动态扩展，也没有引用计数，堆外内存难以可靠回收。</p>
+<h3 id="8-2-读写指针">2. 读写指针</h3>
+<p><code>ByteBuf</code> 用两个指针把读写彻底分开：</p>
+<blockquote>
+<p>• <code>readerIndex</code>：下一个要读的位置，<code>readByte()</code> 等读方法会推进它。<br>
+• <code>writerIndex</code>：下一个要写的位置，<code>writeByte()</code> 等写方法会推进它。<br>
+• <code>readableBytes() = writerIndex - readerIndex</code>，<code>writableBytes() = capacity - writerIndex</code>。<br>
+• <code>getXxx()/setXxx()</code> 按下标访问，不改变任何指针，可用于「看一眼但不消费」。<br>
+• <code>discardReadBytes()</code> 回收已读区间，把可读数据前移；<code>clear()</code> 只把两个指针归零，不擦除内容。<br>
+• <code>markReaderIndex()/resetReaderIndex()</code> 成对使用，可在解析失败时回退重读。</p>
+</blockquote>
+<p><img src="/post-assets/Hbra5M-xo/23-bytebuf-pointers.svg" alt="ByteBuf 读写指针与 readableBytes 示意图"></p>
+<h3 id="8-3-容量与扩容">3. 容量与扩容</h3>
+<p>ByteBuf 有 <code>capacity</code>（当前容量）和 <code>maxCapacity</code>（上限，默认 <code>Integer.MAX_VALUE</code>）。写入超过 capacity 时会自动扩容，扩容规则大致为 <code>newCapacity = min(maxCapacity, max(64, capacity &lt;&lt; 1))</code>，并按 4 字节对齐；扩容会重新分配内存并复制数据，所以服务于已知长度报文的场景应先用 <code>alloc.buffer(initialCapacity)</code> 预估容量，避免反复拷贝。也可以调用 <code>ensureWritable(n)</code> 主动确保有 n 字节可写空间。</p>
+<h3 id="8-4-池化与非池化-堆内存与直接内存">4. 池化与非池化、堆内存与直接内存</h3>
+<blockquote>
+<p>• <code>PooledByteBufAllocator</code>：Netty 4.1 起 <code>ByteBufAllocator.DEFAULT</code> 即为池化实现，按内存规格（tiny/small/normal/huge）复用内存块，显著减少分配与 GC 压力，但需要用引用计数显式归还。<br>
+• <code>UnpooledByteBufAllocator</code>：每次分配新内存，实现简单，适合低频场景，同样有引用计数。<br>
+• <code>Unpooled.*</code> 工具类（如 <code>Unpooled.copiedBuffer</code>、<code>Unpooled.wrappedBuffer</code>）返回的也是需要释放的 ByteBuf，<code>Unpooled.EMPTY_BUFFER</code> 是唯一例外（永不释放）。<br>
+• 堆缓冲区 <code>heapBuffer</code>：数据在 JVM 堆上，读写快但要经过一次拷贝才能进内核。<br>
+• 直接缓冲区 <code>directBuffer</code>：数据在堆外，Socket 读写时少一次拷贝，性能更好，但分配与回收成本更高，因此必须配合池化。<br>
+• <code>ChannelOption.ALLOCATOR</code> 可指定分配器；<code>io.netty.allocator.type=unpooled</code> 可全局切换为非池化；<code>io.netty.noPreferDirect=true</code> 则优先使用堆内存。</p>
+</blockquote>
+<h3 id="8-5-零拷贝">5. 零拷贝</h3>
+<p>Netty 语境下的「零拷贝」包含两层含义：</p>
+<blockquote>
+<p>• <strong>用户态的内存复用</strong>：<code>slice()</code>、<code>duplicate()</code>、<code>CompositeByteBuf.addComponents()</code> 都不复制数据，只生成共享底层存储的视图，各自维护独立的 readerIndex/writerIndex。<br>
+• <strong>减少用户态与内核态的拷贝</strong>：直接内存本身就是零拷贝的基础；<code>FileRegion</code> 通过 <code>FileChannel.transferTo()</code> 让文件数据经内核直接送到网卡，全程不进入 JVM 堆（Linux 上即 sendfile 语义）。<br>
+• <code>wrap</code> 系列（<code>Unpooled.wrappedBuffer</code>）把已有字节数组或直接内存包装成 ByteBuf，同样不发生拷贝。<br>
+• 使用 <code>CompositeByteBuf</code> 时注意调用 <code>addComponents(true, ...)</code> 自动调整索引，否则可读区间仍为 0，是常见的「写进去了却读不出来」的原因。</p>
+</blockquote>
+<h3 id="8-6-引用计数与释放规则">6. 引用计数与释放规则</h3>
+<p>ByteBuf 实现了 <code>ReferenceCounted</code>，<code>retain()</code> 增计数、<code>release()</code> 减计数，<code>refCnt</code> 归零时内存被归还或回收。谁最后使用谁释放是核心原则：</p>
+<blockquote>
+<p>• 入站消息由 Netty 分配，业务处理完后必须释放。继承 <code>SimpleChannelInboundHandler</code> 时框架会自动释放（它重写了 <code>channelRead</code>，在调用完 <code>channelRead0</code> 后 release）；继承 <code>ChannelInboundHandlerAdapter</code> 则需要自己调用 <code>ReferenceCountUtil.release(msg)</code>，或在异常分支里释放。<br>
+• 如果只是把消息往下传（<code>ctx.fireChannelRead(msg)</code>），不要释放，交给下游释放。<br>
+• 如果想把 msg 交给异步线程稍后处理，必须先 <code>retain()</code>，处理完再 <code>release()</code>，否则原线程返回后内存已被回收，出现 <code>IllegalReferenceCountException: refCnt: 0</code>。<br>
+• 出站消息由调用方自己负责：正常情况下 <code>ctx.writeAndFlush(buf)</code> 由 Netty 在写完成后释放该 buf；如果需要重复写入同一个 buf，必须先 <code>retain()</code>；写入失败时要检查 <code>future.isSuccess()</code>，否则可能泄漏。<br>
+• 释放规则违背的典型现象是日志出现 <code>LEAK: ByteBuf.release() was not called before it's garbage-collected</code>。</p>
+</blockquote>
+<h3 id="8-7-直接内存与泄漏检测">7. 直接内存与泄漏检测</h3>
+<p>直接内存不受 JVM 堆大小限制，由 <code>-XX:MaxDirectMemorySize</code> 控制上限，写满会抛 <code>OutOfMemoryError: Direct buffer memory</code>。排查泄漏可打开 Netty 的泄漏检测：</p>
+<pre><code class="language-bash"># 四级：DISABLED / SIMPLE(默认,约 1% 采样) / ADVANCED / PARANOID(全量采样,仅用于调试)
+java -Dio.netty.leakDetection.level=paranoid -jar app.jar
+# 也可以在代码中设置
+ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);
+</code></pre>
+<p>开启后若出现泄漏，日志会打印「最近被访问的位置」堆栈，据此定位是哪个 Handler 没有释放。生产环境建议保持 SIMPLE 级别，采样开销低又能捕获大部分泄漏。</p>
+<p>下面回到本章主体：用群聊实例把这些组件串起来。</p>
+<h2 id="9-netty-群聊">9. Netty 群聊</h2>
+<h3 id="1-群聊需求">1. 群聊需求</h3>
 <p><strong>要求：</strong></p>
 <blockquote>
 <p>编写一个 Netty 群聊系统，实现服务器端和客户端之间的数据简单通讯（非阻塞）<br>
@@ -738,6 +868,13 @@ ChannelPipeline addLast(ChannelHandler… handlers)
 }
 </code></pre>
 <h2 id="9-心跳机制">9. 心跳机制</h2>
+<p><strong>心跳机制的作用：</strong>长连接如果对端异常掉线（拔网线、进程被杀、NAT 表项过期），本端 TCP 并不会立刻感知，连接会一直「假活」占着资源。心跳就是周期性发一个很小的数据包探活，一段时间没收到对方回应就判定连接失效并关闭释放。它同时能防止中间设备（NAT、防火墙）因为连接长时间无数据而回收会话表项。</p>
+<p>Netty 只提供了空闲检测的触发器，并不替业务发送心跳内容，这一点很容易误解：</p>
+<blockquote>
+<p>• <code>IdleStateHandler</code> 的职责是「计时 + 发事件」，它在超时后通过 <code>userEventTriggered</code> 回调把 IdleStateEvent 交给后续 Handler，本身不会向对端发送任何数据。<br>
+• 真正的「发心跳包」动作，需要在业务 Handler 的 <code>userEventTriggered</code> 中自己写，例如 <code>ctx.writeAndFlush(new PingWebSocketFrame())</code> 或自定义的 Ping 消息。<br>
+• 同理，收到心跳后也要自己回 Pong、并维护一个「最近一次收到心跳的时间」，超过阈值才 <code>ctx.close()</code>。</p>
+</blockquote>
 <p><strong>1. server端：</strong></p>
 <pre><code class="language-java">public class MyServer {
     public static void main(String[] args) throws Exception{
@@ -980,10 +1117,7 @@ public class MyTextWebSocketFrameHandler extends SimpleChannelInboundHandler&lt;
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#1-netty%E7%AE%80%E5%8D%95%E4%BB%8B%E7%BB%8D">1. Netty简单介绍</a>
+<a href="#1-netty%E7%AE%80%E5%8D%95%E4%BB%8B%E7%BB%8D">1. Netty简单介绍</a>
 <ul>
 <li><a href="#1-%E5%8E%9F%E7%94%9Fnio%E5%AD%98%E5%9C%A8%E7%9A%84%E9%97%AE%E9%A2%98">1. 原生NIO存在的问题</a></li>
 <li><a href="#2-netty%E5%AE%98%E7%BD%91%E8%AF%B4%E6%98%8E">2. Netty官网说明</a></li>
@@ -991,7 +1125,8 @@ public class MyTextWebSocketFrameHandler extends SimpleChannelInboundHandler&lt;
 <li><a href="#4-netty%E7%89%88%E6%9C%AC%E8%AF%B4%E6%98%8E">4. Netty版本说明</a></li>
 </ul>
 </li>
-<li><a href="#2-%E5%90%84%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%BC%8F">2. 各线程模式</a>
+<li>
+<a href="#2-%E5%90%84%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%BC%8F">2. 各线程模式</a>
 <ul>
 <li><a href="#1-%E4%BC%A0%E7%BB%9F%E9%98%BB%E5%A1%9E-io-%E6%9C%8D%E5%8A%A1%E6%A8%A1%E5%9E%8B">1. 传统阻塞 I/O 服务模型</a></li>
 <li><a href="#2-reactor-%E6%A8%A1%E5%BC%8F">2. Reactor 模式</a></li>
@@ -1001,7 +1136,8 @@ public class MyTextWebSocketFrameHandler extends SimpleChannelInboundHandler&lt;
 <li><a href="#6-reactor-%E6%A8%A1%E5%BC%8F%E5%B0%8F%E7%BB%93">6. Reactor 模式小结</a></li>
 </ul>
 </li>
-<li><a href="#3-netty%E6%A8%A1%E5%9E%8B">3. Netty模型</a>
+<li>
+<a href="#10-%E4%B8%BB%E4%BB%8E-reactor-%E4%B8%8E-netty-%E7%9A%84%E5%AF%B9%E5%BA%94%E5%85%B3%E7%B3%BB">10. 主从 Reactor 与 Netty 的对应关系</a>
 <ul>
 <li><a href="#1-%E7%AE%80%E5%8D%95%E7%89%88">1. 简单版</a></li>
 <li><a href="#2-%E8%BF%9B%E9%98%B6%E7%89%88">2. 进阶版</a></li>
@@ -1009,7 +1145,18 @@ public class MyTextWebSocketFrameHandler extends SimpleChannelInboundHandler&lt;
 <li><a href="#4-%E7%90%86%E8%A7%A3%E9%87%8D%E5%88%B6%E7%89%88">4. 理解重制版</a></li>
 </ul>
 </li>
-<li><a href="#4-netty%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90">4. Netty实例分析</a>
+<li>
+<a href="#3-netty%E6%A8%A1%E5%9E%8B">3. Netty模型</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#4-netty%E4%B8%8E-jdk-nio-%E7%9A%84%E5%B7%AE%E5%BC%82">4. Netty与 JDK NIO 的差异</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#5-netty%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90">5. Netty实例分析</a>
 <ul>
 <li><a href="#1-bossgroup-%E5%92%8C-workgroup-%E6%80%8E%E4%B9%88%E7%A1%AE%E5%AE%9A%E8%87%AA%E5%B7%B1%E6%9C%89%E5%A4%9A%E5%B0%91%E4%B8%AA-nioeventloop">1. BossGroup 和 WorkGroup 怎么确定自己有多少个 NIOEventLoop</a></li>
 <li><a href="#2-workergroup-%E6%98%AF%E5%A6%82%E4%BD%95%E5%88%86%E9%85%8D%E8%BF%99%E4%BA%9B%E8%BF%9B%E7%A8%8B%E7%9A%84">2. WorkerGroup 是如何分配这些进程的</a></li>
@@ -1018,15 +1165,24 @@ public class MyTextWebSocketFrameHandler extends SimpleChannelInboundHandler&lt;
 <li><a href="#5-%E8%AE%BE%E7%BD%AE%E9%80%9A%E9%81%93%E5%8F%82%E6%95%B0">5. 设置通道参数</a></li>
 </ul>
 </li>
-<li><a href="#5-taskqueue-%E4%BB%BB%E5%8A%A1%E9%98%9F%E5%88%97">5. TaskQueue 任务队列</a></li>
-<li><a href="#6-%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%9E%8B">6. 异步模型</a>
+<li>
+<a href="#5-taskqueue-%E4%BB%BB%E5%8A%A1%E9%98%9F%E5%88%97">5. TaskQueue 任务队列</a>
+<ul>
+<li><a href="#1-%E7%94%A8%E6%88%B7%E7%A8%8B%E5%BA%8F%E8%87%AA%E5%AE%9A%E4%B9%89%E6%99%AE%E9%80%9A%E4%BB%BB%E5%8A%A1">1. 用户程序自定义普通任务</a></li>
+<li><a href="#2-%E7%94%A8%E6%88%B7%E8%87%AA%E5%AE%9A%E4%B9%89%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1">2. 用户自定义定时任务</a></li>
+<li><a href="#3-%E9%9D%9E%E5%BD%93%E5%89%8Dreactor%E7%BA%BF%E7%A8%8B%E8%B0%83%E7%94%A8-channel-%E7%9A%84%E5%90%84%E7%A7%8D%E6%96%B9%E6%B3%95">3. 非当前 Reactor 线程调用 Channel 的各种方法</a></li>
+</ul>
+</li>
+<li>
+<a href="#6-%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%9E%8B">6. 异步模型</a>
 <ul>
 <li><a href="#1-%E5%B7%A5%E4%BD%9C%E7%A4%BA%E6%84%8F%E5%9B%BE">1. 工作示意图</a></li>
 <li><a href="#2-future-listener-%E6%9C%BA%E5%88%B6">2. Future-Listener 机制</a></li>
 <li><a href="#3-%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8%E5%AE%9E%E4%BE%8B-http%E6%9C%8D%E5%8A%A1">3. 快速入门实例-HTTP服务</a></li>
 </ul>
 </li>
-<li><a href="#7-netty%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6">7. netty核心组件</a>
+<li>
+<a href="#7-netty%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6">7. netty核心组件</a>
 <ul>
 <li><a href="#1-bootstrap-%E5%92%8C-serverbootstrap">1. Bootstrap 和 ServerBootstrap</a></li>
 <li><a href="#2-future-%E5%92%8C-channelfuture">2. Future 和 ChannelFuture</a></li>
@@ -1036,11 +1192,32 @@ public class MyTextWebSocketFrameHandler extends SimpleChannelInboundHandler&lt;
 <li><a href="#6-pipeline-%E5%92%8C-channelpipeline">6. Pipeline 和 ChannelPipeline</a></li>
 </ul>
 </li>
-<li><a href="#8-netty-%E7%BE%A4%E8%81%8A">8. Netty 群聊</a></li>
-<li><a href="#9-%E5%BF%83%E8%B7%B3%E6%9C%BA%E5%88%B6">9. 心跳机制</a></li>
-<li><a href="#10-%E9%95%BF%E8%BF%9E%E6%8E%A5">10. 长连接</a></li>
+<li>
+<a href="#8-bytebuf-%E8%AF%A6%E8%A7%A3">8. ByteBuf 详解</a>
+<ul>
+<li><a href="#8-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%94%A8-jdk-%E7%9A%84-bytebuffer">1. 为什么不用 JDK 的 ByteBuffer</a></li>
+<li><a href="#8-2-%E8%AF%BB%E5%86%99%E6%8C%87%E9%92%88">2. 读写指针</a></li>
+<li><a href="#8-3-%E5%AE%B9%E9%87%8F%E4%B8%8E%E6%89%A9%E5%AE%B9">3. 容量与扩容</a></li>
+<li><a href="#8-4-%E6%B1%A0%E5%8C%96%E4%B8%8E%E9%9D%9E%E6%B1%A0%E5%8C%96-%E5%A0%86%E5%86%85%E5%AD%98%E4%B8%8E%E7%9B%B4%E6%8E%A5%E5%86%85%E5%AD%98">4. 池化与非池化、堆内存与直接内存</a></li>
+<li><a href="#8-5-%E9%9B%B6%E6%8B%B7%E8%B4%9D">5. 零拷贝</a></li>
+<li><a href="#8-6-%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0%E4%B8%8E%E9%87%8A%E6%94%BE%E8%A7%84%E5%88%99">6. 引用计数与释放规则</a></li>
+<li><a href="#8-7-%E7%9B%B4%E6%8E%A5%E5%86%85%E5%AD%98%E4%B8%8E%E6%B3%84%E6%BC%8F%E6%A3%80%E6%B5%8B">7. 直接内存与泄漏检测</a></li>
 </ul>
 </li>
+<li>
+<a href="#9-netty-%E7%BE%A4%E8%81%8A">9. Netty 群聊</a>
+<ul>
+<li><a href="#1-%E7%BE%A4%E8%81%8A%E9%9C%80%E6%B1%82">1. 群聊需求</a></li>
+</ul>
+</li>
+<li>
+<a href="#9-%E5%BF%83%E8%B7%B3%E6%9C%BA%E5%88%B6">9. 心跳机制</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#10-%E9%95%BF%E8%BF%9E%E6%8E%A5">10. 长连接</a>
+<ul>
 </ul>
 </li>
 </ul>
