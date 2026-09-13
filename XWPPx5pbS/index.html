@@ -126,14 +126,16 @@
           <img class="post-feature-header-image" src="/post-images/XWPPx5pbS.png" alt="封面图">
           
           <blockquote>
-<p>Harbor 作为 Docker 镜像仓库，自然依赖 Docker 环境：安装 Harbor 之前必须装好 Docker，同时再安装 docker-compose。</p>
+<p>Harbor 是一个开源的容器镜像仓库（Registry），由 VMware 发起、现为 CNCF 毕业项目。它在 Docker Registry 的基础上增加了 Web 管理界面、基于角色的访问控制、镜像复制与漏洞扫描等能力，因此安装前必须先有 Docker 环境，同时再装好 docker-compose。</p>
 </blockquote>
-<p>docker与docker-compose的安装教程参考：<a href="">Docker、Docker-compose的安装</a></p>
+<p>Docker 的安装可参考：<a href="/4kG3rvwit/">CentOS 7 安装 Docker 详细步骤</a>；docker-compose 也需要提前安装好。</p>
+<p>下面按「下载安装包 → 解压部署 → 修改配置 → prepare/install → 验证」的顺序，记录一次 Harbor 离线安装的完整过程。</p>
+<p><img src="/post-assets/XWPPx5pbS/01-install-flow.svg" alt="Harbor 离线安装流程：下载安装包、解压到 /usr/local、修改 harbor.yml、执行 prepare 与 install、用 docker-compose ps 验证"></p>
 <hr>
 <h2 id="ch1-offline-install">一、Harbor 的离线安装</h2>
-<p><strong>1、下载Harbor的离线安装包：</strong></p>
-<p>下载地址：https://github.com/goharbor/harbor/releases</p>
-<p>我下载的是当前最新版：v1.10.10</p>
+<p><strong>1、下载 Harbor 的离线安装包：</strong></p>
+<p>下载地址：<a href="https://github.com/goharbor/harbor/releases">https://github.com/goharbor/harbor/releases</a></p>
+<p>我下载的是当时的最新版 v1.10.10。Harbor 2.x 之后的版本在界面和部分命令上有所变化，但「离线包 + docker-compose 部署」的整体流程仍然一致，实际操作请以官方文档为准。</p>
 <p><strong>2、上传并解压到 /usr/local/目录下：</strong></p>
 <pre><code class="language-shell">[root@node1 ~]# tar -zxvf harbor-offline-installer-v1.10.10.tgz 
  
@@ -166,7 +168,7 @@ harbor_admin_password: Harbor12345 #需要修改
 # 安装
 ./install
 </code></pre>
-<p>如果碰到 iptables 相关的 error，关闭 firewalld 并重启 docker 服务</p>
+<p>如果碰到 iptables 相关的 error，通常是 firewalld 的规则拦截了 Harbor 容器之间的转发。可以先关闭 firewalld 并重启 docker 服务；生产环境更稳妥的做法是按需放行 Harbor 使用的端口，而不是直接关掉防火墙。</p>
 <pre><code class="language-shell">systemctl stop firewalld
 service docker restart
 </code></pre>
@@ -192,10 +194,13 @@ registryctl         /home/harbor/start.sh            Up (healthy)
 <p><strong>6、通过yml中配置的ip+port，以及admin的账号密码访问Harbor：</strong></p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1644915125561587.png" alt="image.png" loading="lazy"></figure>
 <hr>
-<h2 id="supp1-ip-no-domain">补充一、内部使用 Harbor 时只有 ip 端口、没有域名怎么办？</h2>
+<h2 id="supp1-ip-no-domain">补充一、内部使用 Harbor 时只有 IP 和端口、没有域名怎么办？</h2>
+<p>先看一个常见的报错：在客户端执行 docker login 或 docker push 时，Docker 会失败并提示如下信息。</p>
 <pre><code class="language-shell">Error response from daemon: Get https://10.206.73.155/v2/: dial tcp 10.206.73.155:443: connect: connection refused
 </code></pre>
-<p>我们可以在docker的核心配置文件中，增加上对特定ip的允许即可：</p>
+<p>原因是：harbor.yml 中只开放了 HTTP 的 80 端口，而 Docker 客户端默认按 HTTPS（443 端口）访问仓库，连接自然被拒绝。内网环境通常没有域名和证书，最省事的做法就是把该地址声明为「非安全仓库」（insecure registry）。需要提醒的是，这种方式只适合内网自建仓库；如果仓库要跨公网访问，仍应配置域名与 HTTPS 证书。整个排查过程如下图：</p>
+<p><img src="/post-assets/XWPPx5pbS/02-insecure-registry-flow.svg" alt="只有 IP 和端口时 docker push 的排查流程：推送被 443 端口拒绝、在 daemon.json 配置 insecure-registries、重启 Docker、重新推送成功"></p>
+<p>具体操作是在 Docker 的核心配置文件 <code>/etc/docker/daemon.json</code> 中，把该 IP 加入非安全仓库白名单：</p>
 <pre><code class="language-shell">[root@master ~]# vim /etc/docker/daemon.json
 {
     &quot;registry-mirrors&quot;:[
@@ -221,9 +226,13 @@ registryctl         /home/harbor/start.sh            Up (healthy)
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#ch1-offline-install">一、Harbor 的离线安装</a>
 <ul>
-<li><a href="#ch1-offline-install">一、Harbor 的离线安装</a></li>
-<li><a href="#supp1-ip-no-domain">补充一：内部使用只有 ip 端口、没有域名怎么办？</a></li>
+</ul>
+</li>
+<li>
+<a href="#supp1-ip-no-domain">补充一、内部使用 Harbor 时只有 IP 和端口、没有域名怎么办？</a>
+<ul>
 </ul>
 </li>
 </ul>
