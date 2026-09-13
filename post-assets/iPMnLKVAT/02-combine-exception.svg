@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="700" viewBox="0 0 900 700" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="700" fill="#ffffff"/>
+  <defs>
+    <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="32" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">allOf / anyOf 组合语义与异常、超时处理路径</text>
+  <text x="450" y="54" text-anchor="middle" font-size="12" fill="#5b6b7c">上半部分：组合语义；下半部分：异常与超时的处理选择</text>
+
+  <rect x="30" y="74" width="840" height="254" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="50" y="98" font-size="14" font-weight="700" fill="#1f2b38">① allOf 等全部完成；anyOf 任一完成即返回</text>
+
+  <rect x="200" y="124" width="340" height="28" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="215" y="143" font-size="12" fill="#1f2b38">任务 A（3s）</text>
+  <rect x="200" y="158" width="170" height="28" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="215" y="177" font-size="12" fill="#1f2b38">任务 B（1.5s）</text>
+  <rect x="200" y="192" width="227" height="28" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <text x="215" y="211" font-size="12" fill="#1f2b38">任务 C（2s）</text>
+
+  <line x1="370" y1="116" x2="370" y2="236" stroke="#2e9e5b" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="376" y="114" font-size="11" fill="#2e9e5b">anyOf 触发</text>
+  <line x1="540" y1="116" x2="540" y2="236" stroke="#2f6fd0" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="546" y="114" font-size="11" fill="#2f6fd0">allOf 触发</text>
+
+  <text x="50" y="252" font-size="12" fill="#1f2b38">anyOf(f1,f2,f3)：任一完成即返回最先完成者的结果，返回类型为 Object，不要求各任务结果类型一致，其余任务不会被取消。</text>
+  <text x="50" y="276" font-size="12" fill="#1f2b38">allOf(f1,f2,f3)：等全部完成才完成，返回 CompletableFuture&lt;Void&gt;，本身不带结果；任一任务异常则整体异常。</text>
+  <text x="50" y="302" font-size="11" fill="#2f6fd0">取回所有结果：allOf(...).thenApply(v -&gt; futures.stream().map(CompletableFuture::join).collect(toList()))</text>
+
+  <rect x="30" y="344" width="840" height="336" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="50" y="370" font-size="14" font-weight="700" fill="#1f2b38">② 异常与超时处理路径</text>
+
+  <rect x="50" y="396" width="150" height="72" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <text x="125" y="426" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">上游阶段</text>
+  <text x="125" y="448" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">抛出异常</text>
+
+  <line x1="200" y1="432" x2="246" y2="413" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="200" y1="432" x2="246" y2="473" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="200" y1="432" x2="246" y2="533" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+  <rect x="250" y="392" width="230" height="42" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="265" y="418" font-size="12" font-weight="700" fill="#1f2b38">exceptionally(fn)</text>
+  <text x="500" y="410" font-size="12" fill="#1f2b38">仅在上游异常时执行，返回兜底值，异常被转成正常结果；</text>
+  <text x="500" y="428" font-size="12" fill="#5b6b7c">上游正常完成时函数不执行，结果直接透传。</text>
+
+  <rect x="250" y="452" width="230" height="42" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="265" y="478" font-size="12" font-weight="700" fill="#1f2b38">handle(fn)</text>
+  <text x="500" y="470" font-size="12" fill="#1f2b38">无论成功还是异常都会执行，可返回新结果并吞掉异常；</text>
+  <text x="500" y="488" font-size="12" fill="#5b6b7c">入参为 (结果, 异常)，两者必有一个为 null。</text>
+
+  <rect x="250" y="512" width="230" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="265" y="538" font-size="12" font-weight="700" fill="#1f2b38">whenComplete(fn)</text>
+  <text x="500" y="530" font-size="12" fill="#1f2b38">无论成功还是异常都会执行，但不能改变结果，异常继续传递；</text>
+  <text x="500" y="548" font-size="12" fill="#5b6b7c">适合做日志、指标、资源释放等收尾动作。</text>
+
+  <line x1="50" y1="576" x2="850" y2="576" stroke="#c8d3e0" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="50" y="612" font-size="12" font-weight="700" fill="#1f2b38">超时控制</text>
+  <text x="50" y="634" font-size="11" fill="#5b6b7c">JDK9+</text>
+
+  <rect x="250" y="588" width="230" height="34" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <text x="265" y="610" font-size="12" font-weight="700" fill="#1f2b38">orTimeout(2, SECONDS)</text>
+  <text x="500" y="610" font-size="11" fill="#1f2b38">超时以 TimeoutException 结束，需 catch 包装后的异常。</text>
+
+  <rect x="250" y="630" width="230" height="34" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <text x="265" y="652" font-size="12" font-weight="700" fill="#1f2b38">completeOnTimeout(v, ...)</text>
+  <text x="500" y="652" font-size="11" fill="#1f2b38">超时后用给定值 v 作为结果，任务按正常完成处理。</text>
+</svg>

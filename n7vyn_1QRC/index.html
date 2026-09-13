@@ -123,13 +123,58 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <img class="post-feature-header-image" src="/post-images/n7vyn_1QRC.png" alt="封面图">
-          </img>
           
-          <h3 id="lora-low-rank-adaptation"><strong>LoRA (Low-Rank Adaptation)</strong></h3>
-<p>LoRA（低秩适配）是一种高效的参数高效微调（Parameter-Efficient Fine-Tuning, PEFT）方法，旨在通过低秩分解的方式对预训练模型进行微调。<br>
-相比于全参数微调（Full Fine-Tuning），LoRA 只需要更新少量的参数。<br>
-LoRA 的核心思想是：冻结预训练权重 W<sub>0</sub>，在其上引入低秩分解增量 ΔW = BA（B、A 为低秩矩阵），仅训练 A、B 而保持原始预训练权重不变，前向计算变为 h = W<sub>0</sub>x + ΔW·x。<br>
-完整代码见下文：完全从 0 实现 LoRA 微调流程，不依赖任何第三方库对 LoRA 的封装。</p>
+          
+                    <h2 id="lora-low-rank-adaptation">LoRA（Low-Rank Adaptation）</h2>
+<p>LoRA（Low-Rank Adaptation，低秩适配）是当前应用最广的参数高效微调（Parameter-Efficient Fine-Tuning, PEFT）方法之一。它的出发点非常朴素：<strong>微调时权重矩阵的变化量本身是低秩的</strong>。既然 \(\Delta W\) 的有效自由度远小于矩阵本身的尺寸，就不必更新整个权重，而只用两个小矩阵的乘积去逼近它。</p>
+<p>与全参数微调相比，LoRA 通常只训练原模型 0.01%～1% 的参数：显存占用大幅下降，产出的权重文件只有几十 MB，切换任务时只需换一个「插件」。更关键的是，训练完成后可以把增量合并回原始权重，<strong>推理阶段不引入任何额外延迟</strong>——这是 Adapter、Prefix-Tuning 等方法不具备的优势。</p>
+<p>LoRA 的前向计算可以写成：</p>
+<div class="math-block">\[ h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} B A x \]</div>
+<p>其中 \(W_0 \in \mathbb{R}^{d \times k}\) 是冻结的预训练权重，\(A \in \mathbb{R}^{r \times k}\)、\(B \in \mathbb{R}^{d \times r}\) 是可训练的低秩矩阵，秩 \(r \ll \min(d, k)\)，\(\alpha\) 是缩放系数。初始化时 \(A\) 取高斯随机、\(B\) 取全零，因此训练开始时 \(\Delta W = 0\)，模型行为与微调前完全一致。</p>
+<p>下文先讲清原理与超参数，再给出<strong>完全从 0 实现</strong>的 LoRA 微调代码（不依赖任何第三方库的 LoRA 封装），最后介绍 QLoRA、PEFT 标准 API 与合并部署的工程实践。</p>
+
+<h2 id="一-为什么需要-lora">一、为什么需要 LoRA</h2>
+<p>全参数微调（Full Fine-Tuning）能取得最好的效果，但在真实工程里有三个绕不开的问题。</p>
+<ul>
+<li><strong>显存成本高</strong>：可训练参数、梯度、Adam 的一阶与二阶动量都要保存。混合精度下，一个 \(N\) 参数模型的训练显存大致是 \(16N\) 字节量级——权重 2 字节、梯度 2 字节、两个 FP32 动量 8 字节，再叠加中间激活，远高于推理时的 \(2N\)。</li>
+<li><strong>每个任务一份完整权重</strong>：如果有 10 个垂域任务，就要存 10 份完整的模型权重，部署、切换与回滚都很笨重。</li>
+<li><strong>灾难性遗忘</strong>：全参数微调会整体改动权重，领域数据量不大时很容易把通用能力「洗掉」。</li>
+</ul>
+<p>LoRA 用一句话回应了这三点：<strong>冻结全部预训练权重，只训练一小块低秩增量</strong>。可训练参数与优化器状态随之缩小几个数量级，多任务之间只共享同一个基座；而 \(\Delta W = 0\) 的初始化让微调从「原地出发」，对通用能力的破坏也更小。</p>
+
+<h2 id="二-lora-原理低秩旁路与缩放">二、LoRA 原理：低秩旁路与缩放</h2>
+<p>LoRA 并没有改变 Transformer 的结构，它只是在原有的线性层旁边<strong>并联一条低秩旁路</strong>，再把两条支路的输出相加。原始权重保持冻结、不接收梯度，梯度只流经旁路上的 \(A\) 与 \(B\)。</p>
+
+<h3 id="二-一-低秩分解-dw-ba">2.1 低秩分解：ΔW = BA</h3>
+<p>设某个线性层的权重为 \(W_0 \in \mathbb{R}^{d \times k}\)，输入为 \(x\)。LoRA 把权重更新参数化为两个小矩阵的乘积：</p>
+<div class="math-block">\[ W = W_0 + \Delta W = W_0 + B A, \qquad B \in \mathbb{R}^{d \times r},\ A \in \mathbb{R}^{r \times k} \]</div>
+<p>这样一来，可训练参数从 \(d \times k\) 降到 \(r \times (d + k)\)。以 \(d = k = 4096\)、\(r = 8\) 为例：原来约 1678 万参数，现在只有约 6.5 万，压到原来的 0.4% 左右。</p>
+<p>「低秩」这个假设是有依据的。已有工作（如 Aghajanyan 等人关于内在维度的研究）发现，预训练模型在下游任务上的适配过程存在很低的「内在维度」，也就是说真正需要改变的方向并不多。LoRA 相当于直接把这个观察写进了参数化形式。</p>
+<p>初始化方式决定了训练的稳定性：\(A\) 用高斯分布随机初始化，\(B\) 初始化为全零。于是训练第一步 \(\Delta W = BA = 0\)，模型输出与预训练模型完全相同，不会因为随机噪声破坏已有能力。</p>
+
+<h3 id="二-二-缩放因子-alpha-r">2.2 缩放因子：α / r</h3>
+<p>论文进一步给增量加上一个缩放系数 \(\alpha / r\)：</p>
+<div class="math-block">\[ h = W_0 x + \frac{\alpha}{r} \Delta W x = W_0 x + \frac{\alpha}{r} B A x \]</div>
+<p>为什么要除以 \(r\)？因为 \(B A x\) 各分量是 \(r\) 项乘积之和，方差大致随 \(r\) 线性增长。如果不做归一化，把秩从 8 调到 64 时等效更新幅度会明显变大，学习率就得跟着重调。除以 \(r\) 之后，\(\alpha\) 就成了「与秩无关的等效学习率缩放」，调参时可以先固定 \(\alpha\) 再扫 \(r\)，超参数更容易迁移。</p>
+<p>实践中常见的取值是 \(\alpha = 2r\)（例如 \(r=16,\ \alpha=32\)）或 \(\alpha = r\)。需要注意：由于 \(\alpha\) 与学习率的作用高度耦合，单独放大 \(\alpha\) 基本等价于放大学习率，二者应当一起调。</p>
+<p>还要记住一点：合并或推理时使用的缩放必须与训练时完全一致，\(\alpha\)、\(r\) 以及挂载的目标模块都要对应。这正是保存 LoRA 权重时应当<strong>一并保存适配器配置</strong>（adapter_config.json）的原因。</p>
+
+<h3 id="二-三-目标模块该加在哪里">2.3 目标模块：该加在哪里</h3>
+<p>Transformer 里有大量线性层，LoRA 挂到哪里，效果差别很大。原论文的结论是：在 \(r\) 较小时，只适配注意力层的 \(W_q\)、\(W_v\) 就已经足够好，继续往其它位置加收益有限；但随着 \(r\) 增大、数据量变多，把更多线性层纳入进来会更有帮助。</p>
+<p>工程上的常见做法可以概括为三档：</p>
+<ul>
+<li><strong>最省参数</strong>：只挂 <code>q_proj</code>、<code>v_proj</code>（Hugging Face PEFT 的默认值），适合风格、格式、指令跟随这类轻量适配。</li>
+<li><strong>推荐默认</strong>：注意力四个投影 <code>q_proj</code>/<code>k_proj</code>/<code>v_proj</code>/<code>o_proj</code> 全部挂上，再视情况加入 MLP 的 <code>gate_proj</code>/<code>up_proj</code>/<code>down_proj</code>。QLoRA 论文就是把 LoRA 加在所有线性层上的。</li>
+<li><strong>保守省显存</strong>：只挂注意力输出投影与 MLP 下投影（<code>o_proj</code>、<code>down_proj</code>），在几乎不损失效果的前提下让参数量最小。</li>
+</ul>
+<p>下面这张图概括了 LoRA 的低秩旁路结构：原始权重 \(W_0\) 冻结，输入 \(x\) 同时经过冻结支路与低秩旁路，旁路输出按 \(\alpha / r\) 缩放后相加。</p>
+<p><img src="/post-assets/n7vyn_1QRC/01-lora-architecture.svg" alt="LoRA 低秩旁路结构：冻结的权重矩阵 W0 与可训练低秩矩阵 A、B 并联，输入 x 分两路计算后按 alpha/r 缩放相加得到输出 h"></p>
+
+<h2 id="三-从零实现-lora-微调">三、从零实现 LoRA 微调</h2>
+<p>下面这份代码基于 MiniMind 项目，完整走通了 LoRA 微调的流程：加载基座、插入 LoRA 模块、冻结非 LoRA 参数、只用 LoRA 参数构建优化器、训练并只保存 LoRA 权重。它没有任何 PEFT 库依赖，适合用来彻底搞清 LoRA 究竟做了什么。</p>
+<p>代码保留了对每一行关键语句的注释，便于逐行对照。若只想快速上手，可以直接跳到后面的「七、用 PEFT 库的标准写法」。</p>
+
+<h3 id="三-一-训练脚本-train-lora-py">3.1 训练脚本 train_lora.py</h3>
 <pre><code class="language-python">import os  # 文件操作
 import argparse  # 命令行参数解析
 import time  # 时间管理
@@ -648,6 +693,10 @@ if __name__ == &quot;__main__&quot;:
     for epoch in range(args.epochs):
         train_epoch(epoch, wandb)
 </code></pre>
+<h3 id="三-二-lora-模块与挂载逻辑-model-lora-py">3.2 LoRA 模块与挂载逻辑 model_lora.py</h3>
+<p>这一部分是 LoRA 的心脏：<code>LoRA</code> 类定义低秩旁路，<code>apply_lora</code> 把旁路挂到目标线性层上，<code>save_lora</code> / <code>load_lora</code> 只存取旁路参数。</p>
+<p>需要注意 <code>apply_lora</code> 的挂载条件是 <code>weight.shape[0] == weight.shape[1]</code>，也就是「只给方阵线性层挂 LoRA」。这是一个简化写法：它能覆盖注意力中的大部分投影，但会漏掉 <code>down_proj</code> 这类非方阵层，也可能误挂到其它方阵层上。生产代码应当像 PEFT 那样<strong>显式指定 <code>target_modules</code></strong>，避免「到底改了哪些层」变得不可控。</p>
+<p>另外，这个从零实现把 \(\alpha / r\) 缩放省略了。它只是一个常数因子，可以被学习率吸收；但为了让超参数能跨秩迁移、并与社区实现对齐，建议在 <code>forward</code> 中显式乘上缩放系数（即 \(\alpha / r\)）。</p>
 <pre><code class="language-python"># 作用 ：
 # torch：PyTorch核心库，用于张量操作和神经网络功能。
 # optim 和 nn：分别提供优化器和神经网络模块的支持。
@@ -744,6 +793,8 @@ def save_lora(model, path):
             state_dict.update(lora_state)
     torch.save(state_dict, path)
 </code></pre>
+<h3 id="三-三-模型配置-lmconfig-py">3.3 模型配置 LMConfig.py</h3>
+<p>把模型超参数收敛到一个继承自 <code>PretrainedConfig</code> 的配置类里，既能与 <code>transformers</code> 生态对接，也方便保存与复现。</p>
 <pre><code class="language-python">
 # 作用 ：从 transformers 库中导入 PretrainedConfig 基类。
 # 用途 ：用于定义模型配置类，继承自 PretrainedConfig。
@@ -846,19 +897,192 @@ class LMConfig(PretrainedConfig):
 <blockquote>
 <p>训练日志默认每隔 <code>100</code> 步打印一次；模型权重保存间隔由 <code>--save_interval</code> 控制（示例代码中默认为每个 step 保存），保存为 <code>./out/lora/&lt;lora_name&gt;_&lt;dim&gt;.pth</code>，同名文件会被新权重覆盖。</p>
 </blockquote>
-<p>很多人困惑于：如何让模型学会私有领域的知识？如何准备数据集？如何基于通用模型打造垂域模型？<br>
-这里举几个例子：通用模型往往欠缺医学等领域知识，可以尝试在原有模型基础上注入领域知识以获得更好的表现；同时，我们又希望不因学习领域知识而损失基础模型的其它通用能力，此时 LoRA 可以很好地改善这个问题。<br>
-只需要准备如下格式的对话数据集，放置到 <code>./dataset/lora_xxx.jsonl</code>，启动 <code>python train_lora.py</code> 训练，即可得到 <code>./out/lora/lora_xxx.pth</code> 的新模型权重。</p>
-<p><strong>医疗场景</strong></p>
-<pre><code class="language-text"> {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;请问颈椎病的人枕头多高才最好？&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;颈椎病患者选择枕头的高度应该根据...&quot;}]}
+<h2 id="四-qlora-把基座压到-4-bit">四、QLoRA：把基座压到 4-bit</h2>
+<p>LoRA 已经把优化器状态与梯度的开销降下来了，但基座模型的<strong>权重本身</strong>仍然要以 FP16/BF16 常驻显存——7B 模型约 14 GB，65B 模型超过 130 GB，微调时还要再加激活与优化器状态。QLoRA 的思路是：把冻结的基座进一步量化到 4-bit，只让 LoRA 旁路保持高精度，从而把 65B 模型的微调显存需求压到单张 48 GB 显卡可以承受的范围。</p>
+<p>QLoRA 由三个关键设计组成。</p>
+
+<h3 id="四-一-nf4-分位数量化">4.1 NF4：为正态分布设计的 4-bit 数据类型</h3>
+<p>普通的 4-bit 整数量化在区间内均匀取点，但预训练权重的分布近似零均值正态，落在两端极值区间的参数很少。NF4（4-bit NormalFloat）的做法是：先把权重按块归一化到标准正态，再取标准正态分布的<strong>分位数</strong>作为量化点。这样每个量化桶里落入的参数数量大致相等，对正态分布数据在信息论意义上是最优的，精度高于 INT4 与 FP4。</p>
+<p>量化以块（block）为单位进行，例如每 64 个权重共享一个缩放常数。块越小精度越高，额外开销也越大。</p>
+
+<h3 id="四-二-双重量化与-paged-optimizer">4.2 双重量化与 Paged Optimizer</h3>
+<p><strong>双重量化（Double Quantization）</strong>：上一步里「每块一个」的缩放常数本身是 FP32，平均下来每个参数要多花 \(32 / 64 = 0.5\) bit。双重量化把这一组常数再量化一次（块大小 256），把开销降到约 0.127 bit/参数，折算到 65B 模型上大约省下 3 GB 显存。</p>
+<p><strong>Paged Optimizer</strong>：训练中长序列样本会偶发产生显存峰值，容易触发 OOM。Paged Optimizer 借助 NVIDIA 统一内存，在显存吃紧时把优化器状态自动换出到 CPU 内存、需要时再换回，用少量带宽换取训练的稳定性。</p>
+<p><strong>计算精度</strong>：4-bit 权重在参与矩阵乘法前会被反量化（dequantize）到计算精度（通常是 BF16），因此前向与反向的算力开销和半精度相当——QLoRA 省下的是显存，而不是 FLOPs；代价是反量化带来的额外时间开销。</p>
+<p>整条流水线可以概括为下图：</p>
+<p><img src="/post-assets/n7vyn_1QRC/02-qlora-pipeline.svg" alt="QLoRA 4-bit 量化微调流水线：基座权重按块归一化后用 NF4 量化为 4-bit，缩放常数再做双重量化，LoRA 旁路保持 BF16，反量化到 BF16 后参与矩阵乘，paged optimizer 在显存不足时把优化器状态换出到 CPU"></p>
+<p>用 PEFT + bitsandbytes 启用 QLoRA 只需要几行配置：</p>
+<pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
+model_id = &quot;Qwen/Qwen2.5-7B-Instruct&quot;
+
+# 1) 4-bit 量化配置：NF4 + 双重量化 + BF16 计算精度
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type=&quot;nf4&quot;,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
+)
+
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    quantization_config=bnb_config,
+    device_map=&quot;auto&quot;,
+)
+
+# 2) 量化模型的前置处理：冻结基座、开启梯度检查点、把 LayerNorm 等升到 FP32
+model = prepare_model_for_kbit_training(model)
+
+# 3) 挂载 LoRA 旁路
+lora_config = LoraConfig(
+    r=16,
+    lora_alpha=32,          # 等效缩放 alpha / r = 2
+    lora_dropout=0.05,
+    bias=&quot;none&quot;,
+    task_type=&quot;CAUSAL_LM&quot;,
+    target_modules=[&quot;q_proj&quot;, &quot;k_proj&quot;, &quot;v_proj&quot;, &quot;o_proj&quot;,
+                    &quot;gate_proj&quot;, &quot;up_proj&quot;, &quot;down_proj&quot;],
+)
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+</code></pre>
+<p>可以看到，可训练参数占比通常不到 1%。训练完成后，<code>model.save_pretrained(...)</code> 保存的只是适配器（adapter_model.safetensors 与 adapter_config.json），体量在几十 MB 级别。</p>
+
+<h2 id="五-lora-与其它-peft-方法的对比">五、LoRA 与其它 PEFT 方法的对比</h2>
+<p>PEFT 是一整个家族。理解它们的差别，关键在于三个问题：<strong>新增参数挂在哪里</strong>、<strong>推理时能否合并回原权重</strong>、<strong>是否占用上下文长度</strong>。</p>
+<ul>
+<li><strong>Adapter（Houlsby 等，2019）</strong>：在每个 Transformer 块的两处插入「降维 → 非线性 → 升维」的瓶颈 MLP。参数很少、效果稳定，但增加了网络深度，<strong>推理会变慢</strong>，且不能合并回原权重。</li>
+<li><strong>Prefix-Tuning / P-Tuning v2</strong>：在每一层的注意力中拼接一段可训练的前缀 Key/Value（P-Tuning v2 更进一步，在每层都加 soft prompt）。不改变权重、可训练参数极少，但会<strong>占用上下文长度</strong>、压缩有效窗口，且难以合并，对生成速度也有影响。</li>
+<li><strong>IA3（Liu 等，2022）</strong>：用三个可学习向量分别缩放注意力 Key、Value 与 FFN 中间激活，参数量比 LoRA 还少一到两个数量级。乘性缩放可以合并回原权重，但它只调整已有方向的比例，表达能力弱于 LoRA，通常更适合少样本场景。</li>
+<li><strong>DoRA（Liu 等，2024）</strong>：把预训练权重分解为<strong>幅度</strong>与<strong>方向</strong>两部分，方向部分用 LoRA 更新，幅度部分用一组可训练标量单独调整，即 \(W' = m \odot \dfrac{W_0 + BA}{\lVert W_0 + BA \rVert_c}\)。相比 LoRA，它在低秩下更接近全参数微调的效果，代价是训练时多一次列归一化计算、显存略高。</li>
+<li><strong>LoRA</strong>：并联低秩旁路，不增加深度、不占上下文，可合并、可多任务热插拔，是目前综合性价比最高的默认选择。</li>
+</ul>
+<p>一句话总结取舍：<strong>要推理零开销、要多适配器热切换，选 LoRA（或 DoRA）；参数量要压到极致且任务简单，可以考虑 IA3；不在意推理延迟、想要更强的表达能力，可以试 Adapter；需要软提示且不在意占用上下文，用 Prefix-Tuning。</strong></p>
+<p>下表从工程角度做个对照：</p>
+<table>
+<thead>
+<tr><th>方法</th><th>新增参数位置</th><th>可否合并</th><th>推理额外开销</th><th>典型可训练占比</th></tr>
+</thead>
+<tbody>
+<tr><td>Full FT</td><td>全部权重</td><td>—</td><td>无</td><td>100%</td></tr>
+<tr><td>LoRA</td><td>线性层并联低秩旁路</td><td>可以</td><td>合并后为 0</td><td>0.01%～1%</td></tr>
+<tr><td>QLoRA</td><td>同上（基座 4-bit）</td><td>可以</td><td>合并后为 0</td><td>0.01%～1%</td></tr>
+<tr><td>Adapter</td><td>块内串行瓶颈层</td><td>不可以</td><td>增加深度，较明显</td><td>0.5%～3%</td></tr>
+<tr><td>Prefix / P-Tuning v2</td><td>各层 KV 前缀</td><td>一般不可以</td><td>占用上下文</td><td>低于 0.1%</td></tr>
+<tr><td>IA3</td><td>K/V/FFN 乘性缩放</td><td>可以</td><td>合并后为 0</td><td>约 0.01%</td></tr>
+<tr><td>DoRA</td><td>LoRA + 幅度向量</td><td>可以</td><td>合并后为 0</td><td>略高于 LoRA</td></tr>
+</tbody>
+</table>
+
+<h2 id="六-合并与部署">六、合并与部署</h2>
+<p>LoRA 最讨人喜欢的一点是：部署时可以把旁路「焊死」进原始权重，得到与全参数微调产物一样的普通模型，推理零额外开销。</p>
+<div class="math-block">\[ W_{\text{merged}} = W_0 + \frac{\alpha}{r} B A \]</div>
+<p>注意这里的 \(\alpha / r\) 缩放：如果训练时带缩放而合并时漏掉，模型输出会整体偏移，表现为「合并后效果变差」。用 PEFT 时 <code>merge_and_unload()</code> 会自动读取 adapter_config.json 中的 \(r\) 与 <code>lora_alpha</code>，不需要手动乘系数。</p>
+<pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+base_id = &quot;Qwen/Qwen2.5-7B-Instruct&quot;
+adapter_dir = &quot;./out/lora_medical&quot;
+
+tokenizer = AutoTokenizer.from_pretrained(base_id)
+base = AutoModelForCausalLM.from_pretrained(base_id, torch_dtype=torch.bfloat16, device_map=&quot;auto&quot;)
+
+# 加载适配器并合并回基座权重
+model = PeftModel.from_pretrained(base, adapter_dir)
+model = model.merge_and_unload()      # 把 (alpha / r) * B @ A 加回 W0，并移除旁路
+
+model.save_pretrained(&quot;./merged_medical&quot;)
+tokenizer.save_pretrained(&quot;./merged_medical&quot;)
+</code></pre>
+<p>两种部署形态各有取舍：</p>
+<ul>
+<li><strong>合并部署</strong>：一个任务一份完整权重，推理路径与普通模型完全一致，适合任务固定、追求极致延迟的生产环境。</li>
+<li><strong>不合并、动态加载适配器</strong>：一个基座常驻显存，按请求切换 LoRA 权重。vLLM、S-LoRA 等推理框架支持多适配器并发，能把成百上千个 LoRA 挂在同一个基座上服务，显存利用率远高于「一任务一模型」。</li>
+</ul>
+<p><img src="/post-assets/n7vyn_1QRC/03-merge-deploy.svg" alt="LoRA 合并与部署流程：训练产出几十 MB 的适配器，既可按 alpha/r 合并进基座权重后单任务部署，也可由同一个常驻基座动态加载多个适配器在线切换"></p>
+
+<h2 id="七-用-peft-库的标准写法">七、用 PEFT 库的标准写法</h2>
+<p>真实项目里不必自己写旁路，Hugging Face 的 <code>peft</code> 已经把 LoRA、QLoRA 以及上面提到的各种方法统一成了同一套 API。核心只有几个函数：<code>LoraConfig</code> 描述「怎么挂」，<code>get_peft_model</code> 把配置注入模型，<code>save_pretrained</code> / <code>get_peft_model_state_dict</code> 负责保存适配器，<code>merge_and_unload</code> 负责合并。</p>
+<pre><code class="language-python"># 训练脚本的核心骨架（全参数 LoRA，非量化）
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from peft import LoraConfig, get_peft_model, get_peft_model_state_dict
+
+model_id = &quot;Qwen/Qwen2.5-7B-Instruct&quot;
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.bfloat16)
+
+# 1) 描述「怎么挂」：秩、缩放、dropout、目标模块
+config = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    lora_dropout=0.05,
+    bias=&quot;none&quot;,
+    task_type=&quot;CAUSAL_LM&quot;,
+    target_modules=[&quot;q_proj&quot;, &quot;v_proj&quot;],
+)
+
+# 2) 把配置注入模型：冻结基座，返回带旁路的 PeftModel
+model = get_peft_model(model, config)
+model.print_trainable_parameters()
+
+trainer = Trainer(
+    model=model,
+    args=TrainingArguments(output_dir=&quot;./out&quot;, per_device_train_batch_size=4,
+                           gradient_accumulation_steps=8, learning_rate=1e-4,
+                           num_train_epochs=3, bf16=True, logging_steps=10),
+    train_dataset=train_dataset,
+)
+trainer.train()
+
+# 3) 只保存适配器权重（几十 MB，而不是十几 GB）
+trainer.model.save_pretrained(&quot;./out/lora_adapter&quot;)
+
+# 4) 如果框架需要，可只取适配器的 state_dict
+state_dict = get_peft_model_state_dict(model)
+</code></pre>
+<pre><code class="language-python"># 推理时加载适配器
+from peft import PeftModel
+
+model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.bfloat16, device_map=&quot;auto&quot;)
+model = PeftModel.from_pretrained(model, &quot;./out/lora_adapter&quot;)
+model.eval()
+
+# 需要与基座合并时
+merged = model.merge_and_unload()
+merged.save_pretrained(&quot;./out/merged&quot;)
+</code></pre>
+<p>几个容易踩的点：</p>
+<ul>
+<li><strong>学习率要比全参微调大</strong>。LoRA 的可训练参数很少，学习率通常取 \(1\times10^{-4}\)～\(3\times10^{-4}\)（全参微调常用 \(1\times10^{-5}\)～\(2\times10^{-5}\)）；QLoRA 因为要反量化，常取 \(2\times10^{-4}\) 左右。</li>
+<li><strong>别忘了 <code>task_type</code></strong>。分类任务应为 <code>SEQ_CLS</code>，因果语言模型为 <code>CAUSAL_LM</code>，否则 PEFT 无法正确处理前向输出。</li>
+<li><strong>保存与加载要配套</strong>。只存 adapter 权重而不存 adapter_config.json，加载时就无法恢复 \(r\)、\(\alpha\) 与目标模块，等于丢失了模型定义。</li>
+<li><strong>断点续训</strong>。PeftModel 的 <code>state_dict</code> 里既有基座又有适配器，做 checkpoint 时应当使用 <code>get_peft_model_state_dict</code>，或者直接 <code>save_pretrained</code> 保存整个适配器目录。</li>
+</ul>
+<h2 id="八-实战给基座注入领域知识">八、实战：给基座注入领域知识</h2>
+<p>很多人困惑于：如何让模型学会私有领域的知识？如何准备数据集？如何基于通用模型打造垂域模型？</p>
+<p>这里举几个例子：通用模型往往欠缺医学等领域知识，可以尝试在原有模型基础上注入领域知识以获得更好的表现；同时，我们又希望不因学习领域知识而损失基础模型的其它通用能力，此时 LoRA 可以很好地改善这个问题。</p>
+<p>只需要准备如下格式的对话数据集，放置到 <code>./dataset/lora_xxx.jsonl</code>，启动 <code>python train_lora.py</code> 训练，即可得到 <code>./out/lora/lora_xxx.pth</code> 的新模型权重。</p>
+
+<h3 id="八-一-准备对话数据集">8.1 准备对话数据集</h3>
+
+<p><strong>医疗场景</strong>（<code>lora_medical</code>）</p>
+<pre><code class="language-json"> {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;请问颈椎病的人枕头多高才最好？&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;颈椎病患者选择枕头的高度应该根据...&quot;}]}
  {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;请问xxx&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;xxx...&quot;}]}
 </code></pre>
 <p><strong>自我认知场景</strong></p>
-<pre><code class="language-text"> {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;你叫什么名字？&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;我叫minimind...&quot;}]}
+<pre><code class="language-json"> {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;你叫什么名字？&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;我叫minimind...&quot;}]}
  {&quot;conversations&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;你是谁&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;我是...&quot;}]}
 </code></pre>
 <p>此时「基础模型 + LoRA 权重」即可获得医疗等场景的增强能力，相当于给基础模型外挂了 LoRA 插件，且不损失基础模型原有的通用能力。<br>
-我们可以通过<code>eval_model.py</code>进行模型评估测试。</p>
+我们可以通过 <code>eval_model.py</code> 进行模型评估测试。</p>
+
+<h3 id="八-二-推理与评估">8.2 推理与评估</h3>
+<p>评估脚本的关键是「先加载基座、再挂载 LoRA」：<code>apply_lora</code> 重建出与训练时结构一致的旁路，<code>load_lora</code> 再把权重填进去。注意 <code>model_mode</code> 必须与训练时使用的基座保持一致，否则基座与适配器对不上。</p>
 <pre><code class="language-python">import argparse
 import random
 import time
@@ -1045,6 +1269,7 @@ if __name__ == &quot;__main__&quot;:
 <pre><code class="language-bash"># 注意：model_mode即选择基础模型的类型，这和train_lora是基于哪个模型训练的相关，确保统一即可。
 python eval_model.py --lora_name 'lora_medical' --model_mode 2
 </code></pre>
+<h3 id="八-三-效果与注意事项">8.3 效果与注意事项</h3>
 <p><strong>小测试</strong></p>
 <pre><code class="language-text">👶: 我最近经常感到头晕，可能是什么原因？
 🤖️: 头晕可能是由于多种原因，包括但不限于：心脏疾病、眼睛损伤、过敏反应、皮肤问题、过敏反应、压力、焦虑、疲劳、药物副作用、性功能障碍或者其他...
@@ -1056,17 +1281,18 @@ python eval_model.py --lora_name 'lora_medical' --model_mode 2
 </code></pre>
 <p>PS：只要有所需要的数据集，也可以做 full_sft 全参微调（此时需混合通用知识数据一起训练，否则过拟合领域数据会让模型变傻、损失通用能力）。</p>
 
-          <div class="toc-container"><ul class="markdownIt-TOC">
-<li>
+<h2 id="九-小结">九、小结</h2>
+<p>把全文压缩成几句可以带走的结论：</p>
 <ul>
-<li>
-<ul>
-<li><a href="#lora-low-rank-adaptation"><strong>LoRA (Low-Rank Adaptation)</strong></a></li>
+<li>LoRA 的本质是给冻结的线性层并联一条低秩旁路，\(\Delta W = BA\)，并按 \(\alpha / r\) 缩放；\(B\) 零初始化保证训练起点等价于原模型。</li>
+<li>参数量与显存开销由 \(r\) 决定，等效更新强度由 \(\alpha / r\) 决定。调参时先固定 \(\alpha = 2r\) 再扫 \(r\)，比同时调两者省事得多。</li>
+<li>目标模块决定「改哪里」：只挂 q/v 最省，注意力四投影加 MLP 全挂通常效果最好，需要省显存时优先保留 <code>o_proj</code> 与 <code>down_proj</code>。</li>
+<li>显存还不够就上 QLoRA：基座 NF4 量化 + 双重量化，LoRA 旁路保持 BF16，配合 paged optimizer 与梯度检查点，可以在单卡上微调更大的模型。</li>
+<li>部署时用 <code>merge_and_unload</code> 合并，推理零开销；要同时服务多任务，就让一个基座动态切换多个适配器。</li>
+<li>LoRA 更擅长「让模型换一种说法、风格或领域行为」；对于需要精确事实的知识，RAG 往往比把知识压进权重更可靠，两者也可以叠加使用。</li>
 </ul>
-</li>
-</ul>
-</li>
-</ul>
+
+          <div class="toc-container"><ul class="markdownIt-TOC"><li><ul><li><a href="#lora-low-rank-adaptation">LoRA（Low-Rank Adaptation）</a></li><li><a href="#%E4%B8%80-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-lora">一、为什么需要 LoRA</a></li><li><a href="#%E4%BA%8C-lora-%E5%8E%9F%E7%90%86%E4%BD%8E%E7%A7%A9%E6%97%81%E8%B7%AF%E4%B8%8E%E7%BC%A9%E6%94%BE">二、LoRA 原理：低秩旁路与缩放</a><ul><li><a href="#%E4%BA%8C-%E4%B8%80-%E4%BD%8E%E7%A7%A9%E5%88%86%E8%A7%A3-dw-ba">2.1 低秩分解：ΔW = BA</a></li><li><a href="#%E4%BA%8C-%E4%BA%8C-%E7%BC%A9%E6%94%BE%E5%9B%A0%E5%AD%90-alpha-r">2.2 缩放因子：α / r</a></li><li><a href="#%E4%BA%8C-%E4%B8%89-%E7%9B%AE%E6%A0%87%E6%A8%A1%E5%9D%97%E8%AF%A5%E5%8A%A0%E5%9C%A8%E5%93%AA%E9%87%8C">2.3 目标模块：该加在哪里</a></li></ul></li><li><a href="#%E4%B8%89-%E4%BB%8E%E9%9B%B6%E5%AE%9E%E7%8E%B0-lora-%E5%BE%AE%E8%B0%83">三、从零实现 LoRA 微调</a><ul><li><a href="#%E4%B8%89-%E4%B8%80-%E8%AE%AD%E7%BB%83%E8%84%9A%E6%9C%AC-train-lora-py">3.1 训练脚本 train_lora.py</a></li><li><a href="#%E4%B8%89-%E4%BA%8C-lora-%E6%A8%A1%E5%9D%97%E4%B8%8E%E6%8C%82%E8%BD%BD%E9%80%BB%E8%BE%91-model-lora-py">3.2 LoRA 模块与挂载逻辑 model_lora.py</a></li><li><a href="#%E4%B8%89-%E4%B8%89-%E6%A8%A1%E5%9E%8B%E9%85%8D%E7%BD%AE-lmconfig-py">3.3 模型配置 LMConfig.py</a></li></ul></li><li><a href="#%E5%9B%9B-qlora-%E6%8A%8A%E5%9F%BA%E5%BA%A7%E5%8E%8B%E5%88%B0-4-bit">四、QLoRA：把基座压到 4-bit</a><ul><li><a href="#%E5%9B%9B-%E4%B8%80-nf4-%E5%88%86%E4%BD%8D%E6%95%B0%E9%87%8F%E5%8C%96">4.1 NF4：为正态分布设计的 4-bit 数据类型</a></li><li><a href="#%E5%9B%9B-%E4%BA%8C-%E5%8F%8C%E9%87%8D%E9%87%8F%E5%8C%96%E4%B8%8E-paged-optimizer">4.2 双重量化与 Paged Optimizer</a></li></ul></li><li><a href="#%E4%BA%94-lora-%E4%B8%8E%E5%85%B6%E5%AE%83-peft-%E6%96%B9%E6%B3%95%E7%9A%84%E5%AF%B9%E6%AF%94">五、LoRA 与其它 PEFT 方法的对比</a></li><li><a href="#%E5%85%AD-%E5%90%88%E5%B9%B6%E4%B8%8E%E9%83%A8%E7%BD%B2">六、合并与部署</a></li><li><a href="#%E4%B8%83-%E7%94%A8-peft-%E5%BA%93%E7%9A%84%E6%A0%87%E5%87%86%E5%86%99%E6%B3%95">七、用 PEFT 库的标准写法</a></li><li><a href="#%E5%85%AB-%E5%AE%9E%E6%88%98%E7%BB%99%E5%9F%BA%E5%BA%A7%E6%B3%A8%E5%85%A5%E9%A2%86%E5%9F%9F%E7%9F%A5%E8%AF%86">八、实战：给基座注入领域知识</a><ul><li><a href="#%E5%85%AB-%E4%B8%80-%E5%87%86%E5%A4%87%E5%AF%B9%E8%AF%9D%E6%95%B0%E6%8D%AE%E9%9B%86">8.1 准备对话数据集</a></li><li><a href="#%E5%85%AB-%E4%BA%8C-%E6%8E%A8%E7%90%86%E4%B8%8E%E8%AF%84%E4%BC%B0">8.2 推理与评估</a></li><li><a href="#%E5%85%AB-%E4%B8%89-%E6%95%88%E6%9E%9C%E4%B8%8E%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9">8.3 效果与注意事项</a></li></ul></li><li><a href="#%E4%B9%9D-%E5%B0%8F%E7%BB%93">九、小结</a></li></ul></li></ul>
 </div>
           <hr />
           

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <rect width="900" height="500" fill="#ffffff"/>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="32" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">CompletableFuture 链式流水线与线程切换</text>
+  <text x="450" y="54" text-anchor="middle" font-size="12" fill="#5b6b7c">同一条链上的阶段可能运行在不同线程；只有带 Async 的方法才会主动切换线程</text>
+
+  <rect x="50" y="86" width="170" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="135" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">supplyAsync(fn)</text>
+  <text x="135" y="134" text-anchor="middle" font-size="11" fill="#5b6b7c">提交到线程池</text>
+
+  <rect x="250" y="86" width="160" height="64" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="330" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">thenApply(f)</text>
+  <text x="330" y="134" text-anchor="middle" font-size="11" fill="#5b6b7c">触发完成的线程</text>
+
+  <rect x="450" y="86" width="190" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="545" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">thenApplyAsync(f, pool)</text>
+  <text x="545" y="134" text-anchor="middle" font-size="11" fill="#5b6b7c">再次提交到线程池</text>
+
+  <rect x="680" y="86" width="170" height="64" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="765" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">thenAccept(...)</text>
+  <text x="765" y="134" text-anchor="middle" font-size="11" fill="#5b6b7c">完成线程 / 调用线程</text>
+
+  <line x1="220" y1="118" x2="244" y2="118" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="410" y1="118" x2="444" y2="118" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="640" y1="118" x2="674" y2="118" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <line x1="135" y1="150" x2="135" y2="196" stroke="#c8d3e0" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="330" y1="150" x2="330" y2="196" stroke="#c8d3e0" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="545" y1="150" x2="545" y2="196" stroke="#c8d3e0" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="765" y1="150" x2="765" y2="196" stroke="#c8d3e0" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+  <rect x="60" y="198" width="150" height="36" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="135" y="221" text-anchor="middle" font-size="11" fill="#1f2b38">pool-worker-1</text>
+  <rect x="260" y="198" width="140" height="36" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="330" y="221" text-anchor="middle" font-size="11" fill="#1f2b38">main / 完成线程</text>
+  <rect x="470" y="198" width="150" height="36" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="545" y="221" text-anchor="middle" font-size="11" fill="#1f2b38">pool-worker-2</text>
+  <rect x="690" y="198" width="150" height="36" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="765" y="221" text-anchor="middle" font-size="11" fill="#1f2b38">完成线程 / 调用线程</text>
+
+  <rect x="60" y="250" width="16" height="16" rx="3" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <text x="84" y="263" font-size="12" fill="#5b6b7c">线程池线程执行</text>
+  <rect x="300" y="250" width="16" height="16" rx="3" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="324" y="263" font-size="12" fill="#5b6b7c">调用线程 / 完成前一阶段的线程执行</text>
+
+  <rect x="40" y="292" width="820" height="178" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.5"/>
+  <text x="60" y="318" font-size="13" font-weight="700" fill="#1f2b38">要点</text>
+  <text x="60" y="344" font-size="12" fill="#1f2b38">① 未指定 Executor 时，supplyAsync / runAsync 默认使用 ForkJoinPool.commonPool()，并行度约为 CPU 核数 - 1。</text>
+  <text x="60" y="370" font-size="12" fill="#1f2b38">② 不带 Async 的回调由“完成前一阶段的线程”顺带执行；前一阶段已完成时，则由调用线程立即执行。</text>
+  <text x="60" y="396" font-size="12" fill="#1f2b38">③ 带 Async 的回调才切换到线程池；有切换成本，IO 场景务必显式传入业务线程池，避免占用 commonPool。</text>
+  <text x="60" y="422" font-size="12" fill="#1f2b38">④ 链上任意一环抛出异常且未处理时，后续阶段被跳过，最终在 get / join 处抛出包装后的异常。</text>
+  <text x="60" y="448" font-size="12" fill="#1f2b38">⑤ allOf / anyOf 只做编排：allOf 等全部完成（结果为 Void），anyOf 取最先完成者的结果。</text>
+</svg>

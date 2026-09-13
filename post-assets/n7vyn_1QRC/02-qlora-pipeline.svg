@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="640" viewBox="0 0 900 640" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="b1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <rect width="900" height="640" fill="#ffffff"/>
+
+  <text x="450" y="34" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">QLoRA 4-bit 量化微调流水线</text>
+
+  <rect x="90" y="72" width="720" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <circle cx="130" cy="110" r="18" fill="#2f6fd0"/>
+  <text x="130" y="116" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">1</text>
+  <text x="170" y="104" font-size="14" font-weight="700" fill="#1f2b38">冻结基座，按块量化</text>
+  <text x="170" y="128" font-size="11" fill="#5b6b7c">FP16/BF16 权重每 64 个一组，共享一个 FP32 缩放常数</text>
+
+  <path d="M450,148 V182" fill="none" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#b1)"/>
+
+  <rect x="90" y="186" width="720" height="76" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.5"/>
+  <circle cx="130" cy="224" r="18" fill="#2e9e5b"/>
+  <text x="130" y="230" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">2</text>
+  <text x="170" y="218" font-size="14" font-weight="700" fill="#1f2b38">NF4 分位数量化到 4-bit</text>
+  <text x="170" y="242" font-size="11" fill="#5b6b7c">按标准正态分位数取 16 个量化点，对正态分布的权重信息损失最小</text>
+
+  <path d="M450,262 V296" fill="none" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#b1)"/>
+
+  <rect x="90" y="300" width="720" height="76" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.5"/>
+  <circle cx="130" cy="338" r="18" fill="#e08a1e"/>
+  <text x="130" y="344" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">3</text>
+  <text x="170" y="332" font-size="14" font-weight="700" fill="#1f2b38">双重量化（Double Quantization）</text>
+  <text x="170" y="356" font-size="11" fill="#5b6b7c">把 FP32 缩放常数再量化到 8-bit：0.5 → 0.127 bit/参数，65B 模型省约 3 GB</text>
+
+  <path d="M450,376 V410" fill="none" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#b1)"/>
+
+  <rect x="90" y="414" width="720" height="76" rx="8" fill="#f7f9fc" stroke="#7a5bd0" stroke-width="1.5"/>
+  <circle cx="130" cy="452" r="18" fill="#7a5bd0"/>
+  <text x="130" y="458" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">4</text>
+  <text x="170" y="446" font-size="14" font-weight="700" fill="#1f2b38">反量化到 BF16 参与计算</text>
+  <text x="170" y="470" font-size="11" fill="#5b6b7c">4-bit 权重反量化后做矩阵乘；LoRA 旁路 A、B 与优化器状态保持 BF16</text>
+
+  <path d="M450,490 V524" fill="none" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#b1)"/>
+
+  <rect x="90" y="528" width="720" height="76" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.5"/>
+  <circle cx="130" cy="566" r="18" fill="#2f6fd0"/>
+  <text x="130" y="572" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">5</text>
+  <text x="170" y="560" font-size="14" font-weight="700" fill="#1f2b38">Paged Optimizer</text>
+  <text x="170" y="584" font-size="11" fill="#5b6b7c">显存峰值时把优化器状态换出到 CPU 内存，避免长序列样本触发 OOM</text>
+</svg>

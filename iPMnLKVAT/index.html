@@ -130,15 +130,20 @@
 <p>CompletableFuture继承于java.util.concurrent.Future，它本身具备Future的所有特性，并且基于JDK1.8的流式编程以及Lambda表达式等实现一元操作符、异步性以及事件驱动编程模型，可以用来实现多线程的串行关系，并行关系，聚合关系。它的灵活性和更强大的功能是Future无法比拟的。</p>
 <h2 id="一-创建方式">一、创建方式</h2>
 <h3 id="1-用默认线程池">1. 用默认线程池</h3>
-<p><code>CompletableFuture&lt;String&gt; future = new CompletableFuture&lt;&gt;();</code></p>
-<p>默认使用 ForkJoinPool.commonPool()，commonPool 是一个会被很多任务共享的线程池，比如同一 JVM 上的所有 CompletableFuture、并行 Stream 都将共享 commonPool，commonPool 设计时的目标场景是运行 非阻塞的 CPU 密集型任务，为最大化利用 CPU，其线程数默认为 CPU 数量 - 1。</p>
+<p>先澄清一个常见误解：<code>new CompletableFuture&lt;&gt;()</code> 只是创建一个等待被完成的“容器”，它本身不会启动任何任务，也就谈不上使用哪个线程池。真正与线程池相关的是 <code>supplyAsync</code> / <code>runAsync</code> 这类静态方法，以及所有以 <code>Async</code> 结尾的链式方法。</p>
+<p>这些方法在<b>不传入 Executor</b> 时默认使用 <code>ForkJoinPool.commonPool()</code>。commonPool 是一个被整个 JVM 共享的线程池：同一 JVM 上所有未指定线程池的 CompletableFuture、并行 Stream 都会共用它。它的设计目标是运行<b>非阻塞的 CPU 密集型任务</b>，为最大化利用 CPU，并行度默认为 \(p = \max(1, N_{\text{cpu}} - 1)\)。</p>
+<p>正因为它被共享，一旦链上出现阻塞调用（数据库、RPC、文件 IO 等），就可能占满 commonPool 并拖慢同一 JVM 内的其他任务。所以 IO 密集的业务场景应当显式传入自己的线程池。</p>
 <h3 id="2-用自定义线程池">2. 用自定义线程池</h3>
 <pre><code class="language-java">ThreadPoolExecutor pool = new ThreadPoolExecutor(2, 4, 3,
                 TimeUnit.SECONDS, new ArrayBlockingQueue&lt;Runnable&gt;(3),
                 new ThreadPoolExecutor.DiscardOldestPolicy());
 CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;), pool);
 </code></pre>
+<p>自定义线程池的创建与关闭都由使用方负责，不再使用时记得 <code>shutdown()</code>；如果池中的线程不是守护线程，忘记关闭会导致 JVM 无法正常退出。</p>
+<p>顺便和并行流做个对比：<code>list.parallelStream()</code> 固定使用 commonPool，既不能指定线程池，任务里一旦出现阻塞调用还会拖慢整个 JVM；它也缺少超时、异常兜底和任务编排能力。因此“多任务并行 + 结果聚合 + 异常/超时处理”更适合用 CompletableFuture，并为 IO 场景配一个业务线程池。</p>
 <h2 id="二-使用示例">二、使用示例</h2>
+<p>下文示例假设已导入以下类型：<code>import java.util.concurrent.*;</code>（<code>CompletableFuture</code>、<code>ExecutorService</code>、<code>Executors</code>、<code>ThreadPoolExecutor</code>、<code>ArrayBlockingQueue</code>、<code>TimeUnit</code> 等）、<code>import java.util.*;</code> 与 <code>import java.util.function.*;</code>（<code>Supplier</code>、<code>Function</code>、<code>BiFunction</code>、<code>Consumer</code>、<code>BiConsumer</code> 等）。</p>
+<p><img src="/post-assets/iPMnLKVAT/01-chain-pipeline.svg" alt="CompletableFuture 链式流水线与线程切换示意：supplyAsync 在线程池中执行，thenApply 由完成前序阶段的线程执行，thenApplyAsync 再次切换到线程池"></p>
 <h3 id="1-构建异步任务">1. 构建异步任务</h3>
 <table>
 <thead>
@@ -167,14 +172,19 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
     }
 </code></pre>
 <p>示例</p>
-<pre><code class="language-java">public static void runAsync() {
-    //使用默认线程池
-    CompletableFuture cf = CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;));
-    assertFalse(cf.isDone());    
-    //使用自定义线程池
-    CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
-        Executors.newSingleThreadExecutor());
+<pre><code class="language-java">public static void runAsync() throws InterruptedException {
+    // 使用默认线程池：ForkJoinPool.commonPool()
+    CompletableFuture&lt;Void&gt; cf = CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;));
+    // 异步提交后立即返回，任务通常还没有执行完
+    System.out.println(&quot;isDone=&quot; + cf.isDone());
+    // 使用自定义线程池：第二个参数是 Executor
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+        CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;), pool);
+    } finally {
+        pool.shutdown();
     }
+}
 </code></pre>
 <h4 id="2supplyasync">（2）supplyAsync</h4>
 <pre><code class="language-java">public static &lt;U&gt; CompletableFuture&lt;U&gt; supplyAsync(Supplier&lt;U&gt; supplier) {
@@ -245,9 +255,9 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
     System.out.println(cf.get());
 }
 </code></pre>
-<p><code>then</code>意味着这个阶段的动作发生当前的阶段正常完成之后。本例中，当前节点完成，返回字符串<code>message</code>。</p>
-<p><code>Apply</code> 意味着返回的阶段会对前一阶段的结果应用一个函数。</p>
-<p>函数的执行会被<strong>阻塞</strong></p>
+<p><code>then</code> 表示这个阶段的动作发生在前一阶段<b>正常完成</b>之后；本例中前置的 <code>completedFuture</code> 已经完成，结果为字符串 <code>message</code>。</p>
+<p><code>Apply</code> 表示新阶段会对前一阶段的结果应用一个函数，并用函数返回值作为新阶段的结果。</p>
+<p>示例中第一个回调用的是 <code>thenApplyAsync</code>，它会切到线程池执行；第二个 <code>thenApply</code> 不带 Async，由“完成前一阶段的那个线程”顺带执行。如果调用时前一阶段已经完成，非 Async 的回调会直接在<b>调用线程</b>上同步执行——这正是同一段链式代码可能运行在不同线程上的原因。</p>
 <h4 id="2thenaccept">（2）thenAccept</h4>
 <pre><code class="language-java">public CompletableFuture&lt;Void&gt; thenAccept(Consumer&lt;? super T&gt; action) {
     return uniAcceptStage(null, action);
@@ -259,6 +269,8 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
     }).thenAccept((consumer) -&gt; {
         System.out.println(consumer);
     });
+    // thenAccept 返回 CompletableFuture&lt;Void&gt;，join 用于等待回调执行完
+    future.join();
 }
 </code></pre>
 <h4 id="3thenrun">（3）thenRun</h4>
@@ -284,6 +296,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
     Thread.sleep(2000);
 }
 </code></pre>
+<p><code>thenRun</code> 不消费上一阶段的结果、也不接收任何参数，只在上一阶段完成后触发一个 <code>Runnable</code>。示例用 <code>Thread.sleep(2000)</code> 只是为了让 main 线程不要提前退出，生产代码更推荐用 <code>join()</code> 等待。</p>
 <h3 id="3-合并结果消费">3. 合并结果消费</h3>
 <table>
 <thead>
@@ -302,17 +315,17 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <tr>
 <td>thenAcceptBoth</td>
 <td>无</td>
-<td>合并另一个任务，两个任务都完成后，用 BiConsumer 消费两个任务的结果，无返回值。参为两个任务结果，不返回新结果</td>
+<td>合并另一个任务，两个任务都完成后，用 BiConsumer 消费两个任务的结果，入参为两个任务的结果，不返回新结果</td>
 </tr>
 <tr>
 <td>runAfterBoth</td>
 <td>无返回值无入参</td>
-<td>合并另外一个任务，两个任务都完成后，执行Runnable，注意，这里的两个任务是同时执行</td>
+<td>合并另外一个任务，两个任务都完成后执行 Runnable（不消费结果、无入参）；两个前置任务是并行执行的</td>
 </tr>
 </tbody>
 </table>
 <h4 id="1thencombine">（1）thenCombine</h4>
-<p>如果CompletableFuture依赖两个前面阶段的结果， 它复合两个阶段的结果再返回一个结果，我们就可以使用<code>thenCombine()</code>函数。整个流水线是同步的。</p>
+<p>如果 CompletableFuture 依赖两个前置阶段的结果，需要把两个结果复合后再返回一个新结果，就可以使用 <code>thenCombine()</code>。要注意的是，<code>thenCombine</code> 不带 Async 时，合并函数由“完成第二个阶段的线程”执行（若两个结果在调用时都已就绪，则由调用线程立即执行），它并不会额外开线程。</p>
 <pre><code class="language-java">public &lt;U,V&gt; CompletableFuture&lt;V&gt; thenCombine(CompletionStage&lt;? extends U&gt; other,
                              BiFunction&lt;? super T,? super U,? extends V&gt; fn) {
     return biApplyStage(null, other, fn);
@@ -332,13 +345,14 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
         System.out.println(&quot;processing c...&quot;);
         return &quot;, I'm CodingTao!&quot;;
     });
-    cfA.thenCombine(cfB, (resultA, resultB) -&gt; {
+    String result = cfA.thenCombine(cfB, (resultA, resultB) -&gt; {
         System.out.println(resultA + resultB);  // hello world
         return resultA + resultB;
     }).thenCombine(cfC, (resultAB, resultC) -&gt; {
         System.out.println(resultAB + resultC); // hello world, I'm CodingTao!
         return resultAB + resultC;
-    });
+    }).join(); // 不 join 等待，main 可能先退出而看不到输出
+    System.out.println(result);
 }
 </code></pre>
 <h4 id="2thenacceptboth">（2）thenAcceptBoth</h4>
@@ -424,7 +438,8 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <p>场景</p>
 <p>假设查询商品a，有两种方式，A和B，但是A和B的执行速度不一样，希望哪个先返回就用那个的返回值。</p>
 <h4 id="1applytoeither">（1）applyToEither</h4>
-<pre><code class="language-java">public &lt;U&gt; CompletableFuture&lt;U&gt; applyToEither(CompletionStage&lt;? extends T&gt; other,                                                  Function&lt;? super T, U&gt; fn) {
+<pre><code class="language-java">public &lt;U&gt; CompletableFuture&lt;U&gt; applyToEither(CompletionStage&lt;? extends T&gt; other,
+    Function&lt;? super T, U&gt; fn) {
     return orApplyStage(null, other, fn);
 }
 </code></pre>
@@ -452,7 +467,23 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 }
 </code></pre>
 <h4 id="2accepteither">（2）acceptEither</h4>
+<p>任一前置任务完成后，用 <code>Consumer</code> 消费“先完成者”的结果；不返回新结果，且两个前置任务的结果类型必须一致。</p>
+<pre><code class="language-java">private static void acceptEither() {
+    CompletableFuture&lt;String&gt; futureA = CompletableFuture.supplyAsync(() -&gt; &quot;通过方式A获取商品a&quot;);
+    CompletableFuture&lt;String&gt; futureB = CompletableFuture.supplyAsync(() -&gt; &quot;通过方式B获取商品a&quot;);
+    // 谁先返回就消费谁的结果
+    futureA.acceptEither(futureB, product -&gt; System.out.println(&quot;先返回的是：&quot; + product)).join();
+}
+</code></pre>
 <h4 id="3runaftereither">（3）runAfterEither</h4>
+<p>任一前置任务完成后执行一个 <code>Runnable</code>：不接收结果、不返回结果，也不要求两个前置任务的结果类型一致。</p>
+<pre><code class="language-java">private static void runAfterEither() {
+    CompletableFuture&lt;String&gt; futureA = CompletableFuture.supplyAsync(() -&gt; &quot;resultA&quot;);
+    CompletableFuture&lt;Integer&gt; futureB = CompletableFuture.supplyAsync(() -&gt; 100);
+    // 两个前置任务结果类型不同也可以，只要有一个完成就执行
+    futureA.runAfterEither(futureB, () -&gt; System.out.println(&quot;任一任务完成&quot;)).join();
+}
+</code></pre>
 <h3 id="5-级联任务">5. 级联任务</h3>
 <table>
 <thead>
@@ -478,7 +509,16 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 }
 </code></pre>
 <p>示例</p>
-<pre><code class="language-java">private static void thenCompose() {
+<pre><code class="language-java">// 两个辅助方法，模拟耗时的类型转换
+private static String delayedUpperCase(String s) {
+    return s.toUpperCase();
+}
+
+private static String delayedLowerCase(String s) {
+    return s.toLowerCase();
+}
+
+private static void thenCompose() {
     String original = &quot;Message&quot;;
     CompletableFuture cf = CompletableFuture.completedFuture(original).thenApply(s -&gt; delayedUpperCase(s))
             .thenCompose(upper -&gt; CompletableFuture.completedFuture(original).thenApply(s -&gt; delayedLowerCase(s))
@@ -589,30 +629,46 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 }
 </code></pre>
 <h4 id="3exceptionally">（3）exceptionally</h4>
+<p><code>exceptionally</code> 只在前置任务<b>异常</b>时执行：入参是异常对象，函数返回值作为新结果，异常就此被“消化”，后续阶段能继续执行；如果前置任务正常完成，函数不会执行，结果直接透传。</p>
+<pre><code class="language-java">private static void exceptionally() {
+    String result = CompletableFuture.supplyAsync(() -&gt; {
+                throw new RuntimeException(&quot;远程调用失败&quot;);
+            })
+            .thenApply(s -&gt; s + &quot;-B&quot;)   // 上游异常，本阶段被跳过
+            .exceptionally(ex -&gt; {      // 这里拿到异常并返回兜底值
+                System.out.println(&quot;上游异常：&quot; + ex);
+                return &quot;defaultValue&quot;;
+            })
+            .join();
+    System.out.println(result); // defaultValue
+}
+</code></pre>
+<p>三者的分工可以这样记：<code>handle</code> 能处理异常<b>并改变结果</b>；<code>whenComplete</code> 只能观察，<b>不能改变结果</b>，异常会继续向下传递；<code>exceptionally</code> 只在异常时兜底。</p>
+<p><img src="/post-assets/iPMnLKVAT/02-combine-exception.svg" alt="allOf 与 anyOf 的组合语义，以及 exceptionally、handle、whenComplete 与 orTimeout、completeOnTimeout 的异常和超时处理路径"></p>
 <h3 id="7-合并多个complete为一个">7. 合并多个complete为一个</h3>
 <table>
 <thead>
 <tr>
 <th>方法</th>
-<th></th>
+<th>返回值</th>
 <th>描述</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>allOf</td>
-<td></td>
-<td>合并多个complete为一个，等待全部完成</td>
+<td>CompletableFuture&lt;Void&gt;</td>
+<td>合并多个 CompletableFuture，等待全部完成才完成；本身不携带结果</td>
 </tr>
 <tr>
 <td>anyOf</td>
-<td></td>
-<td>合并多个complete为一个，等待其中之一完成</td>
+<td>CompletableFuture&lt;Object&gt;</td>
+<td>合并多个 CompletableFuture，其中任意一个完成即完成，结果为最先完成者的结果</td>
 </tr>
 </tbody>
 </table>
 <h4 id="1allof">（1）allOf</h4>
-<p>我们在处理业务时，有时会有多任务异步处理，同步返回结果的情况</p>
+<p>处理业务时经常遇到“多个互相独立的子任务并行执行、最后汇总结果”的场景：</p>
 <ul>
 <li>采用多线程并行执行某些任务，比如在不同主机上查询磁盘列表信息。</li>
 <li>将执行结果搜集，分组分类，处理。</li>
@@ -663,7 +719,8 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
         System.out.println(&quot;cf4 run result-&gt;&quot;+cf4.get());
         System.out.println(&quot;main thread exit,time-&gt;&quot;+System.currentTimeMillis());
 </code></pre>
-<p>获取返回值方法</p>
+<p>注意两点：一是 <code>allOf</code> 返回的 <code>CompletableFuture&lt;Void&gt;</code> 不携带结果，<code>get()</code>/<code>join()</code> 只代表“全部结束”；二是任一任务异常终止时聚合结果也会异常（<code>join()</code> 抛出 <code>CompletionException</code>），需要配合 <code>exceptionally</code>/<code>handle</code> 处理。示例中 <code>cf4</code> 是 <code>whenComplete</code> 之后的新任务，所以正常结束时 <code>cf4.get()</code> 返回 null。</p>
+<p>要拿到每个任务的结果，可以再包一层，把 <code>allOf</code> 的结果转换成结果列表：</p>
 <pre><code class="language-java">public &lt;T&gt; CompletableFuture&lt;List&lt;T&gt;&gt; allOf(List&lt;CompletableFuture&lt;T&gt;&gt; futuresList) {
     CompletableFuture&lt;Void&gt; allFuturesResult =
             CompletableFuture.allOf(futuresList.toArray(new CompletableFuture[futuresList.size()]));
@@ -675,7 +732,7 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 }
 </code></pre>
 <h4 id="2anyof">（2）anyOf</h4>
-<p>CompletableFuture.anyOf()和其名字介绍的一样，当任何一个CompletableFuture完成的时候【相同的结果类型】，返回一个新的CompletableFuture。</p>
+<p><code>anyOf()</code> 会在任意一个 CompletableFuture 完成时返回一个新的 CompletableFuture，结果是<b>最先完成</b>的那个任务的结果，返回类型为 <code>Object</code>，因此并不要求各任务的结果类型相同（这一点与 <code>applyToEither</code> 不同）。另外，其余任务不会被取消，仍会在后台继续执行。</p>
 <p>示例</p>
 <pre><code class="language-java">private static void anyOf() throws ExecutionException, InterruptedException {
         CompletableFuture&lt;String&gt; future1 = CompletableFuture.supplyAsync(() -&gt; {
@@ -717,26 +774,27 @@ CompletableFuture.runAsync(() -&gt; System.out.println(&quot;Hello World!&quot;)
 <h4 id="3getlong-timeouttimeunit-unit">（3）get(long timeout,TimeUnit unit)</h4>
 <p>超时阻塞获取结果。</p>
 <h4 id="4cancelboolean-mayinterruptifrunning">（4）cancel(boolean mayInterruptIfRunning)</h4>
-<p>取消任务：若任务未完成，则令其以 CancellationException 异常结束；相关未完成的子任务也会以 CompletionException 结束。</p>
+<p>取消任务：若任务还没有结束，则令其以 <code>CancellationException</code> 结束，依赖它的后续阶段会以包装了该异常的 <code>CompletionException</code> 结束；若任务已经完成，<code>cancel</code> 返回 false 且不会改变已有结果。</p>
 <h4 id="5iscancelled">（5）isCancelled()</h4>
 <p>任务是否已取消：在正常执行完成之前被取消才为 true，否则为 false。</p>
 <h3 id="2-completablefuture接口">2. CompletableFuture接口</h3>
 <h4 id="1join">（1）join</h4>
-<p>        阻塞获取结果或抛出非受检异常。</p>
+<p><code>join()</code> 阻塞等待结果，失败时抛出非受检的 <code>CompletionException</code>，不需要显式 try...catch，适合在流式代码和 Lambda 中使用。</p>
+<p><code>join()</code> 与 <code>get()</code> 的区别：<code>get()</code> 声明抛出受检的 <code>InterruptedException</code> 和 <code>ExecutionException</code>；<code>join()</code> 只抛非受检的 <code>CompletionException</code>。两者拿到的都是包装后的异常，通常还要用 <code>getCause()</code> 才能看到原始异常。</p>
 <h4 id="2getnowt-valueifabsent">（2）getNow(T valueIfAbsent)</h4>
-<p>        若当前任务无结果，则返回valueIfAbsent，否则返回已完成任务的结果。</p>
+<p>若当前任务无结果，则返回valueIfAbsent，否则返回已完成任务的结果。</p>
 <h4 id="3completet-value">（3）complete(T value)</h4>
-<p>设置任务结果，令任务正常结束，之后任务状态为已完成。</p>
+<p>设置任务结果，令任务正常结束，之后任务状态为已完成；若任务已经完成，则返回 false 且不改变原结果。</p>
 <h4 id="4completeexceptionallythrowable-ex">（4）completeExceptionally(Throwable ex)</h4>
 <p>设置任务异常结果，令任务异常结束，之后任务状态为已完成。</p>
 <h4 id="5iscompletedexceptionally">（5）isCompletedExceptionally()</h4>
-<p>        判断任务是否异常结束。异常可能的原因有：取消、显示设置任务异常结果、任务动作执行异常等。</p>
+<p>判断任务是否异常结束。异常可能的原因有：任务被取消、显式调用 <code>completeExceptionally</code>、任务体本身抛出异常等。</p>
 <h4 id="6getnumberofdependents">（6）getNumberOfDependents()</h4>
-<p>        返回依赖当前任务的任务数量，主要用于监控。</p>
+<p>返回依赖当前任务的任务数量，主要用于监控。</p>
 <h4 id="7ortimeoutlong-timeouttimeunit-unit-jdk9">（7）orTimeout(long timeout,TimeUnit unit) jdk9</h4>
-<p>设置任务完成的超时时间：若在指定时间内未正常完成，任务将以 TimeoutException 异常结束。</p>
+<p>设置任务完成的超时时间：若在指定时间内未正常完成，任务将以 <code>TimeoutException</code> 异常结束，<code>join()</code>/<code>get()</code> 会抛出包装后的 <code>CompletionException</code>/<code>ExecutionException</code>。</p>
 <h4 id="8completeontimeoutt-valuelong-timeouttimeunit-unit-jdk9">（8）completeOnTimeout(T value,long timeout,TimeUnit unit) jdk9</h4>
-<p>设置任务完成的超时时间：若在指定时间内未正常完成，则以给定的 value 作为任务结果。</p>
+<p>设置任务完成的超时时间：若在指定时间内未正常完成，则以给定的 value 作为任务结果，任务按<b>正常完成</b>处理，后续阶段看不到异常——这正是它与 <code>orTimeout</code> 的关键区别。</p>
 <h2 id="四-实战">四、实战</h2>
 <h3 id="1-api网关做接口的聚合">1. API网关做接口的聚合</h3>
 <pre><code class="language-java">//这两个参数从外部获得
@@ -744,12 +802,12 @@ Long userId = 10006L;
 String orderId = &quot;XXXXXXXXXXXXXXXXXXXXXX&quot;;
 //从用户服务获取用户信息
 UserInfo userInfo = userService.getUserInfo(userId);
-//从用订单务获取订单信息
+//从订单服务获取订单信息
 OrderInfo orderInfo = orderService.getOrderInfo(orderId);
 //返回两者的聚合DTO
 return new OrderDetailDTO(userInfo,orderInfo);
 </code></pre>
-<p>        下面三个外部接口的信息一定是不相关联的，也就是可以并行获取，三个接口的结果都获取完毕之后做一次数据聚合到DTO即可，也就是聚合的耗时大致是这三个接口中耗时最长的接口的响应时间</p>
+<p>下面三个外部接口互不依赖，可以并行调用：等三个接口的结果都返回后再聚合成 DTO，总耗时大致等于其中响应最慢的那个接口。</p>
 <pre><code class="language-java">@Service
 public class OrderDetailService {
 	/**
@@ -770,14 +828,15 @@ public class OrderDetailService {
 	}
 }
 </code></pre>
+<p>实战要点：三个远程调用都显式提交到专用线程池，避免占用 <code>ForkJoinPool.commonPool()</code>；<code>thenCombineAsync</code> 也传入同一个 <code>executor</code>，保证聚合逻辑在预期的线程上执行。这个池 core=10、max=20、队列容量=100，只有队列被填满才会扩容到 20 个线程，实际容量需要结合拒绝策略一起评估。另外 <code>result.get()</code> 仍会阻塞调用线程，真正的全异步返回应直接给出 <code>CompletableFuture</code>（如 WebFlux 或 <code>DeferredResult</code>）。</p>
 <h2 id="五-区别">五、区别</h2>
-<h4 id="1whencomplete和handle区别">（1）whenComplete和handle区别</h4>
-<p><code>whenComplete</code> 与 <code>handle</code> 都类似于 try...catch...finally 中的 finally 代码块：无论是否发生异常都会执行。两者的区别在于 <code>handle</code> 支持返回处理后的结果。</p>
-<h4 id="2thenapply与thencompose的异同">（2）thenApply与thenCompose的异同</h4>
+<h3 id="1whencomplete和handle区别">（1）whenComplete和handle区别</h3>
+<p><code>whenComplete</code> 与 <code>handle</code> 无论任务正常完成还是异常结束都会执行，类似 try...catch...finally 里的 finally 代码块。区别在于：<code>handle</code> 接收 (结果, 异常) 并<b>返回一个新结果</b>，可以把异常“消化”成正常值；<code>whenComplete</code> 只能观察结果或异常，<b>不能改变结果</b>，异常会继续沿链向下传递。</p>
+<h3 id="2thenapply与thencompose的异同">（2）thenApply与thenCompose的异同</h3>
 <p>对于 thenApply：fn 对上一个已完成 stage 的返回值进行同步计算、转换。</p>
 <p>对于 thenCompose：fn 接收上一个 stage 的返回值，并返回一个新的 CompletableFuture 与之组合（扁平化）。</p>
-<h4 id="3有无async的区别">（3）有无Async的区别</h4>
-<p>没有 Async 后缀的方法，会在调用它的线程所在的调用链上运行，因此通常无法预知在哪里执行；如果结果已经可用，甚至可能立即执行。</p>
+<h3 id="3有无async的区别">（3）有无Async的区别</h3>
+<p>没有 Async 后缀的方法不会额外提交线程：由“完成前一阶段的那个线程”顺带执行；若调用时前一阶段已经完成，则直接在<b>调用线程</b>上同步执行，因此无法预知具体跑在哪条线程上。</p>
 <p>带 Async 后缀的方法会在执行器上运行：未指定线程池时通常使用 ForkJoinPool.commonPool()，指定了线程池则在传入的执行器上运行。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
@@ -869,8 +928,7 @@ public class OrderDetailService {
 <li><a href="#1-api%E7%BD%91%E5%85%B3%E5%81%9A%E6%8E%A5%E5%8F%A3%E7%9A%84%E8%81%9A%E5%90%88">1. API网关做接口的聚合</a></li>
 </ul>
 </li>
-<li><a href="#%E4%BA%94-%E5%8C%BA%E5%88%AB">五、区别</a><br>
-*
+<li><a href="#%E4%BA%94-%E5%8C%BA%E5%88%AB">五、区别</a>
 <ul>
 <li><a href="#1whencomplete%E5%92%8Chandle%E5%8C%BA%E5%88%AB">（1）whenComplete和handle区别</a></li>
 <li><a href="#2thenapply%E4%B8%8Ethencompose%E7%9A%84%E5%BC%82%E5%90%8C">（2）thenApply与thenCompose的异同</a></li>
