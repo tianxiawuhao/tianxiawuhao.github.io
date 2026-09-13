@@ -125,7 +125,20 @@
           
           <img class="post-feature-header-image" src="/post-images/E2kaihQ5a.png" alt="封面图">
           
-          <h2 id="实体对象">实体对象</h2>
+          <p>网关、流程引擎这类系统里经常需要把「组件」做成可插拔的：编译好一个 jar 丢到指定目录，运行时按需加载、实例化、执行，替换 jar 之后还要能生效。在 Java 里这件事只有一个入口——类加载器。本文记录一套实际用过的实现：用自定义的 <code>URLClassLoader</code> 加载指定目录下的组件 jar，用 <code>Class.forName(name, true, loader)</code> 拿到 <code>ICmpt</code> 实例并缓存，卸载时关闭加载器。</p>
+<p>先把几个容易混淆的 API 分清楚，后面的代码才好读：</p>
+<ul>
+<li><code>ClassLoader.loadClass(String)</code>：走双亲委派，只做「加载」，默认不执行静态初始化（内部等价于 <code>loadClass(name, false)</code>）。</li>
+<li><code>Class.forName(String)</code>：等价于「用<b>调用者自己的类加载器</b>加载并初始化」。也就是说它只能看到调用方加载器及其父加载器可见的类，插件 jar 里的新类用它加载不到。</li>
+<li><code>Class.forName(String name, boolean initialize, ClassLoader loader)</code>：显式指定加载器，是插件化的正确入口；<code>initialize=true</code> 会立刻执行静态代码块。</li>
+<li><code>ServiceLoader.load(Class)</code> 与 SPI：面向「一个接口 + 多个实现」的发现机制，靠 <code>META-INF/services</code> 描述文件工作，默认使用线程上下文类加载器（TCCL）。</li>
+</ul>
+<p>类加载器遵守<b>双亲委派模型</b>：收到加载请求先交给父加载器，父加载器加载不到（抛 <code>ClassNotFoundException</code>）才回落到自己的 <code>findClass</code>。插件化之所以绕不开这个模型，是因为「打破」它的三类典型场景恰好都出现在这里。</p>
+<p><img src="/post-assets/E2kaihQ5a/01-parent-delegation.svg" alt="双亲委派模型与三类典型的打破场景：线程上下文类加载器、Tomcat WebappClassLoader、Spring Boot LaunchedURLClassLoader"></p>
+<p>还有一个必须记住的前提：<b>跨类加载器强转，要求接口由共同的父加载器加载</b>。组件 jar 里的实现类由 <code>CmptClassLoader</code> 定义，而它实现的 <code>ICmpt</code> 接口来自宿主公共模块、由 App 加载器加载；由于 <code>CmptClassLoader</code> 的 parent 就是 App 加载器，委派保证了 <code>ICmpt</code> 在 JVM 中只有一份，<code>(ICmpt) instance</code> 才不会抛 <code>ClassCastException</code>。反过来，如果把接口一起打进插件 jar，就会出现「同一个接口被两个加载器各加载一份」的经典错误。</p>
+<h2 id="实体对象">实体对象</h2>
+<p>组件定义来自数据库，字段里最关键的是 <code>fullQualifiedName</code>（入口类全限定名）、<code>version</code> 和 <code>code</code>：前者决定要加载哪个类，后两者决定从哪个目录取 jar，也一起构成缓存的 key。</p>
+
 <pre><code class="language-java">public class CmptDef {
     private String idCmptDef; //组件在DB里的唯一ID号
     private String name;//组件的唯一名称，只能是字母、数字、下划线组成，大于1小雨50，通常为Jar的名字
@@ -185,7 +198,9 @@ public enum CustomFormCode {
     WEBSERVICE_FORM
 }
 </code></pre>
+<p>服务接口只有三个方法：取实例、刷新缓存、删除实例。<code>getCmptInstance</code> 的语义是「缓存优先，未命中时动态加载」，也就是说类加载器不是启动时批量创建的，而是第一次用到某个组件时才建。注意 <code>refreshCmptInstanceCache</code> 在下面实现里是个空桩，方法名比行为更有想象空间。</p>
 <h2 id="方法接口">方法接口</h2>
+
 <pre><code class="language-java">public interface ICmptService {
     /**
      * 根据组件类名和版本从缓存中获取组件,如果不存在则尝试动态加载组件类，实例化并刷新缓存后再获取，还是不存在则返回null；
@@ -213,7 +228,21 @@ public enum CustomFormCode {
     void removeCmpt(final String fullQualifiedName, final Float version, final String code);
 }
 </code></pre>
+<p>这个方法有两个分支，正好对应两种加载方式：</p>
+<ul>
+<li><code>dynamicLoadCmptClass=true</code>：走 <code>CmptClassLoaderUtil.newInstance</code>，用自定义加载器从 jar 目录加载，支持热插拔；</li>
+<li>否则走 <code>Class.forName(name)</code> 加 <code>newInstance()</code>，用的是<b>当前类的加载器</b>，因此只能加载已经在应用 classpath 上的组件——换掉 jar 不会生效，也无法卸载。</li>
+</ul>
+<p>这段代码里有几个点值得先标记出来，后面「工具类」一节会展开：</p>
+<ul>
+<li><code>Class.newInstance()</code> 从 Java 9 起被标记为 deprecated：它只能调用 public 无参构造，还会把构造器抛出的受检异常原样「穿透」。新代码应写 <code>clazz.getDeclaredConstructor().newInstance()</code>。</li>
+<li>前一个 <code>if (null != cmpt)</code> 分支做了 <code>instanceof AbstractCmpt</code> 判断，但后面注册观察者时直接强转 <code>(AbstractCmpt) cmpt</code>，没有判断——如果某个组件不是 <code>AbstractCmpt</code> 的子类，这里会抛 <code>ClassCastException</code>。</li>
+<li><code>removeCmpt</code> 里先显式调用 <code>cmpt.destroy()</code>，随后 <code>CmptInstanceHolder.removeEntry</code> 内部又 <code>destroy()</code> 了一次，<code>destroy</code> 必须写成幂等的。</li>
+<li>卸载时传给 <code>CmptClassLoaderManager.unLoadJar</code> 的是 <code>getJarPath(cmptDef)</code>（jar 路径），而管理类内部 map 的 key 是 <code>IdCmptDef</code>，两者对不上：卸载实际上不会生效，加载器会一直留在静态 map 里。这是本文代码里最典型的一个类加载器泄漏点。</li>
+<li>方法整体加了 <code>synchronized</code>，加载慢时会阻塞同一个 service 实例上的其他调用；用「按类名加锁 + 双重检查」会更好。</li>
+</ul>
 <h2 id="方法实现">方法实现</h2>
+
 <pre><code class="language-java">@Service
 public class CmptServiceImpl implements ICmptService {
     private static Logger logger = LoggerFactory.getLogger(CmptServiceImpl.class);
@@ -307,6 +336,13 @@ public class CmptServiceImpl implements ICmptService {
 }
 </code></pre>
 <h2 id="工具类">工具类</h2>
+<p>下面这几个类合起来是一套最小可用的插件类加载框架，职责分别是：<code>CmptInstanceHolder</code> 缓存实例、<code>CmptClassLoaderUtil</code> 拼路径并创建实例、<code>CmptClassLoaderManager</code> 管理加载器的创建与卸载、<code>CmptClassLoader</code> 是加载器本体、<code>LoadClassUtil</code> 是更早一版的反射工具（含一条已被淘汰的「把 jar 挂到 App 加载器」的路子）。</p>
+<p><img src="/post-assets/E2kaihQ5a/02-jar-loading-flow.svg" alt="插件 jar 的类加载、资源读取与卸载条件：拼装路径、创建加载器、Class.forName 加载、实例化强转、缓存实例，以及类卸载的三个前提与常见泄漏源"></p>
+<p>主线流程是：拼出 jar 绝对路径 → 新建（或复用）<code>CmptClassLoader</code> → <code>Class.forName(name, true, loader)</code> 加载并初始化类 → <code>newInstance()</code> 后强转为 <code>ICmpt</code> → 放进静态缓存。每一环都有各自的坑，分别在下面几个小节里说明。</p>
+<h3 id="组件实例缓存">组件实例缓存</h3>
+<p>这是一个饿汉式静态单例加 <code>ConcurrentHashMap</code> 的实例缓存。<code>addEntry</code> 先 <code>removeEntry</code> 再 put，保证覆盖时旧实例被销毁；<code>removeEntry</code> 在移除后会调用 <code>destroy()</code>，用来释放组件持有的线程、连接等资源。</p>
+<p>要特别注意的是：这个单例由 App 加载器加载，它的静态字段会<b>一直存活到 JVM 结束</b>。只要 map 里还留着某个插件实例，实例 → 插件的 <code>Class</code> → 定义它的 <code>CmptClassLoader</code> 这条引用链就断不掉；而「加载器不可达」是类卸载的前提（见上图），于是 jar 里的类会一直留在 Metaspace 里。插件化系统里「每次重载内存都涨一点」，绝大多数都是这类静态缓存加加载器没释放造成的。</p>
+
 <pre><code class="language-java">/**
  * 组件配置缓存持有者
  */
@@ -364,6 +400,34 @@ public class CmptInstanceHolder {
     }
 }
 </code></pre>
+<h3 id="jar-路径与-jar-内资源">jar 路径与 jar 内资源</h3>
+<p><code>getJarPath</code> 用字符串拼接出「app.home + cmpt.location / code / version / 入口类简名_版本.jar」。拼路径更稳妥的写法是 <code>Paths.get(appHome, location, code, version, fileName)</code>，由 <code>File</code> 负责分隔符；用字符串拼时也尽量避免手工塞 <code>/</code>，否则在不同平台上很容易多出或少掉分隔符。</p>
+<p>示例里的 <code>FileUtil.fixFileName</code> 做了两种归一化，都有副作用：</p>
+<ul>
+<li>第一个 <code>replaceAll</code> 的参数是<b>正则</b>，用两个反斜杠匹配一个反斜杠，写法正确但不直观；</li>
+<li>第二个 <code>replaceAll("//", "/")</code> 把连续斜杠压成一个。对普通文件路径无害，但它同样会破坏 <code>file:///tmp/a.jar</code>（变成 <code>file:/tmp/a.jar</code>）和 Windows 的 UNC 路径（<code>//server/share</code> 被压成 <code>/server/share</code>）。只在真正的本地文件路径上做这种归一化才安全。</li>
+</ul>
+<p>另外 <code>LoadClassUtil</code> 里调用了 <code>FileUtil.fileInfo(jarPath)</code>，但本节列出的 <code>FileUtil</code> 只有 <code>fixFileName</code> 一个方法——把散落的代码片段拼起来复用时要补上这个方法，否则编译不过。</p>
+<p><b>jar 内的资源只能用类加载器读</b>，不能用 <code>new File(path)</code>：jar 里的条目不是文件系统路径。前导斜杠的含义也要分清：</p>
+<pre><code class="language-java">// Class 版本：以 / 开头表示从 classpath 根开始找
+InputStream in1 = getClass().getResourceAsStream("/cmpt/default.properties");
+// Class 版本：不以 / 开头表示相对当前类的包目录
+InputStream in2 = getClass().getResourceAsStream("default.properties");
+// ClassLoader 版本：路径一律相对 classpath 根，不能写前导 /
+InputStream in3 = loader.getResourceAsStream("cmpt/default.properties");
+// 只在本加载器（自己的 jar）里找，不委派父加载器
+URL own = ((URLClassLoader) loader).findResource("cmpt/default.properties");
+// getResource 会先委派父加载器；jar 文件句柄被缓存会导致 Windows 上无法覆盖 jar
+URL url = loader.getResource("cmpt/default.properties");
+if (url != null) {
+    URLConnection conn = url.openConnection();
+    conn.setUseCaches(false);
+    try (InputStream in = conn.getInputStream()) {
+        // 读取资源
+    }
+}
+</code></pre>
+<p>两个容易踩的点：<code>getResource</code>/<code>getResourceAsStream</code> 是<b>父加载器优先</b>的，如果宿主的 classpath 上正好有同名资源，插件 jar 里的那一份读不到，这种场景要改用 <code>findResource</code>；另外把 jar 里的资源读成 <code>InputStream</code> 时要记得关闭，<code>getResourceAsStream</code> 返回的流同样占用 jar 的文件句柄。</p>
 <pre><code class="language-java">public class CmptClassLoaderUtil {
 
     private static Logger logger = LoggerFactory.getLogger(CmptClassLoaderUtil.class);
@@ -411,11 +475,18 @@ public class CmptInstanceHolder {
 
 }
 </code></pre>
-<pre><code class="language-shell">#linux版home目录
+<pre><code class="language-properties">#linux版home目录
 app.home=/work/sharestore
 #组件资源存放路径，&lt;home&gt;/cmpt/&lt;code&gt;/&lt;version&gt;/&lt;name&gt;_&lt;version&gt;.jar,html
 cmpt.location=/cmpt
 </code></pre>
+<h3 id="加载器的创建与卸载">加载器的创建与卸载</h3>
+<p><code>CmptClassLoaderManager</code> 用一个静态 map 管理「组件定义 ID 到加载器」的映射，<code>loadJar(..., isReloadJar)</code> 中 <code>isReloadJar=true</code> 表示每次都新建加载器。这里有两处需要修正：</p>
+<ul>
+<li><b>key 不一致</b>：加载时以 <code>IdCmptDef</code> 为 key，卸载时 <code>CmptServiceImpl.removeCmpt</code> 传的却是 jar 路径，<code>unLoadJar</code> 找不到对应加载器。而它的返回值只表示「过程没有抛异常」——即使什么都没删到也返回 <code>true</code>，调用方无法察觉，加载器就永久留在了静态 map 里。</li>
+<li><b>先卸后载、没有回滚</b>：<code>null == classLoaderMap.get(id) || unLoadJar(id)</code> 先把旧加载器关掉，再去加载新 jar；如果新 jar 损坏、路径写错或入口类缺失，<code>addURL</code> 返回 false，最终返回 <code>null</code>——旧组件也已经不可用了。更稳的顺序是：先建新加载器并验证入口类能加载出来，再替换 map 中的旧值并关闭旧加载器。</li>
+</ul>
+<p><code>close()</code> 是 <code>URLClassLoader</code> 从 Java 7 起实现的方法，作用是关闭该加载器打开的 jar 文件句柄（内部 <code>JarFile</code> 缓存），关闭后不能再用它加载新的类或资源；但<b>已加载到 JVM 中的类不会因此被卸载</b>，类卸载仍然取决于可达性与 GC。所以「卸载插件」是两件事：释放文件句柄（close），以及切断所有强引用后等 GC 回收类（map 移除、缓存清理、线程停止）。</p>
 <pre><code class="language-java">/**
  * 类加载器管理, 加载, 卸载jar包
  */
@@ -518,6 +589,51 @@ public class CmptClassLoaderManager {
     }
 }
 </code></pre>
+<h3 id="cmptclassloader-的用法与坑">CmptClassLoader 的用法与坑</h3>
+<p><code>CmptClassLoader</code> 继承 <code>URLClassLoader</code>，没有重写 <code>loadClass</code>，因此完全遵守双亲委派：插件类先在父加载器（App）里找，找不到才在本 jar 内找。这带来一个副作用——如果插件 jar 自带了与宿主 classpath 同名的库（比如另一个版本的 fastjson），实际生效的是父加载器里的那一份，插件的依赖版本被无声地忽略。要让插件自带的依赖优先，就得像 Tomcat 那样重写 <code>loadClass</code> 实现「子优先」，并显式列出必须先委派的包（<code>java.</code>、<code>javax.</code>、宿主接口所在的包等）。</p>
+<p><code>addURL</code> 里的反射代码其实可以删掉：<code>URLClassLoader.addURL</code> 是 protected 方法，写在子类中直接调用即可；而它绕道取内部字段 <code>ucp</code> 再强转成 <code>sun.misc.URLClassPath</code>，在 JDK 9 及以上会撞上模块化的强封装（<code>java.net</code> 并未 open 给 unnamed 模块，需要 <code>--add-opens java.base/java.net=ALL-UNNAMED</code>），从 JDK 16 起默认直接抛 <code>InaccessibleObjectException</code>。同理，<code>finalize()</code> 里调用 <code>close()</code> 也不可靠：<code>finalize</code> 自 JDK 9 起被弃用、JDK 18（JEP 421）起可以被禁用，对象还可能被「复活」；释放加载器应该由显式的 <code>close()</code> 加 map 移除来完成，不要指望 GC 帮你收尾。</p>
+<p><code>findParentClassLoader()</code> 借 <code>logger.getClass().getClassLoader()</code> 拿父加载器同样脆弱：如果这里的 <code>Logger</code> 是 <code>java.util.logging.Logger</code>，它位于 <code>java.base</code>、由启动类加载器加载，<code>getClassLoader()</code> 返回 <code>null</code>，方法会直接抛运行时异常。应该明确写成 <code>CmptClassLoader.class.getClassLoader()</code>，或者按插件化惯例取 <code>Thread.currentThread().getContextClassLoader()</code>。</p>
+<p>把上面几点落到代码上，大致是这样：</p>
+<pre><code class="language-java">public class CmptClassLoader extends URLClassLoader {
+    static {
+        // 注册后可并行加载类，减少多线程首次加载时的锁竞争
+        ClassLoader.registerAsParallelCapable();
+    }
+
+    public CmptClassLoader(URL[] urls, ClassLoader parent) {
+        super(urls, parent);
+    }
+
+    // addURL 是 protected，子类直接调用即可，无需反射 sun.misc.URLClassPath
+    public void addJar(Path jar) throws MalformedURLException {
+        addURL(jar.toUri().toURL());
+    }
+
+    @Override
+    protected Class&lt;?&gt; loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        // 示例：仅对插件包「子优先」，其余仍走双亲委派
+        if (name.startsWith("org.example.plugin.")) {
+            synchronized (getClassLoadingLock(name)) {
+                Class&lt;?&gt; c = findLoadedClass(name);
+                if (c == null) {
+                    try {
+                        c = findClass(name);
+                    } catch (ClassNotFoundException ignored) {
+                        // 本 jar 里没有，交给父加载器
+                    }
+                }
+                if (c != null) {
+                    if (resolve) {
+                        resolveClass(c);
+                    }
+                    return c;
+                }
+            }
+        }
+        return super.loadClass(name, resolve);
+    }
+}
+</code></pre>
 <pre><code class="language-java">/**
  * 类加载器终极版, 加载, 卸载jar包
  */
@@ -594,6 +710,21 @@ public class CmptClassLoader extends URLClassLoader {
     }
 }
 </code></pre>
+<h3 id="反射工具类的坑">反射工具类的坑</h3>
+<p><code>LoadClassUtil</code> 是这个功能更早的一版实现，核心思路是「把 jar 路径反射塞进<b>应用类加载器</b>的扫描列表」，这样 <code>Class.forName(name)</code> 就能找到插件类。这条路子写起来最短，代价却很明确：</p>
+<ul>
+<li>插件类由 App 加载器定义，而 App 加载器在整个 JVM 生命周期内一直可达，<b>插件类永远无法卸载</b>，替换 jar 也不会生效（类已经加载过了）；</li>
+<li><code>URLClassLoader.addURL</code> 是 protected，只能靠 <code>setAccessible(true)</code> 反射调用，JDK 9 之后受模块化限制，JDK 16 起默认失败；</li>
+<li>插件依赖全部挂到 App 加载器上等于放弃了隔离，插件之间、插件与宿主之间的同名类会互相顶掉。</li>
+</ul>
+<p>也正因为这些限制，才有了后面的 <code>CmptClassLoader</code>：加载器自己持有 jar 的 URL，卸载时才有东西可回收。另外两个细节：<code>newObject(String className)</code> 用的是 <code>Class.forName(className)</code>（调用者的加载器），要加载插件类必须用三参数版本传 <code>loader</code>；<code>invokeMethod</code> 里 <code>o.getClass().getMethod(methodName, args.getClass())</code> 传进去的是 <code>Object[].class</code>，只有「形参恰好是一个 <code>Object[]</code>」的方法才匹配得上，代码注释也承认了这个缺陷。按实参类型匹配的写法是：</p>
+<pre><code class="language-java">Class&lt;?&gt;[] types = Arrays.stream(args)
+        .map(a -&gt; a == null ? Object.class : a.getClass())
+        .toArray(Class[]::new);
+Method method = o.getClass().getMethod(methodName, types);
+return method.invoke(o, args);
+</code></pre>
+<p>顺带一提，SPI 也是插件化的常用入口：把实现类全限定名写进 jar 内的 <code>META-INF/services/接口全限定名</code> 文件，宿主用 <code>ServiceLoader.load(ICmpt.class, loader)</code> 遍历。它比自定义加载器省事，但要注意 <code>ServiceLoader</code> 默认用线程上下文类加载器——插件场景必须显式传 <code>loader</code>，否则要么找不到实现，要么因为用了另一个加载器而强转失败。</p>
 <pre><code class="language-java">/**
  * 类加载器工具类
  */
@@ -751,7 +882,9 @@ public class LoadClassUtil {
 
 }
 </code></pre>
+<p>最后是组件与宿主之间的契约。组件实现类放在插件 jar 里，接口 <code>ICmpt</code> 放在宿主的公共模块里、由 App 加载器加载——这正是前面反复强调的「接口由父加载器加载」。<code>execute</code> 的参数把请求、配置、流程节点和上下文都显式传进来，而不是让组件持有状态，这是对的：缓存的组件实例会被多个线程共享，实现应当尽量无状态。</p>
 <h2 id="组件实现公共接口类">组件实现公共接口类</h2>
+
 <pre><code class="language-java">public interface ICmpt {
 
     /**
@@ -772,18 +905,71 @@ public class LoadClassUtil {
 }
 </code></pre>
 
-          <div class="toc-container"><ul class="markdownIt-TOC">
-<li>
+          <h2 id="小结与避坑清单">小结与避坑清单</h2>
+<p>把上面的内容压成一份可操作的清单。</p>
+<h3 id="加载方式怎么选">加载方式怎么选</h3>
 <ul>
-<li>
+<li>类在应用 classpath 上、启动时就要用：<code>Class.forName(name)</code> 或直接 new，最简单。</li>
+<li>类在运行时才出现的 jar 里：<code>Class.forName(name, true, loader)</code> 或 <code>loader.loadClass(name)</code>，并且 loader 必须是能看见那个 jar 的加载器。</li>
+<li>只想加载、不想触发静态初始化：<code>Class.forName(name, false, loader)</code>。</li>
+<li>「一个接口 + 多个第三方式实现」：用 SPI，实现类全限定名写进 <code>META-INF/services/&lt;接口全限定名&gt;</code>；JDK 9 以上的模块也可以写 <code>provides ... with ...</code>。插件场景用 <code>ServiceLoader.load(ICmpt.class, loader)</code>，不要依赖 TCCL。</li>
+<li>需要读 jar 内资源：一律走 <code>getResourceAsStream</code>，注意前导斜杠的含义和父加载器优先的查找顺序。</li>
+</ul>
+<h3 id="热加载与卸载">热加载与卸载</h3>
 <ul>
-<li><a href="#%E5%AE%9E%E4%BD%93%E5%AF%B9%E8%B1%A1">实体对象</a></li>
-<li><a href="#%E6%96%B9%E6%B3%95%E6%8E%A5%E5%8F%A3">方法接口</a></li>
-<li><a href="#%E6%96%B9%E6%B3%95%E5%AE%9E%E7%8E%B0">方法实现</a></li>
-<li><a href="#%E5%B7%A5%E5%85%B7%E7%B1%BB">工具类</a></li>
-<li><a href="#%E7%BB%84%E4%BB%B6%E5%AE%9E%E7%8E%B0%E5%85%AC%E5%85%B1%E6%8E%A5%E5%8F%A3%E7%B1%BB">组件实现公共接口类</a></li>
+<li>已加载的类无法「替换」，热加载 = <b>新建加载器</b>加载新 jar，再让旧加载器变得不可达。</li>
+<li>缓存 key 必须带版本（本文用全限定名 + 版本 + code），否则拿到的还是旧实例。</li>
+<li>卸载的三个前提要同时满足：实例不可达、加载器不可达、类没有被强引用（ThreadLocal、静态字段、未结束的线程、<code>DriverManager</code> 注册的驱动、日志 appender、<code>ServiceLoader</code> 的 provider 缓存等）。</li>
+<li>卸载时先显式 <code>close()</code> 释放 jar 句柄，再从所有静态 map 里移除；不要依赖 <code>finalize</code>。</li>
+<li>组件实现尽量无状态：实例通常被缓存并被多线程共享，请求相关的数据通过方法参数传入。</li>
+<li>排障时先打印 <code>obj.getClass()</code> 和 <code>obj.getClass().getClassLoader()</code>：同一个接口被两个加载器各加载一份时，强转会抛 <code>ClassCastException</code>，而报错信息通常不会告诉你加载器不同。</li>
+</ul>
+<h3 id="本文示例代码的已知问题">本文示例代码的已知问题</h3>
+<ul>
+<li><code>CmptServiceImpl.removeCmpt</code> 传给 <code>unLoadJar</code> 的是 jar 路径，而 map 的 key 是 <code>IdCmptDef</code>，卸载不生效，加载器泄漏。</li>
+<li><code>destroy()</code> 被调用两次（显式一次、<code>removeEntry</code> 内一次），需要幂等。</li>
+<li>注册观察者处的 <code>(AbstractCmpt) cmpt</code> 缺少 <code>instanceof</code> 判断。</li>
+<li><code>refreshCmptInstanceCache</code> 是空实现，固定返回 <code>false</code>。</li>
+<li><code>FileUtil</code> 缺少 <code>LoadClassUtil</code> 里用到的 <code>fileInfo</code>；<code>CmptClassLoader</code> 依赖 <code>sun.misc.URLClassPath</code>，在 JDK 9 以上要改成直接调用 <code>addURL</code>，否则这段代码编译、运行都会失败。</li>
+<li><code>invokeMethod</code> 的变参匹配有缺陷，修正写法见上文。</li>
+</ul>
+<div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#%E5%AE%9E%E4%BD%93%E5%AF%B9%E8%B1%A1">实体对象</a>
+<ul>
 </ul>
 </li>
+<li>
+<a href="#%E6%96%B9%E6%B3%95%E6%8E%A5%E5%8F%A3">方法接口</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E6%96%B9%E6%B3%95%E5%AE%9E%E7%8E%B0">方法实现</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B7%A5%E5%85%B7%E7%B1%BB">工具类</a>
+<ul>
+<li><a href="#%E7%BB%84%E4%BB%B6%E5%AE%9E%E4%BE%8B%E7%BC%93%E5%AD%98">组件实例缓存</a></li>
+<li><a href="#jar-%E8%B7%AF%E5%BE%84%E4%B8%8E-jar-%E5%86%85%E8%B5%84%E6%BA%90">jar 路径与 jar 内资源</a></li>
+<li><a href="#%E5%8A%A0%E8%BD%BD%E5%99%A8%E7%9A%84%E5%88%9B%E5%BB%BA%E4%B8%8E%E5%8D%B8%E8%BD%BD">加载器的创建与卸载</a></li>
+<li><a href="#cmptclassloader-%E7%9A%84%E7%94%A8%E6%B3%95%E4%B8%8E%E5%9D%91">CmptClassLoader 的用法与坑</a></li>
+<li><a href="#%E5%8F%8D%E5%B0%84%E5%B7%A5%E5%85%B7%E7%B1%BB%E7%9A%84%E5%9D%91">反射工具类的坑</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E7%BB%84%E4%BB%B6%E5%AE%9E%E7%8E%B0%E5%85%AC%E5%85%B1%E6%8E%A5%E5%8F%A3%E7%B1%BB">组件实现公共接口类</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%B0%8F%E7%BB%93%E4%B8%8E%E9%81%BF%E5%9D%91%E6%B8%85%E5%8D%95">小结与避坑清单</a>
+<ul>
+<li><a href="#%E5%8A%A0%E8%BD%BD%E6%96%B9%E5%BC%8F%E6%80%8E%E4%B9%88%E9%80%89">加载方式怎么选</a></li>
+<li><a href="#%E7%83%AD%E5%8A%A0%E8%BD%BD%E4%B8%8E%E5%8D%B8%E8%BD%BD">热加载与卸载</a></li>
+<li><a href="#%E6%9C%AC%E6%96%87%E7%A4%BA%E4%BE%8B%E4%BB%A3%E7%A0%81%E7%9A%84%E5%B7%B2%E7%9F%A5%E9%97%AE%E9%A2%98">本文示例代码的已知问题</a></li>
 </ul>
 </li>
 </ul>
