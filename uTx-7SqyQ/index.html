@@ -128,8 +128,9 @@
           <img class="post-feature-header-image" src="/post-images/uTx-7SqyQ.png" alt="封面图">
           
           <p>需求：使用 Jenkins 搭建流水线，实现持续集成与持续部署。</p>
+<p><img src="/post-assets/uTx-7SqyQ/01-pipeline-overview.svg" alt="流水线总览：Gitee 推送触发 Webhook，Jenkins Blue Ocean 执行 Jenkinsfile 的环境检查、编译、打包、部署四个阶段，最终以 Docker 容器运行"></p>
 <h2 id="一-编写docker-composeyml安装jenkins">一、编写 docker-compose.yml 安装 Jenkins（Blue Ocean 版本）</h2>
-<pre><code class="language-yml">version: '3'
+<pre><code class="language-yaml">version: '3'
 services:
   mysql:
     image: mysql:8.0.29
@@ -210,8 +211,9 @@ services:
     - /etc/localtime:/etc/localtime:ro
     - /var/run/docker.sock:/var/run/docker.sock
 </code></pre>
-<p>在<code>/mydata/jenkins_home/appconfig/maven/settings.xml</code>目录配置maven的阿里源</p>
-<pre><code class="language-yaml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+<p>说明：<code>jenkinsci/blueocean</code> 是官方已停止更新的镜像，新环境建议改用 <code>jenkins/jenkins:lts</code> 并单独安装 Blue Ocean 插件，本文按原环境保留。</p>
+<p>在宿主机的 <code>/mydata/jenkins_home/appconfig/maven/settings.xml</code>（即容器内的 <code>/var/jenkins_home/appconfig/maven/settings.xml</code>）中配置 Maven 阿里云镜像源；Jenkinsfile 里通过 <code>-s</code> 指定容器内路径。</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
 &lt;settings xmlns=&quot;http://maven.apache.org/SETTINGS/1.0.0&quot;
           xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
           xsi:schemaLocation=&quot;http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd&quot;&gt;
@@ -297,7 +299,7 @@ services:
             // 删除容器和虚悬镜像
             steps {
                sh 'pwd &amp;&amp; ls -alh'
-               sh 'docker rm -f ${IMAGE_NAME} &amp;&amp; docker rmi $(docker images -q -f dangling=true)'
+               sh 'docker rm -f ${IMAGE_NAME} || true; docker rmi $(docker images -q -f dangling=true) || true'
                sh 'docker run -d -p 8888:8080 --name ${IMAGE_NAME} -v /mydata/logs/${IMAGE_NAME}:/logs/${IMAGE_NAME} ${IMAGE_NAME}'
             }
         }
@@ -325,8 +327,10 @@ ENTRYPOINT [ &quot;sh&quot;, &quot;-c&quot;, &quot;java $JAVA_OPTS -jar /app.jar
 <figure data-type="image" tabindex="3"><img src="/post-images/1691159809410.png" alt="" loading="lazy"></figure>
 <p>到此整体功能已经完成</p>
 <h2 id="sec3-test">三、测试</h2>
+<p>部署完成后访问 <code>http://&lt;宿主机IP&gt;:8888</code> 验证服务，并在 Blue Ocean 中确认四个阶段均为绿色。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1691159827553.png" alt="" loading="lazy"></figure>
 <h2 id="sec4-remote-trigger">四、触发远程构建</h2>
+<p>在任务配置里勾选“触发远程构建”并填入身份验证令牌后，访问 <code>JENKINS_URL/job/&lt;任务名&gt;/build?token=&lt;令牌&gt;</code> 即可用脚本或 Gitee 的 Webhook 触发构建。</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1691159844392.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="6"><img src="/post-images/1691159855927.png" alt="" loading="lazy"></figure>
 <p>创建一个jenkins账号用来触发远程构建</p>
@@ -336,9 +340,12 @@ ENTRYPOINT [ &quot;sh&quot;, &quot;-c&quot;, &quot;java $JAVA_OPTS -jar /app.jar
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E7%BC%96%E5%86%99docker-composeyml%E5%AE%89%E8%A3%85jenkins">一、编写 docker-compose.yml 安装 Jenkins（Blue Ocean 版本）</a>
 <ul>
-<li><a href="#%E4%B8%80-%E7%BC%96%E5%86%99docker-composeyml%E5%AE%89%E8%A3%85jenkins">一、编写 docker-compose.yml 安装 Jenkins（Blue Ocean 版本）</a></li>
-<li><a href="#%E4%BA%8C-%E7%99%BB%E5%BD%95xxx8080%E9%85%8D%E7%BD%AEjenkins">二、登录 xxx:8080 配置 Jenkins</a>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%8C-%E7%99%BB%E5%BD%95xxx8080%E9%85%8D%E7%BD%AEjenkins">二、登录 xxx:8080 配置 Jenkins</a>
 <ul>
 <li><a href="#step1-initial-password">1、初始密码：使用 docker logs jenkins 查看获取</a></li>
 <li><a href="#step2-install-docker-pipeline">2、安装插件 Docker Pipeline（后续构建流水线需要）</a></li>
@@ -348,8 +355,14 @@ ENTRYPOINT [ &quot;sh&quot;, &quot;-c&quot;, &quot;java $JAVA_OPTS -jar /app.jar
 <li><a href="#step6-run-blue-ocean">6、返回首页点击“打开 Blue Ocean”，选择运行</a></li>
 </ul>
 </li>
-<li><a href="#sec3-test">三、测试</a></li>
-<li><a href="#sec4-remote-trigger">四、触发远程构建</a></li>
+<li>
+<a href="#sec3-test">三、测试</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec4-remote-trigger">四、触发远程构建</a>
+<ul>
 </ul>
 </li>
 </ul>
