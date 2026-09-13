@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Kubernetes 1.24 容器运行时路线对比</title>
+  <rect width="900" height="600" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">Kubernetes 1.24 容器运行时路线：containerd 与 cri-dockerd</text>
+  <text x="450" y="52" text-anchor="middle" font-size="12" fill="#5b6b7c">1.24 的 kubelet 移除了 dockershim，只能通过 CRI 访问运行时，两条路线二选一</text>
+
+  <rect x="30" y="70" width="400" height="430" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="50" y="96" font-size="15" font-weight="700" fill="#1f2b38">路线 A：containerd（推荐）</text>
+  <rect x="50" y="112" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="66" y="134" font-size="12.5" font-weight="700" fill="#1f2b38">① 安装 containerd.io（版本 ≥ 1.6）</text>
+  <text x="66" y="152" font-size="11.5" fill="#5b6b7c">Docker CE 源里的 containerd.io 即可</text>
+  <line x1="230" y1="163" x2="230" y2="171" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="50" y="172" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="66" y="194" font-size="12.5" font-weight="700" fill="#1f2b38">② 生成 config.toml，开启 SystemdCgroup</text>
+  <text x="66" y="212" font-size="11.5" fill="#5b6b7c">cgroup driver 必须与 kubelet 一致</text>
+  <line x1="230" y1="223" x2="230" y2="231" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="50" y="232" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="66" y="254" font-size="12.5" font-weight="700" fill="#1f2b38">③ 替换 sandbox_image 为国内镜像</text>
+  <text x="66" y="272" font-size="11.5" fill="#5b6b7c">pause 版本要与 kubeadm 期望值一致（3.7）</text>
+  <line x1="230" y1="283" x2="230" y2="291" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="50" y="292" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="66" y="314" font-size="12.5" font-weight="700" fill="#1f2b38">④ 重启 containerd 并设为开机自启</text>
+  <text x="66" y="332" font-size="11.5" fill="#5b6b7c">systemctl restart / enable containerd</text>
+  <line x1="230" y1="343" x2="230" y2="351" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="50" y="352" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="66" y="374" font-size="12.5" font-weight="700" fill="#1f2b38">⑤ kubeadm 使用 containerd 的 criSocket</text>
+  <text x="66" y="392" font-size="11.5" fill="#5b6b7c">unix:///run/containerd/containerd.sock</text>
+  <text x="50" y="428" font-size="12" font-weight="700" fill="#2e9e5b">优点：组件最少，也是官方推荐路线</text>
+  <text x="50" y="450" font-size="11.5" fill="#5b6b7c">少一层 dockershim，就少一个故障点</text>
+
+  <rect x="470" y="70" width="400" height="430" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="490" y="96" font-size="15" font-weight="700" fill="#1f2b38">路线 B：Docker + cri-dockerd</text>
+  <rect x="490" y="112" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="506" y="134" font-size="12.5" font-weight="700" fill="#1f2b38">① 安装 docker-ce（建议固定 20.10.x）</text>
+  <text x="506" y="152" font-size="11.5" fill="#5b6b7c">只把 Docker 当作容器引擎使用</text>
+  <line x1="670" y1="163" x2="670" y2="171" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="490" y="172" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="506" y="194" font-size="12.5" font-weight="700" fill="#1f2b38">② daemon.json 设 cgroupdriver=systemd</text>
+  <text x="506" y="212" font-size="11.5" fill="#5b6b7c">文件名必须叫 daemon.json</text>
+  <line x1="670" y1="223" x2="670" y2="231" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="490" y="232" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="506" y="254" font-size="12.5" font-weight="700" fill="#1f2b38">③ 安装 cri-dockerd（v0.2.x）</text>
+  <text x="506" y="272" font-size="11.5" fill="#5b6b7c">版本要与 k8s 次版本对应</text>
+  <line x1="670" y1="283" x2="670" y2="291" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="490" y="292" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="506" y="314" font-size="12.5" font-weight="700" fill="#1f2b38">④ cri-docker.socket + ExecStart fd://</text>
+  <text x="506" y="332" font-size="11.5" fill="#5b6b7c">socket 激活时不要再显式绑定同一路径</text>
+  <line x1="670" y1="343" x2="670" y2="351" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="490" y="352" width="360" height="50" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="506" y="374" font-size="12.5" font-weight="700" fill="#1f2b38">⑤ kubeadm 使用 cri-dockerd 的 criSocket</text>
+  <text x="506" y="392" font-size="11.5" fill="#5b6b7c">unix:///var/run/cri-dockerd.sock</text>
+  <text x="490" y="428" font-size="12" font-weight="700" fill="#e08a1e">代价：多一个组件与一个 socket</text>
+  <text x="490" y="450" font-size="11.5" fill="#5b6b7c">老脚本里的 docker 命令仍可用，但它已不是运行时</text>
+
+  <rect x="30" y="516" width="840" height="64" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="50" y="540" font-size="13" font-weight="700" fill="#1f2b38">两条路线共用的前置条件</text>
+  <text x="50" y="560" font-size="11.5" fill="#5b6b7c">关闭 swap、firewalld、SELinux；加载 br_netfilter 并开启 ip_forward</text>
+  <text x="50" y="576" font-size="11.5" fill="#5b6b7c">cgroup driver 统一为 systemd；kubelet / kubeadm / kubectl 锁定 1.24.1；CNI 与 kube-proxy 选匹配版本</text>
+</svg>

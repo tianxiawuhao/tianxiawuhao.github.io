@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>kubeadm 初始化失败的分支排查路径</title>
+  <rect width="900" height="600" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">kubeadm init / join 失败的分支排查路径</text>
+  <text x="450" y="52" text-anchor="middle" font-size="12" fill="#5b6b7c">1.24 的初始化问题绝大多数落在容器运行时、沙箱镜像与预检三项上</text>
+
+  <rect x="310" y="68" width="280" height="46" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="450" y="96" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2b38">kubeadm init / join 失败</text>
+  <line x1="450" y1="114" x2="450" y2="138" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="160" y1="138" x2="740" y2="138" stroke="#c8d3e0" stroke-width="1.4"/>
+  <line x1="160" y1="138" x2="160" y2="146" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="450" y1="138" x2="450" y2="146" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="740" y1="138" x2="740" y2="146" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="30" y="146" width="260" height="104" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="46" y="170" font-size="12.5" font-weight="700" fill="#1f2b38">① 沙箱镜像拉取失败</text>
+  <text x="46" y="190" font-size="11" fill="#5b6b7c">failed to get sandbox image</text>
+  <text x="46" y="210" font-size="11" fill="#5b6b7c">改 containerd 的 sandbox_image</text>
+  <text x="46" y="230" font-size="11" fill="#2f6fd0">版本 = kubeadm 期望的 pause</text>
+
+  <rect x="320" y="146" width="260" height="104" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="336" y="170" font-size="12.5" font-weight="700" fill="#1f2b38">② CRI v1 未实现</text>
+  <text x="336" y="190" font-size="11" fill="#5b6b7c">containerd 1.5.x 只有 v1alpha2</text>
+  <text x="336" y="210" font-size="11" fill="#5b6b7c">kubelet 1.24 只认 CRI v1</text>
+  <text x="336" y="230" font-size="11" fill="#2f6fd0">升级 containerd.io 到 1.6+</text>
+
+  <rect x="610" y="146" width="260" height="104" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="626" y="170" font-size="12.5" font-weight="700" fill="#1f2b38">③ socket 连不上</text>
+  <text x="626" y="190" font-size="11" fill="#5b6b7c">cri-socket 与实际路径不一致</text>
+  <text x="626" y="210" font-size="11" fill="#5b6b7c">containerd 与 cri-dockerd 不同</text>
+  <text x="626" y="230" font-size="11" fill="#2f6fd0">ls -l 两个 socket 确认</text>
+
+  <line x1="160" y1="250" x2="160" y2="272" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="450" y1="250" x2="450" y2="272" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="740" y1="250" x2="740" y2="272" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="30" y="272" width="260" height="104" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="46" y="296" font-size="12.5" font-weight="700" fill="#1f2b38">④ 预检失败</text>
+  <text x="46" y="316" font-size="11" fill="#5b6b7c">bridge-nf-call-iptables / swap</text>
+  <text x="46" y="336" font-size="11" fill="#5b6b7c">modprobe br_netfilter + sysctl -p</text>
+  <text x="46" y="356" font-size="11" fill="#2f6fd0">ss -lntp 查 6443 / 10250 占用</text>
+
+  <rect x="320" y="272" width="260" height="104" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="336" y="296" font-size="12.5" font-weight="700" fill="#1f2b38">⑤ cgroup driver 不一致</text>
+  <text x="336" y="316" font-size="11" fill="#5b6b7c">kubelet / Docker / containerd</text>
+  <text x="336" y="336" font-size="11" fill="#5b6b7c">三处必须都是 systemd</text>
+  <text x="336" y="356" font-size="11" fill="#2f6fd0">grep cgroupDriver /var/lib/kubelet</text>
+
+  <rect x="610" y="272" width="260" height="104" rx="8" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="626" y="296" font-size="12.5" font-weight="700" fill="#1f2b38">⑥ 证书到期</text>
+  <text x="626" y="316" font-size="11" fill="#5b6b7c">x509: certificate has expired</text>
+  <text x="626" y="336" font-size="11" fill="#5b6b7c">kubeadm 证书默认 1 年</text>
+  <text x="626" y="356" font-size="11" fill="#2f6fd0">certs check-expiration / renew</text>
+
+  <line x1="160" y1="376" x2="160" y2="396" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="450" y1="376" x2="450" y2="396" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="740" y1="376" x2="740" y2="396" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="30" y="396" width="840" height="96" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="50" y="420" font-size="13" font-weight="700" fill="#1f2b38">通用排查命令（建议按顺序执行）</text>
+  <text x="50" y="442" font-size="11.5" fill="#5b6b7c">journalctl -xef -u kubelet -n 50    # 先看 kubelet 的真实报错</text>
+  <text x="50" y="462" font-size="11.5" fill="#5b6b7c">crictl ps -a &amp;&amp; crictl images      kubectl describe node &lt;name&gt;</text>
+  <text x="50" y="482" font-size="11.5" fill="#5b6b7c">kubectl get pods -n kube-system -o wide      ipvsadm -Ln</text>
+
+  <line x1="450" y1="492" x2="450" y2="508" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="30" y="508" width="840" height="64" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="50" y="532" font-size="12.5" font-weight="700" fill="#1f2b38">节点 NotReady 时的定位顺序</text>
+  <text x="50" y="556" font-size="11.5" fill="#5b6b7c">describe node 看 Ready 条件 → journalctl -u kubelet 找 CRI 报错 → 确认 CNI Pod 全部 Running</text>
+</svg>

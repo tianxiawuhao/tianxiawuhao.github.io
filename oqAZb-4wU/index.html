@@ -129,6 +129,17 @@
           <img class="post-feature-header-image" src="/post-images/oqAZb-4wU.png" alt="封面图">
           
           <p><strong>注意：除了Master节点初始化及Node节点添加分别在Master节点和Node节点执行外，其余所有命令均在所有节点执行</strong></p>
+<blockquote>
+<p><strong>阅读前先看版本与路线说明</strong></p>
+<ul>
+<li>Kubernetes 1.24 已在 kubelet 中移除 dockershim，Docker Engine 不再是"装上就能用"的运行时。第 14 小节（Docker + cri-dockerd）与第 15 小节（containerd）是<strong>两条互斥的路线，只需选一条</strong>：<strong>路线 A</strong> 用 containerd，组件最少，也是官方推荐；<strong>路线 B</strong> 保留 Docker，额外装 cri-dockerd。第 18 小节初始化时的 <code>criSocket</code> 必须与所选路线一致。</li>
+<li>镜像仓库：1.24 的 kubeadm 默认仓库仍是 <code>k8s.gcr.io</code>；<code>registry.k8s.io</code> 从 1.25 起成为默认地址，同时也能提供 1.24 的镜像，可用 <code>--image-repository=registry.k8s.io</code> 显式指定。国内环境用 <code>registry.aliyuncs.com/google_containers</code> 最省事。</li>
+<li>版本锁定：<code>kubelet</code>、<code>kubeadm</code>、<code>kubectl</code> 必须同为 1.24.1 并锁定，kubelet 不支持跨次版本升级（1.24.x 只能升到 1.24.y）。</li>
+<li>1.24 的 kubelet 只实现了 CRI v1，因此 containerd 必须 ≥ 1.6（Docker CE 源里的 <code>containerd.io</code> 满足）；更老的 1.5.x 会报 <code>CRI v1 runtime API is not implemented</code>。</li>
+<li>kube-proxy 的 IPVS 模式、CNI 插件（Calico/Flannel）都要选与 1.24 匹配的版本，见第 13、19 小节；文末还有一节<a href="#%E5%B8%B8%E8%A7%81%E6%8A%A5%E9%94%99%E4%B8%8E%E6%8E%92%E6%9F%A5">常见报错与排查</a>。</li>
+</ul>
+</blockquote>
+<p><img src="/post-assets/oqAZb-4wU/01-runtime-route.svg" alt="Kubernetes 1.24 两条容器运行时路线的对比与选型"></p>
 <h2 id="整体环境">整体环境</h2>
 <p>一台master节点，2台<a href="https://so.csdn.net/so/search?q=node&amp;spm=1001.2101.3001.7020">node</a>节点。采用了 CentOS 7，有网络，互相可以 ping 通。</p>
 <h3 id="1内核升级可忽略">1.内核升级（可忽略）</h3>
@@ -216,27 +227,40 @@ hostnamectl set-hostname k8s-node2
 <pre><code class="language-shell">swapoff -a &amp;&amp; sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 </code></pre>
 <h3 id="10配置内核参数">10.配置内核参数</h3>
-<p><strong>将桥接的IPv4流量传递倒iptables的链</strong></p>
+<p><strong>将桥接的 IPv4 流量传递到 iptables 的链</strong></p>
 <h4 id="1设置内核参数">1.设置内核参数</h4>
+<p>这里有两处与"升级后的新内核"直接相关的问题，先说明再给命令：</p>
+<ul>
+<li><code>net.ipv4.tcp_tw_recycle</code> 已在 Linux 4.12 中被移除。本文第 1 小节把内核升到了 5.x，保留这一行会让 <code>sysctl -p</code> 报 <code>cannot stat /proc/sys/net/ipv4/tcp_tw_recycle: No such file or directory</code>，因此直接删掉。</li>
+<li>注释不要写在等号后面：不同版本的 sysctl 对行尾注释的解析不一致，可能把 <code># 禁止使用swap空间…</code> 一起当成值，导致整行设置失败；注释请单独成行（下面已挪到行首）。</li>
+</ul>
 <pre><code class="language-shell">cat &gt; /etc/sysctl.d/k8s.conf &lt;&lt;EOF
+# 桥接流量交给 iptables/ip6tables 处理，需要配合 br_netfilter 模块
 net.bridge.bridge-nf-call-iptables=1
 net.bridge.bridge-nf-call-ip6tables=1
 net.ipv4.ip_forward=1
-net.ipv4.tcp_tw_recycle=0
-vm.swappiness=0 # 禁止使用swap空间，只有当系统00M时才允许使用它
-vm.overcommit_memory=1 # 不检查物理内存是否够用
-vm.panic_on_oom=0 # 开启oom
+# 禁用 swap 倾向；kubelet 1.24 尚不支持 swap
+vm.swappiness=0
+# 不检查物理内存是否够用；开启 OOM
+vm.overcommit_memory=1
+vm.panic_on_oom=0
 fs.inotify.max_user_instances=8192
 fs.inotify.max_user_watches=1048576
 fs.file-max=52786963
 fs.nr_open=52706963
+# 关闭 IPv6；集群内要用 IPv6 请删掉这一行
 net.ipv6.conf.all.disable_ipv6=1
 net.netfilter.nf_conntrack_max=2310720
 EOF
 </code></pre>
 <h4 id="2加载内核模块">2.加载内核模块</h4>
-<pre><code class="language-shell">modprobe br_netfilter &amp;&amp; echo &quot;modprobe br_netfilter&quot; &gt;&gt; /etc/rc.local
+<pre><code class="language-shell">modprobe br_netfilter
+# 持久化：CentOS 7 的 /etc/rc.local 默认没有执行权限，开机自动加载要用 modules-load.d
+cat &gt; /etc/modules-load.d/k8s.conf &lt;&lt;EOF
+br_netfilter
+EOF
 </code></pre>
+<p>另外 <code>net.netfilter.nf_conntrack_max</code> 需要 nf_conntrack 模块已加载，否则 <code>sysctl -p</code> 会提示找不到该键（可先执行 <code>modprobe nf_conntrack</code>）。</p>
 <h4 id="3使内核参数生效">3.使内核参数生效</h4>
 <pre><code class="language-shell">sysctl -p /etc/sysctl.d/k8s.conf
 </code></pre>
@@ -252,14 +276,18 @@ systemctl restart rsyslog &amp;&amp; systemctl restart crond
 <h3 id="13开启ipvs">13.开启IPVS</h3>
 <p><strong>由于ipvs已经加入到了内核的主干，所以为kube-proxy开启ipvs的前提需要加载以下的内核模块</strong></p>
 <pre><code class="language-shell">cat &gt; /etc/sysconfig/modules/ipvs.modules &lt;&lt;EOF
-#！/bin/bash
+#!/bin/bash
 modprobe -- ip_vs
 modprobe -- ip_vs_rr
 modprobe -- ip_vs_wrr
 modprobe -- ip_vs_sh
-modprobe -- nf_conntrack_ipv4
 EOF
 </code></pre>
+<p>两处修正：</p>
+<ul>
+<li>原来的第一行是全角感叹号 <code>#！/bin/bash</code>，脚本不会以 bash 执行，必须写成半角 <code>#!/bin/bash</code>。</li>
+<li><code>nf_conntrack_ipv4</code> 从 Linux 4.19 起已被 <code>nf_conntrack</code> 取代。本文第 1 小节把内核升到了 5.x，这一行会报 <code>Module nf_conntrack_ipv4 not found</code>，直接删掉即可（连接跟踪由 nf_conntrack 提供，IPVS 模式会自动使用）。</li>
+</ul>
 <h4 id="授权启动">授权启动</h4>
 <pre><code class="language-shell">chmod 755 /etc/sysconfig/modules/ipvs.modules &amp;&amp; bash /etc/sysconfig/modules/ipvs.modules &amp;&amp; lsmod 
 </code></pre>
@@ -276,19 +304,23 @@ EOF
 <p><strong>• 工作在内核态，有更好的性能</strong></p>
 <p><strong>• 调度算法丰富：rr，wrr，lc，wlc，ip hash</strong></p>
 </blockquote>
-<p>等集群部署成功，mode由空值修改成ipvs模式</p>
-<pre><code class="language-bash">kubectl edit configmap kube-proxy -n kube-system configmap/kube-proxy edited
+<p>集群部署成功后，把 kube-proxy 的 <code>mode</code> 由空值改成 <code>ipvs</code>（如果用了第 18 小节的 <code>KubeProxyConfiguration</code>，这一步可以省略）。</p>
+<pre><code class="language-bash">kubectl edit configmap kube-proxy -n kube-system
+# 注意：行尾的 "configmap/kube-proxy edited" 是保存后的回显，不是命令的一部分
 </code></pre>
 <figure data-type="image" tabindex="3"><img src="/post-images/1654316987021.png" alt="" loading="lazy"></figure>
-<p><strong>删除所有kube-proxy的pod,等待重启</strong></p>
-<pre><code class="language-bash">kubectl delete pod/kube-proxy-84p9n -n kube-system
-# 查看ipvs相关规则
-ipvsadm
+<p><strong>重启所有 kube-proxy Pod，让新的 mode 生效</strong></p>
+<pre><code class="language-bash"># 比 "kubectl delete pod/kube-proxy-xxxx" 更稳妥：不用先查 Pod 名，DaemonSet 会滚动重建
+kubectl rollout restart daemonset kube-proxy -n kube-system
+kubectl rollout status daemonset kube-proxy -n kube-system
+# 查看 ipvs 相关规则
+ipvsadm -Ln
 </code></pre>
-<h3 id="14安装docker软件">14.安装docker软件</h3>
+<h3 id="14安装docker软件">14.安装docker软件（路线 B：Docker + cri-dockerd）</h3>
 <blockquote>
 <p>自1.20版本被弃用之后，dockershim组件终于在1.24的kubelet中被删除。从1.24开始，大家需要使用其他受到支持的运行时选项（例如containerd或CRI-O）；如果您选择Docker Engine作为运行时，则需要使用cri-dockerd。</p>
 </blockquote>
+<p><strong>只想用 containerd 的读者可以跳过第 14 小节，直接看第 15 小节</strong>：两套都装并不会更稳，反而容易出现 socket 路径写错、cgroup driver 不一致的问题。本节把 Docker 当作纯容器引擎，中间由 cri-dockerd 做 CRI 适配。</p>
 <h4 id="1删除自带的docker">1.删除自带的docker</h4>
 <pre><code class="language-shell">yum remove docker \
                   docker-client \
@@ -311,10 +343,11 @@ ipvsadm
 <pre><code class="language-shell">yum -y install docker-ce
 </code></pre>
 <h4 id="5设置docker">5.设置docker</h4>
-<pre><code class="language-shell">cat &gt; /etc/docker/daemon.conf &lt;&lt;EOF
+<p>三个容易踩坑的细节：文件名必须是 <code>daemon.json</code>（写成 <code>daemon.conf</code>，Docker 根本不会读）；<code>insecure-registries</code> 只写 <code>host[:port]</code>，不能带 <code>https://</code> 前缀；<code>native.cgroupdriver=systemd</code> 必须与 kubelet 的 cgroup driver 一致。另外建议把 Docker CE 固定在大版本（<code>yum install -y docker-ce-20.10.*</code>），避免新版本与 cri-dockerd 的兼容性问题。</p>
+<pre><code class="language-shell">cat &gt; /etc/docker/daemon.json &lt;&lt;EOF
 {
   &quot;registry-mirrors&quot;: [&quot;https://registry.docker-cn.com&quot;,&quot;https://heusyzko.mirror.aliyuncs.com&quot;],
-  &quot;insecure-registries&quot;: [&quot;https://hub.test.com&quot;],
+  &quot;insecure-registries&quot;: [&quot;hub.test.com:5000&quot;],
   &quot;exec-opts&quot;:[&quot;native.cgroupdriver=systemd&quot;],
   &quot;log-driver&quot;:&quot;json-file&quot;,
   &quot;log-opts&quot;:{
@@ -353,14 +386,15 @@ docker  rm $(docker ps -a -q)
 #.删除所有镜像（慎重）
 docker rmi $(docker images -q)
 </code></pre>
-<h3 id="142cri-dockerd安装">14.2.cri-dockerd安装</h3>
+<h3 id="142cri-dockerd安装">14.2.cri-dockerd安装（路线 B 必需）</h3>
 <p><strong>CRI-Dockerd 其实就是从被移除的 Docker Shim 中，独立出来的一个项目，用于解决历史遗留的节点升级 Kubernetes 的问题。</strong></p>
 <blockquote>
 <p>kubelet并没有直接和dockerd交互，而是通过了一个dockershim的组件间接操作dockerd。dockershim提供了一个标准的接口，让kubelet能够专注于容器调度逻辑本身，而不用去适配dockerd的接口变动。而其他实现了相同标准接口的容器技术也可以被kubelet集成使用，这个接口称作CRI。dockershim和CRI的出现也是容器生态系统演化的历史产物。在k8s最早期的版本中是不存在dockershim的，kubelet直接和dockerd交互。但为了支持更多不同的容器技术（避免完全被docker控制容器技术市场），kubelet在之后的版本开始支持另一种容器技术rkt。这给kubelet的维护工作造成了巨大的挑战，因为两种容器技术没有统一的接口和使用逻辑，kubelet同时支持两种技术的使用还要保证一致的容器功能表现，对代码逻辑和功能可靠性都有很大的影响。为了解决这个问题，k8s提出了一个统一接口CRI，kubelet统一通过这个接口来调用容器功能。但是dockerd并不支持CRI，k8s就自己实现了配套的dockershim将CRI接口调用转换成dockerd接口调用来支持CRI。因此，dockershim并不是docker技术的一部分，而是k8s系统的一部分</p>
 </blockquote>
 <p><strong>使用 CRI-Dockerd 项目</strong></p>
-<pre><code class="language-html">项目地址：https://github.com/Mirantis/cri-dockerd
+<pre><code class="language-text">项目地址：https://github.com/Mirantis/cri-dockerd
 </code></pre>
+<p>cri-dockerd 的版本要与 Kubernetes 次版本对应（1.24 用 v0.2.x，下文示例为 v0.2.0），升级集群时一并升级。</p>
 <h4 id="1下载cri-dockerd二进制包或者源码自己编译">1.下载cri-dockerd二进制包或者源码自己编译</h4>
 <pre><code class="language-shell"># 下载文件
 wget https://github.com/Mirantis/cri-dockerd/releases/download/v0.2.0/cri-dockerd-v0.2.0-linux-amd64.tar.gz
@@ -382,7 +416,7 @@ Requires=cri-docker.socket
 [Service]
 Type=notify
 
-ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint=unix:///var/run/cri-docker.sock --network-plugin=cni --cni-bin-dir=/opt/cni/bin \
+ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --network-plugin=cni --cni-bin-dir=/opt/cni/bin \
           --cni-conf-dir=/etc/cni/net.d --image-pull-progress-deadline=30s --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.7 \
           --docker-endpoint=unix:///var/run/docker.sock --cri-dockerd-root-directory=/var/lib/docker
 ExecReload=/bin/kill -s HUP $MAINPID
@@ -434,6 +468,7 @@ WantedBy=sockets.target
 
 EOF
 </code></pre>
+<p><strong>socket 的两种接法不要混用：</strong>上面的 <code>cri-docker.socket</code> 中 <code>ListenStream=/var/run/cri-dockerd.sock</code> 表示由 systemd 创建并监听该 socket（socket 激活），此时 <code>ExecStart</code> 必须用 <code>fd://</code> 接收 systemd 传入的 fd。如果像某些文章那样在 <code>ExecStart</code> 里同时写 <code>unix:///var/run/cri-dockerd.sock</code>，cri-dockerd 会再去 bind 同一个路径，报 <code>address already in use</code> 起不来。</p>
 <pre><code class="language-shell"># 启动 cri-dockerd
 systemctl daemon-reload
 systemctl start cri-docker
@@ -449,10 +484,10 @@ wget https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.24.0/cric
 tar -xvf crictl-v1.24.0-linux-amd64.tar.gz
 # 复制二进制文件到指定目录
 cp crictl /usr/bin/
-# 创建配置文件
+# 创建配置文件（endpoint 必须与 kubeadm 的 --cri-socket 一致）
 vim /etc/crictl.yaml
-runtime-endpoint: &quot;unix:///var/run/cri-docker.sock&quot;
-image-endpoint: &quot;unix:///var/run/cri-docker.sock&quot;
+runtime-endpoint: &quot;unix:///var/run/cri-dockerd.sock&quot;
+image-endpoint: &quot;unix:///var/run/cri-dockerd.sock&quot;
 timeout: 10
 debug: false
 pull-image-on-create: true
@@ -498,7 +533,12 @@ Image is up to date for busybox@sha256:5ecba83a746c7608ed511dc1533b87c737a0b0fb7
 </table>
 <h4 id="1安装containerd">1.安装containerd</h4>
 <p><strong>创建配置文件</strong></p>
-<pre><code class="language-shell">mkdir /etc/modules-load.d/containerd.conf 
+<pre><code class="language-shell"># 注意：这里是"写文件"，不是建目录（mkdir 会创建一个名为 containerd.conf 的目录，导致开机加载失效）
+cat &gt; /etc/modules-load.d/containerd.conf &lt;&lt;EOF
+overlay
+br_netfilter
+EOF
+
 </code></pre>
 <p><strong>创建完配置文件执行以下命令</strong></p>
 <pre><code class="language-shell">modprobe overlay &amp;&amp; modprobe br_netfilter
@@ -507,8 +547,9 @@ Image is up to date for busybox@sha256:5ecba83a746c7608ed511dc1533b87c737a0b0fb7
 <pre><code class="language-shell">sysctl --system
 </code></pre>
 <p><strong>下载 docker-ce 源</strong></p>
-<pre><code class="language-shell">wget http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
-或者
+<pre><code class="language-shell"># 要加 -O 指定目录，否则 repo 文件会下载到当前目录，yum 读不到
+wget -O /etc/yum.repos.d/docker-ce.repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+# 或者
 yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 </code></pre>
 <p><strong>安装 containerd 服务并加入开机启动</strong></p>
@@ -530,8 +571,12 @@ systemctl enable containerd &amp;&amp; systemctl start containerd
 </code></pre>
 <p><strong>替换默认pause镜像地址</strong></p>
 <p>默认情况下k8s.gcr.io无法访问，所以使用阿里云镜像仓库地址即可</p>
-<pre><code class="language-shell"># 所有节点更换默认镜像地址
-sed -i 's/k8s.gcr.io/registry.cn-beijing.aliyuncs.com\/abcdocker/' /etc/containerd/config.toml 
+<pre><code class="language-shell"># 所有节点更换默认镜像地址（即 sandbox_image 里的 pause 镜像）
+# 1.24 的 kubeadm 默认仓库是 k8s.gcr.io；registry.k8s.io 从 1.25 起成为默认，且同样提供 1.24 的镜像
+sed -i 's#k8s.gcr.io#registry.aliyuncs.com/google_containers#' /etc/containerd/config.toml
+# 确认 pause 版本与 kubeadm 期望的一致（1.24.1 为 pause:3.7）
+grep sandbox_image /etc/containerd/config.toml
+kubeadm config images list | grep pause
 </code></pre>
 <p><strong>重启 containerd</strong></p>
 <pre><code class="language-shell">systemctl restart containerd
@@ -562,9 +607,11 @@ gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg http://mirrors.a
 EOF
 </code></pre>
 <h4 id="2安装启用">2.安装启用</h4>
+<p>只装指定版本还不够，还要<strong>锁住</strong>它们：kubelet 不允许跨次版本升级，<code>yum update</code> 一旦把它升到 1.25 就会启动失败。可用 <code>yum-plugin-versionlock</code> 锁定，或在 <code>/etc/yum.conf</code> 里加 <code>exclude=kubelet kubeadm kubectl</code>。<code>--disableexcludes=kubernetes</code> 的作用是绕过 repo 文件里预设的 exclude，让本次安装能装到这几个包。</p>
 <pre><code class="language-shell">sudo yum install -y kubelet-1.24.1 kubeadm-1.24.1 kubectl-1.24.1 --disableexcludes=kubernetes 
 sudo systemctl enable kubelet &amp;&amp; systemctl start kubelet
 </code></pre>
+<p>此时 kubelet 会因为 <code>/var/lib/kubelet/config.yaml</code> 还不存在而反复重启（日志里是 <code>failed to load Kubelet config file</code>），这是 <code>kubeadm init</code> 之前的正常现象，不必处理；<code>kubeadm init</code> 成功后它会自己进入 Running。</p>
 <h4 id="3修改kubelet的配置文件">3.修改kubelet的配置文件</h4>
 <p>先查看配置文件位置</p>
 <pre><code class="language-shell">systemctl status kubelet
@@ -572,7 +619,7 @@ sudo systemctl enable kubelet &amp;&amp; systemctl start kubelet
 <figure data-type="image" tabindex="4"><img src="/post-images/1653818855680.png" alt="" loading="lazy"></figure>
 <pre><code class="language-shell">vi /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
 </code></pre>
-<p>并添加以下内容(使用和docker相同的cgroup-driver)。</p>
+<p>关于 cgroup driver：kubeadm 1.22 起默认就把 kubelet 的 <code>cgroupDriver</code> 设为 <code>systemd</code>，通常<strong>不需要</strong>手工改这里。而且 <code>--cgroup-driver</code> 已经是废弃参数（kubelet 启动时会打印 deprecation 警告），推荐用 <code>KubeletConfiguration</code> 段来声明（在 <code>kubeadm-config.yaml</code> 中加 <code>kind: KubeletConfiguration</code>、<code>cgroupDriver: systemd</code>）。另外 <code>10-kubeadm.conf</code> 由 kubeadm 管理，<code>kubeadm upgrade</code> 时可能被覆盖，手工改动要记下来。如果确实要改，内容如下（与 Docker/containerd 保持一致）。</p>
 <pre><code class="language-shell">Environment=&quot;KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --cgroup-driver=systemd&quot;
 </code></pre>
 <h4 id="4重启kubelet">4.重启kubelet</h4>
@@ -585,6 +632,9 @@ sudo systemctl enable kubelet &amp;&amp; systemctl start kubelet
 <pre><code class="language-bash">kubeadm config images list
 </code></pre>
 <p>获取镜像列表后可以通过下面的脚本从阿里云获取：</p>
+<blockquote>
+<p>这段脚本只适用于<strong>路线 B（Docker + cri-dockerd）</strong>，因为它用的是 <code>docker pull/tag</code>。走 containerd 路线时不需要在 Docker 里准备镜像，直接让 <code>kubeadm init --image-repository registry.aliyuncs.com/google_containers</code> 自己拉即可（也可以用 <code>crictl pull</code> 单独验证）。另外 <code>pause</code> 的版本必须与 <code>kubeadm config images list</code> 的输出一致（1.24.1 为 <code>3.7</code>），tag 成 <code>k8s.gcr.io/...</code> 是因为 1.24 的默认仓库还是它；1.25+ 请改成 <code>registry.k8s.io/...</code>。</p>
+</blockquote>
 <pre><code class="language-shell">vi /usr/local/k8s/k8s-images.sh
 </code></pre>
 <blockquote>
@@ -615,6 +665,7 @@ done
 <p><strong>采用模板配置文件加载</strong></p>
 <pre><code class="language-shell">kubeadm config print init-defaults  &gt; kubeadm-config.yaml
 </code></pre>
+<p>kubeadm 1.24 打印出的 <code>apiVersion</code> 默认已是 <code>kubeadm.k8s.io/v1beta3</code>（下文示例中的 <code>v1beta2</code> 是旧样式，仍被兼容但已废弃）。下面这份文件有三处必须按自己的环境确认：<code>advertiseAddress</code>（本机 IP）、<code>criSocket</code>（两条路线二选一）、<code>controlPlaneEndpoint</code> 与 <code>imageRepository</code>；<code>nodeRegistration.name</code> 要与 <code>hostname</code> 一致。</p>
 <pre><code class="language-yaml">
 [root@master1 ~]# cat kubeadm-config.yaml 
 apiVersion: kubeadm.k8s.io/v1beta2
@@ -631,8 +682,9 @@ localAPIEndpoint:
   advertiseAddress: 192.168.40.131    # 本机IP
   bindPort: 6443
 nodeRegistration:
-  criSocket: unix:///var/run/cri-docker.sock  # 此处千万不要忘记修改，如果不修改等于没有替换。(此处已经更改完了)
-  #criSocket: unix:///run/containerd/containerd.sock      # 此处千万不要忘记修改，如果不修改等于没有替换。(此处已经更改完了)
+  # 下面两行只保留一行，与第 14/15 小节选择的路线保持一致
+  criSocket: unix:///var/run/cri-dockerd.sock          # 路线 B：Docker + cri-dockerd
+  #criSocket: unix:///run/containerd/containerd.sock   # 路线 A：containerd
   name: master1        # 本主机名
   taints:
   - effect: NoSchedule
@@ -643,7 +695,8 @@ apiServer:
 apiVersion: kubeadm.k8s.io/v1beta2
 certificatesDir: /etc/kubernetes/pki
 clusterName: kubernetes
-controlPlaneEndpoint: &quot;192.168.40.151:16443&quot;      # 虚拟IP和haproxy端口
+# 单 master 直接删掉下面这行；只有多 master + haproxy/VIP 才需要 controlPlaneEndpoint
+controlPlaneEndpoint: &quot;192.168.40.131:6443&quot;
 controllerManager: {}
 dns:
   type: CoreDNS
@@ -662,8 +715,7 @@ scheduler: {}
 ---
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
 kind: KubeProxyConfiguration
-featureGates:
-  SupportIPVSProxyMode: true
+# SupportIPVSProxyMode 早已 GA，并在后续版本中被移除；若报 unrecognized feature gate，删掉 featureGates 段
 mode: ipvs
 </code></pre>
 <h4 id="2查看kubeadm版本修改命令参数">2.查看kubeadm版本，修改命令参数</h4>
@@ -671,12 +723,13 @@ mode: ipvs
 </code></pre>
 <p>这个就很简单了，只需要简单的一个命令：</p>
 <pre><code class="language-bash">#直接使用已经下载好的镜像
-kubeadm init --kubernetes-version=v1.24.1 --apiserver-advertise-address=192.168.40.131 --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12 --ignore-preflight-errors=Swap  --cri-socket unix:///var/run/cri-docker.sock | tee kubeadm-init.log
+kubeadm init --kubernetes-version=v1.24.1 --apiserver-advertise-address=192.168.40.131 --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12 --ignore-preflight-errors=Swap  --cri-socket unix:///var/run/cri-dockerd.sock | tee kubeadm-init.log
 #或者采用aliyuncs镜像下载
-kubeadm init --kubernetes-version=v1.24.1 --apiserver-advertise-address=192.168.40.131 --image-repository  registry.aliyuncs.com/google_containers  --service-cidr=10.1.0.0/16 --pod-network-cidr=10.244.0.0/16 --cri-socket unix:///var/run/cri-docker.sock| tee kubeadm-init.log
+kubeadm init --kubernetes-version=v1.24.1 --apiserver-advertise-address=192.168.40.131 --image-repository  registry.aliyuncs.com/google_containers  --service-cidr=10.96.0.0/12 --pod-network-cidr=10.244.0.0/16 --cri-socket unix:///var/run/cri-dockerd.sock| tee kubeadm-init.log
 #使用上面系统生成配置文件加载
 kubeadm init --config kubeadm-config.yaml
 </code></pre>
+<p>几点说明：<code>service-cidr</code> 默认是 <code>10.96.0.0/12</code>，三个网段（node、pod、service）不能互相重叠，上面前两条命令里曾经写成 <code>10.1.0.0/16</code>，已统一为默认值；<code>--ignore-preflight-errors=Swap</code> 只在 swap 确实没关时用来绕过检查，1.24 的 kubelet 并不支持 swap，生产环境应老实关掉；<code>--kubernetes-version=v1.24.1</code> 会跳过版本探测（默认 <code>stable-1</code> 需要访问 <code>dl.k8s.io</code>，国内通常不通）。注意：<code>--cri-socket</code> 要与运行时路线一致，容器里用 containerd 时写 <code>unix:///run/containerd/containerd.sock</code>。</p>
 <h4 id="3初始化命令说明">3.初始化命令说明：</h4>
 <blockquote>
 <p>指明用 Master 的哪个 interface 与 Cluster 的其他节点通信。如果 Master 有多个 interface，建议明确指定，如果不指定，kubeadm 会自动选择有默认网关的 interface。</p>
@@ -701,11 +754,11 @@ kubeadm init --config kubeadm-config.yaml
 <blockquote>
 <p>指定启动时使用cri-docker调用docker</p>
 </blockquote>
-<pre><code class="language-shell">--cri-socket unix:///var/run/cri-docker.sock 
+<pre><code class="language-shell">--cri-socket unix:///var/run/cri-dockerd.sock 
 </code></pre>
 <h4 id="4错误启动重置">4.错误启动重置</h4>
 <pre><code class="language-shell"># 重置 如果有需要
-kubeadm reset --cri-socket unix:///var/run/cri-docker.sock
+kubeadm reset --cri-socket unix:///var/run/cri-dockerd.sock
 </code></pre>
 <h4 id="5初始化成功后为顺利使用kubectl执行以下命令">5.初始化成功后，为顺利使用kubectl，执行以下命令：</h4>
 <pre><code class="language-shell">mkdir -p $HOME/.kube
@@ -713,7 +766,7 @@ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 </code></pre>
 <h4 id="6添加节点">6.添加节点</h4>
-<pre><code class="language-shell">kubeadm join 192.168.40.131:6443 --token eyr8v6.j84sxak8aptse8j9 --discovery-token-ca-cert-hash sha256:c082f3c546bdbac02d0d0a3b696de4004b0d449e37838fa38d4752b39682676b --cri-socket unix:///var/run/cri-docker.sock 
+<pre><code class="language-shell">kubeadm join 192.168.40.131:6443 --token eyr8v6.j84sxak8aptse8j9 --discovery-token-ca-cert-hash sha256:c082f3c546bdbac02d0d0a3b696de4004b0d449e37838fa38d4752b39682676b --cri-socket unix:///var/run/cri-dockerd.sock 
 </code></pre>
 <h4 id="7执行kubectl-get-nodes查看master节点状态">7.执行kubectl get nodes，查看master节点状态：</h4>
 <pre><code class="language-shell">kubectl get node
@@ -724,20 +777,23 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 <p>提示未安装cni 网络插件。</p>
 <h3 id="191安装flannel网络插件cni">19.1安装flannel网络插件(CNI)</h3>
 <p>master执行以下命令安装flannel即可：</p>
-<pre><code class="language-shell">kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+<pre><code class="language-shell"># coreos/flannel 仓库已归档并迁移到 flannel-io/flannel，建议固定版本号，不要用 master
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/v0.19.2/Documentation/kube-flannel.yml
 </code></pre>
-<p>kube-flannel.yaml 中 net-conf.json 的 Network 地址默认与命令中 --pod-network-cidr 的值相同</p>
+<p>kube-flannel.yaml 中 net-conf.json 的 Network 地址默认与命令中 --pod-network-cidr 的值相同（这里是 <code>10.244.0.0/16</code>），两者不一致会导致跨节点 Pod 不通。kube-flannel 的 DaemonSet 带有 <code>tolerations: operator: Exists</code>，因此 master 上的 <code>NoSchedule</code> 污点不影响它调度。如果节点有多块网卡或多个网段，需要在 DaemonSet 的启动参数里加 <code>--iface=ens33</code> 指定网卡，否则可能选错网卡导致 Pod 之间不通。</p>
 <p><strong>输入命令kubectl get pods -n kube-system,等待所有插件为running状态</strong>。</p>
 <p><strong>待所有pod status为Running的时候，再次执行kubectl get nodes：</strong></p>
 <pre><code class="language-shell">[root@k8s-master ~]# kubectl get node
 NAME         STATUS   ROLES    AGE   VERSION
-k8s-master   Ready    master   16m   v1.19.3
+k8s-master   Ready    control-plane,master   16m   v1.24.1
 </code></pre>
 <p><strong>如上所示，master状态变为，表明Master节点部署成功！</strong></p>
 <h3 id="192安装calico网络功能更完善">19.2安装calico网络(功能更完善)</h3>
 <h4 id="1在master上下载配置calico网络的yaml">1.在master上下载配置calico网络的yaml。</h4>
-<pre><code class="language-shell">kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+<pre><code class="language-shell"># docs.projectcalico.org 已不再维护，改用 GitHub 上固定版本的 manifest
+curl -O https://raw.githubusercontent.com/projectcalico/calico/v3.23.1/manifests/calico.yaml
 </code></pre>
+<p><strong>重要：Calico 默认的 IP 池是 <code>192.168.0.0/16</code>，必须与 <code>--pod-network-cidr</code> 保持一致。</strong>打开 <code>calico.yaml</code>，找到 <code>CALICO_IPV4POOL_CIDR</code>，取消注释并改成 <code>10.244.0.0/16</code>（与初始化时的 pod 网段相同）；不改的话 Calico 会用 192.168.0.0/16 建池，跨节点 Pod 通信会失败。另外 Calico 的 <code>veth_mtu</code>、<code>IP_AUTODETECTION_METHOD</code> 在多网卡机器上也常需要显式指定。</p>
 <h4 id="2提前下载所需要的镜像">2.提前下载所需要的镜像。</h4>
 <pre><code class="language-shell"># 查看此文件用哪些镜像：
 [root@k8s-master ~]# grep image calico.yaml
@@ -747,21 +803,21 @@ image: docker.io/calico/kube-controllers:v3.23.1
 </code></pre>
 <h4 id="3安装calico网络">3.安装calico网络。</h4>
 <p>在master上执行如下命令：</p>
-<pre><code class="language-csharp">kubectl apply -f calico.yaml
+<pre><code class="language-shell">kubectl apply -f calico.yaml
 </code></pre>
 <h4 id="5验证结果">5.验证结果。</h4>
 <p>再次在master上运行命令 kubectl get nodes查看运行结果：</p>
-<pre><code class="language-css">[root@k8s-master ~]# kubectl get nodes
+<pre><code class="language-text">[root@k8s-master ~]# kubectl get nodes
 NAME       STATUS   ROLES                  AGE   VERSION
-master01   Ready    control-plane,master   21h   v1.23.4
-worker01   Ready    &lt;none&gt;                 16h   v1.23.4
-worker02   Ready    &lt;none&gt;                 16h   v1.23.4
+k8s-master   Ready    control-plane,master   21h   v1.24.1
+k8s-node1   Ready    &lt;none&gt;                 16h   v1.24.1
+k8s-node2   Ready    &lt;none&gt;                 16h   v1.24.1
 </code></pre>
 <h3 id="20部署k8s-node1-k8s-node2集群">20.部署k8s-node1、k8s-node2集群</h3>
 <p><strong>1、在k8s-node1、k8s-node2等两台虚拟机中重复执行上面的步骤，安装好docker、kubelet、kubectl、kubeadm。</strong></p>
 <h4 id="1node节点加入集群">1.node节点加入集群</h4>
 <p>在上面初始化 master 节点成功后，会输出下面的 kubeadm join 命令：</p>
-<pre><code class="language-shell">kubeadm join 192.168.40.131:6443 --token zj0u08.ge77y7uv76flqgdk --discovery-token-ca-cert-hash sha256:7cd23cec6afb192b2d34c5c719b378082a6315a9d91a22d91b83066c870d4db5 --cri-socket unix:///var/run/cri-docker.sock 
+<pre><code class="language-shell">kubeadm join 192.168.40.131:6443 --token zj0u08.ge77y7uv76flqgdk --discovery-token-ca-cert-hash sha256:7cd23cec6afb192b2d34c5c719b378082a6315a9d91a22d91b83066c870d4db5 --cri-socket unix:///var/run/cri-dockerd.sock 
 </code></pre>
 <p>该命令就是node加入集群的命令，分别在k8s-node1、k8s-node2上执行该命令加入集群。</p>
 <p>如果忘记该命令，可以通过以下命令重新生成：</p>
@@ -772,9 +828,9 @@ worker02   Ready    &lt;none&gt;                 16h   v1.23.4
 </code></pre>
 <pre><code class="language-shell">[root@k8s-master ~]# kubectl get node
 NAME         STATUS   ROLES    AGE     VERSION
-k8s-master   Ready    master   24m     v1.19.3
-k8s-node1    Ready    &lt;none&gt;   5m50s   v1.19.3
-k8s-node2    Ready    &lt;none&gt;   5m21s   v1.19.3
+k8s-master   Ready    master   24m     v1.24.1
+k8s-node1    Ready    &lt;none&gt;   5m50s   v1.24.1
+k8s-node2    Ready    &lt;none&gt;   5m21s   v1.24.1
 
 </code></pre>
 <p>如上所示，所有节点都为ready，集群搭建成功。</p>
@@ -1398,10 +1454,82 @@ webhooks:
   
 kubectl create -f ingress-nginx-deploy.yaml
 </code></pre>
+<h2 id="常见报错与排查">常见报错与排查</h2>
+<p>1.24 移除 dockershim 之后，初始化失败绝大多数集中在运行时（CRI）这一层：kubelet 能起来，但连不上容器运行时，或者拉不到 <code>pause</code> 沙箱镜像。下面按报错信息归类，命中后按对应分支处理。</p>
+<p><img src="/post-assets/oqAZb-4wU/02-init-troubleshoot.svg" alt="kubeadm init 与 join 常见报错的分支排查路径"></p>
+<h3 id="err-sandbox-image">1.沙箱镜像（pause）拉取失败</h3>
+<pre><code class="language-text">Failed to create pod sandbox: rpc error: code = Unknown desc = failed to get sandbox image
+"registry.k8s.io/pause:3.6": failed to pull image: dial tcp: i/o timeout
+</code></pre>
+<p>两个常见原因：一是到 <code>k8s.gcr.io</code>/<code>registry.k8s.io</code> 的网络不通；二是 containerd 里配置的 <code>sandbox_image</code> 版本与 kubeadm 期望的 pause 版本不一致（1.24.1 期望 <code>pause:3.7</code>）。</p>
+<pre><code class="language-shell"># kubeadm 期望的 pause 版本
+kubeadm config images list | grep pause
+# containerd 实际使用的版本
+grep sandbox_image /etc/containerd/config.toml
+# 统一改成国内镜像 + 正确版本，然后重启 containerd
+sed -i 's#sandbox_image = .*#sandbox_image = "registry.aliyuncs.com/google_containers/pause:3.7"#' /etc/containerd/config.toml
+systemctl restart containerd
+crictl pull registry.aliyuncs.com/google_containers/pause:3.7
+</code></pre>
+<h3 id="err-cri-v1">2.运行时连接失败：CRI v1 未实现或 socket 路径不对</h3>
+<pre><code class="language-text">failed to run Kubelet: validate service connection: CRI v1 runtime API is not implemented for endpoint
+"unix:///run/containerd/containerd.sock": rpc error: code = Unimplemented
+</code></pre>
+<p>1.24 的 kubelet 只实现了 CRI v1，containerd 1.5.x 只提供 v1alpha2，必须升级到 1.6 及以上（用 <code>containerd --version</code> 确认）。另一类同族报错是 <code>connection refused</code> 或 <code>no such file or directory</code>，通常是把 socket 路径写错了（cri-dockerd 与 containerd 的路径不同，且 socket 激活方式下路径必须与 systemd 单元一致）。</p>
+<pre><code class="language-shell">systemctl status containerd cri-docker
+ls -l /run/containerd/containerd.sock /var/run/cri-dockerd.sock
+# kubeadm 的 --cri-socket（或配置文件里的 criSocket）必须指向真实存在的那个，且所有节点一致
+</code></pre>
+<h3 id="err-preflight">3.预检失败：iptables 参数、swap、端口占用</h3>
+<pre><code class="language-text">[ERROR FileContent--proc-sys-net-bridge-bridge-nf-call-iptables]: /proc/sys/net/bridge/bridge-nf-call-iptables contents are not set to 1
+[ERROR Swap]: running with swap on is not supported. Please disable swap
+[ERROR Port-6443]: Port 6443 is in use
+[ERROR Port-10250]: Port 10250 is in use
+</code></pre>
+<pre><code class="language-shell"># 1) iptables 参数：加载 br_netfilter 并让内核参数生效
+modprobe br_netfilter &amp;&amp; sysctl -p /etc/sysctl.d/k8s.conf
+# 2) swap：确认已关闭，且 /etc/fstab 里已注释
+swapoff -a &amp;&amp; free -h &amp;&amp; grep swap /etc/fstab
+# 3) 端口：确认是谁占用了 6443/10250/10257/10259/2379/2380
+ss -lntp | grep -E ':(6443|10250|10257|10259|2379|2380)'
+# 确认是上一次失败留下的残留后，重置再试（重置命令见文末）
+kubeadm reset -f --cri-socket unix:///var/run/cri-dockerd.sock
+</code></pre>
+<p>如果只是临时验证、确实不想关 swap，可以在 init 时加 <code>--ignore-preflight-errors=Swap</code>；但这只是跳过检查，1.24 的 kubelet 并不支持 swap，生产环境仍应关闭。</p>
+<h3 id="err-cgroup">4.cgroup driver 不一致</h3>
+<pre><code class="language-text">failed to create kubelet: misconfiguration: kubelet cgroup driver: "cgroupfs" is different from
+docker cgroup driver: "systemd"
+</code></pre>
+<p>三处必须是同一个值 <code>systemd</code>：containerd 的 <code>SystemdCgroup = true</code>、Docker 的 <code>native.cgroupdriver=systemd</code>、kubelet 的 <code>cgroupDriver</code>。kubeadm 1.22 之后默认就使用 systemd，一般无需手工改，确认方式：</p>
+<pre><code class="language-shell">grep cgroupDriver /var/lib/kubelet/config.yaml
+docker info | grep -i cgroup
+grep -n SystemdCgroup /etc/containerd/config.toml
+</code></pre>
+<h3 id="err-cert">5.证书到期</h3>
+<pre><code class="language-text">Unable to connect to the server: x509: certificate has expired or is not yet valid
+</code></pre>
+<p>kubeadm 签发的集群证书默认有效期 1 年（CA 为 10 年），到期症状通常是 apiserver 起不来或 kubectl 报 x509。先看剩余时间，再续期并重启控制面组件（静态 Pod 会被 kubelet 自动重建）。1.24 的命令已经是 <code>kubeadm certs</code>（1.15 之前的老集群是 <code>kubeadm alpha certs</code>）。</p>
+<pre><code class="language-shell">kubeadm certs check-expiration
+kubeadm certs renew all
+systemctl restart kubelet
+</code></pre>
+<h3 id="err-generic">6.通用排查命令</h3>
+<pre><code class="language-shell"># 先看 kubelet 到底在报什么（最常用、最有效）
+journalctl -xef -u kubelet -n 50
+# 容器运行时能不能用
+crictl ps -a &amp;&amp; crictl images
+# 节点为什么 NotReady：看 Conditions 与 Events
+kubectl describe node k8s-node1
+# 控制面组件是否都在跑（apiserver/etcd 是静态 Pod，用 -o wide 看落在哪个节点）
+kubectl get pods -n kube-system -o wide
+kubectl -n kube-system logs kube-apiserver-k8s-master
+</code></pre>
+<p>经验顺序：<code>kubectl get nodes</code> 显示 <code>NotReady</code> 时先看 <code>describe node</code> 中 <code>Ready</code> 条件的原因（<code>KubeletNotReady</code> 多为 CNI 未就绪），再回到 <code>journalctl -u kubelet</code> 找 CRI 相关报错，基本能落到上面几类。</p>
 <h2 id="卸载集群命令">卸载集群命令</h2>
 <pre><code class="language-shell">#建议所有服务器都执行
 #!/bin/bash
-kubeadm reset -f
+# --cri-socket 要与安装时使用的运行时保持一致（containerd 为 unix:///run/containerd/containerd.sock）
+kubeadm reset -f --cri-socket unix:///var/run/cri-dockerd.sock
 modprobe -r ipip
 lsmod
 rm -rf ~/.kube/
@@ -1413,138 +1541,294 @@ rm -rf /etc/cni
 rm -rf /opt/cni
 rm -rf /var/lib/etcd
 rm -rf /var/etcd
-yum -y remove kubeadm* kubectl* kubelet* docker*
+yum -y remove kubeadm* kubectl* kubelet* docker* containerd.io
+rm -rf /var/lib/containerd
 reboot
 </code></pre>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E6%95%B4%E4%BD%93%E7%8E%AF%E5%A2%83">整体环境</a>
 <ul>
-<li><a href="#%E6%95%B4%E4%BD%93%E7%8E%AF%E5%A2%83">整体环境</a>
+<li>
+<a href="#1%E5%86%85%E6%A0%B8%E5%8D%87%E7%BA%A7%E5%8F%AF%E5%BF%BD%E7%95%A5">1.内核升级（可忽略）</a>
 <ul>
-<li><a href="#1%E5%86%85%E6%A0%B8%E5%8D%87%E7%BA%A7%E5%8F%AF%E5%BF%BD%E7%95%A5">1.内核升级（可忽略）</a>
+<li>
+<a href="#%E8%81%94%E7%BD%91%E5%8D%87%E7%BA%A7%E5%86%85%E6%A0%B8">联网升级内核</a>
 <ul>
-<li><a href="#%E8%81%94%E7%BD%91%E5%8D%87%E7%BA%A7%E5%86%85%E6%A0%B8">联网升级内核</a>
-<ul>
-<li><a href="#1-%E6%9F%A5%E7%9C%8B%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC">1. 查看内核版本</a></li>
-<li><a href="#2-%E5%AF%BC%E5%85%A5elrepo%E8%BD%AF%E4%BB%B6%E4%BB%93%E5%BA%93%E7%9A%84%E5%85%AC%E5%85%B1%E7%A7%98%E9%92%A5">2. 导入ELRepo软件仓库的公共秘钥</a></li>
-<li><a href="#3-%E5%AE%89%E8%A3%85elrepo%E8%BD%AF%E4%BB%B6%E4%BB%93%E5%BA%93%E7%9A%84yum%E6%BA%90">3. 安装ELRepo软件仓库的yum源</a></li>
-<li><a href="#4-%E5%90%AF%E7%94%A8-elrepo-%E8%BD%AF%E4%BB%B6%E6%BA%90%E5%B9%B6%E4%B8%8B%E8%BD%BD%E5%AE%89%E8%A3%85%E6%9C%80%E6%96%B0%E7%A8%B3%E5%AE%9A%E7%89%88%E5%86%85%E6%A0%B8">4. 启用 elrepo 软件源并下载安装最新稳定版内核</a></li>
-<li><a href="#5-%E6%9F%A5%E7%9C%8B%E7%B3%BB%E7%BB%9F%E5%8F%AF%E7%94%A8%E5%86%85%E6%A0%B8%E5%B9%B6%E8%AE%BE%E7%BD%AE%E5%86%85%E6%A0%B8%E5%90%AF%E5%8A%A8%E9%A1%BA%E5%BA%8F">5. 查看系统可用内核，并设置内核启动顺序</a></li>
-<li><a href="#6-%E7%94%9F%E6%88%90-grub-%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">6. 生成 grub 配置文件</a></li>
-<li><a href="#7-%E9%87%8D%E5%90%AF%E7%B3%BB%E7%BB%9F%E5%B9%B6%E9%AA%8C%E8%AF%81">7. 重启系统并验证</a></li>
-<li><a href="#8-%E5%88%A0%E9%99%A4%E6%97%A7%E5%86%85%E6%A0%B8">8. 删除旧内核</a></li>
-</ul>
+<li>
+<a href="#1-%E6%9F%A5%E7%9C%8B%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC">1. 查看内核版本</a>
+</li>
+<li>
+<a href="#2-%E5%AF%BC%E5%85%A5elrepo%E8%BD%AF%E4%BB%B6%E4%BB%93%E5%BA%93%E7%9A%84%E5%85%AC%E5%85%B1%E7%A7%98%E9%92%A5">2. 导入ELRepo软件仓库的公共秘钥</a>
+</li>
+<li>
+<a href="#3-%E5%AE%89%E8%A3%85elrepo%E8%BD%AF%E4%BB%B6%E4%BB%93%E5%BA%93%E7%9A%84yum%E6%BA%90">3. 安装ELRepo软件仓库的yum源</a>
+</li>
+<li>
+<a href="#4-%E5%90%AF%E7%94%A8-elrepo-%E8%BD%AF%E4%BB%B6%E6%BA%90%E5%B9%B6%E4%B8%8B%E8%BD%BD%E5%AE%89%E8%A3%85%E6%9C%80%E6%96%B0%E7%A8%B3%E5%AE%9A%E7%89%88%E5%86%85%E6%A0%B8">4. 启用 elrepo 软件源并下载安装最新稳定版内核</a>
+</li>
+<li>
+<a href="#5-%E6%9F%A5%E7%9C%8B%E7%B3%BB%E7%BB%9F%E5%8F%AF%E7%94%A8%E5%86%85%E6%A0%B8%E5%B9%B6%E8%AE%BE%E7%BD%AE%E5%86%85%E6%A0%B8%E5%90%AF%E5%8A%A8%E9%A1%BA%E5%BA%8F">5. 查看系统可用内核，并设置内核启动顺序</a>
+</li>
+<li>
+<a href="#6-%E7%94%9F%E6%88%90-grub-%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">6. 生成 grub 配置文件</a>
+</li>
+<li>
+<a href="#7-%E9%87%8D%E5%90%AF%E7%B3%BB%E7%BB%9F%E5%B9%B6%E9%AA%8C%E8%AF%81">7. 重启系统并验证</a>
+</li>
+<li>
+<a href="#8-%E5%88%A0%E9%99%A4%E6%97%A7%E5%86%85%E6%A0%B8">8. 删除旧内核</a>
 </li>
 </ul>
 </li>
-<li><a href="#2centos%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">2.CentOS 网络配置文件</a>
+</ul>
+</li>
+<li>
+<a href="#2centos%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">2.CentOS 网络配置文件</a>
 <ul>
-<li><a href="#1%E5%86%85%E5%AE%B9%E6%9B%BF%E6%8D%A2%E5%A6%82%E4%B8%8B">1.内容替换如下：</a></li>
-<li><a href="#2%E7%BD%91%E7%BB%9C%E6%9C%8D%E5%8A%A1%E9%87%8D%E5%90%AF">2.网络服务重启</a></li>
-<li><a href="#3%E6%9F%A5%E7%9C%8Bip%E5%9C%B0%E5%9D%80">3.查看IP地址</a></li>
+<li>
+<a href="#1%E5%86%85%E5%AE%B9%E6%9B%BF%E6%8D%A2%E5%A6%82%E4%B8%8B">1.内容替换如下：</a>
+</li>
+<li>
+<a href="#2%E7%BD%91%E7%BB%9C%E6%9C%8D%E5%8A%A1%E9%87%8D%E5%90%AF">2.网络服务重启</a>
+</li>
+<li>
+<a href="#3%E6%9F%A5%E7%9C%8Bip%E5%9C%B0%E5%9D%80">3.查看IP地址</a>
+</li>
 </ul>
 </li>
-<li><a href="#3%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96%E5%8C%85">3.安装依赖包</a></li>
-<li><a href="#4%E4%BF%AE%E6%94%B9yum%E6%BA%90%E8%A7%86%E7%BD%91%E7%BB%9C%E6%83%85%E5%86%B5%E6%93%8D%E4%BD%9C">4.修改yum源（视网络情况操作）</a>
+<li>
+<a href="#3%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96%E5%8C%85">3.安装依赖包</a>
+</li>
+<li>
+<a href="#4%E4%BF%AE%E6%94%B9yum%E6%BA%90%E8%A7%86%E7%BD%91%E7%BB%9C%E6%83%85%E5%86%B5%E6%93%8D%E4%BD%9C">4.修改yum源（视网络情况操作）</a>
 <ul>
-<li><a href="#1%E5%A4%87%E4%BB%BD">1.备份</a></li>
-<li><a href="#2%E4%B8%8B%E8%BD%BD">2.下载</a></li>
-<li><a href="#3%E6%B8%85%E9%99%A4%E7%94%9F%E6%88%90%E7%BC%93%E5%AD%98">3.清除生成缓存</a></li>
+<li>
+<a href="#1%E5%A4%87%E4%BB%BD">1.备份</a>
+</li>
+<li>
+<a href="#2%E4%B8%8B%E8%BD%BD">2.下载</a>
+</li>
+<li>
+<a href="#3%E6%B8%85%E9%99%A4%E7%94%9F%E6%88%90%E7%BC%93%E5%AD%98">3.清除生成缓存</a>
+</li>
 </ul>
 </li>
-<li><a href="#5%E4%BF%AE%E6%94%B9%E4%B8%BB%E6%9C%BA%E5%90%8D">5.修改主机名</a>
+<li>
+<a href="#5%E4%BF%AE%E6%94%B9%E4%B8%BB%E6%9C%BA%E5%90%8D">5.修改主机名</a>
 <ul>
-<li><a href="#%E6%9F%A5%E7%9C%8B%E4%B8%BB%E6%9C%BA%E5%90%8D%E7%A7%B0">查看主机名称</a></li>
+<li>
+<a href="#%E6%9F%A5%E7%9C%8B%E4%B8%BB%E6%9C%BA%E5%90%8D%E7%A7%B0">查看主机名称</a>
+</li>
 </ul>
 </li>
-<li><a href="#6%E6%B7%BB%E5%8A%A0hosts%E8%A7%A3%E6%9E%90">6.添加hosts解析</a></li>
-<li><a href="#7%E5%85%B3%E9%97%AD%E9%98%B2%E7%81%AB%E5%A2%99firewalld">7.关闭防火墙firewalld</a></li>
-<li><a href="#8%E5%85%B3%E9%97%ADselinux">8.关闭selinux</a></li>
-<li><a href="#9%E5%85%B3%E9%97%ADswap%E5%88%86%E5%8C%BA%E4%BA%A4%E6%8D%A2">9.关闭swap分区交换</a></li>
-<li><a href="#10%E9%85%8D%E7%BD%AE%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0">10.配置内核参数</a>
+<li>
+<a href="#6%E6%B7%BB%E5%8A%A0hosts%E8%A7%A3%E6%9E%90">6.添加hosts解析</a>
+</li>
+<li>
+<a href="#7%E5%85%B3%E9%97%AD%E9%98%B2%E7%81%AB%E5%A2%99firewalld">7.关闭防火墙firewalld</a>
+</li>
+<li>
+<a href="#8%E5%85%B3%E9%97%ADselinux">8.关闭selinux</a>
+</li>
+<li>
+<a href="#9%E5%85%B3%E9%97%ADswap%E5%88%86%E5%8C%BA%E4%BA%A4%E6%8D%A2">9.关闭swap分区交换</a>
+</li>
+<li>
+<a href="#10%E9%85%8D%E7%BD%AE%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0">10.配置内核参数</a>
 <ul>
-<li><a href="#1%E8%AE%BE%E7%BD%AE%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0">1.设置内核参数</a></li>
-<li><a href="#2%E5%8A%A0%E8%BD%BD%E5%86%85%E6%A0%B8%E6%A8%A1%E5%9D%97">2.加载内核模块</a></li>
-<li><a href="#3%E4%BD%BF%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0%E7%94%9F%E6%95%88">3.使内核参数生效</a></li>
+<li>
+<a href="#1%E8%AE%BE%E7%BD%AE%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0">1.设置内核参数</a>
+</li>
+<li>
+<a href="#2%E5%8A%A0%E8%BD%BD%E5%86%85%E6%A0%B8%E6%A8%A1%E5%9D%97">2.加载内核模块</a>
+</li>
+<li>
+<a href="#3%E4%BD%BF%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0%E7%94%9F%E6%95%88">3.使内核参数生效</a>
+</li>
 </ul>
 </li>
-<li><a href="#11%E6%97%B6%E9%97%B4%E5%90%8C%E6%AD%A5">11.时间同步</a></li>
-<li><a href="#12%E5%AE%89%E8%A3%85iptables%E8%AE%BE%E7%BD%AE%E7%A9%BA%E8%A1%A8">12.安装iptables，设置空表</a></li>
-<li><a href="#13%E5%BC%80%E5%90%AFipvs">13.开启IPVS</a>
+<li>
+<a href="#11%E6%97%B6%E9%97%B4%E5%90%8C%E6%AD%A5">11.时间同步</a>
+</li>
+<li>
+<a href="#12%E5%AE%89%E8%A3%85iptables%E8%AE%BE%E7%BD%AE%E7%A9%BA%E8%A1%A8">12.安装iptables，设置空表</a>
+</li>
+<li>
+<a href="#13%E5%BC%80%E5%90%AFipvs">13.开启IPVS</a>
 <ul>
-<li><a href="#%E6%8E%88%E6%9D%83%E5%90%AF%E5%8A%A8">授权启动</a></li>
+<li>
+<a href="#%E6%8E%88%E6%9D%83%E5%90%AF%E5%8A%A8">授权启动</a>
+</li>
 </ul>
 </li>
-<li><a href="#14%E5%AE%89%E8%A3%85docker%E8%BD%AF%E4%BB%B6">14.安装docker软件</a>
+<li>
+<a href="#14%E5%AE%89%E8%A3%85docker%E8%BD%AF%E4%BB%B6">14.安装docker软件（路线 B：Docker + cri-dockerd）</a>
 <ul>
-<li><a href="#1%E5%88%A0%E9%99%A4%E8%87%AA%E5%B8%A6%E7%9A%84docker">1.删除自带的docker</a></li>
-<li><a href="#2%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96%E5%8C%85">2.安装依赖包</a></li>
-<li><a href="#3%E5%AE%89%E8%A3%85yum%E6%BA%90">3.安装yum源</a></li>
-<li><a href="#4%E5%AE%89%E8%A3%85docker-ce">4.安装docker-ce</a></li>
-<li><a href="#5%E8%AE%BE%E7%BD%AEdocker">5.设置docker</a></li>
-<li><a href="#6%E9%87%8D%E5%90%AFdocker%E6%9C%8D%E5%8A%A1">6.重启docker服务</a></li>
+<li>
+<a href="#1%E5%88%A0%E9%99%A4%E8%87%AA%E5%B8%A6%E7%9A%84docker">1.删除自带的docker</a>
+</li>
+<li>
+<a href="#2%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96%E5%8C%85">2.安装依赖包</a>
+</li>
+<li>
+<a href="#3%E5%AE%89%E8%A3%85yum%E6%BA%90">3.安装yum源</a>
+</li>
+<li>
+<a href="#4%E5%AE%89%E8%A3%85docker-ce">4.安装docker-ce</a>
+</li>
+<li>
+<a href="#5%E8%AE%BE%E7%BD%AEdocker">5.设置docker</a>
+</li>
+<li>
+<a href="#6%E9%87%8D%E5%90%AFdocker%E6%9C%8D%E5%8A%A1">6.重启docker服务</a>
+</li>
 </ul>
 </li>
-<li><a href="#142cri-dockerd%E5%AE%89%E8%A3%85">14.2.cri-dockerd安装</a>
+<li>
+<a href="#142cri-dockerd%E5%AE%89%E8%A3%85">14.2.cri-dockerd安装（路线 B 必需）</a>
 <ul>
-<li><a href="#1%E4%B8%8B%E8%BD%BDcri-dockerd%E4%BA%8C%E8%BF%9B%E5%88%B6%E5%8C%85%E6%88%96%E8%80%85%E6%BA%90%E7%A0%81%E8%87%AA%E5%B7%B1%E7%BC%96%E8%AF%91">1.下载cri-dockerd二进制包或者源码自己编译</a></li>
-<li><a href="#2%E9%85%8D%E7%BD%AE%E5%90%AF%E5%8A%A8%E6%96%87%E4%BB%B6">2.配置启动文件</a></li>
-<li><a href="#3%E4%B8%8B%E8%BD%BDcri-tools%E9%AA%8C%E8%AF%81cri-docker-%E6%98%AF%E5%90%A6%E6%AD%A3%E5%B8%B8">3.下载cri-tools验证cri-docker 是否正常</a></li>
+<li>
+<a href="#1%E4%B8%8B%E8%BD%BDcri-dockerd%E4%BA%8C%E8%BF%9B%E5%88%B6%E5%8C%85%E6%88%96%E8%80%85%E6%BA%90%E7%A0%81%E8%87%AA%E5%B7%B1%E7%BC%96%E8%AF%91">1.下载cri-dockerd二进制包或者源码自己编译</a>
+</li>
+<li>
+<a href="#2%E9%85%8D%E7%BD%AE%E5%90%AF%E5%8A%A8%E6%96%87%E4%BB%B6">2.配置启动文件</a>
+</li>
+<li>
+<a href="#3%E4%B8%8B%E8%BD%BDcri-tools%E9%AA%8C%E8%AF%81cri-docker-%E6%98%AF%E5%90%A6%E6%AD%A3%E5%B8%B8">3.下载cri-tools验证cri-docker 是否正常</a>
+</li>
 </ul>
 </li>
-<li><a href="#15%E9%83%A8%E7%BD%B2-containerdk8s-124%E7%89%88%E6%9C%AC%E4%BB%A5%E4%B8%8A">15.部署 containerd(k8s-1.24版本以上)</a>
+<li>
+<a href="#15%E9%83%A8%E7%BD%B2-containerdk8s-124%E7%89%88%E6%9C%AC%E4%BB%A5%E4%B8%8A">15.部署 containerd(k8s-1.24版本以上)</a>
 <ul>
-<li><a href="#1%E5%AE%89%E8%A3%85containerd">1.安装containerd</a></li>
-<li><a href="#2%E9%85%8D%E7%BD%AE-containerd">2.配置 containerd</a></li>
+<li>
+<a href="#1%E5%AE%89%E8%A3%85containerd">1.安装containerd</a>
+</li>
+<li>
+<a href="#2%E9%85%8D%E7%BD%AE-containerd">2.配置 containerd</a>
+</li>
 </ul>
 </li>
-<li><a href="#16%E5%AE%89%E8%A3%85kubeadm-kubelet-kubectl">16.安装kubeadm、kubelet、kubectl</a>
+<li>
+<a href="#16%E5%AE%89%E8%A3%85kubeadm-kubelet-kubectl">16.安装kubeadm、kubelet、kubectl</a>
 <ul>
-<li><a href="#1%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%BF%AE%E6%94%B9">1.配置文件修改</a></li>
-<li><a href="#2%E5%AE%89%E8%A3%85%E5%90%AF%E7%94%A8">2.安装启用</a></li>
-<li><a href="#3%E4%BF%AE%E6%94%B9kubelet%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">3.修改kubelet的配置文件</a></li>
-<li><a href="#4%E9%87%8D%E5%90%AFkubelet">4.重启kubelet</a></li>
+<li>
+<a href="#1%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%BF%AE%E6%94%B9">1.配置文件修改</a>
+</li>
+<li>
+<a href="#2%E5%AE%89%E8%A3%85%E5%90%AF%E7%94%A8">2.安装启用</a>
+</li>
+<li>
+<a href="#3%E4%BF%AE%E6%94%B9kubelet%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6">3.修改kubelet的配置文件</a>
+</li>
+<li>
+<a href="#4%E9%87%8D%E5%90%AFkubelet">4.重启kubelet</a>
+</li>
 </ul>
 </li>
-<li><a href="#17%E8%8E%B7%E5%8F%96k8s%E9%95%9C%E5%83%8F%E5%8F%AF%E5%BF%BD%E7%95%A5">17.获取K8S镜像（可忽略）</a>
+<li>
+<a href="#17%E8%8E%B7%E5%8F%96k8s%E9%95%9C%E5%83%8F%E5%8F%AF%E5%BF%BD%E7%95%A5">17.获取K8S镜像（可忽略）</a>
 <ul>
-<li><a href="#1%E8%8E%B7%E5%8F%96%E9%95%9C%E5%83%8F%E5%88%97%E8%A1%A8">1.获取镜像列表</a></li>
-<li><a href="#2%E8%B5%8B%E6%9D%83%E6%89%A7%E8%A1%8C">2.赋权执行</a></li>
+<li>
+<a href="#1%E8%8E%B7%E5%8F%96%E9%95%9C%E5%83%8F%E5%88%97%E8%A1%A8">1.获取镜像列表</a>
+</li>
+<li>
+<a href="#2%E8%B5%8B%E6%9D%83%E6%89%A7%E8%A1%8C">2.赋权执行</a>
+</li>
 </ul>
 </li>
-<li><a href="#18%E5%88%9D%E5%A7%8B%E5%8C%96%E7%8E%AF%E5%A2%83master%E6%93%8D%E4%BD%9C">18.初始化环境（master操作）</a>
+<li>
+<a href="#18%E5%88%9D%E5%A7%8B%E5%8C%96%E7%8E%AF%E5%A2%83master%E6%93%8D%E4%BD%9C">18.初始化环境（master操作）</a>
 <ul>
-<li><a href="#1%E5%AE%89%E8%A3%85%E9%95%9C%E5%83%8F">1.安装镜像</a></li>
-<li><a href="#2%E6%9F%A5%E7%9C%8Bkubeadm%E7%89%88%E6%9C%AC%E4%BF%AE%E6%94%B9%E5%91%BD%E4%BB%A4%E5%8F%82%E6%95%B0">2.查看kubeadm版本，修改命令参数</a></li>
-<li><a href="#3%E5%88%9D%E5%A7%8B%E5%8C%96%E5%91%BD%E4%BB%A4%E8%AF%B4%E6%98%8E">3.初始化命令说明：</a></li>
-<li><a href="#4%E9%94%99%E8%AF%AF%E5%90%AF%E5%8A%A8%E9%87%8D%E7%BD%AE">4.错误启动重置</a></li>
-<li><a href="#5%E5%88%9D%E5%A7%8B%E5%8C%96%E6%88%90%E5%8A%9F%E5%90%8E%E4%B8%BA%E9%A1%BA%E5%88%A9%E4%BD%BF%E7%94%A8kubectl%E6%89%A7%E8%A1%8C%E4%BB%A5%E4%B8%8B%E5%91%BD%E4%BB%A4">5.初始化成功后，为顺利使用kubectl，执行以下命令：</a></li>
-<li><a href="#6%E6%B7%BB%E5%8A%A0%E8%8A%82%E7%82%B9">6.添加节点</a></li>
-<li><a href="#7%E6%89%A7%E8%A1%8Ckubectl-get-nodes%E6%9F%A5%E7%9C%8Bmaster%E8%8A%82%E7%82%B9%E7%8A%B6%E6%80%81">7.执行kubectl get nodes，查看master节点状态：</a></li>
-<li><a href="#8%E9%80%9A%E8%BF%87%E5%A6%82%E4%B8%8B%E5%91%BD%E4%BB%A4%E6%9F%A5%E7%9C%8Bkubelet%E7%8A%B6%E6%80%81">8.通过如下命令查看kubelet状态：</a></li>
+<li>
+<a href="#1%E5%AE%89%E8%A3%85%E9%95%9C%E5%83%8F">1.安装镜像</a>
+</li>
+<li>
+<a href="#2%E6%9F%A5%E7%9C%8Bkubeadm%E7%89%88%E6%9C%AC%E4%BF%AE%E6%94%B9%E5%91%BD%E4%BB%A4%E5%8F%82%E6%95%B0">2.查看kubeadm版本，修改命令参数</a>
+</li>
+<li>
+<a href="#3%E5%88%9D%E5%A7%8B%E5%8C%96%E5%91%BD%E4%BB%A4%E8%AF%B4%E6%98%8E">3.初始化命令说明：</a>
+</li>
+<li>
+<a href="#4%E9%94%99%E8%AF%AF%E5%90%AF%E5%8A%A8%E9%87%8D%E7%BD%AE">4.错误启动重置</a>
+</li>
+<li>
+<a href="#5%E5%88%9D%E5%A7%8B%E5%8C%96%E6%88%90%E5%8A%9F%E5%90%8E%E4%B8%BA%E9%A1%BA%E5%88%A9%E4%BD%BF%E7%94%A8kubectl%E6%89%A7%E8%A1%8C%E4%BB%A5%E4%B8%8B%E5%91%BD%E4%BB%A4">5.初始化成功后，为顺利使用kubectl，执行以下命令：</a>
+</li>
+<li>
+<a href="#6%E6%B7%BB%E5%8A%A0%E8%8A%82%E7%82%B9">6.添加节点</a>
+</li>
+<li>
+<a href="#7%E6%89%A7%E8%A1%8Ckubectl-get-nodes%E6%9F%A5%E7%9C%8Bmaster%E8%8A%82%E7%82%B9%E7%8A%B6%E6%80%81">7.执行kubectl get nodes，查看master节点状态：</a>
+</li>
+<li>
+<a href="#8%E9%80%9A%E8%BF%87%E5%A6%82%E4%B8%8B%E5%91%BD%E4%BB%A4%E6%9F%A5%E7%9C%8Bkubelet%E7%8A%B6%E6%80%81">8.通过如下命令查看kubelet状态：</a>
+</li>
 </ul>
 </li>
-<li><a href="#191%E5%AE%89%E8%A3%85flannel%E7%BD%91%E7%BB%9C%E6%8F%92%E4%BB%B6cni">19.1安装flannel网络插件(CNI)</a></li>
-<li><a href="#192%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C%E5%8A%9F%E8%83%BD%E6%9B%B4%E5%AE%8C%E5%96%84">19.2安装calico网络(功能更完善)</a>
+<li>
+<a href="#191%E5%AE%89%E8%A3%85flannel%E7%BD%91%E7%BB%9C%E6%8F%92%E4%BB%B6cni">19.1安装flannel网络插件(CNI)</a>
+</li>
+<li>
+<a href="#192%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C%E5%8A%9F%E8%83%BD%E6%9B%B4%E5%AE%8C%E5%96%84">19.2安装calico网络(功能更完善)</a>
 <ul>
-<li><a href="#1%E5%9C%A8master%E4%B8%8A%E4%B8%8B%E8%BD%BD%E9%85%8D%E7%BD%AEcalico%E7%BD%91%E7%BB%9C%E7%9A%84yaml">1.在master上下载配置calico网络的yaml。</a></li>
-<li><a href="#2%E6%8F%90%E5%89%8D%E4%B8%8B%E8%BD%BD%E6%89%80%E9%9C%80%E8%A6%81%E7%9A%84%E9%95%9C%E5%83%8F">2.提前下载所需要的镜像。</a></li>
-<li><a href="#3%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C">3.安装calico网络。</a></li>
-<li><a href="#5%E9%AA%8C%E8%AF%81%E7%BB%93%E6%9E%9C">5.验证结果。</a></li>
+<li>
+<a href="#1%E5%9C%A8master%E4%B8%8A%E4%B8%8B%E8%BD%BD%E9%85%8D%E7%BD%AEcalico%E7%BD%91%E7%BB%9C%E7%9A%84yaml">1.在master上下载配置calico网络的yaml。</a>
+</li>
+<li>
+<a href="#2%E6%8F%90%E5%89%8D%E4%B8%8B%E8%BD%BD%E6%89%80%E9%9C%80%E8%A6%81%E7%9A%84%E9%95%9C%E5%83%8F">2.提前下载所需要的镜像。</a>
+</li>
+<li>
+<a href="#3%E5%AE%89%E8%A3%85calico%E7%BD%91%E7%BB%9C">3.安装calico网络。</a>
+</li>
+<li>
+<a href="#5%E9%AA%8C%E8%AF%81%E7%BB%93%E6%9E%9C">5.验证结果。</a>
+</li>
 </ul>
 </li>
-<li><a href="#20%E9%83%A8%E7%BD%B2k8s-node1-k8s-node2%E9%9B%86%E7%BE%A4">20.部署k8s-node1、k8s-node2集群</a>
+<li>
+<a href="#20%E9%83%A8%E7%BD%B2k8s-node1-k8s-node2%E9%9B%86%E7%BE%A4">20.部署k8s-node1、k8s-node2集群</a>
 <ul>
-<li><a href="#1node%E8%8A%82%E7%82%B9%E5%8A%A0%E5%85%A5%E9%9B%86%E7%BE%A4">1.node节点加入集群</a></li>
-<li><a href="#2%E5%9C%A8master%E8%8A%82%E7%82%B9%E6%89%A7%E8%A1%8C%E4%B8%8B%E9%9D%A2%E5%91%BD%E4%BB%A4%E6%9F%A5%E7%9C%8B%E9%9B%86%E7%BE%A4%E7%8A%B6%E6%80%81">2.在master节点执行下面命令查看集群状态：</a></li>
+<li>
+<a href="#1node%E8%8A%82%E7%82%B9%E5%8A%A0%E5%85%A5%E9%9B%86%E7%BE%A4">1.node节点加入集群</a>
+</li>
+<li>
+<a href="#2%E5%9C%A8master%E8%8A%82%E7%82%B9%E6%89%A7%E8%A1%8C%E4%B8%8B%E9%9D%A2%E5%91%BD%E4%BB%A4%E6%9F%A5%E7%9C%8B%E9%9B%86%E7%BE%A4%E7%8A%B6%E6%80%81">2.在master节点执行下面命令查看集群状态：</a>
+</li>
 </ul>
 </li>
-<li><a href="#21%E5%AE%89%E8%A3%85ingress-nginx">21.安装ingress-nginx</a></li>
+<li>
+<a href="#21%E5%AE%89%E8%A3%85ingress-nginx">21.安装ingress-nginx</a>
+</li>
 </ul>
 </li>
-<li><a href="#%E5%8D%B8%E8%BD%BD%E9%9B%86%E7%BE%A4%E5%91%BD%E4%BB%A4">卸载集群命令</a></li>
+<li>
+<a href="#%E5%B8%B8%E8%A7%81%E6%8A%A5%E9%94%99%E4%B8%8E%E6%8E%92%E6%9F%A5">常见报错与排查</a>
+<ul>
+<li>
+<a href="#err-sandbox-image">1.沙箱镜像（pause）拉取失败</a>
+</li>
+<li>
+<a href="#err-cri-v1">2.运行时连接失败：CRI v1 未实现或 socket 路径不对</a>
+</li>
+<li>
+<a href="#err-preflight">3.预检失败：iptables 参数、swap、端口占用</a>
+</li>
+<li>
+<a href="#err-cgroup">4.cgroup driver 不一致</a>
+</li>
+<li>
+<a href="#err-cert">5.证书到期</a>
+</li>
+<li>
+<a href="#err-generic">6.通用排查命令</a>
+</li>
 </ul>
+</li>
+<li>
+<a href="#%E5%8D%B8%E8%BD%BD%E9%9B%86%E7%BE%A4%E5%91%BD%E4%BB%A4">卸载集群命令</a>
 </li>
 </ul>
 </div>
