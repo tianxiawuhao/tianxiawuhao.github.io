@@ -135,9 +135,10 @@
 <p><strong>Helm相关组件及概念</strong></p>
 <ul>
 <li><strong>helm</strong>是一个命令行工具，主要用于Kubernetes应用程序Chart的创建、打包、发布以及创建和管理本地和远程的Chart仓库。chart Helm的软件包，采用TAR格式。类似于APT的DEB包或者YUM的RPM包，其包含了一组定义Kubernetes资源相关的 YAML文件。</li>
-<li><strong>Repoistory</strong> Helm的软件仓库，Repository本质上是一个Web服务器，该服务器保存了一系列的Chart软件包以供用户下载，并且提供了一个该Repository的Chart包的清单文件以供查询。Helm可以同时管理多个不同的Repository。</li>
+<li><strong>Repository</strong> Helm的软件仓库，Repository本质上是一个Web服务器，该服务器保存了一系列的Chart软件包以供用户下载，并且提供了一个该Repository的Chart包的清单文件以供查询。Helm可以同时管理多个不同的Repository。</li>
 <li><strong>release</strong>使用helm install命令在Kubernetes集群中部署的Chart称为Release。可以理解为Helm使用Chart包部署的一个应用实例。</li>
 </ul>
+<p><img src="/post-assets/zIWVYloAQ/01-helm-concepts-flow.svg" alt="Helm 3 核心概念与发布流程示意图"></p>
 <blockquote>
 <p>创建release<br>
 helm 客户端从指定的目录或本地tar文件或远程repo仓库解析出chart的结构信息<br>
@@ -155,7 +156,7 @@ helm 将新的 release 传递给 kube-apiserver 进行更新</p>
 <ul>
 <li>
 <p><strong>chart</strong>的基本结构</p>
-<pre><code class="language-java">## Helm的打包格式叫做chart，所谓chart就是一系列文件, 它描述了一组相关的 k8s 集群资源。
+<pre><code class="language-text">## Helm的打包格式叫做chart，所谓chart就是一系列文件, 它描述了一组相关的 k8s 集群资源。
 ## Chart中的文件安装特定的目录结构组织, 最简单的chart 目录如下所示：
 ./
 ├── charts                            #  目录存放依赖的chart
@@ -176,11 +177,12 @@ helm 将新的 release 传递给 kube-apiserver 进行更新</p>
 <h2 id="二-安装helm">二、安装Helm</h2>
 <h3 id="1-安装helm">1 安装Helm</h3>
 <pre><code class="language-shell">[root@Ansible01 ~]# wget https://get.helm.sh/helm-v3.8.2-linux-amd64.tar.gz
-[root@Ansible01 ~]# tar -zxvf helm-v3.0.0-linux-amd64.tar.gz
+[root@Ansible01 ~]# tar -zxvf helm-v3.8.2-linux-amd64.tar.gz
 [root@Ansible01 ~]# mv linux-amd64/helm /usr/local/bin/helm
 [root@Ansible01 ~]# helm version
 version.BuildInfo{Version:&quot;v3.8.2&quot;, GitCommit:&quot;6e3701edea09e5d55a8ca2aae03a68917630e91b&quot;, GitTreeState:&quot;clean&quot;, GoVersion:&quot;go1.17.5&quot;}
 </code></pre>
+<p>提示：Helm 3 取消了服务端组件 Tiller，<code>helm</code> 客户端通过 kubeconfig 直接与 kube-apiserver 通信，因此执行前请确认 <code>kubectl</code> 能正常访问集群。</p>
 <h3 id="2-添加常用repo">2 添加常用repo</h3>
 <p><strong>添加存储库</strong></p>
 <pre><code class="language-shell">[root@Ansible01 ~]# helm repo add aliyun https://kubernetes.oss-cn-hangzhou.aliyuncs.com/charts
@@ -207,6 +209,9 @@ aliyun                  https://kubernetes.oss-cn-hangzhou.aliyuncs.com/charts
 <pre><code class="language-shell">[root@Ansible01 ~]# helm repo remove  aliyun
 &quot;aliyun&quot; has been removed from your repositories
 </code></pre>
+<blockquote>
+<p>注意：Helm 官方的 <code>stable</code> / <code>incubator</code> 仓库已于 2020 年 11 月归档、不再更新，文中 <code>stable/mysql</code> 属于历史示例；上面用到的阿里云 charts 地址也是早期镜像，已长期未更新。新环境建议改用仍在维护的仓库，例如 <code>helm repo add bitnami https://charts.bitnami.com/bitnami</code>，对应安装命令为 <code>helm install db bitnami/mysql</code>。</p>
+</blockquote>
 <h2 id="三-使用helm">三、使用Helm</h2>
 <h3 id="1-使用chart部署一个mysql">1 使用chart部署一个mysql</h3>
 <pre><code class="language-shell">#  查找所有repo下的所有chart
@@ -219,7 +224,7 @@ helm search repo stable/mysql
 helm show chart stable/mysql
 
  #  安装包：
-helm install db stable/mysql**
+helm install db stable/mysql
 
 # 查看发布状态：
 helm status db
@@ -361,7 +366,7 @@ mychart  mychart-0.1.0.tgz
 <li>升级、回滚和删除</li>
 </ul>
 <pre><code class="language-shell">#  发布新版本的chart时，或者当您要更改发布的配置时，可以使用该helm upgrade 命令。
-helm upgrade --set imageTag=1.17 web mychart
+helm upgrade --set image.tag=1.17 web mychart
 helm upgrade -f values.yaml web mychart
  
 #  如果在发布后没有达到预期的效果，则可以使用helm rollback回滚到之前的版本。
@@ -372,7 +377,7 @@ helm rollback web 2
 helm uninstall web
 
 #  查看历史版本配置信息
-helm get --revision 1 web
+helm get all --revision 1 web
 </code></pre>
 <ul>
 <li>下载、上传tar包</li>
@@ -381,6 +386,7 @@ helm get --revision 1 web
 [root@Ansible01 2022-05-21]# ls
 traefik-1.87.7.tgz
 </code></pre>
+<p>注意：<code>helm push</code> 不是 Helm 自带命令，需要先安装 <code>helm-push</code>（chartmuseum）插件，例如 <code>helm plugin install https://github.com/chartmuseum/helm-push</code>。</p>
 <pre><code class="language-shell"># 　 一种方式是直接上传charts文件夹，seldon-mab是charts目录，harbor-test-helm是harbor charts repo名称。
 helm push seldon-mab harbor-test-helm
 
@@ -390,8 +396,9 @@ helm push seldon-core-operator-1.5.1.tgz harbor-test-helm
 <ul>
 <li>安装到k8s的其它空间：--namespace=monitoring</li>
 </ul>
-<pre><code class="language-shell">helm install --name prometheus-operator --set rbacEnable=true --namespace=monitoring stable/prometheus-operator
+<pre><code class="language-shell">helm install prometheus-operator --set rbacEnable=true --namespace=monitoring stable/prometheus-operator
 </code></pre>
+<p>Helm 3 已移除 <code>--name</code> 参数，release 名称直接跟在 <code>install</code> 之后；另外目标 namespace 需要事先存在，也可以加上 <code>--create-namespace</code> 让 Helm 自动创建。</p>
 <h2 id="四-helm使用minio搭建私有仓库">四、Helm使用minio搭建私有仓库</h2>
 <p><strong>minio介绍</strong></p>
 <p>我们一般是从本地的目录结构中的chart去进行部署，如果要集中管理 chart，就需要考虑 repository 的问题——Helm repository 都是指向外部地址的，所以接下来我们可以通过 MinIO 建立一个企业私有的存放仓库。</p>
@@ -406,8 +413,12 @@ helm push seldon-core-operator-1.5.1.tgz harbor-test-helm
 <h3 id="3-安装minio服务端">3 安装minio服务端</h3>
 <p><strong>1使用容器安装服务端</strong></p>
 <pre><code class="language-shell">docker pull minio/minio
-docker run -p 9000:9000 minio/minio server /data
+# 新版 MinIO（RELEASE.2021-04-22 起）控制台独立在 9001 端口，且必须显式设置管理员账号密码
+docker run -d -p 9000:9000 -p 9001:9001 \
+  -e &quot;MINIO_ROOT_USER=minioadmin&quot; -e &quot;MINIO_ROOT_PASSWORD=minioadmin&quot; \
+  minio/minio server /data --console-address &quot;:9001&quot;
 </code></pre>
+<p>旧版本的 <code>minio/minio server /data</code> 会在 9000 端口同时提供 API 与控制台，且自动生成 access key / secret key；新版本改为控制台 9001 + 环境变量指定账号密码，登录时使用上面设置的用户名和密码即可。</p>
 <p><strong>2使用二进制安装服务端</strong></p>
 <pre><code class="language-shell">wget https://dl.min.io/server/minio/release/linux-amd64/minio
 chmod +x minio
@@ -434,32 +445,35 @@ chmod +x mc
 </code></pre>
 <figure data-type="image" tabindex="5"><img src="/post-images/1657191674247.png" alt="" loading="lazy"></figure>
 <h3 id="5-连接至服务端">5 连接至服务端</h3>
-<pre><code class="language-shell">./mc config host add myminio http://172.17.0.1:9000 XH2LCA4AJIP52RDB4P5M CDDCuoS2FNsdW8S0bodkcs2729N+TH5lFov+rrT3
+<pre><code class="language-shell">./mc alias set myminio http://172.17.0.1:9000 &lt;ACCESS_KEY&gt; &lt;SECRET_KEY&gt;
 </code></pre>
+<p>两点说明：一是新版 <code>mc</code> 已用 <code>mc alias set</code> 取代 <code>mc config host add</code>；二是原文直接贴出了真实的 access key / secret key，出于安全考虑此处替换为占位符，实际使用时请填入自己的密钥，并注意不要公开。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1657191689882.png" alt="" loading="lazy"></figure>
-<p>服务端启动时候的access  key和secret  key</p>
+<p>服务端启动时候的 access key 和 secret key</p>
 <h3 id="6-mc的shell使用别名">6 mc的shell使用别名</h3>
-<pre><code class="language-shell">ls=mc ls
-cp=mc cp
-cat=mc cat
-mkdir=mc mb
-pipe=mc pipe
-find=mc find
+<pre><code class="language-shell">alias ls='mc ls'
+alias cp='mc cp'
+alias cat='mc cat'
+alias mkdir='mc mb'
+alias pipe='mc pipe'
+alias find='mc find'
 </code></pre>
+<p>这些别名只在交互式 shell 中生效（且会覆盖系统原有的 <code>ls</code>、<code>cp</code>、<code>mkdir</code> 等命令，误操作风险较大，建议只在临时排查时使用）。</p>
 <h3 id="7-创建bucket">7 创建bucket</h3>
 <pre><code class="language-shell">./mc mb myminio/minio-helm-repo
 </code></pre>
 <figure data-type="image" tabindex="7"><img src="/post-images/1657191697994.png" alt="" loading="lazy"></figure>
 <h3 id="8-设置bucket和objects匿名访问">8 设置bucket和objects匿名访问</h3>
-<pre><code class="language-shell">./mc policy set download myminio/minio-helm-repo
+<p>新版 <code>mc</code> 中该命令已改为 <code>mc anonymous set download</code>（旧版为 <code>mc policy set</code>）。</p>
+<pre><code class="language-shell">./mc anonymous set download myminio/minio-helm-repo
 </code></pre>
 <figure data-type="image" tabindex="8"><img src="/post-images/1657191704821.png" alt="" loading="lazy"></figure>
 <h3 id="9-helm创建与仓库连接的indexyaml文件">9 helm创建与仓库连接的index.yaml文件</h3>
 <pre><code class="language-shell">mkdir /root/helm/repo
-helm repo index helm/repo/
+helm repo index /root/helm/repo/
 </code></pre>
 <h3 id="10-helm与minio仓库进行连接">10 helm与minio仓库进行连接</h3>
-<p><strong>1.将index.yaml文件推送到backet中去</strong></p>
+<p><strong>1.将index.yaml文件推送到bucket中去</strong></p>
 <pre><code class="language-shell">./mc cp helm/repo/index.yaml myminio/minio-helm-repo
 </code></pre>
 <figure data-type="image" tabindex="9"><img src="/post-images/1657191712580.png" alt="" loading="lazy"></figure>
@@ -484,24 +498,27 @@ helm repo index helm/repo/
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E7%AE%80%E4%BB%8B">一、简介</a>
 <ul>
+</ul>
+</li>
 <li>
-<ul>
-<li><a href="#%E4%B8%80-%E7%AE%80%E4%BB%8B">一、简介</a></li>
-<li><a href="#%E4%BA%8C-%E5%AE%89%E8%A3%85helm">二、安装Helm</a>
+<a href="#%E4%BA%8C-%E5%AE%89%E8%A3%85helm">二、安装Helm</a>
 <ul>
 <li><a href="#1-%E5%AE%89%E8%A3%85helm">1 安装Helm</a></li>
 <li><a href="#2-%E6%B7%BB%E5%8A%A0%E5%B8%B8%E7%94%A8repo">2 添加常用repo</a></li>
 </ul>
 </li>
-<li><a href="#%E4%B8%89-%E4%BD%BF%E7%94%A8helm">三、使用Helm</a>
+<li>
+<a href="#%E4%B8%89-%E4%BD%BF%E7%94%A8helm">三、使用Helm</a>
 <ul>
 <li><a href="#1-%E4%BD%BF%E7%94%A8chart%E9%83%A8%E7%BD%B2%E4%B8%80%E4%B8%AAmysql">1 使用chart部署一个mysql</a></li>
 <li><a href="#2-%E5%AE%89%E8%A3%85%E5%89%8D%E8%87%AA%E5%AE%9A%E4%B9%89chart%E9%85%8D%E7%BD%AE%E9%80%89%E9%A1%B9">2 安装前自定义chart配置选项</a></li>
 <li><a href="#3-%E6%9E%84%E5%BB%BA%E4%B8%80%E4%B8%AAhelm-chart">3 构建一个Helm Chart</a></li>
 </ul>
 </li>
-<li><a href="#%E5%9B%9B-helm%E4%BD%BF%E7%94%A8minio%E6%90%AD%E5%BB%BA%E7%A7%81%E6%9C%89%E4%BB%93%E5%BA%93">四、Helm使用minio搭建私有仓库</a>
+<li>
+<a href="#%E5%9B%9B-helm%E4%BD%BF%E7%94%A8minio%E6%90%AD%E5%BB%BA%E7%A7%81%E6%9C%89%E4%BB%93%E5%BA%93">四、Helm使用minio搭建私有仓库</a>
 <ul>
 <li><a href="#1-helm3%E5%AD%98%E5%82%A8%E5%BA%93%E6%9B%B4%E6%94%B9">1 helm3存储库更改</a></li>
 <li><a href="#2-minio%E4%BB%8B%E7%BB%8D">2 minio介绍</a></li>
@@ -513,10 +530,6 @@ helm repo index helm/repo/
 <li><a href="#8-%E8%AE%BE%E7%BD%AEbucket%E5%92%8Cobjects%E5%8C%BF%E5%90%8D%E8%AE%BF%E9%97%AE">8 设置bucket和objects匿名访问</a></li>
 <li><a href="#9-helm%E5%88%9B%E5%BB%BA%E4%B8%8E%E4%BB%93%E5%BA%93%E8%BF%9E%E6%8E%A5%E7%9A%84indexyaml%E6%96%87%E4%BB%B6">9 helm创建与仓库连接的index.yaml文件</a></li>
 <li><a href="#10-helm%E4%B8%8Eminio%E4%BB%93%E5%BA%93%E8%BF%9B%E8%A1%8C%E8%BF%9E%E6%8E%A5">10 helm与minio仓库进行连接</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

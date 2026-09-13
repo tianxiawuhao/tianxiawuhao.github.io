@@ -135,17 +135,20 @@
 </blockquote>
 <figure data-type="image" tabindex="2"><img src="/post-images/1656857467980.png" alt="" loading="lazy"></figure>
 <p>核心思路：采用多线程优化性能，将串行操作变成并行操作。异步模式设计的程序可以显著减少线程等待，从而在高吞吐量场景中，极大提升系统的整体性能，显著降低时延。</p>
-<p>接下来，我们来讲一下异步编程有哪些实现方式。</p>
+<p>接下来，我们来讲一下异步编程有哪些实现方式。整体上可以归为三类：JDK 原生的并发工具、Spring 生态的注解与事件、以及架构层的消息队列。</p>
+<p><img src="/post-assets/9hE3Lg3SU/01-async-7-ways.svg" alt="异步编程 7 种实现方式总览与选型"></p>
 <h2 id="一-线程-thread">一、线程 Thread</h2>
 <p>直接继承 <code>Thread类</code> 是创建异步线程最简单的方式。</p>
-<p>首先，创建Thread子类，普通类或匿名内部类方式；然后创建子类实例；最后通过start()方法启动线程。</p>
-<pre><code class="language-java">public class AsyncThread extends Thread{
+<p>具体步骤是：先创建 <code>Thread</code> 子类（普通类或匿名内部类均可），再创建子类实例，最后调用 <code>start()</code> 方法启动线程。注意：直接调用 <code>run()</code> 只是普通的方法调用，不会开启新线程，只有 <code>start()</code> 才会启动新线程。</p>
+<pre><code class="language-java">public class AsyncThread extends Thread {
     @Override
     public void run() {
         System.out.println(&quot;当前线程名称:&quot; + this.getName() + &quot;, 执行线程名称:&quot; + Thread.currentThread().getName() + &quot;-hello&quot;);
     }
 }
-public static void main(String[] args) {
+</code></pre>
+<p>然后在主线程（或任意调用方）中创建实例并启动：</p>
+<pre><code class="language-java">public static void main(String[] args) {
 
   // 模拟业务流程
   // .......
@@ -187,7 +190,7 @@ public ExecutorService downloadExecutorService() {
 <li>isCancelled()：表示任务是否被取消成功，如果在任务正常完成前被取消成功，则返回 true</li>
 <li>isDone()：表示任务是否已经完成，如果完成，返回true</li>
 <li>get()：获取执行结果，这个方法会产生阻塞，会一直等到任务执行完毕才返回</li>
-<li>get(long timeout, TimeUnit unit)：用来获取执行结果，如果在指定时间内，还没获取到结果，就直接返回null</li>
+<li>get(long timeout, TimeUnit unit)：用来获取执行结果；如果在指定时间内还没获取到结果，会抛出 <code>TimeoutException</code>（而不是返回 null），调用方必须捕获处理</li>
 </ul>
 <p><strong>代码示例：</strong></p>
 <pre><code class="language-java">public class CallableAndFuture {
@@ -209,8 +212,8 @@ public ExecutorService downloadExecutorService() {
         Future&lt;String&gt; future = executorService.submit(new MyCallable());
         try {
             System.out.println(future.get());
-        } catch (Exception e) {
-            // nodo
+                } catch (Exception e) {
+            // 实际业务中应记录日志，不要静默吞掉异常（此处仅作示例）
         } finally {
             executorService.shutdown();
         }
@@ -297,11 +300,10 @@ CompletableFuture&lt;String&gt; f3 =
 
 //等待任务3执行结果
 System.out.println(f3.join());
-
-}
 </code></pre>
+<p>示例中的 <code>sleep(int, TimeUnit)</code> 是封装好的辅助方法（内部调用 <code>TimeUnit.SECONDS.sleep(...)</code>），这里省略了外层类与 <code>main</code> 方法。</p>
 <p>CompletableFuture 提供了非常丰富的API，大约有50种处理串行，并行，组合以及处理错误的方法。</p>
-<h2 id="五-springboot-注解-async">五、 SpringBoot 注解 @Async</h2>
+<h2 id="五-springboot-注解-async">五、SpringBoot 注解 @Async</h2>
 <p>除了硬编码的异步编程处理方式，SpringBoot 框架还提供了 <code>注解式</code> 解决方案，以 <code>方法体</code> 为边界，方法体内部的代码逻辑全部按异步方式执行。</p>
 <p>首先，使用 <code>@EnableAsync</code> 启用异步注解</p>
 <pre><code class="language-java">@SpringBootApplication
@@ -332,7 +334,7 @@ public class ThreadPoolConfiguration {
 <pre><code class="language-java">@Service
 public class AsyncServiceImpl implements AsyncService {
 
-    @Async(&quot;defaultThreadPoolExecutor&quot;)
+        @Async(&quot;defaultThreadPoolExecutor&quot;)
     public Boolean execute(Integer num) {
         System.out.println(&quot;线程：&quot; + Thread.currentThread().getName() + &quot; , 任务：&quot; + num);
         return true;
@@ -340,12 +342,14 @@ public class AsyncServiceImpl implements AsyncService {
 
 }
 </code></pre>
+<p>注意：<code>@Async</code> 方法的返回值会被代理“吞掉”，调用方拿到的是 <code>null</code>。上面返回 <code>Boolean</code> 的写法并不安全，生产中应返回 <code>void</code>，或返回 <code>Future</code> / <code>CompletableFuture</code> 以便获取执行结果。</p>
 <p>用 @Async 注解标记的方法，称为异步方法。在spring boot应用中使用 @Async 很简单：</p>
 <ul>
 <li>调用异步方法类上或者启动类加上注解 @EnableAsync</li>
 <li>在需要被异步调用的方法外加上 @Async</li>
 <li>所使用的 @Async 注解方法的类对象应该是Spring容器管理的bean对象；</li>
 </ul>
+<p>还有两个常见坑：一是异步方法必须由<b>另一个 Bean</b> 调用，同类内部的方法互相调用不经过代理，<code>@Async</code> 会失效；二是 <code>private</code>、<code>final</code>、<code>static</code> 方法无法被代理，同样不会异步执行。</p>
 <h2 id="六-spring-applicationevent-事件">六、Spring ApplicationEvent 事件</h2>
 <p>事件机制在一些大型项目中被经常使用，Spring 专门提供了一套事件机制的接口，满足了架构原则上的解耦。</p>
 <p><code>ApplicationContext</code> 通过 <code>ApplicationEvent</code> 类和 <code>ApplicationListener</code> 接口进行事件处理。如果将实现 <code>ApplicationListener</code> 接口的 bean 注入到上下文中，则每次使用 <code>ApplicationContext</code> 发布 <code>ApplicationEvent</code> 时，都会通知该 bean。本质上，这是标准的<code>观察者设计模式</code>。</p>
@@ -370,6 +374,7 @@ public class OrderEventListener implements ApplicationListener&lt;OrderEvent&gt;
     }
 }
 </code></pre>
+<p>补充：Spring 4.2 之后也可以用 <code>@EventListener</code> 注解替代实现 <code>ApplicationListener</code> 接口，写法更简洁，监听的对象不限于 <code>ApplicationEvent</code> 的子类。</p>
 <p>最后，发布事件，把某个事件告诉所有与这个事件相关的监听器。相当于 MQ 的生产端。</p>
 <pre><code class="language-java">OrderModel orderModel = new OrderModel();
 orderModel.setOrderId((long) i);
@@ -430,18 +435,38 @@ public class SpringConfiguration {
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#%E4%B8%80-%E7%BA%BF%E7%A8%8B-thread">一、线程 Thread</a>
 <ul>
-<li>
-<ul>
-<li><a href="#%E4%B8%80-%E7%BA%BF%E7%A8%8B-thread">一、线程 Thread</a></li>
-<li><a href="#%E4%BA%8C-future">二、Future</a></li>
-<li><a href="#%E4%B8%89-futuretask">三、FutureTask</a></li>
-<li><a href="#%E5%9B%9B-%E5%BC%82%E6%AD%A5%E6%A1%86%E6%9E%B6-completablefuture">四、异步框架 CompletableFuture</a></li>
-<li><a href="#%E4%BA%94-springboot-%E6%B3%A8%E8%A7%A3-async">五、 SpringBoot 注解 @Async</a></li>
-<li><a href="#%E5%85%AD-spring-applicationevent-%E4%BA%8B%E4%BB%B6">六、Spring ApplicationEvent 事件</a></li>
-<li><a href="#%E4%B8%83-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">七、消息队列</a></li>
 </ul>
 </li>
+<li>
+<a href="#%E4%BA%8C-future">二、Future</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%89-futuretask">三、FutureTask</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%9B%9B-%E5%BC%82%E6%AD%A5%E6%A1%86%E6%9E%B6-completablefuture">四、异步框架 CompletableFuture</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%BA%94-springboot-%E6%B3%A8%E8%A7%A3-async">五、SpringBoot 注解 @Async</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%85%AD-spring-applicationevent-%E4%BA%8B%E4%BB%B6">六、Spring ApplicationEvent 事件</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E4%B8%83-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97">七、消息队列</a>
+<ul>
 </ul>
 </li>
 </ul>
