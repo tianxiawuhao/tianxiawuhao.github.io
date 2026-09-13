@@ -129,13 +129,17 @@
 <p>副本虽然能够提高数据的可用性，降低丢失风险，但是每台服务器实际上必须容纳全量数据，对数据的横向扩容没有解决。 要解决数据水平切分的问题，需要引入分片的概念。通过分片把一份完整的数据进行切分，不同的分片分布到不同的节点上，再通过 Distributed 表引擎把数据拼接起来一同使用。</p>
 <p>Distributed 表引擎本身不存储数据，有点类似于 MyCat 之于 MySql，成为一种中间件，通过分布式逻辑表来写入、分发、路由，从而操作多台节点上不同分片的分布式数据。</p>
 <p>注意：ClickHouse 的集群是表级别的，实际企业中，大部分做了高可用，但是没有用分片，避免降低查询性能以及操作集群的复杂性。</p>
-<h3 id="1集群写入流程3-分片-2-副本共-6-个节点">1.集群写入流程（3 分片 2 副本共 6 个节点）</h3>
-<figure data-type="image" tabindex="1"><img src="/post-images/1656505247965.png" alt="" loading="lazy"></figure>
-<p>internal_replication（内部副本同步）：true 表示由分片自己同步；false 表示由 distributed 表同步，压力较大</p>
-<h3 id="2集群读取流程3-分片-2-副本共-6-个节点">2.集群读取流程（3 分片 2 副本共 6 个节点）</h3>
-<figure data-type="image" tabindex="2"><img src="/post-images/1656505265680.png" alt="" loading="lazy"></figure>
-<h3 id="3-分片-2-副本共-6-个节点集群配置供参考">3 分片 2 副本共 6 个节点集群配置（供参考）</h3>
-<p>配置的位置还是在之前的/etc/clickhouse-server/config.d/metrika.xml，内容如下 注：也可以不创建外部文件，直接在 config.xml 的&lt;remote_servers&gt;中指定</p>
+<p>下图是 3 分片 2 副本集群的整体读写路径：应用只与 Distributed 逻辑表交互，写入按分片键路由到某个分片的副本，查询则由 Distributed 表汇总各分片的结果。</p>
+<figure data-type="image" tabindex="4"><img src="/post-assets/vuilLU8qj/01-shard-cluster.svg" alt="ClickHouse 3 分片 2 副本集群读写架构图" loading="lazy"></figure>
+<h3 id="1集群写入流程3-分片-2-副本共-6-个节点">1. 集群写入流程（3 分片 2 副本共 6 个节点）</h3>
+<figure data-type="image" tabindex="1"><img src="/post-images/1656505247965.png" alt="3 分片 2 副本集群写入流程截图" loading="lazy"></figure>
+<p>internal_replication（内部副本同步）：true 表示 Distributed 表只把数据写入每个分片的一个副本，副本之间的同步由分片自己完成；false 表示 Distributed 表会向该分片的每个副本各写一份数据，写入压力较大。</p>
+<p><img src="/post-assets/vuilLU8qj/01-shard-write-flow.svg" alt="3 分片 2 副本集群写入流程示意图"></p>
+<h3 id="2集群读取流程3-分片-2-副本共-6-个节点">2. 集群读取流程（3 分片 2 副本共 6 个节点）</h3>
+<figure data-type="image" tabindex="2"><img src="/post-images/1656505265680.png" alt="3 分片 2 副本集群读取流程截图" loading="lazy"></figure>
+<h3 id="3-分片-2-副本共-6-个节点集群配置供参考">3. 集群配置示例（3 分片 2 副本共 6 个节点，供参考）</h3>
+<p>配置的位置还是在之前的 <code>/etc/clickhouse-server/config.d/metrika.xml</code>，内容如下。</p>
+<p>注：也可以不创建外部文件，直接在 config.xml 的 <code>&lt;remote_servers&gt;</code> 中指定。</p>
 <pre><code class="language-xml">&lt;yandex&gt;
     &lt;remote_servers&gt;
         &lt;fz_cluster&gt; &lt;!-- 集群名称--&gt;
@@ -178,11 +182,15 @@
     &lt;/remote_servers&gt;
 &lt;/yandex&gt;
 </code></pre>
-<h3 id="4-配置三节点版本集群及副本">4 .配置三节点版本集群及副本</h3>
+<h3 id="4-配置三节点版本集群及副本">4. 配置三节点版本集群及副本</h3>
 <h4 id="41-集群及副本规划2-个分片只有第一个分片有副本">4.1 集群及副本规划（2 个分片，只有第一个分片有副本）</h4>
-<figure data-type="image" tabindex="3"><img src="/post-images/1656505279732.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="/post-images/1656505279732.png" alt="三节点 2 分片集群及副本规划截图" loading="lazy"></figure>
+<p><img src="/post-assets/vuilLU8qj/02-three-node-plan.svg" alt="三节点 2 分片集群及副本规划示意图"></p>
 <h4 id="42-配置步骤">4.2 配置步骤</h4>
-<p>1）在 Node01 的/etc/clickhouse-server/config.d 目录下创建 metrika-shard.xml 文件 vim /etc/clickhouse-server/config.d/metrika-shard.xml 注：也可以不创建外部文件，直接在 config.xml 的&lt;remote_servers&gt;中指定</p>
+<p>1）在 Node01 的 <code>/etc/clickhouse-server/config.d</code> 目录下创建 metrika-shard.xml 文件：</p>
+<pre><code class="language-shell">vim /etc/clickhouse-server/config.d/metrika-shard.xml
+</code></pre>
+<p>注：也可以不创建外部文件，直接在 config.xml 的 <code>&lt;remote_servers&gt;</code> 中指定。</p>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot;?&gt; 
 &lt;yandex&gt;     
     &lt;remote_servers&gt;         
@@ -242,13 +250,13 @@ scp /etc/clickhouse-server/config.d/metrika-shard.xml root@Node03:/etc/clickhous
 <pre><code class="language-xml">&lt;macros&gt;
         &lt;shard&gt;01&lt;/shard&gt; &lt;!--不同机器放的分片数不一样--&gt;
         &lt;replica&gt;rep_1_2&lt;/replica&gt; &lt;!--不同机器放的副本数不一样--&gt;
-&lt;/macros&gt;1.2.3.4.
+&lt;/macros&gt;
 </code></pre>
 <p>（2）Node03</p>
 <pre><code class="language-xml">&lt;macros&gt;
         &lt;shard&gt;02&lt;/shard&gt; &lt;!--不同机器放的分片数不一样--&gt;
         &lt;replica&gt;rep_2_1&lt;/replica&gt; &lt;!--不同机器放的副本数不一样--&gt;
-&lt;/macros&gt;1.2.3.4.
+&lt;/macros&gt;
 </code></pre>
 <p>4）在 Node01 上修改/etc/clickhouse-server/config.xml</p>
 <pre><code class="language-shell">vim /etc/clickhouse-server/config.xml 
@@ -260,7 +268,9 @@ scp /etc/clickhouse-server/config.d/metrika-shard.xml root@Node03:/etc/clickhous
 <pre><code class="language-shell">scp /etc/clickhouse-server/config.xml root@Node02:/etc/clickhouse-server/
 scp /etc/clickhouse-server/config.xml root@Node03:/etc/clickhouse-server/
 </code></pre>
-<p>6）重启三台服务器上的 ClickHouse 服务 sudo clickhouse restart  查看集群</p>
+<p>6）重启三台服务器上的 ClickHouse 服务，然后查看集群：</p>
+<pre><code class="language-shell">sudo clickhouse restart
+</code></pre>
 <pre><code class="language-text">superset-BI :) show clusters;
 SHOW CLUSTERS
 Query id: 391735d2-bf74-43f5-aa86-b6d203c357cd
@@ -276,7 +286,7 @@ Query id: 391735d2-bf74-43f5-aa86-b6d203c357cd
 └─────────────────────────────────────────────────┘
 8 rows in set. Elapsed: 0.002 sec.
 </code></pre>
-<p>7）在 Node01 上执行建表语句 ➢ 会自动同步到 Node02 和 Node03 上 ➢ 集群名字要和配置文件中的一致 ➢ 分片和副本名称从配置文件的宏定义中获取</p>
+<p>7）在 Node01 上执行建表语句，<code>ON CLUSTER</code> 会让语句自动同步到 Node02 和 Node03 上。注意：集群名字要和配置文件中的一致，表路径中的分片与副本名称取自配置文件的宏定义。</p>
 <pre><code class="language-sql">create table st_fz_order_mt_01 on cluster gmall_cluster ( 
     id UInt32, 
     sku_id String, 
@@ -287,16 +297,7 @@ partition by toYYYYMMDD(create_time)
 primary key (id) 
 order by (id,sku_id);  
 </code></pre>
-<pre><code class="language-sql">create table st_fz_order_mt_01 on cluster gmall_cluster (  
-	id UInt32,        
-    sku_id String,         
-    total_amount Decimal(16,2),         
-    create_time Datetime         
-) engine =ReplicatedMergeTree('/clickhouse/tables/{shard}/st_fz_order_mt_01','{replica}')         
-partition by toYYYYMMDD(create_time)         
-primary key (id)         
-order by (id,sku_id); 
-</code></pre>
+<p>格式化后的等价写法如下（字段名用反引号包裹，大小写更规范）：</p>
 <pre><code class="language-sql">CREATE TABLE st_fz_order_mt_01 ON CLUSTER gmall_cluster (  
 	`id` UInt32,   
     `sku_id` String,   
@@ -307,8 +308,8 @@ PARTITION BY toYYYYMMDD(create_time)
 PRIMARY KEY id 
 ORDER BY (id, sku_id) 
 </code></pre>
-<p>在Node02和Node03上查看表是否创建成功 show tables;</p>
-<p>8）在 Node02 上创建 Distribute 分布式表</p>
+<p>在 Node02 和 Node03 上执行 <code>show tables;</code> 查看表是否创建成功。</p>
+<p>8）在 Node02 上创建 Distributed 分布式表</p>
 <pre><code class="language-sql">create table st_fz_order_mt_all2 on cluster gmall_cluster (      
     id UInt32,       
     sku_id String,       
@@ -322,16 +323,17 @@ CREATE TABLE st_fz_order_mt_all2 ON CLUSTER gmall_cluster (
     `create_time` Datetime 
 ) ENGINE = Distributed(gmall_cluster, default, st_fz_order_mt_01, hiveHash(sku_id)) 
 </code></pre>
-<p>参数含义： Distributed（集群名称，库名，本地表名，分片键） 分片键必须是整型数字，所以用 hiveHash 函数转换，也可以 rand()</p>
+<p>参数含义：<code>Distributed(集群名称, 库名, 本地表名, 分片键)</code>。分片键表达式的结果必须是整数，所以这里用 <code>hiveHash(sku_id)</code> 把字符串转成整型，也可以直接使用 <code>rand()</code> 随机分片。</p>
 <p>9）在 Node01 上插入测试数据</p>
-<pre><code class="language-sql">insert into st_order_mt_all2 values
+<pre><code class="language-sql">insert into st_fz_order_mt_all2 values
 (201,'sku_001',1000.00,'2020-06-01 12:00:00') ,
 (202,'sku_002',2000.00,'2020-06-01 12:00:00'),
 (203,'sku_004',2500.00,'2020-06-01 12:00:00'),
 (204,'sku_002',2000.00,'2020-06-01 12:00:00'),
-(205,'sku_003',600.00,'2020-06-02 12:00:00');1.2.3.4.5.6.
+(205,'sku_003',600.00,'2020-06-02 12:00:00');
 </code></pre>
-<p>10）通过查询分布式表和本地表观察输出结果 （1）分布式表</p>
+<p>10）通过查询分布式表和本地表观察输出结果。</p>
+<p>（1）分布式表</p>
 <pre><code class="language-sql">select * From st_fz_order_mt_all2;
 
 Query id: d8b676e9-c119-4483-8ca2-f0b5cd150a61
@@ -372,28 +374,16 @@ Query id: 7a336004-7040-4098-948e-1e7c5d983edb
 └─────┴─────────┴──────────────┴─────────────────────┘
 2 rows in set. Elapsed: 0.002 sec.
 </code></pre>
-<p>可以看到数据分布在Node1和Node3两个节点上。</p>
+<p>可以看到，数据按分片键被分布到分片 01（Node01）和分片 02（Node03）上，每个分片只写入了其中一个副本。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#clickhouse-%E5%88%86%E7%89%87%E9%9B%86%E7%BE%A4">ClickHouse-分片集群</a>
 <ul>
-<li>
-<ul>
-<li><a href="#clickhouse-%E5%88%86%E7%89%87%E9%9B%86%E7%BE%A4">ClickHouse-分片集群</a>
-<ul>
-<li><a href="#1%E9%9B%86%E7%BE%A4%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B3-%E5%88%86%E7%89%87-2-%E5%89%AF%E6%9C%AC%E5%85%B1-6-%E4%B8%AA%E8%8A%82%E7%82%B9">1.集群写入流程（3 分片 2 副本共 6 个节点）</a></li>
-<li><a href="#2%E9%9B%86%E7%BE%A4%E8%AF%BB%E5%8F%96%E6%B5%81%E7%A8%8B3-%E5%88%86%E7%89%87-2-%E5%89%AF%E6%9C%AC%E5%85%B1-6-%E4%B8%AA%E8%8A%82%E7%82%B9">2.集群读取流程（3 分片 2 副本共 6 个节点）</a></li>
-<li><a href="#3-%E5%88%86%E7%89%87-2-%E5%89%AF%E6%9C%AC%E5%85%B1-6-%E4%B8%AA%E8%8A%82%E7%82%B9%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E4%BE%9B%E5%8F%82%E8%80%83">3 分片 2 副本共 6 个节点集群配置（供参考）</a></li>
-<li><a href="#4-%E9%85%8D%E7%BD%AE%E4%B8%89%E8%8A%82%E7%82%B9%E7%89%88%E6%9C%AC%E9%9B%86%E7%BE%A4%E5%8F%8A%E5%89%AF%E6%9C%AC">4 .配置三节点版本集群及副本</a>
-<ul>
-<li><a href="#41-%E9%9B%86%E7%BE%A4%E5%8F%8A%E5%89%AF%E6%9C%AC%E8%A7%84%E5%88%922-%E4%B8%AA%E5%88%86%E7%89%87%E5%8F%AA%E6%9C%89%E7%AC%AC%E4%B8%80%E4%B8%AA%E5%88%86%E7%89%87%E6%9C%89%E5%89%AF%E6%9C%AC">4.1 集群及副本规划（2 个分片，只有第一个分片有副本）</a></li>
-<li><a href="#42-%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4">4.2 配置步骤</a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
+<li><a href="#1%E9%9B%86%E7%BE%A4%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B3-%E5%88%86%E7%89%87-2-%E5%89%AF%E6%9C%AC%E5%85%B1-6-%E4%B8%AA%E8%8A%82%E7%82%B9">1. 集群写入流程（3 分片 2 副本共 6 个节点）</a></li>
+<li><a href="#2%E9%9B%86%E7%BE%A4%E8%AF%BB%E5%8F%96%E6%B5%81%E7%A8%8B3-%E5%88%86%E7%89%87-2-%E5%89%AF%E6%9C%AC%E5%85%B1-6-%E4%B8%AA%E8%8A%82%E7%82%B9">2. 集群读取流程（3 分片 2 副本共 6 个节点）</a></li>
+<li><a href="#3-%E5%88%86%E7%89%87-2-%E5%89%AF%E6%9C%AC%E5%85%B1-6-%E4%B8%AA%E8%8A%82%E7%82%B9%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E4%BE%9B%E5%8F%82%E8%80%83">3. 集群配置示例（3 分片 2 副本共 6 个节点，供参考）</a></li>
+<li><a href="#4-%E9%85%8D%E7%BD%AE%E4%B8%89%E8%8A%82%E7%82%B9%E7%89%88%E6%9C%AC%E9%9B%86%E7%BE%A4%E5%8F%8A%E5%89%AF%E6%9C%AC">4. 配置三节点版本集群及副本</a></li>
 </ul>
 </li>
 </ul>
