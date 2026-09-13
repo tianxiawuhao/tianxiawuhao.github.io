@@ -125,7 +125,7 @@
           
           <img class="post-feature-header-image" src="/post-images/NjXzyw7sR.png" alt="封面图">
           
-          <p>反射是框架设计的灵魂（使用的前提条件：必须先得到代表的字节码的Class，Class类用于表示.class文件（字节码））</p>
+          <p>反射是框架设计的灵魂。使用它的前提条件，是先拿到代表该类的字节码对象——<code>Class</code> 对象；<code>Class</code> 类用于表示 .class 文件（字节码）。</p>
 <h2 id="反射的概述">反射的概述</h2>
 <blockquote>
 <p>JAVA反射机制是在运行状态中，对于任意一个类，都能够知道这个类的所有属性和方法；对于任意一个对象，都能够调用它的任意一个方法和属性；这种动态获取的信息以及动态调用对象的方法的功能称为java语言的反射机制。<br>
@@ -137,7 +137,9 @@
 </blockquote>
 <p>如图是类的正常加载过程：Class对象的由来是将class文件读入内存，并为之创建一个Class对象。</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1619675125967.png" alt="" loading="lazy"></figure>
-<p>其中这个Class对象很特殊。我们先了解一下这个Class类</p>
+<p>这个 Class 对象很特殊，我们先了解一下 Class 类本身。</p>
+<p>下面这张图概括了反射的整体脉络：先拿到 Class 对象，再由它解剖出构造方法、成员变量和成员方法，最后用这些成员对象完成创建实例、读写字段和调用方法。</p>
+<p><img src="/post-assets/NjXzyw7sR/01-reflection-overview.svg" alt="反射整体脉络：获取 Class 对象的三种方式与解剖结果"></p>
 <h3 id="查看class类在java中的api详解">查看Class类在java中的api详解</h3>
 <p>Class 类的实例表示正在运行的 Java 应用程序中的类和接口，即 JVM 中每个类（包括基本数据类型）都对应一个 Class 对象。<br>
 Class 没有公共构造方法。Class 对象是在加载类时由 Java 虚拟机以及通过调用类加载器中的defineClass 方法自动构造的。也就是这不需要我们自己去处理创建，JVM已经帮我们创建好了。</p>
@@ -145,10 +147,12 @@ Class 没有公共构造方法。Class 对象是在加载类时由 Java 虚拟�
 <img src="/post-images/1619675067633.png" alt="" loading="lazy"></p>
 <h3 id="反射的使用">反射的使用</h3>
 <h4 id="获取class对象的三种方式">获取Class对象的三种方式</h4>
-<p>1.1 Object ——&gt; getClass();<br>
-1.2 任何数据类型（包括基本数据类型）都有一个“静态”的class属性<br>
-1.3 通过Class类的静态方法：forName（String  className）(常用)</p>
-<p>其中1.1是因为Object类中的getClass方法、因为所有类都继承Object类。从而调用Object类来获取</p>
+<ol>
+<li>对象名 <code>——&gt;</code> <code>getClass()</code>；</li>
+<li>任何数据类型（包括基本数据类型）都有一个“静态”的 class 属性，写作 <code>类名.class</code>；</li>
+<li>通过 Class 类的静态方法 <code>Class.forName(String className)</code>（常用）。</li>
+</ol>
+<p>第 1 种之所以可行，是因为 <code>getClass</code> 定义在 Object 类中，而所有类都继承 Object；第 3 种只需要一个全类名字符串，最灵活，因此最常用。</p>
 <pre><code class="language-java">package fanshe;
 /**
  * 获取Class对象的三种方式
@@ -179,8 +183,8 @@ public class Fanshe {
 	}
 }
 </code></pre>
-<p>注意：在运行期间，一个类，只有一个Class对象产生。<br>
-三种方式常用第三种，第一种对象都有了还要反射干什么。第二种需要导入类的包，依赖太强，不导包就抛编译错误。一般都第三种，一个字符串可以传入也可写在配置文件中等多种方法。</p>
+<p>注意：在运行期间，一个类只会产生一个 Class 对象，所以三种方式拿到的其实是同一个实例（示例中用 <code>==</code> 比较的结果为 true）。<br>
+三种方式里第三种最常用：第一种要求对象已经存在，既然对象都有了，再反射就多此一举；第二种需要导入对应类的包，编译期依赖太强，不导包会直接编译报错；第三种只需要一个全类名字符串，既可以硬编码，也可以写在配置文件中。</p>
 <h4 id="通过反射获取构造方法并使用">通过反射获取构造方法并使用：</h4>
 <pre><code class="language-java">package fanshe;
  
@@ -219,7 +223,7 @@ public class Student {
  
 }
 </code></pre>
-<p>共有6个构造方法；</p>
+<p>Student 类一共声明了 6 个构造方法，下面把公有的、私有的、受保护的构造方法都取出来并调用。</p>
 <pre><code class="language-java">/*
  * 通过Class对象可以获取某个类中的：构造方法、成员变量、成员方法；并访问成员；
  * 
@@ -263,8 +267,8 @@ public class Constructors {
 		}
 		
 		System.out.println(&quot;*****************获取公有、无参的构造方法*******************************&quot;);
-		Constructor con = clazz.getConstructor(null);
-		//1&gt;、因为是无参的构造方法所以类型是一个null,不写也可以：这里需要的是一个参数的类型，切记是类型
+		Constructor con = clazz.getConstructor();
+		//1&gt;、无参构造方法不传参数类型；旧写法 getConstructor(null) 也能运行，但会有编译警告
 		//2&gt;、返回的是描述这个无参构造函数的类对象。
 	
 		System.out.println(&quot;con = &quot; + con);
@@ -284,7 +288,7 @@ public class Constructors {
 }
 </code></pre>
 <p>后台输出：</p>
-<pre><code class="language-java">**********************所有公有构造方法*********************************
+<pre><code class="language-text">**********************所有公有构造方法*********************************
 public fanshe.Student(java.lang.String,int)
 public fanshe.Student(char)
 public fanshe.Student()
@@ -302,6 +306,7 @@ con = public fanshe.Student()
 public fanshe.Student(char)
 姓名：男
 </code></pre>
+<p>提示：最后一步取到的其实是公有的 <code>Student(char)</code> 构造方法，<code>setAccessible(true)</code> 对公有成员同样能调用；它真正的用途是解除私有成员的访问限制，例如用 <code>getDeclaredConstructor(int.class)</code> 取出私有的 <code>Student(int)</code> 后再调用。</p>
 <h4 id="获取成员变量并调用">获取成员变量并调用：</h4>
 <pre><code class="language-java">package fanshe.field;
  
@@ -381,7 +386,7 @@ public class Fields {
 	}
 </code></pre>
 <p>后台输出：</p>
-<pre><code class="language-java">************获取所有公有的字段********************
+<pre><code class="language-text">************获取所有公有的字段********************
 public java.lang.String fanshe.field.Student.name
 ************获取所有的字段(包括私有、受保护、默认的)********************
 public java.lang.String fanshe.field.Student.name
@@ -476,7 +481,7 @@ public class MethodClass {
 }
 </code></pre>
 <p>控制台输出：</p>
-<pre><code class="language-java">***************获取所有的”公有“方法*******************
+<pre><code class="language-text">***************获取所有的”公有“方法*******************
 public void fanshe.method.Student.show1(java.lang.String)
 public final void java.lang.Object.wait(long,int) throws java.lang.InterruptedException
 public final native void java.lang.Object.wait(long) throws java.lang.InterruptedException
@@ -543,8 +548,10 @@ public class Main {
 }
 </code></pre>
 <p>控制台输出：</p>
-<pre><code class="language-java">main方法执行了。。。
+<pre><code class="language-text">main方法执行了。。。
 </code></pre>
+<p>反射调用与普通调用的本质差别，正是“改配置文件即可切换实现”的原因，对比如下图：</p>
+<p><img src="/post-assets/NjXzyw7sR/02-normal-vs-reflection.svg" alt="正常调用与反射调用的对比"></p>
 <h4 id="反射方法的其它使用之-通过反射运行配置文件内容">反射方法的其它使用之---通过反射运行配置文件内容</h4>
 <pre><code class="language-java">public class Student {
 	public void show(){
@@ -553,7 +560,7 @@ public class Main {
 }
 </code></pre>
 <p>配置文件以txt文件为例子（pro.txt）：</p>
-<pre><code class="language-java">className = cn.fanshe.Student
+<pre><code class="language-text">className = cn.fanshe.Student
 methodName = show
 </code></pre>
 <p>测试类：</p>
@@ -589,7 +596,7 @@ public class Demo {
 }
 </code></pre>
 <p>控制台输出：</p>
-<pre><code class="language-java">is show()
+<pre><code class="language-text">is show()
 </code></pre>
 <h5 id="需求">需求：</h5>
 <p>当系统升级时不再使用 Student 类，而需要新写一个 Student2 类时，只需要更改 pro.txt 的文件内容即可，代码一点都不用改动</p>
@@ -601,14 +608,15 @@ public class Demo {
 }
 </code></pre>
 <p>配置文件更改为：</p>
-<pre><code class="language-java">className = cn.fanshe.Student2
+<pre><code class="language-text">className = cn.fanshe.Student2
 methodName = show2
 </code></pre>
 <p>控制台输出：</p>
-<pre><code class="language-java">is show2();
+<pre><code class="language-text">is show2();
 </code></pre>
 <h4 id="反射方法的其它使用之-通过反射越过泛型检查">反射方法的其它使用之---通过反射越过泛型检查</h4>
-<p>泛型用在编译期，编译过后泛型擦除（消失掉）。所以是可以通过反射越过泛型检查的</p>
+<p>泛型只作用于编译期，编译后会被擦除（类型擦除），因此可以借助反射在运行期越过编译期的泛型检查，例如往 <code>ArrayList&lt;String&gt;</code> 里放入一个 <code>Integer</code>。</p>
+<p>提示：下面只是演示反射的能力，实际开发中不建议这样用——它绕过了编译器的类型检查，取值时很容易在运行期抛出 <code>ClassCastException</code>。</p>
 <pre><code class="language-java">import java.lang.reflect.Method;
 import java.util.ArrayList;
  
@@ -629,7 +637,7 @@ public class Demo {
 		//获取add()方法
 		Method m = listClass.getMethod(&quot;add&quot;, Object.class);
 		//调用add()方法
-		m.invoke(listClass , 100);
+		m.invoke(strList, 100);   //注意：第一个参数是目标对象 strList，不是它的 Class 对象
 		
 		//遍历集合
 		for(Object obj : strList){
@@ -639,34 +647,25 @@ public class Demo {
 }
 </code></pre>
 <p>控制台输出：</p>
-<pre><code class="language-java">aaa
+<pre><code class="language-text">aaa
 bbb
 100
 </code></pre>
+<h2 id="小结">小结</h2>
+<p>反射的核心只有三步：先拿到 <code>Class</code> 对象（推荐 <code>Class.forName</code>），再由它取出 <code>Constructor</code>、<code>Field</code>、<code>Method</code> 等成员对象，最后用 <code>newInstance</code>、<code>set</code>、<code>invoke</code> 完成创建实例、读写字段和调用方法；访问私有成员前需要 <code>setAccessible(true)</code>。</p>
+<p>掌握反射之后，再去看 Spring 的依赖注入、MyBatis 的结果映射、注解处理器等框架实现，就不会觉得神秘了；同时也要记住它的代价：绕过编译期检查、性能低于直接调用、报错时间更晚。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#%E5%8F%8D%E5%B0%84%E7%9A%84%E6%A6%82%E8%BF%B0">反射的概述</a>
+<a href="#%E5%8F%8D%E5%B0%84%E7%9A%84%E6%A6%82%E8%BF%B0">反射的概述</a>
 <ul>
 <li><a href="#%E6%9F%A5%E7%9C%8Bclass%E7%B1%BB%E5%9C%A8java%E4%B8%AD%E7%9A%84api%E8%AF%A6%E8%A7%A3">查看Class类在java中的api详解</a></li>
-<li><a href="#%E5%8F%8D%E5%B0%84%E7%9A%84%E4%BD%BF%E7%94%A8">反射的使用</a>
+<li><a href="#%E5%8F%8D%E5%B0%84%E7%9A%84%E4%BD%BF%E7%94%A8">反射的使用</a></li>
+</ul>
+</li>
+<li>
+<a href="#%E5%B0%8F%E7%BB%93">小结</a>
 <ul>
-<li><a href="#%E8%8E%B7%E5%8F%96class%E5%AF%B9%E8%B1%A1%E7%9A%84%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F">获取Class对象的三种方式</a></li>
-<li><a href="#%E9%80%9A%E8%BF%87%E5%8F%8D%E5%B0%84%E8%8E%B7%E5%8F%96%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95%E5%B9%B6%E4%BD%BF%E7%94%A8">通过反射获取构造方法并使用：</a></li>
-<li><a href="#%E8%8E%B7%E5%8F%96%E6%88%90%E5%91%98%E5%8F%98%E9%87%8F%E5%B9%B6%E8%B0%83%E7%94%A8">获取成员变量并调用：</a></li>
-<li><a href="#%E8%8E%B7%E5%8F%96%E6%88%90%E5%91%98%E6%96%B9%E6%B3%95%E5%B9%B6%E8%B0%83%E7%94%A8">获取成员方法并调用</a></li>
-<li><a href="#%E5%8F%8D%E5%B0%84main%E6%96%B9%E6%B3%95">反射main方法</a></li>
-<li><a href="#%E5%8F%8D%E5%B0%84%E6%96%B9%E6%B3%95%E7%9A%84%E5%85%B6%E5%AE%83%E4%BD%BF%E7%94%A8%E4%B9%8B-%E9%80%9A%E8%BF%87%E5%8F%8D%E5%B0%84%E8%BF%90%E8%A1%8C%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E5%86%85%E5%AE%B9">反射方法的其它使用之---通过反射运行配置文件内容</a>
-<ul>
-<li><a href="#%E9%9C%80%E6%B1%82">需求：</a></li>
-</ul>
-</li>
-<li><a href="#%E5%8F%8D%E5%B0%84%E6%96%B9%E6%B3%95%E7%9A%84%E5%85%B6%E5%AE%83%E4%BD%BF%E7%94%A8%E4%B9%8B-%E9%80%9A%E8%BF%87%E5%8F%8D%E5%B0%84%E8%B6%8A%E8%BF%87%E6%B3%9B%E5%9E%8B%E6%A3%80%E6%9F%A5">反射方法的其它使用之---通过反射越过泛型检查</a></li>
-</ul>
-</li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

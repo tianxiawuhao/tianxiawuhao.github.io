@@ -127,24 +127,22 @@
           
           <img class="post-feature-header-image" src="/post-images/vU42syr2A.png" alt="封面图">
           
-          <p><code>声明：经过下面一系列操作之后，以后想发布新版本，只要修改好要升级的版本，然后在 Maven的 Lifecycle 里双击 deploy 即可~</code></p>
+          <p><strong>声明：</strong>经过下面一系列操作之后，以后想发布新版本，只要修改好要升级的版本号，然后在 Maven 的 Lifecycle 里双击 deploy 即可。</p>
 <h2 id="前言">前言</h2>
 <p>自使用maven以来，没少使用maven中央仓库中的各种jar包，方便有效，但是咱们也不能总是只取不予，也应该懂得奉献，当你写好了一个十分好用的jar包，想贡献出去给大家使用的时候，应该怎么做呢？当然是发布到maven的中央仓库了，不过要说这个发布过程，还真是比较复杂，本文就来详细说下如何发布jar包到maven中央仓库。</p>
+<p>整个流程可以概括为下面五步，后文按顺序展开：</p>
+<p><img src="/post-assets/vU42syr2A/01-publish-flow.svg" alt="发布 JAR 包到 Maven 中央仓库的五个步骤流程图"></p>
 <h2 id="注意事项">注意事项</h2>
+<p>先说明本文会用到的三类地址及其用途：</p>
 <ul>
-<li><strong>工单管理</strong>： https://issues.sonatype.org/secure/Dashboard.jspa</li>
+<li><strong>工单管理</strong>：https://issues.sonatype.org/secure/Dashboard.jspa —— 注册账号、创建和管理 issue，JAR 包的发布是以解决 issue 的方式起步的。这里的用户名与密码非常重要，后面配置 settings.xml 时会用到，一定要保存好。</li>
+<li><strong>构件仓库（OSSRH）</strong>：https://oss.sonatype.org/#welcome —— 正式发布前的过渡仓库，用 Maven 提交后的构件会先到这个库中。</li>
+<li><strong>镜像仓库</strong>：https://central.sonatype.com —— 最终成功发布的构件可以在这里搜到（旧地址 http://search.maven.org 已跳转至此）。</li>
 </ul>
-<p>说明：注册账号、创建和管理issue，Jar包的发布是以解决issue的方式起步的。这里的用户名与密码是非常重要的，后面会用到，一定要保存好。</p>
-<ul>
-<li><strong>构件仓库</strong>： https://oss.sonatype.org/#welcome</li>
-</ul>
-<p>说明：这是正式发布前的一个过渡仓库，用 Maven 提交后的 jar 包会先到这个库中。</p>
-<ul>
-<li><strong>镜像仓库</strong>： http://search.maven.org</li>
-</ul>
-<p>说明：最终成功发布的jar可以在这里搜到。</p>
+<p>提示：Sonatype 已经推出新的 Central Portal（https://central.sonatype.com），并宣布将逐步退役旧的 OSSRH 流程。本文介绍的是仍被大量老项目沿用的 OSSRH 流程；新项目也可以直接使用 Central Portal 的发布方式，步骤更简单。</p>
 <h2 id="一、创建工单">一、创建工单</h2>
 <p>在上述工单管理的地址中创建；如果没有账号需要先注册。记住用户名和密码，后面要配置到 settings.xml 中。</p>
+<p>关于 Group Id：如果使用 GitHub 托管项目，通常填写 <code>io.github.你的用户名</code>（部分教程写作 <code>com.github.你的用户名</code>），并按客服提示在 GitHub 上完成验证；如果有自己的域名，则填写域名倒序，并按提示配置 DNS TXT 记录。</p>
 <p>Create Issue 填写内容说明：</p>
 <figure data-type="image" tabindex="1"><img src="/post-images/1666786672736.png" alt="" loading="lazy"></figure>
 <pre><code class="language-text">===Step 1===
@@ -153,7 +151,7 @@ Issue Type：New Project
 
 ===Step 2===
 Summary：JAR包名称，如：requestjson
-Group Id：你懂得，不用多说，如com.luxsuen
+Group Id：你拥有或申请的域名倒序，如 com.luxsuen，必须与工单中填写的一致
 Project URL：项目站点，如：https://github.com/LuxSun/requestjson
 SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
 </code></pre>
@@ -167,17 +165,18 @@ SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
 <p>如果是用自己的域名，就需要根据客服的提示配置下DNS。</p>
 </li>
 </ul>
-<p>	提示：无论以上是哪种情况，最后只要呈现如下图所示，即代表成功！</p>
+<p>提示：无论以上是哪种情况，最后只要呈现如下图所示，即代表成功！</p>
 <figure data-type="image" tabindex="2"><img src="/post-images/1666786702549.png" alt="" loading="lazy"></figure>
 <h2 id="二、配置 Maven（pom.xml）">二、配置 Maven（pom.xml）</h2>
 <p>接下来就是重头戏了，pom.xml是一个maven项目的重点配置，一个项目的所有配置都可以由这个文件来描述，文件中的所有配置都有默认值，也就是说所有的配置都是可选配置，但是为了把构件发布到中央仓库，我们必须配置一些关键信息，否则发布时是不会通过的。</p>
-<p>在工程的 pom.xml 中引入 Sonatype 官方的通用父 POM oss-parent，好处是很多发布相关配置不用自己写了：</p>
+<p>在工程的 pom.xml 中引入 Sonatype 官方的通用父 POM oss-parent，好处是很多发布相关配置（例如它预置的 <code>sonatype-oss-release</code> profile）不用自己写了：</p>
 <pre><code class="language-java">&lt;parent&gt;
     &lt;groupId&gt;org.sonatype.oss&lt;/groupId&gt;
     &lt;artifactId&gt;oss-parent&lt;/artifactId&gt;
     &lt;version&gt;7&lt;/version&gt;
 &lt;/parent&gt;
 </code></pre>
+<p>注意：oss-parent 是较早期的做法，最新版本为 7 且已多年未更新，完全可以省略。本文下面给出的「完整版」pom 就没有使用它，而是自行声明了 <code>release</code> profile，因此后续命令统一写作 <code>-P release</code>；如果保留了 <code>&lt;parent&gt;</code>，也可以改用 <code>-P sonatype-oss-release</code> 走官方预置的配置。</p>
 <p><strong>并增加Licenses、SCM、Developers信息</strong>：</p>
 <pre><code class="language-xml">&lt;licenses&gt;
   &lt;license&gt;
@@ -201,21 +200,16 @@ SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
   &lt;connection&gt;https://github.com/LuxSun/requestjson.git&lt;/connection&gt;
 &lt;/scm&gt;
 </code></pre>
-<p>修改maven配置文件setting.xml，在servers中增加server配置。</p>
+<p>修改 Maven 配置文件 settings.xml（一般位于 <code>~/.m2/settings.xml</code>），在 <code>&lt;servers&gt;</code> 中增加 server 配置。<strong>这里的 <code>&lt;id&gt;</code> 必须与后面 pom.xml 中 <code>distributionManagement</code> 的仓库 id、以及 <code>nexus-staging-maven-plugin</code> 的 <code>serverId</code> 完全一致</strong>，否则 deploy 时会因找不到凭据而报 401/403。本文统一使用 <code>ossrh</code>：</p>
 <pre><code class="language-xml">&lt;servers&gt;
   &lt;server&gt;
-    &lt;id&gt;sonatype-nexus-snapshots&lt;/id&gt;
-    &lt;username&gt;Sonatype 账号&lt;/username&gt;
-    &lt;password&gt;Sonatype 密码&lt;/password&gt;
-  &lt;/server&gt;
-
-  &lt;server&gt;
-    &lt;id&gt;sonatype-nexus-staging&lt;/id&gt;
+    &lt;id&gt;ossrh&lt;/id&gt;
     &lt;username&gt;Sonatype 账号&lt;/username&gt;
     &lt;password&gt;Sonatype 密码&lt;/password&gt;
   &lt;/server&gt;
 &lt;/servers&gt;
 </code></pre>
+<p>部分老教程使用的是另一套 id：<code>sonatype-nexus-snapshots</code> 与 <code>sonatype-nexus-staging</code>，那是 <code>oss-parent</code> 预置的写法。两种写法都可以，但 settings.xml、pom.xml 与插件三处的 id 必须严格一致，不能混用。</p>
 <p>根据官方指南，这里需要4个插件，</p>
 <ul>
 <li>maven-source-plugin 用来生成Source Jar文件</li>
@@ -223,7 +217,7 @@ SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
 <li>maven-gpg-plugin 用来对工程文件进行自动签名</li>
 <li>nexus-staging-maven-plugin 用来将工程发布到中央仓库</li>
 </ul>
-<p>另外注意生成javadoc文档时需要指定关闭doclint，不然可能因为使用了不规范的javadoc注解而导致失败，完整配置如下。</p>
+<p>另外注意：JDK 8 起 javadoc 默认启用了 doclint 检查，一旦 javadoc 注解不规范就会直接构建失败，需要在插件中把它关掉（2.x 版本用 <code>&lt;additionalparam&gt;-Xdoclint:none&lt;/additionalparam&gt;</code>，3.x 版本可改用 <code>&lt;doclint&gt;none&lt;/doclint&gt;</code>）。完整配置如下。</p>
 <p><strong>完整版</strong></p>
 <pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
 
@@ -361,6 +355,8 @@ SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
             &lt;/executions&gt;
             &lt;configuration&gt;
               &lt;excludePackageNames&gt;com.luxsuen.requestjson.entity:com.luxsuen.requestjson.web&lt;/excludePackageNames&gt;
+              &lt;!-- JDK 8 起 javadoc 默认开启 doclint，注解不规范会直接失败，这里关闭它 --&gt;
+              &lt;additionalparam&gt;-Xdoclint:none&lt;/additionalparam&gt;
             &lt;/configuration&gt;
           &lt;/plugin&gt;
     
@@ -406,6 +402,8 @@ SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
 </li>
 </ul>
 <h2 id="三、配置 gpg-key">三、配置 gpg-key</h2>
+<p>为了让使用者能够确认构件确实由你发布，Maven 会用 GPG 对构件签名，下载方再用公钥验签，整个流转过程如下图所示：</p>
+<p><img src="/post-assets/vU42syr2A/02-gpg-sign-flow.svg" alt="GPG 签名与公钥验签流转示意图"></p>
 <h3 id="1-可视化配置">1、可视化配置</h3>
 <p>Windows的话先到  https://gpg4win.org/download.html 下载最新的版本，直接安装即可使用。</p>
 <h4 id="11-新建密钥对openpgp类型">1.1、新建密钥对（OpenPGP类型）</h4>
@@ -419,26 +417,28 @@ SCM url：项目源码仓库，如：https://github.com/LuxSun/requestjson.git
 <h4 id="15-根据密钥id在服务器上查找公钥">1.5、根据密钥ID在服务器上查找公钥</h4>
 <p>最终必须保证这一步成功！如下。</p>
 <figure data-type="image" tabindex="5"><img src="/post-images/1666786765413.png" alt="" loading="lazy"></figure>
-<p>提示：注意：这里有个bug，如果生成的密钥ID的第一个字符是数字0的话，在下面使用maven-gpg插件的时候可能会被自动去掉导致密钥找不到，所以保险起见遇到这种情况就重新生成证书。</p>
+<p>提示：这里有一个容易踩的坑——部分工具在显示密钥 ID 时会省略前导的数字 0（例如把 <code>0A1B2C3D</code> 显示成 <code>A1B2C3D</code>），导致后面 maven-gpg-plugin 按这个短 ID 找不到密钥。遇到这种情况，可以改用 <code>gpg --fingerprint</code> 查到的 40 位完整指纹，或者重新生成一个密钥。</p>
 <h3 id="2-命令行配置">2、命令行配置</h3>
-<p>提示：Windows系统使用“gpg”命令开头，而Mac系统使用“gpg2”命令开头。</p>
-<p>如果是使用的windows，可以下载gpg4win，地址：https://www.gpg4win.org/download.html，安装后在命令行中执行 gpg --gen-key生成，过程中需要填写名字、邮箱等，其他步骤可以使用默认值，不过有个叫：passphrase的参数需要记住，这个相当于是是密钥的密码，下一步发布过程中进行签名操作的时候会用到。</p>
+<p>提示：Windows 下命令以 <code>gpg</code> 开头。较早的教程说 macOS 要用 <code>gpg2</code>，那是因为旧版 Homebrew 同时安装了 GnuPG 1.x 和 2.x；现在通过 Homebrew 安装的 GnuPG 2.x 直接提供 <code>gpg</code> 命令，<code>gpg2</code> 只是兼容用的软链接，用哪个都可以。</p>
+<p>Windows 可以下载 Gpg4win，地址：https://www.gpg4win.org/download.html，安装后在命令行中执行 <code>gpg --gen-key</code> 生成密钥。过程中需要填写名字、邮箱等，其他步骤可以使用默认值；其中 passphrase 参数需要记住，它相当于密钥的密码，下一步发布过程中进行签名操作时会用到。</p>
+<p>提示：GnuPG 2.1.17 及以上版本中 <code>gpg --gen-key</code> 依然可用，但走的是快速生成流程（算法与长度由版本默认值决定）；如果需要自选算法、密钥长度和有效期，请使用 <code>gpg --full-generate-key</code>。现代 GnuPG 2.2+ 的输出格式也有变化，密钥 ID 不再是下文示例里的 <code>2048R/82DC852E</code>，而是类似 <code>rsa3072/82DC852E</code> 或 <code>ed25519/...</code>，指纹为 40 位十六进制。</p>
 <figure data-type="image" tabindex="6"><img src="/post-images/1666786780362.png" alt="" loading="lazy"></figure>
 <p>建议大家下载 Gpg4win-Vanilla 版本，因为它仅包括 GnuPG，这个工具才是我们所需要的。</p>
 <p>安装 GPG 软件后，打开命令行窗口，依次做以下操作：</p>
 <h4 id="21-查看是否安装成功">2.1、查看是否安装成功</h4>
-<pre><code class="language-shell">gpg --version
+<pre><code class="language-bash">gpg --version
 </code></pre>
 <p>能够显示 GPG 的版本信息，说明安装成功了。</p>
 <h4 id="22-生成密钥对">2.2、生成密钥对</h4>
-<pre><code class="language-shell">gpg --gen-key
+<pre><code class="language-bash">gpg --gen-key              # 快速生成
+gpg --full-generate-key    # 需要自选算法、长度、有效期时使用
 </code></pre>
 <p>此时需要输入姓名、邮箱等字段，其它字段可使用默认值，此外，还需要输入一个 passphrase，相当于一个密钥库的密码，一定不要忘了，也不要告诉别人，最好记下来，因为后面会用到。</p>
 <h4 id="23-查看公钥">2.3、查看公钥</h4>
-<pre><code class="language-shell">gpg --list-keys
+<pre><code class="language-bash">gpg --list-keys
 </code></pre>
 <p>输出如下信息（新版本可能格式会有点区别，不用担心，是正常的）：</p>
-<pre><code class="language-yaml">C:/Users/huangyong/AppData/Roaming/gnupg/pubring.gpg
+<pre><code class="language-text">C:/Users/huangyong/AppData/Roaming/gnupg/pubring.gpg
 ----------------------------------------------------
 
 pub   2048R/82DC852E 2014-04-24
@@ -447,17 +447,19 @@ sub   2048R/3ACA39AF 2014-04-24
 </code></pre>
 <p>可见这里的公钥的 ID 是：82DC852E，很明显是一个 16 进制的数字，马上就会用到。</p>
 <h4 id="24-将公钥发布到-pgp-密钥服务器后面还需要操作此步骤">2.4、将公钥发布到 PGP 密钥服务器（后面还需要操作此步骤）</h4>
-<pre><code class="language-shell">gpg --keyserver hkp://pool.sks-keyservers.net --send-keys 82DC852E
+<pre><code class="language-bash">gpg --keyserver hkp://keyserver.ubuntu.com:11371 --send-keys 82DC852E
 </code></pre>
-<p>此后，可使用本地的私钥来对上传构件进行数字签名，而下载该构件的用户可通过上传的公钥来验证签名，也就是说，大家可以验证这个构件是否由本人上传的，因为有可能该构件被坏人给篡改了。</p>
+<p>此后，本地私钥用于对上传的构件进行数字签名，而下载该构件的用户可以通过公钥验证签名，从而确认构件确实由本人发布、没有被他人篡改。</p>
+<p>提示：很多老教程里使用的 <code>hkp://pool.sks-keyservers.net</code> 已经停止服务，请改用仍在运行的密钥服务器，例如 <code>hkp://keyserver.ubuntu.com:11371</code> 或 <code>hkps://keys.openpgp.org</code>。另外，8 位短密钥 ID 存在碰撞风险，条件允许时建议直接使用 <code>gpg --fingerprint</code> 得到的 40 位完整指纹。</p>
 <h4 id="25-查询公钥是否发布成功">2.5、查询公钥是否发布成功</h4>
-<pre><code class="language-shell">gpg --keyserver hkp://pool.sks-keyservers.net --recv-keys 82DC852E
+<pre><code class="language-bash">gpg --keyserver hkp://keyserver.ubuntu.com:11371 --recv-keys 82DC852E
 </code></pre>
-<p>实际上就是从 key server 上通过公钥 ID 来接收公钥，此外，也可以到 sks-keyservers.net 上通过公钥 ID 去查询。</p>
+<p>这一步实际上就是从密钥服务器上按公钥 ID 接收公钥；能够成功取回，说明 2.4 节的发布已经生效。也可以在浏览器中打开 https://keyserver.ubuntu.com 按公钥 ID 或邮箱查询。</p>
 <h2 id="四、上传构件到 OSS 中">四、上传构件到 OSS 中</h2>
-<p>这步就简单了，就是一套命令：</p>
-<pre><code class="language-shell">mvn clean deploy -P sonatype-oss-release -Darguments=&quot;gpg.passphrase=密钥密码&quot;
+<p>这步就简单了，就是一套命令（<code>-Darguments</code> 用于把 GPG 的 passphrase 传给 maven-gpg-plugin，省去每次弹窗输入；也可以省略该参数，改为在弹窗中手动输入）：</p>
+<pre><code class="language-bash">mvn clean deploy -P release -Darguments=&quot;gpg.passphrase=密钥密码&quot;
 </code></pre>
+<p>如果保留了 <code>oss-parent</code>，对应的 profile 名是 <code>sonatype-oss-release</code>，命令写成 <code>mvn clean deploy -P sonatype-oss-release -Darguments=&quot;gpg.passphrase=密钥密码&quot;</code> 即可，两种写法效果一致。</p>
 <p>如果使用eclipse的mvn插件发布的话，配置如下（IDEA类似）：</p>
 <figure data-type="image" tabindex="7"><img src="/post-images/1666786795135.png" alt="" loading="lazy"></figure>
 <p>如果发布成功，就可以到构件仓库中查看了。</p>
@@ -465,14 +467,14 @@ sub   2048R/3ACA39AF 2014-04-24
 <p>先通过 cmd 进入到项目的这个目录下。</p>
 <figure data-type="image" tabindex="8"><img src="/post-images/1666786809041.png" alt="" loading="lazy"></figure>
 <p>再执行下面命令。</p>
-<pre><code class="language-shell">mvn clean deploy -P release
+<pre><code class="language-bash">mvn clean deploy -P release
 </code></pre>
 <p>当执行以上 Maven 命令时，会自动弹出对话框，要求输入上面提到的 passphrase——它就是该 GPG 密钥对的密码，只有自己知道。随后会看到大量的 upload 信息，而且速度比较慢，经常会 timeout，需要反复尝试。</p>
 <p>注意：此时上传的构件并未正式发布到中央仓库中，只是部署到 OSS 中了，下面才是真正的发布。</p>
 <h2 id="五、在 OSS 中发布构件">五、在 OSS 中发布构件</h2>
 <p>进入 https://oss.sonatype.org/#stagingRepositories 查看发布的构件，点击左侧的 Staging Repositories——一般最后一个就是刚发布的 jar，此时构件状态为 open。</p>
 <p>打开命令行窗口，查看gpg key并上传到第三方的key验证库：</p>
-<pre><code class="language-shell">E:\98_code\workSpace\marathon-client&gt;gpg --list-keys
+<pre><code class="language-bash">E:\98_code\workSpace\marathon-client&gt;gpg --list-keys
 
 C:/Users/VF/AppData/Roaming/gnupg/pubring.gpg
 ---------------------------------------------
@@ -489,10 +491,10 @@ E:\98_code\workSpace\marathon-client&gt;
 </code></pre>
 <p>回到 https://oss.sonatype.org/#stagingRepositories，选中刚发布的构件，点击上方的 Close → Confirm；在下方的 Activity 选项卡查看状态，变成 closed 后执行 Release → Confirm，成功后构件仓库会被自动清理。</p>
 <p>需要在曾经创建的 Issue 下面回复一条“构件已成功发布”的评论，这是为了通知 Sonatype 的工作人员为需要发布的构件做审批，发布后会关闭该 Issue。</p>
-<p>一小段时间（约1-2个小时）后即可同步到 https://search.maven.org中央仓库（Maven中央仓库可能需要24-48小时： https://mvnrepository.com）。</p>
+<p>一小段时间（约 1–2 个小时）后即可在 https://central.sonatype.com 检索到（旧的 http://search.maven.org 已跳转到该站点）；第三方站点 https://mvnrepository.com 的索引更新会慢一些，通常需要 24–48 小时。</p>
 <figure data-type="image" tabindex="9"><img src="/post-images/1666786827207.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="10"><img src="/post-images/1666786836649.png" alt="" loading="lazy"></figure>
-<p>提示：注意这里有个大坑，之前很多教程都会把这个步骤提前到最开始（我不是说生成密钥这个环节，这个密钥生成环节的确是一开始就可以弄了的），但下面这句解析需要到这一步再开始搞，之前一直在https://oss.sonatype.org/#stagingRepositories这里审核一直失败，大坑呀~</p>
+<p>提示：这里有一个大坑——很多教程会把公钥上传（2.4 节）安排在整个流程的最开头。生成密钥确实可以一开始就做，但把公钥发布到密钥服务器这一步建议放到构件已经上传、准备 Close/Release 时再执行；否则在 Staging Repositories 中的审核会一直失败。</p>
 <p>最后想说：第一次总是比较痛苦，以后就舒服了。没错，只有第一次发布如此折腾；以后 deploy 的构件会自动发布到中央仓库，无需再这样操作。（附：成功效果图）</p>
 <figure data-type="image" tabindex="11"><img src="/post-images/1666786845695.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="12"><img src="/post-images/1666786857593.png" alt="" loading="lazy"></figure>
@@ -500,7 +502,7 @@ E:\98_code\workSpace\marathon-client&gt;
 在编码过程中，有些通用的代码模块，有时候我们不想通过复制拷贝来粗暴地复用，因为这样不仅体现不了变化，也不利于统一管理。这里我们使用maven deploy的方式，将通用的模块打成jar包，发布到nexus，让其他的项目来引用，以更简洁高效的方式来实现复用和管理。</p>
 <ul>
 <li>
-<p>第一：maven的settings.xml文件中设置<server>标签</p>
+<p>第一：Maven 的 settings.xml 文件中设置 <code>&lt;server&gt;</code> 标签</p>
 <pre><code class="language-xml">&lt;server&gt;
   &lt;id&gt;my-deploy-release&lt;/id&gt;
   &lt;username&gt;admin&lt;/username&gt;
@@ -564,7 +566,8 @@ Failed to execute goal org.apache.maven.plugins:maven-deploy-plugin:2.8.2:deploy
 原因：因为release的部署策略是【disable redeploy】，不允许覆盖更新组件。<br>
 解决办法：修改一下版本号，再提交即可。之前其实还可以通过人工客服聊天帮忙删除不想要的Jar包，但是现在不行了，只能通过上传新版本，所以有些童鞋想做测试的需要注意这一点。<br>
 打包指定的文件/文件夹在代码中也有体现（含：doc、sources、class）。<br>
-Maven deploy 时，为什么没有生成对应的 javadoc 和 sources （前提已经有插件部署好）？</p>
+Maven deploy 时，为什么没有生成对应的 javadoc 和 sources（前提已经有插件部署好）？<br>
+原因：这两个插件的 execution 都绑定在 <code>release</code> profile 中，只有显式激活 profile（例如 <code>mvn deploy -P release</code>）时才会执行；直接执行 <code>mvn deploy</code> 不会激活 profile，自然也就不会生成 javadoc 包和 sources 包。</p>
 </li>
 </ul>
 

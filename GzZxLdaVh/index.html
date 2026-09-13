@@ -126,32 +126,32 @@
           <img class="post-feature-header-image" src="/post-images/GzZxLdaVh.png" alt="封面图">
           
           <h2 id="flink-中的时间语义">Flink 中的时间语义</h2>
-<p>在 Flink 的流式处理中， 会涉及到时间的不同概念， 如下图所示：<br>
-<img src="/post-images/1618472695574.png" alt="" loading="lazy"><br>
-图 Flink 时间概念<br>
-<code>Event Time</code>： 是事件创建的时间。 它通常由事件中的时间戳描述， 例如采集的<br>
-日志数据中， 每一条日志都会记录自己的生成时间， Flink 通过时间戳分配器访问事<br>
-件时间戳。<br>
-<code>Ingestion Time</code>： 是数据进入 Flink 的时间。<br>
-<code>Processing Time</code>： 是每一个执行基于时间操作的算子的本地系统时间， 与机器<br>
-相关， 默认的时间属性就是 Processing Time。<br>
-一个例子——电影《 星球大战》 ：<br>
-<img src="/post-images/1618472731095.png" alt="" loading="lazy"><br>
-例如， 一条日志进入 Flink 的时间为 2020-11-12 10:00:00.123， 到达 Window 的<br>
-系统时间为 2020-11-12 10:00:01.234， 日志的内容如下：</p>
-<pre><code class="language-sh">2020-11-02 18:37:15.624 INFO Fail over to rm2
+<p>在 Flink 的流式处理中，会涉及到时间的不同概念，如下图所示。</p>
+<p><img src="/post-images/1618472695574.png" alt="Flink 中事件时间、摄入时间与处理时间的示意图" loading="lazy"></p>
+<p>三种时间语义的含义如下。</p>
+<ul>
+<li><code>Event Time</code>：事件创建的时间。它通常由事件中的时间戳描述，例如采集的日志数据中，每一条日志都会记录自己的生成时间，Flink 通过时间戳分配器访问事件时间戳。</li>
+<li><code>Ingestion Time</code>：数据进入 Flink 的时间，由 Source 算子在数据接入时打上时间戳。</li>
+<li><code>Processing Time</code>：每一个执行基于时间操作的算子的本地系统时间，与机器相关。Flink 1.12 之前默认的时间属性就是 Processing Time。</li>
+</ul>
+<p><img src="/post-assets/GzZxLdaVh/01-time-semantics.svg" alt="Flink 三种时间语义对比：Event Time 由数据自身携带的时间戳决定，Ingestion Time 是数据进入 Flink 的时间，Processing Time 是算子所在机器的系统时间"></p>
+<p>一个例子——电影《星球大战》：</p>
+<p><img src="/post-images/1618472731095.png" alt="《星球大战》中事件发生与数据处理先后顺序不同的示意图" loading="lazy"></p>
+<p>例如，一条日志进入 Flink 的时间为 2020-11-12 10:00:00.123，到达 Window 的系统时间为 2020-11-12 10:00:01.234，日志的内容如下：</p>
+<pre><code class="language-text">2020-11-02 18:37:15.624 INFO Fail over to rm2
 </code></pre>
 <p>对于业务来说， 要统计 1min 内的故障日志个数， 哪个时间是最有意义的？ ——<br>
 eventTime， 因为我们要根据日志的生成时间进行统计。</p>
 <h2 id="eventtime-的引入">EventTime 的引入</h2>
-<p style="text-indent:2em">在 Flink 的流式处理中， 绝大部分的业务都会使用 eventTime， 一般只在eventTime 无法使用时， 才会被迫使用 ProcessingTime 或者 IngestionTime。
-如果要使用 EventTime， 那么需要引入 EventTime 的时间属性， 引入方式如下所
-示：</p>
+<p>在 Flink 的流式处理中，绝大部分的业务都会使用 eventTime，一般只在 eventTime 无法使用时，才会被迫使用 ProcessingTime 或者 IngestionTime。如果要使用 EventTime，那么需要声明 EventTime 的时间属性，引入方式如下所示。</p>
 <pre><code class="language-java">// 创建 execution environment
 StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        // 告诉系统按照 EventTime 处理
+// 告诉系统按照 EventTime 处理（Flink 1.12 之前必须显式设置）
 env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 </code></pre>
+<blockquote>
+<p>版本提示：<code>setStreamTimeCharacteristic()</code> 在 Flink 1.12 中已被标记为废弃，Flink 1.12 起默认的时间语义就是 EventTime；从 Flink 1.14 开始，该方法与 <code>TimeCharacteristic</code> 已被移除，新代码不需要（也不能）再调用它。下文示例中保留该行，是为了让示例能在 1.12 之前的老版本上运行。</p>
+</blockquote>
 <h2 id="watermark">Watermark</h2>
 <h3 id="基本概念">基本概念</h3>
 <p style="text-indent:2em">我们知道， 流处理从事件产生， 到流经 source， 再到 operator， 中间是有一个过程和时间的， 虽然大部分情况下， 流到 operator 的数据都是按照事件产生的时间顺序来的， 但是也不排除由于网络、 分布式等原因， 导致乱序的产生， 所谓乱序， 就
@@ -171,10 +171,10 @@ Watermark 机制结合 window 来实现。</li>
 时长 t， 每次系统会校验已经到达的数据中最大的 maxEventTime， 然后认定 eventTime<br>
 小于 maxEventTime - t 的所有数据都已经到达， 如果有窗口的停止时间等于<br>
 maxEventTime – t， 那么这个窗口被触发执行。<br>
-有序流的 Watermarker 如下图所示： （ Watermark 设置为 0）<br>
+有序流的 Watermark 如下图所示： （ Watermark 设置为 0）<br>
 <img src="/post-images/1618472893459.png" alt="" loading="lazy"><br>
 图 有序数据的 Watermark<br>
-乱序流的 Watermarker 如下图所示： （ Watermark 设置为 2）<br>
+乱序流的 Watermark 如下图所示： （ Watermark 设置为 2）<br>
 <img src="/post-images/1618472899867.png" alt="" loading="lazy"><br>
 图 无序数据的 Watermark</li>
 </ol>
@@ -183,47 +183,48 @@ maxEventTime – t， 那么这个窗口被触发执行。<br>
 基于数据携带的时间戳生成的， 一旦 Watermark 比当前未触发的窗口的停止时间要
 晚， 那么就会触发相应窗口的执行。 由于 event time 是由数据携带的， 因此， 如果
 运行过程中无法获取新的数据， 那么没有被触发的窗口将永远都不被触发。</p>
-<p style="text-indent:2em">上图中， 我们设置的允许最大延迟到达时间为 2s， 所以时间戳为 7s 的事件对应
-的 Watermark 是 5s， 时间戳为 12s 的事件的 Watermark 是 10s， 如果我们的窗口 1
-是 1s~5s， 窗口 2 是 6s~10s， 那么时间戳为 7s 的事件到达时的 Watermarker 恰好触
-发窗口 1， 时间戳为 12s 的事件到达时的 Watermark 恰好触发窗口 2。Watermark 就是触发前一窗口的“ 关窗时间” ， 一旦触发关门那么以当前时刻为准在窗口范围内的所有所有数据都会收入窗中。
-只要没有达到水位那么不管现实中的时间推进了多久都不会触发关窗。</p>
+<p>上图中，我们设置的允许最大延迟到达时间为 2s，所以时间戳为 7s 的事件对应的 Watermark 是 5s，时间戳为 12s 的事件的 Watermark 是 10s。如果窗口 1 是 1s~5s，窗口 2 是 6s~10s，那么时间戳为 7s 的事件到达时的 Watermark 恰好触发窗口 1，时间戳为 12s 的事件到达时的 Watermark 恰好触发窗口 2。Watermark 就是触发前一窗口的“关窗时间”，一旦触发关窗，当前时刻在窗口范围内的所有数据都会收入窗中；只要没有达到水位线，不管现实中的时间推进了多久，窗口都不会触发。</p>
+<p><img src="/post-assets/GzZxLdaVh/02-watermark-trigger.svg" alt="Watermark 触发窗口示意：允许延迟 2s 时，时间戳 7s 的事件产生 WM=5s 并触发窗口1 [0s,5s)，时间戳 12s 的事件产生 WM=10s 并触发窗口2 [5s,10s)"></p>
 <h3 id="watermark-的引入">Watermark 的引入</h3>
-<p>watermark 的引入很简单， 对于乱序数据， 最常见的引用方式如下：</p>
-<pre><code class="language-java">// 抽取出时间和生成 watermark
+<p>Watermark 的引入很简单。对于乱序数据，最常见的引入方式如下所示。</p>
+<pre><code class="language-java">// 抽取出时间并生成 watermark（AscendingTimestampExtractor 适用于时间戳单调递增的数据）
 dataStream.assignTimestampsAndWatermarks(new AscendingTimestampExtractor&lt;UserBehavior&gt;() {
     @Override
     public long extractAscendingTimestamp(UserBehavior userBehavior) {
         // 原始数据单位秒，将其转成毫秒
         return userBehavior.timestamp * 1000;
     }
-})
+});
 </code></pre>
-<p style="text-indent:2em">Event Time 的使用一定要指定数据源中的时间戳。 否则程序无法知道事件的事
-件时间是什么(数据源里的数据没有时间戳的话， 就只能使用 Processing Time 了)。
-我们看到上面的例子中创建了一个看起来有点复杂的类， 这个类实现的其实就
-是分配时间戳的接口。 Flink 暴露了 TimestampAssigner 接口供我们实现， 使我们可
-以自定义如何从事件数据中抽取时间戳。</p>
+<blockquote>
+<p>版本提示：<code>AscendingTimestampExtractor</code>、<code>BoundedOutOfOrdernessTimestampExtractor</code>、<code>AssignerWithPeriodicWatermarks</code>、<code>AssignerWithPunctuatedWatermarks</code> 这组旧 API 自 Flink 1.11 起废弃，并在 Flink 1.14 中被移除，新项目请使用 <code>WatermarkStrategy</code>：</p>
+<pre><code class="language-java">// Flink 1.11 之后推荐的写法：允许 5 秒乱序
+DataStream&lt;UserBehavior&gt; withWatermarks = dataStream.assignTimestampsAndWatermarks(
+        WatermarkStrategy.&lt;UserBehavior&gt;forBoundedOutOfOrderness(Duration.ofSeconds(5))
+                .withTimestampAssigner((event, recordTimestamp) -&gt; event.timestamp * 1000)
+);
+</code></pre>
+</blockquote>
+<p style="text-indent:2em">Event Time 的使用一定要指定数据源中的时间戳。 否则程序无法知道事件的 Event Time 是多少（数据源里的数据没有时间戳的话，就只能使用 Processing Time 了）。
+上面的例子中创建了一个看起来有点复杂的类，它实现的其实就是分配时间戳的接口。Flink 暴露了 <code>TimestampAssigner</code> 接口供我们实现，使我们可以自定义如何从事件数据中抽取时间戳。</p>
 <pre><code class="language-java">// 创建 execution environment
 final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 // 通过连接 socket 获取输入数据，这里连接到本地9000端口，如果9000端口已被占用，请换一个端口
 DataStream&lt;String&gt; text = env.socketTextStream(&quot;localhost&quot;, 9000, &quot;\n&quot;);
 text.assignTimestampsAndWatermarks(new MyAssigner())
 </code></pre>
-<p>MyAssigner 有两种类型</p>
+<p>自定义的时间戳分配器主要有两种类型。</p>
 <ol>
-<li>AssignerWithPeriodicWatermarks</li>
-<li>AssignerWithPunctuatedWatermarks<br>
-以上两个接口都继承自 TimestampAssigner。</li>
+<li><code>AssignerWithPeriodicWatermarks</code>：周期性地生成 Watermark（默认每 200ms 一次）。</li>
+<li><code>AssignerWithPunctuatedWatermarks</code>：根据数据自身间断性地生成 Watermark。</li>
 </ol>
+<p>以上两个接口都继承自 <code>TimestampAssigner</code>，因此都必须实现 <code>extractTimestamp()</code> 来抽取事件时间戳。</p>
 <h3 id="assigner-with-periodic-watermarks">Assigner with periodic watermarks</h3>
-<p>周期性的生成 watermark： 系统会周期性的将 watermark 插入到流中(水位线也<br>
-是一种特殊的事件!)。 默认周期是 200 毫秒。 可以使用<br>
-ExecutionConfig.setAutoWatermarkInterval()方法进行设置。</p>
+<p>周期性地生成 Watermark：系统会周期性地将 Watermark 插入到流中（水位线也是一种特殊的事件！）。默认周期是 200 毫秒，可以通过 <code>ExecutionConfig.setAutoWatermarkInterval()</code> 方法设置。</p>
 <pre><code class="language-java">StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime); // Flink 1.12 之前需要，之后可省略
 // 每隔 5 秒产生一个 watermark
-env.getConfig.setAutoWatermarkInterval(5000)
+env.getConfig().setAutoWatermarkInterval(5000);
 </code></pre>
 <p style="text-indent:2em">产生 watermark 的逻辑： 每隔 5 秒钟， Flink 会调用
 AssignerWithPeriodicWatermarks 的 getCurrentWatermark()方法。 如果方法返回一个
@@ -231,60 +232,73 @@ AssignerWithPeriodicWatermarks 的 getCurrentWatermark()方法。 如果方法�
 水位线是单调递增的。 如果方法返回的时间戳小于等于之前水位的时间戳， 则不会
 产生新的 watermark。</p>
 <p>例子， 自定义一个周期性的时间戳抽取：</p>
-<pre><code class="language-java">public class PeriodicAssigner extends
-AssignerWithPeriodicWatermarks&lt;SensorReading&gt; {
-    Long bound= 60 * 1000 // 延时为 1 分钟
-    Long maxTs = Long.MinValue // 观察到的最大时间戳
-    public Watermark  getCurrentWatermark() {
-        new Watermark(maxTs - bound)
-    } 
-    public void extractTimestamp(SensorReading r,Long previousTS) = {
-        maxTs = maxTs.max(r.timestamp)
-        r.timestamp
+<pre><code class="language-java">public class PeriodicAssigner extends AssignerWithPeriodicWatermarks&lt;SensorReading&gt; {
+    // 允许的最大延迟：1 分钟
+    private final long bound = 60 * 1000L;
+    // 观察到的最大时间戳
+    private long maxTs = Long.MIN_VALUE;
+
+    @Override
+    public Watermark getCurrentWatermark() {
+        return new Watermark(maxTs - bound);
+    }
+
+    @Override
+    public long extractTimestamp(SensorReading r, long previousTS) {
+        maxTs = Math.max(maxTs, r.timestamp);
+        return r.timestamp;
     }
 }
 </code></pre>
 <p style="text-indent:2em">一种简单的特殊情况是， 如果我们事先得知数据流的时间戳是单调递增的， 也就是说没有乱序， 那我们可以使用 assignAscendingTimestamps， 这个方法会直接使
 用数据的时间戳生成 watermark。</p>
-<pre><code class="language-java">DataStream&lt;SensorReading&gt; stream:  = ...
-DataStream&lt;SensorReading&gt; withTimestampsAndWatermarks = stream
-.assignAscendingTimestamps(e =&gt; e.timestamp)
-&gt;&gt; result: E(1), W(1), E(2), W(2), ...
+<pre><code class="language-java">// 数据流时间戳单调递增（无乱序）时的写法
+DataStream&lt;SensorReading&gt; stream = ...;
+DataStream&lt;SensorReading&gt; withTimestampsAndWatermarks =
+        stream.assignAscendingTimestamps(r -&gt; r.timestamp);
+// 输出形如：E(1), W(1), E(2), W(2), ...
 </code></pre>
 <p>而对于乱序数据流， 如果我们能大致估算出数据流中的事件的最大延迟时间，<br>
 就可以使用如下代码：</p>
-<pre><code class="language-java">DataStream&lt;SensorReading&gt; stream:  = ...
-DataStream&lt;SensorReading&gt; withTimestampsAndWatermarks = stream.assignTimestampsAndWatermarks(
-    new SensorTimeAssigner()
-) 
-public class SensorTimeAssigner extends
-BoundedOutOfOrdernessTimestampExtractor&lt;SensorReading&gt;(Time.seconds(5)) {
-    // 抽取时间戳
-    public Long  extractTimestamp(SensorReading r){
-        return r.timestamp
+<pre><code class="language-java">// 乱序数据流：允许最大 5 秒延迟
+DataStream&lt;SensorReading&gt; stream = ...;
+DataStream&lt;SensorReading&gt; withTimestampsAndWatermarks =
+        stream.assignTimestampsAndWatermarks(new SensorTimeAssigner());
+
+public class SensorTimeAssigner extends BoundedOutOfOrdernessTimestampExtractor&lt;SensorReading&gt; {
+    // 在构造函数中指定允许的最大乱序时间
+    public SensorTimeAssigner() {
+        super(Time.seconds(5));
+    }
+
+    @Override
+    public long extractTimestamp(SensorReading r) {
+        return r.timestamp;
     }
 }
-&gt;&gt; relust: E(10), W(0), E(8), E(7), E(11), W(1), ...
+// 输出形如：E(10), W(0), E(8), E(7), E(11), W(1), ...
 </code></pre>
 <h3 id="assigner-with-punctuated-watermarks">Assigner with punctuated watermarks</h3>
-<p style="text-indent:2em">间断式地生成 watermark。 和周期性生成的方式不同， 这种方式不是固定时间的，而是可以根据需要对每条数据进行筛选和处理。 直接上代码来举个例子， 我们只给
-sensor_1 的传感器的数据流插入 watermark：</p>
-<pre><code class="language-java">public class PunctuatedAssigner extends
-    AssignerWithPunctuatedWatermarks&lt;SensorReading&gt; {
-    Long bound=60 * 1000
-    public  Watermark checkAndGetNextWatermark(SensorReading r , Long extractedTS) {
-        if (r.id == &quot;sensor_1&quot;) {
-            new Watermark(extractedTS - bound)
-        } else {
-            null
-         }
-    } 
-    public  Long extractTimestamp(SensorReading r, Long previousTS){
-        return  r.timestamp
+<p>间断式（Punctuated）地生成 Watermark。与周期性方式不同，它不按固定时间间隔产生，而是可以根据需要对每条数据进行筛选和处理。下面举个例子：只给 sensor_1 这个传感器的数据流插入 Watermark。</p>
+<pre><code class="language-java">public class PunctuatedAssigner implements AssignerWithPunctuatedWatermarks&lt;SensorReading&gt; {
+    private final long bound = 60 * 1000L;
+
+    @Override
+    public Watermark checkAndGetNextWatermark(SensorReading r, long extractedTS) {
+        // 只给 sensor_1 的数据插入 Watermark，其余返回 null（表示不插入）
+        if (&quot;sensor_1&quot;.equals(r.id)) {
+            return new Watermark(extractedTS - bound);
+        }
+        return null;
+    }
+
+    @Override
+    public long extractTimestamp(SensorReading r, long previousTS) {
+        return r.timestamp;
     }
 }
 </code></pre>
-<h2 id="evnettime-在-window-中的使用">EventTime 在 window 中的使用</h2>
+<h2 id="eventtime-在-window-中的使用">EventTime 在 window 中的使用</h2>
 <h3 id="滚动窗口tumblingeventtimewindows">滚动窗口（TumblingEventTimeWindows）</h3>
 <pre><code class="language-java">public class EventTimeTumblingWindowAllDemo {
     public static void main(String[] args) throws Exception {
@@ -293,7 +307,7 @@ sensor_1 的传感器的数据流插入 watermark：</p>
         // 结果 ： 2&gt; 1
         //        3&gt; 2
         StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
-        // 老版本必须要设置时间标准 （1.20 之前的）
+        // 老版本（Flink 1.12 之前）必须设置时间语义，新版默认即为 EventTime
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         DataStreamSource&lt;String&gt; lines = env.socketTextStream(&quot;linux01&quot;, 8888);
        // flink里面的时间都精确到毫秒
@@ -302,14 +316,14 @@ sensor_1 的传感器的数据流插入 watermark：</p>
        // 一个窗口中的一个分区的水位线 = 当前窗口当前分区最大的 EventTime - 延迟时间     Time.seconds(0)
         SingleOutputStreamOperator&lt;String&gt; linesWithWaterMark = lines.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor&lt;String&gt;(Time.seconds(0)) {
 
-            private SimpleDateFormat dateFormat = new SimpleDateFormat(&quot;yyyy-MM-dd HH:mm:ss&quot;) ;
+            // 注意：SimpleDateFormat 不是线程安全、也不能被序列化，因此不能作为算子字段
             @Override
             public long extractTimestamp(String s) {
                 String strings = s.split(&quot;,&quot;)[0];
                 long timestamp = 0;
                 try {
-                    Date date = dateFormat.parse(strings);
-                    timestamp = date.getTime();
+                    // 在方法内部创建 SimpleDateFormat，避免序列化与线程安全问题
+                    timestamp = new SimpleDateFormat(&quot;yyyy-MM-dd HH:mm:ss&quot;).parse(strings).getTime();
                 } catch (ParseException e) {
                     e.printStackTrace();
                     timestamp = System.currentTimeMillis();
@@ -325,8 +339,8 @@ sensor_1 的传感器的数据流插入 watermark：</p>
                 return i;
             }
         });
-        //  划分窗口
-        AllWindowedStream&lt;Integer, TimeWindow&gt; window = nums.windowAll(TumblingProcessingTimeWindows.of(Time.seconds(5)));
+        // 划分窗口：这里必须是 EventTime 窗口，用 TumblingProcessingTimeWindows 会让上面抽取的时间戳和 Watermark 失效
+        AllWindowedStream&lt;Integer, TimeWindow&gt; window = nums.windowAll(TumblingEventTimeWindows.of(Time.seconds(5)));
         // 对 window 中的数据 进行聚合
         SingleOutputStreamOperator&lt;Integer&gt; sum = window.sum(0);
 
@@ -337,15 +351,15 @@ sensor_1 的传感器的数据流插入 watermark：</p>
     }
 }
 </code></pre>
-<p>结果是按照 Event Time 的时间窗口计算得出的， 而无关系统的时间（ 包括输入的快慢） 。</p>
+<p>结果是按照 Event Time 的时间窗口计算得出的，与系统时间和数据输入的快慢无关。</p>
 <h3 id="滑动窗口slidingeventtimewindows">滑动窗口（SlidingEventTimeWindows）</h3>
 <pre><code class="language-java">public class EventTimeSlidingWindowDemo {
     public static void main(String[] args) throws Exception {
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
-         //  两秒 调一次方法
+         // 每 1 秒调用一次 getCurrentWatermark()（默认 200ms）
         env.getConfig().setAutoWatermarkInterval(1000);
-        // 老版本必须要设置时间标准 （1.20 之前的）
+        // 老版本（Flink 1.12 之前）必须设置时间语义，新版默认即为 EventTime
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         DataStreamSource&lt;String&gt; lines = env.socketTextStream(&quot;linux01&quot;, 8888);
        // flink里面的时间都精确到毫秒
@@ -390,9 +404,9 @@ sensor_1 的传感器的数据流插入 watermark：</p>
     public static void main(String[] args) throws Exception {
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
-         //  两秒 调一次方法
+         // 每 1 秒调用一次 getCurrentWatermark()（默认 200ms）
         env.getConfig().setAutoWatermarkInterval(1000);
-        // 老版本必须要设置时间标准 （1.20 之前的）
+        // 老版本（Flink 1.12 之前）必须设置时间语义，新版默认即为 EventTime
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         DataStreamSource&lt;String&gt; lines = env.socketTextStream(&quot;linux01&quot;, 8888);
        // flink里面的时间都精确到毫秒
@@ -436,10 +450,17 @@ sensor_1 的传感器的数据流插入 watermark：</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
+<a href="#flink-%E4%B8%AD%E7%9A%84%E6%97%B6%E9%97%B4%E8%AF%AD%E4%B9%89">Flink 中的时间语义</a>
 <ul>
-<li><a href="#flink-%E4%B8%AD%E7%9A%84%E6%97%B6%E9%97%B4%E8%AF%AD%E4%B9%89">Flink 中的时间语义</a></li>
-<li><a href="#eventtime-%E7%9A%84%E5%BC%95%E5%85%A5">EventTime 的引入</a></li>
-<li><a href="#watermark">Watermark</a>
+</ul>
+</li>
+<li>
+<a href="#eventtime-%E7%9A%84%E5%BC%95%E5%85%A5">EventTime 的引入</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#watermark">Watermark</a>
 <ul>
 <li><a href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5">基本概念</a></li>
 <li><a href="#watermark-%E7%9A%84%E5%BC%95%E5%85%A5">Watermark 的引入</a></li>
@@ -447,13 +468,12 @@ sensor_1 的传感器的数据流插入 watermark：</p>
 <li><a href="#assigner-with-punctuated-watermarks">Assigner with punctuated watermarks</a></li>
 </ul>
 </li>
-<li><a href="#evnettime-%E5%9C%A8-window-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8">EventTime 在 window 中的使用</a>
+<li>
+<a href="#eventtime-%E5%9C%A8-window-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8">EventTime 在 window 中的使用</a>
 <ul>
 <li><a href="#%E6%BB%9A%E5%8A%A8%E7%AA%97%E5%8F%A3tumblingeventtimewindows">滚动窗口（TumblingEventTimeWindows）</a></li>
 <li><a href="#%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3slidingeventtimewindows">滑动窗口（SlidingEventTimeWindows）</a></li>
 <li><a href="#%E4%BC%9A%E8%AF%9D%E7%AA%97%E5%8F%A3eventtimesessionwindows">会话窗口（EventTimeSessionWindows）</a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
