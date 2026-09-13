@@ -169,7 +169,7 @@ Flink Table API 和 SQL 的实现上有80%左右的代码是公用的。作为�
 </thead>
 <tbody>
 <tr>
-<td>tab.groupBy(“word”).select(&quot;word,count(1) as count&quot;)</td>
+<td>tab.groupBy(&quot;word&quot;).select(&quot;word, count(1) as cnt&quot;)</td>
 <td>SELECT word,COUNT(*) AS cnt FROM MyTable GROUP BY word</td>
 </tr>
 </tbody>
@@ -235,6 +235,16 @@ Flink Table API 和 SQL 的实现上有80%左右的代码是公用的。作为�
 </li>
 </ul>
 <p>Flink Planner 和 Blink Planner 都会依赖于具体的 JavaAPI，也会依赖于具体的 Bridge，通过Bridge可以将 API 操作相应的转化为Scala的 DataStream，或者转化为JAVA的 DataStream</p>
+<blockquote>
+<p>版本差异提示：上面的两个 Planner 不要同时引入（类名相同会冲突），<code>flink-table-planner</code> 一般也只在写单元测试时才需要，生产代码用 <code>provided</code> 即可；另外 Java 业务代码只需要 <code>flink-table-api-java-bridge</code>，Scala 的 Bridge 可以不加。各版本的坐标对应关系如下：</p>
+</blockquote>
+<ul>
+<li><p>1.9 – 1.10：默认是旧 Planner <code>flink-table-planner_2.12</code>，要用 Blink 需显式引入 <code>flink-table-planner-blink_2.12</code>；</p></li>
+<li><p>1.11 – 1.13：Blink Planner 成为默认（<code>useBlinkPlanner()</code>），旧 Planner 被标记为废弃，并计划在 1.14 移除；</p></li>
+<li><p>1.14 起：旧 Planner 已被移除（同时 <code>BatchTableEnvironment</code> 与 DataSet 的互操作也不再支持），<code>flink-table-planner-blink</code> 改回原名 <code>flink-table-planner</code>，<code>flink-table-runtime-blink</code> 改名为 <code>flink-table-runtime</code>；</p></li>
+<li><p>1.15 起：推荐引入 <code>flink-table-planner-loader</code>（把 Planner 放在独立 ClassLoader 中加载，避免与用户依赖的 Scala 版本冲突），<code>flink-table-planner</code> 只在需要直接使用 Planner 内部类（例如自定义优化规则）时才引入；</p></li>
+<li><p>1.18：Java 侧可以完全不依赖 Scala，只引 <code>flink-table-api-java-bridge</code> + <code>flink-table-planner-loader</code>；<code>EnvironmentSettings.Builder#useOldPlanner()</code>、<code>useBlinkPlanner()</code> 这些方法已不再需要，直接创建环境即可。</p></li>
+</ul>
 <h3 id="22-程序结构">2.2 程序结构</h3>
 <blockquote>
 <p>参考：https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/common.html#structure-of-table-api-and-sql-programs</p>
@@ -304,6 +314,19 @@ import org.apache.flink.table.api.TableEnvironment;
 EnvironmentSettings bbSettings = EnvironmentSettings.newInstance().useBlinkPlanner().inBatchMode().build();
 TableEnvironment bbTableEnv = TableEnvironment.create(bbSettings);
 </code></pre>
+<h4 id="232-环境与-planner-的版本差异">2.3.2 环境与 Planner 的版本差异</h4>
+<p>1.14 之前，创建执行环境必须显式选择 Planner，而且流、批两套环境用的是不同的类；1.14 之后旧 Planner 被移除，<code>useOldPlanner()</code>、<code>useBlinkPlanner()</code> 也随之失去意义，流批两种模式可以统一成同一种写法：</p>
+<pre><code class="language-java">// 1.14+ 推荐写法：不再指定 Planner，靠 inStreamingMode / inBatchMode 区分流批
+EnvironmentSettings settings = EnvironmentSettings.newInstance()
+        .inStreamingMode()      // 批处理改为 inBatchMode()
+        .build();
+TableEnvironment tableEnv = TableEnvironment.create(settings);
+
+// 需要与 DataStream API 混用时，用 StreamTableEnvironment
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+StreamTableEnvironment streamTableEnv = StreamTableEnvironment.create(env);
+</code></pre>
+<p>注意：<code>TableEnvironment</code> 与 <code>StreamTableEnvironment</code> 的建表、查询方法基本通用，但 <code>fromDataStream()</code>、<code>toChangelogStream()</code> 这类与 DataStream 互转的方法只存在于 <code>StreamTableEnvironment</code> 上，混编程序里请直接使用后者。</p>
 <h4 id="233-创建表">2.3.3 创建表</h4>
 <pre><code class="language-java">// get a TableEnvironment
 TableEnvironment tableEnv = ...; // see &quot;Create a TableEnvironment&quot; section
@@ -390,7 +413,7 @@ result.executeInsert(&quot;CsvSinkTable&quot;);
 <blockquote>
 <p>参考：https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/common.html#integration-with-datastream-and-dataset-api</p>
 </blockquote>
-<h5 id="3361-从datastream创建视图">2.3.6.1 从 DataStream 创建视图</h5>
+<h5 id="2361-从datastream创建视图">2.3.6.1 从 DataStream 创建视图</h5>
 <pre><code class="language-java">Create a View from a DataStream or DataSet：
 
 // get StreamTableEnvironment
@@ -453,16 +476,34 @@ DataStream&lt;Tuple2&lt;String, Integer&gt;&gt; dsTuple =
 DataStream&lt;Tuple2&lt;Boolean, Row&gt;&gt; retractStream =
   tableEnv.toRetractStream(table, Row.class);
 </code></pre>
+<blockquote>
+<p>版本差异：<code>toAppendStream()</code> / <code>toRetractStream()</code> 自 1.13 起被标记为废弃，新代码应统一使用 <code>toChangelogStream()</code>。changelog 流里的每条 <code>Row</code> 都带一个 <code>RowKind</code>（<code>+I</code> 插入、<code>-U</code> 更新前、<code>+U</code> 更新后、<code>-D</code> 删除），它和动态表的四种变更一一对应，是 Table 与 DataStream 之间唯一能无损表达回撤的桥梁。</p>
+</blockquote>
+<pre><code class="language-java">StreamTableEnvironment tableEnv = ...; // see &quot;Create a TableEnvironment&quot; section
+
+// 交互式查询得到的结果表，按用户分组累计金额
+Table result = tableEnv.sqlQuery(
+    &quot;SELECT user_id, SUM(money) AS total_money FROM order_source GROUP BY user_id&quot;);
+
+// Table -&gt; DataStream：changelog 流
+DataStream&lt;Row&gt; changelogStream = tableEnv.toChangelogStream(result);
+
+// 若结果只会追加，可以显式声明期望的 ChangelogMode，
+// 这样一旦 SQL 产生 -U/+U，规划阶段就会报错而不是运行期才失败
+// tableEnv.toChangelogStream(result, Schema.newBuilder().build(), ChangelogMode.insertOnly());
+
+// DataStream（Row 带 RowKind） -&gt; Table
+Table table = tableEnv.fromChangelogStream(changelogStream);
+</code></pre>
 <h4 id="237-tableapi">2.3.7 TableAPI</h4>
 <blockquote>
 <p>参考：https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/tableApi.html</p>
 </blockquote>
-<figure data-type="image" tabindex="1"><img src=".%5CSnipaste_2023-04-12_10-13-06.png" alt="" loading="lazy"></figure>
+<p><img src="/post-assets/tloS_nSAM/01-table-api-sql-execution.svg" alt="Table API 与 SQL 的执行链路：SQL 文本或 Table API 调用经 TableEnvironment、逻辑计划、优化器、物理计划，最终由 Flink Runtime 执行并输出 Changelog 流"></p>
 <h4 id="238-sql">2.3.8 SQL</h4>
 <blockquote>
 <p>参考：https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/sql/</p>
 </blockquote>
-<figure data-type="image" tabindex="2"><img src=".%5CSnipaste_2023-04-12_10-13-24.png" alt="" loading="lazy"></figure>
 <h2 id="03-相关概念">03 相关概念</h2>
 <blockquote>
 <p>参考：https://ci.apache.org/projects/flink/flink-docs-release-1.12/dev/table/streaming/dynamic_tables.html</p>
@@ -496,13 +537,17 @@ DataStream&lt;Tuple2&lt;Boolean, Row&gt;&gt; retractStream =
 <figure data-type="image" tabindex="3"><img src="/post-images/1681541829648.png" alt="" loading="lazy"></figure>
 <p>该示意图描述了：我们通过建立动态表和连续查询来实现在无界流中的SQL操作。</p>
 <p>大家也可以看到，在Continuous上面有一个State，表示查询出来的结果会存储在State中，再下来Flink最终还是使用流来进行处理。</p>
+<p><img src="/post-assets/tloS_nSAM/02-dynamic-table-continuous-query.svg" alt="动态表与连续查询：无界流映射为动态表，连续查询长期运行并用 State 保存中间结果，结果按操作类型编码为 Changelog 流"></p>
 <p>所以，我们可以理解为Flink的Table API和SQL，是一个逻辑模型，通过该逻辑模型可以让我们的数据处理变得更加简单。</p>
 <figure data-type="image" tabindex="4"><img src="/post-images/1681541845694.png" alt="" loading="lazy"></figure>
 <figure data-type="image" tabindex="5"><img src="/post-images/1681541857678.png" alt="" loading="lazy"></figure>
 <h3 id="32-表与stream的转换">3.2 表与Stream的转换</h3>
 <h4 id="321-表中的update和delete">3.2.1 表中的Update和Delete</h4>
 <p>我们前面提到的表示不断地 Append，表的数据是一直累加的，因为表示对接Source的，Source是不会有update的，但如果我们编写了一个SQL。这个SQL看起来是这样的：</p>
-<pre><code class="language-sql">SELECT user, sum(money) FROM order GROUP BY user;
+<pre><code class="language-sql">SELECT `user`, SUM(money) AS total_money
+FROM t_order
+GROUP BY `user`;
+-- user、order 都是 SQL 保留字，作为表名/列名时必须用反引号包起来
 </code></pre>
 <p>当执行一条SQL语句之后，这条语句的结果还是一个表，因为在Flink中执行的SQL是Continuous Query，这个表的数据是不断变化的。新创建的表存在Update的情况。仔细看下下面的示例，例如：</p>
 <ul>
@@ -521,10 +566,16 @@ DataStream&lt;Tuple2&lt;Boolean, Row&gt;&gt; retractStream =
 </ul>
 <p>大家发现了吗，现在数据结果是有Update的，张三一开始是2000，但后面变成了2300。</p>
 <p>那还有删除的情况吗？有的，看下面这条SQL语句：</p>
-<pre><code class="language-sql">SELECT t1.`user`, SUM(t1.`money`) FROM t_order t1
-WHERE
-NOT EXISTS (SELECT T2.`user`AS TOTAL_MONEY FROM t_order t2 WHERE T2.`user` = T1.`user` GROUP BY t2.`user` HAVING SUM(T2.`money`) &gt; 3000)
-GROUP BY t1.`user`GROUP BY t1.`user`
+<pre><code class="language-sql">SELECT t1.`user`, SUM(t1.money) AS total_money
+FROM t_order t1
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM t_order t2
+    WHERE t2.`user` = t1.`user`
+    GROUP BY t2.`user`
+    HAVING SUM(t2.money) &gt; 3000
+)
+GROUP BY t1.`user`;
 </code></pre>
 <ul>
 <li>
@@ -601,57 +652,185 @@ GROUP BY t1.`user`GROUP BY t1.`user`
 <p>Upsert流是要求必须指定Primary Key的，因为Upsert操作是要有Key的，Upsert流针对UPDATE操作用一个UPSERT MESSAGE就可以描述，所以效率会更高。</p>
 <figure data-type="image" tabindex="7"><img src="/post-images/1681541899440.png" alt="" loading="lazy"></figure>
 
+<h3 id="33-时间属性与-watermark">3.3 时间属性与 WATERMARK</h3>
+<p>窗口、interval join、按时间去重这些能力都建立在「时间属性」之上。Flink SQL 里只有两种时间属性：事件时间（event time）和处理时间（processing time），它们都必须写在建表 DDL 中声明，声明之后才能像普通字段一样在 SQL 里使用。</p>
+<h4 id="331-事件时间与-watermark">3.3.1 事件时间与 WATERMARK</h4>
+<p>事件时间来自数据本身携带的时间戳，必须通过 <code>WATERMARK</code> 告诉 Flink「时间已经推进到哪里」，否则事件时间窗口永远不会触发：</p>
+<pre><code class="language-sql">CREATE TABLE click_source (
+    user_id  BIGINT,
+    url      STRING,
+    ts       TIMESTAMP(3),                          -- 事件时间字段，毫秒精度
+    -- 允许 5 秒乱序：水位线 = 观察到的最大事件时间 - 5 秒
+    WATERMARK FOR ts AS ts - INTERVAL '5' SECOND
+) WITH (
+    'connector'                    = 'kafka',
+    'topic'                        = 'clicks',
+    'properties.bootstrap.servers' = 'hadoop102:9092',
+    'properties.group.id'          = 'click-group',
+    'scan.startup.mode'            = 'latest-offset',
+    'format'                       = 'json'
+);
+</code></pre>
+<p>三个要点：</p>
+<ul>
+<li><p><code>WATERMARK FOR ts AS ...</code> 中的字段必须是 <code>TIMESTAMP(3)</code> 或 <code>TIMESTAMP_LTZ(3)</code> 类型，早期版本只支持 <code>TIMESTAMP(3)</code>；</p></li>
+<li><p>水位线相当于一个「事件时间时钟」，只有它越过窗口的结束时间，窗口才会触发计算，所以水位线的延迟公式直接决定了结果的延迟；</p></li>
+<li><p>水位线单调递增，比当前水位线更早到达的数据属于迟到数据，窗口聚合默认会丢弃它。</p></li>
+</ul>
+<h4 id="332-处理时间">3.3.2 处理时间</h4>
+<p>处理时间由计算节点在运行时生成，不需要数据自带时间戳，在 DDL 中声明成一个计算列即可：</p>
+<pre><code class="language-sql">CREATE TABLE order_source (
+    user_id   BIGINT,
+    money     DECIMAL(10, 2),
+    proc_time AS PROCTIME()      -- 处理时间属性，原始数据中不存在这个字段
+) WITH (
+    'connector'                    = 'kafka',
+    'topic'                        = 'orders',
+    'properties.bootstrap.servers' = 'hadoop102:9092',
+    'format'                       = 'json'
+);
+</code></pre>
+<p>两种时间属性怎么选：处理时间实现简单、不需要等待乱序数据，但结果不可重放（同一份数据重跑结果可能不同）；事件时间结果确定、可重放，代价是要维护水位线并容忍一定乱序。生产上的统计类需求优先选事件时间。</p>
+<blockquote>
+<p>时间戳也可以来自 DataStream：注册表时用 <code>fromDataStream(stream, $(&quot;ts&quot;).rowtime())</code> 声明行时间，用 <code>$(&quot;pt&quot;).proctime()</code> 声明处理时间，就不必再写 DDL。</p>
+</blockquote>
+<h3 id="34-窗口-tvf">3.4 窗口 TVF（TUMBLE / HOP / CUMULATE）</h3>
+<p>Flink 1.13 起，窗口统一用「窗口表值函数」（Windowing TVF）来表达：窗口函数先把流按时间切成带 <code>window_start</code>、<code>window_end</code> 两列的关系，再与主表连接，最后按窗口聚合。相比更早的 <code>GROUP BY TUMBLE(ts, INTERVAL '10' SECOND)</code> 写法（自 1.13 起被标记为废弃），TVF 的语义更清晰，也支持窗口 TopN、窗口 join 等扩展用法。</p>
+<p>三种窗口的语义差别：</p>
+<ul>
+<li><p><code>TUMBLE</code>（滚动窗口）：窗口等长且互不重叠，只有一个 <code>size</code> 参数，每条数据只属于一个窗口；</p></li>
+<li><p><code>HOP</code>（滑动窗口）：窗口等长但可以重叠，参数是 <code>slide</code> 和 <code>size</code>，<code>slide &lt; size</code> 时一条数据会属于多个窗口，常用于「每 5 秒看一眼最近 10 秒」；</p></li>
+<li><p><code>CUMULATE</code>（累积窗口）：窗口从起点按 <code>step</code> 逐步扩大，最大到 <code>size</code>，适合「每小时要一个统计值，但结果每分钟都在更新」的场景。</p></li>
+</ul>
+<p><img src="/post-assets/tloS_nSAM/03-window-tvf.svg" alt="窗口 TVF 三种窗口对比：TUMBLE 窗口不重叠、HOP 窗口重叠滑动、CUMULATE 窗口逐步累积扩大"></p>
+<p>以 3.3.1 节的 <code>click_source</code> 为例：</p>
+<pre><code class="language-sql">-- 事件时间滚动窗口：每 10 秒统计一次每个用户的点击量
+SELECT
+    user_id,
+    window_start,
+    window_end,
+    COUNT(*) AS click_cnt
+FROM TABLE(
+    TUMBLE(TABLE click_source, DESCRIPTOR(ts), INTERVAL '10' SECOND)
+)
+GROUP BY user_id, window_start, window_end;
+</code></pre>
+<pre><code class="language-sql">-- 滑动窗口：每 5 秒输出一次最近 10 秒的统计结果
+SELECT user_id, window_start, window_end, COUNT(*) AS click_cnt
+FROM TABLE(
+    HOP(TABLE click_source, DESCRIPTOR(ts), INTERVAL '5' SECOND, INTERVAL '10' SECOND)
+)
+GROUP BY user_id, window_start, window_end;
+</code></pre>
+<pre><code class="language-sql">-- 累积窗口：每 5 秒输出一次，窗口从 5 秒逐步累积到 15 秒
+SELECT user_id, window_start, window_end, COUNT(*) AS click_cnt
+FROM TABLE(
+    CUMULATE(TABLE click_source, DESCRIPTOR(ts), INTERVAL '5' SECOND, INTERVAL '15' SECOND)
+)
+GROUP BY user_id, window_start, window_end;
+</code></pre>
+<p>使用窗口 TVF 时有几个容易踩坑的地方：</p>
+<ul>
+<li><p><code>window_start</code>、<code>window_end</code> 必须同时出现在 <code>SELECT</code> 和 <code>GROUP BY</code> 中，否则 SQL 校验不通过；</p></li>
+<li><p>事件时间窗口用事件时间字段（<code>DESCRIPTOR(ts)</code>），处理时间窗口用 <code>DESCRIPTOR(proc_time)</code>，两者不能混用；</p></li>
+<li><p>窗口默认只在触发时输出一次，需要提前看到中间结果可以打开提前触发（<code>table.exec.emit.early-fire.enabled</code>）；</p></li>
+<li><p>除 TUMBLE / HOP / CUMULATE 外，Flink 还提供会话窗口 TVF <code>SESSION</code>：按活跃间隔切分，窗口大小不固定。</p></li>
+</ul>
+<h3 id="35-连接join">3.5 连接（Join）</h3>
+<p>流上的 join 比批复杂：数据永远不会「到齐」，Flink 只能把暂时匹配不上的数据放进状态里等对方到来。所以选择哪种 join，本质上是在回答两个问题——状态能留多久、要不要查外部系统。</p>
+<h4 id="351-regular-join">3.5.1 Regular Join（常规连接）</h4>
+<p>就是普通的 <code>JOIN</code>，两侧都可以是流，语义与批一致，但结果是回撤流：</p>
+<pre><code class="language-sql">SELECT o.order_id, o.user_id, u.user_name, o.money
+FROM order_stream AS o
+JOIN user_stream  AS u
+  ON o.user_id = u.user_id;
+</code></pre>
+<p>两侧的输入数据都要长期保存在状态里（默认永不过期），状态会随运行时间不断增长，因此线上必须配置状态 TTL，例如 <code>table.exec.state.ttl = 1 h</code>；TTL 太小又会丢掉本来可以匹配上的数据。另外 regular join 只支持等值连接条件，非等值连接只能写成 <code>CROSS JOIN</code> + <code>WHERE</code>，代价更高。</p>
+<h4 id="352-interval-join">3.5.2 Interval Join（区间连接）</h4>
+<p>给 join 加上时间区间约束，只保留区间内的数据，从而把「无限状态」压成「有限状态」：</p>
+<pre><code class="language-sql">SELECT o.order_id, o.user_id, o.money, p.pay_id
+FROM order_stream AS o,
+     pay_stream   AS p
+WHERE o.user_id = p.user_id
+  AND p.pay_time BETWEEN o.order_time - INTERVAL '5' MINUTE
+                     AND o.order_time + INTERVAL '5' MINUTE;
+</code></pre>
+<p>使用限制：两侧都必须有事件时间属性，并且至少有一个等值连接条件，处理时间表不支持 interval join。区间越窄状态越小，但超出区间的数据无法匹配，需要按业务能接受的延迟来确定区间大小。</p>
+<h4 id="353-lookup-join">3.5.3 Lookup Join（维表连接）</h4>
+<p>事实流 join 外部维表（MySQL、HBase、Redis 等）时，用 <code>FOR SYSTEM_TIME AS OF</code> 声明「按处理时间去查维表当前的数据」，维表不需要全量进入状态：</p>
+<pre><code class="language-sql">-- 维表：JDBC connector
+CREATE TABLE user_dim (
+    user_id   BIGINT,
+    user_name STRING,
+    PRIMARY KEY (user_id) NOT ENFORCED
+) WITH (
+    'connector'             = 'jdbc',
+    'url'                   = 'jdbc:mysql://hadoop102:3306/gmall',
+    'table-name'            = 'user_info',
+    'username'              = 'root',
+    'password'              = '123456',
+    'lookup.cache.max-rows' = '1000',
+    'lookup.cache.ttl'      = '1 min'
+);
+
+-- 事实表要带处理时间属性（见 3.3.2）
+SELECT o.order_id, o.user_id, d.user_name, o.money
+FROM order_source AS o
+JOIN user_dim FOR SYSTEM_TIME AS OF o.proc_time AS d
+  ON o.user_id = d.user_id;
+</code></pre>
+<p>要点：事实表必须有处理时间属性，连接条件必须是等值条件，维表 connector 必须实现 <code>LookupTableSource</code>；每条事实数据到来都会查一次维表，建议开启 <code>lookup.cache</code> 降低外部系统压力。lookup join 的输出是追加流——维表后来发生变化，已经输出的历史结果不会被回撤重算；如果维表本身是带版本的变化流、并且希望按事件时间取当时的历史版本，则要改用 temporal join（版本表 + <code>FOR SYSTEM_TIME AS OF</code> 事件时间字段）。</p>
+<h3 id="36-sql-与-datastream-互转">3.6 SQL 与 DataStream 互转</h3>
+<p>SQL 擅长表达统计逻辑，而 Source / Sink 和自定义算子仍然要用 DataStream API 写，两者的边界就是 <code>fromChangelogStream()</code> 与 <code>toChangelogStream()</code>。1.13 起这两个方法是 Table 与 DataStream 之间唯一推荐的桥梁，旧的 <code>toAppendStream()</code> / <code>toRetractStream()</code> 已经废弃。</p>
+<pre><code class="language-java">StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
+
+// DataStream -&gt; Table：注册成临时视图后即可用 SQL 查询
+DataStream&lt;Order&gt; orderStream = env.addSource(new OrderSource());
+tableEnv.createTemporaryView(&quot;order_source&quot;, orderStream);
+
+// SQL -&gt; Table
+Table result = tableEnv.sqlQuery(
+        &quot;SELECT user_id, SUM(money) AS total_money FROM order_source GROUP BY user_id&quot;);
+
+// Table -&gt; DataStream：changelog 流，每条 Row 带 RowKind
+DataStream&lt;Row&gt; changelogStream = tableEnv.toChangelogStream(result);
+changelogStream.print(&quot;changelog&quot;);
+
+// DataStream（Row 带 RowKind） -&gt; Table，继续用 SQL 处理
+Table table = tableEnv.fromChangelogStream(changelogStream);
+</code></pre>
+<p>两个常见问题：</p>
+<ul>
+<li><p>下游只接受追加流时，可以给 <code>toChangelogStream()</code> 显式传入期望的 <code>ChangelogMode</code>（<code>org.apache.flink.table.connector.ChangelogMode</code>），这样结果表一旦产生 <code>-U</code>/<code>+U</code>，规划阶段就会报错，而不是运行期才失败；</p></li>
+<li><p><code>fromChangelogStream()</code> 要求输入是带 <code>RowKind</code> 的 changelog 流（一般来自 <code>toChangelogStream()</code>，或实现了 changelog 语义的 connector），普通 POJO 流应先用 <code>fromDataStream()</code> 注册成表。</p></li>
+</ul>
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li><a href="#table-api-sql-%E4%BB%8B%E7%BB%8D">Table API &amp; SQL 介绍</a>
+<a href="#table-api-sql-%E4%BB%8B%E7%BB%8D">Table API &amp; SQL 介绍</a>
 <ul>
 <li><a href="#11-flink-table%E6%A8%A1%E5%9D%97">1.1 Flink Table模块</a></li>
 <li><a href="#12-table-api-sql%E7%89%B9%E7%82%B9">1.2 Table API &amp; SQL特点</a></li>
 <li><a href="#13-table-api-sql%E5%8F%91%E5%B1%95%E5%8E%86%E7%A8%8B">1.3 Table API&amp; SQL发展历程</a></li>
 </ul>
 </li>
-<li><a href="#03-%E5%BC%80%E5%8F%91%E5%87%86%E5%A4%87">03 开发准备</a>
+<li>
+<a href="#03-%E5%BC%80%E5%8F%91%E5%87%86%E5%A4%87">03 开发准备</a>
 <ul>
 <li><a href="#21-%E6%B7%BB%E5%8A%A0%E4%BE%9D%E8%B5%96">2.1 添加依赖</a></li>
 <li><a href="#22-%E7%A8%8B%E5%BA%8F%E7%BB%93%E6%9E%84">2.2 程序结构</a></li>
-<li><a href="#23-api">2.3 API</a>
-<ul>
-<li><a href="#231-%E8%8E%B7%E5%8F%96%E7%8E%AF%E5%A2%83">2.3.1 获取环境</a></li>
-<li><a href="#233-%E5%88%9B%E5%BB%BA%E8%A1%A8">2.3.3 创建表</a></li>
-<li><a href="#234-%E6%9F%A5%E8%AF%A2%E8%A1%A8">2.3.4 查询表</a></li>
-<li><a href="#235-%E5%86%99%E5%87%BA%E8%A1%A8">2.3.5 写出表</a></li>
-<li><a href="#236-%E4%B8%8Edatastream%E9%9B%86%E6%88%90">2.3.6 与DataStream集成</a>
-<ul>
-<li><a href="#3361-%E4%BB%8Edatastream%E5%88%9B%E5%BB%BA%E8%A7%86%E5%9B%BE">2.3.6.1 从 DataStream 创建视图</a></li>
-<li><a href="#2362-%E8%BD%AC%E6%8D%A2datastream%E5%88%B0%E8%A1%A8">2.3.6.2 转换DataStream到表</a></li>
-<li><a href="#2363-%E8%BD%AC%E6%8D%A2%E8%A1%A8%E5%88%B0datastream">2.3.6.3 转换表到DataStream</a></li>
+<li><a href="#23-api">2.3 API</a></li>
 </ul>
 </li>
-<li><a href="#237-tableapi">2.3.7 TableAPI</a></li>
-<li><a href="#238-sql">2.3.8 SQL</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#03-%E7%9B%B8%E5%85%B3%E6%A6%82%E5%BF%B5">03 相关概念</a>
+<li>
+<a href="#03-%E7%9B%B8%E5%85%B3%E6%A6%82%E5%BF%B5">03 相关概念</a>
 <ul>
 <li><a href="#31-%E5%8A%A8%E6%80%81%E8%A1%A8%E5%92%8C%E8%BF%9E%E7%BB%AD%E6%9F%A5%E8%AF%A2">3.1 动态表和连续查询</a></li>
-<li><a href="#32-%E8%A1%A8%E4%B8%8Estream%E7%9A%84%E8%BD%AC%E6%8D%A2">3.2 表与Stream的转换</a>
-<ul>
-<li><a href="#321-%E8%A1%A8%E4%B8%AD%E7%9A%84update%E5%92%8Cdelete">3.2.1 表中的Update和Delete</a></li>
-<li><a href="#322-%E5%AF%B9%E8%A1%A8%E7%9A%84%E7%BC%96%E7%A0%81%E6%93%8D%E4%BD%9C">3.2.2 对表的编码操作</a></li>
-<li><a href="#323-%E5%B0%86%E8%A1%A8%E8%BD%AC%E6%8D%A2%E4%B8%BA%E4%B8%89%E7%A7%8D%E4%B8%8D%E5%90%8C%E7%BC%96%E7%A0%81%E6%96%B9%E5%BC%8F%E7%9A%84%E6%B5%81">3.2.3 将表转换为三种不同编码方式的流</a>
-<ul>
-<li><a href="#3231-append-only%E6%B5%81">3.2.3.1 Append-only流</a></li>
-<li><a href="#3232-retract%E6%B5%81">3.2.3.2 Retract流</a></li>
-<li><a href="#3233-upsert%E6%B5%81">3.2.3.3 Upsert流</a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
+<li><a href="#32-%E8%A1%A8%E4%B8%8Estream%E7%9A%84%E8%BD%AC%E6%8D%A2">3.2 表与Stream的转换</a></li>
+<li><a href="#33-%E6%97%B6%E9%97%B4%E5%B1%9E%E6%80%A7%E4%B8%8E-watermark">3.3 时间属性与 WATERMARK</a></li>
+<li><a href="#34-%E7%AA%97%E5%8F%A3-tvf">3.4 窗口 TVF（TUMBLE / HOP / CUMULATE）</a></li>
+<li><a href="#35-%E8%BF%9E%E6%8E%A5join">3.5 连接（Join）</a></li>
+<li><a href="#36-sql-%E4%B8%8E-datastream-%E4%BA%92%E8%BD%AC">3.6 SQL 与 DataStream 互转</a></li>
 </ul>
 </li>
 </ul>
