@@ -126,7 +126,10 @@
           <img class="post-feature-header-image" src="/post-images/4WluurBt3.png" alt="封面图">
           </img>
           
-          <h2 id="代码示例">代码示例</h2>
+                    <h2 id="id-结构">雪花算法 64 位 ID 结构</h2>
+  <p>Snowflake 生成的 ID 是一个 64 位正整数，由 5 个位段拼接而成：最高 1 位是符号位，恒为 0，保证 ID 为正数；接着是 41 位毫秒级时间戳，以自定义起始时间 twepoch 为基准；然后是 5 位数据中心 ID 和 5 位机器 ID，合起来 10 位机器位，最多支持 1024 个节点；最低 12 位是同一毫秒内的自增序列号，取值范围 0~4095。</p>
+  <p><img src="/post-assets/4WluurBt3/01-snowflake-id.svg" alt="雪花算法 64 位 ID 结构"></p>
+<h2 id="代码示例">代码示例</h2>
   <pre><code class="language-java">package com.ihrm.common.utils;
 
 import java.lang.management.ManagementFactory;
@@ -134,6 +137,7 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 
 //雪花算法代码实现
+//64位ID结构：1位符号位(恒为0) + 41位毫秒时间戳 + 5位数据中心ID + 5位机器ID + 12位序列号
 public class IdWorker {
     // 时间起始标记点，作为基准，一般取系统的最近时间（一旦确定不能变动）
     private final static long twepoch = 1288834974657L;
@@ -155,6 +159,8 @@ public class IdWorker {
     private final static long timestampLeftShift = sequenceBits + workerIdBits + datacenterIdBits;
     //毫秒内自增最大值
     private final static long sequenceMask = -1L ^ (-1L &lt;&lt; sequenceBits);
+    // 允许容忍的最大时钟回拨毫秒数
+    private final static long maxBackwardMs = 5L;
     /* 上次生产id时间戳 */
     private static long lastTimestamp = -1L;
     // 0，并发控制
@@ -169,8 +175,8 @@ public class IdWorker {
     }
 
     /**
-     * @param workerId     工作机器ID
-     * @param datacenterId 序列号
+     * @param workerId     工作机器ID(0 ~ maxWorkerId)
+     * @param datacenterId 数据中心ID(0 ~ maxDatacenterId)
      */
     public IdWorker(long workerId, long datacenterId) {
         if (workerId &gt; maxWorkerId || workerId &lt; 0) {
@@ -191,7 +197,21 @@ public class IdWorker {
     public synchronized long nextId() {
         long timestamp = timeGen();
         if (timestamp &lt; lastTimestamp) {
-            throw new RuntimeException(String.format(&quot;Clock moved backwards. Refusing to generate id for %d milliseconds &quot;, lastTimestamp - timestamp));
+            long offset = lastTimestamp - timestamp;
+            if (offset &gt; maxBackwardMs) {
+                throw new RuntimeException(String.format(&quot;Clock moved backwards. Refusing to generate id for %d milliseconds&quot;, offset));
+            }
+            try {
+                // 小幅回拨：等待追平后继续生成
+                wait(offset &lt;&lt; 1);
+                timestamp = timeGen();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+            if (timestamp &lt; lastTimestamp) {
+                throw new RuntimeException(String.format(&quot;Clock moved backwards. Refusing to generate id for %d milliseconds&quot;, lastTimestamp - timestamp));
+            }
         }
         if (lastTimestamp == timestamp) {
             // 当前毫秒内，则+1
@@ -269,8 +289,22 @@ public class IdWorker {
     }
 }
 </code></pre>
+          <h3 id="位运算实现">位运算与 ID 组装</h3>
+  <p>位段之间靠移位和按位或组装：序列号占最低 12 位不左移，机器 ID 左移 12 位，数据中心 ID 左移 12+5=17 位，时间戳左移 12+5+5=22 位，最后按位或拼成完整 ID。sequenceMask 把序列号限制在 12 位内，同一毫秒内达到 4095 后由 tilNextMillis() 等待下一毫秒，避免进位污染时间戳位。</p>
+          <h3 id="时钟回拨处理">时钟回拨处理</h3>
+  <p>nextId() 是 synchronized 方法，用 lastTimestamp 记录上一次生成 ID 的毫秒值；若当前时间小于 lastTimestamp，说明发生了时钟回拨。原实现无论回拨多少都直接抛异常，这里补上小幅回拨的等待逻辑：回拨不超过 maxBackwardMs（5ms）时等待追平后继续生成，回拨过大则抛出异常拒绝生成，否则可能产生重复 ID。</p>
 
-          <div class="toc-container"></div>
+
+                    <div class="toc-container">
+            <div class="markdownIt-TOC">
+              <ul>
+                <li><a href="#id-%E7%BB%93%E6%9E%84">雪花算法 64 位 ID 结构</a></li>
+                <li><a href="#%E4%BB%A3%E7%A0%81%E7%A4%BA%E4%BE%8B">代码示例</a></li>
+                <li><a href="#%E4%BD%8D%E8%BF%90%E7%AE%97%E5%AE%9E%E7%8E%B0">位运算与 ID 组装</a></li>
+                <li><a href="#%E6%97%B6%E9%92%9F%E5%9B%9E%E6%8B%A8%E5%A4%84%E7%90%86">时钟回拨处理</a></li>
+              </ul>
+            </div>
+          </div>
           <hr />
           
             <nav class="post-pn">

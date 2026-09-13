@@ -139,7 +139,7 @@
 <p>第一项是拟合数据的能力，\(\Omega(\theta)\) 是正则项（L1/L2、树复杂度、Dropout），\(\lambda\) 控制强度。</p>
 <ul><li><strong>泛化</strong>：模型在未见数据上的表现。测试误差可分解为</li></ul>
 <div class="math-block">\[\mathbb{E}[\text{Err}] = \text{Bias}^2 + \text{Variance} + \text{Noise}\]</div>
-<ul><li><strong>欠拟合</strong>：偏差主导 —— 模型容量不足，训练误差就很高；&lt;ul&gt;&lt;li&gt;&lt;strong&gt;过拟合&lt;/strong&gt;：方差主导 —— 训练误差低但测试误差高；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;应对&lt;/strong&gt;：增加数据、数据增强、正则化、早停、集成、降低模型容量。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>没有免费午餐定理（No Free Lunch）</strong>：不存在对所有问题都最优的算法，模型选择必须结合数据分布与任务先验。</li></ul>
+<ul><li><strong>欠拟合</strong>：偏差主导 —— 模型容量不足，训练误差就很高；<ul><li><strong>过拟合</strong>：方差主导 —— 训练误差低但测试误差高；</li><li><strong>应对</strong>：增加数据、数据增强、正则化、早停、集成、降低模型容量。</li></ul></li><li><strong>没有免费午餐定理（No Free Lunch）</strong>：不存在对所有问题都最优的算法，模型选择必须结合数据分布与任务先验。</li></ul>
 <p><img src="/machine-learning-assets/52-overfit.svg" alt="模型复杂度与误差：容量-误差曲线"></p>
 <h3 id="13-数据准备与特征工程">1.3 数据准备与特征工程</h3>
 <p><img src="/machine-learning-assets/03-data-collection.svg" alt="数据采集流程"></p>
@@ -174,14 +174,16 @@
 <div class="math-block">\[F_m(x) = F_{m-1}(x) + \nu\, h_m(x), \qquad h_m \approx -\frac{\partial \mathcal{L}}{\partial F}\]</div>
 <p>\(\nu\) 为学习率（收缩系数），越小越稳但需要更多轮；配合行/列子采样可进一步抗过拟合。</p>
 <p><img src="/machine-learning-assets/70-gradient-boosting.svg" alt="梯度提升：串行加法模型"></p>
-<ul><li><strong>三大工程实现对比</strong>：</li></ul>
-<p>| 维度 | XGBoost | LightGBM | CatBoost |</p>
-<p>| --- | --- | --- | --- |</p>
-<p>| 分裂策略 | 预排序 + 近似分位 | 直方图 + Leaf-wise（带深度限制） | 对称/遗忘树 + 有序提升 |</p>
-<p>| 速度 | 中 | 快（大数据集尤佳） | 中 |</p>
-<p>| 类别特征 | 需手动编码 | 原生支持 | 原生支持（目标统计，抗泄漏） |</p>
-<p>| 强项 | 精度与生态成熟 | 大规模、低内存 | 类别特征多、小数据抗过拟合 |</p>
-<p>| 主要风险 | 内存占用高 | 叶生长过深易过拟合 | 训练相对慢 |</p>
+<p><strong>三大工程实现对比</strong></p>
+<table class="table table-bordered table-sm post-table">
+<thead><tr><th>维度</th><th>XGBoost</th><th>LightGBM</th><th>CatBoost</th></tr></thead>
+<tbody>
+<tr><td>分裂策略</td><td>精确贪心（预排序）+ 近似分位；2.0 起默认直方图</td><td>直方图 + Leaf-wise（带深度限制）</td><td>对称/遗忘树 + 有序提升</td></tr>
+<tr><td>速度</td><td>中</td><td>快（大数据集尤佳）</td><td>中</td></tr>
+<tr><td>类别特征</td><td>需手动编码</td><td>原生支持</td><td>原生支持（目标统计，抗泄漏）</td></tr>
+<tr><td>强项</td><td>精度与生态成熟</td><td>大规模、低内存</td><td>类别特征多、小数据抗过拟合</td></tr>
+<tr><td>主要风险</td><td>内存占用高</td><td>叶生长过深易过拟合</td><td>训练相对慢</td></tr>
+</tbody></table>
 <ul><li><strong>2025 现状</strong>：结构化/表格数据上 GBDT 仍是<strong>默认最强基线</strong>，通常优于同量级深度模型；实践中常与神经网络融合或作为特征工程后的最终模型。</li></ul>
 <h3 id="25-朴素贝叶斯">2.5 朴素贝叶斯</h3>
 <ul><li>假设特征在给定类别下<strong>条件独立</strong>：</li></ul>
@@ -233,7 +235,7 @@
 <p>不依赖人工标注，从数据自身构造监督信号，学到的表示可迁移到下游任务。</p>
 <ul><li><strong>对比学习</strong>：拉近正样本对、推远负样本对，常用 InfoNCE 损失</li></ul>
 <div class="math-block">\[\mathcal{L} = -\log \frac{\exp\big(\text{sim}(z_i, z_i^+) / \tau\big)}{\sum_{j} \exp\big(\text{sim}(z_i, z_j) / \tau\big)}\]</div>
-<ul><li>代表：<strong>SimCLR</strong>（大 batch + 强增强）、<strong>MoCo</strong>（动量编码器 + 队列，解耦 batch 大小）、<strong>BYOL / SimSiam</strong>（无负样本，靠预测器与非对称结构防塌缩）、<strong>SwAV</strong>（聚类分配）。&lt;ul&gt;&lt;li&gt;关键要素：数据增强策略、温度系数 \(\tau\)、负样本数量与质量、大批量训练。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>掩码建模</strong>：遮住部分输入并重建。&lt;ul&gt;&lt;li&gt;&lt;strong&gt;MAE&lt;/strong&gt;：只编码 25% 可见 patch，训练效率高，ViT-Huge 在 ImageNet-1K 上纯自监督达 87.8% Top-1；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;BEiT / SimMIM&lt;/strong&gt;：预测离散 token 或原始像素；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;BERT&lt;/strong&gt;：NLP 侧的掩码语言建模（MLM）。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>自蒸馏</strong>：<strong>DINO / DINOv2</strong>（1.42 亿张图像上预训练，学生-教师自蒸馏 + 多裁剪，特征无需微调即可用于分割与深度估计）、iBOT。</li><li><strong>2025 趋势</strong>：自监督预训练已是视觉与多模态的默认起点；对比学习重心从"图像-图像"转向"图像-文本"（CLIP 系）与多模态对齐。</li></ul>
+<ul><li>代表：<strong>SimCLR</strong>（大 batch + 强增强）、<strong>MoCo</strong>（动量编码器 + 队列，解耦 batch 大小）、<strong>BYOL / SimSiam</strong>（无负样本，靠预测器与非对称结构防塌缩）、<strong>SwAV</strong>（聚类分配）。<ul><li>关键要素：数据增强策略、温度系数 \(\tau\)、负样本数量与质量、大批量训练。</li></ul></li><li><strong>掩码建模</strong>：遮住部分输入并重建。<ul><li><strong>MAE</strong>：只编码 25% 可见 patch，训练效率高，ViT-Huge 在 ImageNet-1K 上纯自监督达 87.8% Top-1；</li><li><strong>BEiT / SimMIM</strong>：预测离散 token 或原始像素；</li><li><strong>BERT</strong>：NLP 侧的掩码语言建模（MLM）。</li></ul></li><li><strong>自蒸馏</strong>：<strong>DINO / DINOv2</strong>（1.42 亿张图像上预训练，学生-教师自蒸馏 + 多裁剪，特征无需微调即可用于分割与深度估计）、iBOT。</li><li><strong>2025 趋势</strong>：自监督预训练已是视觉与多模态的默认起点；对比学习重心从"图像-图像"转向"图像-文本"（CLIP 系）与多模态对齐。</li></ul>
 <hr>
 <h2 id="4-半监督学习">4. 半监督学习</h2>
 <p>结合少量标注与大量无标注数据，缓解标注成本。</p>
@@ -246,7 +248,7 @@
 <p><img src="/machine-learning-assets/71-mdp-loop.svg" alt="MDP：智能体—环境交互循环"></p>
 <h3 id="51-核心概念">5.1 核心概念</h3>
 <p><img src="/machine-learning-assets/30-rl-environment.svg" alt="强化学习的环境与交互轨迹"></p>
-<ul><li><strong>Agent（智能体）</strong>：学习与决策的主体，如游戏角色、机器人、LLM 本身。</li><li><strong>Environment（环境）</strong>：智能体所处世界，如棋盘、3D 城市、用户。</li><li><strong>State（状态）\(s\)</strong>：环境在某一时刻的完整描述，如棋盘布局。&lt;ul&gt;&lt;li&gt;状态转移函数：\(s_{t+1} = f(s_t, a_t)\)，描述动作如何改变状态；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;马尔可夫性&lt;/strong&gt;：\(P(s_{t+1}\mid s_t, a_t) = P(s_{t+1}\mid s_1,a_1,\dots,s_t,a_t)\)，即"无记忆性"；&lt;/li&gt;&lt;li&gt;部分可观测时用观测 \(o_t\) 建模为 &lt;strong&gt;POMDP&lt;/strong&gt;。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>Action（动作）\(a\)</strong>：可执行操作集合。&lt;ul&gt;&lt;li&gt;&lt;strong&gt;离散&lt;/strong&gt;动作空间（棋子移动方向）便于穷举；&lt;strong&gt;连续&lt;/strong&gt;动作空间（方向盘角度）需要策略网络直接输出。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>Reward（奖励）\(r\)</strong>：&lt;ul&gt;&lt;li&gt;即时奖励 \(R_{t+1}\)：单步反馈信号；&lt;/li&gt;&lt;li&gt;累积回报 \(G_t = \sum_{k=0}^{\infty}\gamma^k R_{t+k+1}\)，\(\gamma \in [0,1)\) 为折扣因子；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;稀疏奖励&lt;/strong&gt;问题：长期任务中有效反馈极少（如航天器对接），需奖励塑形、内在激励、课程学习。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>Policy（策略）\(\pi\)</strong>：\(\pi(a\mid s)\) 表示在状态 \(s\) 下选择动作 \(a\) 的概率。&lt;ul&gt;&lt;li&gt;确定性策略 \(a = \mu_\theta(s)\)：高效、无探索，适合连续控制（DDPG、TD3）；&lt;/li&gt;&lt;li&gt;随机性策略 \(\pi_\theta(a\mid s)\)：具备探索能力，适合离散动作与探索-利用平衡。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>Value Function（价值函数）</strong>：</li></ul>
+<ul><li><strong>Agent（智能体）</strong>：学习与决策的主体，如游戏角色、机器人、LLM 本身。</li><li><strong>Environment（环境）</strong>：智能体所处世界，如棋盘、3D 城市、用户。</li><li><strong>State（状态）\(s\)</strong>：环境在某一时刻的完整描述，如棋盘布局。<ul><li>状态转移函数：\(s_{t+1} = f(s_t, a_t)\)，描述动作如何改变状态；</li><li><strong>马尔可夫性</strong>：\(P(s_{t+1}\mid s_t, a_t) = P(s_{t+1}\mid s_1,a_1,\dots,s_t,a_t)\)，即"无记忆性"；</li><li>部分可观测时用观测 \(o_t\) 建模为 <strong>POMDP</strong>。</li></ul></li><li><strong>Action（动作）\(a\)</strong>：可执行操作集合。<ul><li><strong>离散</strong>动作空间（棋子移动方向）便于穷举；<strong>连续</strong>动作空间（方向盘角度）需要策略网络直接输出。</li></ul></li><li><strong>Reward（奖励）\(r\)</strong>：<ul><li>即时奖励 \(R_{t+1}\)：单步反馈信号；</li><li>累积回报 \(G_t = \sum_{k=0}^{\infty}\gamma^k R_{t+k+1}\)，\(\gamma \in [0,1)\) 为折扣因子；</li><li><strong>稀疏奖励</strong>问题：长期任务中有效反馈极少（如航天器对接），需奖励塑形、内在激励、课程学习。</li></ul></li><li><strong>Policy（策略）\(\pi\)</strong>：\(\pi(a\mid s)\) 表示在状态 \(s\) 下选择动作 \(a\) 的概率。<ul><li>确定性策略 \(a = \mu_\theta(s)\)：高效、无探索，适合连续控制（DDPG、TD3）；</li><li>随机性策略 \(\pi_\theta(a\mid s)\)：具备探索能力，适合离散动作与探索-利用平衡。</li></ul></li><li><strong>Value Function（价值函数）</strong>：</li></ul>
 <div class="math-block">\[V_\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s], \qquad Q_\pi(s,a) = \mathbb{E}_\pi[G_t \mid s_t = s, a_t = a]\]</div>
 <div class="math-block">\[A_\pi(s,a) = Q_\pi(s,a) - V_\pi(s) \quad (\text{优势函数})\]</div>
 <ul><li><strong>贝尔曼方程</strong>：价值函数的递归关系，是动态规划与 TD 学习的理论基础。</li></ul>
@@ -275,14 +277,14 @@
 <ul><li><strong>SARSA</strong>：<strong>On-policy</strong>，用当前策略实际采取的下一步动作更新：</li></ul>
 <div class="math-block">\[Q(s,a) \leftarrow Q(s,a) + \alpha\big[r + \gamma Q(s',a') - Q(s,a)\big]\]</div>
 <p>更保守、更稳，但收敛到的是当前策略的价值。</p>
-<ul><li><strong>DQN</strong>：Q-learning 的深度版本，用神经网络近似 \(Q\)，两大稳定机制：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;经验回放&lt;/strong&gt;：缓存 \((s,a,r,s')\) 随机采样 mini-batch，打破时序相关性、提高利用率。改进 &lt;strong&gt;PER&lt;/strong&gt; 按 TD 误差加权采样 \(P(i) \propto |\delta_i|^\alpha\) 并用重要性采样纠偏。&lt;/li&gt;&lt;li&gt;&lt;strong&gt;目标网络&lt;/strong&gt;：参数定期从主网络复制、期间冻结，目标值&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>DQN</strong>：Q-learning 的深度版本，用神经网络近似 \(Q\)，两大稳定机制：<ul><li><strong>经验回放</strong>：缓存 \((s,a,r,s')\) 随机采样 mini-batch，打破时序相关性、提高利用率。改进 <strong>PER</strong> 按 TD 误差加权采样 \(P(i) \propto |\delta_i|^\alpha\) 并用重要性采样纠偏。</li><li><strong>目标网络</strong>：参数定期从主网络复制、期间冻结，TD 目标改由它计算：</li></ul></li></ul>
 <div class="math-block">\[y = r + \gamma \max_{a'} Q_{\text{target}}(s', a')\]</div>
-<p>避免"追逐移动目标"导致震荡。</p>
-<ul><li><strong>DQN 改进族</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Double DQN&lt;/strong&gt;（解决 Q 值&lt;strong&gt;高估&lt;/strong&gt;，分离动作选择与价值评估）：&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<p>用慢更新的目标网络给出 TD 目标，避免"追逐移动目标"导致训练震荡。</p>
+<ul><li><strong>DQN 改进族</strong>：<ul><li><strong>Double DQN</strong>（解决 Q 值<strong>高估</strong>，分离动作选择与价值评估）：</li></ul></li></ul>
 <div class="math-block">\[y = r + \gamma\, Q_{\text{target}}\big(s', \arg\max_{a'} Q_{\text{main}}(s', a')\big)\]</div>
 <ul><li><strong>Dueling DQN</strong>（分解状态价值与动作优势）：</li></ul>
 <div class="math-block">\[Q(s,a) = V(s) + \Big(A(s,a) - \tfrac{1}{|\mathcal{A}|}\sum_{a'} A(s,a')\Big)\]</div>
-<ul><li><strong>多步学习</strong>：\(y = \sum_{k=0}^{n-1}\gamma^k r_{t+k} + \gamma^n \max_{a'}Q(s_{t+n},a')\)，加速奖励传播。&lt;ul&gt;&lt;li&gt;&lt;strong&gt;分布式 DQN&lt;/strong&gt;（C51 / QR-DQN / IQN）：建模回报&lt;strong&gt;分布&lt;/strong&gt;而非期望，增强不确定性表达。&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Noisy Net&lt;/strong&gt;：在网络参数上加噪，替代 \(\varepsilon\)-greedy 实现状态相关的探索。&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Rainbow&lt;/strong&gt;：整合上述改进，是离散动作 DQN 系列的集大成者。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>多步学习</strong>：\(y = \sum_{k=0}^{n-1}\gamma^k r_{t+k} + \gamma^n \max_{a'}Q(s_{t+n},a')\)，加速奖励传播。<ul><li><strong>分布式 DQN</strong>（C51 / QR-DQN / IQN）：建模回报<strong>分布</strong>而非期望，增强不确定性表达。</li><li><strong>Noisy Net</strong>：在网络参数上加噪，替代 \(\varepsilon\)-greedy 实现状态相关的探索。</li><li><strong>Rainbow</strong>：整合上述改进，是离散动作 DQN 系列的集大成者。</li></ul></li></ul>
 <h3 id="54-策略学习policy-based">5.4 策略学习（Policy-Based）</h3>
 <p>直接参数化策略并优化期望回报 \(J(\theta) = \mathbb{E}_{\tau\sim\pi_\theta}[G(\tau)]\)，由<strong>策略梯度定理</strong>：</p>
 <div class="math-block">\[\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a_t\mid s_t)\cdot \hat{A}_t\big]\]</div>
@@ -290,9 +292,9 @@
 <ul><li><strong>REINFORCE</strong>：以整条轨迹的回报 \(G_t\) 为权重的蒙特卡洛策略梯度，无偏但方差极大。</li><li><strong>A3C</strong>：多线程智能体并行探索、异步更新全局参数，用优势函数减方差。</li><li><strong>A2C</strong>：A3C 的同步版本，集中式批量更新，实现更简单、GPU 利用率更高。</li><li><strong>PPO</strong>：当前最通用基线，用重要性采样比加<strong>裁剪</strong>限制更新幅度：</li></ul>
 <div class="math-block">\[r_t(\theta) = \frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\text{old}}}(a_t\mid s_t)}, \qquad \mathcal{L}^{\text{CLIP}} = \mathbb{E}\Big[\min\big(r_t\hat{A}_t,\ \text{clip}(r_t, 1-\epsilon, 1+\epsilon)\hat{A}_t\big)\Big]\]</div>
 <p>常配 GAE 优势估计、价值损失与熵正则。</p>
-<ul><li><strong>连续控制三件套</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;DDPG&lt;/strong&gt;：确定性策略 + Q-learning（off-policy），加噪声探索；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;TD3&lt;/strong&gt;：双 Critic 抑制高估 + 延迟策略更新 + 目标动作平滑；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;SAC&lt;/strong&gt;：最大熵 RL，目标含熵项 \(\mathbb{E}\big[\sum_t \gamma^t\big(r_t + \alpha\mathcal{H}(\pi(\cdot\mid s_t))\big)\big]\)，样本效率与稳定性俱佳。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>信赖域方法</strong>：TRPO（KL 约束）、自然策略梯度（Fisher 信息矩阵）；PPO 是其"廉价近似"。</li></ul>
+<ul><li><strong>连续控制三件套</strong>：<ul><li><strong>DDPG</strong>：确定性策略 + Q-learning（off-policy），加噪声探索；</li><li><strong>TD3</strong>：双 Critic 抑制高估 + 延迟策略更新 + 目标动作平滑；</li><li><strong>SAC</strong>：最大熵 RL，目标含熵项 \(\mathbb{E}\big[\sum_t \gamma^t\big(r_t + \alpha\mathcal{H}(\pi(\cdot\mid s_t))\big)\big]\)，样本效率与稳定性俱佳。</li></ul></li><li><strong>信赖域方法</strong>：TRPO（KL 约束）、自然策略梯度（Fisher 信息矩阵）；PPO 是其"廉价近似"。</li></ul>
 <h3 id="55-离线强化学习offline-rl与前沿方向">5.5 离线强化学习（Offline RL）与前沿方向</h3>
-<ul><li><strong>离线 RL / Batch RL</strong>：只能从固定数据集学习，禁止在线交互（医疗、金融、推荐）。核心难题是<strong>分布外（OOD）动作的外推误差</strong>。&lt;ul&gt;&lt;li&gt;代表算法：BCQ、&lt;strong&gt;CQL&lt;/strong&gt;（保守 Q 学习，压低 OOD 动作价值）、&lt;strong&gt;IQL&lt;/strong&gt;（隐式 Q 学习，避免查询 OOD 动作）、TD3+BC、&lt;strong&gt;Decision Transformer&lt;/strong&gt;（把 RL 变成序列建模）。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>基于模型的 RL</strong>：Dreamer 系列（在潜空间中"想象" rollout）、MuZero（学隐式动力学 + MCTS），样本效率远高于 model-free。</li><li><strong>多智能体 RL（MARL）</strong>：MADDPG、QMIX、MAPPO；难点在非平稳性与信用分配。</li><li><strong>探索机制</strong>：内在奖励（ICM、RND）、计数法、熵正则、汤普森采样。</li><li><strong>模仿学习</strong>：行为克隆（BC）、逆强化学习（IRL）、GAIL。</li><li><strong>RL + 大模型</strong>：见 <a href="#753-偏好对齐rlhf--dpo--grpo">§7.5.3</a>，RLHF/DPO/GRPO 已成为 LLM 对齐与推理能力提升的标准工具。</li></ul>
+<ul><li><strong>离线 RL / Batch RL</strong>：只能从固定数据集学习，禁止在线交互（医疗、金融、推荐）。核心难题是<strong>分布外（OOD）动作的外推误差</strong>。<ul><li>代表算法：BCQ、<strong>CQL</strong>（保守 Q 学习，压低 OOD 动作价值）、<strong>IQL</strong>（隐式 Q 学习，避免查询 OOD 动作）、TD3+BC、<strong>Decision Transformer</strong>（把 RL 变成序列建模）。</li></ul></li><li><strong>基于模型的 RL</strong>：Dreamer 系列（在潜空间中"想象" rollout）、MuZero（学隐式动力学 + MCTS），样本效率远高于 model-free。</li><li><strong>多智能体 RL（MARL）</strong>：MADDPG、QMIX、MAPPO；难点在非平稳性与信用分配。</li><li><strong>探索机制</strong>：内在奖励（ICM、RND）、计数法、熵正则、汤普森采样。</li><li><strong>模仿学习</strong>：行为克隆（BC）、逆强化学习（IRL）、GAIL。</li><li><strong>RL + 大模型</strong>：见 <a href="#753-偏好对齐rlhf-dpo-grpo">§7.5.3</a>，RLHF/DPO/GRPO 已成为 LLM 对齐与推理能力提升的标准工具。</li></ul>
 <h3 id="56-典型应用">5.6 典型应用</h3>
 <ul><li><strong>游戏与博弈</strong>：Atari（DQN）、围棋（AlphaGo/AlphaZero）、星际争霸（AlphaStar）、Dota（OpenAI Five）。</li><li><strong>机器人</strong>：抓取、 locomotion、灵巧操作；仿真到现实（Sim2Real）迁移。</li><li><strong>推荐与广告</strong>：把用户反馈作为奖励，做长期价值优化（与 bandit 问题衔接）。</li><li><strong>系统优化</strong>：数据中心制冷（DeepMind）、芯片布局、编译器优化、网络调度。</li><li><strong>大模型对齐与推理</strong>：见 §7.5.3、§7.6。</li></ul>
 <hr>
@@ -305,10 +307,10 @@
 <p><img src="/machine-learning-assets/42-forward.svg" alt="前向传播"></p>
 <p><img src="/machine-learning-assets/43-computegraph.svg" alt="计算图与反向传播"></p>
 <p><img src="/machine-learning-assets/41-mlp.svg" alt="多层感知器结构"></p>
-<ul><li><strong>训练技巧</strong>：&lt;ul&gt;&lt;li&gt;权重初始化：Xavier/Glorot（tanh）、He（ReLU）；&lt;/li&gt;&lt;li&gt;归一化：BatchNorm、&lt;strong&gt;LayerNorm&lt;/strong&gt;（Transformer 必备）、RMSNorm、GroupNorm；&lt;/li&gt;&lt;li&gt;正则化：Dropout、权重衰减、Label Smoothing、数据增强、早停；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;残差连接&lt;/strong&gt;（ResNet）解决深层网络的退化问题；&lt;/li&gt;&lt;li&gt;优化器：SGD+Momentum、Adam、&lt;strong&gt;AdamW&lt;/strong&gt;（解耦权重衰减）、LAMB（超大 batch）、Lion；&lt;/li&gt;&lt;li&gt;学习率调度：Warmup + Cosine/Linear Decay、OneCycle、ReduceLROnPlateau。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>其他经典网络</strong>：Hopfield 网络（联想记忆）、自组织映射 SOM（拓扑保持的无监督聚类）、学习矢量量化 LVQ。</li></ul>
+<ul><li><strong>训练技巧</strong>：<ul><li>权重初始化：Xavier/Glorot（tanh）、He（ReLU）；</li><li>归一化：BatchNorm、<strong>LayerNorm</strong>（Transformer 必备）、RMSNorm、GroupNorm；</li><li>正则化：Dropout、权重衰减、Label Smoothing、数据增强、早停；</li><li><strong>残差连接</strong>（ResNet）解决深层网络的退化问题；</li><li>优化器：SGD+Momentum、Adam、<strong>AdamW</strong>（解耦权重衰减）、LAMB（超大 batch）、Lion；</li><li>学习率调度：Warmup + Cosine/Linear Decay、OneCycle、ReduceLROnPlateau。</li></ul></li><li><strong>其他经典网络</strong>：Hopfield 网络（联想记忆）、自组织映射 SOM（拓扑保持的无监督聚类）、学习矢量量化 LVQ。</li></ul>
 <p><img src="/machine-learning-assets/05-optimization.svg" alt="优化问题的几何直觉：凸与非凸、鞍点与局部极小"></p>
 <h3 id="62-卷积神经网络-cnn">6.2 卷积神经网络 CNN</h3>
-<ul><li><strong>核心组件</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;卷积层&lt;/strong&gt;：卷积核滑动提取局部特征，具备&lt;strong&gt;局部连接、权值共享、平移等变性&lt;/strong&gt;；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;池化层&lt;/strong&gt;：下采样降低分辨率与计算量，扩大感受野；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;全连接层&lt;/strong&gt;：整合特征输出预测。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>核心组件</strong>：<ul><li><strong>卷积层</strong>：卷积核滑动提取局部特征，具备<strong>局部连接、权值共享、平移等变性</strong>；</li><li><strong>池化层</strong>：下采样降低分辨率与计算量，扩大感受野；</li><li><strong>全连接层</strong>：整合特征输出预测。</li></ul></li></ul>
 <p><img src="/machine-learning-assets/06-pooling.svg" alt="池化操作"></p>
 <ul><li><strong>感受野</strong>：多层小卷积核（如 3×3）堆叠可在同等参数下获得更大感受野与更强非线性。</li><li><strong>经典架构演进</strong>：LeNet → AlexNet → VGG → <strong>ResNet</strong>（残差连接，深度突破百层）→ Inception → DenseNet → EfficientNet（复合缩放）→ ConvNeXt（CNN 的现代化改造）→ <strong>ViT/Swin</strong>（Transformer 进入视觉）。</li></ul>
 <p><img src="/machine-learning-assets/44-lenet.svg" alt="LeNet 结构"></p>
@@ -319,7 +321,7 @@
 <h3 id="63-循环神经网络与序列建模">6.3 循环神经网络与序列建模</h3>
 <ul><li><strong>基本结构</strong>：\(h_t = \phi(W_h h_{t-1} + W_x x_t + b)\)，输出 \(y_t = g(W_o h_t)\)；参数在时间上共享。</li></ul>
 <p><img src="/machine-learning-assets/48-rnn.svg" alt="RNN 展开结构"></p>
-<ul><li><strong>问题</strong>：长序列上梯度消失/爆炸（可用梯度裁剪缓解），难以捕捉长距离依赖。</li><li><strong>门控变体</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;LSTM&lt;/strong&gt;：遗忘门 \(f_t\)、输入门 \(i_t\)、输出门 \(o_t\) 与细胞状态 \(C_t\) 控制信息流：&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>问题</strong>：长序列上梯度消失/爆炸（可用梯度裁剪缓解），难以捕捉长距离依赖。</li><li><strong>门控变体</strong>：<ul><li><strong>LSTM</strong>：遗忘门 \(f_t\)、输入门 \(i_t\)、输出门 \(o_t\) 与细胞状态 \(C_t\) 控制信息流：</li></ul></li></ul>
 <div class="math-block">\[f_t = \sigma(W_f[h_{t-1},x_t]), \quad i_t = \sigma(W_i[h_{t-1},x_t]), \quad C_t = f_t \odot C_{t-1} + i_t \odot \tanh(W_C[h_{t-1},x_t])\]</div>
 <p><img src="/machine-learning-assets/49-lstm.svg" alt="LSTM 单元"></p>
 <ul><li><strong>GRU</strong>：合并为更新门与重置门，参数更少、训练更快。</li></ul>
@@ -343,9 +345,9 @@
 <p>其中 \(1/\sqrt{d_k}\) 用于稳定梯度。作用是为解码器动态提供源序列上下文，缓解固定长度向量瓶颈，擅长机器翻译、文本生成等跨序列任务。</p>
 <p><img src="/machine-learning-assets/68-seq2seq-attention.svg" alt="编码器-解码器注意力"></p>
 <p><img src="/machine-learning-assets/69-attention-details.svg" alt="注意力计算细节"></p>
-<ul><li><strong>自注意力（同序列内部）</strong>：&lt;ul&gt;&lt;li&gt;每个词经 \(W_Q, W_K, W_V\) 线性变换得到 \(q, k, v\)；&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>自注意力（同序列内部）</strong>：<ul><li>每个词经 \(W_Q, W_K, W_V\) 线性变换得到 \(q, k, v\)；</li></ul></li></ul>
 <p><img src="/machine-learning-assets/61-qkv.svg" alt="Q / K / V 三个矩阵"></p>
-<ul><li>以某词为中心，用它的 \(q\) 与所有词的 \(k\) 做点积，Softmax 得到权重，再对所有 \(v\) 加权求和作为该词的输出；&lt;ul&gt;&lt;li&gt;直观记忆：&lt;strong&gt;Query 是"我想找什么"，Key 是"我有什么标签"，Value 是"我实际提供的内容"&lt;/strong&gt;；&lt;/li&gt;&lt;li&gt;复杂度 \(O(N^2 d)\)，长序列是瓶颈 → 稀疏注意力、线性注意力、FlashAttention（IO 感知的精确加速）、滑窗/分块注意力。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li>以某词为中心，用它的 \(q\) 与所有词的 \(k\) 做点积，Softmax 得到权重，再对所有 \(v\) 加权求和作为该词的输出；<ul><li>直观记忆：<strong>Query 是"我想找什么"，Key 是"我有什么标签"，Value 是"我实际提供的内容"</strong>；</li><li>复杂度 \(O(N^2 d)\)，长序列是瓶颈 → 稀疏注意力、线性注意力、FlashAttention（IO 感知的精确加速）、滑窗/分块注意力。</li></ul></li></ul>
 <p><img src="/machine-learning-assets/60-self-attention.svg" alt="自注意力机制"></p>
 <ul><li><strong>多头注意力</strong>：把表示切分为 \(h\) 个子空间并行做注意力再拼接：</li></ul>
 <div class="math-block">\[\text{MultiHead}(Q,K,V) = \text{Concat}(\text{head}_1,\dots,\text{head}_h)W^O\]</div>
@@ -367,7 +369,7 @@
 <p>整体数据流：<strong>输入序列 → 编码器（理解）→ 中间表示 → 解码器（生成）→ 输出序列</strong>。</p>
 <p><img src="/machine-learning-assets/73-transformer-arch.svg" alt="Transformer 总体架构"></p>
 <p><img src="/machine-learning-assets/63-transformer.svg" alt="Transformer 原始论文结构图"></p>
-<ul><li><strong>输入部分</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;输入嵌入&lt;/strong&gt;：把 token 映射为固定维度向量，捕捉语义；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;位置编码&lt;/strong&gt;：Transformer 本身无序列感知能力，需显式注入位置信息（正弦编码或 RoPE）。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>编码器</strong>：由 \(N\) 个相同层堆叠，每层含</li><li><strong>多头自注意力</strong>：捕捉序列内元素关系，双向可见；</li><li><strong>前馈网络 FFN</strong>：对每个位置独立做线性变换 + 激活（通常是两层 MLP，中间维度约 4 倍）。</li></ul>
+<ul><li><strong>输入部分</strong>：<ul><li><strong>输入嵌入</strong>：把 token 映射为固定维度向量，捕捉语义；</li><li><strong>位置编码</strong>：Transformer 本身无序列感知能力，需显式注入位置信息（正弦编码或 RoPE）。</li></ul></li><li><strong>编码器</strong>：由 \(N\) 个相同层堆叠，每层含</li><li><strong>多头自注意力</strong>：捕捉序列内元素关系，双向可见；</li><li><strong>前馈网络 FFN</strong>：对每个位置独立做线性变换 + 激活（通常是两层 MLP，中间维度约 4 倍）。</li></ul>
 <p>每个子模块后接<strong>残差连接 + LayerNorm</strong> 以稳定训练。</p>
 <p><img src="/machine-learning-assets/65-addnorm.svg" alt="残差 + LayerNorm"></p>
 <ul><li><strong>解码器</strong>：由 \(N\) 个相同层堆叠，每层含三个子模块</li><li><strong>掩码多头自注意力</strong>：只能看到左侧已生成的 token；</li><li><strong>交叉注意力</strong>：\(Q\) 来自解码器、\(K/V\) 来自编码器输出，用于对齐输入与输出；</li><li><strong>前馈网络 FFN</strong>。</li><li><strong>输出部分</strong>：线性层把隐藏状态映射到词表维度，Softmax 得到下一个 token 的概率分布。</li></ul>
@@ -383,9 +385,9 @@
 </tbody></table>
 <p><img src="/machine-learning-assets/66-bert-input.svg" alt="BERT 输入表示"></p>
 <p><img src="/machine-learning-assets/67-bert-tagging.svg" alt="BERT 用于序列标注"></p>
-<ul><li><strong>BERT 系预训练目标</strong>：MLM（随机掩码 token 预测）+ NSP（RoBERTa 证明 NSP 有害并弃用）。</li><li><strong>Decoder-only 为何胜出</strong>：训练目标统一（下一 token 预测）、易于扩展、零样本/少样本泛化强、天然支持统一的多任务与多模态接口。</li><li><strong>架构前沿（2025）</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;MoE&lt;/strong&gt;：每个 token 只激活部分专家（如 DeepSeek-V3/R1 总参数 671B、每 token 激活约 37B），容量与算力解耦；难点在负载均衡与通信开销。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>BERT 系预训练目标</strong>：MLM（随机掩码 token 预测）+ NSP（RoBERTa 证明 NSP 有害并弃用）。</li><li><strong>Decoder-only 为何胜出</strong>：训练目标统一（下一 token 预测）、易于扩展、零样本/少样本泛化强、天然支持统一的多任务与多模态接口。</li><li><strong>架构前沿（2025）</strong>：<ul><li><strong>MoE</strong>：每个 token 只激活部分专家（如 DeepSeek-V3/R1 总参数 671B、每 token 激活约 37B），容量与算力解耦；难点在负载均衡与通信开销。</li></ul></li></ul>
 <p><img src="/machine-learning-assets/74-moe.svg" alt="混合专家 MoE"></p>
-<ul><li><strong>状态空间模型 SSM / Mamba</strong>：以选择性扫描实现线性复杂度与 \(O(1)\) 推理记忆，长序列高效。&lt;ul&gt;&lt;li&gt;&lt;strong&gt;混合架构&lt;/strong&gt;：注意力层与 Mamba/SSM 层交错 + MoE —— 代表 &lt;strong&gt;Jamba&lt;/strong&gt;（注意力:Mamba = 1:7，每两个块插入 MoE）、&lt;strong&gt;RWKV-7 / RWKV-X&lt;/strong&gt;（线性复杂度、支持长度外推）、Zamba、Hymba。2025 年共识是"纯注意力"与"纯 SSM"各有短板，混合是工程最优解。&lt;/li&gt;&lt;li&gt;&lt;strong&gt;线性注意力与高效注意力&lt;/strong&gt;：RetNet、GLA、Lightning Attention，追求训练可并行、推理递归。&lt;/li&gt;&lt;li&gt;&lt;strong&gt;多模态架构&lt;/strong&gt;：统一 token 化 + 跨模态对齐，视觉编码器（ViT/SigLIP）+ 投影层 + LLM 解码器是主流范式。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>状态空间模型 SSM / Mamba</strong>：以选择性扫描实现线性复杂度与 \(O(1)\) 推理记忆，长序列高效。<ul><li><strong>混合架构</strong>：注意力层与 Mamba/SSM 层交错 + MoE —— 代表 <strong>Jamba</strong>（注意力:Mamba = 1:7，每两个块插入 MoE）、<strong>RWKV-7 / RWKV-X</strong>（线性复杂度、支持长度外推）、Zamba、Hymba。2025 年共识是"纯注意力"与"纯 SSM"各有短板，混合是工程最优解。</li><li><strong>线性注意力与高效注意力</strong>：RetNet、GLA、Lightning Attention，追求训练可并行、推理递归。</li><li><strong>多模态架构</strong>：统一 token 化 + 跨模态对齐，视觉编码器（ViT/SigLIP）+ 投影层 + LLM 解码器是主流范式。</li></ul></li></ul>
 <h3 id="74-tokenizer-分词器">7.4 Tokenizer 分词器</h3>
 <p>把自然语言通过"词典"映射为整数 ID（数字就是单词在词典中的页码）。</p>
 <table class="table table-bordered table-sm post-table">
@@ -419,13 +421,13 @@
 <h4 id="grpo组相对策略优化">GRPO：组相对策略优化</h4>
 <ul><li>PPO 的简化版：<strong>去掉价值网络</strong>，用同一问题下一组回答的组内奖励归一化作为优势估计</li></ul>
 <div class="math-block">\[\hat{A}_i = \frac{r_i - \text{mean}(\{r_j\}_{j=1}^{G})}{\text{std}(\{r_j\}_{j=1}^{G})}\]</div>
-<ul><li>只需策略与参考两个模型；与<strong>可验证奖励（RLVR：数学答案匹配、代码单测、格式约束）</strong> 结合时，无需人工推理轨迹即可激发出长链思维（CoT）、自我验证、反思与"顿悟时刻（Aha Moment）"。</li><li>改进变体：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;DAPO&lt;/strong&gt;：非对称裁剪（Clip-Higher，防熵崩溃）+ 动态采样（过滤全对/全错批次）+ token 级损失（缓解长序列梯度稀释）；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Dr.GRPO&lt;/strong&gt;：移除长度与标准差归一化，消除"偏好长回答"和"难度偏置"；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;RLOO&lt;/strong&gt;：留一均值作基线，无偏且更简单，可视为 GRPO 前身；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;GSPO&lt;/strong&gt;：序列级重要性比率，进一步稳定长序列训练。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li>只需策略与参考两个模型；与<strong>可验证奖励（RLVR：数学答案匹配、代码单测、格式约束）</strong> 结合时，无需人工推理轨迹即可激发出长链思维（CoT）、自我验证、反思与"顿悟时刻（Aha Moment）"。</li><li>改进变体：<ul><li><strong>DAPO</strong>：非对称裁剪（Clip-Higher，防熵崩溃）+ 动态采样（过滤全对/全错批次）+ token 级损失（缓解长序列梯度稀释）；</li><li><strong>Dr.GRPO</strong>：移除长度与标准差归一化，消除"偏好长回答"和"难度偏置"；</li><li><strong>RLOO</strong>：留一均值作基线，无偏且更简单，可视为 GRPO 前身；</li><li><strong>GSPO</strong>：序列级重要性比率，进一步稳定长序列训练。</li></ul></li></ul>
 <p><strong>趋势判断</strong>：偏好对齐更多提升"礼貌"（有用性、安全性、风格）而非"智力"；推理能力提升主要来自 <strong>RLVR + 可验证奖励</strong>。偏好对齐本身有利有弊 —— 样本成本高、反馈偏差、多样性损失。</p>
 <h4 id="754-知识蒸馏-kd">7.5.4 知识蒸馏 KD</h4>
 <ul><li><strong>思想</strong>：学生模型面向教师模型学习；教师是充分训练的大模型。</li><li><strong>硬标签 vs 软标签</strong>：SFT 拟合 one-hot 硬标签；KD 用教师 softmax 分布作软标签并以 KL 损失对齐（\(T\) 为温度）：</li></ul>
 <div class="math-block">\[\mathcal{L}_{\text{KD}} = \text{KL}\big(p_{\text{teacher}}(\cdot\mid x, T)\,\|\,p_{\text{student}}(\cdot\mid x, T)\big)\]</div>
 <p>直观理解：SFT 学"老师的答案"，KD 学"老师大脑里神经元的激活状态"（如 1+1=2 时某神经元输出 100、另一个 -99）。</p>
-<ul><li><strong>目的</strong>：让小模型<strong>体积更小、效果更好</strong>，降低部署成本。</li><li><strong>白盒 / 黑盒</strong>：&lt;ul&gt;&lt;li&gt;&lt;strong&gt;白盒蒸馏&lt;/strong&gt;：可访问教师内部结构（logits、中间层、注意力），如 DistilBERT、MiniLLM；&lt;/li&gt;&lt;li&gt;&lt;strong&gt;黑盒蒸馏&lt;/strong&gt;：只能学教师输出数据，即"用大模型生成数据做 SFT"（闭源模型只能如此），是大模型时代最普遍的做法，与 SFT 流程完全一致，差别只在数据来源。&lt;/li&gt;&lt;/ul&gt;</li></ul>
+<ul><li><strong>目的</strong>：让小模型<strong>体积更小、效果更好</strong>，降低部署成本。</li><li><strong>白盒 / 黑盒</strong>：<ul><li><strong>白盒蒸馏</strong>：可访问教师内部结构（logits、中间层、注意力），如 DistilBERT、MiniLLM；</li><li><strong>黑盒蒸馏</strong>：只能学教师输出数据，即"用大模型生成数据做 SFT"（闭源模型只能如此），是大模型时代最普遍的做法，与 SFT 流程完全一致，差别只在数据来源。</li></ul></li></ul>
 <h4 id="755-lora-与参数高效微调-peft">7.5.5 LoRA 与参数高效微调 PEFT</h4>
 <p><img src="/machine-learning-assets/75-lora.svg" alt="LoRA：低秩增量"></p>
 <h4 id="lora低秩适配">LoRA：低秩适配</h4>
@@ -444,7 +446,7 @@
 </tbody></table>
 <ul><li><strong>选择建议</strong>：资源受限优先 LoRA/QLoRA；追求极致质量用全参 SFT 或 DoRA；多任务/多租户用 LoRA 热插拔；长上下文微调注意位置编码与长度分布。</li></ul>
 <p><strong>工具链依赖关系</strong>：</p>
-<pre><code>transformers（Hugging Face 基础库：模型 / 分词器 / Trainer）
+<pre><code class="language-text">transformers（Hugging Face 基础库：模型 / 分词器 / Trainer）
    ├── PEFT（LoRA/QLoRA 等适配器，量化依赖 bitsandbytes）
    │      └── QLoRA = 4-bit 量化基座 + LoRA
    └── TRL（RLHF 训练库：SFTTrainer / PPO / DPO / GRPO，可结合 PEFT 的 LoRA）
@@ -498,7 +500,7 @@
 <ul><li><strong>Faster R-CNN</strong>：用 <strong>RPN（区域提议网络）</strong> 替代 Selective Search，实现真正端到端，是两阶段方法的经典基线。</li><li><strong>R-FCN</strong>：位置敏感得分图，提升精度与速度；后续演进 Mask R-CNN（加分割分支）、Cascade R-CNN（级联阈值提纯）。</li></ul>
 <p><strong>（3）基于深度学习的回归方法（单阶段）</strong></p>
 <p><img src="/machine-learning-assets/83-ssd.svg" alt="SSD 多尺度预测"></p>
-<ul><li><strong>YOLO</strong>：① 输入图像划分为 \(S\times S\) 网格（原版 7×7）；② 每个网格预测 \(B\) 个边界框（含目标置信度与各类别概率）；③ 得到 \(S\times S\times B\) 个候选窗口后，按阈值滤除低置信度框，再用 <strong>NMS（非极大值抑制）</strong> 去除冗余窗口。&lt;ul&gt;&lt;li&gt;版本演进：YOLOv3（FPN 多尺度）→ YOLOv5/v8（工程化与生态）→ YOLOv9/v10 → &lt;strong&gt;YOLO11&lt;/strong&gt;（2024）→ &lt;strong&gt;YOLO26&lt;/strong&gt;（2025-09，主打关键架构改进与端到端推理）。&lt;/li&gt;&lt;/ul&gt;</li><li><strong>SSD</strong>：多尺度特征图预测 + 默认框（anchor），速度与精度平衡。</li><li><strong>DenseBox / CornerNet / CenterNet</strong>：无锚框（anchor-free）路线，减少超参。</li><li><strong>FCOS、ATSS</strong>：anchor-free 单阶段的重要改进。</li></ul>
+<ul><li><strong>YOLO</strong>：① 输入图像划分为 \(S\times S\) 网格（原版 7×7）；② 每个网格预测 \(B\) 个边界框（含目标置信度与各类别概率）；③ 得到 \(S\times S\times B\) 个候选窗口后，按阈值滤除低置信度框，再用 <strong>NMS（非极大值抑制）</strong> 去除冗余窗口。<ul><li>版本演进：YOLOv3（FPN 多尺度）→ YOLOv5/v8（工程化与生态）→ YOLOv9/v10 → <strong>YOLO11</strong>（2024）→ <strong>YOLO26</strong>（2025-09，主打关键架构改进与端到端推理）。</li></ul></li><li><strong>SSD</strong>：多尺度特征图预测 + 默认框（anchor），速度与精度平衡。</li><li><strong>DenseBox / CornerNet / CenterNet</strong>：无锚框（anchor-free）路线，减少超参。</li><li><strong>FCOS、ATSS</strong>：anchor-free 单阶段的重要改进。</li></ul>
 <p><strong>（4）基于 Transformer 的检测器</strong></p>
 <ul><li><strong>DETR</strong>：把检测视为集合预测，Transformer 编解码 + 二分图匹配（匈牙利算法）去掉 NMS；缺点是收敛慢。</li><li><strong>Deformable DETR</strong>：可变形注意力，显著加速收敛。</li><li><strong>DINO</strong>：当前 DETR 系精度标杆（对比去噪训练 + 混合查询选择）。</li><li><strong>RT-DETR / RT-DETRv2</strong>：实时检测 Transformer，直接输出最终检测结果、无需 NMS 后处理，在实时场景对标 YOLO。</li><li><strong>2025 现状</strong>：实时场景以 <strong>YOLO11/YOLO26 与 RT-DETR 系</strong>为两大主力；精度优先用 DINO 系与 Co-DETR；开放词汇检测（Grounding DINO、YOLO-World）与"检测 + 分割 + 描述"统一的多模态模型成为新范式。</li></ul>
 <h3 id="93-图像分割">9.3 图像分割</h3>
