@@ -40,7 +40,7 @@
 
 <body>
   <!-- Navigation -->
-  
+
   <!-- Page Header -->
   <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
   <div class="container">
@@ -53,30 +53,30 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarResponsive">
       <ul class="navbar-nav ml-auto">
-        
+
         <li class="nav-item">
-          
+
           <a class="nav-link" href="/">首页</a>
-          
+
         </li>
-        
+
         <li class="nav-item">
-          
+
           <a class="nav-link" href="/archives">归档</a>
-          
+
         </li>
-        
+
         <li class="nav-item">
-          
+
           <a class="nav-link" href="/tags">标签</a>
-          
+
         </li>
         <li class="nav-item">
-          
+
           <a class="nav-link" href="/ai-weekly">周报</a>
-          
+
         </li>
-        
+
         <li class="nav-item">
           <div class="gridea-search-container">
             <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
@@ -95,15 +95,15 @@
   <div class="container">
     <div class="row">
       <div class="col-lg-8 col-md-10 mx-auto">
-        
+
           <!-- 没Title为其他页面Header -->
-          
+
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                
+
                 <a href="/Ilm3j1zDlpy/" class="tag">mysql</a>
-                
+
               </span>
               <h1>mysql概述四</h1>
               <span class="meta">
@@ -111,8 +111,8 @@
                 2021-05-21，16 min read
               </span>
             </div>
-          
-        
+
+
       </div>
     </div>
   </div>
@@ -122,9 +122,9 @@
     <div class="container">
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
-          
+
           <img class="post-feature-header-image" src="/post-images/QKdNIC7pG.png" alt="封面图">
-          
+
           <h2 id="视图">视图</h2>
 <blockquote>
 <p>为了提高复杂SQL语句的复用性和表操作的安全性，MySQL数据库管理系统提供了视图特性。所谓视图，本质上是一种虚拟表，在物理上是不存在的，其内容与真实的表相似，包含一系列带有名称的列和行数据。但是，视图并不在数据库中以存储的数据值形式存在。行和列数据来自定义视图的查询所引用基本表，并且在具体引用视图时动态生成。</p>
@@ -161,7 +161,7 @@
 <li>性能。数据库必须把视图的查询转化成对基本表的查询，如果这个视图是由一个复杂的多表查询所定义，那么，即使是视图的一个简单查询，数据库也把它变成一个复杂的结合体，需要花费一定的时间。</li>
 <li>修改限制。当用户试图修改视图的某些行时，数据库必须把它转化为对基本表的某些行的修改。事实上，当从视图中插入或者删除时，情况也是这样。对于简单视图来说，这是很方便的，但是，对于比较复杂的视图，可能是不可修改的</li>
 </ol>
-<p>这些视图有如下特征：</p>
+<p>下面几类视图通常是<strong>不可更新</strong>的，即不能通过它们执行 INSERT/UPDATE/DELETE：</p>
 <ol>
 <li>
 <p>有UNIQUE等集合操作符的视图。</p>
@@ -179,34 +179,109 @@
 <p>连接表的视图（其中有些例外）</p>
 </li>
 </ol>
+<h3 id="创建与使用视图">创建与使用视图</h3>
+<pre><code class="language-sql">-- 创建视图：只暴露需要的列，隐藏敏感字段
+CREATE VIEW v_emp_dept AS
+SELECT e.id, e.name, d.dept_name
+FROM employee e JOIN dept d ON e.dept_id = d.id;
+
+-- 查询视图，用法和查表一样
+SELECT * FROM v_emp_dept WHERE dept_name = '研发部';
+
+-- 查看视图定义
+SHOW CREATE VIEW v_emp_dept;
+-- 也可以查数据字典（MySQL 8.0 中视图定义统一由数据字典维护）
+SELECT TABLE_NAME, VIEW_DEFINITION
+FROM information_schema.VIEWS
+WHERE TABLE_SCHEMA = DATABASE();
+
+-- 修改与删除
+CREATE OR REPLACE VIEW v_emp_dept AS SELECT id, name FROM employee;
+ALTER VIEW v_emp_dept AS SELECT id, name, dept_id FROM employee;
+DROP VIEW IF EXISTS v_emp_dept;
+</code></pre>
+<p>带 <code>WITH CHECK OPTION</code> 的视图会校验写入的数据是否仍满足视图的 WHERE 条件。视图本身不存储数据，它的定义会被合并进对基表的查询，所以复杂视图的查询开销并不比直接写 SQL 小。</p>
 <h2 id="游标">游标</h2>
 <blockquote>
 <p>游标是系统为用户开设的一个数据缓冲区，存放SQL语句的执行结果，每个游标区都有一个名字。用户可以通过游标逐一获取记录并赋给主变量，交由主语言进一步处理。</p>
 </blockquote>
+<p>在 MySQL 中，游标只能写在存储过程、函数或触发器里，而且是<strong>只读、不可滚动、asensitive</strong> 的：只能从前往后逐行读取，不能跳过或回退。使用步骤固定为：声明游标 → 声明结束条件 → 打开 → 循环 FETCH → 关闭。</p>
+<pre><code class="language-sql">DELIMITER $$
+CREATE PROCEDURE p_list_emp()
+BEGIN
+    DECLARE done INT DEFAULT 0;
+    DECLARE v_name VARCHAR(50);
+    -- 1. 声明游标
+    DECLARE cur CURSOR FOR SELECT name FROM employee;
+    -- 2. 声明“没有更多行”的处理：置标记并继续执行
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+    -- 3. 打开游标
+    OPEN cur;
+    read_loop: LOOP
+        FETCH cur INTO v_name;              -- 4. 逐行读取
+        IF done = 1 THEN LEAVE read_loop; END IF;
+        SELECT v_name;                      -- 这里换成真正的业务处理
+    END LOOP;
+    CLOSE cur;                              -- 5. 关闭游标
+END$$
+DELIMITER ;
+
+CALL p_list_emp();
+</code></pre>
+<p>注意：HANDLER 必须声明在游标之后；游标适合表达不好用集合运算描述的逻辑，能用一条 SQL 完成时不要用游标。</p>
 <h2 id="存储过程与函数">存储过程与函数</h2>
 <blockquote>
 <p>存储过程是一个预编译的SQL语句，优点是允许模块化的设计，就是说只需要创建一次，以后在该程序中就可以调用多次。如果某次操作需要执行多次SQL，使用存储过程比单纯SQL语句执行要快。</p>
 </blockquote>
 <h3 id="优点-2">优点</h3>
 <ol>
-<li>
-<p>存储过程是预编译过的，执行效率高。</p>
-</li>
-<li>
-<p>存储过程的代码直接存放于数据库中，通过存储过程名直接调用，减少网络通讯。</p>
-</li>
-<li>
-<p>安全性高，执行存储过程需要有一定权限的用户。</p>
-</li>
-<li>
-<p>存储过程可以重复使用，减少数据库开发人员的工作量。</p>
-</li>
+<li>存储过程是预编译过的，执行效率高。</li>
+<li>存储过程的代码直接存放于数据库中，通过存储过程名直接调用，减少网络通讯。</li>
+<li>安全性高，执行存储过程需要有一定权限的用户。</li>
+<li>存储过程可以重复使用，减少数据库开发人员的工作量。</li>
 </ol>
+<p>补充：MySQL 的存储过程由服务器解析并缓存执行计划，并不像 Oracle 那样生成本地编译代码，它带来的主要收益是减少网络往返、统一业务逻辑，而不是“执行一定更快”。</p>
 <h3 id="缺点-2">缺点</h3>
-<p>1）调试麻烦，但是用 PL/SQL Developer 调试很方便！弥补这个缺点。</p>
-<p>2）移植问题，数据库端代码当然是与数据库相关的。但是如果是做工程型项目，基本不存在移植问题。</p>
-<p>3）重新编译问题，因为后端代码是运行前编译的，如果带有引用关系的对象发生改变时，受影响的存储过程、包将需要重新编译（不过也可以设置成运行时刻自动编译）。</p>
-<p>4）如果在一个程序系统中大量的使用存储过程，到程序交付使用的时候随着用户需求的增加会导致数据结构的变化，接着就是系统的相关问题了，最后如果用户想维护该系统可以说是很难很难、而且代价是空前的，维护起来更麻烦。</p>
+<ol>
+<li>调试麻烦：缺少像应用代码那样成熟的单步调试和版本管理手段。</li>
+<li>移植问题：数据库端代码与具体数据库绑定，换库通常要重写。</li>
+<li>重新编译问题：带有引用关系的对象发生改变时，受影响的存储过程、函数需要重新编译（也可以设置为运行时刻自动编译）。</li>
+<li>大量使用存储过程后，随着需求增加会导致数据结构变化，后期维护成本很高。</li>
+</ol>
+<h3 id="存储过程与函数的区别">存储过程与函数的区别</h3>
+<table>
+<thead>
+<tr><th>对比项</th><th>存储过程 PROCEDURE</th><th>函数 FUNCTION</th></tr>
+</thead>
+<tbody>
+<tr><td>调用方式</td><td><code>CALL p(...)</code></td><td>可在 SQL 中直接使用，如 <code>SELECT f(x)</code></td></tr>
+<tr><td>返回值</td><td>可以没有返回值，也可用 OUT/INOUT 返回多个值</td><td>必须有且只有一个返回值（RETURNS）</td></tr>
+<tr><td>参数</td><td>IN、OUT、INOUT</td><td>只有 IN</td></tr>
+<tr><td>事务控制</td><td>可以 COMMIT / ROLLBACK</td><td>不允许显式提交或回滚事务</td></tr>
+<tr><td>典型用途</td><td>批量业务逻辑、定时任务</td><td>可复用的计算逻辑，可用于 SELECT / WHERE</td></tr>
+</tbody>
+</table>
+<pre><code class="language-sql">DELIMITER $$
+CREATE PROCEDURE p_add_emp(IN p_name VARCHAR(50), OUT p_id BIGINT)
+BEGIN
+    INSERT INTO employee(name, join_date) VALUES (p_name, CURDATE());
+    SET p_id = LAST_INSERT_ID();   -- 返回新插入行的自增主键
+END$$
+
+CREATE FUNCTION f_years(p_date DATE) RETURNS INT
+DETERMINISTIC                       -- 开启 binlog 时必须声明确定性，否则建函数会失败
+RETURN TIMESTAMPDIFF(YEAR, p_date, CURDATE());
+$$
+DELIMITER ;
+
+CALL p_add_emp('zhangsan', @new_id);
+SELECT @new_id;
+
+SELECT name, f_years(join_date) AS years FROM employee;
+SHOW PROCEDURE STATUS WHERE Db = DATABASE();
+SHOW FUNCTION STATUS WHERE Db = DATABASE();
+</code></pre>
+<p>版本提示：MySQL 5.7 及更早版本把存储过程、函数、触发器的定义保存在 <code>mysql.proc</code> 表中；MySQL 8.0 移除了 <code>mysql.proc</code>，改由事务型数据字典维护，仍可通过 <code>information_schema.ROUTINES</code> 或 <code>SHOW CREATE PROCEDURE/FUNCTION</code> 查看。</p>
 <h2 id="触发器">触发器</h2>
 <blockquote>
 <p>触发器是用户定义在关系表上的一类由事件驱动的特殊的存储过程。触发器是指一段代码，当触发某个事件时，自动执行这些代码。</p>
@@ -216,61 +291,85 @@
 <li>可以通过数据库中的相关表实现级联更改。</li>
 <li>实时监控某张表中的某个字段的更改而需要做出相应的处理。</li>
 <li>例如可以生成某些业务的编号。</li>
-<li>注意不要滥用，否则会造成数据库及应用程序的维护困难。</li>
-<li>大家需要牢记以上基础知识点，重点是理解数据类型CHAR和VARCHAR的差异，表存储引擎InnoDB和MyISAM的区别。</li>
+<li>注意不要滥用，否则会造成数据库及应用程序的维护困难：触发器逻辑对应用层不可见，出问题时更难排查。</li>
 </ul>
 <h3 id="mysql中都有哪些触发器">MySQL中都有哪些触发器</h3>
-<p>在MySQL数据库中有如下六种触发器：</p>
+<p>按触发时机（BEFORE / AFTER）与事件（INSERT / UPDATE / DELETE）组合，MySQL 共有如下六种触发器：</p>
 <ul>
-<li>Before Insert</li>
-<li>After Insert</li>
-<li>Before Update</li>
-<li>After Update</li>
-<li>Before Delete</li>
-<li>After Delete</li>
+<li>Before Insert、After Insert</li>
+<li>Before Update、After Update</li>
+<li>Before Delete、After Delete</li>
 </ul>
+<pre><code class="language-sql">DELIMITER $$
+-- BEFORE 触发器可以改写即将写入的行：NEW 表示新行，OLD 表示旧行
+CREATE TRIGGER trg_emp_before_insert
+BEFORE INSERT ON employee
+FOR EACH ROW
+BEGIN
+    IF NEW.join_date IS NULL THEN
+        SET NEW.join_date = CURDATE();
+    END IF;
+    SET NEW.name = TRIM(NEW.name);
+END$$
+
+-- AFTER 触发器常用于写日志、同步冗余字段
+CREATE TRIGGER trg_emp_after_update
+AFTER UPDATE ON employee
+FOR EACH ROW
+    INSERT INTO emp_log(emp_id, old_name, new_name, changed_at)
+    VALUES (OLD.id, OLD.name, NEW.name, NOW());
+$$
+DELIMITER ;
+
+SHOW TRIGGERS;
+DROP TRIGGER IF EXISTS trg_emp_after_update;
+</code></pre>
+<p>版本与限制：MySQL 5.7.2 之前，同一张表的同一事件只能有一个触发器；5.7.2 起允许同一事件存在多个触发器，并用 <code>FOLLOWS</code> / <code>PRECEDES</code> 指定执行顺序。MySQL 不支持 Oracle 那样的 <code>INSTEAD OF</code> 触发器（不能建在视图上）；触发器里也不能修改触发它的那条语句正在使用的表，否则会报 “Can't update table ... already used”（错误码 1442）。</p>
 <h2 id="sql语句">SQL语句</h2>
 <p><strong>SQL语句分类</strong></p>
 <ol>
 <li>
-<p>数据定义语言DDL（Data Ddefinition Language）CREATE，DROP，ALTER 主要为以上操作 即对逻辑结构等有操作的，其中包括表结构，视图和索引。</p>
+<p>数据定义语言 DDL（Data Definition Language）：<code>CREATE</code>、<code>DROP</code>、<code>ALTER</code>、<code>TRUNCATE</code>、<code>RENAME</code>，操作对象是库、表、视图、索引等逻辑结构。DDL 会隐式提交当前事务。</p>
 </li>
 <li>
-<p>数据查询语言DQL（Data Query Language）SELECT 这个较为好理解 即查询操作，以select关键字。各种简单查询，连接查询等 都属于DQL。</p>
+<p>数据查询语言 DQL（Data Query Language）：<code>SELECT</code>。各种简单查询、连接查询都属于 DQL。</p>
 </li>
 <li>
-<p>数据操纵语言DML（Data Manipulation Language）INSERT，UPDATE，DELETE 主要为以上操作 即对数据进行操作的，对应上面所说的查询操作 DQL与DML共同构建了多数初级程序员常用的增删改查操作。而查询是较为特殊的一种 被划分到DQL中。</p>
+<p>数据操纵语言 DML（Data Manipulation Language）：<code>INSERT</code>、<code>UPDATE</code>、<code>DELETE</code>（<code>REPLACE</code>、<code>LOAD DATA</code> 也常被归入 DML），即对数据进行增删改。DQL 与 DML 共同构成了日常的增删改查。</p>
 </li>
 <li>
-<p>数据控制功能DCL（Data Control Language）GRANT，REVOKE，COMMIT，ROLLBACK 主要为以上操作 即对数据库安全性完整性等有操作的，可以简单的理解为权限控制等。</p>
+<p>数据控制语言 DCL（Data Control Language）：<code>GRANT</code>、<code>REVOKE</code>，负责权限控制。而 <code>COMMIT</code>、<code>ROLLBACK</code>、<code>SAVEPOINT</code> 属于事务控制语言 TCL（Transaction Control Language），不要与 DCL 混为一谈。</p>
 </li>
 </ol>
 <h3 id="超键-候选键-主键-外键">超键、候选键、主键、外键</h3>
 <ul>
-<li>超键：在关系中能唯一标识元组的属性集称为关系模式的超键。一个属性可以为作为一个超键，多个属性组合在一起也可以作为一个超键。超键包含候选键和主键。</li>
-<li>候选键：是最小超键，即没有冗余元素的超键。</li>
-<li>主键：数据库表中对储存数据对象予以唯一和完整标识的数据列或属性的组合。一个数据列只能有一个主键，且主键的取值不能缺失，即不能为空值（Null）。</li>
-<li>外键：在一个表中存在的另一个表的主键称此表的外键。</li>
+<li>超键：在关系中能唯一标识元组的属性集称为关系模式的超键。一个属性可以是超键，多个属性的组合也可以是超键。超键包含候选键和主键。</li>
+<li>候选键：是最小超键，即没有任何冗余属性的超键。</li>
+<li>主键：从候选键中选定一个用于唯一标识元组。一个表只能有一个主键，主键可以由多列组成（复合主键）；主键列不允许为空——MySQL 中声明为 <code>PRIMARY KEY</code> 的列会被隐式加上 <code>NOT NULL</code>。</li>
+<li>外键：表中的一个或多个列，其取值必须匹配另一张表（或本表）的主键或唯一键，也可以为 NULL。InnoDB 支持外键约束，MyISAM 会解析外键定义但忽略它。</li>
 </ul>
 <h3 id="sql-约束">SQL 约束</h3>
 <ul>
-<li><code>NOT NULL</code>: 用于控制字段的内容一定不能为空（NULL）。</li>
-<li><code>UNIQUE</code>: 控件字段内容不能重复，一个表允许有多个 Unique 约束。</li>
-<li><code>PRIMARY KEY</code>: 也是用于控件字段内容不能重复，但它在一个表只允许出现一个。</li>
-<li><code>FOREIGN KEY</code>: 用于预防破坏表之间连接的动作，也能防止非法数据插入外键列，因为它必须是它指向的那个表中的值之一。</li>
-<li><code>CHECK</code>: 用于控制字段的值范围。</li>
+<li><code>NOT NULL</code>：用于控制字段的内容一定不能为空（NULL）。</li>
+<li><code>UNIQUE</code>：字段内容不能重复，一个表允许有多个 UNIQUE 约束，且允许多个 NULL 值。</li>
+<li><code>PRIMARY KEY</code>：唯一且非空，一个表只允许有一个（可以由多列组合而成）。</li>
+<li><code>FOREIGN KEY</code>：维护表之间的引用完整性，外键列的值必须是其指向表的主键/唯一键中的值之一，或者为 NULL。</li>
+<li><code>CHECK</code>：控制字段的取值范围。注意 MySQL 8.0.16 之前只是解析并忽略 CHECK 约束，8.0.16 起才真正生效。</li>
+<li><code>DEFAULT</code>：插入时未提供该列时使用的默认值。</li>
 </ul>
 <h3 id="六种关联查询">六种关联查询</h3>
 <ul>
 <li>交叉连接（CROSS JOIN）</li>
-<li>内连接（INNER JOIN）</li>
-<li>外连接（LEFT JOIN/RIGHT JOIN）</li>
-<li>联合查询（UNION与UNION ALL）</li>
-<li>全连接（FULL JOIN）</li>
-<li>交叉连接（CROSS JOIN）</li>
+<li>内连接（INNER JOIN，可简写为 JOIN）</li>
+<li>左外连接（LEFT JOIN）</li>
+<li>右外连接（RIGHT JOIN）</li>
+<li>联合查询（UNION 与 UNION ALL）</li>
+<li>全外连接（FULL JOIN，MySQL 不支持，需要用 UNION 模拟）</li>
 </ul>
-<p><code>SELECT * FROM A,B(,C)</code>或者<code>SELECT * FROM A CROSS JOIN B (CROSS JOIN C)</code>#没有任何关联条件，结果是笛卡尔积，结果集会很大，没有意义，很少使用内连接（INNER JOIN）<code>SELECT * FROM A,B WHERE A.id=B.id</code>或者<code>SELECT * FROM A INNER JOIN B ON A.id=B.id</code>多表中同时符合某种条件的数据记录的集合，INNER JOIN可以缩写为JOIN</p>
-<p>内连接分为三类</p>
+<p><img src="/post-assets/QKdNIC7pG/01-join-types-result.svg" alt="交叉连接、内连接、左外连接、右外连接的结果集对照示意图"></p>
+<p>交叉连接不带关联条件，结果是笛卡尔积，行数等于两张表行数之积，结果集很大，实际很少使用：<code>SELECT * FROM A CROSS JOIN B</code> 等价于 <code>SELECT * FROM A, B</code>。</p>
+<p>内连接只保留关联条件成立的数据行：<code>SELECT * FROM A, B WHERE A.id = B.id</code> 与 <code>SELECT * FROM A INNER JOIN B ON A.id = B.id</code> 等价，INNER JOIN 可以缩写为 JOIN。</p>
+<p>内连接分为三类</p><p>内连接分为三类</p>
 <ul>
 <li>等值连接：ON A.id=B.id</li>
 <li>不等值连接：ON A.id &gt; B.id</li>
@@ -282,7 +381,7 @@
 <li>右外连接：RIGHT OUTER JOIN, 以右表为主，先查询出右表，按照ON后的关联条件匹配左表，没有匹配到的用NULL填充，可以简写成RIGHT JOIN</li>
 </ul>
 <p>联合查询（UNION与UNION ALL）</p>
-<pre><code class="language-mysql">SELECT * FROM A UNION SELECT * FROM B UNION ...
+<pre><code class="language-sql">SELECT * FROM A UNION SELECT * FROM B UNION ...
 </code></pre>
 <ul>
 <li>就是把多个结果集集中在一起，UNION前的结果为基准，需要注意的是联合查询的列数要相等，相同的记录行会合并</li>
@@ -296,7 +395,9 @@
 </li>
 <li>
 <p>可以使用LEFT JOIN 和UNION和RIGHT JOIN联合使用</p>
-<pre><code class="language-mysql">SELECT * FROM A LEFT JOIN B ON A.id=B.id UNIONSELECT * FROM A RIGHT JOIN B ON A.id=B.id
+<pre><code class="language-sql">SELECT * FROM A LEFT JOIN B ON A.id = B.id
+UNION
+SELECT * FROM A RIGHT JOIN B ON A.id = B.id;
 </code></pre>
 </li>
 </ul>
@@ -355,7 +456,7 @@
 <ol>
 <li>交叉连接(笛卡尔积):</li>
 </ol>
-<pre><code class="language-mysql">select r.*,s.* from r,s
+<pre><code class="language-sql">select r.*,s.* from r,s
 </code></pre>
 <table>
 <thead>
@@ -436,7 +537,7 @@
 <ol>
 <li>内连接结果：</li>
 </ol>
-<pre><code class="language-mysql">select r.*,s.* from r inner join s on r.c=s.c
+<pre><code class="language-sql">select r.*,s.* from r inner join s on r.c=s.c
 </code></pre>
 <table>
 <thead>
@@ -468,7 +569,7 @@
 <ol>
 <li>左连接结果：</li>
 </ol>
-<pre><code class="language-mysql">select r.*,s.* from r left join s on r.c=s.c
+<pre><code class="language-sql">select r.*,s.* from r left join s on r.c=s.c
 </code></pre>
 <table>
 <thead>
@@ -507,26 +608,20 @@
 <ol>
 <li>右连接结果：</li>
 </ol>
-<pre><code class="language-mysql">select r.*,s.* from r right join s on r.c=s.c
+<pre><code class="language-sql">select r.*,s.* from r right join s on r.c=s.c
 </code></pre>
+<p>右连接结果（保留右表 S 的全部行，R 中缺失的列补 NULL）：</p>
 <table>
 <thead>
 <tr>
-<th></th>
-<th></th>
-<th></th>
-<th></th>
-<th></th>
+<th>A</th>
+<th>B</th>
+<th>C</th>
+<th>C</th>
+<th>D</th>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>A</td>
-<td>B</td>
-<td>C</td>
-<td>C</td>
-<td>D</td>
-</tr>
 <tr>
 <td>a1</td>
 <td>b1</td>
@@ -551,9 +646,9 @@
 </tbody>
 </table>
 <ol>
-<li>全表连接的结果（MySql不支持，Oracle支持）：</li>
+<li>全外连接的结果（MySQL 不支持，Oracle、PostgreSQL 支持，这里仅作对照）：</li>
 </ol>
-<pre><code class="language-mysql">select r.*,s.* from r full join s on r.c=s.c
+<pre><code class="language-sql">select r.*,s.* from r full join s on r.c=s.c
 </code></pre>
 <table>
 <thead>
@@ -604,42 +699,38 @@
 <h3 id="子查询的三种情况">子查询的三种情况</h3>
 <ol>
 <li>
-<p>子查询是单行单列的情况：结果集是一个值，父查询使用：=、 &lt;、 &gt; 等运算符</p>
-<p>-- 查询工资最高的员工是谁？  <code>select  * from employee where salary=(select max(salary) from employee);   </code></p>
+<p>单行单列：结果集是一个值，父查询使用 <code>=</code>、<code>&lt;</code>、<code>&gt;</code> 等运算符。</p>
+<pre><code class="language-sql">-- 查询工资最高的员工
+SELECT * FROM employee WHERE salary = (SELECT MAX(salary) FROM employee);
+</code></pre>
 </li>
 <li>
-<p>子查询是多行单列的情况：结果集类似于一个数组，父查询使用：in 运算符</p>
-<p>-- 查询工资最高的员工是谁？  <code>select  * from employee where salary=(select max(salary) from employee);   </code></p>
+<p>多行单列：结果集类似一个数组，父查询使用 <code>IN</code>、<code>ANY</code>、<code>ALL</code> 等运算符。</p>
+<pre><code class="language-sql">-- 查询“研发部”下的所有员工
+SELECT * FROM employee
+WHERE dept_id IN (SELECT id FROM dept WHERE dept_name = '研发部');
+</code></pre>
 </li>
 <li>
-<p>子查询是多行多列的情况：结果集类似于一张虚拟表，不能用于where条件，用于select子句中做为子表</p>
-<p>-- 1) 查询出2011年以后入职的员工信息 -- 2) 查询所有的部门信息，与上面的虚拟表中的信息比对，找出所有部门ID相等的员工。</p>
-<pre><code class="language-mysql">SELECT
-	* 
-FROM
-	dept d,
-	( SELECT * FROM employee WHERE join_date &gt; '2011-1-1' ) e 
-WHERE
-	e.dept_id = d.id;
-	
--- 使用表连接：
-SELECT
-	d.*,
-	e.* 
-FROM
-	dept d
-	INNER JOIN employee e ON d.id = e.dept_id 
-WHERE
-	e.join_date &gt; '2011-1-1'
+<p>多行多列：结果集类似一张虚拟表，不能直接用于 WHERE 条件，通常放在 FROM 之后作为子表，或改写为连接。</p>
+<pre><code class="language-sql">-- 子表写法：先筛出 2011 年以后入职的员工，再与部门表比对
+SELECT d.*, e.*
+FROM dept d, (SELECT * FROM employee WHERE join_date &gt; '2011-01-01') e
+WHERE e.dept_id = d.id;
+
+-- 等价的连接写法（一般由优化器处理得更好）
+SELECT d.*, e.*
+FROM dept d INNER JOIN employee e ON d.id = e.dept_id
+WHERE e.join_date &gt; '2011-01-01';
 </code></pre>
 </li>
 </ol>
 <h3 id="mysql中-in-和-exists-区别">mysql中 in 和 exists 区别</h3>
-<p>mysql中的in语句是把外表和内表作hash 连接，而exists语句是对外表作loop循环，每次loop循环再对内表进行查询。一直大家都认为exists比in语句的效率要高，这种说法其实是不准确的。这个是要区分环境的。</p>
+<p>in 是先把子查询的结果集取出来再做匹配，exists 是拿外表的每一行去子查询里判断是否存在。谁更快取决于优化器能否把子查询改写成半连接（semi-join，MySQL 5.6 起支持的优化）以及两张表的大小关系，建议用 <code>EXPLAIN</code> 看实际执行计划：</p>
 <ol>
-<li>如果查询的两个表大小相当，那么用in和exists差别不大。</li>
-<li>如果两个表中一个较小，一个是大表，则子查询表大的用exists，子查询表小的用in。</li>
-<li>not in 和not exists：如果查询语句使用了not in，那么内外表都进行全表扫描，没有用到索引；而not extsts的子查询依然能用到表上的索引。所以无论那个表大，用not exists都比not in要快。</li>
+<li>如果两个表大小相当，用 in 和 exists 差别不大。</li>
+<li>如果一个大表一个小表，子查询表大时用 exists，子查询表小时用 in（把小结果集放进内存匹配更划算）。</li>
+<li>not in 与 not exists：<code>NOT IN</code> 遇到子查询结果中含 NULL 时会返回空结果集，这是最常见的坑，此时应改用 <code>NOT EXISTS</code> 或在子查询中过滤掉 NULL；<code>NOT EXISTS</code> 通常也能更好地利用索引。</li>
 </ol>
 <h3 id="varchar与char的区别">varchar与char的区别</h3>
 <p><strong>char的特点</strong></p>
@@ -658,33 +749,27 @@ WHERE
 </ul>
 <p>总之，结合性能角度（char更快）和节省磁盘空间角度（varchar更小），具体情况还需具体来设计数据库才是妥当的做法。</p>
 <h3 id="varchar50中50的涵义">varchar(50)中50的涵义</h3>
-<p>最多存放50个字符，varchar(50)和(200)存储hello所占空间一样，但后者在排序时会消耗更多内存，因为order by col采用fixed_length计算col长度(memory引擎也一样)。在早期 MySQL 版本中， 50 代表字节数，现在代表字符数。</p>
+<p>最多存放 50 个<strong>字符</strong>。varchar(50) 和 varchar(200) 存储 hello 占用的空间一样，但后者在排序、临时表等场景会按定义长度预留更多内存（order by col 采用 fixed_length 计算列长度，MEMORY 引擎也一样），所以长度够用即可。MySQL 4.1 之前 50 代表字节数，4.1 起代表字符数；在 utf8mb4 下 varchar(50) 最多占 50×4=200 字节（另加 1~2 字节长度前缀），建索引时要留意索引键长度限制。</p>
 <h3 id="int20中20的涵义">int(20)中20的涵义</h3>
-<p>是指显示字符的长度。20表示最大显示宽度为20，但仍占4字节存储，存储范围不变；不影响内部存储，只是影响带 zerofill 定义的 int 时，前面补多少个 0，易于报表展示</p>
+<p>是指显示字符的长度：20 表示最大显示宽度为 20，但仍固定占 4 字节存储，取值范围不变；只影响带 ZEROFILL 定义的 int 前面补多少个 0，便于报表展示。注意显示宽度与 ZEROFILL 从 MySQL 8.0.17 起已被废弃，8.0.19 起 <code>SHOW CREATE TABLE</code> 不再输出 <code>int(11)</code> 这类写法，新项目直接写 <code>INT</code> 即可。</p>
 <h3 id="mysql为什么这么设计字段">mysql为什么这么设计字段</h3>
 <p>对大多数应用没有意义，只是规定一些工具用来显示字符的个数；int(1)和int(20)存储和计算均一样；</p>
 <h3 id="mysql中int10和char10以及varchar10的区别">mysql中int(10)和char(10)以及varchar(10)的区别</h3>
 <ul>
-<li>
-<p>int(10)的10表示显示的数据的长度，不是存储数据的大小；chart(10)和varchar(10)的10表示存储数据的大小，即表示存储多少个字符。</p>
-<p>int(10) 10位的数据长度 9999999999，占32个字节，int型4位</p>
-<p>char(10) 10位固定字符串，不足补空格 最多10个字符</p>
-<p>varchar(10) 10位可变字符串，不足补空格 最多10个字符</p>
-</li>
-<li>
-<p>char(10)表示存储定长的10个字符，不足10个就用空格补齐，占用更多的存储空间</p>
-</li>
-<li>
-<p>varchar(10)表示存储10个变长的字符，存储多少个就是多少个，空格也按一个字符存储，这一点是和char(10)的空格不同的，char(10)的空格表示占位不算一个字符</p>
-</li>
+<li>int(10) 的 10 表示显示宽度，不是存储大小；char(10)、varchar(10) 的 10 表示能存储多少个字符。</li>
+<li>INT 固定占 4 字节（32 位），与括号中的数字无关，有符号范围约 -21 亿 ~ 21 亿，INT UNSIGNED 上限约 42 亿。</li>
+<li>char(10)：定长字符串，不足 10 个字符时用空格补齐，占用空间固定，读取时尾部空格会被去掉。</li>
+<li>varchar(10)：变长字符串，只存实际内容加 1~2 字节长度前缀，尾部的空格会按字符保留，这一点与 char 不同。</li>
 </ul>
 <h3 id="float和double的区别">FLOAT和DOUBLE的区别</h3>
 <ul>
-<li>FLOAT类型数据可以存储至多8位十进制数，并在内存中占4字节。</li>
-<li>DOUBLE类型数据可以存储至多18位十进制数，并在内存中占8字节。</li>
+<li>FLOAT 是单精度浮点数，占 4 字节，约 7 位有效十进制数字。</li>
+<li>DOUBLE 是双精度浮点数，占 8 字节，约 15~16 位有效十进制数字。</li>
+<li>两者都是近似值类型，比较时容易出现精度误差；金额等需要精确计算的场景应使用 DECIMAL。</li>
+<li>MySQL 8.0.17 起，非标准的 <code>FLOAT(M,D)</code>、<code>DOUBLE(M,D)</code> 写法以及 FLOAT/DOUBLE 的 UNSIGNED 属性已被废弃。</li>
 </ul>
 <h3 id="drop-delete与truncate的区别">drop、delete与truncate的区别</h3>
-<p>三者都表示删除，但是三者有一些差别：</p>
+<p>三者都表示删除，但是差别很大：</p>
 <table>
 <thead>
 <tr>
@@ -697,70 +782,162 @@ WHERE
 <tbody>
 <tr>
 <td>类型</td>
-<td>属于DML</td>
-<td>属于DDL</td>
-<td>属于DDL</td>
+<td>属于 DML</td>
+<td>属于 DDL</td>
+<td>属于 DDL</td>
 </tr>
 <tr>
 <td>回滚</td>
-<td>可回滚</td>
-<td>不可回滚</td>
-<td>不可回滚</td>
+<td>可回滚（InnoDB）</td>
+<td>隐式提交，不可回滚</td>
+<td>隐式提交，不可回滚</td>
 </tr>
 <tr>
 <td>删除内容</td>
-<td>表结构还在，删除表的全部或者一部分数据行</td>
-<td>表结构还在，删除表中的所有数据</td>
-<td>从数据库中删除表，所有的数据行，索引和权限也会被删除</td>
+<td>表结构还在，删除全部或一部分数据行（可带 WHERE）</td>
+<td>表结构还在，清空表中所有数据</td>
+<td>删除表本身，数据、索引、权限一并删除</td>
+</tr>
+<tr>
+<td>AUTO_INCREMENT</td>
+<td>不重置，继续从当前值递增</td>
+<td>重置为 1</td>
+<td>表已删除</td>
+</tr>
+<tr>
+<td>触发器</td>
+<td>会触发 DELETE 触发器</td>
+<td>不触发触发器</td>
+<td>不触发触发器</td>
 </tr>
 <tr>
 <td>删除速度</td>
-<td>删除速度慢，需要逐行删除</td>
-<td>删除速度快</td>
-<td>删除速度最快</td>
+<td>慢，逐行删除并写 undo/redo 日志</td>
+<td>快，按页释放</td>
+<td>最快</td>
 </tr>
 </tbody>
 </table>
-<p>因此，在不再需要一张表的时候，用drop；在想删除部分数据行时候，用delete；在保留表而删除所有数据的时候用truncate。</p>
+<p>因此，在不再需要一张表的时候，用 drop；在想删除部分数据行时候，用 delete；在保留表而删除所有数据的时候用 truncate。</p>
 <h3 id="union与union-all的区别">UNION与UNION ALL的区别</h3>
 <ul>
-<li>如果使用UNION ALL，不会合并重复的记录行</li>
-<li>效率 UNION 高于 UNION ALL</li>
+<li>UNION 会对合并后的结果去重（通常需要排序或临时表），UNION ALL 直接拼接，不做去重。</li>
+<li>因此效率上 <strong>UNION ALL 高于 UNION</strong>：可以确定没有重复行时优先使用 UNION ALL。</li>
+<li>两者都要求前后两个结果集的列数相同、类型兼容，结果集的列名以第一个 SELECT 为准。</li>
+<li>UNION 去重时按整行比较，NULL 被视为相同，这一点与用 <code>=</code> 判断不同。</li>
 </ul>
+
+<h2 id="mysql-57-与-80-的关键差异">MySQL 5.7 与 8.0 的关键差异</h2>
+<table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>MySQL 5.7</th>
+<th>MySQL 8.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>默认字符集</td>
+<td>latin1</td>
+<td>utf8mb4</td>
+</tr>
+<tr>
+<td>默认排序规则</td>
+<td>latin1_swedish_ci</td>
+<td>utf8mb4_0900_ai_ci（基于 Unicode 9.0 / UCA 9.0.0）</td>
+</tr>
+<tr>
+<td>utf8 的含义</td>
+<td>utf8 即 utf8mb3，最多 3 字节，emoji 存不进去</td>
+<td>utf8 仍是 utf8mb3 的别名，自 8.0.28 起被废弃，应显式使用 utf8mb4</td>
+</tr>
+<tr>
+<td>默认认证插件</td>
+<td>mysql_native_password</td>
+<td>caching_sha2_password，老客户端/驱动会报认证插件错误</td>
+</tr>
+<tr>
+<td>数据字典</td>
+<td>元数据分散在 .frm、.par 以及 mysql.proc 等表中</td>
+<td>事务型数据字典，information_schema 是数据字典之上的视图，mysql.proc 被移除</td>
+</tr>
+<tr>
+<td>InnoDB 元数据表</td>
+<td>information_schema.INNODB_SYS_TABLES / INNODB_SYS_INDEXES</td>
+<td>改名为 INNODB_TABLES / INNODB_INDEXES（INNODB_SYS_* 已移除）</td>
+</tr>
+<tr>
+<td>整型显示宽度</td>
+<td>int(11) 等显示宽度有效</td>
+<td>8.0.17 起废弃 ZEROFILL 与显示宽度，8.0.19 起不再输出</td>
+</tr>
+<tr>
+<td>窗口函数与 CTE</td>
+<td>不支持</td>
+<td>支持窗口函数和公用表表达式（WITH）</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-sql">-- 查看当前字符集与排序规则
+SHOW VARIABLES LIKE 'character_set_server';
+SHOW VARIABLES LIKE 'collation_server';
+SHOW VARIABLES LIKE 'default_authentication_plugin';
+
+-- 查看账号使用的认证插件
+SELECT user, host, plugin FROM mysql.user;
+
+-- 8.0 客户端报 "Authentication plugin 'caching_sha2_password' cannot be loaded" 时：
+-- 方案一（推荐）：升级客户端/驱动；方案二：把账号改回 mysql_native_password
+ALTER USER 'app'@'%' IDENTIFIED WITH mysql_native_password BY 'StrongPass!2024';
+FLUSH PRIVILEGES;
+
+-- 从 5.7 升级到 8.0 前，建议先统一字符集，避免升级后出现乱码
+ALTER DATABASE mydb CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE employee CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+</code></pre>
+<p>说明：utf8mb4_0900_ai_ci 是 8.0 新增的排序规则，5.7 中不存在，需要跨版本兼容的脚本可以继续使用 utf8mb4_unicode_ci。8.0 的 information_schema 已改为数据字典之上的视图，绝大多数查询语法不变，但读写 InnoDB 内部元数据表的名字要按上表调整。</p>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
 <li>
-<ul>
-<li>
-<ul>
-<li><a href="#%E8%A7%86%E5%9B%BE">视图</a>
+<a href="#%E8%A7%86%E5%9B%BE">视图</a>
 <ul>
 <li><a href="#%E7%89%B9%E7%82%B9">特点</a></li>
 <li><a href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF">使用场景</a></li>
 <li><a href="#%E4%BC%98%E7%82%B9">优点</a></li>
 <li><a href="#%E7%BC%BA%E7%82%B9">缺点</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E4%B8%8E%E4%BD%BF%E7%94%A8%E8%A7%86%E5%9B%BE">创建与使用视图</a></li>
 </ul>
 </li>
-<li><a href="#%E6%B8%B8%E6%A0%87">游标</a></li>
-<li><a href="#%E5%AD%98%E5%82%A8%E8%BF%87%E7%A8%8B%E4%B8%8E%E5%87%BD%E6%95%B0">存储过程与函数</a>
+<li>
+<a href="#%E6%B8%B8%E6%A0%87">游标</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#%E5%AD%98%E5%82%A8%E8%BF%87%E7%A8%8B%E4%B8%8E%E5%87%BD%E6%95%B0">存储过程与函数</a>
 <ul>
 <li><a href="#%E4%BC%98%E7%82%B9-2">优点</a></li>
 <li><a href="#%E7%BC%BA%E7%82%B9-2">缺点</a></li>
+<li><a href="#%E5%AD%98%E5%82%A8%E8%BF%87%E7%A8%8B%E4%B8%8E%E5%87%BD%E6%95%B0%E7%9A%84%E5%8C%BA%E5%88%AB">存储过程与函数的区别</a></li>
 </ul>
 </li>
-<li><a href="#%E8%A7%A6%E5%8F%91%E5%99%A8">触发器</a>
+<li>
+<a href="#%E8%A7%A6%E5%8F%91%E5%99%A8">触发器</a>
 <ul>
 <li><a href="#mysql%E4%B8%AD%E9%83%BD%E6%9C%89%E5%93%AA%E4%BA%9B%E8%A7%A6%E5%8F%91%E5%99%A8">MySQL中都有哪些触发器</a></li>
 </ul>
 </li>
-<li><a href="#sql%E8%AF%AD%E5%8F%A5">SQL语句</a>
+<li>
+<a href="#sql%E8%AF%AD%E5%8F%A5">SQL语句</a>
 <ul>
 <li><a href="#%E8%B6%85%E9%94%AE-%E5%80%99%E9%80%89%E9%94%AE-%E4%B8%BB%E9%94%AE-%E5%A4%96%E9%94%AE">超键、候选键、主键、外键</a></li>
 <li><a href="#sql-%E7%BA%A6%E6%9D%9F">SQL 约束</a></li>
 <li><a href="#%E5%85%AD%E7%A7%8D%E5%85%B3%E8%81%94%E6%9F%A5%E8%AF%A2">六种关联查询</a></li>
 </ul>
 </li>
-<li><a href="#%E5%AD%90%E6%9F%A5%E8%AF%A2">子查询</a>
+<li>
+<a href="#%E5%AD%90%E6%9F%A5%E8%AF%A2">子查询</a>
 <ul>
 <li><a href="#%E5%AD%90%E6%9F%A5%E8%AF%A2%E7%9A%84%E4%B8%89%E7%A7%8D%E6%83%85%E5%86%B5">子查询的三种情况</a></li>
 <li><a href="#mysql%E4%B8%AD-in-%E5%92%8C-exists-%E5%8C%BA%E5%88%AB">mysql中 in 和 exists 区别</a></li>
@@ -774,27 +951,28 @@ WHERE
 <li><a href="#union%E4%B8%8Eunion-all%E7%9A%84%E5%8C%BA%E5%88%AB">UNION与UNION ALL的区别</a></li>
 </ul>
 </li>
-</ul>
-</li>
+<li>
+<a href="#mysql-57-%E4%B8%8E-80-%E7%9A%84%E5%85%B3%E9%94%AE%E5%B7%AE%E5%BC%82">MySQL 5.7 与 8.0 的关键差异</a>
+<ul>
 </ul>
 </li>
 </ul>
 </div>
           <hr />
-          
+
             <nav class="post-pn">
       <a class="prev-post" href="/lbX34toJL/"><span class="pn-label">← 上一篇</span><span class="pn-title">mysql概述五</span></a>
       <a class="next-post" href="/5ppmKteEb/"><span class="pn-label">下一篇 →</span><span class="pn-title">mysql概述三</span></a>
       </nav>
-          
-          
-          
-          
-          <div class="comment" style="text-align: center;">
-            
 
-            
-            
+
+
+
+          <div class="comment" style="text-align: center;">
+
+
+
+
           </div>
         </div>
       </div>
@@ -806,21 +984,21 @@ WHERE
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto">
           <ul class="list-inline text-center">
-            
-            
-              
-            
-              
-            
-              
-            
-              
-            
-              
-            
-              
-            
-              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
               <!-- <li class="list-inline-item">
               <a href="/atom.xml" target="_blank">
                 <span class="fa-stack fa-lg">
@@ -869,7 +1047,7 @@ WHERE
       }
     }
   })(this));</script>
-  
+
   <script src="/media/scripts/tocScript.js"></script>
 
 <script src="/media/scripts/site.js"></script>
