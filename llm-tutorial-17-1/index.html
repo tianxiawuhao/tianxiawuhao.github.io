@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,扩散模型背后的数学理论">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>17.1 正向扩散过程 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="17.1 正向扩散过程 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="17.1 正向扩散过程" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-17-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">多模态</a>
+                <a href="/tutorial/" class="tag">扩散模型背后的数学理论</a>
+                </span>
+              <h1>17.1 正向扩散过程</h1>
+              <span class="meta">
+                Posted on
+                2025-06-07，8 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p>由于我们正在创建一个生成模型，我们希望找到真实图像的分布。</p>
+<p>给定一个目标和未知的概率分布，可以构造一条马尔可夫链，用来近似该目标概率分布。执行近似时包含的步骤越多，样本的分布就越接近真实分布。</p>
+<p>当当前决策仅取决于你所在的位置而非起点时，过程就是马尔可夫过程。存在概率转移矩阵，我们可以构建一个链结构，称为马尔可夫链。</p>
+<p>$$
+p(x) \propto e^{-f(x)} \quad \Leftrightarrow \quad \log p(x) = -f(x) + \text{常数} \tag{1}
+$$
+$$
+\therefore x_t = x_{t-1} - \eta_t \nabla f(x_{t-1}) \tag{2}
+$$
+$$
+x_{t+1} = x_t - \frac{\varepsilon}{2} \nabla f(x_t) + \sqrt{\varepsilon} \mathcal{N}(0, I) \tag{3}
+\tag{17.1}
+$$</p>
+<p>图 17.1 郎之万动力学</p>
+<p>郎之万动力学是目前最流行的MCMC（马尔可夫蒙特卡洛采样）方法之一。如果我们有一个概率分布 $p(x)$ 且是马尔可夫分布，则它属于指数分布类。这在图 17.1(1)中给出，其中 $f(x)$ 是某个使得该方程成立的函数。假设我们没有直接从该分布中采样的方法。假设我们只能知道函数在每一点的梯度 $\nabla f(x)$。如果是这样，我们可以应用梯度下降来求出分布的模态。这由图 17.1(2)给出，其中 $\eta$ 是时间步 $t$ 的学习率。如果我们能找到分布的模态，那么我们就能找到密度中具有峰值的区域。由于在我们的训练数据中，会有很多“好”图像，这意味着去到峰值时，会得到这些好图像。郎之万采样是对该梯度下降算法的有趣修改，由图 17.1(3)给出。这里我们在梯度下降公式的每个步骤中添加一个噪声项。</p>
+<p>一个问题是，如果想加快过程，可能会选择 $\varepsilon$ 的值过高，这可能导致上述方程(3)不稳定并发散。所以，如果我们能提供某种形式的保证，保证更新规则会收敛，那就更好了。</p>
+<p>图 17.2 正向扩散和反向扩散</p>
+<p>扩散模型的训练可以分为两部分：</p>
+<ol>
+<li>正向扩散过程 $\longrightarrow$ 给图像添加噪声。</li>
+<li>反向扩散过程 $\longrightarrow$ 从图像中去除噪声。</li>
+</ol>
+<p>加噪声图片
+的分布
+输出
+均值
+方差
+数学记号：
+t：时间步（从 1 到 T）
+：从真实的数据分布 q(x) 中采样到的一条数据
+I：单位矩阵
+x0
+x0 ~ q(x)
+例如
+：方差计划
+βt
+βt
+0
+1
+β0
+βT
+(
+, 以及
+=一个小的数值,
+=一个大的数值)</p>
+<p>图 17.3 正向扩散公式图解</p>
+<p>正向扩散过程逐步将高斯噪声添加到输入图像 $x_0$ 中，总共会有 $T$ 步。该过程将产生一系列带噪声的图像样本 $x_1, \dots, x_T$。</p>
+<p>当 $T \rightarrow \infty$ 时，最终结果将变成完全噪声图像，就像从各向同性的高斯分布中采样出来的噪声一样。</p>
+<p>但我们不需要设计一种算法来迭代地向图像中添加噪声，而是可以使用闭式公式（解析解）在特定的时间步 $t$ 直接对噪声图像进行采样。</p>
+<p><strong>前向扩散的闭式公式（解析解）</strong></p>
+<p>可以使用重参数化技巧推导出解析形式的采样公式。</p>
+<p><strong>重参数技巧</strong></p>
+<p>首先，如果 $z \sim \mathcal{N}(\mu, \sigma^2)$ 的话，那么有下面的结论</p>
+<p>$$
+z = \mu + \sigma \varepsilon \quad \text{其中} \quad \varepsilon \sim \mathcal{N}(0, 1) \tag{17.2}
+$$</p>
+<p>两个正态分布（独立）随机变量的和也是正态分布，也就是如果 $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$ 和 $Y \sim \mathcal{N}(\mu_Y, \sigma_Y^2)$，那么对于 $Z = X + Y$ 有 $Z \sim \mathcal{N}(\mu_X + \mu_Y, \sigma_X^2 + \sigma_Y^2)$，也就是</p>
+<p>$$
+z = \mu_X + \mu_Y + \sqrt{\sigma_X^2 + \sigma_Y^2} \varepsilon \quad \text{其中} \quad \varepsilon \sim \mathcal{N}(0, 1) \tag{17.3}
+$$</p>
+<p>利用这个技巧，我们可以将采样图像 $x_t$ 表示如下：</p>
+<p>$$
+x_t = \sqrt{1 - \beta_t} x_{t-1} + \sqrt{\beta_t} \varepsilon_{t-1} \tag{17.4}
+$$</p>
+<p>然后我们可以递归地展开它来得到闭合形式的公式：</p>
+<p>我们先来写一些前置结论</p>
+<p>$$
+\varepsilon_0, \dots, \varepsilon_{t-2}, \varepsilon_{t-1} \sim \mathcal{N}(0, I)
+$$
+$$
+\varepsilon \sim \mathcal{N}(0, I)
+$$
+$$
+\alpha_t = 1 - \beta_t
+$$
+$$
+\bar{\alpha}<em>t = \prod</em>{i=1}^t \alpha_i
+\tag{17.5}
+$$</p>
+<p>然后我们开始推导</p>
+<p>$$
+\begin{aligned}
+x_t &amp;= \sqrt{1 - \beta_t} x_{t-1} + \sqrt{\beta_t} \varepsilon_{t-1} \
+&amp;= \sqrt{\alpha_t} x_{t-1} + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \
+&amp;= \sqrt{\alpha_t} (\sqrt{\alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_{t-1}} \varepsilon_{t-2}) + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{\alpha_t (1 - \alpha_{t-1})} \varepsilon_{t-2} + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \mathcal{N}(0, \alpha_t (1 - \alpha_{t-1}) I) + \mathcal{N}(0, (1 - \alpha_t) I) \
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \mathcal{N}(0, (1 - \alpha_t \alpha_{t-1}) I) \
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_t \alpha_{t-1}} \varepsilon_{t-2} \
+&amp;\vdots \
+&amp;= \sqrt{\alpha_t \alpha_{t-1} \dots \alpha_1} x_0 + \sqrt{1 - \alpha_t \alpha_{t-1} \dots \alpha_1} \varepsilon \
+&amp;= \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon
+\end{aligned}
+\tag{17.6}
+$$</p>
+<p><strong>一步加噪声公式</strong></p>
+<p><strong>提示</strong></p>
+<p>所有 $\varepsilon$ 都是i.i.d.（独立同分布）标准正态随机变量。</p>
+<p>使用不同的符号和下标来区分它们非常重要，因为它们是独立的，并且在采样后它们的值可能会有所不同。</p>
+<p>重复这些步骤将为我们提供以下仅取决于输入图像 $x_0$ 的公式：</p>
+<p>$$
+x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon \tag{17.7}
+$$</p>
+<p>现在我们可以使用此公式在任何时间步骤直接对 $x_t$ 进行采样，这使得前向过程更快。</p>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-16-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">16.4 完整代码</span></a>
+      <a class="next-post" href="/llm-tutorial-17-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">17.2 逆向扩散过程</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

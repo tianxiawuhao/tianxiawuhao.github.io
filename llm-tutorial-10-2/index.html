@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,使用DPO微调大语言模型">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>10.2 DPO实战 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="10.2 DPO实战 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="10.2 DPO实战" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-10-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">使用DPO微调大语言模型</a>
+                </span>
+              <h1>10.2 DPO实战</h1>
+              <span class="meta">
+                Posted on
+                2025-05-05，62 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>我们遵循RLHF的标准流程：预训练LLM $\Longrightarrow$ SFT $\Longrightarrow$ DPO</p>
+<h3 id="sec-1">10.2.1 第一步：对预训练模型进行基于指令的监督微调（SFT）</h3>
+<p><strong>提示</strong></p>
+<ul>
+<li>基于指令的监督微调：Instruct SFT</li>
+<li>目标：在给定问题（Question）的前提下，使得模型产生该回答（Answer）的概率最大化。</li>
+</ul>
+<p>指令微调的优化目标</p>
+<p><figure class="tutorial-figure"><figcaption>图10.2 SFT的损失函数</figcaption></figure>
+</p>
+<p>我们要注意的是在基于指令的监督微调中，我们只针对答案部分计算损失。</p>
+<p><figure class="tutorial-figure"><figcaption>图10.3 基于指令的监督微调只针对答案部分计算损失</figcaption></figure>
+</p>
+<p>我们将损失的计算推广到批次（batch）。</p>
+<p><figure class="tutorial-figure"><figcaption>图10.4 将只针对答案计算损失推广到批次</figcaption></figure>
+</p>
+<p>首先导入需要的依赖。</p>
+<pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+import numpy as np
+import os
+from dataclasses import dataclass
+import datasets
+import time
+</code></pre>
+<p>接下来我们导入模型和分词器。</p>
+<pre><code class="language-python">device = &quot;cuda&quot;
+model_path = &quot;./Qwen3-0.6B-Base&quot;
+
+model = AutoModelForCausalLM.from_pretrained(model_path, dtype=&quot;auto&quot;, device_map=&quot;auto&quot;)
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+</code></pre>
+<p>然后我们设置一下生成文本的参数。保证测试的一致性。</p>
+<p>其中151645为 <code>&lt;|im_end|&gt;</code>，151643为 <code>&lt;|endoftext|&gt;</code></p>
+<pre><code class="language-python">model.generation_config.do_sample = True
+model.generation_config.eos_token_id = [151645,151643]
+model.generation_config.pad_token_id = 151643
+model.generation_config.temperature = 0.7
+model.generation_config.top_p = 0.8
+model.generation_config.top_k = 20
+model.generation_config.repetition_penalty = 1.05
+</code></pre>
+<p><strong>代码10.4 模型生成的配置</strong></p>
+<p>然后我们定义一下SFT阶段的训练超参数。</p>
+<pre><code class="language-python">@dataclass
+class SFTConfig:
+    max_length = 2500
+    batch_size = 2
+    gradient_accumulation_steps = 8
+    log_iter = 400
+    max_lr = 2e-5
+    min_lr = 2e-6
+    warmup_steps = 1000
+</code></pre>
+<p>接下来我们导入训练数据并将训练数据转换成input_ids。</p>
+<pre><code class="language-python">ultrachat_200k_data = datasets.load_dataset(&quot;/ultrachat_200k&quot;)
+
+def tokenize_and_format(data):
+    &quot;&quot;&quot;使用模型自带的聊天模板格式化训练数据&quot;&quot;&quot;
+    input_ids = tokenizer.apply_chat_template(
+        data,
+        tokenize=True,
+        add_generation_prompt=False,
+        truncation=True,
+        max_length=2500,
+    )
+    return input_ids
+
+## 生成训练数据的input_ids
+train_data = []
+i = 0
+while True:
+    data = ultrachat_200k_data[&quot;train_sft&quot;][i][&quot;messages&quot;]
+    # 添加系统提示词
+    data.insert(
+        0,
+        {&quot;content&quot;: &quot;You are a helpful assistant&quot;, &quot;role&quot;: &quot;system&quot;}
+    )
+    input_ids = tokenize_and_format(data)
+    train_data.append(input_ids)
+    i += 1
+    if i % 1000 == 0:
+        print(f&quot;已处理{i}条数据&quot;)
+    if i == 50000:
+        break
+</code></pre>
+<p>接下来我们编写一下学习率的线性预热和余弦衰减的函数。</p>
+<pre><code class="language-python">def linear_warmup(current_step, warmup_steps, max_lr):
+    if current_step &lt; warmup_steps:
+        return max_lr * current_step / warmup_steps
+    else:
+        return max_lr
+
+def cosine_decay(current_step, warmup_steps, total_steps, max_lr, min_lr):
+    if current_step &lt; warmup_steps:
+        return linear_warmup(current_step, warmup_steps, max_lr)
+    else:
+        progress = (current_step - warmup_steps) / (total_steps - warmup_steps)
+        decay = 0.5 * (1 + np.cos(np.pi * progress))
+        return (max_lr - min_lr) * decay + min_lr
+</code></pre>
+<p><strong>代码10.5 学习率调度：线性预热和余弦衰减</strong></p>
+<h3 id="sec-2">基于指令SFT的掩码设置</h3>
+<p>基于指令SFT的掩码设置</p>
+<ul>
+<li>SFT和预训练的区别核心就是掩码掉“问题”部分的损失，而只看“回答”部分的损失，并仅基于回答部分的损失进行优化</li>
+<li>实现方式：构造损失掩码，仅针对每轮对话（含多轮）的模型“输出”部分（也就是回答部分）进行损失计算</li>
+</ul>
+<p>假设我们的多轮对话数据是</p>
+<pre><code class="language-python">data = [
+    {&quot;content&quot;: &quot;你是谁？&quot;, &quot;role&quot;: &quot;user&quot;},
+    {&quot;content&quot;: &quot;我是左元。&quot;, &quot;role&quot;: &quot;assistant&quot;},
+    {&quot;content&quot;: &quot;你会强化学习吗?&quot;, &quot;role&quot;: &quot;user&quot;},
+    {&quot;content&quot;: &quot;略知一二。&quot;, &quot;role&quot;: &quot;assistant&quot;},
+]
+</code></pre>
+<p>经过模型的对话模板格式化之后是</p>
+<pre><code class="language-text">&lt;im_start&gt;system
+You are a helpful assistant &lt;im_end&gt;
+&lt;im_start&gt;user
+你是谁？&lt;im_end&gt;
+&lt;im_start&gt;assistant
+我是左元。&lt;im_end&gt;
+&lt;im_start&gt;user
+你会强化学习吗？&lt;im_end&gt;
+&lt;im_start&gt;assistant
+&lt;think&gt;&lt;/think&gt;略知一二。&lt;im_end&gt;
+</code></pre>
+<p>代码如下：</p>
+<pre><code class="language-python">def create_answer_mask(input_ids, tokenizer):
+    &quot;&quot;&quot;
+    创建仅对助手回答部分计算损失的掩码
+    Args:
+        input_ids: 输入token序列 [batch_size, seq_len]
+        tokenizer: 分词器
+    Returns:
+        answer_mask: 助手回答部分为1，其他部分为0的掩码
+    &quot;&quot;&quot;
+    batch_size, seq_len = input_ids.shape
+    answer_mask = torch.zeros_like(input_ids)
+
+    # 获取结束标记的token id
+    eos_token_id = tokenizer.encode(&quot;&lt;im_end&gt;&quot;)[0]
+
+    for batch_idx in range(batch_size):
+        # 找到所有 &lt;im_end&gt; 的位置
+        eos_positions = torch.where(
+            input_ids[batch_idx] == eos_token_id
+        )[0].tolist()
+
+        if len(eos_positions) &lt; 2: # 至少需要user和assistant各一个结束标记
+            continue
+
+        # 解析对话轮次
+        user_ends, assistant_ends = _parse_conversation_turns(eos_positions)
+
+        # 为每个助手回答设置掩码
+        _set_answer_masks(
+            answer_mask[batch_idx],
+            user_ends,
+            assistant_ends,
+            seq_len
+        )
+
+    return answer_mask
+
+
+def _parse_conversation_turns(eos_positions):
+    &quot;&quot;&quot;
+    解析对话轮次，分离用户和助手的结束位置
+    对话格式：
+    &lt;im_start&gt;user\n{user_msg}&lt;im_end&gt;\n&lt;im_start&gt;assistant\n{assistant_msg}
+    &lt;im_end&gt;\n
+    eos_positions[0]: system结束（如果有）
+    eos_positions[1]: 第1轮user结束
+    eos_positions[2]: 第1轮assistant结束
+    eos_positions[3]: 第2轮user结束
+    eos_positions[4]: 第2轮assistant结束
+    ...
+    &quot;&quot;&quot;
+    # 跳过system系统提示词部分，从第一个user开始
+    conversation_eos = eos_positions[1:] # 去掉system的&lt;im_end&gt;
+
+    # 偶数索引：user结束位置，奇数索引：assistant结束位置
+    # pos + 1 为跳过&lt;im_end&gt;，此时pos+1指向\n
+    user_ends = [pos + 1 for pos in conversation_eos[::2]]
+    assistant_ends = [pos + 1 for pos in conversation_eos[1::2]]
+
+    return user_ends, assistant_ends
+
+
+def _set_answer_masks(mask, user_ends, assistant_ends, seq_len):
+    &quot;&quot;&quot;
+    为助手回答部分设置掩码
+    Args:
+        mask: 当前样本的掩码 [seq_len]
+        user_ends: 用户消息结束位置列表
+        assistant_ends: 助手消息结束位置列表
+        seq_len: 序列长度
+    &quot;&quot;&quot;
+    num_user_turns = len(user_ends)
+    num_assistant_turns = len(assistant_ends)
+
+    if num_user_turns == num_assistant_turns:
+        # 完整对话: 每轮都有用户问题和助手回答
+        for user_end, assistant_end in zip(user_ends, assistant_ends):
+            answer_start = user_end + 3 # 跳过 &lt;im_start&gt; assistant 这2个token.
+            # answer_start指向assistant后面的\n
+            answer_end = assistant_end - 1 # 不包含&lt;im_end&gt;后面的\n
+            mask[answer_start:answer_end] = 1 # 左闭右开区间，所以掩码不包含&lt;im_end&gt;
+    elif num_user_turns == num_assistant_turns + 1:
+        # 未完成对话: 最后一轮助手回答被截断
+        # 处理完整的对话轮次
+        for user_end, assistant_end in zip(user_ends[:-1], assistant_ends):
+            answer_start = user_end + 3
+            answer_end = assistant_end - 1
+            mask[answer_start:answer_end] = 1
+        # 处理最后一轮被截断的助手回答
+        last_user_end = user_ends[-1]
+        last_answer_start = last_user_end + 3
+        mask[last_answer_start:] = 1 # 到序列结尾
+</code></pre>
+<p><strong>代码10.6 答案掩码</strong></p>
+<p>设置模型的训练超参数：</p>
+<pre><code class="language-python">batch_size = SFTConfig.batch_size
+gradient_accumulation_steps = SFTConfig.gradient_accumulation_steps
+log_iter = SFTConfig.log_iter
+max_lr = SFTConfig.max_lr
+min_lr = SFTConfig.min_lr
+warmup_steps = SFTConfig.warmup_steps
+total_steps = len(train_data) // batch_size
+optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
+</code></pre>
+<p>编写日志记录函数</p>
+<pre><code class="language-python">with open(&quot;log.txt&quot;, &quot;a&quot;) as my_file:
+    my_file.write(f&quot; \
+    time:{time.strftime(&#39;%Y-%m-%d, %H:%M:%S&#39;)}, \
+    batch_size:{batch_size}, \
+    warmup_steps:{warmup_steps}, \
+    max_lr:{max_lr}, \
+    min_lr:{min_lr}\n&quot;)
+
+# 定义一个日志记录函数
+def log_call(iters, iters_average_loss):
+    with open(&quot;log.txt&quot;, &quot;a&quot;) as my_file:
+        my_file.write(f&quot; \
+        time:{time.strftime(&#39;%Y-%m-%d, %H:%M:%S&#39;)}, \
+        iters:{iters+1}, \
+        iters_average_loss:{iters_average_loss:.4f}\n&quot;)
+</code></pre>
+<p><strong>代码10.7 日志相关配置</strong></p>
+<p>主训练循环如下</p>
+<pre><code class="language-python">model.train()
+training_losses = []
+model.zero_grad() # 训练开始时清空梯度
+skipped_batches_count = 0
+
+total_batches = len(train_data) // batch_size
+
+for batch_idx in range(total_batches):
+    ## ==================== 数据准备阶段 ====================
+
+    # 获取当前批次的原始数据
+    current_batch_sequences = train_data[
+        batch_idx * batch_size : (batch_idx + 1) * batch_size
+    ]
+
+    # 计算当前批次的最高序列长度，用于padding对齐
+    max_sequence_length = max([len(sequence) for sequence in current_batch_sequences])
+
+    ## 对批次数据进行填充，使所有序列长度一致以便并行计算
+    padded_sequences_list = []
+    ## 将&lt;|endoftext|&gt;设置为填充符
+    pad_token_id = model.generation_config.eos_token_id[-1]
+
+    for seq_idx in range(batch_size):
+        # 原始的一条训练数据
+        original_sequence = current_batch_sequences[seq_idx]
+        # 要填充的长度
+        padding_length = max_sequence_length - len(original_sequence)
+
+        # 使用EOS token进行填充
+        padded_sequence = torch.nn.functional.pad(
+            torch.tensor(original_sequence),
+            (0, padding_length),
+            mode=&quot;constant&quot;,
+            value=pad_token_id
+        ).tolist()
+        padded_sequences_list.append(padded_sequence)
+
+    # 转换为张量
+    batch_input_tensor = torch.tensor(padded_sequences_list)
+
+    ## ======================== 构建输入输出对 ========================
+    # 构建因果语言模型的输入输出对：x→y（下一个词预测）
+    model_inputs = batch_input_tensor[:, :-1].to(device) # 输入：前n-1个token
+    target_labels = batch_input_tensor[:, 1:].to(device) # 标签：后n-1个token
+
+    ## ======================== 构建训练掩码 ========================
+    # 构建掩码矩阵来控制损失计算范围
+    # 1. padding_mask：标识哪些位置是填充token（不计算损失）
+    # 2. answer_mask：标识哪些位置是助手回答部分（只对回答计算损失）
+
+    ## 【填充掩码】：非填充token为1，填充token为0
+    ## padding_mask中的问题部分的掩码也是1
+    padding_mask = torch.where(target_labels == pad_token_id, 0, 1)
+
+    ## 【回答掩码】：只有助手回答部分为1，其他部分为0
+    assistant_answer_mask = create_answer_mask(model_inputs, tokenizer)
+
+    ## 【组合掩码】：同时满足“非填充”且“是回答部分”的token才计算损失
+    ## 取出交集，就是真正要计算的回答部分
+    final_loss_mask = (assistant_answer_mask &amp; padding_mask)
+
+    ## ======================== 批次有效性检查 ========================
+    ## 检查当前批次是否有效：如果某个样本的回答部分完全为空，则跳过该批次
+    # 这种情况通常发生在问题过长导致回答部分被截断时
+    tokens_per_sample = final_loss_mask.sum(dim=-1) # 每个样本的有效回答token数
+    min_answer_tokens = tokens_per_sample.min().item() # 最少的有效token数
+
+    if min_answer_tokens == 0:
+        print(f&quot;跳过第{batch_idx + 1}批次：回答部分数据不足&quot;)
+        skipped_batches_count += 1
+        continue # 跳过当前批次
+
+    ## ====================== 模型前向传播 ======================
+    # 执行前向传播，获取模型预测的Logits
+    # [batch_size, seq_length, vocab_size]
+    model_logits = model(model_inputs).logits
+
+    ## ====================== 损失计算 ======================
+    # 计算带掩码的交叉熵损失
+    # 步骤：Logits → softmax → log → gather → 负对数似然 → 掩码过滤 → 平均
+
+    # 1. 计算每个token的负对数似然损失
+    # 形状：[batch_size, seq_len, vocab_size]
+    log_probabilities = torch.log(torch.softmax(model_logits, dim=-1))
+    # 使用真正的目标token取出vocab_size长度的数组中token对应的对数概率
+    # 形状：[batch_size, seq_len]
+    gathered_log_probs = torch.gather(
+        log_probabilities,
+        dim=-1,
+        index=target_labels.unsqueeze(2)
+    )
+    negative_log_likelihood = gathered_log_probs * (-1) # 负对数似然
+    token_losses = negative_log_likelihood.squeeze(2)
+
+    # 2. 应用掩码并计算每个样本的平均损失
+    masked_token_losses = torch.mul(token_losses, final_loss_mask)
+    sample_losses = masked_token_losses.sum(dim=-1) \
+        / final_loss_mask.sum(dim=-1)
+
+    # 3. 计算批次平均损失并应用梯度累积
+    batch_average_loss = torch.nanmean(sample_losses) \
+        / gradient_accumulation_steps
+
+    ## ====================== 反向传播和优化 ======================
+    # 反向传播计算梯度
+    batch_average_loss.backward()
+
+    # 动态调整学习率（余弦衰减 + 预热）
+    current_learning_rate = cosine_decay(
+        batch_idx,
+        warmup_steps,
+        total_steps,
+        max_lr,
+        min_lr
+    )
+
+    # 更新优化器的学习率
+    for param_group in optimizer.param_groups:
+        param_group[&quot;lr&quot;] = current_learning_rate
+
+    # 梯度累积：只在累积步数达到或最后一个批次时更新权重
+    is_accumulation_step = (batch_idx + 1) \
+        % gradient_accumulation_steps == 0
+    is_final_batch = (batch_idx + 1) == total_batches
+
+    if is_accumulation_step or is_final_batch:
+        optimizer.step() # 更新模型权重
+        optimizer.zero_grad() # 清空梯度缓存
+
+    ## ======================== 训练日志记录 ========================
+    # 记录当前批次的损失（还原梯度累积的缩放）
+    actual_batch_loss = \
+        batch_average_loss.item() \
+        * \
+        gradient_accumulation_steps
+    training_losses.append(actual_batch_loss)
+
+    # 定期输出训练进度
+    should_log = (batch_idx + 1) % log_iter == 0 or is_final_batch
+
+    if should_log:
+        # 计算最近几个批次的平均损失
+        recent_losses = training_losses[-log_iter:]
+        recent_average_loss = np.nanmean(recent_losses)
+
+        # 输出训练状态
+        current_time = time.strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+        print(f&quot;时间: {current_time} | &quot;
+              f&quot;批次: {batch_idx + 1}/{total_batches} | &quot;
+              f&quot;最近{len(recent_losses)}批次平均损失: {recent_average_loss:.4f} | &quot;
+              f&quot;学习率: {current_learning_rate:.2e}&quot;)
+
+        # 调用外部日志记录函数
+        log_call(batch_idx, recent_average_loss)
+
+## ======================== 训练完成总结 ========================
+print(&quot;训练完成!&quot;)
+print(f&quot;训练统计:&quot;)
+print(f&quot; - 总批次数: {total_batches}&quot;)
+print(f&quot; - 跳过批次数: {skipped_batches_count}&quot;)
+print(f&quot; - 有效批次数: {total_batches - skipped_batches_count}&quot;)
+print(f&quot; - 最终平均损失: {np.nanmean(training_losses[-100:]):.4f}&quot;)
+
+if skipped_batches_count &gt; 0:
+    skip_ratio = skipped_batches_count / total_batches * 100
+    print(f&quot;跳过批次占比: {skip_ratio:.2f}%&quot;)
+    if skip_ratio &gt; 10:
+        print(&quot;建议: 跳过批次过多, 考虑增加最大序列长度或优化数据预处理&quot;)
+
+model.save_pretrained(&quot;./Qwen3-0.6B-SFT/&quot;)
+tokenizer.save_pretrained(&quot;./Qwen3-0.6B-SFT/&quot;)
+</code></pre>
+<p><figure class="tutorial-figure"><figcaption>图10.5 我们是从model_inputs中寻找回答部分，然后计算预测的损失</figcaption></figure>
+</p>
+<p>为什么要取交集？也就是代码 <code>final_loss_mask = (assistant_answer_mask &amp; padding_mask)</code> 为什么要这么写？</p>
+<p>注意到 <code>padding_mask = torch.where(target_labels == pad_token_id, 0, 1)</code> 是将 target_labels 中的填充符 pad_token 置为 0。因为我们是右填充逻辑。</p>
+<p>在绝大多数标准场景下，这个“取交集”的操作确实是冗余的，但保留它也无伤大雅，甚至是一种防御性编程的好习惯。</p>
+<p>下面为你详细拆解为什么它是“冗余”的，以及为什么在某些边缘情况下它又是“必要”的。</p>
+<ol>
+<li>为什么理论上是“没必要”的？（冗余性分析）</li>
+</ol>
+<p>SFT（有监督微调）的核心逻辑是：只计算 Assistant（助手）回答部分的 Loss。</p>
+<p>我们来看看这两个掩码的定义：</p>
+<ul>
+<li>padding_mask：标记哪些是真实内容（1），哪些是填充内容（0）。</li>
+<li>assistant_answer_mask：标记哪些是助手的回答内容（1），其他都是0。</li>
+</ul>
+<p>在标准的右填充（Right-padding）数据处理流程中：</p>
+<p>所有的 Padding 都在句子的最末尾。所有的 Assistant 回答都在 Padding 之前。结论：assistant_answer_mask 为 1 的区域，必然是真实内容，因此该区域的 padding_mask 必然也是 1。</p>
+<p>数学上来说：Answer_Set $\subset$ Content_Set。</p>
+<p>既然回答集合是内容集合的子集，那么 Answer &amp; Content 自然就等于 Answer。所以取交集不会改变 assistant_answer_mask 本身的值。</p>
+<ol start="2">
+<li>为什么保留它也是好的？（防御性编程）</li>
+</ol>
+<p>虽然逻辑上冗余，但在工程实践中，保留 &amp; padding_mask 有两个好处：</p>
+<p>A. 防止掩码生成函数的 Bug</p>
+<p><code>create_answer_mask</code> 是一个复杂的逻辑函数（涉及查找 <code>&lt;im_start&gt;</code>，<code>&lt;im_end&gt;</code> 索引）。如果这个函数写得有瑕疵，比如：</p>
+<ul>
+<li>索引计算错误，导致掩码划多了，划到了 Padding 区域。</li>
+<li>数据集本身有脏数据，导致解析错位。</li>
+</ul>
+<p>此时，&amp; padding_mask 就像一道安全闸，强制把 Loss 计算限制在非 Padding 区域，防止模型去学习“预测 Padding Token”，避免模型变傻。</p>
+<p>B. 处理截断（Truncation）的边缘情况</p>
+<p>在代码中，我们使用了 <code>truncation=True</code>。如果一条数据非常长，恰好在 Assistant 回答的一半被截断了，且后面紧接着就是 Padding（这种情况在我们的代码中不会出现！虽然在 truncation 后通常没有 padding，但也取决于具体实现），双重掩码能确保万无一失。</p>
+<h3 id="sec-3">10.2.2 第二步：使用DPO算法对SFT后的模型进行微调</h3>
+<p><strong>危险</strong></p>
+<p>我们使用DPO算法要微调的模型是上一节中保存的“Qwen3-0.6B-SFT”。</p>
+<p>加载我们要微调的模型。</p>
+<pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+from dataclasses import dataclass
+import datasets
+import torch
+import numpy as np
+import os
+
+device = &quot;cuda&quot;
+model_path = &quot;./Qwen3-0.6B-SFT&quot;
+
+# 加载模型
+model = AutoModelForCausalLM.from_pretrained(
+    model_path,
+    dtype=&quot;auto&quot;,
+    device_map=&quot;auto&quot;
+)
+# 冻结的参考模型
+ref_model = AutoModelForCausalLM.from_pretrained(
+    model_path,
+    dtype=&quot;auto&quot;,
+    device_map=&quot;auto&quot;
+)
+# 加载分词器
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+</code></pre>
+<p>生成回答的配置和SFT时相同，见代码10.4。定义模型训练的超参数。</p>
+<pre><code class="language-python">@dataclass
+class DPOConfig:
+    max_length = 1700
+    batch_size = 2
+    gradient_accumulation_steps = 8
+    beta = 0.5 # β是DPO目标函数中的超参数
+    log_iter = 100
+    max_lr = 1e-6
+    min_lr = 1e-7
+    warmup_steps:int = 300
+</code></pre>
+<p>接下来导入正负例数据集。</p>
+<pre><code class="language-python">binarized_data = datasets.load_dataset(&quot;./ultrafeedback_binarized&quot;)
+</code></pre>
+<p>处理数据集</p>
+<pre><code class="language-python">def tokenize_and_format(data):
+    input_ids = tokenizer.apply_chat_template(
+        data,
+        tokenize=True,
+        add_generation_prompt=False,
+        truncation=True,
+        max_length=DPOConfig.max_length,
+    )
+    return input_ids
+
+## 生成偏好数据的input_ids
+chosen_input_ids_list = []
+i = 0
+while True:
+    data = binarized_data[&quot;train_sft&quot;][i][&quot;chosen&quot;]
+    data.insert(
+        0,
+        {&quot;content&quot;: &quot;You are a helpful assistant&quot;, &quot;role&quot;: &quot;system&quot;}
+    )
+    input_ids = tokenize_and_format(data)
+    chosen_input_ids_list.append(input_ids)
+    i += 1
+    if i % 10000 == 0 or i == len(binarized_data[&quot;train_sft&quot;]):
+        print(f&quot;偏好数据已处理{i}条数据&quot;)
+    if i == 30000:
+        break
+print(&quot;_&quot; * 70)
+
+#############
+## 生成不偏好数据的input_ids
+rejected_input_ids_list = []
+i = 0
+while True:
+    data = binarized_data[&quot;train_sft&quot;][i][&quot;rejected&quot;]
+    data.insert(
+        0,
+        {&quot;content&quot;: &quot;You are a helpful assistant&quot;, &quot;role&quot;: &quot;system&quot;}
+    )
+    input_ids = tokenize_and_format(data)
+    rejected_input_ids_list.append(input_ids)
+    i += 1
+    if i % 10000 == 0 or i == len(binarized_data[&quot;train_sft&quot;]):
+        print(f&quot;非偏好数据已处理{i}条数据&quot;)
+    if i == 30000:
+        break
+
+## 确保数据条数一致
+assert len(chosen_input_ids_list) == len(rejected_input_ids_list)
+</code></pre>
+<p>设置一下训练的超参数</p>
+<pre><code class="language-python">beta = DPOConfig.beta # β超参数
+batch_size = DPOConfig.batch_size
+gradient_accumulation_steps = DPOConfig.gradient_accumulation_steps
+log_iter = DPOConfig.log_iter
+max_lr = DPOConfig.max_lr
+min_lr = DPOConfig.min_lr
+warmup_steps = DPOConfig.warmup_steps
+total_steps = len(chosen_input_ids_list) // batch_size
+optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
+</code></pre>
+<p>配置 logging 日志记录模型训练过程参见代码10.7。复用SFT阶段设置的余弦衰减学习率曲线，参见代码10.5。将回答部分进行掩码的代码，参见代码10.6。</p>
+<p>计算平均对数概率</p>
+<pre><code class="language-python">def _compute_average_log_probability(logits, target_labels, mask):
+    &quot;&quot;&quot;
+    计算带掩码的平均对数概率
+    Args:
+        logits: 模型输出 [batch_size, seq_len, vocab_size]
+        target_labels: 目标标签 [batch_size, seq_len]
+        mask: 计算掩码 [batch_size, seq_len]
+    Returns:
+        average_log_prob: 每个样本的平均对数概率 [batch_size]
+    &quot;&quot;&quot;
+    # 计算softmax概率分布
+    probabilities = torch.softmax(logits, dim=-1)
+
+    # 计算对数概率
+    log_probabilities = torch.log(probabilities)
+
+    # 获取目标token的对数概率:
+    # [logπ(y0|x), logπ(y1|x,y0), logπ(y2|x,y&lt;2), ...]
+    gathered_log_probs = torch.gather(
+        log_probabilities,
+        dim=-1,
+        index=target_labels.unsqueeze(2)
+    ).squeeze(2)
+
+    # 应用掩码并计算平均值
+    masked_log_probs = torch.mul(gathered_log_probs, mask)
+
+    # 1/T (log π(y0|x) + log π(y1|x,y0) + log π(y2|x,y&lt;t) + ...)
+    # = 1/T (Σ log π(yt|x,y&lt;t)) = log (Π π(yt|x,y&lt;t))^(1/T)
+    # 这就是在提示词为x的条件下，生成一条回答y的概率。用强化学习的术语来说就是一条轨迹的概率。
+    average_log_prob = masked_log_probs.sum(dim=-1) / mask.sum(dim=-1)
+
+    return average_log_prob
+</code></pre>
+<p>DPO训练循环如下：</p>
+<pre><code class="language-python">model.train()
+
+# ======================= 训练指标记录列表 =======================
+training_losses = []
+# 偏好的回答的概率
+preferred_log_probabilities = []
+# 讨厌的回答的概率
+rejected_log_probabilities = []
+# 偏好的回答的奖励
+preferred_rewards = []
+# 讨厌的回答的奖励
+rejected_rewards = []
+reward_margins = []
+
+model.zero_grad() # 训练开始时清空梯度
+skipped_batches_count = 0
+total_batches = len(chosen_input_ids_list) // batch_size
+
+for batch_idx in range(total_batches):
+    ## ======================= 获取批次数据 =======================
+
+    # 获取当前批次的偏好对数据
+    preferred_batch_sequences = chosen_input_ids_list[
+        batch_idx * batch_size:(batch_idx + 1) * batch_size
+    ]
+    rejected_batch_sequences = rejected_input_ids_list[
+        batch_idx * batch_size:(batch_idx + 1) * batch_size
+    ]
+
+    ## ======================= 数据填充对齐 =======================
+
+    # 计算各自批次的最大序列长度
+    preferred_max_length = max([len(sequence) for sequence in preferred_batch_sequences])
+    rejected_max_length = max([len(sequence) for sequence in rejected_batch_sequences])
+    # 使用eos token作为pad token
+    pad_token_id = model.generation_config.eos_token_id[-1]
+
+    ### 偏好数据填充处理
+    preferred_padded_sequences = []
+    for seq_idx in range(batch_size):
+        original_sequence = preferred_batch_sequences[seq_idx]
+        # 计算要填充多少个pad
+        padding_length = preferred_max_length - len(original_sequence)
+        # 在训练数据的末尾填充pad
+        padded_sequence = torch.nn.functional.pad(
+            torch.tensor(original_sequence),
+            (0, padding_length),
+            mode=&quot;constant&quot;,
+            value=pad_token_id
+        ).tolist()
+        # 将填充过的数据放入列表
+        preferred_padded_sequences.append(padded_sequence)
+
+    preferred_batch_tensor = torch.tensor(preferred_padded_sequences)
+
+    ### 拒绝数据填充处理
+    rejected_padded_sequences = []
+    for seq_idx in range(batch_size):
+        original_sequence = rejected_batch_sequences[seq_idx]
+        padding_length = rejected_max_length - len(original_sequence)
+
+        padded_sequence = torch.nn.functional.pad(
+            torch.tensor(original_sequence),
+            (0, padding_length),
+            mode=&quot;constant&quot;,
+            value=pad_token_id
+        ).tolist()
+
+        rejected_padded_sequences.append(padded_sequence)
+
+    rejected_batch_tensor = torch.tensor(rejected_padded_sequences)
+
+    ### ================ 构建输入输出对 ================
+
+    # 构建因果语言模型的输入输出对：x→y（下一个词预测）
+    # 模型的输入：偏好的回答
+    preferred_model_inputs = preferred_batch_tensor[:, :-1].to(device)
+    # 真实的标签y
+    preferred_target_labels = preferred_batch_tensor[:, 1:].to(device)
+
+    rejected_model_inputs = rejected_batch_tensor[:, :-1].to(device)
+    # 真实的标签y
+    rejected_target_labels = rejected_batch_tensor[:, 1:].to(device)
+
+    ### ================ 构建训练掩码 ================
+
+    # 构建掩码矩阵：padding_mask（忽略填充token）+ answer_mask（只关注回答部分）
+    # pad_token_id 对应的置为 0 ，其它置为 1 。
+    preferred_padding_mask = torch.where(
+        preferred_target_labels == pad_token_id,
+        0,
+        1
+    )
+    rejected_padding_mask = torch.where(
+        rejected_target_labels == pad_token_id,
+        0,
+        1
+    )
+
+    # 助手回答的掩码：将助手回答的部分掩码为 1 。其它都是 0 。
+    preferred_answer_mask = create_answer_mask(
+        preferred_model_inputs,
+        tokenizer
+    )
+    rejected_answer_mask = create_answer_mask(
+        rejected_model_inputs,
+        tokenizer
+    )
+
+    # 最终掩码：取交集
+    preferred_final_mask = (preferred_answer_mask &amp; preferred_padding_mask)
+    rejected_final_mask = (rejected_answer_mask &amp; rejected_padding_mask)
+
+    ## ====================== 批次有效性检查 ======================
+
+    # 检查偏好对数据是否都有有效的回答部分
+    preferred_min_tokens = preferred_final_mask.sum(dim=-1).min().item()
+    rejected_min_tokens = rejected_final_mask.sum(dim=-1).min().item()
+
+    if preferred_min_tokens == 0 or rejected_min_tokens == 0:
+        print(f&quot;跳过第{batch_idx + 1}批次：偏好对数据回答部分不足&quot;)
+        skipped_batches_count += 1
+        continue # 跳过当前批次
+
+    ## ====================== 模型前向传播 ======================
+
+    # 训练模型对偏好数据的前向传播
+    preferred_logits = model(preferred_model_inputs).logits
+    torch.cuda.empty_cache() # 清理GPU显存
+    torch.cuda.ipc_collect()
+
+    # 训练模型对拒绝数据的前向传播
+    rejected_logits = model(rejected_model_inputs).logits
+    torch.cuda.empty_cache() # 清理GPU显存
+    torch.cuda.ipc_collect()
+
+    # 参考模型的前向传播（不计算梯度）
+    with torch.no_grad():
+        reference_preferred_logits = ref_model(preferred_model_inputs) \
+            .logits \
+            .detach()
+        reference_rejected_logits = ref_model(rejected_model_inputs) \
+            .logits \
+            .detach()
+
+    ## ====================== DPO损失计算 ======================
+    # DPO（Direct Preference Optimization）论文：https://arxiv.org/pdf/2305.18290.pdf
+    # 核心思想：通过偏好对比学习，无需显式奖励模型
+
+    # 计算平均对数概率（average_log_prob = True）
+    # 参考：https://github.com/huggingface/trl/blob/main/trl/trainer/dpo_trainer.py#L924
+
+    ### 训练模型的对数概率
+    ### 正在微调的模型，接收到正例的logits，计算对数概率
+    ### logπ(y_w|x)
+    preferred_log_prob = _compute_average_log_probability(
+        preferred_logits,
+        preferred_target_labels,
+        preferred_final_mask
+    )
+    ### logπ(y_l|x)
+    rejected_log_prob = _compute_average_log_probability(
+        rejected_logits,
+        rejected_target_labels,
+        rejected_final_mask
+    )
+
+    ### 参考模型的对数概率
+    ### logπ_ref(y_w|x)
+    reference_preferred_log_prob = _compute_average_log_probability(
+        reference_preferred_logits,
+        preferred_target_labels,
+        preferred_final_mask
+    )
+    ### logπ_ref(y_l|x)
+    reference_rejected_log_prob = _compute_average_log_probability(
+        reference_rejected_logits,
+        rejected_target_labels,
+        rejected_final_mask
+    )
+
+    # βlogπ_ref(y_w|x)
+    preferred_implicit_reward = \
+        beta * \
+        (preferred_log_prob - reference_preferred_log_prob)
+    # βlogπ_ref(y_l|x)
+    rejected_implicit_reward = \
+        beta * \
+        (rejected_log_prob - reference_rejected_log_prob)
+
+    # β (logπ_θ(y_w|x)/π_ref(y_w|x) - logπ_θ(y_l|x)/π_ref(y_l|x))
+    reward_margin = preferred_implicit_reward - rejected_implicit_reward
+
+    # DPO损失：
+    # -log(σ(β(logπ_θ(y_w|x)/π_ref(y_w|x) - logπ_θ(y_l|x)/π_ref(y_l|x))))
+    preference_probability = torch.nn.functional.sigmoid(reward_margin)
+    sample_losses = -torch.log(preference_probability)
+
+    # 批次平均损失 + 梯度累积
+    batch_average_loss = \
+        torch.nanmean(sample_losses) / \
+        gradient_accumulation_steps
+
+    ## ====================== 反向传播和优化 ======================
+
+    batch_average_loss.backward()
+
+    # 动态学习率调整
+    current_learning_rate = cosine_decay(
+        batch_idx,
+        warmup_steps,
+        total_steps,
+        max_lr,
+        min_lr
+    )
+
+    for param_group in optimizer.param_groups:
+        param_group[&quot;lr&quot;] = current_learning_rate
+
+    # 梯度累积和权重更新
+    is_accumulation_step = (batch_idx + 1) % gradient_accumulation_steps == 0
+    is_final_batch = (batch_idx + 1) == total_batches
+
+    if is_accumulation_step or is_final_batch:
+        optimizer.step() # 更新权重
+        optimizer.zero_grad() # 清空梯度
+
+    ## ====================== 指标记录 ======================
+
+    # 记录各项训练指标（detach避免梯度追踪）
+    training_losses.append(
+        batch_average_loss.detach().item() * gradient_accumulation_steps)
+    preferred_log_probabilities.append(
+        torch.nanmean(preferred_log_prob.detach()).item())
+    rejected_log_probabilities.append(
+        torch.nanmean(rejected_log_prob.detach()).item())
+    preferred_rewards.append(
+        torch.nanmean(preferred_implicit_reward.detach()).item())
+    rejected_rewards.append(torch.nanmean(
+        rejected_implicit_reward.detach()).item())
+    reward_margins.append(
+        torch.nanmean(reward_margin.detach()).item())
+
+    ## ======================= 训练日志输出 =======================
+
+    should_log = (batch_idx + 1) % log_iter == 0 or is_final_batch
+
+    if should_log:
+        # 计算最近批次的平均指标
+        recent_loss = np.nanmean(training_losses[-log_iter:])
+        recent_preferred_logprob = np.nanmean(
+            preferred_log_probabilities[-log_iter:])
+        recent_rejected_logprob = np.nanmean(
+            rejected_log_probabilities[-log_iter:])
+        recent_preferred_reward = np.nanmean(preferred_rewards[-log_iter:])
+        recent_rejected_reward = np.nanmean(rejected_rewards[-log_iter:])
+        recent_margin = np.nanmean(reward_margins[-log_iter:])
+
+        # 格式化输出训练状态
+        current_time = time.strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+        print(f&quot;时间: {current_time}&quot;)
+        print(f&quot;批次: {batch_idx + 1}/{total_batches}&quot;)
+        print(f&quot;最近{log_iter}批次指标: &quot;)
+        print(f&quot; - 平均损失: {recent_loss:.4f}&quot;)
+        print(f&quot; - 偏好对数概率: {recent_preferred_logprob:.4f}&quot;)
+        print(f&quot; - 拒绝对数概率: {recent_rejected_logprob:.4f}&quot;)
+        print(f&quot; - 偏好奖励: {recent_preferred_reward:.4f}&quot;)
+        print(f&quot; - 拒绝奖励: {recent_rejected_reward:.4f}&quot;)
+        print(f&quot; - 奖励边际: {recent_margin:.4f}&quot;)
+        print(f&quot;学习率: {current_learning_rate:.2e}&quot;)
+        print(&quot;&quot; * 80)
+
+        # 调用外部日志记录
+        log_call(batch_idx, recent_loss)
+
+## ======================= 训练完成总结 =======================
+
+print(&quot;DPO训练完成!&quot;)
+print(f&quot;训练统计: &quot;)
+print(f&quot; - 总批次数: {total_batches}&quot;)
+print(f&quot; - 跳过批次数：{skipped_batches_count}&quot;)
+print(f&quot; - 有效批次数：{total_batches - skipped_batches_count}&quot;)
+
+# 输出最终训练指标
+if training_losses:
+    final_metrics = {
+        &quot;loss&quot;: np.nanmean(training_losses[-100:]),
+        &quot;preferred_logprob&quot;: np.nanmean(preferred_log_probabilities[-100:]),
+        &quot;rejected_logprob&quot;: np.nanmean(rejected_log_probabilities[-100:]),
+        &quot;preferred_reward&quot;: np.nanmean(preferred_rewards[-100:]),
+        &quot;rejected_reward&quot;: np.nanmean(rejected_rewards[-100:]),
+        &quot;margin&quot;: np.nanmean(reward_margins[-100:])
+    }
+
+    print(f&quot;最终指标（最近100批次平均）：&quot;)
+    for metric_name, metric_value in final_metrics.items():
+        print(f&quot; - {metric_name}: {metric_value:.4f}&quot;)
+
+if skipped_batches_count &gt; 0:
+    skip_ratio = skipped_batches_count / total_batches * 100
+    print(f&quot;跳过批次占比：{skip_ratio:.2f}%&quot;)
+    if skip_ratio &gt; 10:
+        print(&quot;建议：跳过批次过多，考虑增加最大序列长度或优化数据预处理&quot;)
+</code></pre>
+<hr>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">10.2.1 第一步：对预训练模型进行基于指令的监督微调（SFT）</a></li>
+<li><a href="#sec-2">基于指令SFT的掩码设置</a></li>
+<li><a href="#sec-3">10.2.2 第二步：使用DPO算法对SFT后的模型进行微调</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-10-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">10.1 DPO理论介绍以及DPO存在的问题</span></a>
+      <a class="next-post" href="/llm-tutorial-11-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">11.1 InstructGPT训练流程</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

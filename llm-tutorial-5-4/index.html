@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,策略梯度法">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>5.4 Actor-Critic（演员-评论家架构） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="5.4 Actor-Critic（演员-评论家架构） | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="5.4 Actor-Critic（演员-评论家架构）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-5-4/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">策略梯度法</a>
+                </span>
+              <h1>5.4 Actor-Critic（演员-评论家架构）</h1>
+              <span class="meta">
+                Posted on
+                2025-04-18，16 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>如果在上节介绍的带基线的REINFORCE中使用价值函数作为基线，那么就可以将其视为基于价值且基于策略的方法。本节将进一步改进带基线的REINFORCE，推导一个叫作Actor-Critic的算法。Actor-Critic也是基于价值且基于策略的方法。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.13 演员评论家架构</figcaption></figure>
+</p>
+<h3 id="sec-1">5.4.1 Actor-Critic的数学推导</h3>
+<p>首先从复习带基线的REINFORCE开始。带基线的REINFORCE的目标函数的梯度的数学式如下所示。</p>
+<p>$$\nabla_{\theta}J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}(G_t - b(S_t))\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right] \quad (5.27)$$</p>
+<p>上式中的 $G_t$ 表示回报，$b(S_t)$ 表示基线。可以使用任何函数作为基线。这里我们使用基于神经网络建模的价值函数作为基线。因此，我们要用到以下这些新的记号。</p>
+<ul>
+<li>$\omega$：表示价值函数的神经网络的所有权重参数。</li>
+<li>$V_{\omega}(S_t)$：将价值函数模型化的神经网络。</li>
+</ul>
+<p>此时目标函数的梯度的数学式如下式所示</p>
+<p><strong>定理5.4—Actor-Critic架构的REINFORCE策略梯度定理</strong></p>
+<p>$$\nabla_{\theta}J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}(G_t - V_{\omega}(S_t))\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right] \quad (5.28)$$</p>
+<p>上式中存在一个问题，即只要没抵达目标，就无法确定回报 $G_t$ 的值。也就是说，在抵达目标之前，无法更新策略和价值函数。如果这是基于蒙特卡洛方法的算法，那么二者无法更新就是它的缺点。</p>
+<p><strong>蒙特卡洛采样</strong></p>
+<p>我们之前使用的是蒙特卡洛采样，也就是采样出一条完整的轨迹。然后更新策略神经网络 $\pi_{\theta}$。</p>
+<p>消除这个缺点的方法是时序-差分方法（TD方法，Time Difference Method）。使用TD方法训练价值函数时，使用1个时间步（或 $n$ 个时间步）后的结果就能进行更新，如图所示。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.14 蒙特卡洛方法和TD方法对比</figcaption></figure>
+</p>
+<p>如图所示，在训练价值函数 $V_{\omega}(S_t)$ 时，蒙特卡洛方法使用的是回报 $G_t$，而TD方法使用的是 $R_t + \gamma V_{\omega}(S_{t+1})$。</p>
+<p>下面将基于蒙特卡洛（MC）方法的公式切换为TD方法，其中，代替 $G_t$ 的是 $R_t + \gamma V_{\omega}(S_{t+1})$。此时得到的式子如下所示。</p>
+<p><strong>定理5.5—1步TD误差的Actor-Critic策略梯度定理</strong></p>
+<p>$$\nabla_{\theta}J(\theta) = \mathbb{E}_{T\sim \pi_{\theta}}\left[\sum_{t = 0}^{T}(R_t + \gamma V_{\omega}(S_{t+1}) - V_{\omega}(S_t))\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right] \quad (5.29)$$</p>
+<p>t时刻的单步TD误差经常表示为 $\delta_t = R_t + \gamma V_{\omega}(S_{t+1}) - V_{\omega}(S_t)$</p>
+<p>也就是在蒙特卡洛方法中，我们的训练目标是：通过训练使得 $V_{\omega}(S_t)$ 越来越接近 $G_t$。也就是使二者的均方误差损失越小越好，$(V_{\omega}(S_t) - G_t)^2 \rightarrow 0$。但是用 $G_t$ 作为 $V_{\omega}(S_t)$ 的预测目标有个问题，就是 $G_t$ 中包含的噪声很多，或者说 $G_t$ 是无偏估计，但是方差很大。相当于一名篮球运动员传了一次球这个动作的好坏，由比赛最终的输赢结果来评判。有一定的道理，但传球之后发生的事情太多了，传球那个动作的好坏的信号淹没在了噪声里面。后面的未来奖励受太多随机因素影响，所以 $G_t$ 波动很大。所以蒙特卡洛方法训练价值网络是一种偏差小但是方差很大的方法。</p>
+<p>而在TD方法中，我们的训练目标是：通过训练使得 $V_{\omega}(S_t)$ 越来越接近 $R_t + \gamma V_{\omega}(S_{t+1})$。也就是使二者的均方误差损失越小越好，$(V_{\omega}(S_t) - (R_t + \gamma V_{\omega}(S_{t+1})))^2 \rightarrow 0$。这里替换的逻辑是：$G_t = R_t + \gamma G_{t+1}$，而 $V(S_{t+1}) = \mathbb{E}[G_{t+1}] \approx G_{t+1}$。如果 $V_{\omega}$ 是一个理想的真实的价值函数，那么根据贝尔曼期望方程 $V(S_t) = \mathbb{E}[G_t] = \mathbb{E}[R_t + \gamma V(S_{t+1})]$，使用 $R_t + \gamma V(S_{t+1})$ 替换掉 $G_t$ 是无偏估计的。可惜这里我们使用 $V_{\omega}$ 这个神经网络来拟合 $V$ 价值函数。所以势必会引入偏差。为什么TD方法会有偏差？因为预测目标TD Target：$R_t + \gamma V_{\omega}(S_{t+1})$ 本身就包含了一个 $V_{\omega}(S_{t+1})$ 预测值。如果 $V_{\omega}(S_{t+1})$ 没有学准，那么Target本身就是错误的。这就是偏差的来源。为什么TD方法的方差小？因为TD目标只包含：一个 $R_t$ 和神经网络的预测值 $V_{\omega}(S_{t+1})$，而神经网络的输出平滑，所以预测目标波动很小。所以方差很小。所以TD方法训练价值网络是一种偏差大但是方差小的方法，价值网络的学习速度（收敛速度）很快。</p>
+<p>TD通常是低方差、高偏差，而MC通常是高方差、低偏差。</p>
+<p>我们可以看到，我们的训练目标其实是单步TD误差趋近于0。这是因为，当目标函数到达极大值点时，对 $\theta$ 求得的梯度一定为0，所以单步TD误差也肯定为0。</p>
+<p>概念</p>
+<ul>
+<li>单步TD误差（TD Error）：$R_t + \gamma V_{\omega}(S_{t+1}) - V_{\omega}(S_t)$</li>
+<li>单步TD目标（TD Target）：$R_t + \gamma V_{\omega}(S_{t+1})$</li>
+</ul>
+<p>基于上面的公式的算法就是Actor-Critic。策略 $\pi_{\theta}$ 和价值函数 $V_{\omega}$ 是神经网络，我们要同时训练这两个神经网络。具体来说，对于策略 $\pi_{\theta}$ 要基于上面的公式进行训练；而对于价值函数 $V_{\omega}$，则通过TD方法，以接近 $R_t + \gamma V_{\omega}(S_{t+1})$ 为目标训练 $V_{\omega}(S_t)$ 这个神经网络。</p>
+<p><strong>提示</strong></p>
+<p>Actor-Critic中的Actor是演员（采取动作的人）的意思，也就是采取动作的人，相当于策略 $\pi_{\theta}$。而Critic是评论家的意思，相当于价值函数 $V_{\omega}$。因此，Actor-Critic的意思是“使用 $V_{\omega}$，来评论基于策略 $\pi_{\theta}$ 采取的动作的好坏”。</p>
+<p>为什么可以用 $R_t + \gamma V_{\omega}(S_{t+1})$ 替换掉 $G_t$？</p>
+<p>首先我们知道 $G_t = R_t + \gamma G_{t+1}$ 以及 $V_{\omega}(S_{t+1}) = \mathbb{E}[G_{t+1}]$。所以 $G_{t+1} \approx V_{\omega}(S_{t+1})$。</p>
+<h3 id="sec-2">5.4.2 Actor-Critic的代码实现</h3>
+<p>下面实现Actor-Critic。策略和价值函数这两个神经网络的代码如下所示。</p>
+<p>策略网络和价值网络</p>
+<pre><code class="language-python">class PolicyNet(nn.Module):
+    def __init__(self, action_size):
+        super().__init__()
+        self.l1 = nn.Linear(4, 128)
+        self.l2 = nn.Linear(128, action_size)
+
+    def forward(self, x):
+        x = F.relu(self.l1(x))
+        x = F.softmax(self.l2(x), dim=1)
+        return x
+
+class ValueNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.l1 = nn.Linear(4, 128)
+        self.l2 = nn.Linear(128, 1)
+
+    def forward(self, x):
+        x = F.relu(self.l1(x))
+        x = self.l2(x)
+        return x
+</code></pre>
+<p>上面的代码将策略的网络实现了为PolicyNet类，将价值函数的网络实现为了ValueNet类。策略的最终输出是Softmax函数的输出，所以输出的是概率。接下来是Agent类的代码。</p>
+<pre><code class="language-python">class Agent:
+    def __init__(self):
+        self.gamma = 0.98 # 折扣因子
+        self.lr_pi = 0.0002 # 策略网络的学习率 α_actor
+        self.lr_v = 0.0005 # 价值网络的学习率 α_critic
+        self.action_size = 2
+        # 初始化策略网络（演员网络）π_θ
+        self.pi = PolicyNet(self.action_size)
+        # 初始化价值函数网络（评论家网络）V_ω
+        self.v = ValueNet()
+
+        self.optimizer_pi = optim.Adam(self.pi.parameters(), lr=self.lr_pi)
+        self.optimizer_v = optim.Adam(self.v.parameters(), lr=self.lr_v)
+
+    def get_action(self, state):
+        probs = self.pi(torch.tensor(state).unsqueeze(0)).squeeze(0)
+        m = Categorical(probs)
+        action = m.sample().item()
+        return action, probs
+
+    def update(
+        self,
+        state, # S_t
+        action_prob, # π_θ(A_t|S_t)
+        reward, # R_t
+        next_state, # S_{t+1}
+        done
+    ):
+        state = torch.tensor(state).unsqueeze(0) # S_t
+        next_state = torch.tensor(next_state).unsqueeze(0) # S_{t+1}
+
+        # ① self.v的损失：均方差
+        # TD目标 = R_t + γV_ω(S_{t+1})
+        target = reward + self.gamma * self.v(next_state) * (1 - done)
+        v = self.v(state) # V_ω(S_t)
+        loss_fn = nn.MSELoss() # (R_t + γV_ω(S_{t+1}) - V_ω(S_t))² → 0
+        loss_v = loss_fn(v, target.detach()) # target要从计算图中剥离出去
+
+        # ② self.pi的损失
+        delta = target - v # δ = R_t + γV_ω(S_{t+1}) - V_ω(S_t)
+        # -(R_t + γV_ω(S_{t+1}) - V_ω(S_t))logπ_θ(A_t|S_t)
+        loss_pi = -torch.log(action_prob) * delta.detach().item()
+
+        self.optimizer_v.zero_grad()
+        self.optimizer_pi.zero_grad()
+        loss_v.backward() # ∇_ω(R_t + γV_ω(S_{t+1}) - V_ω(S_t))²
+        loss_pi.backward() # -(R_t + γV_ω(S_{t+1}) - V_ω(S_t))∇_θlogπ_θ(A_t|S_t)
+        self.optimizer_v.step()
+        self.optimizer_pi.step()
+</code></pre>
+<p>get_action方法可以基于策略取出动作。需要注意的是，由于输入到神经网络中的数据将作为小批量进行处理，因此在处理其中一个数据（状态）时需要小批量的轴。另外，get_action方法返回了两个值，即选择的动作及其概率。选择动作的概率将在稍后的损失函数计算中使用。</p>
+<p>update方法可以训练价值函数和策略。在代码①处为价值函数（self.v）计算损失。为此要计算TD目标（target），求出当前状态下其与价值函数（v）的均方差。然后，在代码②处为策略（self.pi）计算损失。需要将其乘以-1的值作为损失。剩下的就是一直以来的神经网络的训练代码。</p>
+<p>训练循环 Python</p>
+<pre><code class="language-python">env = gym.make(&quot;CartPole-v0&quot;)
+agent = Agent()
+return_list = []
+episode_list = []
+
+for episode in range(2000):
+    state = env.reset()
+    done = False
+    total_reward = 0
+
+    while not done:
+        action, probs = agent.get_action(state)
+        next_state, reward, done, info = env.step(action)
+        # 执行完一个动作，立即更新π和V,这两个网络
+        agent.update(state, probs[action], reward, next_state, done)
+
+        state = next_state
+        total_reward += reward
+
+    return_list.append(total_reward)
+    episode_list.append(episode)
+    if episode % 100 == 0:
+        print(&quot;回合: { }, 总奖励: { }, 1f} &quot;.format(episode, total_reward))
+
+plot_loss(episode_list, return_list, &quot;actor-critic-pg-loss.pdf&quot;)
+test_agent(agent, env)
+</code></pre>
+<p><figure class="tutorial-figure"><figcaption>图5.15 actor-critic每一轮的回报走势图</figcaption></figure>
+</p>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">5.4.1 Actor-Critic的数学推导</a></li>
+<li><a href="#sec-2">5.4.2 Actor-Critic的代码实现</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-5-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">5.3 带基线（baseline）的策略梯度法</span></a>
+      <a class="next-post" href="/llm-tutorial-5-5/"><span class="pn-label">下一篇 →</span><span class="pn-title">5.5 Actor-Critic 的代码实现（完整采集一条轨迹的版本）</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,PPO背后的数学">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>7.2 替代目标 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="7.2 替代目标 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="7.2 替代目标" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-7-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">PPO背后的数学</a>
+                </span>
+              <h1>7.2 替代目标</h1>
+              <span class="meta">
+                Posted on
+                2025-04-28，24 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>直观上，原始策略梯度法的问题出在步长上，因此可以通过加入一个约束，将步长限制在安全范围以防止性能崩塌。</p>
+<p>我们的目的是：</p>
+<p>$$
+J(\theta) - J(\theta_{\text{old}}) \geq 0 \tag{7.20}
+$$</p>
+<p>所以首先要将差值计算出来。差值计算出的结果如下：</p>
+<p>$$
+J(\theta) - J(\theta_{\text{old}}) = \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t}A_{t}^{\pi_{\theta_{\text{old}}}}\right] \tag{7.21}
+$$</p>
+<p>上式的证明如下。我们从反方向证明。</p>
+<p>$$
+\begin{aligned}
+&amp;\mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t}A_{t}^{\pi_{\theta_{\text{old}}}}\right] \quad (1)\
+&amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t}(R_{t} + \gamma V(S_{t+1}) - V(S_{t}))\right] \quad (2)\
+&amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t}R_{t} + \sum_{t = 0}^{T}\gamma^{t+1}V(S_{t+1}) - \sum_{t = 0}^{T}\gamma^{t}V(S_{t})\right] \quad (3)\
+&amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t}R_{t}\right] + \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t+1}V(S_{t+1}) - \sum_{t = 0}^{T}\gamma^{t}V(S_{t})\right] \quad (4)\
+&amp;= J(\theta) + \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 1}^{T}\gamma^{t}V(S_{t}) - \sum_{t = 0}^{T}\gamma^{t}V(S_{t})\right] \quad (5)\
+&amp;= J(\theta) - \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}[V(S_0)] \quad (6)\
+&amp;= J(\theta) - \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}[J(\theta_{\text{old}})] \quad (7)\
+&amp;= J(\theta) - J(\theta_{\text{old}}) \quad (8)
+\end{aligned} \tag{7.22}
+$$</p>
+<p>第(6)步到第(7)步依赖于状态价值函数的定义：$V(S_0) = \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}[G_0] = \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}[G(\tau)] = J(\theta_{\text{old}})$。</p>
+<p>第(7)步到第(8)步依赖于期望的性质，也就是由于策略 $\pi_{\theta}$ 和 $\pi_{\theta_{\text{old}}}$ 相互独立，所以 $\mathbb{E}<em>{\tau \sim \pi</em>{\theta}}[J(\theta_{\text{old}})] = J(\theta_{\text{old}})$。</p>
+<p>$J(\theta) - J(\theta_{\text{old}})$ 可作为度量策略改进的指标。若该差值为正，则新策略 $\pi_{\theta}$ 比旧策略 $\pi_{\theta_{\text{old}}}$ 更优。在一次策略迭代过程中，理想情况下应选择使这一差值最大化的新策略 $\pi_{\theta}$。因此，最大化目标 $J(\theta)$ 等价于最大化该差值，两者均可通过梯度上升实现。</p>
+<p>$$
+\max_{\theta} J(\theta) \iff \max_{\theta}{J(\theta) - J(\theta_{\text{old}})} \tag{7.23}
+$$</p>
+<p>以这种方式刻画目标也意味着，每次策略迭代都应保证非负（单调）的改进——即 $J(\theta) - J(\theta_{\text{old}}) \geq 0$ ——因为在最坏情况下我们可以简单地令 $\pi_{\theta} = \pi_{\theta_{\text{old}}}$，也就是不改进策略。在此条件下，整个训练过程中将不会发生性能崩塌，这正是我们所期望的性质。</p>
+<p>然而，这一差值作为目标函数有一个限制使其无法直接使用。注意，在表达式 $\mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}\gamma^{t}A_{t}^{\pi_{\theta_{\text{old}}}}\right]$ 中，期望要求使用新策略 $\pi_{\theta}$ 采样轨迹以进行更新，但在完成更新之前，新策略 $\pi_{\theta}$ 并不可用。为了解决这一悖论，我们需要设法将其改写为使用已用的旧策略 $\pi_{\theta_{\text{old}}}$。</p>
+<p><strong>重要性采样复习</strong></p>
+<p>$$
+\mathbb{E}<em>{x \sim P}[f(x)] = \mathbb{E}</em>{x \sim Q}\left[\frac{P(x)}{Q(x)}f(x)\right] \approx \frac{1}{|D|}\sum_{x \in D}\frac{P(x)}{Q(x)}f(x), \quad D \sim Q \tag{7.24}
+$$</p>
+<p>比值 $\frac{P(x)}{Q(x)}$ 是 $x$ 的重要性采样权重。</p>
+<p>重要性采样估计器的方差是什么呢？</p>
+<p>$$
+\begin{aligned}
+\text{var}(\hat{\mu}<em>Q) &amp;= \frac{1}{N}\text{var}\left(\frac{P(x)}{Q(x)}f(x)\right) \
+&amp;= \frac{1}{N}\left(\mathbb{E}</em>{x \sim Q}\left[\left(\frac{P(x)}{Q(x)}f(x)\right)^2\right] - \mathbb{E}<em>{x \sim Q}\left[\frac{P(x)}{Q(x)}f(x)\right]^2\right) \
+&amp;= \frac{1}{N}\left(\mathbb{E}</em>{x \sim P}\left[\frac{Q(x)}{P(x)}\left(\frac{P(x)}{Q(x)}f(x)\right)^2\right] - \mathbb{E}<em>{x \sim Q}\left[\frac{P(x)}{Q(x)}f(x)\right]^2\right) \
+&amp;= \frac{1}{N}\left(\mathbb{E}</em>{x \sim P}\left[\frac{P(x)}{Q(x)}f(x)^2\right] - \mathbb{E}_{x \sim P}[f(x)]^2\right)
+\end{aligned} \tag{7.25}
+$$</p>
+<p>红色部分很成问题！——如果 $\frac{P(x)}{Q(x)}$ 在错误的地方很大，那么估计的方差直接炸了。</p>
+<p><strong>方差的计算</strong></p>
+<p>$$
+\text{var}(X) = \mathbb{E}[X^2] - \mathbb{E}[X]^2 \tag{7.26}
+$$</p>
+<p>这里就要用到重要性采样了。我们使用的重要性采样权重为 $\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}$。也就是我们使用新旧策略采取动作的概率的比值来改进旧策略 $\pi_{\theta_{\text{old}}}$ 产生的轨迹的回报值。在新策略 $\pi_{\theta}$ 下更可能发生的动作所对应的回报会被上调权重，而在 $\pi_{\theta}$ 下相对不太可能的动作所对应的回报会被下调权重。该近似在下面的式子中给出。</p>
+<p>$$
+\begin{aligned}
+J(\theta) - J(\theta_{\text{old}}) &amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta}}\left[\sum_{t = 0}^{T}A_{t}^{\pi_{\theta_{\text{old}}}}\right] \quad (\text{为简单起见，将}\gamma\text{设置为1})\
+&amp;\approx \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}\left[\sum_{t = 0}^{T}A_{t}^{\pi_{\theta_{\text{old}}}}\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}\right] \
+&amp;= J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta)
+\end{aligned} \tag{7.27}
+$$</p>
+<p>上面的式子也就是 $J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta)$ 叫作替代目标（surrogate objective）。因为新目标中包含了新旧策略的比值，所以叫做“替代目标”。上标 CPI 的意思是“保守策略迭代”（conservative policy iteration）。</p>
+<p><strong>为什么是约等于</strong></p>
+<p>把真实性能差分展开，由期望的定义</p>
+<p>$$
+\begin{aligned}
+J(\theta) - J(\theta_{\text{old}}) &amp;= \sum_{t = 0}^{T}\mathbb{E}<em>{s_t \sim d</em>{\pi_{\theta}}^t, a_t \sim \pi_{\theta}(\cdot|s_t)}\left[A_t^{\pi_{\theta_{\text{old}}}}\right] \
+&amp;= \sum_{t = 0}^{T}\mathbb{E}<em>{s_t \sim d</em>{\pi_{\theta}}^t, a_t \sim \pi_{\theta_{\text{old}}}(\cdot|s_t)}\left[A_t^{\pi_{\theta_{\text{old}}}}\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}\right] \
+&amp;\approx \sum_{t = 0}^{T}\mathbb{E}<em>{s_t \sim d</em>{\pi_{\theta_{\text{old}}}}^t, a_t \sim \pi_{\theta_{\text{old}}}(\cdot|s_t)}\left[A_t^{\pi_{\theta_{\text{old}}}}\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}\right] \
+&amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}\left[\sum_{t = 0}^{T}A_t^{\pi_{\theta_{\text{old}}}}\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}\right]
+\end{aligned} \tag{7.28}
+$$</p>
+<p>CPI 的近似假设是：新旧策略足够接近，因此它们诱导的状态访问分布也接近：</p>
+<p>$$
+d_{\pi_{\theta}}^t(s) \approx d_{\pi_{\theta_{\text{old}}}}^t(s) \tag{7.29}
+$$</p>
+<p>现在我们有了一个新的目标函数。要将其用于策略梯度算法，需要检查在该目标下进行优化是否仍然是在执行策略梯度上升。幸运的是，我们可以证明替代目标的梯度等于策略梯度，如下式所述。</p>
+<p>$$
+\nabla_{\theta}J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta)|<em>{\theta = \theta</em>{\text{old}}} = \nabla_{\theta}J(\theta)|<em>{\theta = \theta</em>{\text{old}}} = \nabla_{\theta}{J(\theta) - J(\theta_{\text{old}})}|<em>{\theta = \theta</em>{\text{old}}} \tag{7.30}
+$$</p>
+<p>上面的式子证明如下。也就是我们要证明代理目标的梯度等于策略梯度。</p>
+<p>$$
+\begin{aligned}
+\nabla_{\theta}J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta)|<em>{\theta = \theta</em>{\text{old}}} &amp;= \nabla_{\theta}\mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}\left[\sum_{t = 0}^{T}A_t^{\pi_{\theta_{\text{old}}}}\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}\right]|<em>{\theta = \theta</em>{\text{old}}} \
+&amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}\left[\sum_{t = 0}^{T}A_t^{\pi_{\theta_{\text{old}}}}\frac{\nabla_{\theta}\pi_{\theta}(a_t|s_t)|<em>{\theta = \theta</em>{\text{old}}}}{\pi_{\theta_{\text{old}}}(a_t|s_t)}\right] \
+&amp;= \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}\left[\sum_{t = 0}^{T}A_t^{\pi_{\theta_{\text{old}}}}\nabla_{\theta}\log \pi_{\theta}(a_t|s_t)|<em>{\theta = \theta</em>{\text{old}}}\right] \
+&amp;= \nabla_{\theta}J(\theta)|<em>{\theta = \theta</em>{\text{old}}} \
+&amp;= \nabla_{\theta}{J(\theta) - J(\theta_{\text{old}})}|<em>{\theta = \theta</em>{\text{old}}}
+\end{aligned} \tag{7.31}
+$$</p>
+<p>上式表明，代理目标的梯度等于策略梯度。这保证了在代理目标下进行的优化仍然是在执行策略梯度上升。这也很有用，因为现在可以直接度量策略改进，最大化该度量就意味着最大化策略改进。此外，我们还知道，在上式中，$J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta)$ 是对 $J(\theta) - J(\theta_{\text{old}})$ 的一阶近似，因为它们的一阶导数（梯度）相等，且在 $\theta = \theta_{\text{old}}$ 处函数值相等。</p>
+<p>由于我们推导出了 $J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta) \approx J(\theta) - J(\theta_{\text{old}})$，注意这里是约等于。也就是</p>
+<p>$$
+(J(\theta) - J(\theta_{\text{old}})) - J_{\pi_{\theta_{\text{old}}}}^{\text{CPI}}(\theta) \approx 0 \tag{7.32}
+$$</p>
+<p>这里的误差是因为新旧策略诱导出的状态访问分布之间有差异导致的。所以新策略 $\pi_{\theta}$ 和旧策略 $\pi_{\theta_{\text{old}}}$ 越接近，诱导出的状态访问分布就越接近，那么误差就越小。</p>
+<p>而衡量两个分布的差异的数学手段是 KL 散度。所以上面的约等于 0，可以建模为</p>
+<p>将绝对值展开可以得到如下式子</p>
+<p>$$
+J(\theta) - J(\theta_{\mathrm{old}}) \geq J_{\pi_{\theta_{\mathrm{old}}}}^{\mathrm{CPI}}(\theta) - C \sqrt{\frac{1}{T} \sum_{t = 0}^{T} \left(\mathrm{KL}\left(\pi_{\theta_{\mathrm{old}}}(a_t|s_t)\right) | \pi_{\theta}(a_t|s_t)\right))} \tag{7.34}
+$$</p>
+<p>其中 $C$ 是超参数。如果我们想让上式中的左手边大于0，那么只需要保证右手边大于0就可以了。右手边的式子叫做下界函数。</p>
+<p>当我们优化下界函数时，我们能保证优化完毕之后，右手边的式子大于等于0吗？</p>
+<p>现在，让我们看看策略迭代某一步中的最坏情况。考虑对新策略 $\pi_{\theta}$ 的所有选择，其中也包含旧策略 $\pi_{\theta_{\mathrm{old}}}$（参数更新幅度为0）。如果没有候选策略表现更好，就直接设定 $\pi_{\theta} = \pi_{\theta_{\mathrm{old}}}$，并在该次迭代中不进行更新。在这种情况下，式（7.27）告诉我们 $J_{\pi_{\theta_{\mathrm{old}}}}^{\mathrm{CPI}}(\theta) = \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T} A_{t}^{\pi_{\theta_{\mathrm{old}}}}\pi_{\theta_{\mathrm{old}}}(a_t|s_t)\right] = 0$。因为一个策略相对于自身没有期望优势。KL散度满足 $\mathrm{KL}(\pi | \pi) = 0$。</p>
+<p>为了接受策略的变更，上面的式子表明，估计的策略改进 $J_{\pi_{\theta_{\mathrm{old}}}}^{\mathrm{CPI}}(\theta)$ 必须大于 $C \sqrt{\frac{1}{T} \sum_{t = 0}^{T} \left(\mathrm{KL}\left(\pi_{\theta}(a_t|s_t)\right) | \pi_{\theta_{\mathrm{old}}}(a_t|s_t)\right)}$。</p>
+<p>如果将误差上界作为惩罚项加入到优化问题中，我们就能保证策略的单调改进。此时优化问题变成了如下形式：</p>
+<p>$$
+\begin{array}{r l} &amp; {\mathrm{argmax}<em>{\pi</em>{\theta}}\left(J_{\pi_{\theta_{\mathrm{old}}}}^{\mathrm{CPI}}(\theta) - C\sqrt{\frac{1}{T}\sum_{t = 0}^{T}\left(\mathrm{KL}\left(\pi_{\theta_{\mathrm{old}}}(a_t|s_t)\right)| \pi_{\theta}(a_t|s_t)\right)}\right)}\
+&amp; {\qquad \Rightarrow J(\theta) - J(\theta_{\mathrm{old}})\geq 0} \end{array} \tag{7.35}
+$$</p>
+<p>这一结果满足了我们的最终要求。它使我们能够避免在使用原始目标 $J(\theta_{\mathrm{old}})$ 时可能出现的性能崩溃。需要注意的一个关键区别是，单调改进并不保证收敛到最优策略 $\pi^{*}$。例如，策略优化仍可能停留在一个局部极大值处，在该处每次策略迭代都不产生改进——即 $J(\theta) - J(\theta_{\mathrm{old}}) = 0$。保证收敛仍是一个困难的没有解决的问题。</p>
+<p>最后一步是考虑如何在实践中实现上式提出的优化问题。一个思路是直接约束KL散度的期望，如下式所示。</p>
+<p>$$
+\frac{1}{T} \sum_{t = 0}^{T} \left(\mathrm{KL}\left(\pi_{\theta_{\mathrm{old}}}(a_t|s_t)\right) | \pi_{\theta}(a_t|s_t)\right) \leq \delta \tag{7.36}
+$$</p>
+<p>$\delta$ 限制了KL散度的大小，因此实际上约束了新策略 $\pi_{\theta}$ 相对旧策略 $\pi_{\theta_{\mathrm{old}}}$ 能偏离的程度。只有策略空间中位于 $\pi_{\theta_{\mathrm{old}}}$ 附近的小邻域内的候选策略才会被考虑。这个邻域称为置信域（trust region），而上式称为置信域约束。需要注意的是，$\delta$ 是一个需要调参的超参数。</p>
+<p><figure class="tutorial-figure"><figcaption>图7.4 使用下界函数优化目标函数</figcaption></figure>
+</p>
+<p>将约束和替代目标合并以后，置信域策略优化问题如下所示。</p>
+<p>$$
+\begin{array}{rl} &amp; {\underset {\theta}{\max}J_{\pi_{\theta_{\mathrm{old}}}}^{\mathrm{CPI}}(\theta) = \underset {\theta}{\max}\mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T}A_{t}^{\pi_{\theta_{\mathrm{old}}}}\frac{\pi_{\theta}(a_{t}|s_{t})}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})}\right]}\
+&amp; {\underset {\theta}{\mathrm{min}}\frac{1}{T}\sum_{t = 0}^{T}\left(\mathrm{KL}\left(\pi_{\theta}(a_{t}|s_{t})\parallel \pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})\right)\right)\leq \delta} \end{array} \tag{7.37}
+$$</p>
+<p>上式中的约束条件非常的难以求解（需要求解二阶导数黑塞矩阵），所以我们不如将约束条件直接做进目标函数，从而有了PPO算法！</p>
+<p>$$
+J(\theta)^{\text{ppo-clip}} = \mathbb{E}<em>{\tau \sim \pi</em>{\theta_{\text{old}}}}\left[\sum_{t = 0}^{T}\left[\min \left(\frac{\pi_{\theta}(a_{t}|s_{t})}{\pi_{\theta_{\text{old}}}(a_{t}|s_{t})}A_{t}^{\pi_{\theta_{\text{old}}}},\text{clip}\left(\frac{\pi_{\theta}(a_{t}|s_{t})}{\pi_{\theta_{\text{old}}}(a_{t}|s_{t})},1 - \varepsilon ,1 + \varepsilon\right)A_{t}^{\pi_{\theta_{\text{old}}}}\right)\right]\right]
+$$</p>
+<p><strong>危险</strong></p>
+<p>由于我们将硬约束条件变成软约束条件做进了目标函数，所以约束就没那么强了。这也是PPO偶尔会训练退化的原因了。</p>
+<hr>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-7-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">7.1 数学背景知识</span></a>
+      <a class="next-post" href="/llm-tutorial-7-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">7.3 补充知识</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

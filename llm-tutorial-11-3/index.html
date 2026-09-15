@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,使用PPO微调大语言模型——复刻 InstructGPT">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>11.3 PPO微调LLM实战 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="11.3 PPO微调LLM实战 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="11.3 PPO微调LLM实战" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-11-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">使用PPO微调大语言模型——复刻 InstructGPT</a>
+                </span>
+              <h1>11.3 PPO微调LLM实战</h1>
+              <span class="meta">
+                Posted on
+                2025-05-10，84 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>应用场景：在电商场景中，很多商品由于没有人买而变成了“长尾商品”。而我们需要为这些长尾商品“自动”生成一些正向评论，来吸引买家。所以需要训练一个能够编写正向评论的LLM。</p>
+<ol>
+<li>首先对一个预训练LLM（gpt2，Qwen2.5-0.5B等）进行SFT，让LLM可以编写商品评论。这里的问题在于这个LLM虽然能够写电商评论，但写出来的可能是正向评论也可能是负向评论。</li>
+<li>训练一个奖励模型（Reward Model），可以针对正向评论打高分，针对负向评论打低分。</li>
+<li>使用奖励模型给SFT后的LLM输出的电商评论打分，如果分数高（说明是正向评论），则鼓励SFT后的LLM输出这条评论（提升输出这条评论的概率）。如果分数低（说明是负向评论），则抑制SFT模型输出这条评论的概率。</li>
+</ol>
+<h3 id="sec-1">11.3.1 GPT2模型结构以及分词器</h3>
+<p>文件 <code>gpt_model.py</code> 中编写gpt2的模型结构。</p>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class LayerNorm(nn.Module):
+    def __init__(self, emb_dim):
+        super().__init__()
+        self.eps = 1e-5
+        self.scale = nn.Parameter(torch.ones(emb_dim))
+        self.shift = nn.Parameter(torch.zeros(emb_dim))
+
+    def forward(self, x):
+        mean = x.mean(dim=-1, keepdim=True)
+        var = x.var(dim=-1, keepdim=True, unbiased=False)
+        norm_x = (x - mean) / torch.sqrt(var + self.eps)
+        return self.scale * norm_x + self.shift
+
+
+class GELU(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(
+            torch.sqrt(torch.tensor(2.0 / torch.pi)) *
+            (x + 0.044715 * torch.pow(x, 3))
+        ))
+
+
+class FeedForward(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(cfg[&quot;emb_dim&quot;], 4 * cfg[&quot;emb_dim&quot;]),
+            GELU(),
+            nn.Linear(4 * cfg[&quot;emb_dim&quot;], cfg[&quot;emb_dim&quot;]),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+        super().__init__()
+        assert d_out % num_heads == 0, &quot;d_out must be divisible by n_heads&quot;
+
+        self.d_out = d_out
+        self.num_heads = num_heads
+        # 将每个注意力头的维度缩小到目标输出维度
+        self.head_dim = d_out // num_heads
+
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
+        # 用线性层合并多个注意力头的输出
+        self.out_proj = nn.Linear(d_out, d_out)
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer(&quot;mask&quot;, torch.triu(
+            torch.ones(context_length, context_length), diagonal=1))
+
+    def forward(self, x):
+        b, num_tokens, d_in = x.shape
+
+        keys = self.W_key(x) # 形状: (b, num_tokens, d_out)
+        queries = self.W_query(x)
+        values = self.W_value(x)
+
+        # 通过增加num_heads维度来拆分多头
+        # 展开最后一维: (b, num_tokens, d_out) → (b, num_tokens, num_heads, head_dim)
+        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
+        values = values.view(b, num_tokens, self.num_heads, self.head_dim)
+        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)
+
+        # 转置: (b, num_tokens, num_heads, head_dim) → (b, num_heads, num_tokens, head_dim)
+        keys = keys.transpose(1, 2)
+        queries = queries.transpose(1, 2)
+        values = values.transpose(1, 2)
+
+        # 使用因果掩码计算缩放点积注意力，也就是自注意力
+        # 对每个注意力头计算点积
+        attn_scores = queries @ keys.transpose(2, 3)
+
+        # 将原始掩码截断到当前token数量，并转换为布尔类型
+        # (T, T)
+        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]
+
+        # 使用掩码填充注意力分数
+        attn_scores.masked_fill_(mask_bool, -torch.inf)
+
+        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+
+        # 形状: (b, num_tokens, num_heads, head_dim)
+        context_vec = (attn_weights @ values).transpose(1, 2)
+
+        # 合并多头，此时self.d_out = self.num_heads * self.head_dim
+        context_vec = context_vec.reshape(b, num_tokens, self.d_out)
+        context_vec = self.out_proj(context_vec) # 可选的输出投影
+
+        return context_vec
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.att = MultiHeadAttention(
+            d_in=cfg[&quot;emb_dim&quot;],
+            d_out=cfg[&quot;emb_dim&quot;],
+            context_length=cfg[&quot;context_length&quot;],
+            num_heads=cfg[&quot;n_heads&quot;],
+            dropout=cfg[&quot;drop_rate&quot;],
+            qkv_bias=cfg[&quot;qkv_bias&quot;])
+        self.ff = FeedForward(cfg)
+        self.norm1 = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.norm2 = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.drop_resid = nn.Dropout(cfg[&quot;drop_rate&quot;])
+
+    def forward(self, x):
+        # x: (B, T, emb_dim)
+        # 注意力模块的残差连接
+        shortcut = x
+        x = self.norm1(x)
+        x = self.att(x) # 形状 [batch_size, num_tokens, emb_size]
+        x = self.drop_resid(x)
+        x = x + shortcut # 加回原始输入
+
+        # 前馈网络模块的残差连接
+        shortcut = x
+        x = self.norm2(x)
+        x = self.ff(x)
+        x = self.drop_resid(x)
+        x = x + shortcut # 加回原始输入
+
+        return x # shape: (B, T, emb_dim)
+
+
+class GPTModel(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.tok_emb = nn.Embedding(cfg[&quot;vocab_size&quot;], cfg[&quot;emb_dim&quot;])
+        self.pos_emb = nn.Embedding(cfg[&quot;context_length&quot;], cfg[&quot;emb_dim&quot;])
+        self.drop_emb = nn.Dropout(cfg[&quot;drop_rate&quot;])
+
+        self.trf_blocks = nn.Sequential(
+            *[TransformerBlock(cfg) for _ in range(cfg[&quot;n_layers&quot;])])
+
+        self.final_norm = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.out_head = nn.Linear(
+            cfg[&quot;emb_dim&quot;], cfg[&quot;vocab_size&quot;], bias=False)
+
+    def forward(self, in_idx):
+        batch_size, seq_len = in_idx.shape # (B, T)
+        tok_embeds = self.tok_emb(in_idx) # (B, T, emb_dim)
+        pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device)) # (B, T, emb_dim)
+        x = tok_embeds + pos_embeds # 形状 [batch_size, num_tokens, emb_size]
+        x = self.drop_emb(x)
+        x = self.trf_blocks(x)
+        x = self.final_norm(x)
+        last_hidden_state = x
+        logits = self.out_head(x)
+        return {
+            &quot;logits&quot;: logits, # shape: (B, T, vocab_size)
+            &quot;last_hidden_state&quot;: last_hidden_state, # shape: (B, T, emb_dim)
+        }
+</code></pre>
+<p>分词器文件 <code>gpt_tokenizer.py</code></p>
+<pre><code class="language-python">from pathlib import Path
+
+from tokenizers import BertWordPieceTokenizer
+
+
+class ChineseGPT2Tokenizer:
+    def __init__(self, model_path):
+        model_path = Path(model_path)
+        self.tokenizer = BertWordPieceTokenizer(
+            str(model_path / &quot;vocab.txt&quot;),
+            lowercase=False,
+            strip_accent=None,
+            clean_text=True,
+            handle_chinese_chars=True,
+        )
+
+    def encode(self, text, add_special_tokens=False):
+        return self.tokenizer.encode(
+            text,
+            add_special_tokens=add_special_tokens,
+        ).ids
+
+    def decode(self, token_ids, skip_special_tokens=True):
+        return self.tokenizer.decode(
+            token_ids,
+            skip_special_tokens=skip_special_tokens,
+        )
+
+    def token_to_id(self, token):
+        return self.tokenizer.token_to_id(token)
+</code></pre>
+<h3 id="sec-2">11.3.2 加载预训练权重</h3>
+<p>我们从网上下载 <code>gpt2-chinese-cluecorpusmall</code> 权重之后，需要用我们自己定义的模型结构来加载预训练的权重。</p>
+<p>文件 <code>gpt_load_weight.py</code> 如下：</p>
+<pre><code class="language-python">from gpt_model import GPTModel, generate, token_ids_to_text, text_to_token_ids
+import numpy as np
+import torch
+from gpt_tokenizer import ChineseGPT2Tokenizer
+
+MODEL_PATH = &quot;./gpt2-chinese-cluecorpusmall&quot;
+PROMPT = &quot;这本书真是&quot;
+MAX_NEW_TOKENS = 30
+
+BASE_CONFIG = {
+    &quot;vocab_size&quot;: 21128, # Vocabulary size
+    &quot;context_length&quot;: 1024, # Context length
+    &quot;drop_rate&quot;: 0.0, # Dropout rate
+    &quot;qkv_bias&quot;: True, # Query-key-value bias
+    &quot;emb_dim&quot;: 768,
+    &quot;n_layers&quot;: 12,
+    &quot;n_heads&quot;: 12,
+}
+
+
+def assign_check(left, right):
+    if left.shape != right.shape:
+        raise ValueError(
+            f&quot;Shape mismatch. Left: {left.shape}, Right: {right.shape}&quot;
+        )
+    return torch.nn.Parameter(right.clone().detach())
+
+
+def load_weights_from_state_dict(gpt, d, cfg=BASE_CONFIG):
+    gpt.pos_emb.weight = assign_check(
+        gpt.pos_emb.weight, d[&quot;transformer.wpe.weight&quot;])
+    gpt.tok_emb.weight = assign_check(
+        gpt.tok_emb.weight, d[&quot;transformer.wte.weight&quot;])
+
+    for b in range(cfg[&quot;n_layers&quot;]):
+        q_w, k_w, v_w = np.split(
+            d[f&quot;transformer.h.{b}.attn.c_attn.weight&quot;], 3, axis=-1)
+        gpt.trf_blocks[b].att.W_query.weight = assign_check(
+            gpt.trf_blocks[b].att.W_query.weight, q_w.T)
+        gpt.trf_blocks[b].att.W_key.weight = assign_check(
+            gpt.trf_blocks[b].att.W_key.weight, k_w.T)
+        gpt.trf_blocks[b].att.W_value.weight = assign_check(
+            gpt.trf_blocks[b].att.W_value.weight, v_w.T)
+
+        q_b, k_b, v_b = np.split(
+            d[f&quot;transformer.h.{b}.attn.c_attn.bias&quot;], 3, axis=-1)
+        gpt.trf_blocks[b].att.W_query.bias = assign_check(
+            gpt.trf_blocks[b].att.W_query.bias, q_b)
+        gpt.trf_blocks[b].att.W_key.bias = assign_check(
+            gpt.trf_blocks[b].att.W_key.bias, k_b)
+        gpt.trf_blocks[b].att.W_value.bias = assign_check(
+            gpt.trf_blocks[b].att.W_value.bias, v_b)
+
+        gpt.trf_blocks[b].att.out_proj.weight = assign_check(
+            gpt.trf_blocks[b].att.out_proj.weight, d[f&quot;transformer.h.{b}.attn.c_proj.weight&quot;].T)
+        gpt.trf_blocks[b].att.out_proj.bias = assign_check(
+            gpt.trf_blocks[b].att.out_proj.bias, d[f&quot;transformer.h.{b}.attn.c_proj.bias&quot;])
+
+        gpt.trf_blocks[b].ff.layers[0].weight = assign_check(
+            gpt.trf_blocks[b].ff.layers[0].weight, d[f&quot;transformer.h.{b}.mlp.c_fc.weight&quot;].T)
+        gpt.trf_blocks[b].ff.layers[0].bias = assign_check(
+            gpt.trf_blocks[b].ff.layers[0].bias, d[f&quot;transformer.h.{b}.mlp.c_fc.bias&quot;])
+        gpt.trf_blocks[b].ff.layers[2].weight = assign_check(
+            gpt.trf_blocks[b].ff.layers[2].weight, d[f&quot;transformer.h.{b}.mlp.c_proj.weight&quot;].T)
+        gpt.trf_blocks[b].ff.layers[2].bias = assign_check(
+            gpt.trf_blocks[b].ff.layers[2].bias, d[f&quot;transformer.h.{b}.mlp.c_proj.bias&quot;])
+
+        gpt.trf_blocks[b].norm1.scale = assign_check(
+            gpt.trf_blocks[b].norm1.scale, d[f&quot;transformer.h.{b}.ln_1.weight&quot;])
+        gpt.trf_blocks[b].norm1.shift = assign_check(
+            gpt.trf_blocks[b].norm1.shift, d[f&quot;transformer.h.{b}.ln_1.bias&quot;])
+        gpt.trf_blocks[b].norm2.scale = assign_check(
+            gpt.trf_blocks[b].norm2.scale, d[f&quot;transformer.h.{b}.ln_2.weight&quot;])
+        gpt.trf_blocks[b].norm2.shift = assign_check(
+            gpt.trf_blocks[b].norm2.shift, d[f&quot;transformer.h.{b}.ln_2.bias&quot;])
+
+    gpt.final_norm.scale = assign_check(
+        gpt.final_norm.scale, d[&quot;transformer.ln_f.weight&quot;])
+    gpt.final_norm.shift = assign_check(
+        gpt.final_norm.shift, d[&quot;transformer.ln_f.bias&quot;])
+    gpt.out_head.weight = assign_check(
+        gpt.out_head.weight, d[&quot;transformer.wte.weight&quot;])
+
+
+def load_weights(gpt, gpt_hf, cfg=BASE_CONFIG):
+    load_weights_from_state_dict(gpt, gpt_hf.state_dict(), cfg)
+
+
+if __name__ == &quot;__main__&quot;:
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+
+    model = AutoModelForCausalLM.from_pretrained(MODEL_PATH)
+    tokenizer = ChineseGPT2Tokenizer(MODEL_PATH)
+    hf_tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+
+    gpt = GPTModel(BASE_CONFIG) # 初始化一个自己手摇的GPT-2模型
+
+    device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+    load_weights(gpt, model) # 将从huggingface下载的权重赋值到我们自己初始化的gpt模型
+    gpt.to(device).eval()
+    model.to(device).eval()
+
+    torch.manual_seed(123)
+
+    input_ids = text_to_token_ids(PROMPT, tokenizer).to(device)
+    token_ids = generate( # 自己手搓的generative方法
+        model=gpt,
+        idx=input_ids,
+        max_new_tokens=MAX_NEW_TOKENS,
+        context_size=BASE_CONFIG[&quot;context_length&quot;],
+        top_k=None,
+        temperature=0.0
+    )
+
+    print(&quot;Custom generate:&quot;)
+    print(token_ids_to_text(token_ids, tokenizer))
+
+    g = pipeline(
+        &quot;text-generation&quot;,
+        model=model,
+        tokenizer=hf_tokenizer,
+        device=0 if device.type == &quot;cuda&quot; else -1,
+    )
+    pipeline_output = g(
+        PROMPT,
+        max_new_tokens=MAX_NEW_TOKENS,
+        do_sample=False,
+        add_special_tokens=False,
+        return_tensors=True,
+    )
+    pipeline_token_ids = torch.tensor(
+        pipeline_output[0][&quot;generated_token_ids&quot;], device=device
+    ).unsqueeze(0)
+
+    print(&quot;Transformers pipeline:&quot;)
+    print(token_ids_to_text(pipeline_token_ids, tokenizer))
+    print(&quot;Same token ids:&quot;, torch.equal(token_ids.cpu(), pipeline_token_ids.cpu()))
+</code></pre>
+<h3 id="sec-3">11.3.3 监督微调（SFT）</h3>
+<p>我们的目标是训练一个可以写电商评论的大语言模型。所以我们对 gpt2 进行微调，让它可以写电商评论。</p>
+<p>由于我们使用的文本，既有正向情感的文本，也有负向情感的文本，所以训练出来的模型，在给定提示词（例如：“这本书”）时，可能写出正向情感的评论也可能写出负向情感的评论。</p>
+<p><strong>预训练模型</strong></p>
+<p>我们使用的底座模型是中文版 gpt2：“gpt2-chinese-cluecorpussmall”。</p>
+<pre><code class="language-python">import os
+import shutil
+from pathlib import Path
+from pprint import pprint
+
+import torch
+import torch.nn.functional as F
+from datasets import load_dataset
+from torch.utils.data import DataLoader
+
+from gpt_model import GPTModel, generate, text_to_token_ids, token_ids_to_text
+from gpt_load_weight import BASE_CONFIG, load_weights_from_state_dict
+from gpt_tokenizer import ChineseGPT2Tokenizer
+
+
+PRETRAINED_MODEL_PATH = Path(&quot;./gpt2-chinese-cluecorpussmall&quot;)
+OUTPUT_DIR = Path(&quot;./gpt2-sft&quot;)
+DATASET_CACHE_DIR = Path(&quot;./.cache/hf_datasets&quot;)
+CSV_PATH = &quot;online_shopping_10_cats.csv&quot;
+PROMPT = &quot;这本书真是&quot;
+MAX_NEW_TOKENS = int(os.getenv(&quot;SFT_MAX_NEW_TOKENS&quot;, &quot;300&quot;))
+BATCH_SIZE = 2
+LEARNING_RATE = 5e-5
+NUM_EPOCHS = 1
+MAX_TRAIN_STEPS = int(os.getenv(&quot;SFT_MAX_STEPS&quot;, &quot;0&quot;)) or None
+
+
+def tokenize(batch):
+    return {
+        &quot;input_ids&quot;: [
+            tokenizer.encode(text, add_special_tokens=False)
+            for text in batch[&quot;review&quot;]
+        ]
+    }
+
+
+# 整理数据
+# [&quot;abc&quot;, &quot;abcd&quot;]
+# {
+#   &quot;input_ids&quot;: [[1,2,3,pad],[1,2,3,4]],
+#   &quot;labels&quot;: [[1,2,3,-100],[1,2,3,4]]
+# }
+def causal_lm_collate(batch):
+    pad_id = tokenizer.token_to_id(&quot;[PAD]&quot;)
+    # 一批数据中最长数据的长度
+    max_len = max(len(item[&quot;input_ids&quot;]) for item in batch)
+
+    input_ids = []
+    labels = []
+    for item in batch:
+        ids = item[&quot;input_ids&quot;]
+        pad_len = max_len - len(ids)
+        input_ids.append(ids + [pad_id] * pad_len)
+        # labels中的pad替换为-100
+        labels.append(ids + [-100] * pad_len)
+
+    return {
+        &quot;input_ids&quot;: torch.tensor(input_ids, dtype=torch.long),
+        &quot;labels&quot;: torch.tensor(labels, dtype=torch.long),
+    }
+
+
+def calc_loss(logits, labels):
+    shift_logits = logits[:, :-1, :].contiguous()
+    shift_labels = labels[:, 1:].contiguous()
+    return F.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        ignore_index=-100 # -100是pad,需要忽略掉
+    )
+
+
+torch.manual_seed(42)
+
+dataset = load_dataset(
+    &quot;csv&quot;,
+    data_files=CSV_PATH,
+    cache_dir=str(DATASET_CACHE_DIR),
+)
+
+ds_train = dataset[&quot;train&quot;]
+ds_train = ds_train.filter(
+    lambda x: x[&quot;review&quot;] is not None and len(x[&quot;review&quot;]) &gt; 20 and len(x[&quot;review&quot;]) &lt; 512
+)
+
+tokenizer = ChineseGPT2Tokenizer(PRETRAINED_MODEL_PATH)
+model = GPTModel(BASE_CONFIG)
+state_dict = torch.load(
+    PRETRAINED_MODEL_PATH / &quot;pytorch_model.bin&quot;,
+    map_location=&quot;cpu&quot;,
+)
+load_weights_from_state_dict(model, state_dict)
+
+tokenized_dataset_train = ds_train.map(
+    tokenize,
+    batched=True,
+    batch_size=512,
+    remove_columns=[&quot;cat&quot;, &quot;label&quot;, &quot;review&quot;],
+)
+tokenized_dataset_train.set_format(type=&quot;python&quot;)
+
+train_dataLoader = DataLoader(
+    tokenized_dataset_train,
+    batch_size=BATCH_SIZE,
+    collate_fn=causal_lm_collate,
+)
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+model.to(device)
+
+global_step = 0
+for epoch in range(NUM_EPOCHS):
+    model.train()
+    for i, batch in enumerate(train_dataLoader):
+        # [a,b,c,pad] of input_ids is [1,2,3,pad_id]
+        input_ids = batch[&quot;input_ids&quot;].to(device)
+        # [1,2,3,-100]
+        labels = batch[&quot;labels&quot;].to(device)
+
+        logits = model(input_ids)[&quot;logits&quot;]
+        loss = calc_loss(logits, labels)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if i % 100 == 0:
+            print(f&quot;Epoch: {epoch}, Step: {i}, Loss: {loss.item()}&quot;)
+
+        global_step += 1
+        if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
+            break
+
+    if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
+        break
+
+OUTPUT_DIR.mkdir(exist_ok=True)
+torch.save(model.state_dict(), OUTPUT_DIR / &quot;model.pt&quot;)
+shutil.copy2(PRETRAINED_MODEL_PATH / &quot;vocab.txt&quot;, OUTPUT_DIR / &quot;vocab.txt&quot;)
+
+model.eval()
+with torch.no_grad():
+    input_ids = text_to_token_ids(PROMPT, tokenizer).to(device)
+    token_ids = generate(
+        model=model,
+        idx=input_ids,
+        max_new_tokens=MAX_NEW_TOKENS,
+        context_size=BASE_CONFIG[&quot;context_length&quot;],
+        top_k=50,
+        temperature=1.0
+    )
+
+    pprint([f&quot;generated_text&quot;: token_ids_to_text(token_ids, tokenizer)])
+</code></pre>
+<h3 id="sec-4">11.3.4 训练奖励模型（Reward Model）</h3>
+<p>我们会将 gpt2 预训练模型微调成一个分类模型（奖励模型）。</p>
+<p>我们要训练一个模型作为奖励模型，也就是给模型输入文本，模型可以给一个评分出来。</p>
+<p><figure class="tutorial-figure"><figcaption>图11.4 奖励模型训练流程示意图</figcaption></figure>
+</p>
+<p>我们的评论在输入奖励模型之前会先在末尾添加一个 reward_token，作为标记。作用和 Bert 用来训练分类模型时添加的 CLS_TOKEN 是一样的。</p>
+<p>我们将评论输入 gpt2 模型，然后提取 gpt2 输出的最后一层隐藏层（last_hidden_state），并送入一个我们自己定义的线性层（reward_head），然后取输出的最后一个元素作为评分。</p>
+<pre><code class="language-python">import os
+from pathlib import Path
+
+import torch
+from datasets import load_dataset
+from sklearn.metrics import confusion_matrix
+from torch import nn
+from torch.utils.data import DataLoader
+
+from gpt_model import GPTModel
+from gpt_load_weight import BASE_CONFIG, load_weights_from_state_dict
+from gpt_tokenizer import ChineseGPT2Tokenizer
+
+
+MODEL_PATH = Path(&quot;./gpt2-chinese-cluecorpussmall&quot;)
+DATASET_CACHE_DIR = Path(&quot;./.cache/hf_datasets&quot;)
+CSV_PATH = &quot;online_shopping_10_cats.csv&quot;
+BATCH_SIZE = 2
+LEARNING_RATE = 1e-4
+NUM_EPOCHS = 1
+MAX_TRAIN_STEPS = int(os.getenv(&quot;RM_MAX_STEPS&quot;, &quot;0&quot;)) or None
+MAX_EVAL_STEPS = int(os.getenv(&quot;RM_MAX_EVAL_STEPS&quot;, &quot;0&quot;)) or None
+
+tokenizer = ChineseGPT2Tokenizer(MODEL_PATH)
+REWARD_TOKEN_ID = tokenizer.token_to_id(&quot;[PAD]&quot;)
+PAD_TOKEN_ID = tokenizer.token_to_id(&quot;[PAD]&quot;)
+
+ds = load_dataset(
+    &quot;csv&quot;,
+    data_files=CSV_PATH,
+    cache_dir=str(DATASET_CACHE_DIR),
+)
+ds_train = ds[&quot;train&quot;]
+
+ds_train = ds_train.filter(
+    lambda x: x[&quot;review&quot;] is not None and len(x[&quot;review&quot;]) &gt; 20 and len(x[&quot;review&quot;]) &lt; 512
+)
+
+print(&quot;数据集的数量：&quot;, len(ds_train))
+
+
+def tokenize(batch):
+    input_ids = [
+        tokenizer.encode(text, add_special_tokens=False) + [REWARD_TOKEN_ID]
+        for text in batch[&quot;review&quot;]
+    ]
+    return {
+        &quot;input_ids&quot;: input_ids,
+        &quot;score&quot;: [float(label) for label in batch[&quot;label&quot;]],
+        # reward_token_id的索引
+        &quot;score_index&quot;: [len(ids) - 1 for ids in input_ids],
+    }
+
+
+def padding_collate(batch):
+    max_len = max(len(item[&quot;input_ids&quot;]) for item in batch)
+
+    input_ids = []
+    attention_mask = []
+    score = []
+    score_index = []
+    for item in batch:
+        ids = item[&quot;input_ids&quot;]
+        pad_len = max_len - len(ids)
+        input_ids.append(ids + [PAD_TOKEN_ID] * pad_len)
+        attention_mask.append([1] * len(ids) + [0] * pad_len)
+        score.append(item[&quot;score&quot;])
+        score_index.append(item[&quot;score_index&quot;])
+
+    return {
+        &quot;input_ids&quot;: torch.tensor(input_ids, dtype=torch.long),
+        &quot;attention_mask&quot;: torch.tensor(attention_mask, dtype=torch.long),
+        &quot;score&quot;: torch.tensor(score, dtype=torch.float),
+        &quot;score_index&quot;: torch.tensor(score_index, dtype=torch.long),
+    }
+
+
+tokenized_dataset_train = ds_train.map(
+    tokenize,
+    batched=True,
+    batch_size=512,
+    remove_columns=[&quot;cat&quot;, &quot;label&quot;, &quot;review&quot;],
+)
+tokenized_dataset_train.set_format(type=&quot;python&quot;)
+
+
+class RewardModel(nn.Module):
+    def __init__(self, model_path):
+        super().__init__()
+        self.llm = GPTModel(BASE_CONFIG)
+        state_dict = torch.load(
+            Path(model_path) / &quot;pytorch_model.bin&quot;,
+            map_location=&quot;cpu&quot;,
+        )
+        load_weights_from_state_dict(self.llm, state_dict)
+        self.reward_head = nn.Linear(BASE_CONFIG[&quot;emb_dim&quot;], 1)
+
+    def forward(self, input_ids, attention_mask=None):
+        # input_ids: (B, T)
+        outputs = self.llm(input_ids)
+        # last_hidden_state: (B, T, emb_dim)
+        last_hidden_state = outputs[&quot;last_hidden_state&quot;]
+        # self.reward_head(last_hidden_state): (B, T, 1)
+        # .squeeze(-1)之后的形状，也就是reward的形状(B, T)
+        reward = self.reward_head(last_hidden_state).squeeze(-1)
+        return torch.sigmoid(reward)
+
+
+model = RewardModel(MODEL_PATH)
+
+train_dataloader = DataLoader(
+    tokenized_dataset_train,
+    batch_size=BATCH_SIZE,
+    shuffle=True,
+    collate_fn=padding_collate,
+)
+
+device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+criterion = nn.BCELoss()
+
+model.to(device)
+
+global_step = 0
+for epoch in range(NUM_EPOCHS):
+    model.train()
+    for i, batch in enumerate(train_dataloader):
+        inputs = {key: value.to(device) for key, value in batch.items()}
+        model_inputs = {
+            &quot;input_ids&quot;: inputs[&quot;input_ids&quot;],
+            &quot;attention_mask&quot;: inputs[&quot;attention_mask&quot;],
+        }
+
+        scores = model(**model_inputs)
+        batch_indices = torch.arange(scores.shape[0], device=device)
+        # 取出批次中每一条数据中reward_token_id的索引对应的分数
+        score = scores[batch_indices, inputs[&quot;score_index&quot;]]
+        target = inputs[&quot;score&quot;]
+        loss = criterion(score, target)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if i % 100 == 0:
+            print(&quot;Step-&quot;, i, &quot;, Loss: &quot;, loss.item(), flush=True)
+
+        global_step += 1
+        if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
+            break
+
+    if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
+        break
+
+torch.save(model.state_dict(), &quot;reward_model.pt&quot;)
+
+model.eval()
+
+all_predictions = []
+all_labels = []
+
+for i, batch in enumerate(train_dataloader):
+    inputs = {key: value.to(device) for key, value in batch.items()}
+    model_inputs = {
+        &quot;input_ids&quot;: inputs[&quot;input_ids&quot;],
+        &quot;attention_mask&quot;: inputs[&quot;attention_mask&quot;],
+    }
+    with torch.no_grad():
+        scores = model(**model_inputs)
+        batch_indices = torch.arange(scores.shape[0], device=device)
+        score = scores[batch_indices, inputs[&quot;score_index&quot;]]
+        target = inputs[&quot;score&quot;]
+        predictions = (score &gt; 0.5).int()
+
+        all_predictions.extend(predictions.cpu().numpy())
+        all_labels.extend(target.cpu().numpy())
+
+    if MAX_EVAL_STEPS is not None and i + 1 &gt;= MAX_EVAL_STEPS:
+        break
+
+print(confusion_matrix(all_labels, all_predictions))
+</code></pre>
+<p>结果的格式如下：</p>
+<pre><code class="language-python">混淆矩阵:
+[[364, 60], # 第一行：真实标签为0的情况：364个预测正确，60个预测错误
+ [ 31, 412]] # 第二行：真实标签为1的情况：31个预测错误，412个预测正确
+</code></pre>
+<h3 id="sec-5">11.3.5 对gpt2-sft进行PPO微调</h3>
+<h4 id="sec-6">11.3.5.1 导入依赖</h4>
+<pre><code class="language-python">from transformers import DataCollatorWithPadding, AutoModelForCausalLM, AutoTokenizer
+from copy import deepcopy
+from torch.utils.data import DataLoader
+import random
+from datasets import load_dataset
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+
+model_path = &quot;./gpt2-sft&quot;
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+tokenizer.pad_token = tokenizer.eos_token
+</code></pre>
+<h4 id="sec-7">11.3.5.2 准备提示词</h4>
+<p>我们需要搞一些提示词，给到gpt2-sft，让它补全。补全的内容交给奖励模型评分。然后决定惩罚gpt2-sft还是奖励gpt2-sft。</p>
+<p><strong>危险</strong></p>
+<p>自己编写prompt太麻烦了，所以我们准备提示词的方式，是把数据集中文本的前几个字截取出来作为提示词。后面的文本不再使用！</p>
+<p>截取前几个字作为提示词</p>
+<p>东西太小了，光有数量没有质量！很失望！</p>
+<p>为PPO准备提示词 Python</p>
+<pre><code class="language-python">ds = load_dataset(&quot;csv&quot;, data_files=&quot;online_shopping_10_cats.csv&quot;)
+ds_train = ds[&quot;train&quot;]
+
+ds_train = ds_train.filter(lambda x: x[&quot;review&quot;] != None and len(
+    x[&quot;review&quot;]) &gt; 20 and len(x[&quot;review&quot;]) &lt; 1024)
+
+# 截取评论数据的前2～8个token作为提示词
+input_min_token_length = 2
+input_max_token_length = 8
+input_token_length_range = list(range(
+    input_min_token_length,
+    input_max_token_length))
+
+def tokenize(sample):
+    # 提示词token的数量随机选择一个
+    input_size = random.choice(input_token_length_range)
+    # 如果input_size=3，截取review字段文本的前3个token出来
+    sample[&quot;input_ids&quot;] = tokenizer.encode(sample[&quot;review&quot;])[:input_size]
+    # 提示词掩码为1
+    sample[&quot;attention_mask&quot;] = [1] * len(sample[&quot;input_ids&quot;])
+    # 提示词对应的文本
+    sample[&quot;query&quot;] = tokenizer.decode(sample[&quot;input_ids&quot;])
+    return sample
+
+
+map_kwargs = {
+    &quot;batched&quot;: False,
+    &quot;remove_columns&quot;: [&quot;cat&quot;, &quot;review&quot;, &quot;label&quot;]
+}
+
+tokenized_dataset_train = ds_train.map(tokenize, **map_kwargs)
+
+tokenized_dataset_train.set_format(type=&quot;torch&quot;)
+
+batch_size = 32
+
+def collator(batch):
+    return dict((key, [d[key] for d in batch]) for key in batch[0])
+
+# 提示词组成的数据集
+train_dataloader = DataLoader(
+    tokenized_dataset_train,
+    batch_size=batch_size,
+    collate_fn=collator,
+    shuffle=True
+)
+</code></pre>
+<h4 id="sec-8">11.3.5.3 ActorCritic 模型结构</h4>
+<p>在倒立摆环境中，我们的Actor是PolicyNet，Critic是ValueNet。</p>
+<p>在InstructGPT中，演员模型和价值模型合并成了一个模型ActorCriticModel。这样actor和critic可以共享gpt2-sft模型的权重。</p>
+<p>演员评论家模型 Python</p>
+<pre><code class="language-python">class ActorCriticModel(nn.Module):
+    &quot;&quot;&quot;GPT2模型+价值头&quot;&quot;&quot;
+    def __init__(self, model_path):
+        super().__init__()
+        # 这个要初始化为我们微调出来的gpt2-sft模型
+        # actor演员模型：策略模型π_θ
+        self.llm = AutoModelForCausalLM.from_pretrained(model_path)
+        # 添加价值头V_ω
+        # critic评论家模型：价值函数模型，价值头，线性层
+        self.v_head = nn.Linear(self.llm.config.hidden_size, 1)
+
+    def forward(self, input_ids, attention_mask):
+        # gpt2-sft模型的输出
+        transformer_outputs = self.llm.forward(
+            input_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=True,
+        )
+        # 输出的token的logits
+        logits = transformer_outputs.logits
+        # 获取最后一层隐藏层
+        last_hidden_state = transformer_outputs.hidden_states[-1]
+
+        # 评估token的价值，评估的是最后一个隐藏层的价值
+        value = self.v_head(last_hidden_state).squeeze(-1)
+        # 返回输出的token的logits和token的价值
+        return logits, value
+
+    def generate(self, *args, **kwargs):
+        &quot;&quot;&quot;生成文本&quot;&quot;&quot;
+        return self.llm.generate(*args, **kwargs)
+</code></pre>
+<h4 id="sec-9">11.3.5.4 加载模型</h4>
+<p>将需要的模型都加载到显存 Python</p>
+<pre><code class="language-python">device = torch.device(&quot;cuda&quot;)
+
+# 将奖励模型加载
+reward_model = RewardModel(model_path)
+reward_model.load_state_dict(torch.load(
+    &quot;reward_model.pt&quot;,
+    map_location=&quot;cpu&quot;))
+# 加载演员评论家模型
+model = ActorCriticModel(model_path)
+model = model.to(device)
+reward_model = reward_model.to(device)
+# 加载冻结的参考模型π_ref，只用来计算即时奖励R_t
+ref_model = deepcopy(model)
+
+# 设置reward_token
+REWARD_TOKEN_ID = tokenizer.eos_token_id
+</code></pre>
+<h4 id="sec-10">11.3.5.5 奖励 $R_t$ 的计算</h4>
+<p>这
+本
+书
+真
+好
+看
+提示词
+保留这部分奖励</p>
+<p>图 11.5 提示词为“这本书”，补全为“真好看”的 $R_t$ 的计算</p>
+<p>下面的函数 compute_rewards 在计算输出的每个token的 $R_t$ 的同时，顺便计算了每个token的价值，也就是 $V(S_t)$。</p>
+<pre><code class="language-python">def compute_rewards(
+    input_data, # 输入数据（提示词+补全）
+    query_tensors, # 提示词张量
+    response_tensors, # 补全的张量
+    score_tensors # 奖励模型给出的分数的张量
+):
+    with torch.no_grad():
+        # 正在微调的模型所输出的token的logits和token的价值（[V(S_0), V(S_1), ..., V(S_T)]）
+        logits, values = model(**input_data) # (B, T, vocab_size)
+        # 冻结的参考模型的输出
+        ref_logits, _ = ref_model(**input_data)
+        # 正在微调的模型的输出的对数概率log_softmax
+        # 去掉最后一个token，因为是预测下一个token的任务
+        logp = F.log_softmax(logits[:, :-1, :], dim=-1)
+        # 冻结的模型的输出的对数概率
+        ref_logp = F.log_softmax(ref_logits[:, :-1, :], dim=-1)
+        # 实际生成的token序列
+        # 自回归模型是预测下一个token，所以去掉第一个token
+        labels = input_data[&quot;input_ids&quot;][:, 1:] # (B, T-1)
+        # 使用gather提取实际token的概率
+        # logp 是 vocab_size 大小的张量
+        logp = torch.gather(logp, 2, labels.unsqueeze(-1)).squeeze(-1) # (B, T-1)
+        ref_logp = torch.gather(ref_logp, 2, labels.unsqueeze(-1)).squeeze(-1) # (B, T-1)
+        # KL散度：[log π_θ(y_0|x)/π_ref(y_0|x), log π_θ(y_1|x,y_0)/π_ref(y_1|x,y_0), ...]
+        kl = logp - ref_logp
+        # kl散度的权重β
+        beta = 0.2
+        # 最终奖励的计算的右边式子：[-βlog π_θ(y_0|x)/π_ref(y_0|x), -βlog π_θ(y_1|x,y_0)/π_ref(y_1|x,y_0), ...]
+        rewards = - beta * kl
+        attention_mask = input_data[&quot;attention_mask&quot;]
+        # 预测下一个token，所以去掉第一个mask
+        masks = torch.zeros_like(attention_mask[:, 1:])
+        masks[:,:] = attention_mask[:, 1:]
+        # 遍历批次中的每一个提示词张量
+        for j in range(len(query_tensors)):
+            # 补全开始的索引
+            start = len(query_tensors[j]) - 1
+            # 补全结束的索引
+            end = start + len(response_tensors[j])
+            # 提示词部分掩码为0
+            masks[j, :start] = 0
+            # 补全后面的填充token掩码为0
+            masks[j, end:] = 0
+            # 将奖励模型给出的分数加到补全的最后一个token的奖励上面，得到
+            # [-βlog π_θ(y_0|x)/π_ref(y_0|x), -βlog π_θ(y_1|x,y_0)/π_ref(y_1|x,y_0), ..., score - βlog π_θ(y_T|x,y_&lt;T)/π_ref(y_T|x,y_&lt;T)]
+            rewards[j, end - 1] += score_tensors[j]
+            # 只留下掩码为1的部分的奖励
+            rewards[j, :] *= masks[j, :]
+            # 只留下掩码为1的部分的价值
+            # 注意最后一个token的价值V(S_end)去掉！
+            values[j, :-1] *= masks[j, :]
+
+    return logp, rewards, values[:, :-1], masks
+</code></pre>
+<p>values[j, :-1] *= masks[j, :] 是为什么呢？</p>
+<p>这
+本
+书
+真
+好
+看
+eos_token
+训练数据
+gpt2-sft
+v_head
+提示词
+保留这部分的价值</p>
+<p>图 11.6 去掉最后一个的价值</p>
+<h4 id="sec-11">11.3.5.6 广义优势估计（GAE）的计算</h4>
+<pre><code class="language-python">def masked_mean(values, mask):
+    # 计算带掩码的平均值
+    return (values * mask).sum() / mask.sum()
+
+def masked_var(values, mask):
+    # 计算带掩码的方差
+    mean = masked_mean(values, mask)
+    centred_values = values - mean
+    return masked_mean(centred_values ** 2, mask)
+
+def masked_whiten(values, mask):
+    &quot;&quot;&quot;对数据进行带掩码的白化处理，让有效数据的方差变为1，但均值保持不变&quot;&quot;&quot;
+    mean, var = masked_mean(values, mask), masked_var(values, mask)
+    whitened = (values - mean) * torch.rsqrt(var + 1e-8)
+    whitened += mean
+    return whitened
+
+def compute_advantage(rewards, values, masks):
+    &quot;&quot;&quot;广义优势估计（GAE）&quot;&quot;&quot;
+    lastgae = 0.0
+    advantage_reversed = []
+    # 补全的token数量
+    seq_length = rewards.shape[-1]
+    # 折扣因子γ=1，指数加权超参数λ=0.95
+    gamma, lam = 1.0, 0.95
+
+    for t in reversed(range(seq_length)): # 逆序计算
+        # V(S_{t+1})
+        nextvalues = values[:, t + 1] if t &lt; seq_length - 1 else 0.0
+        # δ_t = R_t + γV(S_{t+1}) - V(S_t)
+        delta = rewards[:, t] + gamma * nextvalues - values[:, t]
+        # A^GAE_t = δ_t + γλA^GAE_{t+1}
+        lastgae = delta + gamma * lam * lastgae
+        advantage_reversed.append(lastgae)
+    # [A^GAE_0, A^GAE_1, A^GAE_2, ...]
+    advantages = torch.stack(advantage_reversed[::-1], dim=1)
+    # 对广义优势估计进行了白化处理
+    advantages = masked_whiten(advantages, masks)
+    # GAE Target_t = A^GAE_t + V(S_t)
+    gae_targets = advantages + values
+    return advantages, gae_targets
+</code></pre>
+<h4 id="sec-12">11.3.5.7 损失的计算</h4>
+<pre><code class="language-python">def compute_loss(
+    old_logprobs, # 旧策略输出的概率log π_θ_old(a_t|s_t)
+    logprobs, # 正在微调的模型输出的对数概率log π_θ(a_t|s_t)
+    vpreds, # 价值 V(S_t)
+    masks, # 掩码
+    advantages, # 广义优势估计A^GAE_t
+    gae_targets # gae目标A^GAE_t + V(S_t)
+):
+    ratio = torch.exp(logprobs - old_logprobs) # π_θ(a_t|s_t) / π_θ_old(a_t|s_t)
+    pg_loss1 = - ratio * advantages # -π_θ(a_t|s_t)/π_θ_old(a_t|s_t) A^GAE_t
+    # -clip(π_θ(a_t|s_t)/π_θ_old(a_t|s_t), 1-ε, 1+ε) A^GAE_t
+    pg_loss2 = - torch.clamp(ratio, 1 - 0.2, 1 + 0.2) * advantages
+    # 求掩码部分的平均值
+    pg_loss = masked_mean(torch.max(pg_loss1, pg_loss2), masks)
+    # MSELoss(V(S_t), GAE Target) → 0
+    v_loss = masked_mean((vpreds - gae_targets) ** 2, masks)
+    # total loss = loss_π_θ + 0.1 × loss_V_ω
+    loss = pg_loss + 0.1 * v_loss
+
+    return loss
+</code></pre>
+<h4 id="sec-13">11.3.5.8 PPO 训练循环</h4>
+<p>训练流程：</p>
+<ul>
+<li>一条轨迹：提示词 + 策略模型输出的补全。</li>
+<li>批次大小：32。所以我们针对32个提示词生成32条轨迹。那么还是一个提示词一条轨迹。</li>
+<li>每条轨迹通过ppo使用4次更新策略模型。</li>
+<li>更新后的策略模型作为下一轮训练的 $\pi_{\theta_{\mathrm{old}}}$。</li>
+<li>由于32条轨迹同时计算新旧策略的概率比值，比较消耗GPU。所以我们4条4条的计算。也就是mini_batch_size=4。</li>
+<li>使用32条轨迹更新32次策略模型 $\pi_{\theta}$。更新后的策略模型作为下一轮ppo微调的 $\pi_{\theta_{\mathrm{old}}}$。</li>
+</ul>
+<p>使用旧策略采集的轨迹更新4次策略 Python</p>
+<pre><code class="language-python">data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+learning_rate = 1e-5
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+# 使用旧策略产生的轨迹（补全）更新4次模型
+ppo_epochs = 4
+num_epochs = 1
+mini_batch_size = 4
+
+def ppo_update(input_data, old_logprobs, masks, advantages, gae_targets):
+    for ep in range(ppo_epochs): # π_θ被更新了32次
+        # range(0, 32)
+        batch_inds = list(range(batch_size)) # batch_size=32
+        for start in range(0, batch_size, mini_batch_size):
+            # 4条4条的使用
+            mini_batch_inds = batch_inds[start:start+mini_batch_size]
+
+            mb_model_inputs = {
+                &quot;input_ids&quot;: input_data[&quot;input_ids&quot;][mini_batch_inds],
+                &quot;attention_mask&quot;: input_data[&quot;attention_mask&quot;][mini_batch_inds]
+            }
+            # 模型的输出是token的logits和value
+            # mb_vpreds：[V(S_0), V(S_1), ..., V(S_T)]
+            mb_logits, mb_vpreds = model(**mb_model_inputs)
+            # 去掉最后一个token
+            mb_logits = F.log_softmax(mb_logits[:, :-1, :], dim=-1)
+            # 取出真实标签对应的概率：[log π_θ(y_0|x), log π_θ(y_1|x, y_0), ...]
+            mb_logprobs = torch.gather(
+                mb_logits,
+                2,
+                mb_model_inputs[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+            ).squeeze(-1)
+
+            loss = compute_loss(
+                old_logprobs[mini_batch_inds], # log π_θ_old(y_t|x, y_&lt;t)
+                mb_logprobs, # log π_θ(y_t|x, y_&lt;t)
+                mb_vpreds[:, :-1], # V(S_t)
+                masks[mini_batch_inds],
+                advantages[mini_batch_inds], # A^GAE_t
+                gae_targets[mini_batch_inds] # A^GAE_t + V(S_t)
+            )
+
+            optimizer.zero_grad()
+            # 使用4条轨迹更新了一次π_θ
+            loss.backward()
+            optimizer.step()
+            print(&quot;loss/total&quot;, loss.item())
+    print(&quot;ppo update finished&quot;)
+</code></pre>
+<p>主训练循环代码如下</p>
+<pre><code class="language-python">count = 0
+for epoch in range(num_epochs):
+    for batch in train_dataloader:
+        if count == 1:
+            break
+        count += 1
+        # 生成补全内容（回复）
+        query_tensors = batch[&quot;input_ids&quot;] # 提示词的张量
+        query_attention_masks = batch[&quot;attention_mask&quot;]
+
+        response_tensors = [] # 补全的张量
+        query_response_tensors = [] # 提示词+补全的张量
+        score_tensors = [] # 分数的张量
+
+        for i, query in enumerate(query_tensors):
+            query = query.to(device)
+            query_attention_mask = query_attention_masks[i].to(device)
+            # 随机挑一个补全的长度
+            new_tokens = random.choice(list(range(
+                output_min_length,
+                output_max_length)))
+            # 设置补全长度属性
+            generation_kwargs[&quot;max_new_tokens&quot;] = new_tokens
+            # 使用π_θ_old采样一条轨迹：提示词 + 补全
+            query_response = model.generate(
+                input_ids=query.unsqueeze(0),
+                attention_mask=query_attention_mask.unsqueeze(0),
+                **generation_kwargs
+            ).squeeze(0)
+            # 补全的长度
+            response_len = len(query_response) - len(query)
+            # 补全的张量
+            response_tensors.append(query_response[-response_len:])
+            query_response_tensors.append(query_response)
+            # 从奖励模型拿分数
+            with torch.no_grad():
+                # 提示词 + 补全 + reward_token
+                query_response_score = torch.cat([
+                    query_response,
+                    torch.tensor([REWARD_TOKEN_ID]).to(device)])
+                attention_mask = torch.ones_like(
+                    query_response_score,
+                    dtype=torch.long)
+                # 奖励模型的评分
+                score = reward_model(
+                    query_response_score.unsqueeze(0),
+                    attention_mask.unsqueeze(0)
+                ).squeeze(0)[-1]
+                # 将奖励模型的评分从(0,1)缩放到(-1,1)
+                score = 2 * (score - 0.5)
+                score_tensors.append(score)
+
+        input_data = data_collator([
+            {
+                &quot;input_ids&quot;: ids,
+                &quot;attention_mask&quot;: torch.ones_like(ids)
+            }
+            for ids in query_response_tensors
+        ]).to(device)
+
+        # 奖励和优势
+        old_logprobs, rewards, values, masks = compute_rewards(
+            input_data,
+            query_tensors,
+            response_tensors,
+            score_tensors
+        )
+        # 计算GAE和GAE Target
+        advantages, gae_targets = compute_advantage(rewards, values, masks)
+
+        # 小批次训练
+        if input_data[&quot;input_ids&quot;].shape[0] != 32:
+            break
+        # 使用采集到的32条轨迹更新策略
+        ppo_update(input_data, old_logprobs, masks, advantages, gae_targets)
+</code></pre>
+<h4 id="sec-14">11.3.5.9 评估模型</h4>
+<p>主要对比PPO微调后的模型和微调前的模型。对比方法：</p>
+<ul>
+<li>选择一些提示词</li>
+<li>使用PPO微调后的模型补全</li>
+<li>送入奖励模型，打平均分</li>
+<li>使用PPO微调前的模型补全</li>
+<li>送入奖励模型，打平均分</li>
+<li>对比打分情况</li>
+</ul>
+<p>对比微调前后的模型的补全的打分情况 Python</p>
+<pre><code class="language-python">train_gen_lengths = [0] * len(tokenized_dataset_train)
+for i in range(len(tokenized_dataset_train)):
+    train_gen_lengths[i] = random.choice(list(range(
+        output_min_length,
+        output_max_length)))
+
+
+def validate():
+    scores = []
+    count = 0
+    for b, batch in enumerate(train_dataloader):
+        if count == 1:
+            break
+        count += 1
+        # 生成补全内容
+        query_tensors = batch[&quot;input_ids&quot;]
+        query_attention_masks = batch[&quot;attention_mask&quot;]
+        for i, query in enumerate(query_tensors):
+            query = query.to(device)
+            query_attention_mask = query_attention_masks[i].to(device)
+            new_tokens = train_gen_lengths[b * len(query_tensors) + i]
+            generation_kwargs[&quot;max_new_tokens&quot;] = new_tokens
+            query_response = model.generate(
+                input_ids=query.unsqueeze(0),
+                attention_mask=query_attention_mask.unsqueeze(0),
+                **generation_kwargs
+            ).squeeze(0)
+            query_response_score = torch.cat([
+                query_response,
+                torch.tensor([REWARD_TOKEN_ID]).to(device)])
+            attention_mask = torch.ones_like(
+                query_response_score, dtype=torch.long)
+            score = reward_model(
+                query_response_score.unsqueeze(0),
+                attention_mask.unsqueeze(0)
+            ).squeeze(0)[-1]
+            score = 2 * (score - 0.5)
+            scores.append(score.item())
+    print(&quot;平均分数：&quot;, sum(scores) / len(scores))
+
+
+validate()
+
+model_path = &quot;./gpt2-sft&quot;
+model = ActorCriticModel(model_path).to(device)
+validate()
+</code></pre>
+<hr>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">11.3.1 GPT2模型结构以及分词器</a></li>
+<li><a href="#sec-2">11.3.2 加载预训练权重</a></li>
+<li><a href="#sec-3">11.3.3 监督微调（SFT）</a></li>
+<li><a href="#sec-4">11.3.4 训练奖励模型（Reward Model）</a></li>
+<li><a href="#sec-5">11.3.5 对gpt2-sft进行PPO微调</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">2 为什么要这样做？</span></a>
+      <a class="next-post" href="/llm-tutorial-12-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">12.1 GRPO 简介</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

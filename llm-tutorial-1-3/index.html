@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,microgpt">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>1.3 自动微分（Autograd） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.3 自动微分（Autograd） | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.3 自动微分（Autograd）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">大语言模型</a>
+                <a href="/tutorial/" class="tag">microgpt</a>
+                </span>
+              <h1>1.3 自动微分（Autograd）</h1>
+              <span class="meta">
+                Posted on
+                2025-03-25，16 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p>这是代码中最优雅的部分。Value类实现了自动微分——即通过任意数学运算链计算导数的能力。这正是神经网络训练得以实现的关键。</p>
+<p><strong>导数为什么这么重要？</strong></p>
+<p>训练神经网络意味着寻找能使损失函数最小化的参数值。损失函数衡量的是模型预测的偏差程度。为了降低损失，我们需要了解：对于每个参数，如果对其进行微小调整，损失会增加还是减少？这就是损失函数对每个参数的导数（梯度）。</p>
+<pre><code>Parameter: 0.5
+nudge right → 0.501 → loss = 2.38 ← went up
+original → 0.500 → loss = 2.37
+nudge left → 0.499 → loss = 2.36 ← went down
+Gradient is positive → move the parameter left (decrease it)
+</code></pre>
+<p>由于有4,192个参数，我们需要4,192个梯度。如果通过逐个微调每个参数来计算这些梯度，则需要进行4,192次正向传播。而反向传播只需一次反向传播即可计算出所有梯度。这就是自动梯度的魔力。</p>
+<pre><code class="language-python">class Value:
+    def __init__(self, data, children=(), local_grads=()):
+        self.data = data
+        self.grad = 0
+        self._children = children
+        self._local_grads = local_grads
+</code></pre>
+<p>每个Value存储三项内容：计算结果（data）、其梯度（grad，在反向传播过程中填充）以及生成方式（_children和_local_grads）。这些内容共同构成一个计算图——即每项数学运算的记录。当你写下 $c = a + b$ 时，生成的Value会记住它是通过加法从a和b得出的：</p>
+<pre><code>a (data=3.0)
+b (data=2.0)
+(+) → c (data=5.0)
+children: (a, b)
+local_grads: (1, 1) ← derivative of (a+b) w.r.t. a is 1,
+derivative of (a+b) w.r.t. b is 1
+</code></pre>
+<p>对于乘法，局部梯度有所不同：</p>
+<pre><code class="language-python">def __mul__(self, other):
+    return Value(self.data * other.data, (self, other), (other.data, self.data))
+</code></pre>
+<pre><code>a (data=3.0)
+b (data=2.0)
+(×) → c (data=6.0)
+children: (a, b)
+local_grads: (2.0, 3.0) ← d(a×b)/da = b = 2.0
+d(a×b)/db = a = 3.0
+</code></pre>
+<p>这是微积分中的乘法法则：$a \times b$ 对a的导数是b，反之亦然。Value类中的每项运算都包含其自身的导数规则。</p>
+<p>backward()方法以反向顺序遍历计算图，并利用链式求导法则累计梯度：如果z依赖于y，而y又依赖于x，则 $\frac{dz}{dx} = \frac{dz}{dy} \cdot \frac{dy}{dx}$</p>
+<pre><code class="language-python">def backward(self):
+    topo = []
+    visited = set()
+    def build_topo(v):
+        if v not in visited:
+            visited.add(v)
+            for child in v._children:
+                build_topo(child)
+            topo.append(v)
+    build_topo(self)
+    self.grad = 1
+    for v in reversed(topo):
+        for child, local_grad in zip(v._children, v._local_grads):
+            child.grad += local_grad * v.grad
+</code></pre>
+<p>首先，build_topo执行拓扑排序——它排列所有节点，使得每个节点都出现在其子节点之后。然后，梯度从损失（其梯度按定义为1）反向流经每个操作，最终到达每个参数。</p>
+<pre><code>1 Forward pass (left to right): compute values
+a = 3.0 → (×) → d = 6.0 → (+) → f = 7.0 → (-log) → loss = -1.95
+b = 2.0     e = 1.0
+
+2 Backward pass (right to left): compute gradients
+loss.grad = 1.0
+f.grad = 1.0 × (-1/f.data) = -0.143 chain rule through -log
+d.grad = f.grad × 1 = -0.143 chain rule through +
+e.grad = f.grad × 1 = -0.143 chain rule through +
+a.grad = d.grad × b.data = -0.143 × 2 = -0.286 chain rule through ×
+b.grad = d.grad × a.data = -0.143 × 3 = -0.429 chain rule through ×
+</code></pre>
+<p><code>←</code> 中的<code>child.grad = local_grad × v.grad</code> 很重要——当一个值在多个操作中被使用时，其梯度会累积来自所有操作的贡献。这处理了一个参数通过多条路径影响损失的情况。</p>
+<p>这正是PyTorch、TensorFlow和JAX所实现的反向传播算法。区别在于这些框架基于张量（多维数值数组）运行，并可在GPU上执行。而microGPT则对单个标量值进行操作，这使得其速度慢约1,000,000倍，但在概念上完全一致。</p>
+<p>训练神经网络需要梯度：对于模型中的每个参数，我们需要知道“如果我将这个数值稍微调高一点，损失值会上升还是下降？变化幅度是多少？”计算图有许多输入（模型参数和输入词元），但最终汇聚成一个标量输出：损失值（我们将在下文准确定义损失值）。反向传播从该单一输出开始，沿计算图逆向推进，计算损失值相对于每个输入的梯度。这依赖于微积分中的链式法则。在实际应用中，PyTorch等库会自动处理这一过程。在此，我们通过一个名为Value的类从头实现该功能：</p>
+<pre><code class="language-python">class Value:
+    _slots_ = {&#39;data&#39;, &#39;grad&#39;, &#39;_children&#39;, &#39;_local_grads&#39;}
+    
+    def __init__(self, data, children=(), local_grads=()):
+        self.data = data # scalar value of this node calculated during forward pass
+        self.grad = 0 # derivative of the loss w.r.t. this node, calculated in backward pass
+        self._children = children # children of this node in the computation graph
+        self._local_grads = local_grads # local derivative of this node w.r.t. its children
+    
+    def __add__(self, other):
+        other = other if isinstance(other, Value) else Value(other)
+        return Value(self.data + other.data, (self, other), (1, 1))
+    
+    def __mul__(self, other):
+        other = other if isinstance(other, Value) else Value(other)
+        return Value(self.data * other.data, (self, other), (other.data, self.data))
+    
+    def __pow__(self, other): return Value(self.data ** other, (self,), (other * self.data ** (other - 1),))
+    def log(self): return Value(math.log(self.data), (self,), (1/self.data,))
+    def exp(self): return Value(math.exp(self.data), (self,), (math.exp(self.data),))
+    def relu(self): return Value(max(0, self.data), (self,), (float(self.data &gt; 0),))
+    def __neg__(self): return self * -1
+    def __radd__(self, other): return self + other
+    def __sub__(self, other): return self + (-other)
+    def __rsub__(self, other): return other + (-self)
+    def __rmul__(self, other): return self * other
+    def __truediv__(self, other): return self * other**-1
+    def __rtruediv__(self, other): return other * self**-1
+    
+    def backward(self):
+        topo = []
+        visited = set()
+        def build_topo(v):
+            if v not in visited:
+                visited.add(v)
+                for child in v._children:
+                    build_topo(child)
+                topo.append(v)
+        build_topo(self)
+        self.grad = 1
+        for v in reversed(topo):
+            for child, local_grad in zip(v._children, v._local_grads):
+                child.grad += local_grad * v.grad
+</code></pre>
+<p>这是数学和算法上最密集的部分。简单来说，一个Value包装了一个单一的标量数字（.data），并追踪它是如何被计算出来的。可以把每个操作想象成一个小乐高积木：它接收一些输入，产生一个输出（前向传播），并且知道其输出相对于每个输入的变化情况（局部梯度）。这就是自动微分从每个积木中需要的全部信息。其余的一切都只是链式法则，将这些积木串联起来。</p>
+<p>每次使用Value对象进行数学运算（加法、乘法等）时，结果都会生成一个新的Value，它会记住其输入值（_children）以及该运算的局部导数（_local_grads）。例如，_mul_记录了 $\frac{\partial(a \cdot b)}{\partial a} = b$ 和 $\frac{\partial(a \cdot b)}{\partial b} = a$。完整的积木块集合如下：</p>
+<table>
+<thead>
+<tr>
+<th>运算</th>
+<th>前向传播</th>
+<th>梯度</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>a + b</td>
+<td>a + b</td>
+<td>∂a/∂a = 1, ∂b/∂b = 1</td>
+</tr>
+<tr>
+<td>a * b</td>
+<td>a · b</td>
+<td>∂a/∂a = b, ∂b/∂b = a</td>
+</tr>
+<tr>
+<td>a ** n</td>
+<td>a^n</td>
+<td>∂a/∂a = n · a^(n-1)</td>
+</tr>
+<tr>
+<td>log(a)</td>
+<td>ln(a)</td>
+<td>∂a/∂a = 1/a</td>
+</tr>
+<tr>
+<td>exp(a)</td>
+<td>e^a</td>
+<td>∂a/∂a = e^a</td>
+</tr>
+<tr>
+<td>relu(a)</td>
+<td>max(0, a)</td>
+<td>∂a/∂a = 1 if a &gt; 0 else 0</td>
+</tr>
+</tbody></table>
+<p><strong>表1.1 运算，前向传播，梯度</strong></p>
+<p>backward()方法以逆拓扑顺序遍历该图（从损失开始，到参数结束），在每一步应用链式法则。如果损失为 $L$，且节点 $v$ 有一个子节点 $c$，其局部梯度为 $\frac{\partial v}{\partial c}$，则：</p>
+<p>$$\frac{\partial L}{\partial c} += \frac{\partial v}{\partial c} \cdot \frac{\partial L}{\partial v} \quad (1.1)$$</p>
+<p>我们从损失节点开始设置 self.grad = 1，因为 $\frac{\partial L}{\partial L} = 1$；损失相对于自身的变化率显然为 1。由此，链式法则只需沿着每条返回参数的路径，将局部梯度相乘即可。</p>
+<p>注意这里的 $+=$（累加，而非赋值）。当某个值在计算图中被多处使用（即图存在分支）时，梯度会沿每个分支独立回流，且必须求和。这是多元链式法则的必然结果：若c通过多条路径影响L，则总导数等于各路径贡献之和。</p>
+<p>在backward()完成以后，图中的每个Value都包含一个.grad，其中含有 $\frac{\partial L}{\partial x}$，这告诉我们如果调整该值，最终损失将如何变化。</p>
+<p>以下是一个具体示例。注意a被使用了两次（图出现分支），因此其梯度是两条路径之和：</p>
+<pre><code class="language-python">a = Value(2.0)
+b = Value(3.0)
+c = a * b # c = 6.0
+L = c + a # L = 8.0
+L.backward()
+print(a.grad) # 4.0 (dL/da = b + 1 = 3 + 1, via both paths)
+print(b.grad) # 2.0 (dL/db = a = 2)
+</code></pre>
+<p>这正是PyTorch的.backward()所提供的：</p>
+<pre><code class="language-python">import torch
+a = torch.tensor(2.0, requires_grad=True)
+b = torch.tensor(3.0, requires_grad=True)
+c = a * b
+L = c + a
+L.backward()
+print(a.grad) # tensor(4.)
+print(b.grad) # tensor(2.)
+</code></pre>
+<p>这是PyTorch的loss.backward()所运行的相同算法，只不过是在标量而非张量（标量数组）上执行——算法上完全一致，但规模更小、更简单，当然效率也低得多。</p>
+<p>让我们解读一下上面.backward()给出的结果。自动微分计算得出，如果 $L = a*b + a$，$a = 2$ 和 $b = 3$ 成立，那么a.grad = 4.0反映的是a对L的局部影响程度。当你微调输入a时，L会朝哪个方向变化？这里，L对a的导数为4.0，意味着若将a增加微小量（如0.001），L将增加约4倍于此的值（0.004）。同理，b.grad = 2.0表示对b施加相同幅度的调整，会使L增加约2倍于此的值（0.002）。换言之，这些梯度既指明了每个输入对最终输出（损失值）的影响方向（正负取决于符号），也揭示了影响陡峭程度（梯度幅值）。这使我们能够通过迭代微调神经网络参数来降低损失值，从而提升其预测性能。</p>
+<p>有了自动求导机制，我们就可以定义Transformer模型了。microGPT遵循GPT-2架构，并做了少量简化。</p>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-1-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">1.2 分词器</span></a>
+      <a class="next-post" href="/llm-tutorial-1-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">1.4 参数</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

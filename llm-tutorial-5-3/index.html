@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,策略梯度法">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>5.3 带基线（baseline）的策略梯度法 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="5.3 带基线（baseline）的策略梯度法 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="5.3 带基线（baseline）的策略梯度法" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-5-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">策略梯度法</a>
+                </span>
+              <h1>5.3 带基线（baseline）的策略梯度法</h1>
+              <span class="meta">
+                Posted on
+                2025-04-17，4 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>前面介绍的REINFORCE玩倒立摆有一个问题，那就是不管我们怎么推车，获得的奖励都是正奖励。也就是说不管怎么玩，我们都会提升某个状态采取某个动作的概率，即使奖励很少也是如此。其实我们在玩倒立摆时，获得的奖励很少时，应该降低某个状态下采取某个动作的概率。也就是说，我们应该在获得的奖励很多时，给予策略正的奖励，而在获得奖励很少时，给予策略负的奖励。这样会更加的确。这就是基线的技术。</p>
+<p>倒立摆环境中只要倒立摆没有倒，给出的奖励总是1。也就是不管策略多么的差劲，采样出的轨迹的回报一定是正的。也就是说，即使轨迹的回报很低，也会提升在 $S_t$ 采取 $A_t$ 的概率，只是可能提升的不大。</p>
+<p>如果加入基线，那么如果轨迹的回报很低，权重就会成为负值，从而在策略更新之后，直接降低在 $S_t$ 采取 $A_t$ 的概率。所以训练速度会加快。</p>
+<p>下面介绍基线（baseline）技术，该技术可以改进REINFORCE。让我们先通过一个简单的例子来了解一下基线的思路，然后再将基线应用于REINFORCE。</p>
+<p>下式是REINFORCE的数学式。</p>
+<p>$$\nabla_{\theta}J(\theta) = \mathbb{E}_{T\sim \pi_{\theta}}\left[\sum_{t = 0}^{T}G_t\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right] \quad (5.25)$$</p>
+<p>将基线应用于这个REINFORCE的数学式如下式所示。</p>
+<p><strong>定理5.3—带基线的REINFORCE策略梯度定理</strong></p>
+<p>$$\nabla_{\theta}J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}(G_t - b(S_t))\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right] \quad (5.26)$$</p>
+<p>上式用 $G_t - b(S_t)$ 代替了 $G_t$。这里 $b(S_t)$ 可以是任何函数。也就是说，只要输入是 $S_t$，$b(S_t)$ 是什么函数都行。这个 $b(S_t)$ 就是基线（baseline）。</p>
+<p>上式中的 $b(S_t)$ 可以是任何函数。例如，在状态 $S_t$ 下，可以考虑使用之前获得的奖励的平均值作为 $b(S_t)$。实践中经常使用的是价值函数，数学式为 $b(S_t) = V_{\pi_{\theta}}(S_t)$。如果能够使用基线减小方差，那么就可以进行样本效率更高的训练。另外，将价值函数作为基线使用时，我们是不知道真正的价值函数 $v_{\pi_{\theta}}(S_t)$ 的。这种情况下还需要训练价值函数神经网络。</p>
+<p>最后，我们再通过直观介绍补充说明一下为什么使用基线更好。这里以倒立摆为例，思考下图的状态。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.12 无论怎么推，倒立摆都会在3步之后倒下</figcaption></figure>
+</p>
+<p>上图表示游戏结束之前的杆子失去平衡的状态。在这种状态下，无论采取什么样的行动，在几个时间步之后游戏都将结束。</p>
+<p>设图的状态为s，在此状态下采取的行动为a。假定从状态s开始几个时间步（比如3个时间步）后游戏一定会结束。在这种情况下，状态s的回报G为3（这里设折扣因子 $\gamma$ 为1）。如果使用的是没有基线的REINFORCE，那么状态s下的行动a就会因为权重3而被增强（状态s下选择行动a的概率会变高）。但无论采取什么样的行动，3个时间步之后游戏一定会结束，所以可以说这种提高行动a被选择的概率的工作是无意义的。</p>
+<p>此时就要用到基线了。这里使用价值函数作为基线，假设我们已经知道图中的例子中的 $V_{\pi_{\theta}}(S_t) = 3$。此时的权重为 $G_t - V_{\pi_{\theta}}$ 所以是0。由于权重是0，因此无论选择什么行动，采取那个行动的概率都不会变大，也不会变小。像这样使用基线，有望减少无谓的训练。</p>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-5-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">5.2 REINFORCE</span></a>
+      <a class="next-post" href="/llm-tutorial-5-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">5.4 Actor-Critic（演员-评论家架构）</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

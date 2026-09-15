@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,大语言模型训练概述">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>9.2 RLHF的关键技术 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="9.2 RLHF的关键技术 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="9.2 RLHF的关键技术" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-9-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">大语言模型训练概述</a>
+                </span>
+              <h1>9.2 RLHF的关键技术</h1>
+              <span class="meta">
+                Posted on
+                2025-05-03，4 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p><figure class="tutorial-figure"><figcaption>图9.2 RLHF常用算法</figcaption></figure>
+</p>
+<h3 id="sec-1">9.2.1 近端策略优化（PPO）</h3>
+<p>PPO是LLM强化学习对齐技术的重量级冠军，因OpenAI开发的InstructGPT和ChatGPT而闻名。PPO于2017年开发，解决了强化学习中的一个关键挑战：如何在不破坏训练稳定性的情况下进行有意义的更新。</p>
+<p>PPO成功的秘诀在于其“近端”特性——它对策略进行保守更新，防止模型在单次迭代中发生过大变化。这是通过其目标函数中巧妙的裁剪机制实现的：</p>
+<p>$$
+J_{\mathrm{PPO}}(\theta) = \mathbb{E}\left[\min \left(\frac{\pi_{\theta}(a|s)}{\pi_{\theta_{\mathrm{old}}}(a|s)} A,\mathrm{clip}\left(\frac{\pi_{\theta}(a|s)}{\pi_{\theta_{\mathrm{old}}} (a|s)},1 - \epsilon ,1 + \epsilon\right)A\right)\right] \tag{9.3}
+$$</p>
+<p>通过限制新旧策略之间的比例（通常在 $1\pm 0.2$ 以内），PPO可以确保模型在训练过程中不会偏离目标。</p>
+<p>PPO一直是实现人类反馈强化学习（RLHF）的首选算法，该算法遵循以下三个步骤：</p>
+<ol>
+<li>从预训练模型开始</li>
+<li>监督微调</li>
+<li>根据人类偏好训练奖励模型</li>
+<li>使用PPO微调LLM，来最大化奖励，同时保持接近原来的LLM。</li>
+</ol>
+<h3 id="sec-2">9.2.2 直接偏好优化（DPO）</h3>
+<p>如果说PPO是一位谨慎的外科医生，能够精准地进行手术，那么DPO则是一位效率专家，他找到了通往同一目标的捷径。DPO于2023年在一篇题为《直接偏好优化：你的语言模型其实是一个奖励模型》的论文中首次提出，它彻底消除了对单独奖励模型的需求。</p>
+<p>DPO的精妙之处在于其数学洞察力：奖励函数与最优策略之间存在直接映射。通过利用这种关系，DPO将强化学习问题转化为基于人类偏好数据的更简单的分类问题。</p>
+<p>与传统的三步RLHF流程不同，DPO只需一个训练阶段即可实现相同的目标。这就像跳过中间环节，直接到达源头。</p>
+<p>DPO对从业者特别有吸引力的原因是：</p>
+<ol>
+<li>简单：无需训练单独的奖励模型</li>
+<li>效率：无需在训练期间进行昂贵的采样</li>
+<li>稳定性：组件越少，出错的可能性就越小</li>
+<li>性能：在控制输出属性方面，通常与PPO-RLHF相当或超过PPO-RLHF</li>
+</ol>
+<p>DPO的目标函数如下：</p>
+<p><figure class="tutorial-figure"><figcaption>图9.3 DPO目标函数</figcaption></figure>
+</p>
+<p>$$
+J^{\mathrm{DPO}}(\pi_{\theta};\pi_{\mathrm{ref}}) = \mathbb{E}<em>{(y_w,y_l,x)\sim \mathcal{D}}\left[\log \sigma \left(\beta \left(\log \frac{\pi</em>{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)} - \log \frac{\pi_{\mathrm{ref}}(y_w|x)}{\pi_{\mathrm{ref}}(y_l|x)}\right)\right)\right] \tag{9.4}
+$$</p>
+<p>DPO的目标是让 $\frac{\pi_{\theta}(y_{w}|x)}{\pi_{\theta}(y_{l}|x)}$ 越大越好！</p>
+<h3 id="sec-3">9.2.3 组相对策略优化（GRPO）</h3>
+<p><figure class="tutorial-figure"><figcaption>图9.4 GRPO目标函数</figcaption></figure>
+</p>
+<p><figure class="tutorial-figure"><figcaption>图9.5 GRPO替代损失函数</figcaption></figure>
+</p>
+<p>现在，如果我们能将PPO的可靠性与更高的效率以及对推理能力提升的专注结合起来，会怎么样呢？GRPO应运而生，它是强化学习领域的最新成果之一，由DeepSeek开发，并用于训练其令人印象深刻的DeepSeek-Math和DeepSeek-R1模型。</p>
+<p>GRPO建立在PPO的基础上，但引入了几项巧妙的修改：</p>
+<p>GRPO去掉了价值函数模型，减少了内存开销。GRPO评估输出的一组回答而不是单个token。GRPO直接将KL散度纳入损失函数。</p>
+<p>这种基于组（Group）的方法尤其巧妙。GRPO不是单独评估每个token，而是将完整的答案作为一个整体来看待 $\Rightarrow$ 这是一种评估推理能力更自然的方式，其中整个解答过程都很重要，而不仅仅是单个步骤。</p>
+<p>用AWS社区文章的话来说，“GRPO用于计算优势的组相对方式与奖励模型的比较性质非常吻合，因为奖励模型通常是在同一问题的输出比较数据集上进行训练的。”</p>
+<hr>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">9.2.1 近端策略优化（PPO）</a></li>
+<li><a href="#sec-2">9.2.2 直接偏好优化（DPO）</a></li>
+<li><a href="#sec-3">9.2.3 组相对策略优化（GRPO）</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-9-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">9.1 LLM训练流程</span></a>
+      <a class="next-post" href="/llm-tutorial-10-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">10.1 DPO理论介绍以及DPO存在的问题</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,近端策略优化（PPO）">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>6.3 PPO代码实现 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="6.3 PPO代码实现 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="6.3 PPO代码实现" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-6-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">近端策略优化（PPO）</a>
+                </span>
+              <h1>6.3 PPO代码实现</h1>
+              <span class="meta">
+                Posted on
+                2025-04-26，15 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <h3 id="sec-1">6.3.1 网络结构的定义</h3>
+<ul>
+<li>演员网络：策略网络</li>
+<li>评论家网络：价值函数网络</li>
+</ul>
+<p>策略网络和价值函数网络的定义 Python</p>
+<pre><code class="language-python">class PolicyNet(nn.Module):
+    def __init__(self, action_size):
+        super().__init__()
+        self.l1 = nn.Linear(4, 128)
+        self.l2 = nn.Linear(128, action_size)
+
+    def forward(self, x):
+        x = F.relu(self.l1(x))
+        x = F.softmax(self.l2(x), dim=1)
+        return x
+
+class ValueNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.l1 = nn.Linear(4, 128)
+        self.l2 = nn.Linear(128, 1)
+
+    def forward(self, x):
+        x = F.relu(self.l1(x))
+        x = self.l2(x)
+        return x
+</code></pre>
+<h3 id="sec-2">6.3.2 PPO算法的实现</h3>
+<p>我们来实现Agent，代码如下：</p>
+<pre><code class="language-python">class Agent:
+    def __init__(self):
+        self.gamma = 0.98
+        self.lr_pi = 0.001
+        self.lr_v = 0.02
+        self.action_size = 2
+
+        self.pi = PolicyNet(self.action_size)
+        self.v = ValueNet()
+
+        self.optimizer_pi = optim.Adam(self.pi.parameters(), lr=self.lr_pi)
+        self.optimizer_v = optim.Adam(self.v.parameters(), lr=self.lr_v)
+
+    def get_action(self, state):
+        probs = self.pi(torch.tensor(state).unsqueeze(0)).squeeze(0)
+        m = Categorical(probs)
+        action = m.sample().item()
+        return action, probs
+
+    def rollout(self, env):
+        &quot;&quot;&quot;采集一条轨迹&quot;&quot;&quot;
+        state = env.reset()
+        states, next_states, actions, action_probs, rewards, dones = [], [], [], [], [], []
+        done = False
+
+        while not done:
+            action, probs = self.get_action(state)
+            next_state, reward, done, _ = env.step(action)
+            states.append(state) # s_t
+            actions.append(action) # a_t
+            action_probs.append(probs[action]) # π(a_t|s_t)
+            next_states.append(next_state) # s_{t+1}
+            rewards.append(reward) # R_t
+            dones.append(done) # done_t
+            state = next_state # 状态转移
+
+        return states, next_states, actions, action_probs, rewards, dones
+</code></pre>
+<p>接下来我们要实现智能体的更新（update）代码，在PPO算法中，我们需要用到旧策略采样的轨迹。所以需要保存旧策略采样的轨迹的完整信息。</p>
+<p>我们采样的轨迹是：</p>
+<p>$$\tau = [s_0, a_0, R_0, s_1, a_1, R_1, \cdots, s_T, a_T, R_T] \quad (6.12)$$</p>
+<p>那么我们使用元组来保存一条轨迹的信息。结构如下</p>
+<p>$$\text{一条轨迹的详细信息} = \left\{ \begin{array}{l} \text{states} : [s_0, s_1, ..., s_{T-1}] \\ \text{next\_states} : [s_1, s_2, ..., s_T] \\ \text{actions} : [a_0, a_1, ..., a_{T-1}] \\ \text{action\_probs} : [\pi_{\theta_{old}}(a_0|s_0), \pi_{\theta_{old}}(a_1|s_1), ..., \pi_{\theta_{old}}(a_{T-1}|s_{T-1})] \\ \text{rewards} : [R_0, R_1, ..., R_{T-1}] \\ \text{dones} : [\text{False, False, ..., True}] \end{array} \right. \quad (6.13)$$</p>
+<p>有了旧策略采样的轨迹的所有详细信息，我们就可以来实现PPO算法了。代码如下。</p>
+<pre><code class="language-python">class Agent:
+    ...
+
+    def update(self, trajectory):
+        states, next_states, actions, action_probs, rewards, dones = trajectory
+        # [s_0, s_1, ..., s_{T-1}]
+        states = torch.tensor(states)
+        # [a_0, a_1, ..., a_{T-1}]
+        actions = torch.tensor(actions).view(-1, 1)
+        # [R_0, R_1, ..., R_{T-1}]
+        rewards = torch.tensor(rewards).view(-1, 1)
+        # [s_1, s_2, ..., s_T]
+        next_states = torch.tensor(next_states)
+        # [False, False, ..., True]
+        dones = torch.tensor(dones, dtype=torch.float).view(-1, 1)
+
+        # [V(s_0), V(s_1), ..., V(s_{T-1})]
+        V = self.v(states).detach()
+        # TD-target = R_t + γV(s_{t+1})
+        # [TD-target_0, TD-target_1, ..., TD-target_{T-1}]
+        td_target = rewards + self.gamma * self.v(next_states) * (1 - dones)
+        # 一步TD误差：δ_t = R_t + γV(s_{t+1}) - V(s_t)
+        # [δ_0, δ_1, ..., δ_{T-1}]
+        td_delta = td_target - V
+        # 计算每个时刻t的广义优势估计（GAE），gae是常数，不在计算图中
+        # [A^GAE_0, A^GAE_1, ..., A^GAE_{T-1}]
+        gae = compute_gae(self.gamma, td_delta.cpu())
+        # 冻结一份旧策略采取动作的对数概率logπ_old(a|s)
+        # [logπ_old(a_0|s_0), logπ_old(a_1|s_1), ..., logπ_old(a_{T-1}|s_{T-1})]
+        old_probs = torch.tensor(action_probs).view(-1, 1)
+        old_log_probs = torch.log(old_probs).detach()
+        # 每条轨迹使用10次，也就是更新10次策略网络
+        for _ in range(10):
+            # 新策略采取动作的对数概率：logπ_θ(a|s)
+            # [logπ_θ(a_0|s_0), logπ_θ(a_1|s_1), ..., logπ_θ(a_{T-1}|s_{T-1})]
+            log_probs = torch.log(self.pi(states).gather(1, actions))
+            # 计算比值：ρ(θ) = π_θ(a|s) / π_old(a|s)
+            ratio = torch.exp(log_probs - old_log_probs)
+            # ρ(θ)A^GAE
+            # [ρ_0 A^GAE_0, ρ_1 A^GAE_1, ..., ρ_{T-1} A^GAE_{T-1}]
+            surr1 = ratio * gae
+            # clip(ρ(θ), 1-ε, 1+ε)A^GAE
+            # [clip(ρ_0)A^GAE_0, clip(ρ_1)A^GAE_1, ..., clip(ρ_{T-1})A^GAE_{T-1}]
+            surr2 = torch.clamp(ratio, 1 - 0.2, 1 + 0.2) * gae
+            # π loss = -1/T Σ min(surr1, surr2)
+            pi_loss = torch.mean(-torch.min(surr1, surr2))
+            # V loss = 1/T Σ (V(s_t) - (A^GAE_t + V(s_t)))²
+            # 这里的&#39;gae+V&#39;是常数，不在计算图中
+            v_loss = torch.mean(F.mse_loss(self.v(states), gae + V))
+            self.optimizer_pi.zero_grad()
+            self.optimizer_v.zero_grad()
+            pi_loss.backward()
+            v_loss.backward()
+            self.optimizer_pi.step()
+            self.optimizer_v.step()
+</code></pre>
+<p><strong>比值的计算方法</strong></p>
+<p>$$\because A = e^{\log A}$$
+$$\therefore \frac{A}{B} = e^{\log A - \log B} = \frac{e^{\log A}}{e^{\log B}}$$</p>
+<p>价值网络的损失 MSE</p>
+<p>如果使用单步TD误差，那么</p>
+<p>$$V_{\omega}(s_t) \stackrel{\text{def}}{=} \text{TD Target} = \text{TD Error} + V_{\omega_{\text{old}}}(s_t) = R_t + \gamma V_{\omega_{\text{old}}}(s_{t+1}) \quad (6.15)$$</p>
+<p>如果使用广义优势估计，那么</p>
+<p>$$V_{\omega}(s_t) \stackrel{\text{def}}{=} \text{GAE Target} = \text{GAE} + V_{\omega_{\text{old}}}(s_t) \quad (6.16)$$</p>
+<p>TD Target 和 GAE Target 要从计算图中剔除，作为常数使用。</p>
+<h3 id="sec-3">6.3.3 广义优势估计的计算</h3>
+<pre><code class="language-python">def compute_gae(gamma, td_delta):
+    # δ_t
+    td_delta = td_delta.detach().numpy()
+    gae_list = []
+    last_gae = 0.0
+    lam = 0.95
+    # A_t = δ_t + γλA_{t+1}
+    for delta in td_delta[::-1]:
+        last_gae = gamma * lam * last_gae + delta
+        gae_list.append(last_gae)
+    gae_list.reverse()
+    return torch.tensor(gae_list)
+</code></pre>
+<h3 id="sec-4">6.3.4 训练循环</h3>
+<pre><code class="language-python">def train(env, agent):
+    return_list = []
+    episode_list = []
+    for episode in range(500):
+        trajectory = agent.rollout(env)
+        agent.update(trajectory)
+        # 统计信息
+        episode_reward = sum(trajectory[4])
+        return_list.append(episode_reward)
+        episode_list.append(episode)
+
+        if (episode + 1) % 10 == 0:
+            print(f&quot;回合: {episode}, 回报: {episode_reward}&quot;)
+
+    return return_list, episode_list
+
+def main():
+    env = gym.make(&quot;CartPole-v0&quot;)
+    env.seed(0)
+    torch.manual_seed(0)
+    agent = Agent()
+    return_list, episode_list = train(env, agent)
+    plot_loss(episode_list, return_list, &quot;ppo-loss.pdf&quot;)
+    test_agent(agent, env)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<p>获得的奖励可视化如下：</p>
+<p><figure class="tutorial-figure"><figcaption>图6.8 PPO算法获得的奖励</figcaption></figure>
+</p>
+<hr>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">6.3.1 网络结构的定义</a></li>
+<li><a href="#sec-2">6.3.2 PPO算法的实现</a></li>
+<li><a href="#sec-3">6.3.3 广义优势估计的计算</a></li>
+<li><a href="#sec-4">6.3.4 训练循环</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-6-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">6.2 近端策略优化</span></a>
+      <a class="next-post" href="/llm-tutorial-7-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">7.1 数学背景知识</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,近端策略优化（PPO）">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>6.2 近端策略优化 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="6.2 近端策略优化 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="6.2 近端策略优化" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-6-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">近端策略优化（PPO）</a>
+                </span>
+              <h1>6.2 近端策略优化</h1>
+              <span class="meta">
+                Posted on
+                2025-04-25，14 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>在最优化理论中，优化方法主要有两种：线搜索和置信域。梯度下降算法是一种线搜索。我们首先确定下降方向，然后朝该方向迈出一步。</p>
+<p><strong>提示</strong></p>
+<p>Trust Region Method：置信域方法</p>
+<p><figure class="tutorial-figure"><figcaption>图6.4 左图为线搜索，右图为置信域</figcaption></figure>
+</p>
+<p>而在置信域中，我们确定想要探索的最大步长，然后在该置信域内找到最优点。</p>
+<p><figure class="tutorial-figure"><figcaption>图6.5 置信域方法</figcaption></figure>
+</p>
+<p>也就是，我们在梯度上升的时候，先周围看一圈，然后找一个安全的步长，然后进行梯度上升。为了实现这个目的，我们的目标函数 $J(\theta)$ 就要改变了。</p>
+<p>原始目标函数不好优化，转而去优化一个替代目标函数，这种方法很常见吗？</p>
+<p>是的，非常常见，而且几乎是现代机器学习、优化、统计推断和强化学习里的“基本套路”之一。很多时候，原始目标函数要么不可导、不可直接计算、方差太大、非凸、约束复杂，要么优化起来不稳定，所以我们会构造一个更容易优化的替代目标函数，也常叫surrogate objective/surrogate loss/proxy objective。</p>
+<p>PPO算法是Actor-Critic架构的，也就是演员-评论家架构。</p>
+<p>所以我们先来回顾一下策略梯度法的演员-评论家架构的梯度公式。</p>
+<p>策略梯度法的目标函数如下</p>
+<p>$$J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}[G(\tau)] \quad (6.5)$$</p>
+<p>策略梯度法的目标函数的梯度如下</p>
+<p>$$\nabla_{\theta}J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}A_t^{\pi_{\theta}}\nabla_{\theta}\log \pi_{\theta}(a_{t}|s_{t})\right] \quad (6.6)$$</p>
+<p>其中 $A_t^{\pi_{\theta}}$ 为估计的优势。这里的 $A$ 表示优势，也就是Advantage。表示当前策略采取动作 $a_t$ 之后，相对于价值函数评估的价值的优势是多少。</p>
+<p><strong>危险</strong></p>
+<p>为了不和前面的公式混淆，我们将动作的数学符号由 $A_t$ 改为 $a_t$，将状态的数学符号由 $S_t$ 改为 $s_t$。这样A就代表优势了。</p>
+<p>而PPO的目标函数变成了下式，也就是替代目标函数（surrogate objective function）。</p>
+<p><strong>定理 6.1 — 带裁剪的 PPO 目标函数</strong></p>
+<p>$$J(\theta)^{\mathrm{ppo-clip}} = \mathbb{E}_{\tau \sim \pi_{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T}\left[\min \left(\frac{\pi_{\theta}(a_{t}|s_{t})}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})}A_{t}^{\pi_{\theta_{\mathrm{old}}}},\mathrm{clip}\left(\frac{\pi_{\theta}(a_{t}|s_{t})}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})},1 - \varepsilon ,1 + \varepsilon\right)A_{t}^{\pi_{\theta_{\mathrm{old}}}}\right)\right]\right] \quad (6.7)$$</p>
+<p>只要计算出这个目标函数，然后进行反向传播（.backward()）也就是求 $\nabla_{\theta}J(\theta)^{\mathrm{ppo-clip}}$ 就可以更新策略神经网络了。</p>
+<p>当我们运行旧策略 $\pi_{\theta_{\mathrm{old}}}$ 玩一局倒立摆游戏时，会产生一条轨迹 $\tau = (s_0,a_0,R_0,s_1,a_1,R_1,\cdots)$。将这条轨迹保存下来，我们可以使用新策略 $\pi_{\theta}$ 来计算在每个状态 $s_t$，新策略采取动作 $a_t$ 的概率 $\pi_{\theta}(a_t|s_t)$ 是多少。</p>
+<p>例如：当我们使用旧策略玩了一把倒立摆游戏之后，保存的轨迹中</p>
+<p>$$\pi_{\theta_{\mathrm{old}}}(a_1|s_1) = [\text{向左推的概率} = 0.3, \text{向右推的概率} = 0.7] \quad (6.8)$$</p>
+<p>那么新策略也可以针对 $s_1$ 计算一下采取动作的概率分布。</p>
+<p><strong>危险</strong></p>
+<p>在训练最开始，新策略和旧策略相同，所以比值为 $\frac{\pi_{\theta}(a_t|s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t|s_t)} = 1$，也就是这个比值不会被裁剪。</p>
+<p>所以在训练最开始，也就是 PPO 的目标函数第一次进行反向传播时，有如下成立：</p>
+<p>$$J(\theta)^{\mathrm{ppo-clip}} = \mathbb{E}_{\tau \sim \pi_{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T}\frac{\pi_{\theta}(a_{t}|s_{t})|_{\theta = \theta_{\mathrm{old}}}}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})}A_{t}^{\pi_{\theta_{\mathrm{old}}}}\right] \quad (6.9)$$</p>
+<p>对两边进行求导，注意这里求导时 $\theta = \theta_{\mathrm{old}}$。所以有如下的公式：</p>
+<p>$$\begin{array}{rl} \nabla_{\theta}J(\theta)^{\mathrm{ppo-clip}} &amp;= \nabla_{\theta}\mathbb{E}_{\tau \sim \pi_{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T}\frac{\pi_{\theta}(a_{t}|s_{t})|_{\theta = \theta_{\mathrm{old}}}}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})}A_{t}^{\pi_{\theta_{\mathrm{old}}}}\right]\\ &amp;= \mathbb{E}_{\tau \sim \pi_{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T}\frac{\nabla_{\theta}\pi_{\theta}(a_{t}|s_{t})|_{\theta = \theta_{\mathrm{old}}}}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})}A_{t}^{\pi_{\theta_{\mathrm{old}}}}\right]\\ &amp;= \mathbb{E}_{\tau \sim \pi_{\theta_{\mathrm{old}}}}\left[\sum_{t = 0}^{T}A_{t}^{\pi_{\theta_{\mathrm{old}}}}\nabla_{\theta}\log \pi_{\theta}(a_{t}|s_{t})\right] \quad (\text{log梯度技巧}) \end{array} \quad (6.10)$$</p>
+<p>我们会发现，PPO的第一次反向传播，等价于原始的策略梯度法。</p>
+<p>如果新策略与旧策略的概率比超出 $(1 - \varepsilon)$ 和 $(1 + \varepsilon)$ 的范围，则优势将被剪裁。在PPO论文中的实验中，$\varepsilon$ 设置为0.2。</p>
+<p><figure class="tutorial-figure"><figcaption>图6.6 PPO目标函数中的比值</figcaption></figure>
+</p>
+<p>实际上，如果策略发生重大变化超出了我们的舒适区，那么这将阻碍策略的实现。我们假设比值（重要性权重）</p>
+<p>$$\rho_t(\theta) = \frac{\pi_{\theta}(a_{t}|s_{t})}{\pi_{\theta_{\mathrm{old}}}(a_{t}|s_{t})} \quad (6.11)$$</p>
+<table>
+<thead>
+<tr>
+<th>$\rho_t(\theta) &gt; 0$</th>
+<th>$A_t$</th>
+<th>min函数的结果</th>
+<th>目标函数是否被裁剪?</th>
+<th>目标函数的符号</th>
+<th>梯度</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>$\rho_t(\theta) \in [1-\varepsilon,1+\varepsilon]$</td>
+<td>$+\rho_t(\theta)A_t$</td>
+<td>否</td>
+<td>+</td>
+<td>√</td>
+</tr>
+<tr>
+<td>2</td>
+<td>$\rho_t(\theta) \in [1-\varepsilon,1+\varepsilon]$</td>
+<td>$-\rho_t(\theta)A_t$</td>
+<td>否</td>
+<td>-</td>
+<td>√</td>
+</tr>
+<tr>
+<td>3</td>
+<td>$\rho_t(\theta) &lt; 1-\varepsilon$</td>
+<td>$+\rho_t(\theta)A_t$</td>
+<td>否</td>
+<td>+</td>
+<td>√</td>
+</tr>
+<tr>
+<td>4</td>
+<td>$\rho_t(\theta) &lt; 1-\varepsilon$</td>
+<td>$-(1-\varepsilon)A_t$</td>
+<td>是</td>
+<td>-</td>
+<td>0</td>
+</tr>
+<tr>
+<td>5</td>
+<td>$\rho_t(\theta) &gt; 1+\varepsilon$</td>
+<td>$+(1+\varepsilon)A_t$</td>
+<td>是</td>
+<td>+</td>
+<td>0</td>
+</tr>
+<tr>
+<td>6</td>
+<td>$\rho_t(\theta) &gt; 1+\varepsilon$</td>
+<td>$-\rho_t(\theta)A_t$</td>
+<td>否</td>
+<td>-</td>
+<td>√</td>
+</tr>
+</tbody></table>
+<p><strong>表6.1 对PPO目标函数根据比值的不同进行分情况讨论</strong></p>
+<p>我们有6种不同的情况，见上面的表。首先记住，我们取裁剪目标和非裁剪目标中的最小值。</p>
+<p><strong>· 情况1和2：比值介于裁剪范围之内</strong></p>
+<p>在情况1和2中，由于比例介于范围 $[1 - \varepsilon ,1 + \varepsilon ]$ 之间，因此目标函数不会被裁剪。</p>
+<p>在情况1中，我们具有正优势：该动作优于该状态下所有动作的平均值。因此，我们应该鼓励当前策略提高在该状态下采取该动作的概率。</p>
+<p>由于该比值是在区间之间的，因此我们可以增加我们的策略在该状态下采取该行动的概率。</p>
+<p>在情况2中，我们有一个负优势：该动作比该状态下所有动作的平均值更差。因此，我们应该阻止当前策略在该状态下采取该动作。</p>
+<p>由于该比值是在区间之间的，因此我们可以降低我们的策略在该状态下采取该行动的概率。</p>
+<p><strong>· 情况3和4：比值小于1-$\varepsilon$</strong></p>
+<p>如果概率比低于 $1 - \varepsilon$，则当前策略在该状态下采取该行动的概率比旧策略低得多。</p>
+<p>如果像情况3中一样，优势估计为正（$A &gt; 0$），那么我们希望增加在该状态下采取该行动的概率。但是，如果像情况4那样，优势估计为负，我们不想进一步降低在该状态下采取该行动的概率。因此，梯度 = 0（因为我们在一条平线上），所以我们不会更新权重。</p>
+<p><strong>· 情况5和6：比值大于 $1 + \varepsilon$</strong></p>
+<p>如果概率比高于 $1 + \varepsilon$，则当前策略中该状态下采取该行动的概率远高于前一策略。</p>
+<p>如果像情况5那样，优势为正，我们不应该太贪心。因为在当前状态下，我们采取该行动的概率已经比之前的策略更高了。因此，梯度等于0（因为我们在一条平线上），所以我们不会更新权重。</p>
+<p>如果像情况6中那样，优势是负的，我们希望降低在该状态下采取该行动的概率。</p>
+<p>总结一下，我们只用未裁剪的目标函数部分来更新策略。当最小值是裁剪后的目标函数部分时，我们不会更新策略权重，因为梯度将等于0。</p>
+<p>因此，我们仅在以下情况下更新我们的策略：</p>
+<ul>
+<li>比值在 $(1 - \varepsilon ,1 + \varepsilon)$ 之内</li>
+<li>比值不在 $(1 - \varepsilon ,1 + \varepsilon)$ 范围内，但优势使我们更接近这个范围。</li>
+<li>比值小于 $1 - \varepsilon$，但优势 $&gt;0$。</li>
+<li>比值大于 $1 + \varepsilon$，但优势 $&lt;0$。</li>
+</ul>
+<p>你可能会想，为什么当最小值是截断比值时，梯度为0。当比值被截断时，在这种情况下的导数将不是 $\rho_t(\theta)A_t$ 的导数。而是 $(1 - \varepsilon)A_t$ 或者 $(1 + \varepsilon)A_t$ 的导数，而两者的导数都是0。</p>
+<p><strong>提示</strong></p>
+<p>$A_t$ 不是 $\theta$ 的函数。所以对 $\theta$ 求导为0。</p>
+<p>总而言之，得益于这个裁剪的替代目标函数（替换了原来的简单优美的目标函数（$J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}[G(\tau)]$），我们限制了当前策略与旧策略之间的差异范围。因为我们消除了比值超出区间的诱因，因为裁剪会对梯度产生影响。如果比值为 $&gt;1 + \varepsilon$ 或 $&lt; 1 - \varepsilon$，则梯度将等于0。</p>
+<p>PPO增加了一个软约束（裁剪机制），可以通过一阶优化器（求一阶导数）进行优化。我们偶尔可能会做出一些错误的决策，但它在优化速度上取得了良好的平衡。实验结果证明，这种平衡能够以最简单的方式实现最佳性能。</p>
+<p><strong>带裁剪的PPO算法</strong></p>
+<pre><code>1 输入：初始化策略参数 θ_0
+2 初始化裁剪阈值参数 ε = 0.2
+3 for k = 0,1,2,... do
+4     使用策略 π_θ_k 采集一条轨迹数据 D_k
+5     计算优势 A_t^{π_θ_k}
+6     更新策略
+7     θ&#39;_1 = θ_k
+8     for i = 1,2,...,N do
+9         ρ_t = π_{θ&#39;_i}(a_t|s_t) / π_{θ_k}(a_t|s_t)
+10        clip_t = clip(ρ_t, 1-ε, 1+ε)
+11        J(θ&#39;_i) = Σ_{t=0}^{T} [min(ρ_t · A_t^{π_θ_k}, clip_t · A_t^{π_θ_k})]
+12        θ&#39;_{i+1} = θ&#39;_i + α ∇_{θ&#39;_i} J(θ&#39;_i)
+13    θ_{k+1} = θ&#39;_N
+14 使用广义优势估计（GAE）
+15 执行N步的梯度下降
+16 将 θ_k 作为梯度更新的起点
+17 更新N次梯度
+18 计算时间步 0~T 的比值
+19 裁剪时间步 0~T 的比值
+20 累加所有时间步的最小值
+21 更新梯度
+22 将 θ&#39;_N 作为下一次更新的起点
+</code></pre>
+<p><figure class="tutorial-figure"><figcaption>图6.7 带裁剪的PPO算法伪代码</figcaption></figure>
+</p>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-6-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">6.1 策略梯度法存在的问题</span></a>
+      <a class="next-post" href="/llm-tutorial-6-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">6.3 PPO代码实现</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

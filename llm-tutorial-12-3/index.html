@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,使用GRPO微调大语言模型——复刻 DeepSeek-R1">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>12.3 GRPO 应用场景 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="12.3 GRPO 应用场景 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="12.3 GRPO 应用场景" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-12-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">使用GRPO微调大语言模型——复刻 DeepSeek-R1</a>
+                </span>
+              <h1>12.3 GRPO 应用场景</h1>
+              <span class="meta">
+                Posted on
+                2025-05-13，41 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <h3 id="sec-1">12.3.1 医疗思维链</h3>
+<p>我们使用 Hugging Face 的 <code>interleave_datasets</code> 混合三个关键数据集：</p>
+<p>PubMedQA（占总数据的70%）：</p>
+<ul>
+<li>临床问答，答案为 yes/no/maybe</li>
+</ul>
+<p>GSM8K：</p>
+<ul>
+<li>数学应用题，以保持数学推理能力</li>
+</ul>
+<p>Health Benchmarks：</p>
+<ul>
+<li>50+ 道医学专业选择题</li>
+<li>从心脏病学到疫苗接种的类别</li>
+</ul>
+<p>权重应该反映数据集的复杂性——PubMedQA 的曝光度增加了 3 倍，以处理其细微差别。我们这里对数据集进行了打乱。由于 PubMedQA 样本量增加了 3 倍，因此将这些样本展示给模型的几率也增加了 3 倍。</p>
+<p>模型在训练过程中的答案</p>
+<pre><code>Prompt（提示）：
+
+在以下科学背景下：
+
+我们此前已经展示了对志愿者进行 4 周、共 19 次、每日亚红斑量紫外线（DUVR，模拟非极端暴露条件）照射所产生的不利影响。该光源的 UVA（320-400 nm）与 UVB（290-320 nm）辐照度比为 25，而典型用于代表夏季晴朗近天顶太阳辐照的模拟太阳光（SSR）的该比值接近 10。
+
+在此，我们报告对之前研究的拓展，评估了一款广谱日常护肤产品（低 SPF：SPF 8，UVA-PF 7，UVA 3* 级防护）所提供的光防护。我们检测了与皮肤癌与光老化相关的细胞与分子光损伤标志物。
+
+本研究显示，重复 DUVR 暴露所产生的生物学效应可以被一款广谱日常护理产品所预防，且其所提供的防护水平会随具体检测终点而变化。
+
+回答下列问题：
+一款广谱防晒是否能预防代表温带地区的日常亚红斑量太阳紫外线重复暴露所导致的累积性损伤？请用 &quot;yes&quot; / &quot;no&quot; / &quot;maybe&quot; 作答。你需要仔细阅读背景并推理后回答。
+
+Model Response（模型回答）：
+
+&lt;reasoning&gt;
+提供的背景讨论了一项研究：重复的亚红斑量 UV（DUVR）暴露在 4 周内会产生不利影响。它还提到使用了一款广谱日常护理产品（SPF 8，UVA 防护因子 7，UVA 3* 评级）进行评估。研究的目的是判断该广谱产品是否能预防这类重复暴露引起的累积性损伤。文本中说明，该研究显示重复 DUVR 的生物学效应可以被这款产品预防，说明其具有保护作用。虽然不同终点的防护程度不同，但整体表述支持其确实能预防累积损伤。因此答案应为&quot;yes&quot;。
+&lt;/reasoning&gt;
+
+&lt;answer&gt;
+yes
+&lt;/answer&gt;
+</code></pre>
+<p>TRL 代码如下：</p>
+<pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import GRPOConfig, GRPOTrainer
+from datasets import load_dataset, Dataset, interleave_datasets, concatenate_datasets
+import re
+
+
+# Load and prep dataset
+SYSTEM_PROMPT = &quot;&quot;&quot;
+Respond in the following format:
+&lt;reasoning&gt;
+...
+&lt;/reasoning&gt;
+&lt;answer&gt;
+...
+&lt;/answer&gt;
+&quot;&quot;&quot;
+
+XML_COT_FORMAT = &quot;&quot;&quot;\
+&lt;reasoning&gt;
+{reasoning}
+&lt;/reasoning&gt;
+&lt;answer&gt;
+{answer}
+&lt;/answer&gt;
+&quot;&quot;&quot;
+
+
+def extract_xml_answer(text: str) -&gt; str:
+    answer = text.split(&quot;&lt;answer&gt;&quot;)[-1]
+    answer = answer.split(&quot;&lt;/answer&gt;&quot;)[0]
+    return answer.strip()
+
+
+def extract_hash_answer(text: str) -&gt; str | None:
+    if &quot;####&quot; not in text:
+        return None
+    return text.split(&quot;####&quot;)[1].strip()
+
+# uncomment middle messages for 1-shot prompting
+
+
+def get_datasets(split=&quot;train&quot;) -&gt; Dataset:
+    data = load_dataset(&#39;gsm8k&#39;, &#39;main&#39;)[split] # type: ignore
+    data = data.map(lambda x: { # type: ignore
+        &#39;prompt&#39;: [
+            {&#39;role&#39;: &#39;system&#39;, &#39;content&#39;: SYSTEM_PROMPT},
+            {&#39;role&#39;: &#39;user&#39;, &#39;content&#39;: x[&#39;question&#39;]}
+        ],
+        &#39;answer&#39;: extract_hash_answer(x[&#39;answer&#39;]),
+        &#39;db_set&#39;: &#39;gsm8k&#39;
+    }) # type: ignore
+    data = data.remove_columns([&#39;question&#39;])
+
+    # two times more than other datasets
+    data_qa = load_dataset(&quot;PubMedQA&quot;, &quot;pqa_artificial&quot;)[split]
+    data_qa = data_qa.filter(lambda x: len(&quot;\n&quot;.join(x[&#39;context&#39;][&#39;contexts&#39;])) &lt; 1024) # avoid long traces
+    data_qa = data_qa.map(lambda x: { # type: ignore
+        &#39;prompt&#39;: [
+            {&#39;role&#39;: &#39;system&#39;, &#39;content&#39;: SYSTEM_PROMPT},
+            {
+                &quot;role&quot;: &quot;user&quot;,
+                &quot;content&quot;: &quot;Given the scientific context below:\n&quot; +
+                &quot;\n&quot;.join(x[&#39;context&#39;][&#39;contexts&#39;]) +
+                &quot;\n\nAnswer the following question:\n&quot; +
+                x[&#39;question&#39;] +
+                &quot; with &#39;yes&#39;, &#39;no&#39; or &#39;maybe&#39;. You need to carefully review the context and reason before answering.&quot;
+            },
+        ],
+        &#39;answer&#39;: x[&#39;final_decision&#39;],
+        &#39;db_set&#39;: &#39;pubmedqa&#39;
+    }) # type: ignore
+    data_qa = data_qa.remove_columns([&#39;pubid&#39;, &#39;question&#39;, &#39;context&#39;, &#39;long_answer&#39;, &#39;final_decision&#39;])
+
+    categories = [
+        &#39;Lab_Medicine&#39;,
+        &#39;Wearables&#39;,
+        &#39;Dermatology&#39;,
+        &#39;Gastroenterology&#39;,
+        &#39;Internal_Medicine&#39;,
+        &#39;Oncology&#39;,
+        &#39;Orthopedics&#39;,
+        &#39;General_Surgery&#39;,
+        &#39;Ophthalmology&#39;,
+        &#39;Audiology&#39;,
+        &#39;Head_Neck_Surgery&#39;,
+        &#39;Elderly_Care&#39;,
+        &#39;Pediatrics&#39;,
+        &#39;Allergy_Immunology&#39;,
+        &#39;Rheumatology&#39;,
+        &#39;Pharmacy&#39;,
+        &#39;Obstetrics_Gynecology&#39;,
+        &#39;Microbiology&#39;,
+        &#39;Dentistry&#39;,
+        &#39;Physical_Medicine_and_Rehabilitation&#39;,
+        &#39;Neurology&#39;,
+        &#39;Psychiatry&#39;,
+        &#39;Pathology&#39;,
+        &#39;Genetics&#39;,
+        &#39;Rare_Diseases&#39;,
+        &#39;Hematology&#39;,
+        &#39;Emergency&#39;,
+        &#39;Endocrinology&#39;,
+        &#39;Radiology&#39;,
+        &#39;Cardiology&#39;,
+        &#39;Pulmonology&#39;,
+        &#39;Infectious_Diseases&#39;,
+        &#39;Critical_Care&#39;,
+        &#39;Pediatric_Surgery&#39;,
+        &#39;Neuroscience&#39;,
+        &#39;Epidemiology&#39;,
+        &#39;Fitness_Sports&#39;,
+        &#39;Health_Education&#39;,
+        &#39;Health_Economics&#39;,
+        &#39;Health_Entrepreneurship&#39;,
+        &#39;Hospital_Management&#39;,
+        &#39;Mental_Health&#39;,
+        &#39;Nutrition&#39;,
+        &#39;Palliative_Care&#39;,
+        &#39;Preventive_Medicine&#39;,
+        &#39;Public_Health&#39;,
+        &#39;Social_Media_Addiction&#39;,
+        &#39;Sleep&#39;,
+        &#39;Supplements&#39;,
+        &#39;Vaccination&#39;,
+        &#39;Work_Health&#39;,
+        &#39;Wellbeing&#39;
+    ]
+    data_mc = concatenate_datasets([load_dataset(&quot;Health_Benchmarks&quot;, i)[i] for i in categories])
+    data_mc = data_mc.map(lambda x: { # type: ignore
+        &#39;prompt&#39;: [
+            {&#39;role&#39;: &#39;system&#39;, &#39;content&#39;: SYSTEM_PROMPT},
+            {
+                &quot;role&quot;: &quot;user&quot;,
+                &quot;content&quot;: &quot;\n\nAnswer the following question:\n&quot; +
+                x[&#39;Questions&#39;] +
+                &quot;\n With &#39;A&#39;, &#39;B&#39;, &#39;C&#39; or &#39;D&#39;. You need to carefully review the context and reason before answering.&quot;
+            },
+        ],
+        &#39;answer&#39;: x[&#39;Answers&#39;],
+        &#39;db_set&#39;: &#39;med_mc&#39;
+    }) # type: ignore
+    data_mc = data_mc.remove_columns([&#39;Answers&#39;, &#39;Questions&#39;])
+
+    dataset = concatenate_datasets([data, data_qa, data_mc])
+    return dataset
+
+
+dataset = get_datasets()
+dataset = dataset.shuffle(seed=42)
+train_test_split = dataset.train_test_split(test_size=0.1)
+train_dataset = train_test_split[&quot;train&quot;]
+test_dataset = train_test_split[&quot;test&quot;]
+print(f&quot;train size: {len(train_dataset)}, test size: {len(test_dataset)}&quot;)
+
+
+# Reward functions
+def correctness_reward_func(prompts, completions, answer, db_set, **kwargs) -&gt; list[float]:
+    responses = [completion[0][&#39;content&#39;] for completion in completions]
+    q = prompts[0][-1][&#39;content&#39;]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    print(&#39;-&#39;*20, f&quot;Question:\n{q}&quot;, f&quot;\nAnswer:\n{answer[0]}&quot;,
+          f&quot;\nResponse:\n{responses[0]}&quot;, f&quot;\nExtracted:\n{extracted_responses[0]}&quot;)
+    rewards = []
+    for r, a, dt in zip(extracted_responses, answer, db_set):
+        if dt == &quot;gsm8k&quot;:
+            if a in r:
+                rewards.append(1.0)
+            elif r == a:
+                rewards.append(2.0)
+            else:
+                rewards.append(0.0)
+        else:
+            rewards.append(2.0 if r.lower() == a.strip().lower() else 0.0)
+    return rewards
+
+
+def int_reward_func(completions, db_set, **kwargs) -&gt; list[float]:
+    responses = [completion[0][&#39;content&#39;] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    rewards = []
+    for r, dt in zip(extracted_responses, db_set):
+        if dt == &quot;gsm8k&quot;:
+            rewards.append(0.5 if r.isdigit() else 0.0)
+        elif dt == &quot;pubmedqa&quot;:
+            rewards.append(0.5 if (&#39;yes&#39; in r.lower() or &#39;no&#39; in r.lower() or &#39;maybe&#39; in r.lower()) else 0.0)
+        else:
+            rewards.append(0.5 if (&#39;a&#39; in r.lower() or &#39;b&#39; in r.lower() or &#39;c&#39; in r.lower() or &#39;d&#39; in r.lower()) else 0.0)
+    return rewards
+
+
+def strict_format_reward_func(completions, **kwargs) -&gt; list[float]:
+    &quot;&quot;&quot;Reward function that checks if the completion has a specific format.&quot;&quot;&quot;
+    pattern = r&quot;^&lt;reasoning&gt;\n.*?\n&lt;/reasoning&gt;\n&lt;answer&gt;\n.*?\n&lt;/answer&gt;\n$&quot;
+    responses = [completion[0][&quot;content&quot;] for completion in completions]
+    matches = [re.match(pattern, r) for r in responses]
+    return [0.5 if match else 0.0 for match in matches]
+
+
+def soft_format_reward_func(completions, **kwargs) -&gt; list[float]:
+    &quot;&quot;&quot;Reward function that checks if the completion has a specific format.&quot;&quot;&quot;
+    pattern = r&quot;&lt;reasoning&gt;.*?&lt;/reasoning&gt;\s*&lt;answer&gt;.*?&lt;/answer&gt;&quot;
+    responses = [completion[0][&quot;content&quot;] for completion in completions]
+    matches = [re.match(pattern, r) for r in responses]
+    return [0.5 if match else 0.0 for match in matches]
+
+
+def count_xml(text) -&gt; float:
+    count = 0.0
+    if text.count(&quot;&lt;reasoning&gt;\n&quot;) == 1:
+        count += 0.125
+    if text.count(&quot;\n&lt;/reasoning&gt;\n&quot;) == 1:
+        count += 0.125
+    if text.count(&quot;\n&lt;answer&gt;\n&quot;) == 1:
+        count += 0.125
+        count -= len(text.split(&quot;\n&lt;/answer&gt;\n&quot;)[-1])*0.001
+    if text.count(&quot;\n&lt;/answer&gt;&quot;) == 1:
+        count += 0.125
+        count -= (len(text.split(&quot;\n&lt;/answer&gt;&quot;)[-1]) - 1)*0.001
+    return count
+
+
+def xmlcount_reward_func(completions, **kwargs) -&gt; list[float]:
+    contents = [completion[0][&quot;content&quot;] for completion in completions]
+    return [count_xml(c) for c in contents]
+
+
+training_args = GRPOConfig(output_dir=&quot;outputs&quot;, num_generations=2, per_device_train_batch_size=4)
+
+
+# 加载模型
+model = AutoModelForCausalLM.from_pretrained(
+    &quot;../GRPO/Qwen2.5-3B-Instruct/&quot;,
+    torch_dtype=&quot;auto&quot;,
+    device_map=&quot;auto&quot;
+)
+
+tokenizer = AutoTokenizer.from_pretrained(
+    &quot;../GRPO/Qwen2.5-3B-Instruct/&quot;)
+
+
+trainer = GRPOTrainer(
+    model=model,
+    processing_class=tokenizer,
+    reward_funcs=[
+        xmlcount_reward_func,
+        soft_format_reward_func,
+        strict_format_reward_func,
+        int_reward_func,
+        correctness_reward_func,
+    ],
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=test_dataset,
+)
+trainer.train()
+</code></pre>
+<h3 id="sec-2">12.3.2 Text-To-SQL</h3>
+<p>GITHUB 地址
+底座模型：Qwen2.5-Coder-7B-Instruct</p>
+<p>任务</p>
+<ul>
+<li>输入：请帮我写一段SQL，要求查询出部门35岁以上的程序员</li>
+<li>输出：SELECT * FROM database WHERE ...</li>
+</ul>
+<p>该模型展现出强大的整体性能，SQL 生成准确率高（44/50 分，得分 4 或 5 分），推理质量优异（48/50 分，得分 4 或 5 分），格式遵循近乎完美（49/50 分，得分 5 分），且具有明确的教育价值。总体而言，88% 的输出得分达到 4.0 分或更高，反映出模型结果的一致性、结构良好且易于解释。</p>
+<p>奖励函数编写要点</p>
+<ol>
+<li>使用正则表达式来实现格式奖励</li>
+<li>创建一个sqlite3 数据库，用来校验SQL 语句的正确性</li>
+<li>调用DeepSeek 或者GPT 接口，让外部大语言模型评估一下CoT 的质量。</li>
+</ol>
+<h3 id="sec-3">12.3.3 32B 大模型Text2SQL 微调——项目复盘</h3>
+<p>本文将分享一个医疗数据分析领域的Text2SQL 项目。
+背景：客户内部有几十个业务数据库，分析师每天要写大量SQL。需要构建自然语言转SQL 的工具——用户用中文提问，系统自动生成SQL 查询。
+由于数据库schema 中包含患者信息、诊断记录、用药数据等，合规上不允许任何包含数据库结构的prompt 发到外部API。因此只能本地部署模型，用开源模型 + 微调。</p>
+<h4 id="sec-4">12.3.3.1 难点分析与训练设计</h4>
+<p>项目中最大的挑战是客户的数据库跟公开数据集差异很大——表名是拼音缩写，字段命名不规范，还有大量业务特有的JOIN 逻辑。
+我们的场景中，有客户的数据库和历史查询日志（带结果），但缺少自然语言问题到SQL 的配对标注。让分析师手动标注成本太高，标一条要5-10 分钟。
+这正好适合用GRPO（DeepSeek-R1 同款训练方法）：不需要人工标注，让模型自己生成SQL，在数据库上执行，跑对了就奖励、跑错了就惩罚。只要有数据库和标准答案就能自动训练。
+模型选择了Qwen2.5-Coder-32B-Instruct，4bit 量化 + LoRA，8 张H100 能快速跑起来。</p>
+<h4 id="sec-5">12.3.3.2 奖励函数设计</h4>
+<p>我设计了5 个奖励信号，分为两类：</p>
+<p>Ground truth 奖励（不可替代）：</p>
+<ul>
+<li>执行正确性：生成的SQL 在数据库上执行，结果跟标准答案是否一致。这是唯一能反映“SQL 写对了没有”的信号。采用F1 软评分——部分匹配的SQL 也能拿到0～1 之间的分数，而不是非0 即1。这样一条返回了100 行中99 行正确的SQL 能拿到0.99 分，而不是跟完全写错的一样拿0 分。</li>
+</ul>
+<p>代理奖励（辅助平滑梯度）：</p>
+<ul>
+<li>格式规范：输出是否按要求的 XML 标签格式（<code>&lt;reasoning&gt;</code> + <code>&lt;answer&gt;</code>）</li>
+<li>语法正确：SQL 能不能被parser 解析</li>
+<li>Schema 匹配：用到的表名列名跟标准答案的 Jaccard 相似度</li>
+<li>N-gram 相似度：跟标准 SQL 的 bigram 重合度</li>
+</ul>
+<p>为什么要代理奖励？因为执行正确性虽然是最重要的信号，但它太稀疏了——大部分生成的 SQL 执行结果都是错的，reward=0。如果只有这一个信号，模型很难知道“往哪个方向改”。Schema 匹配和 N-gram 提供了连续的梯度：即使 SQL 执行结果不对，但表名选对了、结构接近了，也能拿到部分奖励，引导模型朝正确方向走。</p>
+<p>权重分配上，执行正确性的权重远高于其他四个（3.0 vs 0.1～0.5），确保模型优先学“写对 SQL”，而不是“写得像标准答案”。</p>
+<h4 id="sec-6">12.3.3.3 首次踩坑(工程)：没有真实反馈，RL 就是在自嗨</h4>
+<p>前几轮实验，我同时跑了几种 GRPO 变体（Dr.GRPO、DAPO、REINFORCE++ 等），想对比哪个算法最好。
+跑了一晚，看 metrics 曲线，schema 匹配度从 0.50 涨到 0.65，ngram 相似度也在涨。
+看起来模型在学。
+但仔细一看——执行正确性始终是 0。
+原因很蠢：训练脚本里数据库路径配错了，SQL 根本没有真正执行过。模型收到的反馈全部来自代理奖励，也就是“生成的 SQL 跟标准答案长得像不像”。
+schema 匹配度涨了，只是模型学会了“看到这种问题就用这几张表”，是模式匹配，不是理解。
+这恰好验证了上面奖励函数设计的一个关键点：代理奖励能引导方向，但不能替代 ground truth。 没有执行奖励的 RL 训练，本质上退化成了低效版 SFT——在模仿标准答案的表面模式，而不是学习写出语义正确的 SQL。
+教训很简单：RL 的核心价值是 ground truth 奖励。如果你的奖励函数不能反映真实目标，那 RL 训练就是在优化一个错误的目标。</p>
+<h4 id="sec-7">12.3.3.4 第二个坑(也是工程)：一条SQL 搞崩训练</h4>
+<p>修好数据库路径后，终于有了真正的执行奖励。模型生成 SQL → 在真实数据库上执行 → 对比结果。
+训练跑起来了，execution reward 从 0 开始涨，一切看起来很美好。
+然后，在训练到 22% 的时候，整个 8 卡训练突然挂了。
+查日志，看到这行：</p>
+<pre><code>WorkNCCL(SeqNum=7034, OpType=_ALLGATHER_BASE)
+ran for 1800063ms before timing out
+</code></pre>
+<p>翻译：某个 GPU 在一个同步操作上卡了 30 分钟，其他 7 张卡等不住了，集体超时退出。
+根因：模型生成了一条带笛卡尔积的 SQL，类似 <code>SELECT * FROM A, B, C WHERE ...</code>，三张大表做交叉连接，结果集是天文数字。SQLite 老老实实地算，直到超时。
+这张卡在执行这条 SQL，其他卡早就算完了在等它同步。等了 30 分钟，NCCL watchdog 判定超时，SIGABRT 杀掉所有进程。
+DDP 训练的致命弱点：一个 rank 卡住 = 全部卡住。
+作为 Text2SQL 领域的新手，修了三次才搞定：
+第一次用 <code>signal.alarm(30)</code> 设超时——失败。SIGALRM 只能发给主线程，DDP 的 worker 线程收不到。
+第二次用 <code>threading.Timer</code> ——失败。SQLite 的连接不是线程安全的，跨线程关闭连接会 segfault。
+第三次用 <code>ThreadPoolExecutor</code>：把 SQL 执行扔到独立线程池，用 <code>.result(timeout=30)</code> 等结果。超时就放弃，返回 reward=0。终于稳了。</p>
+<pre><code class="language-python">executor = ThreadPoolExecutor(max_workers=1)
+try:
+    result = executor.submit(run_sql, db, sql).result(timeout=30)
+except TimeoutError:
+    result = None # reward = 0
+</code></pre>
+<p>教训：RL 训练里跑外部程序（SQL 执行、代码运行、API 调用），一定要加超时。尤其是多卡 DDP 环境，一个 rank 的阻塞会传染给所有 rank。</p>
+<h4 id="sec-8">12.3.3.5 第三个坑(算法)：算法选错，KL 散度爆炸 38 倍</h4>
+<p>GRPO 的几个比较有名的变体，我都无脑试了一波：
+Dr.GRPO 去掉了组内标准差归一化，相当于给梯度加了杠杆。效果是学得特别快——前期 reward 蹭蹭涨。
+但到了中后期，KL 散度（衡量模型偏离原始策略多远）从 0.00028 飙到 0.0108，涨了 38 倍。模型已经跑偏了，开始生成一些语法正确但语义荒谬的 SQL。
+REINFORCE++ 走另一个极端，特别保守。KL 稳如老狗，但 reward 也纹丝不动——太稳了，稳到什么都没学会。
+最后还是选 DAPO（Dynamic Sampling Policy Optimization）作为基础，加上几个关键调整：</p>
+<ul>
+<li>Cosine LR schedule：前期正常学，后期自动降低学习率，防止 KL 发散</li>
+<li>KL 约束 β=0.01：给策略漂移加个软上限</li>
+<li>num_generations 从 4 调到 8：每个问题生成 8 个答案做组内比较，而不是 4 个。数学上，4 个答案时有 15.5% 的概率全对或全错（组内无差异 = 这步白算），8 个答案降到 1.7%</li>
+</ul>
+<p>这个组合兼顾了学习速度和稳定性。</p>
+<h4 id="sec-9">12.3.3.6 推理侧：两层 RAG Agent 补最后一块拼图</h4>
+<p>模型训练完之后，zero-shot 准确率已经有了明显提升。但在客户的实际场景中，还有一个问题：客户有几十个数据库、上百张表，模型需要先知道“这个问题该查哪些表”，才能写出正确的 SQL。
+光靠把所有表的 schema 塞进 prompt 是不现实的——几十个库的 schema 拼起来远超上下文窗口。
+所以在推理侧加了一个两层 RAG Agent：
+第一层：业务路由。 根据用户问题识别业务领域（比如“门诊量统计”→ 门诊系统库，“药品库存”→ 药房管理库），缩小到 1-2 个目标数据库。这一层用关键词匹配 + embedding 相似度，很轻量。
+第二层：Schema 检索。 在目标数据库内，用问题去检索最相关的表和字段。把检索到的 schema + 从历史日志中找到的相似查询作为 few-shot 示例，一起拼进 prompt。
+这样模型拿到的 prompt 是精准的：只包含相关的 schema 和几个参考示例，而不是整个数据库的全量信息。
+效果上，RAG Agent 主要解决了复杂查询的准确率——简单查询模型本来就能搞定，但涉及多表 JOIN、子查询的复杂场景，few-shot 示例的引导作用非常明显。</p>
+<h4 id="sec-10">12.3.3.7 最终结果</h4>
+<p>Base model（Qwen2.5-Coder-32B）+ RAG Agent 的 few-shot 执行准确率：</p>
+<table>
+<thead>
+<tr>
+<th>难度</th>
+<th>few-shot 准确率</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>简单</td>
+<td>78%+</td>
+</tr>
+<tr>
+<td>复杂</td>
+<td>40%+</td>
+</tr>
+</tbody></table>
+<p>GRPO 训练后 + RAG Agent：</p>
+<table>
+<thead>
+<tr>
+<th>难度</th>
+<th>zero-shot 准确率</th>
+<th>few-shot 准确率</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>简单</td>
+<td>87%+</td>
+<td>95%+</td>
+</tr>
+<tr>
+<td>复杂</td>
+<td>62%+</td>
+<td>87%+</td>
+</tr>
+</tbody></table>
+<p>几个值得注意的点：</p>
+<ul>
+<li>训练后的 zero-shot 87.3% 已经超过了训练前的 few-shot 78%，说明 GRPO 确实让模型学到了东西，而不只是靠 few-shot 示例撑着</li>
+<li>复杂查询的提升最大（40% → 87%），这正是 RL 的价值——模型学会了处理多表 JOIN 和嵌套子查询的逻辑，而不只是模式匹配</li>
+<li>few-shot 在训练后仍然有～8% 的额外提升，说明 RAG Agent 和模型能力是互补的</li>
+</ul>
+<h4 id="sec-11">12.3.3.8 经验教训</h4>
+<p>这是我在 Text2SQL 项目中的主要经验。总结三个最值钱的教训：</p>
+<ol>
+<li>奖励函数决定一切：ground truth 奖励（执行正确性）不可替代，代理奖励只是辅助。先确认核心奖励信号正常，再开大规模训练。</li>
+<li>RL + 外部执行要防御性编程：SQL 执行、代码运行这类操作必须加超时，DDP 环境下一个 rank 卡住会拖垮全部。</li>
+<li>算法选择要平衡激进与保守：学得快的容易崩（Dr.GRPO），太稳的学不动（REINFORCE++），DAPO + cosine LR + KL 约束是个不错的起点。</li>
+</ol>
+<h3 id="sec-12">12.3.4 历时两个月的GRPO 训练踩坑实录：63% -&gt; 96% tool selection</h3>
+<p><strong>提示</strong></p>
+<p>本文记录了使用 GRPO 训练基金助手 SubAgent 的完整过程，包括 20+ 个版本的迭代以及最终找到有效方案的思考过程。</p>
+<p><strong>一、项目背景</strong></p>
+<p>1.1 模型选择
+项目目标是用 7B 小模型代替已有的 Mixtral 8X22B，实现低延迟低成本的特定场景 SubAgent。
+核心挑战：如何在 7B 模型的能力边界内，把工具选择准确率做到极致？
+事实证明，通过精心设计的 GRPO 训练流程，7B 模型完全可以在特定任务上达到很高的准确率。</p>
+<p>1.2 任务定义
+训练一个 Mutual Fund Assistant SubAgent，根据用户请求准确选择工具（API）。
+可用工具：
+<code>check_balance</code>、<code>transfer_funds</code>、<code>withdraw_funds</code>、<code>place_order</code>、<code>get_transaction_history</code>、<code>check_market_status</code>
+场景分级：</p>
+<ul>
+<li>简单：“查一下我的余额” → check_balance</li>
+<li>复杂：“我今天早上卖了 AMZN 股票，钱什么时候到账？” → 需理解 T+1 结算规则</li>
+<li>组合：“转账 10 万再提现 5 万” → 需规划多步操作</li>
+</ul>
+<p><strong>二、基础实验与问题发现</strong></p>
+<p>2.1 基线模型
+标准 GRPO 训练结果不理想，平均分 63%，Tool 准确率 67%。
+各类别得分差异明显：history/market/balance 在 82-89%，但 settlement 仅 18%、intraday 23%、deposit 31%、combo 12%。
+直觉告诉我们弱类别是数据不够，于是 3 倍过采样，结果全面退化。查看日志发现近 50% 步数梯度为零，过采样让简单样本重复出现，没有提供新的学习信号。</p>
+<p>2.2 领域数据扩充
+考虑到弱类别是领域知识问题，我们准备了 100+ 条新样本覆盖 T+1 结算、周末处理等场景。
+结果完全无效。日志显示 frac_reward_zero_std 几乎 100%——模型已经“会”了，没有学习信号。GRPO 需要奖励方差才能学习。</p>
+<p><strong>三、NGRPO 突破</strong></p>
+<p>核心问题：所有生成的 reward 相同时，advantage = 0，模型无法学习。
+受 NGRPO 论文启发，我们添加虚拟满分样本：</p>
+<pre><code class="language-python">rewards = [0.8, 0.8, 0.8, 0.8]
+augmented = rewards + [1.0] # 虚拟满分样本
+mean = sum(augmented) / len(augmented) # 0.84
+std = sqrt(variance(augmented)) # 0.08
+advantage = (r - mean) / std # 非零！
+</code></pre>
+<p>即使真实样本得分相同，虚拟样本也能提供参照点，产生非零梯度。
+结果：平均分 +13 点，tool 准确率 +14 点，intraday +35 点。关键指标 frac_reward_zero_std : 0.0。</p>
+<p><strong>四、各种“高级”方法的尝试</strong></p>
+<p>基于 NGRPO 拿到满意的 baseline 后，尝试了多种论文方法，效果都不如预期。</p>
+<ul>
+<li>渐进式奖励塑形 (PRS)：分阶段给予奖励，结果跌了 5 点。模型已能正确产生格式，细粒度帮助不大。</li>
+<li>难度感知重加权 (GRPO-LEAD)：难样本高权重，combo 跌了近 20 点。95% 样本正确率太高，几乎没有“难样本”，权重调整反而破坏了有效学习信号。</li>
+<li>SFT 领域知识注入：300 条 SFT 后 reasoning 提升但 tool 选择退化，1500 条后仍不如 NGRPO。模型学会了正确推理，但 tool 选择反而变差。</li>
+</ul>
+<p>结论：算法改进无法解决数据问题，数据集太简单时各种技术都不管用。</p>
+<p><strong>五、DART 的启示</strong></p>
+<p>SFT 实验中观察到奇怪现象：reasoning 变好但 tool 选择变差。我想到刚读到的一篇 DART 论文 (arXiv:2602.00994) 提到：
+Reasoning 和 Tool-use 的梯度方向几乎正交，联合训练会导致两种能力互相干扰。
+我们实现了简化版 Token-Level 梯度分离：</p>
+<pre><code class="language-python">reasoning_tokens = tokens_in(&quot;reasoning&quot;: &quot;...&quot;)
+tool_tokens = tokens_in(&quot;action&quot;: {&quot;tool&quot;: ...})
+loss = 0.3 * reasoning_loss + 0.7 * tool_loss
+</code></pre>
+<p>整体略低于 NGRPO，但 Combo 提升到 78%。DART 在复杂场景确实有效，但需要足够训练数据。</p>
+<p><strong>六、数据混合的教训</strong></p>
+<p>大量增加 combo 数据后，transfer/order 等场景性能暴跌，combo 也没提升多少。降低比例后效果依然较差。数据混合比例极其敏感。</p>
+<p><strong>七、ReAct Agent 的突破</strong></p>
+<p>我停下来重新思考：Combo 场景本质是多步规划问题，不是简单的工具选择。
+原训练数据：</p>
+<pre><code class="language-json">{&quot;input&quot;: &quot;转账10万再提现5万&quot;, &quot;output&quot;: &#39;{&quot;tool&quot;: &quot;check_balance&quot;}&#39;}
+</code></pre>
+<p>label 本身就错了！测试期望 <code>transfer_funds</code>，训练却教 <code>check_balance</code>。
+重新设计输出格式：</p>
+<pre><code class="language-json">{
+    &quot;thought&quot;: &quot;两步操作：先转账再提现。执行转账。&quot;,
+    &quot;action&quot;: {&quot;tool&quot;: &quot;transfer_funds&quot;, &quot;params&quot;: {&quot;amount&quot;: 1000000}},
+    &quot;plan&quot;: [&quot;transfer 10 lakh&quot;, &quot;withdraw 5 lakh&quot;]
+}
+</code></pre>
+<p>thought 让模型先思考，action 输出第一步实际操作，plan 规划后续步骤。
+结果：combo 91%，平均分 89%，tool 准确率 92%。问题定义比算法更重要。</p>
+<p><strong>八、细节优化</strong></p>
+<p>ReAct 成功后继续强化弱类别，但提升有限。深挖日志发现奖励函数问题：</p>
+<pre><code class="language-python">reasoning: +0.2
+action.tool: +0.3
+valid_tool: +0.2
+params: +0.1
+# 最大分: 0.8 ← 问题所在！
+</code></pre>
+<p>上限 0.8，所有正确输出得分相同，没有区分度。调整到 1.0 后立即提升 6%。
+分析错误模式发现模型过度使用 check_market_status，添加针对性惩罚 −0.3。
+最终：平均分 96%，tool 准确率 97%，最低的 settlement 也到 79%。针对具体错误模式设计惩罚比通用算法改进更有效。</p>
+<p><strong>九、核心经验</strong></p>
+<p>关键监控指标</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>健康范围</th>
+<th>问题信号</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>frac_reward_zero_std</td>
+<td>&lt; 30%</td>
+<td>&gt; 50% 奖励函数有问题</td>
+</tr>
+<tr>
+<td>reward</td>
+<td>接近 1.0</td>
+<td>&lt; 0.8 奖励上限太低</td>
+</tr>
+<tr>
+<td>grad_norm</td>
+<td>非零</td>
+<td>持续为 0 没有学习</td>
+</tr>
+</tbody></table>
+<p>奖励函数设计
+最大分必须能达到 1.0，要有足够区分度，针对具体错误模式设计惩罚，持续监控 frac_reward_zero_std。</p>
+<p>数据教训
+简单重复数据会导致灾难性遗忘，LLM 生成数据质量难保证，改变数据格式（ReAct）有效，修正错误 label 是关键。</p>
+<p>算法选择
+NGRPO 通用解决零梯度问题，DART 适合复杂场景，PRS/难度感知需要足够难样本才有效。</p>
+<p><strong>注意！</strong>
+问题定义 &gt; 数据质量 &gt; 算法选择</p>
+<p><strong>十、最终方案</strong></p>
+<pre><code class="language-python"># 模型
+base_model = &quot;Qwen/Qwen2.5-7B-Instruct&quot;
+lora_r, lora_alpha = 16, 32
+
+# 训练
+num_generations, temperature = 8, 0.9
+learning_rate, epochs = 5e-6, 4
+
+# 奖励函数
+def reward(completion, prompt):
+    score = 0.0
+    if &#39;thought&#39; in parsed: score += 0.2
+    if &#39;action&#39; in parsed and &#39;tool&#39; in action:
+        score += 0.2
+    if tool in valid_tools: score += 0.2
+    if &#39;params&#39; in action: score += 0.1
+    if &#39;plan&#39; in parsed: score += 0.2
+    if tool == &#39;check_market_status&#39; and not market_keywords_in_prompt:
+        score -= 0.3
+    return max(0, min(score, 1.0))
+
+use_virtual_max_reward = True # NGRPO
+</code></pre>
+<p><strong>十一、总结</strong></p>
+<ul>
+<li>过采样实验发现了零梯度问题</li>
+<li>SFT 实验揭示了 reasoning 和 tool-use 的冲突</li>
+<li>数据混合实验认识到比例敏感性</li>
+<li>frac_reward_zero_std 是关键监控指标</li>
+</ul>
+<p>核心建议：先确保问题定义正确，监控 frac_reward_zero_std，奖励函数最大分要能达到 1.0，针对错误模式设计惩罚，不要迷信“高级”算法。</p>
+<hr>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">12.3.1 医疗思维链</a></li>
+<li><a href="#sec-2">12.3.2 Text-To-SQL</a></li>
+<li><a href="#sec-3">12.3.3 32B 大模型Text2SQL 微调——项目复盘</a></li>
+<li><a href="#sec-12">12.3.4 历时两个月的GRPO 训练踩坑实录：63% -&gt; 96% tool selection</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-12-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">12.2 使用DAPO（GRPO的变种）微调Qwen2.5-3B-Instruct</span></a>
+      <a class="next-post" href="/llm-tutorial-13-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">13.1 导入库和模块</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

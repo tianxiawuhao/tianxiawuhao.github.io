@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,策略梯度法">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>5.1 原始策略梯度法 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="5.1 原始策略梯度法 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="5.1 原始策略梯度法" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-5-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">策略梯度法</a>
+                </span>
+              <h1>5.1 原始策略梯度法</h1>
+              <span class="meta">
+                Posted on
+                2025-04-15，30 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <h3 id="sec-1">5.1.1 理论介绍</h3>
+<p>在倒立摆游戏的环境中，我们唯一能控制的，就是推车所采用的策略。而环境和奖励函数我们是无法控制的。</p>
+<table>
+<thead>
+<tr>
+<th>我们可以控制的</th>
+<th>我们无法控制的</th>
+<th>我们无法控制的</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>策略函数</td>
+<td>环境</td>
+<td>奖励函数</td>
+</tr>
+<tr>
+<td>推车的策略</td>
+<td>倒立摆环境</td>
+<td>保持平衡，奖励为1</td>
+</tr>
+</tbody></table>
+<p>现在通行的做法就是策略函数是一个神经网络。输入是环境的状态，输出是动作的概率分布。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.1 输出的动作是概率</figcaption></figure>
+</p>
+<p>上图就是一个例子。玩倒立摆游戏。策略函数是一个神经网络；输入是倒立摆环境的状态，一个浮点数数组；输出是我们可以执行的动作，有几个动作，输出层就有几个神经元。假设我们现在可以执行的动作有2个，输出层就有2个神经元，每个神经元对应一个可以采取的动作。输入一个东西后，策略神经网络会给每一个可以采取的动作一个分数。我们可以把这个分数当作概率，智能体根据概率的分布来决定它要采取的动作，比如0.7的概率向左推、0.3的概率向右推。概率分布不同，推车采取的动作就会不一样。</p>
+<p>如下面的式子所示，首先，环境是一个函数，我们可以把倒立摆环境看成一个函数，虽然它不一定是神经网络，可能是基于规则的（rule-based）模型，但我们可以把它看作一个函数。</p>
+<p>$$\text{倒立摆环境}(S_t,A_t)\rightarrow (S_{t+1},R_t) \quad (5.1)$$</p>
+<p>倒立摆环境就是一个基于规则的函数，只要推车不倒下，就返回奖励1。</p>
+<p>讲了这么多策略有关的东西，大家应该明白策略是什么东西了。</p>
+<p>而通过神经网络等方法将策略模型化，并使用梯度来优化策略的方法叫作策略梯度法（policy gradient method）。</p>
+<p>研究者们提出了各种基于策略梯度法的算法。本章首先介绍最简单的策略梯度法。然后，在改进这个简单的策略梯度法的过程中，我们推导出了被称为REINFORCE的算法。接下来，在进一步改进REINFORCE的过程中，我们又推导出了带基线的REINFORCE方法和Actor-Critic（演员-评论家）方法。</p>
+<p>随机性策略用数学式可以表示为 $\pi(a|s)$。$\pi(a|s)$ 是在状态 $s$ 下采取动作 $a$ 的概率。这里采用神经网络对策略进行建模。此时用符号 $\theta$ 来汇总表示神经网络的所有权重参数（$\theta$ 是将所有参数的元素排成一列的向量）。另外，可以将基于神经网络的策略表示为 $\pi_{\theta}(a|s)$，如下所示。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.2 策略神经网络</figcaption></figure>
+</p>
+<p>还是倒立摆环境，每当倒立摆环境处于某个状态 $s$ 时，我们就会使用神经网络 $\pi_{\theta}$ 来决定要采取什么动作。</p>
+<p>那么，问题是：策略神经网络怎么训练？</p>
+<p><strong>神经网络的训练</strong></p>
+<p>想要训练一个神经网络，需要有输入-输出对。例如，MNIST手写数字数据集，要训练一个可以识别手写数字的卷积神经网络，需要构建一个网络结构，然后提供输入（图片）以及输出（分类标签）。</p>
+<p>当然，还得有损失函数，例如交叉熵损失函数或者均方误差损失函数，等等。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.3 手写数字识别分类网络</figcaption></figure>
+</p>
+<p>但是对于倒立摆环境，想要训练推车的策略神经网络，输入是什么，输出是什么？以及损失函数又是什么？</p>
+<p>首先回顾一下第一章的知识。</p>
+<p>首先明确问题的设定。这里考虑的是回合制任务，并基于策略 $\pi_{\theta}$ 选择动作的情况。在这种情况下，假定得到了以下由“状态、动作、奖励”构成的时间序列数据。</p>
+<p>$$\tau = (S_0, A_0, R_0, S_1, A_1, R_1, \dots , S_{T+1}) \quad (5.3)$$</p>
+<p>这个 $\tau$ 也叫作轨迹（trajectory）。</p>
+<p>而一条轨迹发生的概率是：</p>
+<p>$$\begin{array}{rl} &amp; {\mathrm{Pr}(\tau) = p(S_0)\pi_{\theta}(A_0|S_0)p(S_1|S_0,A_0)\pi_{\theta}(A_1|S_1)p(S_2|S_1,A_1)\dots \pi_{\theta}(A_T|S_T)p(S_{T+1}|S_T,A_T)}\\ &amp; {\qquad = p(S_0)\prod_{t = 1}^{T}\pi_{\theta}(A_t|S_t)p(S_{t+1}|S_t,A_t)} \end{array} \quad (5.4)$$</p>
+<p>此时可以使用折扣因子 $\gamma$ 对回报（Return，收益）作如下定义。</p>
+<p>$$G(\tau) = R_0 + \gamma R_1 + \gamma^2 R_2 + \dots +\gamma^T R_T \quad (5.5)$$</p>
+<p>为了表明回报可以由 $\tau$ 计算出来，上面的式子将其表示了 $G(\tau)$。此时，目标函数 $J(\theta)$ 可以表示为下面的式子。</p>
+<p><strong>定义5.1—强化学习的目标函数</strong></p>
+<p>$$J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}[G(\tau)] \quad (5.6)$$</p>
+<p>回报 $G(\tau)$ 是随机变动的，所以它的期望值是目标函数。上式中期望值E的下标为 $\tau \sim \pi_{\theta}$，这个下标表示 $\tau$ 是基于 $\pi_{\theta}$ 生成的。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.4 策略梯度法的目标函数</figcaption></figure>
+</p>
+<p>我们的目标是让 $J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}[G(\tau)]$ 最大。但是我们发现 $G(\tau)$ 这个轨迹的回报无法求导，换句话说就是对目标函数无法进行优化。目标函数可以优化的意思其实就是可以求导。在神经网络的训练中，我们的目的是让损失函数最小。而在策略梯度法中，我们的目的是让目标函数最大。所以都可以使用梯度法。让损失函数最小，使用梯度下降法。让目标函数最大，使用梯度上升法。所以，我们还是得求解 $J(\theta)$ 的梯度。需要求导的参数是 $\theta$。确定了目标函数后，下一步是计算它的梯度。这里将参数 $\theta$ 的梯度表示为 $\nabla_{\theta}$。我们的目标是求 $\nabla_{\theta} J(\theta)$。$\nabla$ 是梯度符号。</p>
+<p>确定了目标函数后，下一步是计算它的梯度。这里将参数 $\theta$ 的梯度表示为 $\nabla_{\theta}$。我们的目标是求 $\nabla_{\theta} J(\theta)$。$\nabla$ 是梯度符号。</p>
+<p><strong>定理5.1—策略梯度定理</strong></p>
+<p>$$\begin{array}{r l} &amp; {\nabla_{\theta}J(\theta) = \nabla_{\theta}\mathbb{E}_{\tau \sim \pi_{\theta}}[G(\tau)]}\\ &amp; {\qquad = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right]} \end{array} \quad (5.8)$$</p>
+<p>上面的式子中值得注意的是，$\nabla_{\theta}$ 在E中（梯度计算的部分是 $\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)$）。后面会对此做详细介绍。求出 $\nabla_{\theta}J(\theta)$ 之后，接下来更新神经网络的参数。最优化方法多种多样，下面的式子表示的是一种简单的方法。</p>
+<p>$$\theta \leftarrow \theta +\alpha \nabla_{\theta}J(\theta) \quad (5.9)$$</p>
+<p>上面的式子朝着梯度的方向更新参数 $\theta$。更新的值与 $\alpha$ 相关。这里的 $\alpha$ 表示学习率。这是属于梯度上升法的算法。</p>
+<p>只要沿着梯度上升的方向更新参数 $\theta$，那么目标函数 $J(\theta)$ 就会越来越大，也就是所有轨迹的期望就会越来越大，那么就是我们的策略越来越好了。</p>
+<p><strong>危险</strong></p>
+<p>策略梯度法求得的梯度是一个期望值，而期望值无法计算。</p>
+<p>这里有一个问题，那就是真正的期望是无法准确求出来的。因为期望是所有的轨迹得到的奖励计算出来的。而轨迹有无数条。如果我们能够走满倒立摆的200步，那么不同轨迹的数量可能是 $2^{200}$，如下图所示，这是一个天文数字。所以我们希望能够求出近似期望值的数值。比如利用大数定理，多采样几条轨迹，那么就会比较接近期望值。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.5 无数条轨迹</figcaption></figure>
+</p>
+<p><strong>大数定律</strong></p>
+<p>样本数量越多，则其算术平均值就有越高的概率接近期望。
+例如，抛掷一颗均匀的6面的骰子，1，2，3，4，5，6应等概率出现，所以每次扔出骰子后，出现点数的期望是</p>
+<p>$$\frac{1+2+3+4+5+6}{6}=3.5 \quad (5.11)$$</p>
+<p>根据大数定理，如果多次抛掷骰子，随着抛掷次数的增加，平均值（样本平均值）应该接近3.5。</p>
+<p>如果随机变量 $X_1,X_2,\dots$ 是独立同分布，且期望 $\mathbb{E}(X_1)=\mathbb{E}(X_2)=\dots=\mu$。那么</p>
+<p>$$\overline{X}_n = \frac{1}{n}(X_1 + X_2 + \dots + X_n) \quad (5.12)$$</p>
+<p>当 $n\rightarrow\infty$ 时，收敛于真值</p>
+<p>$$\overline{X}_n \rightarrow \mu \quad (5.13)$$</p>
+<p><figure class="tutorial-figure"><figcaption>图5.6 只采样n条轨迹</figcaption></figure>
+</p>
+<p>如式（5.8）所示，$\nabla_{\theta}J(\theta)$ 表示期望值。接下来我们来计算期望值。这里，我们令策略 $\pi_{\theta}$ 的智能体实际采取动作，得到 $n$ 个轨迹 $\tau$，如上图所示。此时，通过对每个 $\tau$ 计算式子中的期望值内部的式子（$\sum_{t=0}^{T}G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)$），并求出其平均值，从而近似得到 $\nabla_{\theta}J(\theta)$。数学式如下所示。</p>
+<p>$$\begin{array}{rl} &amp; {\text{采样:}\tau^{(i)}\sim \pi_{\theta}\quad (i = 1,2,\dots ,n)}\\ &amp; {x^{(i)} = \sum_{t = 0}^{T}G(\tau^{(i)})\nabla_{\theta}\log \pi_{\theta}\left(A_t^{(i)}|S_t^{(i)}\right)}\\ &amp; {\nabla_{\theta}J(\theta)\approx \frac{x^{(1)} + x^{(2)} + \dots + x^{(n)}}{n}} \end{array} \quad (5.15)$$</p>
+<p>上面式子中的 $\tau^{(i)}$，表示在第 $i$ 回合得到的轨迹，$A_t^{(i)}$ 表示在第 $i$ 回合的时刻 $t$ 的动作，$S_t^{(i)}$ 表示在第 $i$ 回合的时刻 $t$ 的状态。</p>
+<p>另外，再思考一下蒙特卡洛方法的样本数为1，即上式中 $n=1$ 的情况，如下图所示。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.7 只采样1条轨迹</figcaption></figure>
+</p>
+<p>在这种情况下，数学式可以简化为如下形式。</p>
+<p>$$\nabla_{\theta}J(\theta)\approx \sum_{t = 0}^{T}G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_t|S_t) \quad (5.17)$$</p>
+<p>为了简单起见，本章将使用以上面的式子为对象的策略梯度法。上面的式子的计算就是对所有时刻（$t = 0 \sim T$）求 $\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)$，然后将各梯度乘以作为权重的回报 $G(\tau)$，最后求它们的和。这个计算过程如下图所示。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.8 使用一条轨迹计算策略梯度</figcaption></figure>
+</p>
+<h3 id="sec-2">5.1.2 代码实现</h3>
+<p>接下来，我们用代码来实现一下策略梯度法。</p>
+<p>我们讲一些实现细节。我们可以把强化学习想成一个分类问题，这个分类问题就是输入倒立摆的状态，输出某个类。在解决分类问题时，我们要收集一些训练数据，数据中要有输入与输出的对。在实现的时候，我们把倒立摆的状态当作分类器的输入，就像在解决图像分类的问题，只是现在的类不是图像里面的东西，而是看到倒立摆的状态我们要采取什么样的动作，每一个动作就是一个类。比如第一个类是向左，第二个类是向右。</p>
+<p>在解决分类问题时，我们要有输入和正确的输出，要有训练数据。但在强化学习中，我们通过采样来获得训练数据。假设在采样的过程中，在某个状态下，我们采样到要采取动作A，那么就把动作A当作标准答案（ground truth）。比如，我们在某个状态下，采样到要向左。因为是采样，所以向左这个动作不一定概率最高。假设我们采样到向左，在训练的时候，让智能体调整网络的参数，如果看到某个状态，我们就向左。在一般的分类问题里面，我们在实现分类的时候，目标函数都会写成最小化交叉熵（cross entropy），最小化交叉熵就是最大化对数似然（log likelihood）。</p>
+<p>从极大似然估计的角度看策略梯度</p>
+<p>$$\begin{array}{l}{J(\theta) = \sum_{t = 0}^{T}G(\tau)\log \pi_{\theta}(A_t|S_t)}\\ {= G(\tau)\log \left(\prod_{t = 0}^{T}\pi_{\theta}(A_t|S_t)\right)} \end{array} \quad (5.18)$$</p>
+<p>最大化目标就会提升某些状态对应的动作的概率。</p>
+<p>策略神经网络 $\pi_{\theta}$</p>
+<pre><code class="language-python">class PolicyNet(nn.Module):
+    def __init__(self, action_size):
+        super().__init__()
+        self.l1 = nn.Linear(4, 128) # 推车环境中状态是一个4维数组
+        self.l2 = nn.Linear(128, action_size) # 输出是一个2维数组
+
+    def forward(self, x):
+        x = F.relu(self.l1(x))
+        x = F.softmax(self.l2(x), dim=1)
+        return x # 输出: [πθ(a = 向左推|s), πθ(a = 向右推|s)]
+</code></pre>
+<p>上面的代码实现的神经网络模型由两层全连接层构成。最终输出的元素数是动作的数量（action_size）。由于这个最终输出是softmax函数的输出，因此可以得到每个动作的概率。</p>
+<p>这个网络结构就是我们要训练的策略神经网络 $\pi$。其中 $\theta$ 就是神经网络的参数。</p>
+<p>我们还记得，策略神经网络的输入是环境的状态，输出是要采取的动作的概率分布。所谓动作的概率分布就是：向左推的概率是多少，向右推的概率是多少。</p>
+<p>而我们的网络结构输入的张量的维度是4。为什么呢？因为倒立摆环境的状态有4个维度。</p>
+<p>输出是action_size个维度。也就是动作的数量个维度。</p>
+<p><strong>softmax</strong></p>
+<p>如果将具有n个元素的向量输入到softmax函数中，那么输出的同样是具有n个元素的向量。此时，第i个输出 $y_i$ 的式子如下所示。</p>
+<p>$$y_i = \frac{\mathrm{e}^{x_i}}{\sum_{k=1}^{n}\mathrm{e}^{x_k}} \quad (5.19)$$</p>
+<p>这里的e是自然常数（值为2.71828...的无限小数）。softmax函数的输出值全部为0以上1以下的实数，它们的合计值为1（$\sum_{i=1}^{n}y_i = 1$）。因此，softmax函数的输出可以作为概率使用。</p>
+<p>下面是Agent类的代码。首先显示初始化和get_action方法。</p>
+<pre><code class="language-python">class Agent:
+    def __init__(self):
+        self.gamma = 0.98 # 折扣因子γ
+        self.lr = 0.0002 # 学习率α
+        self.action_size = 2 # 两个动作
+
+        self.pi = PolicyNet(self.action_size) # 策略神经网络πθ
+        self.optimizer = optim.Adam(self.pi.parameters(), lr=self.lr)
+
+    def get_action(self, state):
+        probs = self.pi(torch.tensor(state).unsqueeze(0)).squeeze(0)
+        # 根据动作的概率分布创建一个二项分布
+        m = Categorical(probs)
+        # 使用二项分布采样动作πθ(a|s)
+        action = m.sample().item()
+
+        # (采样的动作, [向左推的概率, 向右推的概率])
+        return action, probs
+</code></pre>
+<p><strong>代码5.1 智能体代码</strong></p>
+<p>get_action方法决定了在state状态下采取的动作。为此，可以通过self.pi(state)进行神经网络的前向传播，得到概率分布probs。然后，基于该概率分布，进行一次动作的采样。该方法还返回了所有动作的概率（上面代码中的probs）。</p>
+<p>下面来试用一下get_action方法。代码如下所示。</p>
+<p>执行1步动作然后反向传播，观察结果</p>
+<pre><code class="language-python">env = gym.make(&quot;CartPole-v0&quot;)
+
+state = env.reset() # S_0
+
+agent = Agent()
+
+action, probs = agent.get_action(state)
+print(&quot;动作：&quot;, action) # A_0
+print(&quot;动作的概率：&quot;, probs[action].item()) # π_θ(A_0|S_0)
+
+G = 1.0 # G(τ)
+J = -G * probs[action].log() # -G(τ)logπ_θ(A_0|S_0)
+print(&quot;J:&quot;, J)
+
+J.backward() # 求导（梯度） -∇_θG(τ)logπ_θ(A_0|S_0)
+agent.optimizer.step() # 梯度下降： θ = θ + α∇_θG(τ)logπ_θ(A_0|S_0)
+# 在相同的状态state下，采取动作的概率变大了
+#（测试一下）将G变为负值，也就是负的奖励，会发现采取动作的概率下降了
+_, probs = agent.get_action(state)
+print(&quot;动作：&quot;, action)
+print(&quot;动作的概率：&quot;, probs[action].item())
+</code></pre>
+<p>上面的代码取出了初始状态下的动作及其概率。另外，它还显示了使用虚拟的权重来计算由下面的式子表示的梯度的代码（这是从式子取出的 $t=0$ 的相关项的式子）。</p>
+<p>$$G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_0|S_0) \quad (5.20)$$</p>
+<p>作为参考，下面对照列出了上面的代码中出现的变量与相应的数学式。</p>
+<p>probs[action]: $\pi_{\theta}(A_0|S_0)$
+G: $G(\tau)$
+J: $G(\tau)\log \pi_{\theta}(A_0|S_0)$</p>
+<p>求出J之后，通过J.backward()求 $G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_0|S_0)$。下面是Agent类剩下的代码。</p>
+<p>我们先来编写采集一条轨迹的详细信息的代码。</p>
+<pre><code class="language-python">class Agent:
+    ...
+
+    def rollout(self, env):
+        # 采集轨迹
+        state = env.reset()
+        states, actions, rewards = [], [], []
+        done = False
+
+        while not done:
+            action, _ = self.get_action(state)
+            next_state, reward, done, _ = env.step(action)
+            states.append(state) # S_i
+            actions.append(action) # A_i
+            rewards.append(reward) # R_i
+            state = next_state # S_i → S_{i+1}
+        # [S_0, S_1, ..., S_T]
+        # [A_0, A_1, ..., A_T]
+        # [R_0, R_1, ..., R_T]
+        return states, actions, rewards
+</code></pre>
+<p><strong>代码5.2 采集一条轨迹的详细数据，接代码5.1</strong></p>
+<p>然后编写更新策略的代码：</p>
+<pre><code class="language-python">class Agent:
+    ...
+
+    def update(self, trajectory):
+        states, actions, rewards = trajectory
+        # 逆序计算 G(τ)
+        G = 0
+        for r in rewards[::-1]:
+            G = r + self.gamma * G
+        loss = 0
+        for s, a in zip(states, actions):
+            probs = self.pi(torch.tensor(s).unsqueeze(0)).squeeze(0)
+            log_prob = torch.log(probs)[a] # logπ_θ(A_t|S_t)
+            loss += -log_prob * G # -Σ_{t=0}^{T} G(τ)logπ_θ(A_t|S_t)
+
+        self.optimizer.zero_grad()
+        loss.backward() # ∇_θ{-Σ_{t=0}^{T} G(τ)logπ_θ(A_t|S_t)}
+        self.optimizer.step() # θ = θ - α∇_θ{-Σ_{t=0}^{T} G(τ)logπ_θ(A_t|S_t)}
+</code></pre>
+<p><strong>代码5.3 更新策略的代码，接代码5.2</strong></p>
+<p>在训练神经网络时，通常要设置损失函数。对于这个例子，我们可以将目标函数 $J(\theta)$ 乘以-1所得到的 $-J(\theta)$ 作为损失函数，此时可以通过梯度下降法的最优化方法（SGD、Adam等）更新参数。</p>
+<p>代码5.3中第10～14行可以改写成并行版本，代码如下：</p>
+<p>并行版本 Python</p>
+<pre><code class="language-python">states = torch.tensor(states)
+actions = torch.tensor(actions).view(-1, 1)
+log_probs = torch.log(self.pi(states).gather(1, actions))
+loss = -torch.sum(log_probs) * G
+</code></pre>
+<p>最后在倒立摆环境中训练智能体。代码如下所示。</p>
+<pre><code class="language-python">env = gym.make(&quot;CartPole-v0&quot;)
+agent = Agent()
+return_list = []
+episode_list = []
+
+for episode in range(3000):
+    trajectory = agent.rollout(env)
+    reward_list = trajectory[2]
+    return_list.append(sum(reward_list))
+    episode_list.append(episode)
+
+    agent.update(trajectory)
+
+    if episode % 100 == 0:
+        print(&quot;回合:{}，总奖励:{:.1f}&quot;.format(episode, sum(reward_list)))
+</code></pre>
+<p>首先，在while语句中，增加智能体获得的奖励（reward）和行动的概率（prob）。然后在离开while语句后（回合结束时），通过agent.update()更新策略。</p>
+<p>运行此代码，随着回合的推进，获得的奖励也会增加。下图是结果的示意图。</p>
+<p>绘制示意图的代码如下：</p>
+<pre><code class="language-python">def plot_loss(episode_list, return_list, filename):
+    f = plt.figure()
+    plt.plot(episode_list, return_list)
+    plt.xlabel(&quot;Episodes&quot;)
+    plt.ylabel(&quot;Returns&quot;)
+    plt.title(&quot;CartPole-v0&quot;)
+    plt.show()
+    f.savefig(filename, bbox_inches=&quot;tight&quot;)
+
+plot_loss(episode_list, return_list, &quot;pg-loss.pdf&quot;)
+</code></pre>
+<p>通过观察绘制出来的图像，我们发现每回合的奖励随着训练震荡的很厉害，但是随着训练的进行，每回合获得的总奖励确实越来越多了。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.9 策略梯度算法获得的奖励</figcaption></figure>
+</p>
+<p>我们可以测试一下训练的策略神经网络。看看倒立摆能不能坚持很长时间。</p>
+<pre><code class="language-python">def test_agent(agent, env):
+    state = env.reset()
+    done = False
+    frames = []
+
+    while not done:
+        frames.append(env.render(mode=&quot;rgb_array&quot;))
+        action, _ = agent.get_action(state)
+        next_state, _, done, _ = env.step(action)
+        state = next_state
+
+    env.close()
+    show_animation(frames)
+
+test_agent(agent, env)
+</code></pre>
+<p>我们大概可以知道，随着回合的推进，奖励的总和会逐渐增加。但即使经历了3000个回合，依然没有达到这次任务的上限值200，所以似乎还有改进的余地。下面让我们来改进一下这里推导的最简单的策略梯度法。这个改进算法就是著名的REINFORCE算法。</p>
+<h3 id="sec-3">5.1.3 深入讨论</h3>
+<p>采样一条轨迹的梯度是 $\nabla_{\theta}J(\theta)\approx \sum_{t = 0}^{T}G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)$</p>
+<p>如果将梯度符号去掉，可以得到如下：</p>
+<p>$$\begin{array}{l}{J(\theta)\approx \sum_{t = 0}^{T}G(\tau)\log \pi_{\theta}(A_t|S_t)}\\ {= G(\tau)\sum_{t = 0}^{T}\log \pi_{\theta}(A_t|S_t)}\\ {= G(\tau)(\log \pi_{\theta}(A_0|S_0) + \log \pi_{\theta}(A_1|S_1) + \dots)} \end{array} \quad (5.21)$$</p>
+<p>我们的目标是让 $J(\theta)$ 越大越好，那么在经过梯度上升算法之后，$J(\theta)$ 会变大，那么肯定有的 $\log \pi_{\theta}(A_t|S_t)$ 变大了，也可能有的 $\log \pi_{\theta}(A_{t'}|S_{t'})$ 变小了，但总和肯定变大了。也就是说，策略梯度法的本质是，我们使用当前策略 $\pi_{\theta}$ 采样一条轨迹 $\tau$，如果采样的轨迹的回报 $G(\tau)$ 很高，那么说明我们在某个状态 $S_t$ 采取的动作 $A_t$ 比较好，导致了总的奖励也就是回报比较高。那么通过梯度上升法，更新 $\theta$ 之后，新的策略 $\pi_{\theta_{\mathrm{new}}}$ 会提升在 $S_t$ 时执行 $A_t$ 的概率。例如 $A_t$ 是“向左推车”，那么在 $S_t$ 状态下策略采取“向左推车”的概率就会提升，而同时策略采取“向右推车”的概率就会下降。</p>
+<p>举一个最简单的例子，我们采样的轨迹只执行了一步动作，就结束了。那么有如下公式</p>
+<p>$$J(\theta) = G(\tau)\log \pi_{\theta}(A_0|S_0) \quad (5.22)$$</p>
+<ul>
+<li>如果 $G &gt; 0$，那么对 $J(\theta)$ 优化之后，策略 $\pi_{\theta}$ 在状态 $S_0$ 时采取动作 $A_0$ 的概率一定会变大。</li>
+<li>如果 $G &lt; 0$，那么对 $J(\theta)$ 优化之后，策略 $\pi_{\theta}$ 在状态 $S_0$ 时采取动作 $A_0$ 的概率一定会变小。</li>
+</ul>
+<p>如果 $G$ 特别大，例如 $G = 10000$，或者 $G$ 特别小，例如 $G = -10000$，那么梯度上升算法的步长 $\alpha G\nabla_{\theta}\log \pi_{\theta}(A_0|S_0)$ 的绝对值一定会很大，进而导致策略的参数 $\theta$ 更新幅度巨大，进而导致策略 $\pi_{\theta}$ 爆炸式的更新。</p>
+<p>换句话说，我们只是提高了在状态 $S_0 = s$ 时采取动作 $A_0$ 的概率，但是在玩倒立摆游戏时，并不能保证状态 $s$ 经常出现。碰到其它的状态，更新后的策略表现可能非常的差。好比一个人，突然间中了1000万，那么如此大的奖励会直接彻底改变这个人的策略，他的策略彻底变成了靠运气生活。或者一个人犯了一点点小错误，却得到了巨大的惩罚，如此大的惩罚也会让一个人信心崩溃。这就是策略崩溃的例子。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.10 梯度爆炸式更新</figcaption></figure>
+</p>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">5.1.1 理论介绍</a></li>
+<li><a href="#sec-2">5.1.2 代码实现</a></li>
+<li><a href="#sec-3">5.1.3 深入讨论</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-4-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">4.5 下一步</span></a>
+      <a class="next-post" href="/llm-tutorial-5-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">5.2 REINFORCE</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

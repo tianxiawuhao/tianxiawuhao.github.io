@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,使用PPO微调大语言模型——复刻 InstructGPT">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>11.2 即时奖励 $R_t$ 的计算 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="11.2 即时奖励 $R_t$ 的计算 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="11.2 即时奖励 $R_t$ 的计算" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-11-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">使用PPO微调大语言模型——复刻 InstructGPT</a>
+                </span>
+              <h1>11.2 即时奖励 $R_t$ 的计算</h1>
+              <span class="meta">
+                Posted on
+                2025-05-07，4 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>$$
+J_{\mathrm{PPO}}(\theta) = \mathbb{E}\left[\min \left(\frac{\pi_{\theta}(a|s)}{\pi_{\theta_{\mathrm{old}}}(a|s)} A,\mathrm{clip}\left(\frac{\pi_{\theta}(a|s)}{\pi_{\theta_{\mathrm{old}}} (a|s)},1 - \epsilon ,1 + \epsilon\right)A\right)\right] \tag{11.1}
+$$</p>
+<p>PPO的目标函数我们已经很熟悉了，优势A如果使用1步TD误差的话是：$\delta = R_t + \gamma V(S_{t+1}) - V(S_t)$</p>
+<p>在倒立摆环境中，只要木杆不倒下，那么 $R_t = 1$。但是在大语言模型这个环境中，情况就要复杂多了。在大语言模型中，策略模型LLM采取的动作是输出一个token，那么输出一个token，我们应该给什么奖励 $R_t$ 呢？</p>
+<p><figure class="tutorial-figure"><figcaption>图11.2 输出一个token（采取动作），针对输出的这个token，怎么给即时奖励$R_t$？</figcaption></figure>
+</p>
+<p>在RLHF中，奖励模型（Reward Model）的作用是针对一条完整的补全给出分数的。</p>
+<p><figure class="tutorial-figure"><figcaption>图11.3 奖励模型是针对一条完整的补全给出得分的</figcaption></figure>
+</p>
+<p>在InstructGPT（Ouyang et al., 2022）的PPO阶段，奖励函数的设计非常精妙。它不仅仅是奖励模型（Reward Model，RM）给出的分数，还包含了一个至关重要的惩罚项。即时奖励的计算公式分两种情况：</p>
+<ul>
+<li><code>&lt;eos_token&gt;</code> 之前的token的奖励如下计算：</li>
+</ul>
+<p>$$
+R_t = -\beta \log \frac{\pi_{\theta}(y_t|x,y_{&lt; t})}{\pi_{\mathrm{ref}}(y_t|x,y_{&lt; t})} \tag{11.2}
+$$</p>
+<ul>
+<li>最后一个token也就是 <code>&lt;eos_token&gt;</code> 的奖励如下：</li>
+</ul>
+<p>$$
+R_{&lt; \mathrm{eos_token}} = R_T = \text{奖励模型给的得分} - \beta \log \frac{\pi_{\theta}(y_T|x,y_{&lt; T})}{\pi_{\mathrm{ref}}(y_T|x,y_{&lt; T})} \tag{11.3}
+$$</p>
+<p>InstructGPT成功的关键秘诀是式子中的KL散度惩罚项 $\beta \log \frac{\pi_{\theta}(y_t|x,y_{&lt; t})}{\pi_{\mathrm{ref}}(y_t|x,y_{&lt; t})}$</p>
+<p>KL散度近似计算</p>
+<p>KL散度的定义如下：</p>
+<p>$$
+\mathrm{KL}(p \parallel q) = \sum_{x} p(x) \log \frac{p(x)}{q(x)} = \mathbb{E}_{x} \left[ \log \frac{p(x)}{q(x)} \right] \tag{11.4}
+$$</p>
+<p>我们可以用 $\log \frac{p(x)}{q(x)}$ 来近似KL散度。</p>
+<ul>
+<li><p>直观理解：我们不希望强化学习后的模型 $\pi_{\theta}$ 偏离原始的SFT模型 $\pi_{\mathrm{ref}}$ 太远。</p>
+</li>
+<li><p>为什么需要KL散度惩罚项？</p>
+</li>
+</ul>
+<p>防止 Reward Hacking（奖励黑客）：如果没有约束，RL模型会利用奖励模型的漏洞，生成一些人类读起来不通顺、但奖励模型误判为高分的奇怪句子（例如重复乱码）。保持语言流畅性：SFT模型通常能生成通顺的自然语言。通过锚定SFT模型，保证了RL微调的模型生成的句子依然是“人话”。计算细节：这个惩罚是“逐token计算”的，也就是如果 $\pi_{\theta}$ 对某个token的生成概率远高于 $\pi_{\mathrm{ref}}$ 说明模型在“冒险”偏离原来的轨道，惩罚就会变大。奖励模型的打分鼓励模型往“人类喜欢”的方向走。KL惩罚拽住模型，不让它跑得太偏，避免它为了高分而变成“怪兽”。在标准的InstructGPT实现中，奖励模型（RM）的分数通常只加在最后一个token上，而KL惩罚是加在每一个token上的。让我们把这个过程像切蛋糕一样切开来看：</p>
+<p>让我们把这个过程像切蛋糕一样切开来看：</p>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-11-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">11.1 InstructGPT训练流程</span></a>
+      <a class="next-post" href="/llm-tutorial-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">1 奖励的时间步分配</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,GPT-2">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>3.2 GPT-2 模型的训练 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="3.2 GPT-2 模型的训练 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="3.2 GPT-2 模型的训练" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-3-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">大语言模型</a>
+                <a href="/tutorial/" class="tag">GPT-2</a>
+                </span>
+              <h1>3.2 GPT-2 模型的训练</h1>
+              <span class="meta">
+                Posted on
+                2025-04-08，16 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p>创建文件 gpt_train.py。首先导入我们要用的库。</p>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+import os
+import torch
+import tiktoken
+# 从本地库导入
+from gpt_model import GPTModel, create_dataLoader_v1, generate_text_simple
+</code></pre>
+<p>接下来我们编写 token_ids 和 text 之间的转换代码。</p>
+<pre><code class="language-python">def text_to_token_ids(text, tokenizer):
+    encoded = tokenizer.encode(text)
+    encoded_tensor = torch.tensor(encoded).unsqueeze(0)
+    return encoded_tensor
+</code></pre>
+<p>接下来我们编写计算损失的代码。</p>
+<pre><code class="language-python">def calc_loss_batch(input_batch, target_batch, model, device):
+    input_batch, target_batch = input_batch.to(device), target_batch.to(device)
+    logits = model(input_batch)
+    loss = torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())
+    return loss
+</code></pre>
+<p>然后编写整个数据集的损失的计算</p>
+<pre><code class="language-python">def calc_loss_loader(data_loader, model, device, num_batches=None):
+    total_loss = 0.
+    if len(data_loader) == 0:
+        return float(&quot;nan&quot;)
+    elif num_batches is None:
+        num_batches = len(data_loader)
+    else:
+        num_batches = min(num_batches, len(data_loader))
+    for i, (input_batch, target_batch) in enumerate(data_loader):
+        if i &lt; num_batches:
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            total_loss += loss.item()
+        else:
+            break
+    return total_loss / num_batches
+</code></pre>
+<p>然后编写评估模型的函数</p>
+<pre><code class="language-python">def evaluate_model(model, train_loader, val_loader, device, eval_iter):
+    model.eval()
+    with torch.no_grad():
+        train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
+        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
+    model.train()
+    return train_loss, val_loss
+</code></pre>
+<p>然后编写一下简单的生成补全的代码。</p>
+<pre><code class="language-python">def generate_and_print_sample(model, tokenizer, device, start_context):
+    model.eval()
+    context_size = model.pos_emb.weight.shape[0]
+    encoded = text_to_token_ids(start_context, tokenizer).to(device)
+    with torch.no_grad():
+        token_ids = generate_text_simple(
+            model=model,
+            idx=encoded,
+            max_new_tokens=50,
+            context_size=context_size,
+        )
+    decoded_text = token_ids_to_text(token_ids, tokenizer)
+    print(decoded_text.replace(&quot;\n&quot;, &quot; &quot;)) # 压缩一下打印的格式
+    model.train()
+</code></pre>
+<p>然后我们编写训练模型的代码</p>
+<pre><code class="language-python">def train_model_simple(
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    device,
+    num_epochs,
+    eval_freq,
+    eval_iter,
+    start_context,
+    tokenizer,
+):
+    # 初始化一些列表，用来跟踪损失和其它一些指标
+    train_losses, val_losses, track_tokens_seen = [], [], []
+    tokens_seen = 0
+    global_step = -1
+
+    # 主训练循环
+    for epoch in range(num_epochs):
+        model.train() # 将模型设置为训练模式
+
+        for input_batch, target_batch in train_loader:
+            optimizer.zero_grad() # 将上一批数据的损失的梯度清空
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            loss.backward() # 计算损失函数中参数的梯度
+            optimizer.step() # 使用梯度更新模型的参数
+            tokens_seen += input_batch.numel()
+            global_step += 1
+
+            # 可选的评估步骤
+            if global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model(
+                    model,
+                    train_loader,
+                    val_loader,
+                    device,
+                    eval_iter,
+                )
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                track_tokens_seen.append(tokens_seen)
+                print(f&quot;Ep {epoch+1} (Step {global_step:06d}): &quot;
+                      f&quot;Train loss {train_loss:.3f}, Val loss {val_loss:.3f}&quot;)
+
+        # 每一轮训练完毕之后，测试一下补全的文本
+        generate_and_print_sample(
+            model, tokenizer, device, start_context
+        )
+
+    return train_losses, val_losses, track_tokens_seen
+</code></pre>
+<p>编写一下绘制损失图像的代码</p>
+<pre><code class="language-python">def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
+    fig, ax1 = plt.subplots()
+
+    # 绘制每一个epoch的训练损失和验证损失
+    ax1.plot(epochs_seen, train_losses, label=&quot;Training loss&quot;)
+    ax1.plot(epochs_seen, val_losses, linestyle=&quot;-.&quot;, label=&quot;Validation loss&quot;)
+    ax1.set_xlabel(&quot;Epochs&quot;)
+    ax1.set_ylabel(&quot;Loss&quot;)
+    ax1.legend(loc=&quot;upper right&quot;)
+
+    ax2 = ax1.twiny()
+    ax2.plot(tokens_seen, train_losses, alpha=0)
+    ax2.set_xlabel(&quot;Tokens seen&quot;)
+
+    fig.tight_layout()
+    # plt.show()
+</code></pre>
+<p>接下来编写main函数。</p>
+<pre><code class="language-python">def main(gpt_config, settings):
+
+    torch.manual_seed(123)
+    device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+
+    ##########################################
+    # 准备训练数据
+    ##########################################
+
+    file_path = &quot;data.txt&quot;
+    with open(file_path, &quot;r&quot;, encoding=&quot;utf-8&quot;) as file:
+        text_data = file.read()
+
+    ##########################################
+    # 初始化模型
+    ##########################################
+
+    model = GPTModel(gpt_config)
+    model.to(device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=settings[&quot;learning_rate&quot;], weight_decay=settings[&quot;weight_decay&quot;]
+    )
+
+    ##########################################
+    # 准备训练数据集和验证数据集
+    ##########################################
+
+    # Train/validation ratio
+    train_ratio = 0.90
+    split_idx = int(train_ratio * len(text_data))
+
+    train_loader = create_dataLoader_v1(
+        text_data[:split_idx],
+        batch_size=settings[&quot;batch_size&quot;],
+        max_length=gpt_config[&quot;context_length&quot;],
+        stride=gpt_config[&quot;context_length&quot;],
+        drop_last=True,
+        shuffle=True,
+        num_workers=0
+    )
+
+    val_loader = create_dataLoader_v1(
+        text_data[split_idx:],
+        batch_size=settings[&quot;batch_size&quot;],
+        max_length=gpt_config[&quot;context_length&quot;],
+        stride=gpt_config[&quot;context_length&quot;],
+        drop_last=False,
+        shuffle=False,
+        num_workers=0
+    )
+
+    #############
+    # 训练模型
+    #############
+
+    tokenizer = tiktoken.get_encoding(&quot;gpt2&quot;)
+
+    train_losses, val_losses, tokens_seen = train_model_simple(
+        model, train_loader, val_loader, optimizer, device,
+        num_epochs=settings[&quot;num_epochs&quot;], eval_freq=5, eval_iter=1,
+        start_context=&quot;Every effort moves you&quot;, tokenizer=tokenizer
+    )
+
+    return train_losses, val_losses, tokens_seen, model
+</code></pre>
+<p>然后编写文件的入口点函数</p>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+
+    GPT_CONFIG_124M = {
+        &quot;vocab_size&quot;: 50257, # 词汇表大小
+        &quot;context_length&quot;: 256, # 上下文长度（开源的gpt-2模型的上下文长度是1024）
+        &quot;emb_dim&quot;: 768, # 词嵌入维度
+        &quot;n_heads&quot;: 12, # 注意力头的数量
+        &quot;n_layers&quot;: 12, # transformer block的数量
+        &quot;drop_rate&quot;: 0.1, # Dropout rate
+        &quot;qkv_bias&quot;: False # Query-key-value bias
+    }
+
+    OTHER_SETTINGS = {
+        &quot;learning_rate&quot;: 5e-4,
+        &quot;num_epochs&quot;: 10,
+        &quot;batch_size&quot;: 2,
+        &quot;weight_decay&quot;: 0.1
+    }
+
+    #############
+    # 训练模型
+    #############
+
+    train_losses, val_losses, tokens_seen, model = main(GPT_CONFIG_124M, OTHER_SETTINGS)
+
+    #############
+    # 训练完成之后
+    #############
+
+    # 绘制损失图像
+    epochs_tensor = torch.linspace(0, OTHER_SETTINGS[&#39;num_epochs&#39;], len(train_losses))
+    plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+    plt.savefig(&quot;loss.pdf&quot;)
+
+    # 保存和加载模型的代码
+    torch.save(model.state_dict(), &quot;model.pth&quot;)
+    model = GPTModel(GPT_CONFIG_124M)
+    model.load_state_dict(torch.load(&quot;model.pth&quot;, weights_only=True))
+</code></pre>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-3-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">3.1 GPT-2模型结构的定义以及数据集的准备</span></a>
+      <a class="next-post" href="/llm-tutorial-3-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">3.3 加载 OpenAI 开源的 GPT-2 预训练权重</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

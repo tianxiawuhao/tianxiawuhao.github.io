@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,GPT-2">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>3.1 GPT-2模型结构的定义以及数据集的准备 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="3.1 GPT-2模型结构的定义以及数据集的准备 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="3.1 GPT-2模型结构的定义以及数据集的准备" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-3-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">大语言模型</a>
+                <a href="/tutorial/" class="tag">GPT-2</a>
+                </span>
+              <h1>3.1 GPT-2模型结构的定义以及数据集的准备</h1>
+              <span class="meta">
+                Posted on
+                2025-04-07，33 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p>创建一个文件 gpt_model.py。我们首先导入需要的依赖。</p>
+<pre><code class="language-python">import tiktoken # 分词器库
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+</code></pre>
+<h3 id="sec-1">3.1.1 数据集的准备</h3>
+<p><figure class="tutorial-figure"><figcaption>图3.1 分词</figcaption></figure>
+</p>
+<p>接下来我们构建数据集。</p>
+<pre><code class="language-python">class GPTDatasetV1(Dataset):
+    def __init__(self, txt, tokenizer, max_length, stride):
+        self.input_ids = []
+        self.target_ids = []
+
+        # 对整个文本进行分词
+        token_ids = tokenizer.encode(txt, allowed_special={&#39;endoftext&#39;})
+
+        # 使用滑动窗口将文本切割成**重叠的**长度为&#39;max_length&#39;的序列
+        for i in range(0, len(token_ids) - max_length, stride):
+            input_chunk = token_ids[i: i + max_length]
+            target_chunk = token_ids[i + 1: i + max_length + 1]
+            self.input_ids.append(torch.tensor(input_chunk))
+            self.target_ids.append(torch.tensor(target_chunk))
+
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, idx):
+        return self.input_ids[idx], self.target_ids[idx]
+</code></pre>
+<p>然后我们封装一个工具函数，用来创建训练数据集。</p>
+<pre><code class="language-python">def create_dataLoader_v1(
+    txt,
+    batch_size=4,
+    max_length=256,
+    stride=128,
+    shuffle=True,
+    drop_last=True,
+    num_workers=0,
+):
+    # 初始化分词器
+    tokenizer = tiktoken.get_encoding(&quot;gpt2&quot;)
+    # 创建数据集
+    dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)
+    # 创建dataLoader
+    dataLoader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+    return dataLoader
+</code></pre>
+<p><figure class="tutorial-figure"><figcaption>图3.2 数据集</figcaption></figure>
+</p>
+<h3 id="sec-2">3.1.2 模型结构</h3>
+<p>接下来我们自顶向下的来定义模型结构。</p>
+<pre><code class="language-python">class GPTModel(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.tok_emb = nn.Embedding(cfg[&quot;vocab_size&quot;], cfg[&quot;emb_dim&quot;])
+        self.pos_emb = nn.Embedding(cfg[&quot;context_length&quot;], cfg[&quot;emb_dim&quot;])
+        self.drop_emb = nn.Dropout(cfg[&quot;drop_rate&quot;])
+
+        self.trf_blocks = nn.Sequential(
+            *[TransformerBlock(cfg) for _ in range(cfg[&quot;n_layers&quot;])])
+
+        self.final_norm = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.out_head = nn.Linear(cfg[&quot;emb_dim&quot;], cfg[&quot;vocab_size&quot;], bias=False)
+
+    def forward(self, in_idx):
+        batch_size, seq_len = in_idx.shape
+        tok_embeds = self.tok_emb(in_idx)
+        pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
+        x = tok_embeds + pos_embeds # 形状: [batch_size, num_tokens, emb_size]
+        x = self.drop_emb(x)
+        x = self.trf_blocks(x)
+        x = self.final_norm(x)
+        logits = self.out_head(x)
+        return logits
+</code></pre>
+<p>神经网络本身是一个函数，而神经网络这个函数的定义关键要看 .forward 方法，也就是 .forward 方法定义了神经网络的计算图长什么样子。</p>
+<h4 id="sec-3">3.1.2.1 词嵌入</h4>
+<p>首先GPT-2模型的输入in_idx是一批token id列表，形状为（batch_size，seq_len）。</p>
+<p>所以batch_size，seq_len = in_idx.shape这一行可以提取批次的大小batch_size和每条数据序列的长度seq_len。</p>
+<p>而tok_embeds = self.tok_emb(in_idx)将输入的token id列表转换成了形状为（batch_size，seq_len，emb_dim）的张量。</p>
+<p>nn.Embedding的作用是将token id转换成一个向量，如GPT-2会将一个token id转换成一个768个浮点数元素的向量。</p>
+<p><figure class="tutorial-figure"><figcaption>图3.3 词嵌入</figcaption></figure>
+</p>
+<p><figure class="tutorial-figure"><figcaption>图3.4 一条数据和一批数据的词嵌入示例</figcaption></figure>
+</p>
+<p>在PyTorch中，嵌入层实现的功能与执行矩阵乘法的线性层相同；我们使用嵌入层主要是出于计算效率的考虑。</p>
+<pre><code class="language-python"># 假设我们有以下3个训练样本。
+# 它们可能代表LLM上下文中的token ID
+idx = torch.tensor([2, 3, 1])
+
+# 嵌入矩阵的行数可以通过
+# 获取最大的token ID + 1来确定。
+# 如果最大的token ID 是 3，那么我们需要 4 行，用于可能的
+# token ID: 0, 1, 2, 3
+num_idx = max(idx) + 1
+
+# 期望的嵌入维度是一个超参数
+out_dim = 5
+</code></pre>
+<p>实现一个简单的嵌入层</p>
+<pre><code class="language-python">torch.manual_seed(123)
+embedding = torch.nn.Embedding(num_idx, out_dim)
+print(embedding.weight) # 查看嵌入权重
+# 获取训练示例 ID 为 1 的向量表示
+print(embedding(torch.tensor([1])))
+# 获取训练示例 ID 为 2 的向量表示
+print(embedding(torch.tensor([2])))
+# 查找一批 ID 的向量表示
+idx = torch.tensor([2, 3, 1])
+print(embedding(idx))
+</code></pre>
+<p>现在我们用独热编码和 nn.Linear 实现和上面的嵌入层一样的功能。</p>
+<p>首先将 token ID 转换为独热编码</p>
+<pre><code class="language-python">onehot = torch.nn.functional.one_hot(idx)
+print(onehot)
+</code></pre>
+<p>接下来，我们初始化一个线性变换层，它会执行一个矩阵乘法：$XW^T$</p>
+<pre><code class="language-python">torch.manual_seed(123)
+linear = torch.nn.Linear(num_idx, out_dim, bias=False)
+print(linear.weight)
+</code></pre>
+<p>请注意，PyTorch 中的线性层同样是用小的随机权重初始化的；为了与上面的 Embedding 层直接比较，我们必须使用相同的小随机权重，这就是我们在此处重新赋值它们的原因：</p>
+<pre><code class="language-python">linear.weight = torch.nn.Parameter(embedding.weight.T)
+</code></pre>
+<p>现在我们可以将线性层应用于输入数据的独热编码表示</p>
+<pre><code class="language-python">print(linear(onehot.float()))
+print(embedding(idx))
+</code></pre>
+<p>正如我们所见，这与使用嵌入层时得到的结果完全相同。</p>
+<p>底层执行的是对第一个训练示例的 token ID 进行的如下计算：</p>
+<p>由于每行独热编码中除一个索引外全为 0（这是设计的必然结果），该矩阵乘法实质上等同于对独热元素的查表操作。</p>
+<p>这种在独热编码上使用矩阵乘法的做法等价于嵌入层查找操作，但当处理大型嵌入矩阵时会效率低下，因为存在大量与零相乘的无效计算。</p>
+<h4 id="sec-4">3.1.2.2 位置编码</h4>
+<p>GPT-2 使用的是可学习位置编码。</p>
+<pre><code class="language-python">self.pos_emb = nn.Embedding(cfg[&quot;context_length&quot;], cfg[&quot;emb_dim&quot;])
+</code></pre>
+<p>为 token id 的位置构建一个嵌入查找表，例如如果我们的 context_length 为 256 的话。那么查找表如下：</p>
+<p><strong>表3.1 上下文长度为256的位置嵌入查找表</strong></p>
+<p>所以</p>
+<pre><code class="language-python">pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
+</code></pre>
+<p>为[0，1，...，seq_len-1]中的每个位置分配了一个768元素的向量，作为对应的位置编码。也就是将序列的每个位置编号组成的序列变换成形状（batch_size，seq_len，emb_dim）。</p>
+<p>然后我们就会将token的词嵌入向量和token所在位置的位置嵌入向量直接相加。</p>
+<pre><code class="language-python">x = tok_embeds + pos_embeds
+</code></pre>
+<p>初看起来，在token向量上面添加位置信息会破坏输入向量，使得网络的任务变得更加难以完成。不过，从两个随机选择的不相关向量在高维空间中几乎是正交的这一现象中，我们可以了解到这一方法为什么能够很好的发挥作用，这表明网络能够相对独立的处理token的身份信息和位置信息。另外，请注意，由于Transformer中的层与层之间都有残差连接，因此位置信息从一层转到下一层的过程中不会丢失。</p>
+<p>这里我们发现了，每个token id对应的768元素向量，在训练结束时，会固定下来。例如：假设“hello”这个token的id是1，那么1对应的768个元素向量就固定了。</p>
+<p>而序列中的为个位置（索引）对应的768个元素向量，在训练结束时也会固定下来。</p>
+<p>设想有两条文本：</p>
+<p>“我是左元”“我是莎士比亚”</p>
+<p>两句话中的token“我”的token嵌入和位置嵌入一模一样</p>
+<ul>
+<li>相同token id对应的token嵌入向量一定相同</li>
+<li>相同位置（两个“我”都为索引0）对应的位置嵌入向量也一定相同</li>
+</ul>
+<p>所以 x = tok_embeds + pos_embeds 是一样的！但很明显，两个“我”指代的人名是不一样的，所以这两个语义在GPT-2中如何进行区分呢？那就是注意力机制，或者说Transformer模块了！</p>
+<h4 id="sec-5">3.1.2.3 仅解码器的Transformer</h4>
+<p>在模型的初始化时，我们堆叠了很多层的TransformerBlock。</p>
+<pre><code class="language-python">self.trf_blocks = nn.Sequential(*[TransformerBlock(cfg) for _ in range(cfg[&quot;n_layers&quot;])])
+</code></pre>
+<p>然后在前向传播的过程中，</p>
+<pre><code class="language-python">x = self.trf_blocks(x)
+</code></pre>
+<p>堆叠很多层TransformerBlock，然后顺序执行。这里也可以看出TransformerBlock的输入和输出的形状必须一致！否则无法堆叠！</p>
+<p>送进 transformer 模块的是 token 嵌入 + 位置嵌入，形状为： (batch_size, seq_len, emb_dim)。</p>
+<p><figure class="tutorial-figure"><figcaption>图3.5 进入self.trf_blocks的数据</figcaption></figure>
+</p>
+<p>接下来我们编写TransformerBlock的代码</p>
+<pre><code class="language-python">class TransformerBlock(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.att = MultiHeadAttention(
+            d_in=cfg[&quot;emb_dim&quot;],
+            d_out=cfg[&quot;emb_dim&quot;],
+            context_length=cfg[&quot;context_length&quot;],
+            num_heads=cfg[&quot;n_heads&quot;],
+            dropout=cfg[&quot;drop_rate&quot;],
+            qkv_bias=cfg[&quot;qkv_bias&quot;],
+        )
+        self.ff = FeedForward(cfg)
+        self.norm1 = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.norm2 = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.drop_shortcut = nn.Dropout(cfg[&quot;drop_rate&quot;])
+
+    def forward(self, x):
+        # 连接到注意力模块输出的残差连接
+        shortcut = x
+        x = self.norm1(x)
+        x = self.att(x) # 形状: [batch_size, num_tokens, emb_size]
+        x = self.drop_shortcut(x)
+        x = x + shortcut # 将原始的输入加过来
+
+        # 连接到feed-forward block输出的残差连接
+        shortcut = x
+        x = self.norm2(x)
+        x = self.ff(x)
+        x = self.drop_shortcut(x)
+        x = x + shortcut # 将原始的输入加进来
+
+        return x
+</code></pre>
+<p><figure class="tutorial-figure"><figcaption>图3.6 TransformerBlock 的架构图</figcaption></figure>
+</p>
+<p><figure class="tutorial-figure"><figcaption>图3.7 self.trf_blocks 输出的数据</figcaption></figure>
+</p>
+<h4 id="sec-6">3.1.2.4 层归一化（LayerNorm）</h4>
+<p>$$y = \frac{x - \mathrm{E}[x]}{\sqrt{\mathrm{Var}[x] + \epsilon}} * \gamma + \beta \quad (3.1)$$</p>
+<p>层归一化模块（LayerNorm）：在emb_dim这个维度进行归一化</p>
+<p><figure class="tutorial-figure"><figcaption>图3.8 层归一化</figcaption></figure>
+</p>
+<p>针对这一行也就是嵌入向量进行归一化，这样不受批次中数据多少的影响有助于训练稳定性</p>
+<pre><code class="language-python">class LayerNorm(nn.Module):
+    def __init__(self, emb_dim):
+        super().__init__()
+        self.eps = 1e-5
+        self.scale = nn.Parameter(torch.ones(emb_dim))
+        self.shift = nn.Parameter(torch.zeros(emb_dim))
+
+    def forward(self, x):
+        mean = x.mean(dim=-1, keepdim=True) # E[x]
+        var = x.var(dim=-1, keepdim=True, unbiased=False) # Var[x]
+        # x - E[x]
+        norm_x = (x - mean) / torch.sqrt(var + self.eps)
+        # y = x - E[x] + y + β
+        return self.scale * norm_x + self.shift
+</code></pre>
+<p>层归一化模块（LayerNorm）：在emb_dim这个维度进行归一化。</p>
+<p>这里要注意的是：LayerNorm的输入和输出形状相同！也就是说，输入 $\mathbf{x}$ 的形状（batch_size, seq_len, emb_dim），输出的形状也是（batch_size, seq_len, emb_dim）。只是在emb_dim这一个维度进行了归一化。</p>
+<p><figure class="tutorial-figure"><figcaption>图3.9 公式注解</figcaption></figure>
+</p>
+<p>LayerNorm中有两个参数 $\gamma$ 和 $\beta$ 会在训练时更新。</p>
+<h4 id="sec-7">3.1.2.5 多头注意力</h4>
+<pre><code class="language-python">class MultiHeadAttention(nn.Module):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+        super().__init__()
+        assert d_out % num_heads == 0, &quot;d_out 必须能被 n_heads 整除&quot;
+
+        self.d_out = d_out
+        self.num_heads = num_heads
+        self.head_dim = d_out // num_heads
+
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.out_proj = nn.Linear(d_out, d_out)
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer(&quot;mask&quot;, torch.triu(torch.ones(context_length, context_length), diagonal=1))
+
+    def forward(self, x):
+        b, num_tokens, d_in = x.shape
+        # K = X.WK
+        keys = self.W_key(x) # 形状: (b, num_tokens, d_out)
+        # Q = X.WQ
+        queries = self.W_query(x)
+        # V = X.WV
+        values = self.W_value(x)
+
+        # 通过添加一个&#39;num_heads&#39;维度, 我们隐式的将矩阵进行了split
+        # 将最后一个维度展开: (b, num_tokens, d_out) → (b, num_tokens, num_heads, head_dim)
+        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
+        values = values.view(b, num_tokens, self.num_heads, self.head_dim)
+        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)
+
+        # 转置: (b, num_tokens, num_heads, head_dim) → (b, num_heads, num_tokens, head_dim)
+        keys = keys.transpose(1, 2)
+        queries = queries.transpose(1, 2)
+        values = values.transpose(1, 2)
+
+        # 计算缩放点积注意力 (scaled dot-product attention) 也就是自注意力, 使用因果注意力掩
+        # attention_scores = QK^T
+        attn_scores = queries @ keys.transpose(2, 3) # 每个头计算点积
+
+        # 原始的掩码方阵需要切割token序列的长度, 然后转换成布尔类型
+        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]
+
+        # 使用掩码填充注意力分数
+        attn_scores.masked_fill_(mask_bool, -torch.inf)
+
+        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+
+        # 形状: (b, num_tokens, num_heads, head_dim)
+        context_vec = (attn_weights @ values).transpose(1, 2)
+
+        # 将多个头组合起来, 这里 self.d_out = self.num_heads * self.head_dim
+        context_vec = context_vec.reshape(b, num_tokens, self.d_out)
+        context_vec = self.out_proj(context_vec) # 可选的线性变换 (投影)
+
+        return context_vec
+</code></pre>
+<h4 id="sec-8">3.1.2.6 前馈层</h4>
+<p>TransformerBlock里的FeedForwardNetwork，简称FFN/MLP，可以理解为：在注意力机制完成“不同token之间的信息交换”之后，对每个token各自做一次非线性特征加工和升维变换。Self-Attention负责“看别人、融合上下文”，FFN负责“想一想、重新组织这个token的内部表示”。两者配合起来，Transformer才能既建模上下文关系，又有足够强的表达能力。也就是说：</p>
+<p>也就是说：</p>
+<p>Attention子层：让token之间互相通信
+FFN子层：对每个token的表示单独进行非线性变换</p>
+<p>Transformer中常见的FFN是一个两层MLP：</p>
+<p>$$\mathrm{FFN}(x) = W_2\sigma (W_1x + b_1) + b_2 \quad (3.2)$$</p>
+<p>其中：</p>
+<ul>
+<li>$x$ 是某个token的隐藏状态（hidden state）。</li>
+<li>$W_{1}$ 把维度从 $d_{\mathrm{model}}$ 扩展到 $d_{\mathrm{ff}}$，$\sigma$ 是激活函数，例如ReLU、GELU、SwiGLU等。</li>
+<li>$W_{2}$ 再把维度从 $d_{\mathrm{ff}}$ 压回 $d_{\mathrm{model}}$。</li>
+</ul>
+<p>中间维度通常是模型维度的4倍左右。</p>
+<p>Self-Attention本质上主要是在不同token的表示之间做加权组合。</p>
+<p>如果没有FFN，模型会更像是在反复做“上下文混合”，但缺少足够强的非线性加工能力。</p>
+<p>FFN中的激活函数，例如GELU，会引入非线性，这使模型能够表达更复杂的函数关系，而不是简单地线性混合信息。</p>
+<p>可以类比一下：</p>
+<ul>
+<li>Attention：把相关信息从上下文中找到</li>
+<li>FFN：对找到的信息进行加工、判断、抽象</li>
+</ul>
+<p>就像开会时，Attention是“听取大家意见”，FFN是“自己消化一下”。不然只听不想，会议纪要会很热闹，但决策不一定靠谱。</p>
+<p>FFN对序列中的每个位置使用同一套参数，但每个token独立处理。</p>
+<p>它不会直接让token之间交流。</p>
+<p>token之间的交流主要发生在Self-Attention中。</p>
+<p>FFN通常会先升维，再降维。这个结构很重要。升维到更大的空间后，模型可以形成更多中间特征；再压回原维度，相当于筛选和组合这些特征。</p>
+<p>可以理解为：</p>
+<ul>
+<li>把token表示投影到更丰富的特征空间</li>
+<li>通过激活函数筛选重要模式</li>
+<li>再压缩回原来的表示维度</li>
+</ul>
+<p>这有点像把一张小照片放大后仔细修图，再缩回合适尺寸。不是为了变大，而是为了在更大的空间里做更细的处理。</p>
+<p>在大语言模型里，FFN/MLP层往往被认为承担了大量“知识存储”和“模式记忆”的功能。</p>
+<p>有一些研究观察到：</p>
+<ul>
+<li>Attention更偏向于路由信息：决定从哪里取信息</li>
+<li>FFN更偏向于内容变换：决定把信息变成什么</li>
+<li>某些MLP神经元会对特定概念、语言模式、事实关联有响应</li>
+</ul>
+<p>当然，这不是说“知识只存在FFN中”，但FFN确实是参数量很大的部分，往往承载了大量可学习模式。</p>
+<p>Attention把信息聚合过来之后，需要有一个模块对聚合后的信息做“解释”。</p>
+<p>例如句子：</p>
+<pre><code>The bank is near the river.
+</code></pre>
+<p>Attention 可以让 bank 关注 river，但 FFN 可以进一步把 bank 的表示推向“河岸”这个语义区域。</p>
+<p>另一个句子：</p>
+<pre><code>I deposited money in the bank.
+</code></pre>
+<p>Attention 可以让 bank 关注 money，FFN 再把它加工成“银行机构”的语义表示。</p>
+<p>当然这是简化描述，但直觉上很有用。</p>
+<p>FFN 的参数量很大。</p>
+<p>一个标准 FFN 参数量大约是：</p>
+<p>$$d_{\mathrm{model}}\times d_{\mathrm{ff}} + d_{\mathrm{ff}}\times d_{\mathrm{model}} \quad (3.3)$$</p>
+<p>如果</p>
+<p>$$d_{\mathrm{ff}} = 4d_{\mathrm{model}} \quad (3.4)$$</p>
+<p>那么 FFN 参数量约为：</p>
+<p>$$8d_{\mathrm{model}}^{2} \quad (3.5)$$</p>
+<p>而 Attention 中 Q、K、V、O 四个矩阵大约是：</p>
+<p>$$4d_{\mathrm{model}}^{2} \quad (3.6)$$</p>
+<p>所以 FFN 往往比 Attention 参数还多。</p>
+<p>这也是为什么它对模型能力非常关键。</p>
+<p>Transformer block 中的 Feed Forward Network 的作用是：</p>
+<p>对每个 token 的上下文表示进行独立的非线性变换，提升模型表达能力、重组特征，并承担大量模式/知识存储功能。</p>
+<pre><code class="language-python">class GELU(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(
+            torch.sqrt(torch.tensor(2.0 / torch.pi)) *
+            (x + 0.044715 * torch.pow(x, 3))
+        ))
+
+
+class FeedForward(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(cfg[&quot;emb_dim&quot;], 4 * cfg[&quot;emb_dim&quot;]),
+            GELU(),
+            nn.Linear(4 * cfg[&quot;emb_dim&quot;], cfg[&quot;emb_dim&quot;]),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+</code></pre>
+<h4 id="sec-9">3.1.2.7 简单的推理代码</h4>
+<pre><code class="language-python">def generate_text_simple(model, idx, max_new_tokens, context_size):
+    # idx的形状为(B, T)
+    for _ in range(max_new_tokens):
+        # 将当前上下文裁剪到我们支持的上下文长度
+        # 例如LLM如果只支持5个token，而上下文长度为10。
+        # 那么只保留最后5个token作为上下文
+        idx_cond = idx[:, -context_size:]
+
+        # 预测
+        with torch.no_grad():
+            logits = model(idx_cond)
+
+        # 只取最后一个
+        # (batch, n_token, vocab_size) → (batch, vocab_size)
+        logits = logits[:, -1, :]
+
+        # 获取logits分数最高的值的索引
+        idx_next = torch.argmax(logits, dim=-1, keepdim=True) # (batch, 1)
+
+        # 将下一个token在词汇表中的索引追加到序列后面
+        idx = torch.cat((idx, idx_next), dim=1) # (batch, n_tokens + 1)
+
+    return idx
+</code></pre>
+<p>main函数如下：</p>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+
+    GPT_CONFIG_124M = {
+        &quot;vocab_size&quot;: 50257, # 词汇表大小
+        &quot;context_length&quot;: 1024, # 上下文长度
+        &quot;emb_dim&quot;: 768, # 词嵌入维度
+        &quot;n_heads&quot;: 12, # 注意力头的数量
+        &quot;n_layers&quot;: 12, # transformer block的层数
+        &quot;drop_rate&quot;: 0.1, # Dropout rate
+        &quot;qkv_bias&quot;: False # Query-Key-Value bias
+    }
+
+    torch.manual_seed(123)
+    model = GPTModel(GPT_CONFIG_124M)
+    model.eval() # 禁用dropout
+
+    start_context = &quot;Hello, I am&quot;
+
+    tokenizer = tiktoken.get_encoding(&quot;gpt2&quot;)
+    encoded = tokenizer.encode(start_context)
+    encoded_tensor = torch.tensor(encoded).unsqueeze(0)
+
+    print(f&quot;\n{50*&#39;=&#39;}\n{22*&#39; &#39;}IN\n{50*&#39;=&#39;}&quot;)
+    print(&quot;\nInput text:&quot;, start_context)
+    print(&quot;Encoded input text:&quot;, encoded)
+    print(&quot;encoded_tensor.shape:&quot;, encoded_tensor.shape)
+
+    out = generate_text_simple(
+        model=model,
+        idx=encoded_tensor,
+        max_new_tokens=10,
+        context_size=GPT_CONFIG_124M[&quot;context_length&quot;]
+    )
+    decoded_text = tokenizer.decode(out.squeeze(0).tolist())
+
+    print(f&quot;\n\n{50*&#39;=&#39;}\n{22*&#39; &#39;}OUT\n{50*&#39;=&#39;}&quot;)
+    print(&quot;\nOutput:&quot;, out)
+    print(&quot;Output length:&quot;, len(out[0]))
+    print(&quot;Output text:&quot;, decoded_text)
+</code></pre>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">3.1.1 数据集的准备</a></li>
+<li><a href="#sec-2">3.1.2 模型结构</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-2-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">2.5 损失函数的设计</span></a>
+      <a class="next-post" href="/llm-tutorial-3-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">3.2 GPT-2 模型的训练</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

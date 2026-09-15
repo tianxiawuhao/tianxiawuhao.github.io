@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,DALL-E2（文生图）">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>19.3 条件扩散模型 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="19.3 条件扩散模型 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="19.3 条件扩散模型" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-19-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">多模态</a>
+                <a href="/tutorial/" class="tag">DALL-E2（文生图）</a>
+                </span>
+              <h1>19.3 条件扩散模型</h1>
+              <span class="meta">
+                Posted on
+                2025-06-17，55 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p><strong>危险</strong></p>
+<p>训练用于生成图片的条件扩散模型时，CLIP 模型和先验模型都必须冻结！</p>
+<h3 id="sec-1">19.3.1 概述</h3>
+<p>图 19.6 解码器架构</p>
+<p>条件扩散模型是模型中生成图像的部分。它通过预测每个时间步应该去除的噪声，并迭代地从噪声图像中去除预测的噪声来实现这一点。</p>
+<p>最常用作其主干的两个模型架构是UNet 和Transformer。</p>
+<p>Transformer 架构的主要优势之一是其可扩展性，它可以很好地扩展至大型数据集和更复杂的模型。另一个优势是，虽然UNet 主要用于图像，但Transformer 更加灵活，只需进行修改即可用于其他数据类型。</p>
+<p>UNet 是许多图像相关任务的主要选择。这是因为它擅长通过卷积层获取局部信息，同时通过跳跃连接保持高分辨率特征。UNet 的另一个优点是输入和输出的形状应该相同，这在图像扩散中非常有用。</p>
+<p>UNet 的工作原理是，接收输入并将其传入编码器层，编码器层会识别/捕获相关特征，同时降低分辨率。然后，输入会传入解码器层，解码器层会尝试定位特征，同时将分辨率提升至原始形状。由于编码器层包含空间信息，因此会从编码器到解码器添加跳跃连接，以帮助保留这些信息。</p>
+<h3 id="sec-2">19.3.2 残差块</h3>
+<p>图 19.7 残差块的架构</p>
+<p>编码器和解码器层均由残差块构成，这些残差块包含用于识别和定位特征的卷积。这些残差块通常由归一化、激活、卷积、归一化、激活、卷积组成；然而，我们的残差块将是归一化、卷积、归一化、激活、卷积、归一化（如图所示）。Han 等人的论文证明了这种架构可以在保持非线性的同时提升性能。</p>
+<pre><code class="language-python"># 初始化
+self.layers1 = nn.Sequential(
+    nn.GroupNorm(n_groups, d_in),
+    nn.Conv2d(d_in, d_out, kernel_size, padding=1)
+)
+
+self.layers2 = nn.Sequential(
+    nn.GroupNorm(n_groups, d_out),
+    nn.SiLU(),
+    nn.Dropout(p=dropout),
+    nn.Conv2d(d_out, d_out, kernel_size, padding=1),
+    nn.GroupNorm(n_groups, d_out)
+)
+
+# Forward
+x = self.layers1(x_0)
+x = self.layers2(x)
+</code></pre>
+<p>对于残差块的归一化部分，我们将使用GroupNorm（组归一化）。之所以使用GroupNorm 而不是BatchNorm，是因为它的性能与批次大小无关，这使得它在小批次或可变批次大小上表现更佳。使用GroupNorm 也有助于提高训练期间的稳定性。</p>
+<p>残差块的激活部分用于实现非线性特性。虽然ReLU 通常用于残差网络，但我们将使用SiLU 作为激活函数。在Ramachandran等人的论文中，尽管模型和超参数是专门为ReLU设置的，但SiLU的表现优于ReLU 和其他激活函数。由于SiLU 的简单性以及与ReLU 的相似性，因此只需用它来代替ReLU 即可轻松实现。</p>
+<p>对于卷积，我们将使用3x3 核大小和SAME 填充的Conv2d 来保留空间维度。SAME 填充的工作原理是在输入的边界添加0，以确保输出形状与未填充时的输入形状相同。第一个卷积会将输入从d_in 通道投影到d_out 通道，而第二个卷积则仅保留d_out 通道。</p>
+<p>残差块也将根据输入的嵌入信息进行调节。执行调节的主要方法之一是将嵌入添加到输入中。对于我们的模型，我们将执行线性投影以获得比例和偏差值。然后将输入乘以比例，然后添加偏差。Nichol 和Dhariwal 表明，与加法相比，使用这种调节方法可以提高FID 分数。编写此部分代码时需要注意的一点是，调节嵌入的维度可能比输入的维度少。因此，我们需要在嵌入的末尾添加维度。例如，如果输入的形状为(B, C, L)，而嵌入的形状为(B, C)，则需要添加一个维度以使其形状为(B, C, 1)。</p>
+<pre><code class="language-python"># 初始化
+self.use_scale_shift = use_scale_shift
+
+self.cond_layers = nn.Sequential(
+    nn.SiLU(),
+    nn.Linear(model_channels, d_out * 2 if use_scale_shift else d_out)
+)
+
+# Forward
+emb = self.cond_layers(emb)
+
+while len(emb.shape) &lt; len(x.shape):
+    emb = emb[..., None]
+
+if self.use_scale_shift:
+    y_s, y_b = emb.chunk(2, dim=1)
+    x = y_s * x + y_b
+else:
+    x += emb
+</code></pre>
+<p>调节是在第一次卷积之后进行的，而不是在残差块的开始处进行的，因为它允许模型在使用时间步信息对其进行细化之前获取基本特征，从而获得更好的表示。</p>
+<p>最后，通过将ResNet 模块的原始输入添加到输出来创建跳跃连接。如果需要更改通道数以匹配输出，则对输入执行1x1 卷积。这些跳跃连接用于增强特征传播。</p>
+<pre><code class="language-python"># 初始化
+self.residual = nn.Conv2d(d_in, d_out, 1) if d_in != d_out else nn.Identity()
+
+# Forward
+x += self.residual(x_0)
+</code></pre>
+<p>将所有这些放在一起，残差块的最终代码应该是这样的：</p>
+<pre><code class="language-python">class ResidualBlock(nn.Module):
+    def __init__(
+        self,
+        d_in,
+        d_out,
+        cond_channels=128,
+        n_groups=8, # 组归一化GroupNorm每一组的数据量
+        kernel_size=(3,3),
+        dropout=0.0,
+        use_scale_shift=True
+    ):
+        super().__init__()
+
+        self.use_scale_shift = use_scale_shift
+
+        self.layers1 = nn.Sequential(
+            nn.GroupNorm(n_groups, d_in),
+            nn.SiLU(),
+            nn.Conv2d(d_in, d_out, kernel_size, padding=1)
+        )
+
+        # Activation &amp; Linear Projection for Embedding
+        self.cond_layers = nn.Sequential(
+            nn.SiLU(),
+            # d_out multiplied by 2 in order to split into scale &amp; shift if necessary
+            nn.Linear(cond_channels, d_out * 2 if use_scale_shift else d_out)
+        )
+
+        self.layers2 = nn.Sequential(
+            nn.GroupNorm(n_groups, d_out),
+            nn.SiLU(),
+            nn.Dropout(p=dropout),
+            nn.Conv2d(d_out, d_out, kernel_size, padding=1),
+            nn.GroupNorm(n_groups, d_out)
+        )
+
+        self.residual = nn.Conv2d(d_in, d_out, 1) \
+            if d_in != d_out \
+            else nn.Identity()
+
+    def forward(self, x_0, emb):
+        # x_0是原始图片，emb是图片的clip嵌入
+        x = self.layers1(x_0)
+
+        emb = self.cond_layers(emb)
+
+        # Adding dimensions to embedding
+        while len(emb.shape) &lt; len(x.shape):
+            emb = emb[..., None]
+
+        # Conditioning input with embedding
+        if self.use_scale_shift:
+            # Getting scale and shift
+            y_s, y_b = emb.chunk(2, dim=1)
+            # Performing scale and shift
+            x = y_s * x + y_b
+        else:
+            # Adding embedding to input
+            x += emb
+
+        x = self.layers2(x)
+
+        # Skip Connection
+        x += self.residual(x_0)
+
+        return x
+</code></pre>
+<h3 id="sec-3">19.3.3 注意力块</h3>
+<p>图 19.8 注意力块</p>
+<p>在我们的模型中，我们将把注意力模块放置在编码器和解码器内层以及瓶颈层（bottle 层，连接编码器和解码器的底层）的残差模块之后。例如，如果编码器和解码器有四层，那么第二层和第三层就会有一个注意力模块。</p>
+<p>使用注意力模块对我们的模型有诸多好处。其一是它有助于捕捉图像不同部分之间的空间关系信息。其二是它有助于衡量模型特征的重要性。最后，注意力模块还可以用来调节图像生成过程。</p>
+<p>有多种方法可以为注意力模块实现注意力机制。其中一些选项包括自注意力和交叉注意力。我们将使用的方法是GLIDE 模型中用到的两种方法的混合。对于这种方法，我们将从输入和条件信息中获取K 和V，并将它们连接在一起以获得最终的K 和V。</p>
+<pre><code class="language-python">Q, K, V = self.qkv(x).chunk(3, dim=-1)
+
+Q = Q.view(B, L, self.n_heads, self.head_size).transpose(1, 2)
+
+K = K.view(B, L, self.n_heads, self.head_size).transpose(1, 2)
+
+V = V.view(B, L, self.n_heads, self.head_size).transpose(1, 2)
+
+# Concatenating keys and values of input and condition
+if cond is not None:
+    k_c, v_c = self.cond_kv(cond).chunk(2, dim=-1)
+    k_c = k_c.view(B, cond.shape[1], self.n_heads, self.head_size).transpose(1, 2)
+    v_c = v_c.view(B, cond.shape[1], self.n_heads, self.head_size).transpose(1, 2)
+    K = torch.cat((K, k_c), dim=-2)
+    V = torch.cat((V, v_c), dim=-2)
+</code></pre>
+<p>需要注意的是，输入图像的形状为(B, C, H, W)，但对于我们的注意力机制，我们希望其形状为(B, L, C)。因此，我们需要将H 和W 维度合并，并将其与C 维度转置。执行注意力机制后，我们需要将输出转换回其原始形状。</p>
+<pre><code class="language-python">b, c, h, w = x_0.shape
+
+# Changing shape to perform attention
+x = x.permute(0, 2, 3, 1).view(b, h * w, c) # (B, C, H, W) -&gt; (B, H * W, C)
+
+# Attention
+x = self.attention(x, cond)
+
+# Changing back to original shape
+x = x.view(b, h, w, c).permute(0, 3, 1, 2)
+</code></pre>
+<p>最终的代码看起来应该是这样的：</p>
+<pre><code class="language-python">class AttentionBlock(nn.Module):
+    def __init__(self, n_channels, cond_channels, n_groups=8, n_heads=1, dropout=0.0):
+        super().__init__()
+
+        assert n_channels % n_heads == 0, &quot;n_channels must be divisible by n_heads&quot;
+
+        self.n_heads = n_heads
+        self.head_size = n_channels // n_heads
+        self.scale = self.head_size ** -0.5
+
+        self.group_norm = nn.GroupNorm(n_groups, n_channels)
+
+        self.qkv = nn.Linear(n_channels, n_channels * 3)
+
+        self.cond_kv = nn.Linear(cond_channels, n_channels * 2)
+
+        self.out_proj = nn.Linear(n_channels, n_channels)
+
+        self.dropout = nn.Dropout(dropout)
+
+    def attention(self, x, cond=None):
+        B, L, _ = x.shape
+
+        # Getting queries, keys, and values for input
+        Q, K, V = self.qkv(x).chunk(3, dim=-1)
+
+        Q = Q.view(B, L, self.n_heads, self.head_size).transpose(1, 2)
+
+        K = K.view(B, L, self.n_heads, self.head_size).transpose(1, 2)
+
+        V = V.view(B, L, self.n_heads, self.head_size).transpose(1, 2)
+
+        # Concatenating keys and values of condition to keys and values of input
+        if cond is not None:
+            k_c, v_c = self.cond_kv(cond).chunk(2, dim=-1)
+            k_c = k_c.view(B, cond.shape[1], self.n_heads, self.head_size).transpose(1, 2)
+            v_c = v_c.view(B, cond.shape[1], self.n_heads, self.head_size).transpose(1, 2)
+            K = torch.cat((K, k_c), dim=-2)
+            V = torch.cat((V, v_c), dim=-2)
+
+        # Get dot product between queries and keys
+        attention = torch.matmul(Q, K.transpose(-2, -1))
+
+        # Scale
+        attention = attention * self.scale
+
+        # Applying softmax
+        attention = torch.softmax(attention, dim=-1)
+
+        # Get dot product with values
+        attention = torch.matmul(attention, V)
+
+        # Combine heads
+        attention = attention.transpose(1, 2)
+        attention = attention.contiguous().view(x.shape)
+
+        # Output projection
+        attention = self.out_proj(attention)
+
+        # Dropout
+        attention = self.dropout(attention)
+
+        return attention
+
+    def forward(self, x_0, cond=None):
+        b, c, h, w = x_0.shape
+
+        # Group normalization
+        x = self.group_norm(x_0)
+
+        # Changing shape to perform attention
+        x = x.permute(0, 2, 3, 1).view(b, h * w, c) # (B, C, H, W) -&gt; (B, H * W, C)
+
+        # Attention
+        x = self.attention(x, cond)
+
+        # Changing back to original shape
+        x = x.view(b, h, w, c).permute(0, 3, 1, 2)
+
+        # Residual connection
+        x = x + x_0
+
+        return x
+</code></pre>
+<h3 id="sec-4">19.3.4 下采样</h3>
+<p>在每个编码器层之间，我们需要降低输入的分辨率。主要的下采样方法有两种：池化和使用卷积层。池化无需参数，这使得它的计算效率更高，并且有助于防止过拟合。卷积层的优势在于它本身带有参数，这使得它能够学习并保留重要的特征。我们将在模型中使用步长2，这将使输入的分辨率降低2倍。</p>
+<p>我们将对模型进行编码，以便能够使用任一方法，但是在训练模型时，我们将使用卷积方法。</p>
+<pre><code class="language-python">class Downsample(nn.Module):
+    def __init__(self, n_channels, kernel_size=(3,3), stride=2, down_pool=False):
+        super().__init__()
+
+        if down_pool:
+            self.down = nn.AvgPool2d(stride)
+        else:
+            self.down = nn.Conv2d(n_channels, n_channels, kernel_size, stride=stride, padding=1)
+
+    def forward(self, x):
+        x = self.down(x)
+        return x
+</code></pre>
+<h3 id="sec-5">19.3.5 上采样</h3>
+<p>在每个解码器层之间，我们需要提高输入的分辨率。为此，我们首先进行插值，将输入的高度和宽度乘以2。之后，我们将它传入一个卷积层，该层将学习并保留重要特征，同时确保通道数正确。</p>
+<pre><code class="language-python">class Upsample(nn.Module):
+    def __init__(self, d_in, d_out, kernel_size=(3,3)):
+        super().__init__()
+
+        self.conv = nn.Conv2d(d_in, d_out, kernel_size, padding=1)
+
+    def forward(self, x):
+        # interpolate：插值
+        x = nn.functional.interpolate(x, scale_factor=2)
+        x = self.conv(x)
+        return x
+</code></pre>
+<h3 id="sec-6">19.3.6 模型的训练</h3>
+<p>UNET
+x_t
+t
+先验模型根据文本预测的CLIP图片嵌
+入
+预测的噪声
+文本标题
+冻结的CLIP
+模型
+冻结的先验模型
+最大时间步T
+的嵌入
+白噪声组成
+的嵌入
+CLIP文本嵌入</p>
+<p>图 19.9 解码器训练流程</p>
+<p>在训练解码器时，模型需要做的第一件事就是设置条件信息。为此，我们首先需要从先验模型中采样以获取CLIP 图像嵌入。与CLIP 模型一样，在加载先验模型时，应冻结层并将模式设置为eval。</p>
+<pre><code class="language-python"># 初始化先验网络
+self.prior = DiffusionPrior(config).to(config.device)
+self.prior.load_state_dict(torch.load(
+    config.prior.model_location,
+    map_location=config.device
+))
+# 冻结模型
+freeze_model(self.prior)
+
+# Forward
+# 得到预测的图片clip嵌入
+img_embeddings = self.prior.sample(caption, mask).to(x.device)
+</code></pre>
+<p>之后，需要使用输入的时间步来获取时间步嵌入。然后将先验模型生成的CLIP 图像嵌入投影并添加到时间步嵌入中。这些嵌入将用于调节模型的残差块。</p>
+<pre><code class="language-python"># 投影层，将clip图片嵌入转换成和时间步嵌入相同的形状，方便相加
+self.img_projection = nn.Sequential(
+    nn.Linear(config.latent_dim, config.decoder.cond_channels),
+    nn.SiLU(),
+    nn.Linear(config.decoder.cond_channels, config.decoder.cond_channels)
+)
+
+#Forward
+# 条件嵌入 = 时间步嵌入 + clip图片嵌入
+c_emb = self.time_mlp(time) + self.img_projection(img_embeddings)
+
+for module in self.encoder:
+    if isinstance(module, ResidualBlock):
+        x = module(x, c_emb)
+</code></pre>
+<p>对于注意力条件信息，我们首先需要将文本标题传入文本Transformer 编码器。在unCLIP 论文中，之所以使用这些文本编码，是因为Ramesh 等人认为这有助于学习CLIP 无法学习的自然语言知识。但在测试过程中，他们发现这种方法效果不佳，因此这部分是可选的。</p>
+<pre><code class="language-python"># Constructor
+self.text_embedding = nn.Embedding(config.vocab_size, config.latent_dim)
+self.positional_encodings = nn.Parameter(torch.randn(config.text_seq_length, config.latent_dim) * (config.latent_dim ** -0.5))
+
+self.text_encoder = nn.ModuleList(
+    [TransformerBlock(
+        config.latent_dim,
+        cond_width=config.latent_dim,
+        n_heads=config.decoder.n_heads,
+        dropout=config.decoder.dropout,
+        r_mlp=config.decoder.r_mlp,
+        bias=config.decoder.bias
+    ) for _ in range(config.decoder.text_layers)]
+)
+
+self.final_ln = nn.LayerNorm(config.latent_dim)
+
+# Function
+def encode_text(self, text, mask=None):
+    x = self.text_embedding(text)
+
+    x = x + self.positional_encodings
+
+    for block in self.text_encoder:
+        x = block(x, mask=mask)
+
+    x = self.final_ln(x)
+
+    return x
+
+# Forward
+text_encodings = self.encode_text(text, mask)
+</code></pre>
+<p>对文本进行编码后，CLIP 图像嵌入被投影到四个额外的token 中，并连接到编码文本的末尾。</p>
+<pre><code class="language-python"># Constructor
+self.get_img_tokens = nn.Linear(1, config.decoder.n_img_tokens)
+
+# Forward
+img_tokens = self.get_img_tokens(img_embeddings[..., None]).permute(0, 2, 1)
+
+c_attn = torch.cat([text_encodings, img_tokens], dim=1)
+</code></pre>
+<p>设置条件信息后，噪声图像将通过初始卷积层，以获得初始模型通道的通道数。</p>
+<pre><code class="language-python"># Constructor
+ch = config.decoder.model_channels
+
+self.in_conv = nn.Conv2d(
+    config.img_channels,
+    ch,
+    config.decoder.kernel_size,
+    padding=1
+)
+
+# Forward
+x = self.in_conv(x)
+</code></pre>
+<p>现在，含噪图像已达到所需的通道数，它们可以与条件信息一起通过UNet 层。UNet 将包含四个编码器层和解码器层，中间有一个瓶颈层。对于每层的通道数，我们将使用[1, 2, 4, 8]作为层通道数与模型通道数的比值。UNet 的编码器、解码器和瓶颈层都将包含两个残差块。在瓶颈残差块之间以及编码器和解码器内层的每个残差块之后，放置了注意力块。跳跃连接连接位于编码器和解码器的残差块之间。</p>
+<pre><code class="language-python"># Config
+model_channels:int = 32
+channel_ratios:list[int] = field(default_factory=lambda: [1, 2, 4, 8])
+n_layer_blocks:int = 2
+
+# Constructor
+# UNet Encoder Layers
+self.encoder = nn.ModuleList([])
+for r in config.decoder.channel_ratios:
+    for _ in range(config.decoder.n_layer_blocks):
+        self.encoder.append(ResidualBlock(ch, config.decoder.model_channels * r, config.decoder.cond_channels, config.decoder.n_groups, config.decoder.kernel_size, config.decoder.dropout, config.decoder.use_scale_shift))
+
+    ch = config.decoder.model_channels * r
+    if r != config.decoder.channel_ratios[0] and r != config.decoder.channel_ratios[-1]:
+        self.encoder.append(AttentionBlock(ch, config.latent_dim, config.decoder.n_groups, config.decoder.n_heads, config.decoder.dropout))
+
+    if r != config.decoder.channel_ratios[-1]:
+        self.encoder.append(Downsample(ch, config.decoder.kernel_size, config.decoder.stride, config.decoder.down_pool))
+
+# UNet Bottleneck Layers
+self.bottleneck = nn.ModuleList([])
+for block in range(config.decoder.n_layer_blocks):
+    self.bottleneck.append(ResidualBlock(ch, ch, config.decoder.cond_channels, config.decoder.n_groups, config.decoder.kernel_size, config.decoder.dropout, config.decoder.use_scale_shift))
+
+    if block != config.decoder.n_layer_blocks - 1:
+        self.bottleneck.append(AttentionBlock(ch, config.latent_dim, config.decoder.n_groups, config.decoder.n_heads, config.decoder.dropout))
+
+# UNet Decoder Layers
+self.decoder = nn.ModuleList([])
+for r in range(len(config.decoder.channel_ratios))[::-1]:
+    for _ in range(config.decoder.n_layer_blocks):
+        self.decoder.append(ResidualBlock(ch * 2, ch, config.decoder.cond_channels, config.decoder.n_groups, config.decoder.kernel_size, config.decoder.dropout, config.decoder.use_scale_shift))
+
+    if r != 0 and r!= len(config.decoder.channel_ratios) - 1:
+        self.decoder.append(AttentionBlock(ch, config.latent_dim, config.decoder.n_groups, config.decoder.n_heads, config.decoder.dropout))
+
+    if r != 0:
+        ch = config.decoder.model_channels * config.decoder.channel_ratios[r-1]
+        self.decoder.append(Upsample(config.decoder.model_channels * config.decoder.channel_ratios[r], ch, config.decoder.kernel_size))
+
+# Forward
+for module in self.encoder:
+    if isinstance(module, ResidualBlock):
+        x = module(x, c_emb)
+        self.connections.append(x)
+    elif isinstance(module, AttentionBlock):
+        x = module(x, cond=c_attn)
+    else:
+        x = module(x)
+
+for module in self.bottleneck:
+    if isinstance(module, ResidualBlock):
+        x = module(x, c_emb)
+    elif isinstance(module, AttentionBlock):
+        x = module(x, cond=c_attn)
+    else:
+        x = module(x)
+
+for module in self.decoder:
+    if isinstance(module, ResidualBlock):
+        x = torch.cat([x, self.connections.pop()], dim=1)
+        x = module(x, c_emb)
+    elif isinstance(module, AttentionBlock):
+        x = module(x, cond=c_attn)
+    else:
+        x = module(x)
+</code></pre>
+<p>然后，UNet 解码器层的输出会经过GroupNorm 和SiLU 激活层，之后使用Conv2d 让输出恢复到原始通道数。</p>
+<pre><code class="language-python"># Constructor
+self.output = nn.Sequential(
+    nn.GroupNorm(config.decoder.n_groups, config.decoder.model_channels),
+    nn.SiLU(),
+    nn.Conv2d(config.decoder.model_channels, config.img_channels, config.decoder.kernel_size, padding=1)
+)
+
+# Forward
+x = self.output(x)
+</code></pre>
+<p>将所有内容放在一起，解码器模型的最终代码将如下所示：</p>
+<pre><code class="language-python">class Decoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        # Loading Prior Model
+        self.prior = DiffusionPrior(config).to(config.device)
+        self.prior.load_state_dict(torch.load(
+            config.prior.model_location,
+            map_location=config.device
+        ))
+        freeze_model(self.prior)
+
+        # MLP to get time embeddings
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionalEmbedding(
+                config.decoder.max_time,
+                config.decoder.model_channels
+            ),
+            nn.Linear(
+                config.decoder.model_channels,
+                config.decoder.cond_channels
+            ),
+            nn.SiLU(),
+            nn.Linear(
+                config.decoder.cond_channels,
+                config.decoder.cond_channels
+            )
+        )
+
+        # MLP to project CLIP image embeddings
+        self.img_projection = nn.Sequential(
+            nn.Linear(config.latent_dim, config.decoder.cond_channels),
+            nn.SiLU(),
+            nn.Linear(config.decoder.cond_channels, config.decoder.cond_channels)
+        )
+
+        # Projection to get image tokens
+        self.get_img_tokens = nn.Linear(1, config.decoder.n_img_tokens)
+
+        # Embedding layer for text captions
+        self.text_embedding = nn.Embedding(config.vocab_size, config.latent_dim)
+
+        # Learned positional encodings for text captions
+        self.positional_encodings = nn.Parameter(torch.randn(
+            config.text_seq_length,
+            config.latent_dim
+        ) * (config.latent_dim ** -0.5))
+
+        # Transformer encoder blocks to encoder text captions
+        self.text_encoder = nn.ModuleList(
+            [TransformerBlock(
+                config.latent_dim,
+                cond_width=config.latent_dim,
+                n_heads=config.decoder.n_heads,
+                dropout=config.decoder.dropout,
+                r_mlp=config.decoder.r_mlp,
+                bias=config.decoder.bias
+            ) for _ in range(config.decoder.text_layers)]
+        )
+
+        self.final_ln = nn.LayerNorm(config.latent_dim)
+
+        ch = config.decoder.model_channels
+
+        # Initial convolution
+        self.in_conv = nn.Conv2d(
+            config.img_channels,
+            ch,
+            config.decoder.kernel_size,
+            padding=1
+        )
+
+        # UNet Encoder Layers
+        self.encoder = nn.ModuleList([])
+        for r in config.decoder.channel_ratios:
+            for _ in range(config.decoder.n_layer_blocks):
+                self.encoder.append(ResidualBlock(
+                    ch,
+                    config.decoder.model_channels * r,
+                    config.decoder.cond_channels,
+                    config.decoder.n_groups,
+                    config.decoder.kernel_size,
+                    config.decoder.dropout,
+                    config.decoder.use_scale_shift
+                ))
+
+            ch = config.decoder.model_channels * r
+            if r != config.decoder.channel_ratios[0] \
+                and r != config.decoder.channel_ratios[-1]:
+                self.encoder.append(AttentionBlock(
+                    ch,
+                    config.latent_dim,
+                    config.decoder.n_groups,
+                    config.decoder.n_heads,
+                    config.decoder.dropout
+                ))
+
+            if r != config.decoder.channel_ratios[-1]:
+                self.encoder.append(Downsample(
+                    ch,
+                    config.decoder.kernel_size,
+                    config.decoder.stride,
+                    config.decoder.down_pool
+                ))
+
+        # UNet Bottleneck Layers
+        self.bottleneck = nn.ModuleList([])
+        for block in range(config.decoder.n_layer_blocks):
+            self.bottleneck.append(ResidualBlock(
+                ch,
+                ch,
+                config.decoder.cond_channels,
+                config.decoder.n_groups,
+                config.decoder.kernel_size,
+                config.decoder.dropout,
+                config.decoder.use_scale_shift
+            ))
+
+            if block != config.decoder.n_layer_blocks - 1:
+                self.bottleneck.append(AttentionBlock(
+                    ch,
+                    config.latent_dim,
+                    config.decoder.n_groups,
+                    config.decoder.n_heads,
+                    config.decoder.dropout
+                ))
+
+        # UNet Decoder Layers
+        self.decoder = nn.ModuleList([])
+        for r in range(len(config.decoder.channel_ratios))[::-1]:
+            for _ in range(config.decoder.n_layer_blocks):
+                self.decoder.append(ResidualBlock(
+                    ch * 2,
+                    ch,
+                    config.decoder.cond_channels,
+                    config.decoder.n_groups,
+                    config.decoder.kernel_size,
+                    config.decoder.dropout,
+                    config.decoder.use_scale_shift
+                ))
+
+            if r != 0 and r!= len(config.decoder.channel_ratios) - 1:
+                self.decoder.append(AttentionBlock(
+                    ch,
+                    config.latent_dim,
+                    config.decoder.n_groups,
+                    config.decoder.n_heads,
+                    config.decoder.dropout
+                ))
+
+            if r != 0:
+                ch = config.decoder.model_channels \
+                    * config.decoder.channel_ratios[r-1]
+                self.decoder.append(Upsample(
+                    config.decoder.model_channels \
+                    * config.decoder.channel_ratios[r],
+                    ch,
+                    config.decoder.kernel_size
+                ))
+
+        # Output projection
+        self.output = nn.Sequential(
+            nn.GroupNorm(
+                config.decoder.n_groups,
+                config.decoder.model_channels
+            ),
+            nn.SiLU(),
+            nn.Conv2d(
+                config.decoder.model_channels,
+                config.img_channels,
+                config.decoder.kernel_size,
+                padding=1
+            )
+        )
+
+        # Skip connections
+        self.connections = []
+
+    def encode_text(self, text, mask=None):
+        x = self.text_embedding(text)
+
+        x = x + self.positional_encodings
+
+        for block in self.text_encoder:
+            x = block(x, mask=mask)
+
+        x = self.final_ln(x)
+
+        return x
+
+    def forward(self, x, time, caption=None, mask=None):
+        # Sample prior model to get CLIP image embeddings
+        # 使用文本标题输入给先验模型prior model，获得预测的clip图片嵌入
+        img_embeddings = self.prior.sample(caption, mask).to(x.device)
+
+        # 条件嵌入 = 时间步嵌入 + clip图片嵌入
+        c_emb = self.time_mlp(time) + self.img_projection(img_embeddings)
+
+        # Get conditioning information for attention blocks
+        c_attn = self.get_img_tokens(img_embeddings[..., None]).permute(0, 2, 1)
+        # 图片标题为空，那么unet是一个无条件的扩散模型
+        if caption is not None:
+            c_attn = torch.cat([self.encode_text(caption, mask), c_attn], dim=1)
+
+        # Initial convolution
+        x = self.in_conv(x)
+
+        # UNet encoder layers
+        for module in self.encoder:
+            if isinstance(module, ResidualBlock):
+                x = module(x, c_emb)
+                self.connections.append(x)
+            elif isinstance(module, AttentionBlock):
+                x = module(x, cond=c_attn)
+            else:
+                x = module(x)
+
+        # UNet bottleneck layers
+        for module in self.bottleneck:
+            if isinstance(module, ResidualBlock):
+                x = module(x, c_emb)
+            elif isinstance(module, AttentionBlock):
+                x = module(x, cond=c_attn)
+            else:
+                x = module(x)
+
+        # UNet decoder layers
+        for module in self.decoder:
+            if isinstance(module, ResidualBlock):
+                x = torch.cat([x, self.connections.pop()], dim=1)
+                x = module(x, c_emb)
+            elif isinstance(module, AttentionBlock):
+                x = module(x, cond=c_attn)
+            else:
+                x = module(x)
+
+        # Output projection
+        x = self.output(x)
+
+        return x
+</code></pre>
+<h3 id="sec-7">19.3.7 损失的计算</h3>
+<p>训练解码器模型的一个重要部分是损失函数。我们的损失函数首先要做的就是对批次中的每个图像进行随机时间步的采样。</p>
+<pre><code class="language-python">timesteps = torch.randint(
+    0,
+    config.decoder.max_time,
+    (image.shape[0],),
+    device=config.device,
+    dtype=torch.long
+)
+</code></pre>
+<p>然后使用这些时间步和方差计划值来获取通过前向扩散添加的噪声图像和噪声。</p>
+<pre><code class="language-python"># 方差计划
+schedule_values = get_schedule_values(config)
+# x_t, 真实的噪声noise
+noisy_image, noise = forward_diffusion(
+    image,
+    schedule_values,
+    timesteps
+)
+</code></pre>
+<p>然后将噪声图像、时间步、文本标题和文本掩码传递到模型中以获得预测噪声。</p>
+<pre><code class="language-python"># x_t, 时间步，图片标题（最终被处理为条件信息，clip图片嵌入）
+pred_noise = decoder(noisy_image, timesteps, caption, mask)
+</code></pre>
+<p>最后，我们可以使用模型的预测噪声和前向扩散函数的实际噪声来计算损失。我们将用于解码器的损失是预测噪声和实际噪声之间的均方误差损失。</p>
+<pre><code class="language-python"># 预测的噪声和真实噪声之间计算均方误差
+loss = nn.functional.mse_loss(pred_noise, noise)
+</code></pre>
+<p>综合起来，我们得到：</p>
+<pre><code class="language-python"># Calculating Loss
+get_schedule_values(config)
+timesteps = torch.randint(0, config.decoder.max_time, (image.shape[0],), device=config.device, dtype=torch.long)
+noisy_image, noise = forward_diffusion(image, schedule_values, timesteps)
+pred_noise = decoder(noisy_image, timesteps, caption, mask)
+loss = nn.functional.mse_loss(pred_noise, noise)
+</code></pre>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">19.3.1 概述</a></li>
+<li><a href="#sec-2">19.3.2 残差块</a></li>
+<li><a href="#sec-3">19.3.3 注意力块</a></li>
+<li><a href="#sec-4">19.3.4 下采样</a></li>
+<li><a href="#sec-5">19.3.5 上采样</a></li>
+<li><a href="#sec-6">19.3.6 模型的训练</a></li>
+<li><a href="#sec-7">19.3.7 损失的计算</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-19-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">19.2 先验模型（Prior Model）</span></a>
+      <a class="next-post" href="/llm-tutorial-19-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">19.4 训练配置</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

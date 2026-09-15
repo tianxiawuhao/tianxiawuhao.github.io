@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,扩散模型背后的数学理论">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>17.2 逆向扩散过程 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="17.2 逆向扩散过程 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="17.2 逆向扩散过程" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-17-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">多模态</a>
+                <a href="/tutorial/" class="tag">扩散模型背后的数学理论</a>
+                </span>
+              <h1>17.2 逆向扩散过程</h1>
+              <span class="meta">
+                Posted on
+                2025-06-08，38 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p>前向过程的联合概率分布是</p>
+<p>$$
+q(x_0 x_1 \dots x_T) = q(x_0) q(x_1 | x_0) \dots q(x_T | x_{T-1}) \tag{17.8}
+$$</p>
+<p>反向过程的联合概率分布是</p>
+<p>$$
+q(x_0 x_1 \dots x_T) = q(x_T) q(x_{T-1} | x_T) \dots q(x_0 | x_1) \tag{17.9}
+$$</p>
+<p>联合概率的乘法公式是</p>
+<p>$$
+q(x_t, x_{t-1}) = q(x_t | x_{t-1}) q(x_{t-1}) = q(x_{t-1} | x_t) q(x_t) \tag{17.10}
+$$</p>
+<p>贝叶斯公式</p>
+<p>$$
+q(x_{t-1} | x_t) = \frac{q(x_t | x_{t-1}) q(x_{t-1})}{q(x_t)} \tag{17.11}
+$$</p>
+<p>贝叶斯推断</p>
+<p>$$
+q(x_{t-1} | x_t) \propto q(x_t | x_{t-1}) q(x_{t-1}) \tag{17.12}
+$$</p>
+<p>贝叶斯推断为什么要忽略掉分母 $q(x_t)$ 呢？因为我们要计算的是，在固定 $x_t$ 的情况下，求 $x_{t-1}$ 的概率，所以 $q(x_t)$ 是个常数。可以忽略掉。</p>
+<p>现在的问题是，$q(x_t | x_{t-1})$ 我们已经知道公式了，但 $q(x_{t-1})$ 我们不知道怎么计算。</p>
+<p>$$
+q(x_{t-1} | x_t) \propto q(x_t | x_{t-1}) q(x_{t-1})
+$$
+已经知道公式了
+🧟 算不出来了
+需要学习的参数
+（神经网络）
+神经网络
+添加噪声
+去掉噪声
+（算不出来）
+目标分布
+近似分布</p>
+<p>图 17.4 去噪的解析解无法计算</p>
+<p><strong>定理 17.1 — Feller</strong></p>
+<p>如果前向过程的马尔可夫链的转移概率分布 $q(x_t | x_{t-1})$ 是高斯分布，且 $\beta_t$ 充分小，那么反向过程的马尔可夫链的转移概率分布 $q(x_{t-1} | x_t)$ 也是高斯分布。</p>
+<p>图 17.5 通过贝叶斯定理可以对反向分布 $q(x_{t-1}|x_t)$ 进行推断。右图上的红色曲线显示了用 3 个高斯分布混合表示的边缘分布 $q(x_{t-1})$，而左图显示了以 $x_{t-1}$ 为中心的高斯前向噪声过程 $q(x_t|x_{t-1})$ 作为 $x_t$ 的分布。通过将它们相乘并进行归一化，我们得到了蓝色曲线所示的对于特定选择的 $x_t$ 的分布 $q(x_{t-1}|x_t)$。因为左图的分布相对较宽，对应着较大的方差 $\beta_t$，所以分布 $q(x_{t-1}|x_t)$ 具有复杂的多峰结构。</p>
+<p>图 17.6 左图中的高斯分布 $q(x_t|x_{t-1})$ 的方差 $\beta_t$ 要小的多。我们可以看到右图中相应的分布 $q(x_t|x_{t-1})$（蓝色）接近高斯分布，具有与 $q(x_t|x_{t-1})$ 类似的方差</p>
+<p>我们可以将边缘分布 $q(x_{t-1})$ 写成以下形式</p>
+<p>$$
+q(x_{t-1}) = \int q(x_{t-1} | \mathbf{x}_0) q(\mathbf{x}_0) d\mathbf{x}_0 \tag{17.14}
+$$</p>
+<p>其中 $q(x_{t-1} | \mathbf{x}_0)$ 可以由前向扩散的闭式解搞定。然而，上式的分布是难以处理的。因为我们必须对未知的数据密度 $q(\mathbf{x}_0)$ 进行积分。</p>
+<p>如果我们使用训练数据集的样本来近似积分，我们得到一个复杂的分布，表示为高斯混合分布。</p>
+<p><strong>提示</strong></p>
+<p>无论多么复杂的概率分布，都可以由多个高斯分布加权相加来拟合。概率分布的万能逼近定理。</p>
+<p>图 17.7 高斯混合模型（GMM）</p>
+<p>相反，我们考虑条件分布的反向分布，条件是数据向量 $\mathbf{x}<em>0$，定义为 $q(x</em>{t-1} | x_t, \mathbf{x}_0)$，我们很快将看到它实际上是是一个简单的高斯分布。直观上讲，这是合理的，因为对于给定的噪声图像，很难猜测是哪个更低噪声的图像产生了它，而如果我们还知道起始图像，那么问题就变得容易得多。</p>
+<p>我们可以使用贝叶斯定理计算这个条件分布：</p>
+<p>$$
+q(x_{t-1} | x_t, \mathbf{x}<em>0) = \frac{q(x_t | x</em>{t-1}, \mathbf{x}<em>0) q(x</em>{t-1} | \mathbf{x}_0)}{q(x_t | \mathbf{x}_0)} \tag{17.15}
+$$</p>
+<p>现在我们利用前向过程的马尔可夫性质来写</p>
+<p>$$
+q(x_t | x_{t-1}, \mathbf{x}<em>0) = q(x_t | x</em>{t-1}) \tag{17.16}
+$$</p>
+<p><strong>引理 17.1</strong> 第 $t$ 步到第 $t-1$ 步在第0步的条件下的转移概率分布 $q(x_{t-1} | x_t, \mathbf{x}_0)$ 是以下高斯分布：</p>
+<p>$$
+q(x_{t-1} | x_t, \mathbf{x}<em>0) = \mathcal{N}(x</em>{t-1}; \tilde{\boldsymbol{\mu}}_t(x_t, \mathbf{x}_0), \tilde{\beta}_t I) \tag{17.17}
+$$</p>
+<p>其均值是</p>
+<p>$$
+\tilde{\boldsymbol{\mu}}_t(x_t, \mathbf{x}<em>0) = \frac{\sqrt{\alpha_t}(1 - \bar{\alpha}</em>{t-1})}{1 - \bar{\alpha}<em>t} x_t + \frac{\sqrt{\bar{\alpha}</em>{t-1}}(1 - \alpha_t)}{1 - \bar{\alpha}_t} \mathbf{x}_0 \tag{17.18}
+$$</p>
+<p>方差的系数是</p>
+<p>$$
+\tilde{\beta}<em>t = \frac{1 - \bar{\alpha}</em>{t-1}}{1 - \bar{\alpha}<em>t} \beta_t = \frac{(1 - \bar{\alpha}</em>{t-1})(1 - \alpha_t)}{1 - \bar{\alpha}_t} \tag{17.19}
+$$</p>
+<p><strong>证明</strong> 使用贝叶斯定理，利用前向过程的转移概率是高斯分布的性质，可以推导出反向过程的条件转移概率分布也是高斯分布，并得到其概率密度函数。</p>
+<p>$$
+\begin{aligned}
+&amp;q(x_{t-1} | x_t, \mathbf{x}<em>0) \
+&amp;= \frac{q(x</em>{t-1} | \mathbf{x}<em>0) q(x_t | x</em>{t-1}, \mathbf{x}<em>0)}{q(x_t | \mathbf{x}<em>0)} \
+&amp;= \frac{q(x</em>{t-1} | \mathbf{x}<em>0) q(x_t | x</em>{t-1})}{q(x_t | \mathbf{x}<em>0)} \
+&amp;= \frac{\mathcal{N}(x</em>{t-1}; \sqrt{\bar{\alpha}</em>{t-1}} \mathbf{x}<em>0, (1 - \bar{\alpha}</em>{t-1}) I) \mathcal{N}(x_t; \sqrt{\alpha_t} x_{t-1}, (1 - \alpha_t) I)}{\mathcal{N}(x_t; \sqrt{\bar{\alpha}<em>t} \mathbf{x}<em>0, (1 - \bar{\alpha}<em>t) I)} \
+&amp;\propto \exp \left{ -\frac{1}{2} \left[ \frac{(x_t - \sqrt{\alpha_t} x</em>{t-1})^2}{\beta_t} + \frac{(x</em>{t-1} - \sqrt{\bar{\alpha}</em>{t-1}} \mathbf{x}<em>0)^2}{1 - \bar{\alpha}</em>{t-1}} - \frac{(x_t - \sqrt{\bar{\alpha}<em>t} \mathbf{x}<em>0)^2}{1 - \bar{\alpha}<em>t} \right] \right} \
+&amp;= \exp \left{ -\frac{1}{2} \left[ \frac{x_t^2 - 2\sqrt{\alpha_t} x_t x</em>{t-1} + \alpha_t x</em>{t-1}^2}{\beta_t} + \frac{x</em>{t-1}^2 - 2\sqrt{\bar{\alpha}<em>{t-1}} x</em>{t-1} \mathbf{x}<em>0 + \bar{\alpha}</em>{t-1} \mathbf{x}<em>0^2}{1 - \bar{\alpha}</em>{t-1}} - \frac{(x_t - \sqrt{\bar{\alpha}<em>t} \mathbf{x}<em>0)^2}{1 - \bar{\alpha}<em>t} \right] \right} \
+&amp;= \exp \left{ -\frac{1}{2} \left[ \left( \frac{\alpha_t}{\beta_t} + \frac{1}{1 - \bar{\alpha}</em>{t-1}} \right) x</em>{t-1}^2 - 2 \left( \frac{\sqrt{\alpha_t}}{\beta_t} x_t + \frac{\sqrt{\bar{\alpha}</em>{t-1}}}{1 - \bar{\alpha}_{t-1}} \mathbf{x}<em>0 \right) x</em>{t-1} + C(x_t, \mathbf{x}_0) \right] \right}
+\end{aligned}
+\tag{17.20}
+$$</p>
+<p>$C(x_t, \mathbf{x}<em>0)$ 是对于 $x</em>{t-1}$ 的常数。高斯分布的方差系数是</p>
+<p>$$
+\tilde{\beta}<em>t = \frac{1}{\frac{\alpha_t}{\beta_t} + \frac{1}{1 - \bar{\alpha}</em>{t-1}}} = \frac{1 - \bar{\alpha}_{t-1}}{1 - \bar{\alpha}<em>t} \beta_t \quad (\beta_t = 1 - \alpha_t) = \frac{(1 - \bar{\alpha}</em>{t-1})(1 - \alpha_t)}{1 - \bar{\alpha}_t} \tag{17.21}
+$$</p>
+<p>均值是</p>
+<p>$$
+\begin{aligned}
+\tilde{\mu}<em>t(x_t, \mathbf{x}<em>0) &amp;= \frac{\frac{\sqrt{\alpha_t}}{\beta_t} x_t + \frac{\sqrt{\bar{\alpha}</em>{t-1}}}{1 - \bar{\alpha}</em>{t-1}} \mathbf{x}<em>0}{\frac{\alpha_t}{\beta_t} + \frac{1}{1 - \bar{\alpha}</em>{t-1}}} \
+&amp;= \left( \frac{\sqrt{\alpha_t}}{\beta_t} x_t + \frac{\sqrt{\bar{\alpha}<em>{t-1}}}{1 - \bar{\alpha}</em>{t-1}} \mathbf{x}<em>0 \right) \frac{1 - \bar{\alpha}</em>{t-1}}{1 - \bar{\alpha}<em>t} (1 - \alpha_t) \
+&amp;= \frac{\sqrt{\alpha_t}(1 - \bar{\alpha}</em>{t-1})}{1 - \bar{\alpha}<em>t} x_t + \frac{\sqrt{\bar{\alpha}</em>{t-1}}(1 - \alpha_t)}{1 - \bar{\alpha}_t} \mathbf{x}_0
+\end{aligned}
+\tag{17.22}
+$$</p>
+<p>证明完毕</p>
+<p>根据前向扩散的闭式解</p>
+<p>$$
+x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon \tag{17.23}
+$$</p>
+<p>可以得到</p>
+<p>$$
+x_0 = \frac{1}{\sqrt{\bar{\alpha}_t}} (x_t - \sqrt{1 - \bar{\alpha}_t} \varepsilon) \tag{17.24}
+$$</p>
+<p>代入 $\tilde{\mu}_t(x_t, \mathbf{x}_0)$ 可以得到其只依赖 $x_t$ 的形式：</p>
+<p>$$
+\begin{aligned}
+\tilde{\mu}_t(x_t, \mathbf{x}<em>0) &amp;= \frac{\sqrt{\alpha_t}(1 - \bar{\alpha}</em>{t-1})}{1 - \bar{\alpha}<em>t} x_t + \frac{\sqrt{\bar{\alpha}</em>{t-1}}(1 - \alpha_t)}{1 - \bar{\alpha}_t} \frac{1}{\sqrt{\bar{\alpha}_t}} (x_t - \sqrt{1 - \bar{\alpha}_t} \varepsilon) \
+&amp;= \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}_t}} \varepsilon \right)
+\end{aligned}
+\tag{17.25}
+$$</p>
+<p>假设前向过程和反向过程都是马尔可夫链，前向过程的转移概率分布是高斯分布。在此基础上可以得出，反向过程的转移概率分布也是高斯分布，并且能够求出第 $t$ 步前向的转移概率分布 $q(x_t | x_0)$ 和反向的条件转移概率分布 $q(x_{t-1} | x_t, x_0)$。</p>
+<p>前向过程表示一步步加噪的随机过程，由超参数 $\beta_t(1, 2, \dots, T)$ 控制，是事先确定的。反向过程表示一步步去噪的随机过程，由学习得到的神经网络控制。</p>
+<p>DDPM用神经网络表示反向的转移概率分布 $p_{\theta}(x_{t-1} | x_t), t = 1, 2, \dots, T$。由定理可知，这个转移概率分布是高斯分布</p>
+<p>$$
+p_{\theta}(x_{t-1} | x_t) = \mathcal{N}(x_{t-1}, \boldsymbol{\mu}<em>{\theta}(x_t, t), \boldsymbol{\Sigma}</em>{\theta}(x_t, t)) \tag{17.26}
+$$</p>
+<p>其均值和方差由神经网络决定。神经网络的输入是样本 $x_t$ 和步数 $t$，输出是均值 $\boldsymbol{\mu}<em>{\theta}$ 和方差 $\boldsymbol{\Sigma}</em>{\theta}$，参数是 $\theta$。</p>
+<p>反向过程的联合概率分布表示为</p>
+<p>$$
+p(x_0 x_1 \dots x_T) = p(x_T) \mathcal{N}(x_{T-1}; \boldsymbol{\mu}<em>{\theta}(x_T, T), \boldsymbol{\Sigma}</em>{\theta}(x_T, T)) \dots \mathcal{N}(x_1; \boldsymbol{\mu}<em>{\theta}(x_1, 1), \boldsymbol{\Sigma}</em>{\theta}(x_1, 1)) \tag{17.27}
+$$</p>
+<p>假设每一步的协方差矩阵是对角阵。</p>
+<p>$$
+\boldsymbol{\Sigma}_{\theta}(x_t, t) = \sigma_t^2 I \tag{17.28}
+$$</p>
+<p>前向过程从第 $t-1$ 步到第 $t$ 步根据 $q(x_t | x_{t-1})$ 采样，由 $x_{t-1}$ 得到 $x_t$。反向过程从第 $t$ 步到第 $t-1$ 步根据 $p_{\theta}(x_{t-1} | x_t)$ 采样，由 $x_t$ 得到 $x_{t-1}$。原理上 $p_{\theta}(x_{t-1} | x_t)$ 应该近似转移概率分布 $q(x_{t-1} | x_t)$。但 $q(x_{t-1} | x_t)$ 难以计算，DDPM 实际上使用 $p_{\theta}(x_{t-1} | x_t)$ 近似条件转移概率分布 $q(x_{t-1} | x_t, x_0)$。</p>
+<p>我们的目的是希望 $p_{\theta}(\mathbf{x}_0)$ 能够逼近理想中的那个 $p(\mathbf{x}_0)$。</p>
+<p><strong>定理 17.2 — 詹生不等式</strong> $\mathbb{E}<em>{q(x)}[\log f(x)] \leq \log \mathbb{E}</em>{q(x)}[f(x)]$</p>
+<p>推导证据下界：ELBO。</p>
+<p><strong>ELBO</strong></p>
+<p>ELBO：Evidence Lower Bound，证据下界，变分下界</p>
+<p>$$
+\begin{aligned}
+&amp;\log p_{\theta}(x_0) \
+&amp;= \log \int p_{\theta}(x_0 x_1 \dots x_T) d x_1 d x_2 \dots d x_T \
+&amp;= \log \int p_{\theta}(x_0 x_1 \dots x_T) \frac{q(x_1 x_2 \dots x_T | x_0)}{q(x_1 x_2 \dots x_T | x_0)} d x_1 d x_2 \dots d x_T \
+&amp;= \log \mathbb{E}<em>{q(x_1 x_2 \dots x_T | x_0)} \left[ \frac{p</em>{\theta}(x_0 x_1 \dots x_T)}{q(x_1 x_2 \dots x_T | x_0)} \right] \quad (\text{显示为期望值}) \
+&amp;\geq \mathbb{E}<em>{q(x_1 x_2 \dots x_T | x_0)} \left[ \log \frac{p</em>{\theta}(x_0 x_1 \dots x_T)}{q(x_1 x_2 \dots x_T | x_0)} \right] \quad (\text{詹生不等式})
+\end{aligned}
+\tag{17.29}
+$$</p>
+<p>那么就有</p>
+<p>$$
+\underbrace{\mathbb{E}<em>{q(x_0)} \log p</em>{\theta}(x_0)}<em>{\text{证据}} \geq \underbrace{\mathbb{E}</em>{q(x_0 x_1 x_2 \dots x_T)} \left[ \log \frac{p_{\theta}(x_0 x_1 \dots x_T)}{q(x_1 x_2 \dots x_T | x_0)} \right]}_{\text{证据下界}}
+\tag{17.30}
+$$</p>
+<p>直接最大化左边是不可行的，也就是不可求导，无法优化。所以DDPM 通过最大化变分下界来优化目标。所以损失函数得到以下结果，其中用 $p_{\theta}(x_{t-1} | x_t)$ 近似 $q(x_{t-1} | x_t, x_0)$。</p>
+<p>$$
+\begin{aligned}
+&amp;L(\theta) \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ \log \frac{q(x_1 x_2 \dots x_T | x_0)}{p</em>{\theta}(x_0 x_1 \dots x_T)} \right] \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ \log \frac{\prod</em>{t=1}^T q(x_t | x_{t-1})}{p_{\theta}(x_T) \prod_{t=1}^T p_{\theta}(x_{t-1} | x_t)} \right] \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ -\log p</em>{\theta}(x_T) + \sum_{t=1}^T \log \frac{q(x_t | x_{t-1})}{p_{\theta}(x_{t-1} | x_t)} \right] \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ -\log p</em>{\theta}(x_T) + \sum_{t=2}^T \log \frac{q(x_t | x_{t-1})}{p_{\theta}(x_{t-1} | x_t)} + \log \frac{q(x_1 | x_0)}{p_{\theta}(x_0 | x_1)} \right] \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ -\log p</em>{\theta}(x_T) + \sum_{t=2}^T \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} + \sum_{t=2}^T \log \frac{q(x_t | x_0)}{q(x_{t-1} | x_0)} + \log \frac{q(x_1 | x_0)}{p_{\theta}(x_0 | x_1)} \right] \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ -\log p</em>{\theta}(x_T) + \sum_{t=2}^T \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} + \log \frac{q(x_T | x_0)}{q(x_1 | x_0)} + \log \frac{q(x_1 | x_0)}{p_{\theta}(x_0 | x_1)} \right] \
+&amp;= \mathbb{E}<em>{q(x_0 x_1 x_2 \dots x_T)} \left[ \log \frac{q(x_T | x_0)}{p</em>{\theta}(x_T)} + \sum_{t=2}^T \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} - \log p_{\theta}(x_0 | x_1) \right] \
+&amp;= \underbrace{\mathbb{E}<em>{q(x_0, x_T)} \left[ \log \frac{q(x_T | x_0)}{p</em>{\theta}(x_T)} \right]}<em>{L_T} + \sum</em>{t=2}^T \underbrace{\mathbb{E}<em>{q(x_0, x</em>{t-1}, x_t)} \left[ \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} \right]}<em>{L</em>{t-1}} - \underbrace{\mathbb{E}<em>{q(x_0, x_1)} \left[ \log p</em>{\theta}(x_0 | x_1) \right]}_{L_0}
+\end{aligned}
+\tag{17.31}
+$$</p>
+<p>这里的分布 $q(x_{t-1} | x_t, x_0)$ 的定义如下：</p>
+<p>$$
+q(x_{t-1} | x_t, x_0) = \mathcal{N}(x_{t-1}; \tilde{\boldsymbol{\mu}}_t(x_t, x_0), \tilde{\beta}_t I)
+$$
+$$
+\tilde{\boldsymbol{\mu}}_t(x_t, x_0) = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}_t}} \varepsilon \right)
+\tag{17.32}
+$$</p>
+<p>与之对应，分布 $p_{\theta}(x_{t-1} | x_t)$ 的定义如下：</p>
+<p>$$
+p_{\theta}(x_{t-1} | x_t) = \mathcal{N}(x_{t-1}; \tilde{\boldsymbol{\mu}}<em>{\theta}(x_t, t), \sigma_t^2 I)
+$$
+$$
+\tilde{\boldsymbol{\mu}}</em>{\theta}(x_t, t) = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}<em>t}} \boldsymbol{\varepsilon}</em>{\theta}(x_t, t) \right)
+\tag{17.33}
+$$</p>
+<p>假设两个分布 $q(x_{t-1} | x_t, x_0)$ 和 $p_{\theta}(x_{t-1} | x_t)$ 均值具有相同的形式：方差相同，即设 $\tilde{\beta}<em>t = \sigma_t^2$。因此，神经网络简化为 $\varepsilon</em>{\theta}(x_t, t)$，其输入是样本 $x_t$ 和步数 $t$，输出是噪声 $\varepsilon$，$\theta$ 是参数。</p>
+<p>DDPM 的学习实际通过简化的损失函数的最小化进行，训练一个预测噪声的神经网络。</p>
+<p><strong>KL 散度</strong></p>
+<p>$$
+D_{\text{KL}}(P | Q) = \sum_{x \in \mathcal{X}} P(x) \log \frac{P(x)}{Q(x)} = \mathbb{E}_{x \sim P} \left[ \log \frac{P(x)}{Q(x)} \right] \tag{17.34}
+$$</p>
+<p>将损失函数展开，第一项损失 $L_T$ 如下：</p>
+<p>$$
+L_T = \mathbb{E}<em>{q(x_0)} [\text{KL}(q(x_T | x_0) | p</em>{\theta}(x_T))] \tag{17.35}
+$$</p>
+<p>由于 $q$ 没有可学习的参数 $\theta$，而 $p_{\theta}(x_T)$ 是完全的高斯噪声，因此该项在训练期间将是一个常数，因此可以忽略不计。</p>
+<p>这个损失是常数，所以对最小化不起作用。</p>
+<p>中间各项的损失 $L_{t-1} (t = T, T-1, \dots, 2)$ 如下。通过计算分布 $q(x_{t-1} | x_t, x_0)$ 和 $p_{\theta}(x_{t-1} | x_t)$ 的 KL 散度的期望得到，期望是针对分布 $q(x_0)$ 和 $p(\varepsilon)$ 的。</p>
+<p>$$
+\begin{aligned}
+L_{t-1} &amp;= \mathbb{E}<em>{q(x_0, x</em>{t-1}, x_t)} \left[ \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} \right] \
+&amp;= \int q(x_{t-1}, x_t | x_0) \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} d x_{t-1} d x_t \
+&amp;= \int q(x_t | x_0) q(x_{t-1} | x_t, x_0) \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} d x_{t-1} d x_t \
+&amp;= \int q(x_t | x_0) \underbrace{\int q(x_{t-1} | x_t, x_0) \log \frac{q(x_{t-1} | x_t, x_0)}{p_{\theta}(x_{t-1} | x_t)} d x_{t-1}}<em>{\text{KL 散度}} d x_t \
+&amp;= \mathbb{E}</em>{q(x_t | x_0)} [D_{\text{KL}}(q(x_{t-1} | x_t, x_0) | p_{\theta}(x_{t-1} | x_t))] \
+&amp;= \mathbb{E}<em>{q(x_t | x_0)} \left[ \frac{1}{2 \sigma^2(t)} | \boldsymbol{\mu}(x_t, x_0) - \boldsymbol{\mu}</em>{\theta}(x_t, t) |^2 \right] \
+&amp;= \mathbb{E}<em>{q(x_t | x_0)} \left[ \frac{1}{2 \sigma^2(t)} \left| \frac{1}{\sqrt{\alpha_t}} \left[ x_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}<em>t}} \varepsilon \right] - \frac{1}{\sqrt{\alpha_t}} \left[ x_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}<em>t}} \varepsilon</em>{\theta}(x_t, t) \right] \right|^2 \right] \
+&amp;= \mathbb{E}</em>{q(x_t | x_0)} \left[ \frac{1}{2 \sigma^2(t)} \frac{(1 - \alpha_t)^2}{\alpha_t (1 - \bar{\alpha}<em>t)} | \varepsilon - \varepsilon</em>{\theta}(x_t, t) |^2 \right] \
+&amp;= \mathbb{E}</em>{q(x_t | x_0)} \left[ \frac{1}{2 \sigma^2(t)} \frac{(1 - \alpha_t)^2}{\alpha_t (1 - \bar{\alpha}<em>t)} | \varepsilon - \varepsilon</em>{\theta}(\sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon, t) |^2 \right]
+\end{aligned}
+\tag{17.36}
+$$</p>
+<p>最后一项损失 $L_0$ 如下：</p>
+<p>$$
+L_0 = \mathbb{E}<em>{q(x_1 | x_0)} [-\log p</em>{\theta}(x_0 | x_1)] \tag{17.37}
+$$</p>
+<p>我们想计算的是条件概率 $p_{\theta}(x_0 | x_1)$，其中：</p>
+<ul>
+<li>$x_0$ 是离散的图像数据（像素值离散，通常是 $0 \sim 255$ 的整数值）。</li>
+<li>$x_1$ 是扩散过程中的一个中间变量（通常是连续变量，浮点数）。</li>
+</ul>
+<p>$p_{\theta}(x_0 | x_1)$ 本身是个连续的高斯分布，我们却想要求解某个离散的整数像素值 $x_i^0$ 的概率（$x_i^0$ 是原始图片 $x_0$ 的第 $i$ 个像素点），直接用像素点取值，只能取到概率密度值，想要得到某个像素点的概率，需要积分一个特别小的区间。由于像素值 $0 \sim 255$ 被归一化到了 $[-1, 1]$ 区间。所以DDPM 作者选择的积分区间是 $(x_i^0 - \frac{1}{255}, x_i^0 + \frac{1}{255})$。</p>
+<p>那么此时有</p>
+<p>$$
+\begin{aligned}
+p_{\theta}(x_0 | x_1) &amp;= \prod_{i=1}^D \int_{x_i^0 - \frac{1}{255}}^{x_i^0 + \frac{1}{255}} \mathcal{N}(x; \mu_i^{\theta}(x_1, 1), \sigma_1^2) d x \
+&amp;\approx \prod_{i=1}^D \mathcal{N}(x; \mu_i^{\theta}(x_1, 1), \sigma_1^2) \times \frac{2}{255} \
+&amp;= \prod_{i=1}^D \frac{1}{\sqrt{2 \pi \sigma_1^2}} \exp \left( -\frac{(x_i^0 - \mu_i^{\theta}(x_1, 1))^2}{2 \sigma_1^2} \right) \times \frac{2}{255}
+\end{aligned}
+\tag{17.38}
+$$</p>
+<p>其中 $D$ 是图片像素点的数量。</p>
+<p>两边取对数可以得到</p>
+<p>$$
+\log p(x_0 | x_1) = -\frac{1}{2 \sigma^2} | x_0 - \mu_{\theta}(x_1, 1) |^2 + C \tag{17.39}
+$$</p>
+<p>其中 $C$ 是常数，对优化（求导）没有影响。</p>
+<p>针对损失 $L_{t-1}, t = T, T-1, \dots, 2$，忽略系数，只对平方损失部分进行优化。针对损失 $L_0$，假设进行同样的平方损失优化。忽略损失 $L_T$，这样得到以下简化的整体损失函数：</p>
+<p>$$
+\begin{aligned}
+L&#39;(\theta) &amp;= \sum_{t=1}^T \mathbb{E}<em>{q(x_t | x_0)} [| \varepsilon - \varepsilon</em>{\theta}(x_t, t) |^2] \
+&amp;= \sum_{t=1}^T \mathbb{E}<em>{q(x_t | x_0)} [| \varepsilon - \varepsilon</em>{\theta}(\sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon, t) |^2]
+\end{aligned}
+\tag{17.40}
+$$</p>
+<p>神经网络 $\varepsilon_{\theta}(x_t, t)$ 预测的是前向过程第 $t$ 步的高斯噪声，其直观的解释是，这样的神经网络也能对反向过程的第 $t$ 步 $(t = 1, 2, \dots, T)$ 进行有效的去噪。</p>
+<p>反向过程的第 $t$ 步到第 $t-1$ 步的转移概率分布，可以利用学习得到的神经网络 $\varepsilon_{\theta}(x_t, t)$ 计算。使用随机变量表示形式：</p>
+<p>$$
+x_{t-1} = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}<em>t}} \varepsilon</em>{\theta}(x_t, t) \right) + \sigma_t \varepsilon \tag{17.41}
+$$</p>
+<p>上面的式子称为DDPM 反向过程的迭代公式，用于数据生成。设每一步的方差系数与对应的前向过程的方差系数相同，$\sigma_t = \sqrt{\beta_t}$。</p>
+<p><strong>两个正态分布之间的KL 散度</strong></p>
+<p>两个正态分布之间的KL 散度可以通过解析的方式求得。如果 $q(\boldsymbol{z}) = \mathcal{N}(\boldsymbol{z}; \boldsymbol{\mu}_1, \boldsymbol{\sigma}_1^2 I), p(\boldsymbol{z}) = \mathcal{N}(\boldsymbol{z}; \boldsymbol{\mu}_2, \boldsymbol{\sigma}_2^2 I)$，那么KL 散度可以表示为以下式子（式子中的 $H$ 是 $\boldsymbol{z}$ 的维度）。</p>
+<p>$$
+D_{\text{KL}}(q | p) = -\frac{1}{2} \sum_{h=1}^H \left( 1 + \log \frac{\sigma_{1,h}^2}{\sigma_{2,h}^2} - \frac{(\mu_{1,h} - \mu_{2,h})^2}{\sigma_{2,h}^2} - \frac{\sigma_{1,h}^2}{\sigma_{2,h}^2} \right) \tag{17.42}
+$$</p>
+<p><strong>期望值的线性性质和相关变量的期望值</strong></p>
+<p>① 期望的线性性质
+期望值的线性性质是指有下面的等式成立。</p>
+<p>$$
+\mathbb{E}<em>{p(x, y)}[x + y] = \mathbb{E}</em>{p(x)}[x] + \mathbb{E}_{p(y)}[y] \tag{17.43}
+$$</p>
+<p>上式中的 $x$ 和 $y$ 是随机变量，假定它们相互关联（$p(x, y) \neq p(x) p(y)$）。上式成立的证明如下所示。</p>
+<p>$$
+\begin{aligned}
+\mathbb{E}<em>{p(x, y)}[x + y] &amp;= \iint (x + y) p(x, y) d x d y \
+&amp;= \iint x p(x, y) d x d y + \iint y p(x, y) d x d y \
+&amp;= \int x \left( \underbrace{\int p(x, y) d y}</em>{p(x)} \right) d x + \int y \left( \underbrace{\int p(x, y) d x}<em>{p(y)} \right) d y \
+&amp;= \int x p(x) d x + \int y p(y) d y \
+&amp;= \mathbb{E}</em>{p(x)}[x] + \mathbb{E}_{p(y)}[y]
+\end{aligned}
+\tag{17.44}
+$$</p>
+<p>这里展示的等式的意思是“和的期望值”等于“期望值的和”。这一关系也可以扩展到 $T$ 个随机变量，因此有下面的式子成立。</p>
+<p>$$
+\mathbb{E}<em>{p(x_1 x_2 \dots x_T)} \left[ \sum</em>{t=1}^T x_t \right] = \sum_{t=1}^T \mathbb{E}_{p(x_1 x_2 \dots x_T)}[x_t] \tag{17.45}
+$$</p>
+<p>② 相关变量的期望值
+这里假设 $f(x)$ 是以 $x$ 为参数的任意函数。因此，有下式成立。</p>
+<p>$$
+\mathbb{E}<em>{p(x, y)}[f(x)] = \mathbb{E}</em>{p(x)}[f(x)] \tag{17.46}
+$$</p>
+<p>证明过程如下所示。</p>
+<p>$$
+\begin{aligned}
+\mathbb{E}<em>{p(x, y)}[f(x)] &amp;= \iint f(x) p(x, y) d x d y \
+&amp;= \iint f(x) p(x) p(y | x) d x d y \
+&amp;= \int f(x) p(x) \underbrace{\int p(y | x) d y}</em>{=1} d x \
+&amp;= \int f(x) p(x) d x \
+&amp;= \mathbb{E}_{p(x)}[f(x)]
+\end{aligned}
+\tag{17.47}
+$$</p>
+<p>“在 $p(x, y)$ 分布下 $f(x)$ 的期望值”等同于“在 $p(x)$ 分布下 $f(x)$ 的期望值”。重点在于概率分布中与期望值内部的对象（$f(x)$）内容无关的随机变量可以被“消除”。因此，有下面的等式成立。</p>
+<p>$$
+\mathbb{E}<em>{p(x_1 x_2 \dots x_T)}[f(x_t)] = \mathbb{E}</em>{p(x_t)}[f(x_t)] \tag{17.48}
+$$</p>
+<p>另外，$f(x_{t-1}, x_t)$ 的期望值如下所示。</p>
+<p>$$
+\mathbb{E}<em>{p(x_1 x_2 \dots x_T)}[f(x</em>{t-1}, x_t)] = \mathbb{E}<em>{p(x</em>{t-1}, x_t)}[f(x_{t-1}, x_t)] \tag{17.49}
+$$</p>
+<hr>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-17-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">17.1 正向扩散过程</span></a>
+      <a class="next-post" href="/llm-tutorial-18-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">18.1 向扩散模型添加条件</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

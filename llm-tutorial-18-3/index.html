@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,条件扩散模型">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>18.3 得分函数 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="18.3 得分函数 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="18.3 得分函数" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-18-3/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">多模态</a>
+                <a href="/tutorial/" class="tag">条件扩散模型</a>
+                </span>
+              <h1>18.3 得分函数</h1>
+              <span class="meta">
+                Posted on
+                2025-06-11，10 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p>在上面的内容里面，我们实现了一个简单的条件扩散模型。这个“简单”的意思是我们只是向模型提供了条件而已。因此，模型有可能会轻视我们提供的条件，甚至在最坏的情况下有可能会忽略我们提供的条件。接下来，我们将介绍一种称为“指引”的方法。指引是一种将给定条件纳入模型并给予更多重视的机制。</p>
+<p>要理解指引机制，首先需要了解得分函数。</p>
+<h3 id="sec-1">18.3.1 什么是得分函数</h3>
+<p>截至目前，本章讨论的去噪扩散模型与另一类相对独立发展的深度生成式模型密切相关，它们都基于得分匹配（score matching）。这些模型利用的得分函数（或斯坦因得分）则定义为对数似然函数关于数据向量 $\boldsymbol{x}$ 的梯度。</p>
+<p>$$
+s(x) = \nabla_x \log p(x) \tag{18.5}
+$$</p>
+<p>这里需要强调的是，梯度是针对数据向量计算的，而不是针对任何参数向量。注意 $s(x)$ 是一个与 $x$ 维度相同的向量值函数，并且其中的每个元素 $s_i(x) = \frac{\partial \log p(x)}{\partial x_i}$ 都与 $x$ 的相应元素 $x_i$ 相关联。例如，如果 $x$ 是一个图像，那么 $s(x)$ 也可以表示为一个同尺寸的图像，其中对应的像素是图像的得分。下图显示了二维中的概率密度示例以及相应的得分函数。</p>
+<p>图 18.5 得分函数的示意图，图中显示了两种信息的融合：由高斯混合分布构成的二维分布，表示为热图；以及由式 (18.5) 定义的相应得分函数，其作为向量绘制在 $x$ 值的规则网络上</p>
+<p>为了理解得分函数的用处，考虑两个函数 $q(x)$ 和 $p(x)$，它们具有得分相等的属性，所以对于 $x$ 的所有值，$\nabla_x \log q(x) = \nabla_x \log p(x)$。如果我们对这个等式的两边关于 $x$ 积分并取指数，则可以得到 $q(x) = K p(x)$，其中 $K$ 是一个独立于 $x$ 的常数。所以如果我们能学习到一个得分函数的模型 $s(x, w)$，就可以重建原始数据分布，所得结果与之前的相比，最多相差一个常数倍数。</p>
+<p>在实现扩散模型时，我们使用神经网络对 $\boldsymbol{\varepsilon}<em>{\theta}(x_t, t)$ 进行了建模。$\boldsymbol{\varepsilon}</em>{\theta}(x_t, t)$ 基于 $x_t$ 和 $t$ 来推断噪声 $\varepsilon$。下图是这个过程的示意图。</p>
+<p>x t
+t
+NN θ
+θ(x , t)
+t
+ε
+ε</p>
+<p>图 18.6 扩散模型中使用的推断噪声 $\varepsilon$ 的神经网络</p>
+<p>此时有以下与 $\varepsilon$ 相关的数学式成立（稍后将给出证明）。</p>
+<p>$$
+\varepsilon \approx -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t) \tag{18.6}
+$$</p>
+<p>$\nabla$ 是表示梯度的符号，读作“那勃乐”（Nabla）。$\nabla_{x_t} \log p(x_t)$ 是对数似然 $\log p(x_t)$ 对输入数据 $x_t$ 的梯度，称为“得分函数”或“得分”。</p>
+<p><strong>提示</strong></p>
+<p>$p(x_t)$ 是表示数据 $x_t$ 为“真”的随机密度函数。而 $p_{\theta}(x_t)$ 表示使用参数对真的概率密度函数进行近似的概率密度函数。由于 $\nabla_{x_t} \log p(x_t)$ 和 $\nabla_{x_t} \log p_{\theta}(x_t)$ 表示关于输入 $x_t$ 的梯度，因此称为“得分”。另外，在某些领域，关于参数的梯度（$\nabla_{\theta} \log p_{\theta}(x_t)$）也称为“得分”。在本书中，我们将对输入的梯度称为“得分”。</p>
+<p>根据式 (18.6)，$\varepsilon$ 可以近似表示为 $\nabla_{x_t} \log p(x_t)$。值得注意的是，$\varepsilon$ 与 $\nabla_{x_t} \log p(x_t)$ 之间只相差负常数倍（$-\sqrt{1 - \bar{\alpha}_t}$）。这说明以 $-\sqrt{1 - \bar{\alpha}_t} \varepsilon$ 来代替 $\varepsilon$ 作为训练数据的神经网络也是可行的。</p>
+<h2 id="sec-2">x t
+t
+NN θ
+θ(x , t)
+t
+1
+1-α t
+ε</h2>
+<p>S
+x tlogp( )
+x t</p>
+<p>图 18.7 用于推断得分的神经网络</p>
+<p>图中的神经网络将得分的近似值 $-\sqrt{1 - \bar{\alpha}<em>t} \varepsilon$ 推断为 $s</em>{\theta}(x_t, t)$。因此，我们也可以通过推断得分的神经网络来实现扩散模型。</p>
+<p><strong>提示</strong></p>
+<p>生成模型中包括对得分进行建模的方法。这些模型统称为基于得分的模型。以对数似然最大化的方式可以推导出各种模型（GMM、VAE、扩散模型等）。这些模型可以被称为基于似然的模型。重要的是，扩散模型也可以作为基于得分的模型推导得出。</p>
+<h3 id="sec-3">18.3.2 式 (18.6) 的证明</h3>
+<p>现在让我们来证明式 (18.6) 成立。</p>
+<p>$$
+\varepsilon \approx -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t) \tag{18.7}
+$$</p>
+<p>我们先来复习一下。时刻 $t$ 的噪声数据 $x_t$ 可以基于以下正态分布从原始数据 $x_0$ 生成。</p>
+<p>$$
+q(x_t | x_0) = \mathcal{N}(x_t; \sqrt{\bar{\alpha}_t} x_0, (1 - \bar{\alpha}_t) I) \tag{18.8}
+$$</p>
+<p>利用重参数化技巧，可以通过以下式子得到 $x_t$ 的样本。</p>
+<p>$$
+\varepsilon \sim \mathcal{N}(0, I)
+$$
+$$
+x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon \tag{18.9}
+$$</p>
+<p>接下来要用到的是 Tweedie 公式，这个公式如下所示。</p>
+<p><strong>Tweedie 公式</strong></p>
+<p>当基于 $x \sim \mathcal{N}(x; \boldsymbol{\mu}, \boldsymbol{\Sigma})$ 得到样本 $x$ 时，有以下式子成立。</p>
+<p>$$
+\mathbb{E}[\boldsymbol{\mu} | x] = x + \Sigma \nabla_x \log p(x) \tag{18.10}
+$$</p>
+<p>式子中的 $\boldsymbol{\mu}$ 被视为随机变量。左侧的 $\mathbb{E}[\boldsymbol{\mu} | x]$ 是在 $x$ 作为条件下的 $\boldsymbol{\mu}$ 的期望值。右侧的 $\nabla_x \log p(x)$ 表示得分。我们将这个 Tweedie 公式应用于式 (18.8)。</p>
+<p><strong>Tweedie 公式的应用</strong></p>
+<p>当基于 $x_t \sim \mathcal{N}(x_t; \sqrt{\bar{\alpha}_t} x_0, (1 - \bar{\alpha}_t) I)$ 得到样本 $x_t$ 时，有以下式子成立。</p>
+<p>$$
+\mathbb{E}[\sqrt{\bar{\alpha}_t} x_0 | x_t] = x_t + (1 - \bar{\alpha}<em>t) I \nabla</em>{x_t} \log p(x_t) = x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \tag{18.11}
+$$</p>
+<p>然后，利用式 (18.9) 中的 $x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon$ 成立这一事实将式子展开，如下所示。</p>
+<p>$$
+\begin{aligned}
+\mathbb{E}[\sqrt{\bar{\alpha}_t} x_0 | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
+\Leftrightarrow \mathbb{E}[x_t - \sqrt{1 - \bar{\alpha}_t} \varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
+\Leftrightarrow \mathbb{E}[x_t | x_t] - \mathbb{E}[\sqrt{1 - \bar{\alpha}_t} \varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
+\Leftrightarrow x_t - \sqrt{1 - \bar{\alpha}_t} \mathbb{E}[\varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
+\therefore \mathbb{E}[\varepsilon | x_t] &amp;= -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t)
+\end{aligned}
+\tag{18.12}
+$$</p>
+<p>期望值 $\mathbb{E}[\varepsilon | x_t]$ 可以用蒙特卡洛方法近似。这里我们用一个采样数据来近似 $x_t$。这样就得到了以下数学式。</p>
+<p>$$
+\varepsilon \approx -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t) \tag{18.13}
+$$</p>
+<p>这样我们就完成了推导。</p>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#sec-1">18.3.1 什么是得分函数</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-2">x t
+t
+NN θ
+θ(x , t)
+t
+1
+1-α t
+ε</a>
+<ul>
+<li><a href="#sec-3">18.3.2 式 (18.6) 的证明</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-18-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">18.2 条件扩散模型的实现</span></a>
+      <a class="next-post" href="/llm-tutorial-18-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">18.4 分类器指引</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

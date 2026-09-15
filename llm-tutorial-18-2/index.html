@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,条件扩散模型">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>18.2 条件扩散模型的实现 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="18.2 条件扩散模型的实现 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="18.2 条件扩散模型的实现" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-18-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">多模态</a>
+                <a href="/tutorial/" class="tag">条件扩散模型</a>
+                </span>
+              <h1>18.2 条件扩散模型的实现</h1>
+              <span class="meta">
+                Posted on
+                2025-06-10，25 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p>我们已经使用神经网络实现了 $\boldsymbol{\varepsilon}_{\theta}(x_t, t)$。$\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 的参数 $t$ 是整数，可以通过正弦位置编码变换为向量。而新添加的条件 $y$ 是标签，也是整数。这个整数 $y$ 可以通过嵌入层（embedding layer）变换为向量。具体来说，$y$ 被变换成向量，然后与变换后的 $t$ 向量相加。</p>
+<p>t
+y
+正弦位置编码
+嵌入层
++
+v</p>
+<p>图 18.4 在扩散模型中添加嵌入层</p>
+<p><strong>提示</strong></p>
+<p>嵌入层的初始值被设置为随机值，然后通过训练进行优化。这样就可以训练得到与每个标签相对应的匹配任务的向量。而由于与时刻 $t$ 相关的特定任务的训练要素很少，因此我们使用了一种称为正弦位置编码的固定向量变换的方法。</p>
+<p>以下是代码示例。这里我们在上一章中实现的 UNet 类中添加了名为 UNetCond 类的代码，类名中的 Cond 是 Conditional（条件）的缩写。</p>
+<pre><code class="language-python">class UNetCond(nn.Module):
+    def __init__(self, in_ch=1, time_embed_dim=100, num_labels=None):
+        super().__init__()
+        self.time_embed_dim = time_embed_dim
+
+        self.down1 = ConvBlock(in_ch, 64, time_embed_dim)
+        self.down2 = ConvBlock(64, 128, time_embed_dim)
+        self.bot1 = ConvBlock(128, 256, time_embed_dim)
+        self.up2 = ConvBlock(128 + 256, 128, time_embed_dim)
+        self.up1 = ConvBlock(128 + 64, 64, time_embed_dim)
+        self.out = nn.Conv2d(64, in_ch, 1)
+
+        self.maxpool = nn.MaxPool2d(2)
+        self.upsample = nn.Upsample(scale_factor=2, mode=&quot;bilinear&quot;)
+
+        # ❶ 处理标签的嵌入层
+        if num_labels is not None:
+            self.label_emb = nn.Embedding(num_labels, time_embed_dim)
+
+    def forward(self, x, timesteps, labels=None):
+        t = pos_encoding(timesteps, self.time_embed_dim)
+
+        # ❷ 标签的处理
+        if labels is not None:
+            t += self.label_emb(labels)
+
+        x1 = self.down1(x, t)
+        x = self.maxpool(x1)
+        x2 = self.down2(x, t)
+        x = self.maxpool(x2)
+
+        x = self.bot1(x, t)
+
+        x = self.upsample(x)
+        x = torch.cat([x, x2], dim=1)
+        x = self.up2(x, t)
+        x = self.upsample(x)
+        x = torch.cat([x, x1], dim=1)
+        x = self.up1(x, t)
+        x = self.out(x)
+        return x
+</code></pre>
+<p>代码的主要修改有两处。在代码❶处，我们准备了处理标签的嵌入层（nn.Embedding）。具体来说，就是通过 <code>nn.Embedding(num_labels, time_embed_dim)</code> 将共计 num_labels 个不同整数变换为 time_embed_dim 维的向量。在代码❷处，通过 nn.Embedding 层处理标签，然后再加到变换后的时间数据的向量中。</p>
+<p>接下来是 Diffuser 类。对于 Diffuser 类，修改生成数据的方法。下面只展示了修改部分的代码。</p>
+<pre><code class="language-python">class Diffuser:
+    def denoise(self, model, x, t, labels):
+        # ...（省略）
+        with torch.no_grad():
+            eps = model(x, t, labels) # 同时提供labels
+        # ...
+
+    def sample(self, model, x_shape=(20, 1, 28, 28), labels=None):
+        #...
+        if labels is None:
+            labels = torch.randint(0, 10, (len(x),), device=self.device)
+        #...
+        for i in tqdm(range(self.num_timesteps, 0, -1)):
+            t = torch.tensor([i] * batch_size, device=self.device,
+                             dtype=torch.long)
+            x = self.denoise(model, x, t, labels) # 还提供labels
+        #...
+        return images, labels
+</code></pre>
+<p>修改的部分还向模型提供了标签。具体来说，标签是在生成数据和去噪过程中提供的。最后是训练的代码。</p>
+<pre><code class="language-python">diffuser = Diffuser(num_timesteps, device=device)
+model = UNetCond(num_labels=10) ❶
+model.to(device)
+optimizer = Adam(model.parameters(), lr=lr)
+
+losses = []
+for epoch in range(epochs):
+    loss_sum = 0.0
+    cnt = 0
+
+    for images, labels in tqdm(dataloader):
+        optimizer.zero_grad()
+        x = images.to(device) ❷
+        t = torch.randint(1, num_timesteps+1, (len(x),), device=device)
+
+        x_noisy, noise = diffuser.add_noise(x, t)
+        noise_pred = model(x_noisy, t, labels) ❸
+        loss = F.mse_loss(noise, noise_pred)
+
+        loss.backward()
+        optimizer.step()
+
+        loss_sum += loss.item()
+        cnt += 1
+</code></pre>
+<p>训练代码的修改内容如下所示。</p>
+<p>❶ <code>UNetCond(num_labels=10)</code> 创建一个具有10个分类的条件扩散模型。
+❷ <code>labels.to(device)</code> 在 device 上准备标签数据。
+❸ <code>model(x_noisy, t, labels)</code> 向模型提供 labels 进行训练。</p>
+<p>以上就是条件扩散模型的实现。现在运行代码。经过10轮训练后，最终生成了下图所示的图像。虽然仍有改进的余地，但生成的图像是符合条件的。在下一节中，我们将探讨进一步改进这个条件扩散模型的方法。</p>
+<p>完整代码如下：</p>
+<pre><code class="language-python">import math
+import torch
+import torchvision
+import matplotlib.pyplot as plt
+from torchvision import transforms
+from torch.utils.data import DataLoader
+from torch.optim import Adam
+import torch.nn.functional as F
+from torch import nn
+from tqdm import tqdm
+
+
+img_size = 28
+batch_size = 128
+num_timesteps = 1000
+epochs = 10
+lr = 1e-3
+device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+
+
+def show_images(images, labels=None, rows=2, cols=10):
+    fig = plt.figure(figsize=(cols, rows))
+    i = 0
+    for r in range(rows):
+        for c in range(cols):
+            ax = fig.add_subplot(rows, cols, i + 1)
+            plt.imshow(images[i], cmap=&#39;gray&#39;)
+            if labels is not None:
+                ax.set_xlabel(labels[i].item())
+            ax.get_xaxis().set_ticks([])
+            ax.get_yaxis().set_ticks([])
+            i += 1
+    plt.tight_layout()
+    plt.show()
+
+def _pos_encoding(time_idx, output_dim, device=&quot;cpu&quot;):
+    t, D = time_idx, output_dim
+    v = torch.zeros(D, device=device)
+
+    i = torch.arange(0, D, device=device)
+    div_term = torch.exp(i / D * math.log(10000))
+
+    v[0::2] = torch.sin(t / div_term[0::2])
+    v[1::2] = torch.cos(t / div_term[1::2])
+    return v
+
+def pos_encoding(timesteps, output_dim, device=&#39;cpu&#39;):
+    batch_size = len(timesteps)
+    device = timesteps.device
+    v = torch.zeros(batch_size, output_dim, device=device)
+    for i in range(batch_size):
+        v[i] = _pos_encoding(timesteps[i], output_dim, device)
+    return v
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_ch, out_ch, time_embed_dim):
+        super().__init__()
+        self.convs = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU()
+        )
+        self.mlp = nn.Sequential(
+            nn.Linear(time_embed_dim, in_ch),
+            nn.ReLU(),
+            nn.Linear(in_ch, in_ch)
+        )
+
+    def forward(self, x, v):
+        N, C, _, _ = x.shape
+        v = self.mlp(v)
+        v = v.view(N, C, 1, 1)
+        y = self.convs(x + v)
+        return y
+
+class UNetCond(nn.Module):
+    def __init__(self, in_ch=1, time_embed_dim=100, num_labels=None):
+        super().__init__()
+        self.time_embed_dim = time_embed_dim
+
+        self.down1 = ConvBlock(in_ch, 64, time_embed_dim)
+        self.down2 = ConvBlock(64, 128, time_embed_dim)
+        self.bot1 = ConvBlock(128, 256, time_embed_dim)
+        self.up2 = ConvBlock(128 + 256, 128, time_embed_dim)
+        self.up1 = ConvBlock(128 + 64, 64, time_embed_dim)
+        self.out = nn.Conv2d(64, in_ch, 1)
+
+        self.maxpool = nn.MaxPool2d(2)
+        self.upsample = nn.Upsample(scale_factor=2, mode=&#39;bilinear&#39;)
+        # 如果条件标签不为None
+        if num_labels is not None:
+            # 将标签转换为嵌入，嵌入和时间步的嵌入形状相同
+            self.label_emb = nn.Embedding(num_labels, time_embed_dim)
+
+    def forward(self, x, timesteps, labels=None):
+        t = pos_encoding(timesteps, self.time_embed_dim)
+        # 如果标签不为空，将标签转换为嵌入，然后加到时间步的嵌入上面。
+        if labels is not None:
+            t += self.label_emb(labels)
+
+        x1 = self.down1(x, t)
+        x = self.maxpool(x1)
+        x2 = self.down2(x, t)
+        x = self.maxpool(x2)
+
+        x = self.bot1(x, t)
+
+        x = self.upsample(x)
+        x = torch.cat([x, x2], dim=1)
+        x = self.up2(x, t)
+        x = self.upsample(x)
+        x = torch.cat([x, x1], dim=1)
+        x = self.up1(x, t)
+        x = self.out(x)
+        return x
+
+
+class Diffuser:
+    def __init__(
+        self,
+        num_timesteps=1000,
+        beta_start=0.0001,
+        beta_end=0.02,
+        device=&#39;cpu&#39;
+    ):
+        self.num_timesteps = num_timesteps
+        self.device = device
+        self.betas = torch.linspace(
+            beta_start,
+            beta_end,
+            num_timesteps,
+            device=device
+        )
+        self.alphas = 1 - self.betas
+        self.alpha_bars = torch.cumprod(self.alphas, dim=0)
+
+    def add_noise(self, x_0, t):
+        T = self.num_timesteps
+        assert (t &gt;= 1).all() and (t &lt;= T).all()
+
+        t_idx = t - 1 # alpha_bars[0] is for t=1
+        alpha_bar = self.alpha_bars[t_idx] # (N,)
+        alpha_bar = alpha_bar.view(alpha_bar.size(0), 1, 1, 1) # (N, 1, 1, 1)
+
+        noise = torch.randn_like(x_0, device=self.device)
+        x_t = torch.sqrt(alpha_bar) * x_0 \
+            + torch.sqrt(1 - alpha_bar) * noise
+        return x_t, noise
+
+    def denoise(self, model, x, t, labels):
+        T = self.num_timesteps
+        assert (t &gt;= 1).all() and (t &lt;= T).all()
+
+        t_idx = t - 1 # alphas[0] is for t=1
+        alpha = self.alphas[t_idx]
+        alpha_bar = self.alpha_bars[t_idx]
+        alpha_bar_prev = self.alpha_bars[t_idx-1]
+
+        N = alpha.size(0)
+        alpha = alpha.view(N, 1, 1, 1)
+        alpha_bar = alpha_bar.view(N, 1, 1, 1)
+        alpha_bar_prev = alpha_bar_prev.view(N, 1, 1, 1)
+
+        model.eval()
+        with torch.no_grad():
+            eps = model(x, t, labels) # 添加了标签的嵌入
+        model.train()
+
+        noise = torch.randn_like(x, device=self.device)
+        noise[t == 1] = 0 # no noise at t=1
+
+        mu = (x - ((1-alpha) / torch.sqrt(1-alpha_bar)) * eps) \
+            / torch.sqrt(alpha)
+        std = torch.sqrt((1-alpha) * (1-alpha_bar_prev) / (1-alpha_bar))
+        return mu + noise * std
+
+    def reverse_to_img(self, x):
+        x = x * 255
+        x = x.clamp(0, 255)
+        x = x.to(torch.uint8)
+        x = x.cpu()
+        to_pil = transforms.ToPILImage()
+        return to_pil(x)
+
+    def sample(self, model, x_shape=(20, 1, 28, 28), labels=None):
+        batch_size = x_shape[0]
+        x = torch.randn(x_shape, device=self.device)
+        if labels is None:
+            labels = torch.randint(0, 10, (len(x),), device=self.device)
+
+        for i in tqdm(range(self.num_timesteps, 0, -1)):
+            t = torch.tensor(
+                [i] * batch_size,
+                device=self.device,
+                dtype=torch.long
+            )
+            # 带着标签去噪
+            x = self.denoise(model, x, t, labels)
+
+        images = [self.reverse_to_img(x[i]) for i in range(batch_size)]
+        return images, labels
+
+
+preprocess = transforms.ToTensor()
+dataset = torchvision.datasets.MNIST(
+    root=&#39;./../datasets&#39;, download=True, transform=preprocess)
+dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+diffuser = Diffuser(num_timesteps, device=device)
+model = UNetCond(num_labels=10)
+model.to(device)
+optimizer = Adam(model.parameters(), lr=lr)
+
+losses = []
+for epoch in range(epochs):
+    loss_sum = 0.0
+    cnt = 0
+
+    # generate samples every epoch ===================
+    images, labels = diffuser.sample(model)
+    show_images(images, labels)
+    # ================================================
+
+    for images, labels in tqdm(dataloader):
+        optimizer.zero_grad()
+        x = images.to(device)
+        # 使用标签数据
+        labels = labels.to(device)
+        t = torch.randint(1, num_timesteps+1, (len(x),), device=device)
+
+        x_noisy, noise = diffuser.add_noise(x, t)
+        # 带着标签预测噪声
+        noise_pred = model(x_noisy, t, labels)
+        loss = F.mse_loss(noise, noise_pred)
+
+        loss.backward()
+        optimizer.step()
+
+        loss_sum += loss.item()
+        cnt += 1
+
+    loss_avg = loss_sum / cnt
+    losses.append(loss_avg)
+    print(f&#39;Epoch {epoch} | Loss: {loss_avg}&#39;)
+
+# plot losses
+plt.plot(losses)
+plt.xlabel(&#39;Epoch&#39;)
+plt.ylabel(&#39;Loss&#39;)
+plt.show()
+
+# generate samples
+images, labels = diffuser.sample(model)
+show_images(images, labels)
+</code></pre>
+
+          <hr>
+
+          <hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-18-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">18.1 向扩散模型添加条件</span></a>
+      <a class="next-post" href="/llm-tutorial-18-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">18.3 得分函数</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

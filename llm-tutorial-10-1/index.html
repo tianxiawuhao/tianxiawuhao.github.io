@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,使用DPO微调大语言模型">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>10.1 DPO理论介绍以及DPO存在的问题 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="10.1 DPO理论介绍以及DPO存在的问题 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="10.1 DPO理论介绍以及DPO存在的问题" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-10-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">使用DPO微调大语言模型</a>
+                </span>
+              <h1>10.1 DPO理论介绍以及DPO存在的问题</h1>
+              <span class="meta">
+                Posted on
+                2025-05-04，6 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p><strong>提示</strong></p>
+<ul>
+<li>DPO: Direct Preference Optimization</li>
+<li>直接偏好优化：你的大语言模型实际上是一个奖励模型</li>
+</ul>
+<h3 id="sec-1">10.1.1 偏好数据集</h3>
+<p>DPO 需要偏好数据集来微调 LLM。偏好数据集的格式如下：</p>
+<pre><code class="language-json">{
+    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
+    &quot;chosen&quot;: &quot;这部电影很好看.&quot;,
+    &quot;rejected&quot;: &quot;这部电影不好看.&quot;
+}
+</code></pre>
+<p>数据集构建的方法：</p>
+<ul>
+<li>针对同一个prompt，通过调整温度，让LLM输出不同的回答。然后让数据标注工程师来标注对不同回答的偏好。</li>
+<li>在使用ChatGPT时，你可能注意到，偶尔会被要求在两个相似的答案中选择一个来继续对话。这个偏好会被记录下来，并用于在未来的偏好调整中改进模型。</li>
+<li>手工标注</li>
+<li>合成数据：通过写提示词来让LLM生成偏好数据集（需要人工审核）。</li>
+<li>使用网上的开源数据集</li>
+</ul>
+<p>数据集容易存在的问题：</p>
+<ol>
+<li>正负例区分不明显</li>
+</ol>
+<pre><code class="language-json">{
+    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
+    &quot;chosen&quot;: &quot;这部电影很好看。&quot;,
+    &quot;rejected&quot;: &quot;这部电影挺好看。&quot;
+}
+</code></pre>
+<p>人类都无法识别哪个应该是正例，哪个应该是负例。</p>
+<ol start="2">
+<li>数据集中存在偏好循环</li>
+</ol>
+<pre><code class="language-json">{
+    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
+    &quot;chosen&quot;: &quot;这部电影很好看。&quot;,
+    &quot;rejected&quot;: &quot;这部电影很差。&quot;
+},
+{
+    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
+    &quot;chosen&quot;: &quot;这部电影很差。&quot;,
+    &quot;rejected&quot;: &quot;这部电影很好看。&quot;
+}
+</code></pre>
+<p>当模型看到以上数据时，就不知道人类的偏好是什么了。无法学到任何东西。因为第一个人标注的数据的偏好是 $A &gt; B$，第二个人标注的数据的偏好是 $B &gt; A$，那么模型看到的偏好是 $A &gt; B &gt; A$。这就是偏好循环。</p>
+<h3 id="sec-2">10.1.2 DPO目标函数</h3>
+<p><figure class="tutorial-figure"><figcaption>图10.1 DPO目标函数</figcaption></figure>
+</p>
+<p>这里我们思考一下，给定提示词 $x$ 的情况下，模型输出补全 $y$ 的概率是多少呢？如下所示：</p>
+<p>$$
+\begin{aligned}
+\pi_{\theta}(y|x) &amp;= P_{\mathrm{LLM}<em>{\theta}}(y_0|x)P</em>{\mathrm{LLM}<em>{\theta}}(y_1|x,y_0)\dots P</em>{\mathrm{LLM}<em>{\theta}}(y_t|x,y</em>{&lt; t})\
+&amp;= \prod_{t = 0}^{|y|}P_{\mathrm{LLM}<em>{\theta}}(y_t|x,y</em>{&lt; t})
+\end{aligned} \tag{10.2}
+$$</p>
+<p>然后根据 $\log$ 的性质也就是 $\log \frac{A}{B} = \log A - \log B$。可以推导出目标函数最内部的表达式的另一种形式。</p>
+<p>$$
+\begin{aligned}
+&amp;\log \frac{\pi_{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)} -\log \frac{\pi_{\mathrm{ref}}(y_w|x)}{\pi_{\mathrm{ref}}(y_l|x)}\
+&amp;= \log \pi_{\theta}(y_w|x) - \log \pi_{\theta}(y_l|x) - \log \pi_{\mathrm{ref}}(y_w|x) + \log \pi_{\mathrm{ref}}(y_l|x)\
+&amp;= \log \pi_{\theta}(y_w|x) - \log \pi_{\mathrm{ref}}(y_w|x) - (\log \pi_{\theta}(y_l|x) - \log \pi_{\mathrm{ref}}(y_l|x))
+\end{aligned} \tag{10.3}
+$$</p>
+<p>通过观察目标函数，我们知道在最开始训练时：$\pi_{\theta} = \pi_{\mathrm{ref}}$，所以 $\log \frac{\pi_{\theta}(y_w|x)}{\pi_{\mathrm{ref}}(y_w|x)} - \log \frac{\pi_{\theta}(y_l|x)}{\pi_{\mathrm{ref}}(y_l|x)} = 0$。但由于外层有 $\sigma$ 函数，所以不影响反向传播更新网络（$\sigma(0) = 0.5$）。</p>
+<p>通过观察目标函数，我们可以知道随着训练的进行，$\frac{\pi_{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)}$ 会越来越大。因为 $\frac{\pi_{\theta}(y_w|x)}{\pi_{\mathrm{ref}}(y_w|x)}$ 是一个常数（作为正则化项存在）。</p>
+<p><strong>DPO存在的问题</strong></p>
+<ol>
+<li>$\frac{\pi_{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)}$ 的分子和分母可能同时增大或者减小。例如分母增大了1.5倍，分子增大了3倍。那么就导致了LLM输出人类偏好的回答的概率和输出人类讨厌的回答的概率都增加了。</li>
+<li>$\frac{\pi_{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)}$ 随着训练，分子越来越大，分母越来越小，结果导致了 $\pi_{\theta}(y_w|x)$ 趋近于1，$\pi_{\theta}(y_l|x)$ 趋近于0，正则化项 $\frac{\pi_{\theta}(y_w|x)}{\pi_{\mathrm{ref}}(y_w|x)}$ 没有起到作用，最终LLM彻底失去了探索能力。也就是出现了“过拟合”的问题。DPO容易过拟合，泛化能力不足。所以DPO的训练轮数不能太多。</li>
+<li>数据集中存在的偏好循环会导致LLM学不到东西。例如数据集中存在 $A &gt; B$ 和 $B &gt; C$，那么模型可以学习到人类的偏好是 $A &gt; B &gt; C$。如果这是还有一条数据中 $C &gt; A$，那么模型就懵了，不知道人类的偏好是什么了。因为模型看到的是 $A &gt; B &gt; C &gt; A$。也就是偏好循环。</li>
+</ol>
+<p>尽管存在这些缺点，DPO仍然是一种非常有效的工具；许多最成功和性能最好的开源LLM都是使用DPO进行指令微调的。</p>
+<p><strong>危险</strong></p>
+<p>个人认为DPO不算是强化学习，因为DPO需要训练数据集。而真正的强化学习的训练数据是由策略模型自己采样得来的。</p>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">10.1.1 偏好数据集</a></li>
+<li><a href="#sec-2">10.1.2 DPO目标函数</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-9-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">9.2 RLHF的关键技术</span></a>
+      <a class="next-post" href="/llm-tutorial-10-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">10.2 DPO实战</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

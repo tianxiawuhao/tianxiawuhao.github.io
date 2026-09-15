@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="强化学习,策略梯度法">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>5.2 REINFORCE | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="5.2 REINFORCE | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="5.2 REINFORCE" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-5-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">强化学习</a>
+                <a href="/tutorial/" class="tag">策略梯度法</a>
+                </span>
+              <h1>5.2 REINFORCE</h1>
+              <span class="meta">
+                Posted on
+                2025-04-16，6 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <h3 id="sec-1">5.2.1 REINFORCE算法原理</h3>
+<p>REINFORCE 是对上一节的策略梯度法的改进算法。本节首先会基于数学式推导 REINFORCE 算法，然后会通过修改之前的部分代码的做法来实现 REINFORCE。</p>
+<p><strong>提示</strong></p>
+<p>REINFORCE 这个名字是“REward Increment = Nonnegative Factor × Offset Reinforcement × Characteristic Eligibility”（奖励增量=非负因子×偏移强化×特征资格）的首字母缩写。</p>
+<p>先来复习一下第一节。最简单的梯度策略法是基于下面的公式实现的。</p>
+<p>$$\begin{array}{rl} &amp; {\nabla_{\theta}J(\theta) = \nabla_{\theta}\mathbb{E}_{\tau \sim \pi_{\theta}}[G(\tau)]}\\ &amp; {\qquad = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right]} \end{array} \quad (5.23)$$</p>
+<p>上面的式子中的 $G(\tau)$ 是目前为止获得的所有奖励的总和（准确地说是“带折扣因子”的奖励的总和）。这里要思考的问题是，无论在哪个时刻，式子中都是 $G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)$，我们始终会使用固定不变的权重 $G(\tau)$ 来增加（或减少）采取行动 $A_t$ 的概率。</p>
+<p>智能体行动的好坏是根据行动之后获得的奖励总和来评估的（回顾一下价值函数的定义）。反过来说，采取某个行动之前获得的奖励与该行动的好坏无关。如果要评估在某个时刻 $t$ 采取的行动 $A_t$，那么在此之前做了什么以及获得了多少奖励都无所谓。我们是根据采取行动 $A_t$ 之后的结果（在时刻 $t$ 以后获得的奖励的总和）来判断行动 $A_t$ 的好坏。</p>
+<p>上面的式子中行动 $A_t$ 的权重是 $G(\tau)$。这个权重 $G(\tau)$ 包括在时刻之前的奖励。也就是说，原本不相关的奖励作为噪声数据包含在内了。为了改进这一点（去除噪声数据），可以对权重 $G(\tau)$ 作如下修改。</p>
+<p><strong>定理5.2—REINFORCE 版策略梯度定理</strong></p>
+<p>$$\begin{array}{rl} &amp; {\nabla_{\theta}J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}}\left[\sum_{t = 0}^{T}G_t\nabla_{\theta}\log \pi_{\theta}(A_t|S_t)\right]}\\ &amp; {G_t = R_t + \gamma R_{t+1} + \dots +\gamma^{T - 1}R_T} \end{array} \quad (5.24)$$</p>
+<p>如上式所示，权重变成了 $G_t$。权重 $G_t$ 是在时刻 $t \sim T$ 获得的奖励的总和。因此，选择行动 $A_t$ 的概率将由不包含时刻 $t$ 之前的奖励的权重 $G_t$ 增强。这就是改进第一节的策略梯度法的思路。基于上式的算法叫作 REINFORCE。</p>
+<p><strong>提示</strong></p>
+<p>基于上式的 REINFORCE 算法优于最简单的策略梯度法（基于第一节的公式的算法）。通过无限增加的样本数，两个公式都会收敛到正确的 $\nabla_{\theta}J(\theta)$（可以说是无偏差的）。但第一个公式的方差更大，因为公式中的权重包含了无关的数据（噪声）。</p>
+<h3 id="sec-2">5.2.2 REINFORCE 的代码实现</h3>
+<p>由于REINFORCE的方差小，因此即使数据样本少，也能高精度地近似数据。下面我们来实现REINFORCE以验证其精度。REINFORCE的代码与上一节中的代码基本相同，不同之处只有Agent类的update方法。下面仅列出了不同部分的代码。</p>
+<pre><code class="language-python">class Agent:
+    ...
+
+    def update(self, trajectory):
+        states, actions, rewards = trajectory
+        G, loss = 0, 0
+        for r, s, a in zip(rewards[::-1], states[::-1], actions[::-1]):
+            G = r + self.gamma * G # G_t = R_t + γG_{t+1}
+            probs = self.pi(torch.tensor(s).unsqueeze(0)).squeeze(0)
+            log_prob = torch.log(probs)[a] # logπ_θ(A_t|S_t)
+            loss += -log_prob * G # -Σ_{t=0}^{T} G_t logπ_θ(A_t|S_t)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+</code></pre>
+<p>我们使用可视化代码将回合和奖励绘制出来。</p>
+<pre><code class="language-python">plot_loss(episode_list, return_list, &quot;reinforce-pg-loss.pdf&quot;)
+test_agent(agent, env)
+</code></pre>
+<p>从上图中可以看出，随着回合的推进，奖励的总和会逐渐增加。与上一次的结果相比，不但训练稳定了，训练速度也提高了。</p>
+<p><figure class="tutorial-figure"><figcaption>图5.11 REINFORCE策略梯度算法获得的奖励</figcaption></figure>
+</p>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">5.2.1 REINFORCE算法原理</a></li>
+<li><a href="#sec-2">5.2.2 REINFORCE 的代码实现</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-5-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">5.1 原始策略梯度法</span></a>
+      <a class="next-post" href="/llm-tutorial-5-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">5.3 带基线（baseline）的策略梯度法</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

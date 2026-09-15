@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,DALL-E2（文生图）">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>19.2 先验模型（Prior Model） | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="19.2 先验模型（Prior Model） | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="19.2 先验模型（Prior Model）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-19-2/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/" class="tag">多模态</a>
+                <a href="/tutorial/" class="tag">DALL-E2（文生图）</a>
+                </span>
+              <h1>19.2 先验模型（Prior Model）</h1>
+              <span class="meta">
+                Posted on
+                2025-06-16，44 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <p><strong>危险</strong></p>
+<p>训练先验模型时，需要使用上一节训练的CLIP 模型，CLIP 模型必须冻结！</p>
+<p>图 19.2 先验模型架构图</p>
+<p>先验模型的作用：根据文本标题预测CLIP 图像嵌入。也可以放弃先验模型，而以CLIP 文本嵌入为条件，而不是用先验模型生成的CLIP 图像嵌入作为条件，但使用先验模型的效果最佳。</p>
+<p>先验模型是一个仅解码器架构的Transformer。</p>
+<h3 id="sec-1">19.2.1 先验模型的训练</h3>
+<p>仅解码器Transformer
+因果注意力掩码
+文本标题
+CLIP文本特征
+向量
+时间步嵌入
+加噪声的CLIP
+图像特征向量
+可学习嵌入
+可学习嵌入
+MLP
+预测的CLIP图像特征向量
+真实的CLIP图像特征向量
+Loss</p>
+<p>图 19.3 先验模型的训练原理</p>
+<p>要训练一个模型，我们必须搞清楚模型的输入和输出（预测目标）。</p>
+<p>训练先验模型时，我们手上有的是：图文对和一个训练好的CLIP 模型。</p>
+<p>先验模型的输入有6 个：</p>
+<ol>
+<li>Text Captions：图文对中的“文本”。</li>
+<li>CLIP Text Embeddings：图文对中的“文本”经过上一节训练好的冻结的CLIP 模型生成的CLIP 文本嵌入。</li>
+<li>Timestep Embeddings：随机选取的时间步 $t$ 的嵌入。</li>
+<li>Noisy Image Embeddings：添加了 $t$ 步噪声的CLIP 图像嵌入。这个CLIP 图像嵌入是图文对中的“图像”经过上一节训练好的冻结的CLIP 模型生成的CLIP 图像嵌入。</li>
+<li>Learned Embeddings：一个随机初始化的可学习的嵌入。</li>
+<li>Causal Attention Mask：因果注意力掩码。因为我们要训练的是一个Decoder-Only Transformer 架构的模型，所以需要使用因果注意力掩码。</li>
+</ol>
+<p><strong>危险</strong></p>
+<p>Noisy Image Embeddings 是针对CLIP 图片嵌入添加噪声，而不是针对图片添加噪声！</p>
+<p>先验模型的输出（预测目标）：</p>
+<ul>
+<li>图文对中的“图像”经过上一节训练好的冻结的CLIP 模型生成的CLIP 图像嵌入。</li>
+</ul>
+<p>训练细节：</p>
+<ol>
+<li>6 个输入经过Decoder-Only Transformer 之后会输出5 个张量，我们取最后一个，也就是图中蓝色的 Learned Embeddings。</li>
+<li>Learned Embeddings 会送入一个MLP，输出的就是预测的CLIP 图片嵌入。</li>
+<li>预测的CLIP 图片嵌入与真正的CLIP 图片嵌入计算损失，并反向传播更新网络。</li>
+</ol>
+<h3 id="sec-2">19.2.2 先验模型的推理</h3>
+<p><strong>提示</strong></p>
+<p>在推理时，我们手上只有：</p>
+<ol>
+<li>自己编写的提示词</li>
+<li>训练好的CLIP 模型</li>
+<li>训练好的先验模型</li>
+</ol>
+<p>仅解码器Transformer
+因果注意力掩码
+文本标题
+CLIP文本特征
+向量
+时间步1000的
+嵌入
+白噪声
+学好的嵌入
+可学习嵌入
+MLP
+预测的CLIP图像特征向量1
+预测的CLIP图像特征向量2
+CLIP文本特征
+向量
+余弦相似度
+余弦相似度
+max
+预测的CLIP图像特征向量
+推理两次</p>
+<p>图 19.4 先验模型的推理流程</p>
+<p>先验模型的输入有6 个：</p>
+<ol>
+<li>Text Captions：自己编写的文本提示词。</li>
+<li>CLIP Text Embeddings：“自己编写的文本提示词”经过上一节训练好的冻结的CLIP 模型生成的CLIP 文本嵌入。</li>
+<li>Timestep Embeddings：最大时间步 $T = 1000$ 的时间步嵌入。</li>
+<li>Noisy Image Embeddings：纯噪声构成的嵌入（和图片嵌入的形状相同，从高斯分布中采样得到）。</li>
+<li>Learned Embeddings：训练好的参数（先验模型训练完之后就在模型中了）。</li>
+<li>Causal Attention Mask：因果注意力掩码。</li>
+</ol>
+<p><strong>提示</strong></p>
+<p>所以只有 Text Captions 是我们自己编写的文本提示词，其它输入都是模型或者程序自动生成的。</p>
+<p>先验模型的输出：</p>
+<ol>
+<li>6 个输入经过Decoder-Only Transformer 之后会输出5 个张量，我们取最后一个，也就是图中蓝色的 Learned Embeddings。</li>
+<li>Learned Embeddings 会送入两次MLP，生成两个预测的CLIP 图片嵌入。</li>
+<li>两个预测的CLIP图片嵌入分别和CLIP文本嵌入计算余弦相似度，然后选取最相似的一个作为预测。</li>
+</ol>
+<h3 id="sec-3">19.2.3 关键代码解释</h3>
+<h4 id="sec-4">19.2.3.1 余弦调度的方差计划</h4>
+<p>图 19.5 线性调度方差和余弦调度方差的对比</p>
+<p>对于方差调度，在Ho 等人的原始DDPM 论文中，采用了线性调度。虽然该调度在高分辨率图像上效果良好，但当图像较小（64x64 或更小）时，前向过程最终会产生过多的噪声。为了解决这个问题，Nichol 等人建议使用余弦调度，其公式如下所示。</p>
+<p>$$
+\beta_t = 1 - \frac{\alpha_t}{\alpha_{t-1}} \quad \alpha_t = \frac{f(t)}{f(0)} \quad f(t) = \cos \left( \frac{t}{T + s} \cdot \frac{\pi}{2} \right)^2 \tag{19.1}
+$$</p>
+<p>这些值被剪裁为小于或等于0.999，以防止在 $t = T$ 附近出现奇点。因为我们使用包含低分辨率图像的 FashionMNIST 数据集，所以我们将使用余弦方差计划。</p>
+<p>综合起来，前向扩散过程的代码看起来是这样的：</p>
+<pre><code class="language-python"># Gets elements from indicies and makes sure output has a certain dimension
+def extract_and_expand(x, idx, shape):
+    return x[idx].reshape(idx.shape[0], *((1, ) * (len(shape) - 1)))
+
+# 返回方差调度计划
+def get_beta_schedule(schedule, max_time, s=0.008):
+    if schedule == &quot;linear&quot;:
+        scale = 1000 / max_time
+        betas = torch.linspace(1e-4 * scale, 0.02 * scale, max_time)
+    elif schedule == &quot;cosine&quot;:
+        t = torch.linspace(0, max_time, max_time + 1)
+        a_bars = torch.cos(
+            (((t / max_time) + s) / (1 + s)) * (np.pi / 2)
+        ) ** 2
+        a_bars = a_bars / a_bars[0]
+        betas = 1 - (a_bars[1:] / a_bars[:-1])
+        betas = torch.clamp(betas, min=0, max=0.999)
+    else:
+        Exception(&quot;Beta schedule not implemented.&quot;)
+
+    return betas
+
+def get_schedule_values(config):
+    schedule_values = {}
+    schedule_values[&quot;betas&quot;] = get_beta_schedule(
+        config.prior.schedule,
+        config.prior.max_time
+    ).to(config.device)
+    schedule_values[&quot;alphas&quot;] = 1.0 - schedule_values[&quot;betas&quot;]
+    schedule_values[&quot;alpha_bars&quot;] = torch.cumprod(
+        schedule_values[&quot;alphas&quot;],
+        axis=0
+    )
+    schedule_values[&quot;sqrt_recip_alphas&quot;] = torch.sqrt(
+        1.0 / schedule_values[&quot;alphas&quot;])
+    schedule_values[&quot;sqrt_alpha_bars&quot;] = torch.sqrt(
+        schedule_values[&quot;alpha_bars&quot;]
+    )
+    schedule_values[&quot;sqrt_one_minus_alpha_bars&quot;] = torch.sqrt(
+        1.0 - schedule_values[&quot;alpha_bars&quot;]
+    )
+    schedule_values[&quot;alpha_bars_prev&quot;] = torch.cat((
+        torch.ones(1, device=config.device),
+        schedule_values[&quot;alpha_bars&quot;][:-1])
+    )
+    schedule_values[&quot;sigma&quot;] = schedule_values[&quot;betas&quot;] \
+        * (1.0 - schedule_values[&quot;alpha_bars_prev&quot;]) \
+        / (1.0 - schedule_values[&quot;alpha_bars&quot;])
+    return schedule_values
+
+# 获取x_t，前向扩散过程
+def forward_diffusion(x_0, schedule_values, t):
+    # 噪声和图片的尺寸一样
+    noise = torch.randn_like(x_0)
+    sqrt_alpha_bars = extract_and_expand(
+        schedule_values[&quot;sqrt_alpha_bars&quot;], t, x_0.shape)
+    sqrt_one_minus_alpha_bars = extract_and_expand(
+        schedule_values[&quot;sqrt_one_minus_alpha_bars&quot;], t, x_0.shape)
+    x_noisy = (sqrt_alpha_bars * x_0) \
+        + (sqrt_one_minus_alpha_bars * noise)
+    # 返回x_t, 和添加的噪声
+    return x_noisy, noise
+</code></pre>
+<h4 id="sec-5">19.2.3.2 时间步嵌入</h4>
+<p>时间步嵌入是扩散的重要组成部分。这是因为不同时间步的图像具有不同的噪声量。为了在我们的模型中利用这些信息，我们将使用正弦位置编码。这些位置编码与Transformer 中常用的位置编码相同。主要区别在于，我们的输入时间步很可能不会按顺序排列，并且包含所有可能的时间步，因此我们只需要获取与输入时间步对应的位置编码。</p>
+<pre><code class="language-python">class SinusoidalPositionalEncodings(nn.Module):
+    def __init__(
+        self,
+        max_seq_length, # 最大序列长度
+        width # 模型的宽度（嵌入的维度d_model）
+    ):
+        super().__init__()
+        # Create positional encodings
+        pe = torch.zeros(max_seq_length, width)
+        for pos in range(max_seq_length):
+            for i in range(width):
+                if i % 2 == 0:
+                    pe[pos][i] = np.sin(pos/(10000**(i/width)))
+                else:
+                    pe[pos][i] = np.cos(pos/(10000**((i-1)/width)))
+
+        self.register_buffer(&quot;pe&quot;, pe)
+
+    def forward(self, x):
+        # Get positional encodings corresponding to inputted timesteps
+        x = self.pe[x]
+        return x
+</code></pre>
+<p>然后，这些时间编码通过 MLP 来进一步捕获时间信息。</p>
+<pre><code class="language-python">self.time_mlp = nn.Sequential(
+    SinusoidalPositionalEmbedding(
+        config.decoder.max_time,
+        config.decoder.model_channels
+    ),
+    nn.Linear(
+        config.decoder.model_channels,
+        config.decoder.cond_channels
+    ),
+    nn.SiLU(),
+    nn.Linear(
+        config.decoder.cond_channels,
+        config.decoder.cond_channels
+    )
+)
+</code></pre>
+<p>有多种方法可以调节时间步嵌入的输入，这些方法在本章的UNet：残差块部分中进行了描述。</p>
+<h4 id="sec-6">19.2.3.3 冻结模型</h4>
+<p>先验模型首先将图像的文本标题作为输入，然后获取CLIP 文本嵌入和图像嵌入。加载CLIP 模型时，所有层都应冻结，并将模式设置为eval。</p>
+<pre><code class="language-python">def freeze_model(model, set_eval=True):
+    if set_eval:
+        model.eval()
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+# Constructor
+self.clip = CLIP(config).to(config.device)
+self.clip.load_state_dict(torch.load(
+    config.clip.model_location,
+    map_location=config.device
+))
+# 冻结clip模型
+freeze_model(self.clip)
+
+# Forward
+image_embeddings = self.clip.image_encoder(
+    images
+) # (B, C, H, W) -&gt; (B, latent_dim)
+text_embeddings = self.clip.text_encoder(
+    captions,
+    mask=masks
+) # (B, text_seq_length) -&gt; (B, latent_dim)
+</code></pre>
+<h4 id="sec-7">19.2.3.4 加噪声的CLIP 图片嵌入</h4>
+<p>然后，它会获取批次中每个图像的随机时间步，并使用它们从前向扩散中获取噪声CLIP 图像嵌入。</p>
+<p><strong>危险</strong></p>
+<p>不是对图片加噪声，而是对CLIP 图片嵌入加噪声！</p>
+<pre><code class="language-python"># Forward
+# 随机采样一个时间步
+timesteps = torch.randint(
+    0, self.config.prior.max_time, (images.shape[0],)) # (B, )
+
+noisy_image_embedding, _ = forward_diffusion(
+    image_embeddings, # 对图片的嵌入加噪声
+    self.schedule_values, # 方差调度计划
+    timesteps # 时间步
+)
+</code></pre>
+<p>然后将时间步通过MLP 以获得时间步嵌入。</p>
+<pre><code class="language-python"># Constructor
+self.time_mlp = nn.Sequential(
+    SinusoidalPositionalEmbedding(
+        config.prior.max_time,
+        config.latent_dim
+    ),
+    nn.Linear(
+        config.latent_dim,
+        config.latent_dim * config.prior.r_mlp,
+        bias=config.prior.bias
+    ),
+    nn.SiLU(),
+    nn.Linear(
+        config.latent_dim * config.prior.r_mlp,
+        config.latent_dim,
+        bias=config.prior.bias
+    )
+)
+
+# Forward
+timestep_embeddings = self.time_mlp(timesteps) # (B, ) -&gt; (B, latent_dim)
+</code></pre>
+<h4 id="sec-8">19.2.3.5 可学习的嵌入</h4>
+<p>先验模型的另一个重要部分是可以训练的嵌入层。这些嵌入是 Torch 的一个参数，将用于预测最终输出。从构造函数中学习到的嵌入需要在 Forward 方法中进行扩展，以便批次中的每个项目都有一个嵌入。</p>
+<pre><code class="language-python"># 初始化一个随机的需要学习的嵌入参数
+self.learned_embedding = nn.Parameter(torch.randn(config.latent_dim))
+
+# Forward
+# 为批次中的每一项复制一份可学习参数
+learned_embeddings = self.learned_embedding.repeat(
+    images.shape[0],
+    1
+) # (latent_dim) -&gt; (B, latent_dim)
+</code></pre>
+<h4 id="sec-9">19.2.3.6 输入的拼接</h4>
+<p>文本标题、CLIP 文本嵌入、时间步嵌入、加噪声的CLIP 图像嵌入以及需要学习的嵌入将被连接成一个序列。所有这些项都将具有形状 (B, latent_dim)，但我们需要在中间添加一个额外的维度，使它们具有形状 (B, 1, latent_dim)。我们将在这个新维度上进行连接，使序列具有形状 (B, 5, latent_dim)。如果使用包含更高质量图像的数据集，一种提高模型质量的可能方法是将文本嵌入、图像嵌入和/或时间步嵌入传递到卷积层，以增加序列长度。</p>
+<pre><code class="language-python">tokens = torch.cat((
+    captions, # 图像标题
+    text_embeddings, # CLIP文本嵌入
+    timestep_embeddings, # 时间步嵌入
+    noisy_image_embedding, # 加噪声的CLIP图像嵌入
+    learned_embeddings # 需要学习的嵌入
+), dim=1) # (B, 5, latent_dim)
+</code></pre>
+<p>然后，该序列会输入到一个带有因果注意力掩码的仅解码器架构的Transformer。因果注意力掩码是一个由1组成的下三角矩阵，它使得某个 token 只能关注在它之前出现的token。</p>
+<pre><code class="language-python"># 初始化
+self.decoder = nn.ModuleList(
+    [TransformerBlock(
+        config.latent_dim,
+        cond_width=config.latent_dim,
+        n_heads=config.prior.n_heads,
+        dropout=config.prior.dropout,
+        r_mlp=config.prior.r_mlp,
+        bias=config.prior.bias
+    ) for _ in range(config.prior.n_layers)]
+)
+
+self.register_buffer(
+    &quot;causal_attention_mask&quot;,
+    torch.tril(torch.ones(5, 5))[None, :]
+)
+
+# Forward
+for block in self.decoder:
+    tokens = block(tokens, mask=self.causal_attention_mask)
+</code></pre>
+<h4 id="sec-10">19.2.3.7 预测目标</h4>
+<p>最后，我们从 Transformer 的输出中获取学习到的嵌入，并将其传递给 LayerNorm 和 Linear 层以获得预测的图像嵌入。</p>
+<pre><code class="language-python"># 初始化
+self.output = nn.Sequential(
+    nn.LayerNorm(config.latent_dim),
+    nn.Linear(
+        config.latent_dim,
+        config.latent_dim,
+        bias=config.decoder.bias
+    )
+)
+
+# Forward：取最后一个训练出来的可学习嵌入
+pred_image_embeddings = self.output(tokens[:, -1, :])
+</code></pre>
+<p>虽然通常情况下，扩散模型会预测噪声，并通过迭代去除噪声来生成样本，但unCLIP 论文中提到，最好直接预测CLIP 图像嵌入。该模型的损失函数应该是预测值与实际CLIP 图像嵌入之间的均方误差损失。</p>
+<pre><code class="language-python">loss = nn.functional.mse_loss(pred_image_embeddings, image_embeddings)
+</code></pre>
+<p>在采样过程中，为了提高质量，模型应该生成两个CLIP 图像嵌入的样本，并选择与CLIP 文本嵌入点积较高的样本。</p>
+<pre><code class="language-python">def get_one_sample(self, text_embeddings, captions):
+    # 获取一个和CLIP文本嵌入形状相同的白噪声
+    # 而clip的图像嵌入和文本嵌入的形状相同
+    noisy_image_embeddings = torch.randn(
+        text_embeddings.shape,
+        device=self.config.device
+    )
+
+    # 所有项的时间步都是最大时间步T，因为图像嵌入目前都是纯噪声
+    timesteps = torch.full(
+        (captions.shape[0],),
+        self.config.prior.max_time - 1
+    )
+
+    # 获取时间步嵌入
+    timestep_embeddings = self.time_mlp(
+        timesteps
+    ) # (B, ) -&gt; (B, latent_dim)
+
+    # (B, latent_dim) -&gt; (B, 1, latent_dim)
+    timestep_embeddings = timestep_embeddings[:, None, :]
+
+    # 为批次中每一项都创建一个需要学习的嵌入
+    learned_embeddings = self.learned_embedding.repeat(
+        captions.shape[0],
+        1
+    ) # (latent_dim) -&gt; (B, latent_dim)
+
+    # (B, latent_dim) -&gt; (B, 1, latent_dim)
+    learned_embeddings = learned_embeddings[:, None, :]
+
+    tokens = torch.cat((
+        captions, # 图像标题
+        text_embeddings, # CLIP文本嵌入
+        timestep_embeddings, # 最大时间步的嵌入（比如T=1000）
+        noisy_image_embeddings, # 白噪声
+        learned_embeddings # 需要学习的嵌入
+    ), dim=1) # (B, 5, latent_dim)
+
+    # 和因果注意力掩码一起输入给transformer块
+    for block in self.decoder:
+        tokens = block(tokens, mask=self.causal_attention_mask)
+
+    # 预测的图像嵌入（取出学习到的嵌入，输入给投影层）
+    pred_image_embeddings = self.output(tokens[:, -1, :])
+
+    return pred_image_embeddings
+
+def sample(self, captions, masks=None):
+    # 获取CLIP文本嵌入
+    t_emb = self.clip.text_encoder(
+        captions,
+        mask=masks
+    ) # (B, text_seq_length) -&gt; (B, latent_dim)
+
+    # (B, latent_dim) -&gt; (B, 1, latent_dim)
+    text_embeddings = t_emb[:, None, :]
+
+    # 使图片文本的长度等于 latent dimension
+    if self.config.text_seq_length &gt;= self.config.latent_dim:
+        # (B, max_seq_len) -&gt; (B, latent_dim)
+        captions = captions[:, :self.config.latent_dim]
+    else:
+        captions = nn.functional.pad(
+            captions,
+            (0, self.config.latent_dim - self.config.text_seq_length)
+        ) # (B, max_seq_len) -&gt; (B, latent_dim)
+
+    # (B, latent_dim) -&gt; (B, 1, latent_dim)
+    captions = captions[:, None, :]
+
+    # 获取两个采样
+    sample_1 = self.get_one_sample(text_embeddings, captions)
+    sample_2 = self.get_one_sample(text_embeddings, captions)
+
+    gen_image_embeddings = torch.zeros(sample_1.shape)
+
+    # 选择和文本嵌入点积更大的样本
+    for i in range(gen_image_embeddings.shape[0]):
+        if sample_1[i] @ t_emb[i] &gt;= sample_2[i] @ t_emb[i]:
+            gen_image_embeddings[i] = sample_1[i]
+        else:
+            gen_image_embeddings[i] = sample_2[i]
+    # 预测的图片嵌入
+    return gen_image_embeddings
+</code></pre>
+<h4 id="sec-11">19.2.3.8 先验模型完整代码</h4>
+<p>综合以上所有，扩散先验模型的代码看起来应该是这样的：</p>
+<pre><code class="language-python">class DiffusionPrior(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        # 加载clip模型
+        self.clip = CLIP(config).to(config.device)
+        self.clip.load_state_dict(torch.load(
+            config.clip.model_location,
+            map_location=config.device
+        ))
+        freeze_model(self.clip)
+
+        self.config = config
+
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionalEmbedding(
+                config.prior.max_time,
+                config.latent_dim
+            ),
+            nn.Linear(
+                config.latent_dim,
+                config.latent_dim * config.prior.r_mlp,
+                bias=config.prior.bias
+            ),
+            nn.SiLU(),
+            nn.Linear(
+                config.latent_dim * config.prior.r_mlp,
+                config.latent_dim,
+                bias=config.prior.bias
+            )
+        )
+
+        self.learned_embedding = nn.Parameter(
+            torch.randn(config.latent_dim)
+        )
+
+        self.schedule_values = get_schedule_values(config)
+
+        # Transformer blocks
+        self.decoder = nn.ModuleList(
+            [TransformerBlock(
+                config.latent_dim,
+                cond_width=config.latent_dim,
+                n_heads=config.prior.n_heads,
+                dropout=config.prior.dropout,
+                r_mlp=config.prior.r_mlp,
+                bias=config.prior.bias
+            ) for _ in range(config.prior.n_layers)]
+        )
+
+        # Output Projection，输出为预测的图片嵌入
+        self.output = nn.Sequential(
+            nn.LayerNorm(config.latent_dim),
+            nn.Linear(
+                config.latent_dim,
+                config.latent_dim,
+                bias=config.decoder.bias
+            )
+        )
+
+        self.register_buffer(
+            &quot;causal_attention_mask&quot;,
+            torch.tril(torch.ones(5, 5))[None, :]
+        )
+
+    def get_one_sample(self, text_embeddings, captions):
+        # Get image embeddings that are pure noise
+        noisy_image_embeddings = torch.randn(text_embeddings.shape, device=self.config.device)
+
+        # timestep is max for all items because image embeddings are pure noise
+        timesteps = torch.full((captions.shape[0],), self.config.prior.max_time - 1)
+
+        # Get timestep embeddings
+        timestep_embeddings = self.time_mlp(timesteps) # (B, ) -&gt; (B, latent_dim)
+        timestep_embeddings = timestep_embeddings[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Expand learned embedding so that there is one for each item in batch
+        learned_embeddings = self.learned_embedding.repeat(captions.shape[0], 1) # (latent_dim) -&gt; (B, latent_dim)
+        learned_embeddings = learned_embeddings[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        tokens = torch.cat((
+            captions, # Image Caption
+            text_embeddings, # CLIP Text Embedding
+            timestep_embeddings, # Timestep Embedding
+            noisy_image_embeddings, # Noisy CLIP Image Embedding
+            learned_embeddings # Learned Embedding
+        ), dim=1) # (B, 5, latent_dim)
+
+        # Pass through transformer blocks with causal attention mask
+        for block in self.decoder:
+            tokens = block(tokens, mask=self.causal_attention_mask)
+
+        # Get learned embeddings and pass through output projection to get CLIP image embeddings
+        pred_image_embeddings = self.output(tokens[:, -1, :])
+
+        return pred_image_embeddings
+
+    def sample(self, captions, masks=None):
+        # Get CLIP text embeddings
+        t_emb = self.clip.text_encoder(captions, mask=masks) # (B, text_seq_length) -&gt; (B, latent_dim)
+        text_embeddings = t_emb[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Make caption length equal to latent dimension
+        if self.config.text_seq_length &gt;= self.config.latent_dim:
+            captions = captions[:, :self.config.latent_dim] # (B, max_seq_len) -&gt; (B, latent_dim)
+        else:
+            captions = nn.functional.pad(captions, (0, self.config.latent_dim - self.config.text_seq_length)) # (B, max_seq_len) -&gt; (B, latent_dim)
+
+        captions = captions[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Getting two samples
+        sample_1 = self.get_one_sample(text_embeddings, captions)
+        sample_2 = self.get_one_sample(text_embeddings, captions)
+
+        gen_image_embeddings = torch.zeros(sample_1.shape)
+
+        # Choosing the samples with the higher dot product with text embeddings
+        for i in range(gen_image_embeddings.shape[0]):
+            if sample_1[i] @ t_emb[i] &gt;= sample_2[i] @ t_emb[i]:
+                gen_image_embeddings[i] = sample_1[i]
+            else:
+                gen_image_embeddings[i] = sample_2[i]
+
+        return gen_image_embeddings
+
+    def forward(self, images, captions, masks=None):
+        # Get CLIP image embeddings
+        image_embeddings = self.clip.image_encoder(images) # (B, C, H, W) -&gt; (B, latent_dim)
+
+        # Get CLIP text embeddings
+        text_embeddings = self.clip.text_encoder(captions, mask=masks) # (B, text_seq_length) -&gt; (B, latent_dim)
+        text_embeddings = text_embeddings[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Make caption length equal to latent dimension
+        if self.config.text_seq_length &gt;= self.config.latent_dim:
+            captions = captions[:, :self.config.latent_dim] # (B, max_seq_len) -&gt; (B, latent_dim)
+        else:
+            captions = nn.functional.pad(captions, (0, self.config.latent_dim - self.config.text_seq_length)) # (B, max_seq_len) -&gt; (B, latent_dim)
+
+        captions = captions[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Get random timesteps for forward diffusion
+        timesteps = torch.randint(0, self.config.prior.max_time, (images.shape[0],)) # (B, )
+
+        # Get timestep embeddings
+        timestep_embeddings = self.time_mlp(timesteps) # (B, ) -&gt; (B, latent_dim)
+        timestep_embeddings = timestep_embeddings[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Perform forward diffusion to get noisy CLIP image embeddings
+        noisy_image_embedding, _ = forward_diffusion(image_embeddings, self.schedule_values, timesteps)
+        noisy_image_embedding = noisy_image_embedding[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        # Expand learned embedding so that there is one for each item in batch
+        learned_embeddings = self.learned_embedding.repeat(images.shape[0], 1) # (latent_dim) -&gt; (B, latent_dim)
+        learned_embeddings = learned_embeddings[:, None, :] # (B, latent_dim) -&gt; (B, 1, latent_dim)
+
+        tokens = torch.cat((
+            captions, # Image Caption
+            text_embeddings, # CLIP Text Embedding
+            timestep_embeddings, # Timestep Embedding
+            noisy_image_embedding, # Noisy CLIP Image Embedding
+            learned_embeddings # Learned Embedding
+        ), dim=1) # (B, 5, latent_dim)
+
+        # Pass through transformer blocks with causal attention mask
+        for block in self.decoder:
+            tokens = block(tokens, mask=self.causal_attention_mask)
+
+        # Get learned embeddings and pass through output projection to get CLIP image embeddings
+        pred_image_embeddings = self.output(tokens[:, -1, :])
+
+        loss = nn.functional.mse_loss(
+            pred_image_embeddings,
+            image_embeddings
+        )
+
+        return loss
+</code></pre>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li><a href="#sec-1">19.2.1 先验模型的训练</a></li>
+<li><a href="#sec-2">19.2.2 先验模型的推理</a></li>
+<li><a href="#sec-3">19.2.3 关键代码解释</a></li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-19-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">19.1 CLIP</span></a>
+      <a class="next-post" href="/llm-tutorial-19-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">19.3 条件扩散模型</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
