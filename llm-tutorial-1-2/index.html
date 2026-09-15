@@ -127,8 +127,8 @@
     <div class="container">
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
-          <style>.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p>神经网络并不理解文本，它们只理解数字。首要任务就是将字符转换为整数。</p>
 <p>在底层，神经网络处理的是数字而非字符，因此我们需要一种方法将文本转换为整数标记ID序列，并能反向还原。像tiktoken（GPT-4使用的）这样的生产级分词器会按字符块处理以提高效率，但最简单的分词器只需为数据集中的每个唯一字符分配一个整数即可。</p>
 <p><pre><code class="language-python"># Let there be a Tokenizer to translate strings to discrete symbols and back
@@ -140,14 +140,11 @@ print(f"vocab size: {vocab_size}")
 </p>
 <p>在上述代码中，我们收集了数据集中所有不重复的字符（即所有小写字母a-z），将其排序后，每个字母根据其索引获得一个ID。请注意，这些整数值本身没有任何实际意义；每个标记只是一个独立的离散符号。它们完全可以被替换为不同的表情符号，而非0、1、2。此外，我们创建了一个名为BOS（序列起始符）的特殊标记，它作为分隔符使用：告诉模型“新文档在此开始/结束”。在后续训练中，每个文档两侧都会包裹BOS：[BOS，e，m，m，a，BOS]。模型会学习到BOS标志着一个新名称的开始，而另一个BOS则标志着其结束。因此，我们最终得到包含27个标记的词汇表（26个可能的小写字母a-z，加上1个序列起始符标记）。</p>
 <p>数据集包含32,000个名字。uchars收集所有名字中的每个独特字符并进行排序，从而得到字符到整数的映射：</p>
-<p>| 1 Character: a b c d e ... x y z |
-| 2 Token ID: 0 1 2 3 4 ... 23 24 25 |
-| 3 BOS token: 26 |</p>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">1 Character: a b c d e ... x y z</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">2 Token ID: 0 1 2 3 4 ... 23 24 25</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">3 BOS token: 26</td></tr></table>
+
 <p>BOS（序列起始）是一个特殊token，用于标识“名称从此处开始”和“名称在此处结束”。像“emma”这样的名称会转化为token序列[26，4，12，12，0，26]——先是BOS，接着是e-m-m-a，最后再次出现BOS。第二个BOS充当结束token：</p>
-<p>| 1 BOS e m m a BOS |
-| 2 [26] [4] [12] [12] [0] [26] |
-| 3 ↑ ↑ |
-| 4 start end |</p>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">1 BOS e m m a BOS</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">2 [26] [4] [12] [12] [0] [26]</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">3 ↑ ↑</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">4 start end</td></tr></table>
+
 <p>这是一个字符级分词器。像GPT-4这样的生产模型使用子词分词器（BPE），词汇量约为200,000个词元，其中像“the”这样的常见词是一个单独的词元，而罕见词则会被拆分成多个部分。其原理是相同的：将文本映射为整数序列。</p>
 
           <hr>

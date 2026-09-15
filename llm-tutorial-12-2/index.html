@@ -114,7 +114,7 @@
               <h1>12.2 使用DAPO（GRPO的变种）微调Qwen2.5-3B-Instruct</h1>
               <span class="meta">
                 Posted on
-                undefined，undefined min read</span>
+                undefined，96 min read</span>
             </div>
           
         
@@ -244,7 +244,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-
 @dataclass
 class Qwen2Config:
     attention_dropout: float = 0.0
@@ -269,7 +268,6 @@ class Qwen2Config:
     use_sliding_window: bool = False
     vocab_size: int = 151936
 
-
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -286,13 +284,11 @@ class RMSNorm(torch.nn.Module):
         x = self.weight * x.to(input_dtype)
         return x
 
-
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
-
 
 def apply_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=2):
     cos = cos.unsqueeze(unsqueeze_dim)
@@ -300,7 +296,6 @@ def apply_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=2):
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
-
 
 class Attention(nn.Module):
     def __init__(self, args: Qwen2Config):
@@ -392,7 +387,6 @@ class Attention(nn.Module):
         output = output.reshape(bsz, seqlen, -1)
         return self.o_proj(output)
 
-
 class FeedForward(nn.Module):
     def __init__(
         self,
@@ -407,7 +401,6 @@ class FeedForward(nn.Module):
     def forward(self, x):
         x = self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
         return x
-
 
 class TransformerBlock(nn.Module):
     def __init__(self, layer_id: int, args: Qwen2Config):
@@ -434,7 +427,6 @@ class TransformerBlock(nn.Module):
         out = h + self.mlp(self.post_attention_layernorm(h))
         return out
 
-
 class Qwen2RotaryEmbedding(nn.Module):
     def __init__(self, config: Qwen2Config, device: torch.device):
         super().__init__()
@@ -459,7 +451,6 @@ class Qwen2RotaryEmbedding(nn.Module):
             cos = emb.cos()
             sin = emb.sin()
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
-
 
 class Transformer(nn.Module):
     def __init__(self, params: Qwen2Config, device: torch.device):
@@ -594,7 +585,6 @@ from jinja2 import Environment
 from tokenizers import Encoding
 from tokenizers import Tokenizer as TokenizerBase
 
-
 class Tokenizer:
     """Tokenizer with chat template supported using jinja2 engine"""
 
@@ -631,7 +621,6 @@ class Tokenizer:
 <p><pre><code class="language-python">from dataclasses import dataclass
 from typing import Dict, List
 
-
 @dataclass
 class Episode:
     """存储一个回合（Episode）或者说一条轨迹的所有相关信息"""
@@ -644,7 +633,6 @@ class Episode:
     is_finished: bool # 回答是否结束标志位
     reward: float # 奖励
     reward_info: Dict[str, float] # 详细的奖励信息
-
 
 @dataclass
 class MiniBatch:
@@ -680,7 +668,6 @@ USER_TEMPLATE = (
 )
 
 RESPONSE_PROMPT = "让我一步步来解决这个问题。\n&lt;think&gt;"
-
 
 class CountdownTasksDataset(Dataset):
     """准备训练数据集"""
@@ -756,7 +743,6 @@ class CountdownTasksDataset(Dataset):
             prefix_token_ids=prefix_token_ids,
         )
 
-
 def format_reward_function(
     response: str, # 模型的回答
     end_token: Optional[str] = None # 结尾token
@@ -794,7 +780,6 @@ def format_reward_function(
         reward += 0.5
     # 返回奖励
     return reward
-
 
 def answer_reward_function(
     response: str, # 模型给出的回答
@@ -840,7 +825,6 @@ def answer_reward_function(
         pass
 
     return 0.0
-
 
 def reward_function(
     response: str,
@@ -1054,7 +1038,6 @@ def rollout(
     print("\r", end=" " * 100, flush=True)
     return episodes
 
-
 def normalize_rewards_per_group(
     episodes: List[Episode]
 ) -&gt; List[Episode]:
@@ -1087,7 +1070,6 @@ def normalize_rewards_per_group(
             output.append(episode)
     return output
 
-
 def compute_entropy(logits: torch.Tensor) -&gt; torch.Tensor:
     """计算熵，熵越小不确定性越小，用来监控模型训练的稳定性，不参与反向传播"""
     probs = torch.nn.functional.softmax(logits, dim=-1)
@@ -1096,7 +1078,6 @@ def compute_entropy(logits: torch.Tensor) -&gt; torch.Tensor:
         - \
         torch.sum(probs * logits, dim=-1)
     return entropy
-
 
 def update_policy(
     model, # 微调的模型
@@ -1243,7 +1224,6 @@ from grpo import rollout, update_policy
 from qwen2_model import Transformer
 from tokenizer import Tokenizer
 
-
 def evaluate(model, tokenizer, device, dtype):
     """每隔10个step，使用测试数据集评估一下，看能做对多少题"""
     test_dataset = CountdownTasksDataset(
@@ -1282,7 +1262,6 @@ def evaluate(model, tokenizer, device, dtype):
             for episode in episodes
         ])
     return np.mean(success)
-
 
 def main():
     pretrained_model_path = Path(
@@ -1444,7 +1423,6 @@ def main():
             output_file = ckpt_dir / f"ckpt_{step:06d}.pt"
             torch.save(model.state_dict(), output_file)
             print(f"将检查点保存到 {output_file}")
-
 
 if __name__ == "__main__":
     main()

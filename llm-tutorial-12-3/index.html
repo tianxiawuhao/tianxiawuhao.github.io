@@ -114,7 +114,7 @@
               <h1>12.3 GRPO 应用场景</h1>
               <span class="meta">
                 Posted on
-                undefined，undefined min read</span>
+                undefined，41 min read</span>
             </div>
           
         
@@ -127,8 +127,8 @@
     <div class="container">
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
-          <style>.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <h3 id="sec-1">12.3.1 医疗思维链</h3>
 <p>我们使用 Hugging Face 的 <code>interleave_datasets</code> 混合三个关键数据集：</p>
 <p>PubMedQA（占总数据的70%）：</p>
@@ -176,7 +176,6 @@ from trl import GRPOConfig, GRPOTrainer
 from datasets import load_dataset, Dataset, interleave_datasets, concatenate_datasets
 import re
 
-
 # Load and prep dataset
 SYSTEM_PROMPT = """
 Respond in the following format:
@@ -197,12 +196,10 @@ XML_COT_FORMAT = """\
 &lt;/answer&gt;
 """
 
-
 def extract_xml_answer(text: str) -&gt; str:
     answer = text.split("&lt;answer&gt;")[-1]
     answer = answer.split("&lt;/answer&gt;")[0]
     return answer.strip()
-
 
 def extract_hash_answer(text: str) -&gt; str | None:
     if "####" not in text:
@@ -210,7 +207,6 @@ def extract_hash_answer(text: str) -&gt; str | None:
     return text.split("####")[1].strip()
 
 # uncomment middle messages for 1-shot prompting
-
 
 def get_datasets(split="train") -&gt; Dataset:
     data = load_dataset('gsm8k', 'main')[split] # type: ignore
@@ -317,14 +313,12 @@ def get_datasets(split="train") -&gt; Dataset:
     dataset = concatenate_datasets([data, data_qa, data_mc])
     return dataset
 
-
 dataset = get_datasets()
 dataset = dataset.shuffle(seed=42)
 train_test_split = dataset.train_test_split(test_size=0.1)
 train_dataset = train_test_split["train"]
 test_dataset = train_test_split["test"]
 print(f"train size: {len(train_dataset)}, test size: {len(test_dataset)}")
-
 
 # Reward functions
 def correctness_reward_func(prompts, completions, answer, db_set, **kwargs) -&gt; list[float]:
@@ -346,7 +340,6 @@ def correctness_reward_func(prompts, completions, answer, db_set, **kwargs) -&gt
             rewards.append(2.0 if r.lower() == a.strip().lower() else 0.0)
     return rewards
 
-
 def int_reward_func(completions, db_set, **kwargs) -&gt; list[float]:
     responses = [completion[0]['content'] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
@@ -360,7 +353,6 @@ def int_reward_func(completions, db_set, **kwargs) -&gt; list[float]:
             rewards.append(0.5 if ('a' in r.lower() or 'b' in r.lower() or 'c' in r.lower() or 'd' in r.lower()) else 0.0)
     return rewards
 
-
 def strict_format_reward_func(completions, **kwargs) -&gt; list[float]:
     """Reward function that checks if the completion has a specific format."""
     pattern = r"^&lt;reasoning&gt;\n.*?\n&lt;/reasoning&gt;\n&lt;answer&gt;\n.*?\n&lt;/answer&gt;\n$"
@@ -368,14 +360,12 @@ def strict_format_reward_func(completions, **kwargs) -&gt; list[float]:
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
-
 def soft_format_reward_func(completions, **kwargs) -&gt; list[float]:
     """Reward function that checks if the completion has a specific format."""
     pattern = r"&lt;reasoning&gt;.*?&lt;/reasoning&gt;\s*&lt;answer&gt;.*?&lt;/answer&gt;"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
-
 
 def count_xml(text) -&gt; float:
     count = 0.0
@@ -391,14 +381,11 @@ def count_xml(text) -&gt; float:
         count -= (len(text.split("\n&lt;/answer&gt;")[-1]) - 1)*0.001
     return count
 
-
 def xmlcount_reward_func(completions, **kwargs) -&gt; list[float]:
     contents = [completion[0]["content"] for completion in completions]
     return [count_xml(c) for c in contents]
 
-
 training_args = GRPOConfig(output_dir="outputs", num_generations=2, per_device_train_batch_size=4)
-
 
 # 加载模型
 model = AutoModelForCausalLM.from_pretrained(
@@ -409,7 +396,6 @@ model = AutoModelForCausalLM.from_pretrained(
 
 tokenizer = AutoTokenizer.from_pretrained(
     "../GRPO/Qwen2.5-3B-Instruct/")
-
 
 trainer = GRPOTrainer(
     model=model,
@@ -523,42 +509,11 @@ REINFORCE++ 走另一个极端，特别保守。KL 稳如老狗，但 reward 也
 效果上，RAG Agent 主要解决了复杂查询的准确率——简单查询模型本来就能搞定，但涉及多表 JOIN、子查询的复杂场景，few-shot 示例的引导作用非常明显。</p>
 <h4 id="sec-10">12.3.3.7 最终结果</h4>
 <p>Base model（Qwen2.5-Coder-32B）+ RAG Agent 的 few-shot 执行准确率：</p>
-<table>
-<thead>
-<tr>
-<th>难度</th>
-<th>few-shot 准确率</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>简单</td>
-<td>78%+</td>
-</tr>
-<tr>
-<td>复杂</td>
-<td>40%+</td>
-</tr>
-</tbody></table>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">难度</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">few-shot 准确率</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">----------------</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">简单</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">78%+</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">复杂</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">40%+</td></tr></table>
+
 <p>GRPO 训练后 + RAG Agent：</p>
-<table>
-<thead>
-<tr>
-<th>难度</th>
-<th>zero-shot 准确率</th>
-<th>few-shot 准确率</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>简单</td>
-<td>87%+</td>
-<td>95%+</td>
-</tr>
-<tr>
-<td>复杂</td>
-<td>62%+</td>
-<td>87%+</td>
-</tr>
-</tbody></table>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">难度</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">zero-shot 准确率</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">few-shot 准确率</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">----------------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">----------------</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">简单</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">87%+</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">95%+</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">复杂</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">62%+</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">87%+</td></tr></table>
+
 <p>几个值得注意的点：</p>
 <ul>
 <li>训练后的 zero-shot 87.3% 已经超过了训练前的 few-shot 78%，说明 GRPO 确实让模型学到了东西，而不只是靠 few-shot 示例撑着</li>
@@ -661,30 +616,8 @@ params: +0.1
 最终：平均分 96%，tool 准确率 97%，最低的 settlement 也到 79%。针对具体错误模式设计惩罚比通用算法改进更有效。</p>
 <p><strong>九、核心经验</strong></p>
 <p>关键监控指标</p>
-<table>
-<thead>
-<tr>
-<th>指标</th>
-<th>健康范围</th>
-<th>问题信号</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>frac_reward_zero_std</td>
-<td>&lt; 30%</td>
-<td>&gt; 50% 奖励函数有问题</td>
-</tr>
-<tr>
-<td>reward</td>
-<td>接近 1.0</td>
-<td>&lt; 0.8 奖励上限太低</td>
-</tr>
-<tr>
-<td>grad_norm</td>
-<td>非零</td>
-<td>持续为 0 没有学习</td>
-</tr>
-</tbody></table>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">指标</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">健康范围</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">问题信号</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">---------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">---------</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">frac_reward_zero_std</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">< 30%</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">> 50% 奖励函数有问题</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">reward</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">接近 1.0</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">< 0.8 奖励上限太低</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">grad_norm</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">非零</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">持续为 0 没有学习</td></tr></table>
+
 <p>奖励函数设计
 最大分必须能达到 1.0，要有足够区分度，针对具体错误模式设计惩罚，持续监控 frac_reward_zero_std。</p>
 <p>数据教训

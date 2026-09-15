@@ -127,8 +127,8 @@
     <div class="container">
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
-          <style>.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p>这是代码中最优雅的部分。Value类实现了自动微分——即通过任意数学运算链计算导数的能力。这正是神经网络训练得以实现的关键。</p>
 <p><strong>导数为什么这么重要？</strong></p>
 <p>训练神经网络意味着寻找能使损失函数最小化的参数值。损失函数衡量的是模型预测的偏差程度。为了降低损失，我们需要了解：对于每个参数，如果对其进行微小调整，损失会增加还是减少？这就是损失函数对每个参数的导数（梯度）。</p>
@@ -252,45 +252,8 @@ b.grad = d.grad × a.data = -0.143 × 3 = -0.429 chain rule through ×
 </p>
 <p>这是数学和算法上最密集的部分。简单来说，一个Value包装了一个单一的标量数字（.data），并追踪它是如何被计算出来的。可以把每个操作想象成一个小乐高积木：它接收一些输入，产生一个输出（前向传播），并且知道其输出相对于每个输入的变化情况（局部梯度）。这就是自动微分从每个积木中需要的全部信息。其余的一切都只是链式法则，将这些积木串联起来。</p>
 <p>每次使用Value对象进行数学运算（加法、乘法等）时，结果都会生成一个新的Value，它会记住其输入值（_children）以及该运算的局部导数（_local_grads）。例如，_mul_记录了 $\frac{\partial(a \cdot b)}{\partial a} = b$ 和 $\frac{\partial(a \cdot b)}{\partial b} = a$。完整的积木块集合如下：</p>
-<table>
-<thead>
-<tr>
-<th>运算</th>
-<th>前向传播</th>
-<th>梯度</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>a + b</td>
-<td>a + b</td>
-<td>∂a/∂a = 1, ∂b/∂b = 1</td>
-</tr>
-<tr>
-<td>a * b</td>
-<td>a · b</td>
-<td>∂a/∂a = b, ∂b/∂b = a</td>
-</tr>
-<tr>
-<td>a ** n</td>
-<td>a^n</td>
-<td>∂a/∂a = n · a^(n-1)</td>
-</tr>
-<tr>
-<td>log(a)</td>
-<td>ln(a)</td>
-<td>∂a/∂a = 1/a</td>
-</tr>
-<tr>
-<td>exp(a)</td>
-<td>e^a</td>
-<td>∂a/∂a = e^a</td>
-</tr>
-<tr>
-<td>relu(a)</td>
-<td>max(0, a)</td>
-<td>∂a/∂a = 1 if a &gt; 0 else 0</td>
-</tr>
-</tbody></table>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">运算</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">前向传播</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">梯度</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">----------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">------</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">a + b</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">a + b</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">∂a/∂a = 1, ∂b/∂b = 1</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">a * b</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">a · b</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">∂a/∂a = b, ∂b/∂b = a</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">a ** n</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">a^n</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">∂a/∂a = n · a^(n-1)</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">log(a)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">ln(a)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">∂a/∂a = 1/a</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">exp(a)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">e^a</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">∂a/∂a = e^a</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">relu(a)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">max(0, a)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">∂a/∂a = 1 if a > 0 else 0</td></tr></table>
+
 <p><strong>表1.1 运算，前向传播，梯度</strong></p>
 <p>backward()方法以逆拓扑顺序遍历该图（从损失开始，到参数结束），在每一步应用链式法则。如果损失为 $L$，且节点 $v$ 有一个子节点 $c$，其局部梯度为 $\frac{\partial v}{\partial c}$，则：</p>
 <p>$$\frac{\partial L}{\partial c} += \frac{\partial v}{\partial c} \cdot \frac{\partial L}{\partial v} \quad (1.1)$$</p>

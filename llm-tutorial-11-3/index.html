@@ -114,7 +114,7 @@
               <h1>11.3 PPO微调LLM实战</h1>
               <span class="meta">
                 Posted on
-                undefined，undefined min read</span>
+                undefined，84 min read</span>
             </div>
           
         
@@ -153,7 +153,6 @@ class LayerNorm(nn.Module):
         norm_x = (x - mean) / torch.sqrt(var + self.eps)
         return self.scale * norm_x + self.shift
 
-
 class GELU(nn.Module):
     def __init__(self):
         super().__init__()
@@ -163,7 +162,6 @@ class GELU(nn.Module):
             torch.sqrt(torch.tensor(2.0 / torch.pi)) *
             (x + 0.044715 * torch.pow(x, 3))
         ))
-
 
 class FeedForward(nn.Module):
     def __init__(self, cfg):
@@ -176,7 +174,6 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
-
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
@@ -238,7 +235,6 @@ class MultiHeadAttention(nn.Module):
 
         return context_vec
 
-
 class TransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -271,7 +267,6 @@ class TransformerBlock(nn.Module):
         x = x + shortcut # 加回原始输入
 
         return x # shape: (B, T, emb_dim)
-
 
 class GPTModel(nn.Module):
     def __init__(self, cfg):
@@ -307,7 +302,6 @@ class GPTModel(nn.Module):
 <p><pre><code class="language-python">from pathlib import Path
 
 from tokenizers import BertWordPieceTokenizer
-
 
 class ChineseGPT2Tokenizer:
     def __init__(self, model_path):
@@ -358,14 +352,12 @@ BASE_CONFIG = {
     "n_heads": 12,
 }
 
-
 def assign_check(left, right):
     if left.shape != right.shape:
         raise ValueError(
             f"Shape mismatch. Left: {left.shape}, Right: {right.shape}"
         )
     return torch.nn.Parameter(right.clone().detach())
-
 
 def load_weights_from_state_dict(gpt, d, cfg=BASE_CONFIG):
     gpt.pos_emb.weight = assign_check(
@@ -422,10 +414,8 @@ def load_weights_from_state_dict(gpt, d, cfg=BASE_CONFIG):
     gpt.out_head.weight = assign_check(
         gpt.out_head.weight, d["transformer.wte.weight"])
 
-
 def load_weights(gpt, gpt_hf, cfg=BASE_CONFIG):
     load_weights_from_state_dict(gpt, gpt_hf.state_dict(), cfg)
-
 
 if __name__ == "__main__":
     from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
@@ -497,7 +487,6 @@ from gpt_model import GPTModel, generate, text_to_token_ids, token_ids_to_text
 from gpt_load_weight import BASE_CONFIG, load_weights_from_state_dict
 from gpt_tokenizer import ChineseGPT2Tokenizer
 
-
 PRETRAINED_MODEL_PATH = Path("./gpt2-chinese-cluecorpussmall")
 OUTPUT_DIR = Path("./gpt2-sft")
 DATASET_CACHE_DIR = Path("./.cache/hf_datasets")
@@ -509,7 +498,6 @@ LEARNING_RATE = 5e-5
 NUM_EPOCHS = 1
 MAX_TRAIN_STEPS = int(os.getenv("SFT_MAX_STEPS", "0")) or None
 
-
 def tokenize(batch):
     return {
         "input_ids": [
@@ -517,7 +505,6 @@ def tokenize(batch):
             for text in batch["review"]
         ]
     }
-
 
 # 整理数据
 # ["abc", "abcd"]
@@ -544,7 +531,6 @@ def causal_lm_collate(batch):
         "labels": torch.tensor(labels, dtype=torch.long),
     }
 
-
 def calc_loss(logits, labels):
     shift_logits = logits[:, :-1, :].contiguous()
     shift_labels = labels[:, 1:].contiguous()
@@ -553,7 +539,6 @@ def calc_loss(logits, labels):
         shift_labels.view(-1),
         ignore_index=-100 # -100是pad,需要忽略掉
     )
-
 
 torch.manual_seed(42)
 
@@ -659,7 +644,6 @@ from gpt_model import GPTModel
 from gpt_load_weight import BASE_CONFIG, load_weights_from_state_dict
 from gpt_tokenizer import ChineseGPT2Tokenizer
 
-
 MODEL_PATH = Path("./gpt2-chinese-cluecorpussmall")
 DATASET_CACHE_DIR = Path("./.cache/hf_datasets")
 CSV_PATH = "online_shopping_10_cats.csv"
@@ -686,7 +670,6 @@ ds_train = ds_train.filter(
 
 print("数据集的数量：", len(ds_train))
 
-
 def tokenize(batch):
     input_ids = [
         tokenizer.encode(text, add_special_tokens=False) + [REWARD_TOKEN_ID]
@@ -698,7 +681,6 @@ def tokenize(batch):
         # reward_token_id的索引
         "score_index": [len(ids) - 1 for ids in input_ids],
     }
-
 
 def padding_collate(batch):
     max_len = max(len(item["input_ids"]) for item in batch)
@@ -722,7 +704,6 @@ def padding_collate(batch):
         "score_index": torch.tensor(score_index, dtype=torch.long),
     }
 
-
 tokenized_dataset_train = ds_train.map(
     tokenize,
     batched=True,
@@ -730,7 +711,6 @@ tokenized_dataset_train = ds_train.map(
     remove_columns=["cat", "label", "review"],
 )
 tokenized_dataset_train.set_format(type="python")
-
 
 class RewardModel(nn.Module):
     def __init__(self, model_path):
@@ -752,7 +732,6 @@ class RewardModel(nn.Module):
         # .squeeze(-1)之后的形状，也就是reward的形状(B, T)
         reward = self.reward_head(last_hidden_state).squeeze(-1)
         return torch.sigmoid(reward)
-
 
 model = RewardModel(MODEL_PATH)
 
@@ -883,7 +862,6 @@ def tokenize(sample):
     # 提示词对应的文本
     sample["query"] = tokenizer.decode(sample["input_ids"])
     return sample
-
 
 map_kwargs = {
     "batched": False,
@@ -1248,7 +1226,6 @@ for i in range(len(tokenized_dataset_train)):
         output_min_length,
         output_max_length)))
 
-
 def validate():
     scores = []
     count = 0
@@ -1281,7 +1258,6 @@ def validate():
             score = 2 * (score - 0.5)
             scores.append(score.item())
     print("平均分数：", sum(scores) / len(scores))
-
 
 validate()
 
