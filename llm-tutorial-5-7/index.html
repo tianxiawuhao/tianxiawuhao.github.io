@@ -114,7 +114,7 @@
               <h1>5.7 广义优势估计</h1>
               <span class="meta">
                 Posted on
-                undefined，undefined min read</span>
+                undefined，7 min read</span>
             </div>
           
         
@@ -128,6 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p><strong>提示</strong></p>
 <p>广义优势估计：Generalized Advantage Estimation，GAE</p>
 <p>上面的1步TD误差表示为：$\delta_t = R_t + \gamma V_{\omega}(S_{t+1}) - V_{\omega}(S_t)$。在很多强化学习文献中，这个叫做优势A（Advantage）。</p>
@@ -137,7 +138,7 @@
 <p>$$\delta_t = R_t + \gamma V(S_{t+1}) - V(S_t) \quad (5.34)$$</p>
 <p>其中 $V$ 是价值函数神经网络 $V_{\omega}$。那么我们计算一下多步TD误差：</p>
 <p>$$\begin{array}{rl} &amp; {A_t^{(1)} = \delta_t}\\ &amp; {A_t^{(2)} = \delta_t + \gamma \delta_{t+1}}\\ &amp; {A_t^{(3)} = \delta_t + \gamma \delta_{t+1} + \gamma^2 \delta_{t+2} = -V(s_t) + R_t + \gamma R_{t+1} + \gamma^2 R_{t+2} + \gamma^3 V(s_{t+3})}\\ &amp; {\qquad \vdots}\\ &amp; {A_t^{(k)} = \sum_{l = 0}^{k - 1}\gamma^{l}\delta_{t + l}} \end{array}$$</p>
-<p>$$\begin{array}{r l} &amp; {A_t^{\mathrm{GAE}} = (1 - \lambda)\Big(A_t^{(1)} + \lambda A_t^{(2)} + \lambda^{2}A_t^{(3)} + \dots \Big)}\\ &amp; {\qquad = (1 - \lambda)(\delta_t + \lambda (\delta_t + \gamma \delta_{t + 1}) + \lambda^{2}(\delta_t + \gamma \delta_{t + 1} + \gamma^{2}\delta_{t + 2}) + \dots)}\\ &amp; {\qquad = (1 - \lambda)(\delta_t(1 + \lambda +\lambda^{2} + \dots) + \gamma \delta_{t + 1}(\lambda +\lambda^{2} + \lambda^{3} + \dots) + \gamma^{2}\delta_{t + 2}(\lambda^{2} + \lambda^{3} + \lambda^{4} + \dots) + \dots)}\\ &amp; {\qquad = (1 - \lambda)\Bigg(\delta_t\frac{1}{1 - \lambda} +\gamma \delta_{t + 1}\frac{\lambda}{1 - \lambda} +\gamma^{2}\delta_{t + 2}\frac{\lambda^{2}}{1 - \lambda} +\dots \Bigg)}\\ &amp; {\qquad = \sum_{l = 0}^{\infty}(\gamma \lambda)^{l}\delta_{t + l}} \end{array} \quad (5.36)$$</p>
+<p>$$\begin{array}{r l} &amp; {A_t^{\mathrm{GAE}} = (1 - \lambda)\Big(A_t^{(1)} + \lambda A_t^{(2)} + \lambda^{2}A_t^{(3)} + \dots \Big)}\\ &amp; {\qquad = (1 - \lambda)(\delta_t + \lambda (\delta_t + \gamma \delta_{t + 1}) + \lambda^{2}(\delta_t + \gamma \delta_{t + 1} + \gamma^{2}\delta_{t + 2}) + \dots)}\\ &amp; {\qquad = (1 - \lambda)\Big(\delta_t(1 + \lambda +\lambda^{2} + \dots) + \gamma \delta_{t + 1}(\lambda +\lambda^{2} + \lambda^{3} + \dots)}\\ &amp; {\qquad\quad + \gamma^{2}\delta_{t + 2}(\lambda^{2} + \lambda^{3} + \lambda^{4} + \dots) + \dots\Big)}\\ &amp; {\qquad = (1 - \lambda)\Bigg(\delta_t\frac{1}{1 - \lambda} +\gamma \delta_{t + 1}\frac{\lambda}{1 - \lambda}}\\ &amp; {\qquad\quad +\gamma^{2}\delta_{t + 2}\frac{\lambda^{2}}{1 - \lambda} +\dots \Bigg)}\\ &amp; {\qquad = \sum_{l = 0}^{\infty}(\gamma \lambda)^{l}\delta_{t + l}} \end{array} \quad (5.36)$$</p>
 <p>其中，$\lambda \in [0,1]$ 是在GAE中额外引入的一个超参数。当 $\lambda = 0$ 时，$A_t^{\mathrm{GAE}} = \delta_t = R_t + \gamma V(s_{t + 1}) - V(s_t)$，也就是t时刻的步TD误差；当 $\lambda = 1$ 时，$A_t^{\mathrm{GAE}} = \sum_{l = 0}^{\infty}\gamma^{l}\delta_{t + l} = \sum_{l = 0}^{\infty}\gamma^{l}R_{t + l} - V(s_t) = G_t - V(S_t)$，也就是基线版本的REINFORCE改进算法。使用 $G_t$，方差大偏差小，使用 $R_t + \gamma V(s_{t + 1})$，偏差大方差小。所以 $\lambda$ 的大小控制的是“偏差-方差权衡”。</p>
 <p>有上面的式子，我们还可以推导出一个递推公式</p>
 <p>$$A_t^{\mathrm{GAE}} = \delta_t + \gamma \lambda A_{t + 1}^{\mathrm{GAE}} \quad (5.37)$$</p>
