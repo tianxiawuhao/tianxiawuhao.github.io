@@ -7,7 +7,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="多模态,扩散模型">
+<meta name="keywords" content="多模态,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
 <title>16.1 通俗讲解 | tianxia</title>
@@ -110,12 +110,11 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/tutorial/" class="tag">多模态</a>
-                <a href="/tutorial/" class="tag">扩散模型</a>
-                </span>
+</span>
               <h1>16.1 通俗讲解</h1>
               <span class="meta">
                 Posted on
-                2025-06-03，6 min read</span>
+                undefined，undefined min read</span>
             </div>
           
         
@@ -137,17 +136,13 @@
 <h3 id="sec-1">16.1.1 扩散</h3>
 <h4 id="sec-2">16.1.1.1 物理学中的类比</h4>
 <p>想象一下一杯透明的水。如果我们加入少量其他颜色的液体，比如黄色的液体，会发生什么？黄色液体会逐渐均匀地扩散到整个玻璃杯中，最终的混合物会呈现出略带透明的黄色。</p>
-<pre><code class="language-text">透明的水
-添加了一点黄色液体
-水不再透明
-</code></pre>
-<p>图 16.1 水滴的扩散过程</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-1.png" alt="图 16.1 水滴的扩散过程" loading="lazy"><figcaption>图 16.1 水滴的扩散过程</figcaption></figure>
 <p>上面的过程被称为正向扩散：我们通过添加少量其他液体来改变环境状态。然而，进行反向扩散——将混合物恢复到其原始状态——是否同样容易？事实证明并非如此。即使在最好的情况下，实现这一点也需要高度复杂的机制。</p>
 <h4 id="sec-3">16.1.1.2 将类比应用于机器学习</h4>
 <p>扩散也可以应用于图像。想象一下一张高质量的狗狗照片。我们可以通过逐渐添加随机噪声来轻松地变换这幅图像。结果，像素值会发生变化，使图像中的狗狗变得不那么明显，甚至无法辨认。这个变换过程称为正向扩散。</p>
 <p>正向扩散
 反向扩散</p>
-<p>图 16.2 高清图像的扩散过程</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-2.png" alt="图 16.2 高清图像的扩散过程" loading="lazy"><figcaption>图 16.2 高清图像的扩散过程</figcaption></figure>
 <p>我们也可以考虑反向操作：给定一张噪声图像，目标是重建原始图像。这项任务更具挑战性，因为与大量可能的噪声变化相比，可高度识别的图像状态要少得多。用前面提到的物理类比，这个过程称为反向扩散。</p>
 <p>在本文中，我将通过示意图来解释它的工作原理。</p>
 <h3 id="sec-4">16.1.2 扩散模型的架构</h3>
@@ -155,19 +150,7 @@
 <h4 id="sec-5">16.1.2.1 正向扩散</h4>
 <p>如前所述，前向扩散涉及逐步向图像添加噪声。然而，在实践中，这个过程要更加微妙一些。</p>
 <p>最常见的方法是从均值为0 的高斯分布中为图片中的每个像素采样一个随机值。然后将这个采样值（可以是正值也可以是负值）添加到像素的原始值中。对所有像素重复此操作会得到原始图像的噪声版本。</p>
-<pre><code class="language-text">87
-图像
-0
-3
-87 +
-3
-90
-=
-高斯分布
-采样
-新的像素值
-</code></pre>
-<p>图 16.3 从高斯分布中采样一个随机值</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-3.png" alt="图 16.3 从高斯分布中采样一个随机值" loading="lazy"><figcaption>图 16.3 从高斯分布中采样一个随机值</figcaption></figure>
 <p><strong>通知</strong></p>
 <p>所选的高斯分布通常方差较小，这意味着采样值通常较小。因此，每一步只会对图像产生微小的变化。</p>
 <p>图中有49 个像素点，那么需要从一个相同的高斯分布中采样49 次噪声，然后将49 个噪声分别加到49 个像素点上。</p>
@@ -175,28 +158,12 @@
 <h4 id="sec-6">16.1.2.2 反向扩散</h4>
 <p>现在你可能会问：执行所有这些正向扩散变换的目的是什么？答案是，每次迭代生成的图像都用于训练神经网络。</p>
 <p>具体来说，假设我们在正向扩散过程中应用了100 次连续噪声变换。然后，我们可以在每一步获取图像，并训练神经网络重建上一步的图像。预测图像与实际图像之间的差异使用损失函数计算——例如均方误差 (MSE)，它衡量两幅图像之间的平均像素差异。</p>
-<pre><code class="language-text">ti-1
-预测出的图像
-真实图像
-损失
-神经网络模型
-ti
-</code></pre>
-<p>图 16.4 预测图像与实际图像之间的差异使用损失函数计算</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-4.png" alt="图 16.4 预测图像与实际图像之间的差异使用损失函数计算" loading="lazy"><figcaption>图 16.4 预测图像与实际图像之间的差异使用损失函数计算</figcaption></figure>
 <p><strong>通知</strong></p>
 <p>该模型的目标是检测添加的噪声并重建先前的图像。然后将预测图像与实际图像进行比较以计算损失。</p>
 <p>这个例子展示了扩散模型重构原始图像的过程。同时，扩散模型可以被训练来预测添加到图像中的噪声。在这种情况下，要重构原始图像，只需要从前一次迭代的图像中减去预测的噪声就足够了。</p>
 <p>虽然这两个任务看起来可能相似，但预测添加的噪声比图像重构要简单。</p>
-<pre><code class="language-text">预测出的t步噪声
-真实的t步噪声
-时间步t
-添加t步噪声后的图像
-神经网络
-模型
-MSE
-反向传播
-</code></pre>
-<p>图 16.5 将噪声作为预测目标</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-5.png" alt="图 16.5 将噪声作为预测目标" loading="lazy"><figcaption>图 16.5 将噪声作为预测目标</figcaption></figure>
 <h3 id="sec-7">16.1.3 模型设计</h3>
 <p>在对扩散技术有了基本的了解之后，有必要探索一些更高级的概念，以更好地理解扩散模型设计。</p>
 <h4 id="sec-8">16.1.3.1 迭代次数</h4>
@@ -212,23 +179,12 @@ MSE
 <li>其瓶颈架构能够在将整幅图像压缩到潜在空间后将其重建。同时，通过残差连接保留关键图像特征。</li>
 <li>U-Net 最初设计用于生物医学图像分割，其中像素级精度至关重要，它的优势可以很好地转化为需要精确预测单个像素值的扩散任务。</li>
 </ul>
-<p>图 16.6 U-net 架构（以最低分辨率为32×32 像素为例）。每个蓝色方框对应一个多通道特征图。方框顶部标注了通道数量。方框左下角标注了x-y 尺寸。白色方框表示复制的特征图。箭头表示不同的操作。</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-6.png" alt="图 16.6 U-net 架构（以最低分辨率为32×32 像素为例）。每个蓝色方框对应一个多通道特征图。方框顶部标注了通道数量。方框左下角标注了x-y 尺寸。白色方框表示复制的特征图。箭头表示不同的操作。" loading="lazy"><figcaption>图 16.6 U-net 架构（以最低分辨率为32×32 像素为例）。每个蓝色方框对应一个多通道特征图。方框顶部标注了通道数量。方框左下角标注了x-y 尺寸。白色方框表示复制的特征图。箭头表示不同的操作。</figcaption></figure>
 <h4 id="sec-10">16.1.3.3 共享网络</h4>
 <p>乍一看，似乎有必要为扩散过程的每次迭代训练一个单独的神经网络。虽然这种方法可行，并且可以产生高质量的推理结果，但从计算角度来看，它效率极低。例如，如果扩散过程包含1000 个时间步，我们就需要训练1000 个U-Net 模型——这是一项极其耗时且资源密集的任务。</p>
 <p>然而，我们可以观察到，不同迭代中的任务配置本质上是相同的：在每种情况下，我们都需要重建一个尺寸相同、且经过相似幅度噪声改变的图像。这一重要洞见促成了在所有迭代中使用单个共享神经网络的想法。</p>
 <p>实际上，这意味着我们使用一个具有共享权重的U-Net 模型，该模型基于来自不同扩散步骤的图像对进行训练。在推理过程中，含噪图像会多次通过同一个经过训练的U-Net模型，逐步进行优化，直到生成高质量的图像。</p>
-<pre><code class="language-text">t0
-t1
-t2
-tn-2
-tn-1
-tn
-........
-训练
-训练
-共享模型
-</code></pre>
-<p>图 16.7 共享模型</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-7.png" alt="图 16.7 共享模型" loading="lazy"><figcaption>图 16.7 共享模型</figcaption></figure>
 <p>虽然由于仅使用单一模型，生成质量可能会略有下降，但训练速度的提升却非常显著。</p>
 
           <hr>

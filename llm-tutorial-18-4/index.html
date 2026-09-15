@@ -7,7 +7,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="多模态,条件扩散模型">
+<meta name="keywords" content="多模态,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
 <title>18.4 分类器指引 | tianxia</title>
@@ -110,12 +110,11 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/tutorial/" class="tag">多模态</a>
-                <a href="/tutorial/" class="tag">条件扩散模型</a>
-                </span>
+</span>
               <h1>18.4 分类器指引</h1>
               <span class="meta">
                 Posted on
-                2025-06-12，6 min read</span>
+                undefined，undefined min read</span>
             </div>
           
         
@@ -133,18 +132,7 @@
           <p>在上面的内容中，我们了解到可以通过预测得分的神经网络来实现扩散模型。在本节中，我们将从得分的角度来研究扩散模型，并推导出一种称为指引的方法。指引有两种主要类型：分类器指引（classifier guidance）和无分类器指引（classifier-free guidance）。我们先来介绍分类器指引。</p>
 <h3 id="sec-1">18.4.1 什么是分类器</h3>
 <p>分类器指引是一种使用分类器指导数据生成的方法。分类器是一个能够对数据进行分类的预训练神经网络，如图所示。</p>
-<pre><code class="language-text">NN
-0
-1
-2
-3
-9
-...
-x t
-P (y|x )
-t
-</code></pre>
-<p>图 18.8 使用预训练神经网络进行分类的示例（参数为 $\phi$）</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-8.png" alt="图 18.8 使用预训练神经网络进行分类的示例（参数为 $\phi$）" loading="lazy"><figcaption>图 18.8 使用预训练神经网络进行分类的示例（参数为 $\phi$）</figcaption></figure>
 <p>图中的神经网络将时刻 $t$ 的噪声图像 $x_t$ 作为输入，并输出类别 $y$ 的概率 $p_{\phi}(y | x_t)$。利用这个分类器的神经网络，可以将普通的扩散模型变换为条件扩散模型。在这个过程中，我们需要掌握以下两点。</p>
 <ul>
 <li>扩散模型可以通过预测得分 $\nabla_{x_t} \log p(x_t)$ 的神经网络来实现。</li>
@@ -173,25 +161,7 @@ $$</p>
 <p>❶ 此项可以使用预测得分的神经网络 $s_{\theta}(x_t, t)$ 来计算。
 ❷ 此项可以使用作为分类器的神经网络来计算。</p>
 <p>由此可见，我们可以利用得分和分类器这两个神经网络来表示条件得分（而一旦有了条件得分，便可以实现条件扩散模型）。另外，❷的 $\nabla_{x_t} \log p(y | x_t)$ 可以很容易地通过反向传播求出。</p>
-<pre><code class="language-text">NN
-0
-1
-2
-3
-9
-...
-x t
-P (y|x )
-t
-分类器
-x t
-logP (y|x )
-t
-log
-logP (y|x )
-t
-</code></pre>
-<p>图 18.9 通过反向传播可以求出 $\nabla_{x_t} \log p(y|x_t)$</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-9.png" alt="图 18.9 通过反向传播可以求出 $\nabla_{x_t} \log p(y|x_t)$" loading="lazy"><figcaption>图 18.9 通过反向传播可以求出 $\nabla_{x_t} \log p(y|x_t)$</figcaption></figure>
 <p>上图中的 $\nabla_{x_t} \log p(y | x_t)$ 显示了在当前 $x_t$ 下，类别 $y$ 的对数似然增加最快的方向。因此，如果沿着 $\nabla_{x_t} \log p(y | x_t)$ 的方向更新 $x_t$，那么更新后的图像被分类为类别 $y$ 的概率会更高。</p>
 <p>分类器指引的理念是使用得分和分类器来表示条件得分。通常，我们会向分类器指引中引入权重 $\gamma$，这样就能调整分类器的贡献度。引入后的数学式如下所示。</p>
 <p>$$
@@ -202,34 +172,7 @@ $$</p>
 \nabla_{x_t} \log p(x_t | y) \approx s_{\theta}(x_t, t) + \gamma \nabla_{x_t} \log p(y | x_t) \tag{18.18}
 $$</p>
 <p>作为参考，上式所执行的处理如下图所示。</p>
-<pre><code class="language-text">NN
-0
-1
-2
-3
-9
-...
-x t
-P (y|x )
-t
-分类器
-x t
-logP (y|x )
-t
-log
-logP (y|x )
-t
-x t
-NN θ
-θ
-S (x , t)
-t
-t
-推断得分
-推断得分的修正
-γ倍
-</code></pre>
-<p>图 18.10 使用了推断得分的神经网络的分类器指引</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-10.png" alt="图 18.10 使用了推断得分的神经网络的分类器指引" loading="lazy"><figcaption>图 18.10 使用了推断得分的神经网络的分类器指引</figcaption></figure>
 <p>如图所示，分类器可以与常规的扩散模型（推断得分的模型）相结合，作为条件扩散模型来生成数据。以上就是分类器指引的核心思想。</p>
 
           <hr>

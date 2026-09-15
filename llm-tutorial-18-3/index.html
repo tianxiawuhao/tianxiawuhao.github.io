@@ -7,7 +7,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="多模态,条件扩散模型">
+<meta name="keywords" content="多模态,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
 <title>18.3 得分函数 | tianxia</title>
@@ -110,12 +110,11 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/tutorial/" class="tag">多模态</a>
-                <a href="/tutorial/" class="tag">条件扩散模型</a>
-                </span>
+</span>
               <h1>18.3 得分函数</h1>
               <span class="meta">
                 Posted on
-                2025-06-11，10 min read</span>
+                undefined，undefined min read</span>
             </div>
           
         
@@ -138,18 +137,10 @@
 s(x) = \nabla_x \log p(x) \tag{18.5}
 $$</p>
 <p>这里需要强调的是，梯度是针对数据向量计算的，而不是针对任何参数向量。注意 $s(x)$ 是一个与 $x$ 维度相同的向量值函数，并且其中的每个元素 $s_i(x) = \frac{\partial \log p(x)}{\partial x_i}$ 都与 $x$ 的相应元素 $x_i$ 相关联。例如，如果 $x$ 是一个图像，那么 $s(x)$ 也可以表示为一个同尺寸的图像，其中对应的像素是图像的得分。下图显示了二维中的概率密度示例以及相应的得分函数。</p>
-<p>图 18.5 得分函数的示意图，图中显示了两种信息的融合：由高斯混合分布构成的二维分布，表示为热图；以及由式 (18.5) 定义的相应得分函数，其作为向量绘制在 $x$ 值的规则网络上</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-5.png" alt="图 18.5 得分函数的示意图，图中显示了两种信息的融合：由高斯混合分布构成的二维分布，表示为热图；以及由式 (18.5) 定义的相应得分函数，其作为向量绘制在 $x$ 值的规则网络上" loading="lazy"><figcaption>图 18.5 得分函数的示意图，图中显示了两种信息的融合：由高斯混合分布构成的二维分布，表示为热图；以及由式 (18.5) 定义的相应得分函数，其作为向量绘制在 $x$ 值的规则网络上</figcaption></figure>
 <p>为了理解得分函数的用处，考虑两个函数 $q(x)$ 和 $p(x)$，它们具有得分相等的属性，所以对于 $x$ 的所有值，$\nabla_x \log q(x) = \nabla_x \log p(x)$。如果我们对这个等式的两边关于 $x$ 积分并取指数，则可以得到 $q(x) = K p(x)$，其中 $K$ 是一个独立于 $x$ 的常数。所以如果我们能学习到一个得分函数的模型 $s(x, w)$，就可以重建原始数据分布，所得结果与之前的相比，最多相差一个常数倍数。</p>
 <p>在实现扩散模型时，我们使用神经网络对 $\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 进行了建模。$\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 基于 $x_t$ 和 $t$ 来推断噪声 $\varepsilon$。下图是这个过程的示意图。</p>
-<pre><code class="language-text">x t
-t
-NN θ
-θ(x , t)
-t
-ε
-ε
-</code></pre>
-<p>图 18.6 扩散模型中使用的推断噪声 $\varepsilon$ 的神经网络</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-6.png" alt="图 18.6 扩散模型中使用的推断噪声 $\varepsilon$ 的神经网络" loading="lazy"><figcaption>图 18.6 扩散模型中使用的推断噪声 $\varepsilon$ 的神经网络</figcaption></figure>
 <p>此时有以下与 $\varepsilon$ 相关的数学式成立（稍后将给出证明）。</p>
 <p>$$
 \varepsilon \approx -\sqrt{1 - \bar{\alpha}_t} \nabla_{x_t} \log p(x_t) \tag{18.6}
@@ -158,20 +149,7 @@ $$</p>
 <p><strong>提示</strong></p>
 <p>$p(x_t)$ 是表示数据 $x_t$ 为“真”的随机密度函数。而 $p_{\theta}(x_t)$ 表示使用参数对真的概率密度函数进行近似的概率密度函数。由于 $\nabla_{x_t} \log p(x_t)$ 和 $\nabla_{x_t} \log p_{\theta}(x_t)$ 表示关于输入 $x_t$ 的梯度，因此称为“得分”。另外，在某些领域，关于参数的梯度（$\nabla_{\theta} \log p_{\theta}(x_t)$）也称为“得分”。在本书中，我们将对输入的梯度称为“得分”。</p>
 <p>根据式 (18.6)，$\varepsilon$ 可以近似表示为 $\nabla_{x_t} \log p(x_t)$。值得注意的是，$\varepsilon$ 与 $\nabla_{x_t} \log p(x_t)$ 之间只相差负常数倍（$-\sqrt{1 - \bar{\alpha}_t}$）。这说明以 $-\sqrt{1 - \bar{\alpha}_t} \varepsilon$ 来代替 $\varepsilon$ 作为训练数据的神经网络也是可行的。</p>
-<pre><code class="language-text">x t
-t
-NN θ
-θ(x , t)
-t
-1
-1-α t
-ε
--
-S
-x tlogp( )
-x t
-</code></pre>
-<p>图 18.7 用于推断得分的神经网络</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-7.png" alt="图 18.7 用于推断得分的神经网络" loading="lazy"><figcaption>图 18.7 用于推断得分的神经网络</figcaption></figure>
 <p>图中的神经网络将得分的近似值 $-\sqrt{1 - \bar{\alpha}_t} \varepsilon$ 推断为 $s_{\theta}(x_t, t)$。因此，我们也可以通过推断得分的神经网络来实现扩散模型。</p>
 <p><strong>提示</strong></p>
 <p>生成模型中包括对得分进行建模的方法。这些模型统称为基于得分的模型。以对数似然最大化的方式可以推导出各种模型（GMM、VAE、扩散模型等）。这些模型可以被称为基于似然的模型。重要的是，扩散模型也可以作为基于得分的模型推导得出。</p>

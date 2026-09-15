@@ -7,7 +7,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="多模态,扩散模型">
+<meta name="keywords" content="多模态,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
 <title>16.3 代码实现 | tianxia</title>
@@ -110,12 +110,11 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/tutorial/" class="tag">多模态</a>
-                <a href="/tutorial/" class="tag">扩散模型</a>
-                </span>
+</span>
               <h1>16.3 代码实现</h1>
               <span class="meta">
                 Posted on
-                2025-06-05，23 min read</span>
+                undefined，undefined min read</span>
             </div>
           
         
@@ -187,16 +186,7 @@ $$</p>
 </code></pre>
 </p>
 <p>接下来编写反向去噪过程的代码，也就是从 $x_t$ 预测 $x_{t-1}$。</p>
-<pre><code class="language-text">预测出的t步噪声
-真实的t步噪声
-时间步t
-添加t步噪声后的图像
-神经网络
-模型
-MSE
-反向传播
-</code></pre>
-<p>图 16.16 以噪声为预测目标</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-16.png" alt="图 16.16 以噪声为预测目标" loading="lazy"><figcaption>图 16.16 以噪声为预测目标</figcaption></figure>
 <p>给定了时间步和添加噪声的图像，模型可以预测出这幅图片中的噪声有多少，那么我们从 $x_t$ 中将预测出的噪声减掉，就可以去噪了！</p>
 <p><pre><code class="language-python">def denoise(self, model, x, t):
     # x是图片，模型会认为x是添加了t步噪声的图片
@@ -241,52 +231,18 @@ MSE
 6 return x_0
 </code></pre>
 </p>
-<p>图 16.17 采样算法（去噪算法，反向扩散算法）</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-17.png" alt="图 16.17 采样算法（去噪算法，反向扩散算法）" loading="lazy"><figcaption>图 16.17 采样算法（去噪算法，反向扩散算法）</figcaption></figure>
 <p>上面的代码实现了伪代码中的第4 步。</p>
 <h3 id="sec-2">16.3.2 U-Net 神经网络</h3>
 <p>U-Net 最初是为医学图像的语义分割而开发的模型。语义分割是为图像中的每个像素分配特定的类别标签的任务，如图所示。</p>
-<p>图 16.18 U-Net 执行语义分割</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-18.png" alt="图 16.18 U-Net 执行语义分割" loading="lazy"><figcaption>图 16.18 U-Net 执行语义分割</figcaption></figure>
 <p>图中 U-Net 的输入是形状为 $(C, H, W)$ 的图像数据，其中，$C$ 是输入图像的通道数（RGB 图像为3），$H$ 是图像的高度，$W$ 是图像的宽度。输出是形状为 $(D, H, W)$ 的张量，其中 $D$ 是要分类的类别数。模型对每个像素输出 $D$ 个类别的概率分布。而在扩散模型中，输出被设置为 $(C, H, W)$（$D=C$），即输入和输出的通道数都被设置为 $C$。</p>
 <p>U-Net 的名称源于网络结构的形状，因为它与字母“U”的形状相似。</p>
-<pre><code class="language-text">1
-64 64
-28x28
-64
-128
-128
-14x14
-128
-7x7
-256
-256
-128
-128
-128+256
-14x14
-28x28
-64+128
-64
-64
-1
-conv 3x3, BatchNorm, ReLU
-copy
-maxpool 2x2
-upsample 2x2
-conv 1x1
-</code></pre>
-<p>图 16.19 本章要实现的 U-Net</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-19.png" alt="图 16.19 本章要实现的 U-Net" loading="lazy"><figcaption>图 16.19 本章要实现的 U-Net</figcaption></figure>
 <p>U-Net 的处理过程分为前半部分的“缩小阶段”和后半部分的“扩大阶段”。在前半部分的缩小阶段中，在卷积层进行处理的同时，特征图会逐渐缩小。缩小特征图的层称为“下采样层”。在后半部分的扩大阶段中，在卷积层进行特征抽取的同时，特征图会逐渐扩大，这与前半部分正好相反。扩大特征图的层称为“上采样层”。</p>
 <p>U-Net 的重要特征是跳跃连接（skip connection）。这是一种在网络的缩小阶段和扩大阶段之间直接传递特征图的机制。这种跳跃连接使得 U-Net 能够捕捉对象整体的特征，同时使用更精细的空间位置信息进行处理。</p>
 <p>如上图所示，U-Net 包含两个缩小阶段和两个扩大阶段。每个阶段由两个卷积层进行处理。为了实现这个 U-Net，首先要实现一个名为 ConvBlock 的类。如下图所示，该类分别对卷积层，批量归一化层和 ReLU 函数的处理执行了两次。</p>
-<pre><code class="language-text">ConvBlock
-Conv
-BatchNorm
-ReLU
-Conv
-BatchNorm
-ReLU
-</code></pre>
-<p>图 16.20 ConvBlock 类执行的处理</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-20.png" alt="图 16.20 ConvBlock 类执行的处理" loading="lazy"><figcaption>图 16.20 ConvBlock 类执行的处理</figcaption></figure>
 <p>然后是 ConvBlock 类的代码，如下所示。</p>
 <p><pre><code class="language-python">import torch
 from torch import nn
@@ -382,72 +338,11 @@ def _pos_encoding(t, output_dim, device="cpu"):
 </p>
 <p>参数 <code>ts</code> 是张量。对于该张量的每个元素，调用刚刚实现的 <code>_pos_encoding</code> 函数。这样我们就完成了正弦位置编码的实现。</p>
 <p>最后将正弦位置编码嵌入到 U-Net 中。这里我们将正弦位置编码嵌入到之前实现的 ConvBlock 类中。ConvBlock 是拥有两个卷积层的处理单元。我们使用 ConvBlock 实现了 U-Net，如图所示。</p>
-<pre><code class="language-text">Conv
-BatchNorm
-ReLU
-Conv
-BatchNorm
-ReLU
-ConvBlock
-ConvBlock
-x
-maxpool
-ConvBlock
-maxpool
-upsample
-ConvBlock
-upsample
-ConvBlock
-</code></pre>
-<p>图 16.21 我们实现的 U-Net</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-21.png" alt="图 16.21 我们实现的 U-Net" loading="lazy"><figcaption>图 16.21 我们实现的 U-Net</figcaption></figure>
 <p>这里要向5 个 ConvBlock 添加正弦位置编码信息。</p>
-<pre><code class="language-text">ConvBlock
-ConvBlock
-x
-maxpool
-ConvBlock
-maxpool
-upsample
-ConvBlock
-upsample
-ConvBlock
-NEW
-NEW
-NEW
-NEW
-NEW
-pos_encoding
-v
-t
-</code></pre>
-<p>图 16.22 加入正弦位置编码的 U-Net</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-22.png" alt="图 16.22 加入正弦位置编码的 U-Net" loading="lazy"><figcaption>图 16.22 加入正弦位置编码的 U-Net</figcaption></figure>
 <p>如图所示，新的 ConvBlock 中也将接收正弦位置编码信息 v 作为输入。然后在这个新的 ConvBlock 内部执行下图所示的处理。</p>
-<pre><code class="language-text">Conv
-BatchNorm
-ReLU
-Conv
-BatchNorm
-ReLU
-NEW
-ConvBlock
-MLP
-Reshape
-NEW
-x
-(N, C, H, W)
-+
-(N, C, H, W)
-(N, C)
-(N, C, 1, 1)
-v
-(N, D)
-y
-(N, C, H, W)
-x
-v
-y
-</code></pre>
-<p>图 16.23 新的 ConvBlock 类</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-23.png" alt="图 16.23 新的 ConvBlock 类" loading="lazy"><figcaption>图 16.23 新的 ConvBlock 类</figcaption></figure>
 <p>图中的 x 的形状为 $(N, C, H, W)$，v 的形状为 $(N, D)$。v 被 MLP（多层感知机，这里指由全连接层组成的神经网络）变换为 $(N, C)$ 的形状，然后再被变换为 $(N, C, 1, 1)$ 的形状。通过这个变形，广播函数得以应用于随后的加法运算中。新的 ConvBlock 的实现如下所示。</p>
 <p><pre><code class="language-python">class ConvBlock(nn.Module):
     def __init__(self, in_ch, out_ch, time_embed_dim):

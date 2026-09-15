@@ -7,7 +7,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="多模态,DALL-E2（文生图）">
+<meta name="keywords" content="多模态,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
 <title>19.3 条件扩散模型 | tianxia</title>
@@ -110,12 +110,11 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/tutorial/" class="tag">多模态</a>
-                <a href="/tutorial/" class="tag">DALL-E2（文生图）</a>
-                </span>
+</span>
               <h1>19.3 条件扩散模型</h1>
               <span class="meta">
                 Posted on
-                2025-06-17，55 min read</span>
+                undefined，undefined min read</span>
             </div>
           
         
@@ -133,14 +132,14 @@
           <p><strong>危险</strong></p>
 <p>训练用于生成图片的条件扩散模型时，CLIP 模型和先验模型都必须冻结！</p>
 <h3 id="sec-1">19.3.1 概述</h3>
-<p>图 19.6 解码器架构</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-6.png" alt="图 19.6 解码器架构" loading="lazy"><figcaption>图 19.6 解码器架构</figcaption></figure>
 <p>条件扩散模型是模型中生成图像的部分。它通过预测每个时间步应该去除的噪声，并迭代地从噪声图像中去除预测的噪声来实现这一点。</p>
 <p>最常用作其主干的两个模型架构是UNet 和Transformer。</p>
 <p>Transformer 架构的主要优势之一是其可扩展性，它可以很好地扩展至大型数据集和更复杂的模型。另一个优势是，虽然UNet 主要用于图像，但Transformer 更加灵活，只需进行修改即可用于其他数据类型。</p>
 <p>UNet 是许多图像相关任务的主要选择。这是因为它擅长通过卷积层获取局部信息，同时通过跳跃连接保持高分辨率特征。UNet 的另一个优点是输入和输出的形状应该相同，这在图像扩散中非常有用。</p>
 <p>UNet 的工作原理是，接收输入并将其传入编码器层，编码器层会识别/捕获相关特征，同时降低分辨率。然后，输入会传入解码器层，解码器层会尝试定位特征，同时将分辨率提升至原始形状。由于编码器层包含空间信息，因此会从编码器到解码器添加跳跃连接，以帮助保留这些信息。</p>
 <h3 id="sec-2">19.3.2 残差块</h3>
-<p>图 19.7 残差块的架构</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-7.png" alt="图 19.7 残差块的架构" loading="lazy"><figcaption>图 19.7 残差块的架构</figcaption></figure>
 <p>编码器和解码器层均由残差块构成，这些残差块包含用于识别和定位特征的卷积。这些残差块通常由归一化、激活、卷积、归一化、激活、卷积组成；然而，我们的残差块将是归一化、卷积、归一化、激活、卷积、归一化（如图所示）。Han 等人的论文证明了这种架构可以在保持非线性的同时提升性能。</p>
 <p><pre><code class="language-python"># 初始化
 self.layers1 = nn.Sequential(
@@ -265,7 +264,7 @@ x += self.residual(x_0)
 </code></pre>
 </p>
 <h3 id="sec-3">19.3.3 注意力块</h3>
-<p>图 19.8 注意力块</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-8.png" alt="图 19.8 注意力块" loading="lazy"><figcaption>图 19.8 注意力块</figcaption></figure>
 <p>在我们的模型中，我们将把注意力模块放置在编码器和解码器内层以及瓶颈层（bottle 层，连接编码器和解码器的底层）的残差模块之后。例如，如果编码器和解码器有四层，那么第二层和第三层就会有一个注意力模块。</p>
 <p>使用注意力模块对我们的模型有诸多好处。其一是它有助于捕捉图像不同部分之间的空间关系信息。其二是它有助于衡量模型特征的重要性。最后，注意力模块还可以用来调节图像生成过程。</p>
 <p>有多种方法可以为注意力模块实现注意力机制。其中一些选项包括自注意力和交叉注意力。我们将使用的方法是GLIDE 模型中用到的两种方法的混合。对于这种方法，我们将从输入和条件信息中获取K 和V，并将它们连接在一起以获得最终的K 和V。</p>
@@ -418,23 +417,7 @@ x = x.view(b, h, w, c).permute(0, 3, 1, 2)
 </code></pre>
 </p>
 <h3 id="sec-6">19.3.6 模型的训练</h3>
-<pre><code class="language-text">UNET
-x_t
-t
-先验模型根据文本预测的CLIP图片嵌
-入
-预测的噪声
-文本标题
-冻结的CLIP
-模型
-冻结的先验模型
-最大时间步T
-的嵌入
-白噪声组成
-的嵌入
-CLIP文本嵌入
-</code></pre>
-<p>图 19.9 解码器训练流程</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-9.png" alt="图 19.9 解码器训练流程" loading="lazy"><figcaption>图 19.9 解码器训练流程</figcaption></figure>
 <p>在训练解码器时，模型需要做的第一件事就是设置条件信息。为此，我们首先需要从先验模型中采样以获取CLIP 图像嵌入。与CLIP 模型一样，在加载先验模型时，应冻结层并将模式设置为eval。</p>
 <p><pre><code class="language-python"># 初始化先验网络
 self.prior = DiffusionPrior(config).to(config.device)

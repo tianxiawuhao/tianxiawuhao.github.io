@@ -7,7 +7,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="多模态,DALL-E2（文生图）">
+<meta name="keywords" content="多模态,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
 <title>19.2 先验模型（Prior Model） | tianxia</title>
@@ -110,12 +110,11 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/tutorial/" class="tag">多模态</a>
-                <a href="/tutorial/" class="tag">DALL-E2（文生图）</a>
-                </span>
+</span>
               <h1>19.2 先验模型（Prior Model）</h1>
               <span class="meta">
                 Posted on
-                2025-06-16，44 min read</span>
+                undefined，undefined min read</span>
             </div>
           
         
@@ -132,26 +131,11 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p><strong>危险</strong></p>
 <p>训练先验模型时，需要使用上一节训练的CLIP 模型，CLIP 模型必须冻结！</p>
-<p>图 19.2 先验模型架构图</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-2.png" alt="图 19.2 先验模型架构图" loading="lazy"><figcaption>图 19.2 先验模型架构图</figcaption></figure>
 <p>先验模型的作用：根据文本标题预测CLIP 图像嵌入。也可以放弃先验模型，而以CLIP 文本嵌入为条件，而不是用先验模型生成的CLIP 图像嵌入作为条件，但使用先验模型的效果最佳。</p>
 <p>先验模型是一个仅解码器架构的Transformer。</p>
 <h3 id="sec-1">19.2.1 先验模型的训练</h3>
-<pre><code class="language-text">仅解码器Transformer
-因果注意力掩码
-文本标题
-CLIP文本特征
-向量
-时间步嵌入
-加噪声的CLIP
-图像特征向量
-可学习嵌入
-可学习嵌入
-MLP
-预测的CLIP图像特征向量
-真实的CLIP图像特征向量
-Loss
-</code></pre>
-<p>图 19.3 先验模型的训练原理</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-3.png" alt="图 19.3 先验模型的训练原理" loading="lazy"><figcaption>图 19.3 先验模型的训练原理</figcaption></figure>
 <p>要训练一个模型，我们必须搞清楚模型的输入和输出（预测目标）。</p>
 <p>训练先验模型时，我们手上有的是：图文对和一个训练好的CLIP 模型。</p>
 <p>先验模型的输入有6 个：</p>
@@ -183,28 +167,7 @@ Loss
 <li>训练好的CLIP 模型</li>
 <li>训练好的先验模型</li>
 </ol>
-<pre><code class="language-text">仅解码器Transformer
-因果注意力掩码
-文本标题
-CLIP文本特征
-向量
-时间步1000的
-嵌入
-白噪声
-学好的嵌入
-可学习嵌入
-MLP
-预测的CLIP图像特征向量1
-预测的CLIP图像特征向量2
-CLIP文本特征
-向量
-余弦相似度
-余弦相似度
-max
-预测的CLIP图像特征向量
-推理两次
-</code></pre>
-<p>图 19.4 先验模型的推理流程</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-4.png" alt="图 19.4 先验模型的推理流程" loading="lazy"><figcaption>图 19.4 先验模型的推理流程</figcaption></figure>
 <p>先验模型的输入有6 个：</p>
 <ol>
 <li>Text Captions：自己编写的文本提示词。</li>
@@ -224,7 +187,7 @@ max
 </ol>
 <h3 id="sec-3">19.2.3 关键代码解释</h3>
 <h4 id="sec-4">19.2.3.1 余弦调度的方差计划</h4>
-<p>图 19.5 线性调度方差和余弦调度方差的对比</p>
+<figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-5.png" alt="图 19.5 线性调度方差和余弦调度方差的对比" loading="lazy"><figcaption>图 19.5 线性调度方差和余弦调度方差的对比</figcaption></figure>
 <p>对于方差调度，在Ho 等人的原始DDPM 论文中，采用了线性调度。虽然该调度在高分辨率图像上效果良好，但当图像较小（64x64 或更小）时，前向过程最终会产生过多的噪声。为了解决这个问题，Nichol 等人建议使用余弦调度，其公式如下所示。</p>
 <p>$$
 \beta_t = 1 - \frac{\alpha_t}{\alpha_{t-1}} \quad \alpha_t = \frac{f(t)}{f(0)} \quad f(t) = \cos \left( \frac{t}{T + s} \cdot \frac{\pi}{2} \right)^2 \tag{19.1}
