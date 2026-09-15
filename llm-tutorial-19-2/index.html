@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">DALL-E2（文生图）</a>
                 </span>
               <h1>19.2 先验模型（Prior Model）</h1>
@@ -129,13 +129,14 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p><strong>危险</strong></p>
 <p>训练先验模型时，需要使用上一节训练的CLIP 模型，CLIP 模型必须冻结！</p>
 <p>图 19.2 先验模型架构图</p>
 <p>先验模型的作用：根据文本标题预测CLIP 图像嵌入。也可以放弃先验模型，而以CLIP 文本嵌入为条件，而不是用先验模型生成的CLIP 图像嵌入作为条件，但使用先验模型的效果最佳。</p>
 <p>先验模型是一个仅解码器架构的Transformer。</p>
 <h3 id="sec-1">19.2.1 先验模型的训练</h3>
-<p>仅解码器Transformer
+<pre><code class="language-text">仅解码器Transformer
 因果注意力掩码
 文本标题
 CLIP文本特征
@@ -148,7 +149,8 @@ CLIP文本特征
 MLP
 预测的CLIP图像特征向量
 真实的CLIP图像特征向量
-Loss</p>
+Loss
+</code></pre>
 <p>图 19.3 先验模型的训练原理</p>
 <p>要训练一个模型，我们必须搞清楚模型的输入和输出（预测目标）。</p>
 <p>训练先验模型时，我们手上有的是：图文对和一个训练好的CLIP 模型。</p>
@@ -181,7 +183,7 @@ Loss</p>
 <li>训练好的CLIP 模型</li>
 <li>训练好的先验模型</li>
 </ol>
-<p>仅解码器Transformer
+<pre><code class="language-text">仅解码器Transformer
 因果注意力掩码
 文本标题
 CLIP文本特征
@@ -200,7 +202,8 @@ CLIP文本特征
 余弦相似度
 max
 预测的CLIP图像特征向量
-推理两次</p>
+推理两次
+</code></pre>
 <p>图 19.4 先验模型的推理流程</p>
 <p>先验模型的输入有6 个：</p>
 <ol>
@@ -228,16 +231,16 @@ max
 $$</p>
 <p>这些值被剪裁为小于或等于0.999，以防止在 $t = T$ 附近出现奇点。因为我们使用包含低分辨率图像的 FashionMNIST 数据集，所以我们将使用余弦方差计划。</p>
 <p>综合起来，前向扩散过程的代码看起来是这样的：</p>
-<pre><code class="language-python"># Gets elements from indicies and makes sure output has a certain dimension
+<p><pre><code class="language-python"># Gets elements from indicies and makes sure output has a certain dimension
 def extract_and_expand(x, idx, shape):
     return x[idx].reshape(idx.shape[0], *((1, ) * (len(shape) - 1)))
 
 # 返回方差调度计划
 def get_beta_schedule(schedule, max_time, s=0.008):
-    if schedule == &quot;linear&quot;:
+    if schedule == "linear":
         scale = 1000 / max_time
         betas = torch.linspace(1e-4 * scale, 0.02 * scale, max_time)
-    elif schedule == &quot;cosine&quot;:
+    elif schedule == "cosine":
         t = torch.linspace(0, max_time, max_time + 1)
         a_bars = torch.cos(
             (((t / max_time) + s) / (1 + s)) * (np.pi / 2)
@@ -246,36 +249,36 @@ def get_beta_schedule(schedule, max_time, s=0.008):
         betas = 1 - (a_bars[1:] / a_bars[:-1])
         betas = torch.clamp(betas, min=0, max=0.999)
     else:
-        Exception(&quot;Beta schedule not implemented.&quot;)
+        Exception("Beta schedule not implemented.")
 
     return betas
 
 def get_schedule_values(config):
     schedule_values = {}
-    schedule_values[&quot;betas&quot;] = get_beta_schedule(
+    schedule_values["betas"] = get_beta_schedule(
         config.prior.schedule,
         config.prior.max_time
     ).to(config.device)
-    schedule_values[&quot;alphas&quot;] = 1.0 - schedule_values[&quot;betas&quot;]
-    schedule_values[&quot;alpha_bars&quot;] = torch.cumprod(
-        schedule_values[&quot;alphas&quot;],
+    schedule_values["alphas"] = 1.0 - schedule_values["betas"]
+    schedule_values["alpha_bars"] = torch.cumprod(
+        schedule_values["alphas"],
         axis=0
     )
-    schedule_values[&quot;sqrt_recip_alphas&quot;] = torch.sqrt(
-        1.0 / schedule_values[&quot;alphas&quot;])
-    schedule_values[&quot;sqrt_alpha_bars&quot;] = torch.sqrt(
-        schedule_values[&quot;alpha_bars&quot;]
+    schedule_values["sqrt_recip_alphas"] = torch.sqrt(
+        1.0 / schedule_values["alphas"])
+    schedule_values["sqrt_alpha_bars"] = torch.sqrt(
+        schedule_values["alpha_bars"]
     )
-    schedule_values[&quot;sqrt_one_minus_alpha_bars&quot;] = torch.sqrt(
-        1.0 - schedule_values[&quot;alpha_bars&quot;]
+    schedule_values["sqrt_one_minus_alpha_bars"] = torch.sqrt(
+        1.0 - schedule_values["alpha_bars"]
     )
-    schedule_values[&quot;alpha_bars_prev&quot;] = torch.cat((
+    schedule_values["alpha_bars_prev"] = torch.cat((
         torch.ones(1, device=config.device),
-        schedule_values[&quot;alpha_bars&quot;][:-1])
+        schedule_values["alpha_bars"][:-1])
     )
-    schedule_values[&quot;sigma&quot;] = schedule_values[&quot;betas&quot;] \
-        * (1.0 - schedule_values[&quot;alpha_bars_prev&quot;]) \
-        / (1.0 - schedule_values[&quot;alpha_bars&quot;])
+    schedule_values["sigma"] = schedule_values["betas"] \
+        * (1.0 - schedule_values["alpha_bars_prev"]) \
+        / (1.0 - schedule_values["alpha_bars"])
     return schedule_values
 
 # 获取x_t，前向扩散过程
@@ -283,17 +286,18 @@ def forward_diffusion(x_0, schedule_values, t):
     # 噪声和图片的尺寸一样
     noise = torch.randn_like(x_0)
     sqrt_alpha_bars = extract_and_expand(
-        schedule_values[&quot;sqrt_alpha_bars&quot;], t, x_0.shape)
+        schedule_values["sqrt_alpha_bars"], t, x_0.shape)
     sqrt_one_minus_alpha_bars = extract_and_expand(
-        schedule_values[&quot;sqrt_one_minus_alpha_bars&quot;], t, x_0.shape)
+        schedule_values["sqrt_one_minus_alpha_bars"], t, x_0.shape)
     x_noisy = (sqrt_alpha_bars * x_0) \
         + (sqrt_one_minus_alpha_bars * noise)
     # 返回x_t, 和添加的噪声
     return x_noisy, noise
 </code></pre>
+</p>
 <h4 id="sec-5">19.2.3.2 时间步嵌入</h4>
 <p>时间步嵌入是扩散的重要组成部分。这是因为不同时间步的图像具有不同的噪声量。为了在我们的模型中利用这些信息，我们将使用正弦位置编码。这些位置编码与Transformer 中常用的位置编码相同。主要区别在于，我们的输入时间步很可能不会按顺序排列，并且包含所有可能的时间步，因此我们只需要获取与输入时间步对应的位置编码。</p>
-<pre><code class="language-python">class SinusoidalPositionalEncodings(nn.Module):
+<p><pre><code class="language-python">class SinusoidalPositionalEncodings(nn.Module):
     def __init__(
         self,
         max_seq_length, # 最大序列长度
@@ -309,15 +313,16 @@ def forward_diffusion(x_0, schedule_values, t):
                 else:
                     pe[pos][i] = np.cos(pos/(10000**((i-1)/width)))
 
-        self.register_buffer(&quot;pe&quot;, pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         # Get positional encodings corresponding to inputted timesteps
         x = self.pe[x]
         return x
 </code></pre>
+</p>
 <p>然后，这些时间编码通过 MLP 来进一步捕获时间信息。</p>
-<pre><code class="language-python">self.time_mlp = nn.Sequential(
+<p><pre><code class="language-python">self.time_mlp = nn.Sequential(
     SinusoidalPositionalEmbedding(
         config.decoder.max_time,
         config.decoder.model_channels
@@ -333,10 +338,11 @@ def forward_diffusion(x_0, schedule_values, t):
     )
 )
 </code></pre>
+</p>
 <p>有多种方法可以调节时间步嵌入的输入，这些方法在本章的UNet：残差块部分中进行了描述。</p>
 <h4 id="sec-6">19.2.3.3 冻结模型</h4>
 <p>先验模型首先将图像的文本标题作为输入，然后获取CLIP 文本嵌入和图像嵌入。加载CLIP 模型时，所有层都应冻结，并将模式设置为eval。</p>
-<pre><code class="language-python">def freeze_model(model, set_eval=True):
+<p><pre><code class="language-python">def freeze_model(model, set_eval=True):
     if set_eval:
         model.eval()
 
@@ -361,11 +367,12 @@ text_embeddings = self.clip.text_encoder(
     mask=masks
 ) # (B, text_seq_length) -&gt; (B, latent_dim)
 </code></pre>
+</p>
 <h4 id="sec-7">19.2.3.4 加噪声的CLIP 图片嵌入</h4>
 <p>然后，它会获取批次中每个图像的随机时间步，并使用它们从前向扩散中获取噪声CLIP 图像嵌入。</p>
 <p><strong>危险</strong></p>
 <p>不是对图片加噪声，而是对CLIP 图片嵌入加噪声！</p>
-<pre><code class="language-python"># Forward
+<p><pre><code class="language-python"># Forward
 # 随机采样一个时间步
 timesteps = torch.randint(
     0, self.config.prior.max_time, (images.shape[0],)) # (B, )
@@ -376,8 +383,9 @@ noisy_image_embedding, _ = forward_diffusion(
     timesteps # 时间步
 )
 </code></pre>
+</p>
 <p>然后将时间步通过MLP 以获得时间步嵌入。</p>
-<pre><code class="language-python"># Constructor
+<p><pre><code class="language-python"># Constructor
 self.time_mlp = nn.Sequential(
     SinusoidalPositionalEmbedding(
         config.prior.max_time,
@@ -399,9 +407,10 @@ self.time_mlp = nn.Sequential(
 # Forward
 timestep_embeddings = self.time_mlp(timesteps) # (B, ) -&gt; (B, latent_dim)
 </code></pre>
+</p>
 <h4 id="sec-8">19.2.3.5 可学习的嵌入</h4>
 <p>先验模型的另一个重要部分是可以训练的嵌入层。这些嵌入是 Torch 的一个参数，将用于预测最终输出。从构造函数中学习到的嵌入需要在 Forward 方法中进行扩展，以便批次中的每个项目都有一个嵌入。</p>
-<pre><code class="language-python"># 初始化一个随机的需要学习的嵌入参数
+<p><pre><code class="language-python"># 初始化一个随机的需要学习的嵌入参数
 self.learned_embedding = nn.Parameter(torch.randn(config.latent_dim))
 
 # Forward
@@ -411,9 +420,10 @@ learned_embeddings = self.learned_embedding.repeat(
     1
 ) # (latent_dim) -&gt; (B, latent_dim)
 </code></pre>
+</p>
 <h4 id="sec-9">19.2.3.6 输入的拼接</h4>
 <p>文本标题、CLIP 文本嵌入、时间步嵌入、加噪声的CLIP 图像嵌入以及需要学习的嵌入将被连接成一个序列。所有这些项都将具有形状 (B, latent_dim)，但我们需要在中间添加一个额外的维度，使它们具有形状 (B, 1, latent_dim)。我们将在这个新维度上进行连接，使序列具有形状 (B, 5, latent_dim)。如果使用包含更高质量图像的数据集，一种提高模型质量的可能方法是将文本嵌入、图像嵌入和/或时间步嵌入传递到卷积层，以增加序列长度。</p>
-<pre><code class="language-python">tokens = torch.cat((
+<p><pre><code class="language-python">tokens = torch.cat((
     captions, # 图像标题
     text_embeddings, # CLIP文本嵌入
     timestep_embeddings, # 时间步嵌入
@@ -421,8 +431,9 @@ learned_embeddings = self.learned_embedding.repeat(
     learned_embeddings # 需要学习的嵌入
 ), dim=1) # (B, 5, latent_dim)
 </code></pre>
+</p>
 <p>然后，该序列会输入到一个带有因果注意力掩码的仅解码器架构的Transformer。因果注意力掩码是一个由1组成的下三角矩阵，它使得某个 token 只能关注在它之前出现的token。</p>
-<pre><code class="language-python"># 初始化
+<p><pre><code class="language-python"># 初始化
 self.decoder = nn.ModuleList(
     [TransformerBlock(
         config.latent_dim,
@@ -435,7 +446,7 @@ self.decoder = nn.ModuleList(
 )
 
 self.register_buffer(
-    &quot;causal_attention_mask&quot;,
+    "causal_attention_mask",
     torch.tril(torch.ones(5, 5))[None, :]
 )
 
@@ -443,9 +454,10 @@ self.register_buffer(
 for block in self.decoder:
     tokens = block(tokens, mask=self.causal_attention_mask)
 </code></pre>
+</p>
 <h4 id="sec-10">19.2.3.7 预测目标</h4>
 <p>最后，我们从 Transformer 的输出中获取学习到的嵌入，并将其传递给 LayerNorm 和 Linear 层以获得预测的图像嵌入。</p>
-<pre><code class="language-python"># 初始化
+<p><pre><code class="language-python"># 初始化
 self.output = nn.Sequential(
     nn.LayerNorm(config.latent_dim),
     nn.Linear(
@@ -458,11 +470,13 @@ self.output = nn.Sequential(
 # Forward：取最后一个训练出来的可学习嵌入
 pred_image_embeddings = self.output(tokens[:, -1, :])
 </code></pre>
+</p>
 <p>虽然通常情况下，扩散模型会预测噪声，并通过迭代去除噪声来生成样本，但unCLIP 论文中提到，最好直接预测CLIP 图像嵌入。该模型的损失函数应该是预测值与实际CLIP 图像嵌入之间的均方误差损失。</p>
-<pre><code class="language-python">loss = nn.functional.mse_loss(pred_image_embeddings, image_embeddings)
+<p><pre><code class="language-python">loss = nn.functional.mse_loss(pred_image_embeddings, image_embeddings)
 </code></pre>
+</p>
 <p>在采样过程中，为了提高质量，模型应该生成两个CLIP 图像嵌入的样本，并选择与CLIP 文本嵌入点积较高的样本。</p>
-<pre><code class="language-python">def get_one_sample(self, text_embeddings, captions):
+<p><pre><code class="language-python">def get_one_sample(self, text_embeddings, captions):
     # 获取一个和CLIP文本嵌入形状相同的白噪声
     # 而clip的图像嵌入和文本嵌入的形状相同
     noisy_image_embeddings = torch.randn(
@@ -548,9 +562,10 @@ def sample(self, captions, masks=None):
     # 预测的图片嵌入
     return gen_image_embeddings
 </code></pre>
+</p>
 <h4 id="sec-11">19.2.3.8 先验模型完整代码</h4>
 <p>综合以上所有，扩散先验模型的代码看起来应该是这样的：</p>
-<pre><code class="language-python">class DiffusionPrior(nn.Module):
+<p><pre><code class="language-python">class DiffusionPrior(nn.Module):
     def __init__(self, config):
         super().__init__()
         # 加载clip模型
@@ -610,7 +625,7 @@ def sample(self, captions, masks=None):
         )
 
         self.register_buffer(
-            &quot;causal_attention_mask&quot;,
+            "causal_attention_mask",
             torch.tril(torch.ones(5, 5))[None, :]
         )
 
@@ -727,6 +742,7 @@ def sample(self, captions, masks=None):
 
         return loss
 </code></pre>
+</p>
 
           <hr>
 

@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">ClipCap（图生文）</a>
                 </span>
               <h1>15.4 ClipCap 的代码实现</h1>
@@ -129,23 +129,25 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <h3 id="sec-1">15.4.1 项目配置</h3>
 <p>config.py</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 
-CLIP_MODEL_PATH = &quot;./chinese-clip-vit-base-patch16&quot;
+CLIP_MODEL_PATH = "./chinese-clip-vit-base-patch16"
 # 一张图片的嵌入经过投影转换成10个token的embedding，每个embedding的dim是768
 IMAGE_TOKEN_LENGTH = 10 # 图片的token的数量
 MAX_LENGTH = 100 # 最大token数量
 # clip对接的大语言模型
-LLM_PATH = &quot;./gpt2-chinese-cluecorpussmall&quot;
+LLM_PATH = "./gpt2-chinese-cluecorpussmall"
 LLM_WORD_EMBD_DIM = 768 # gpt2的词嵌入维度
 IMAGE_EMBD_DIM = 512 # clip输出的图像嵌入的维度
-device = torch.device(&quot;cuda&quot;)
+device = torch.device("cuda")
 </code></pre>
+</p>
 <h3 id="sec-2">15.4.2 处理数据</h3>
 <p>process_data.py</p>
-<pre><code class="language-python">from PIL import Image
+<p><pre><code class="language-python">from PIL import Image
 import pickle
 from transformers import ChineseCLIPProcessor, ChineseCLIPModel
 from config import CLIP_MODEL_PATH
@@ -158,8 +160,8 @@ def main():
     # 加载clip处理器
     processor = ChineseCLIPProcessor.from_pretrained(CLIP_MODEL_PATH)
     # 将2张图片进行处理，处理完之后交给clip抽取特征
-    inputs_1 = processor(images=Image.open(&quot;1.jpg&quot;), return_tensors=&quot;pt&quot;)
-    inputs_2 = processor(images=Image.open(&quot;2.jpg&quot;), return_tensors=&quot;pt&quot;)
+    inputs_1 = processor(images=Image.open("1.jpg"), return_tensors="pt")
+    inputs_2 = processor(images=Image.open("2.jpg"), return_tensors="pt")
     # 获取第一张图片的嵌入（dim: 512）
     image_1_features = clip_model.get_image_features(**inputs_1)
     image_2_features = clip_model.get_image_features(**inputs_2)
@@ -177,22 +179,23 @@ def main():
     }
     # 图片的id和图片标题对
     caption_list = [
-        (1, &quot;两只狗在雪地里嬉闹&quot;),
-        (2, &quot;一件好看的立领的很特别的紫色风衣&quot;),
+        (1, "两只狗在雪地里嬉闹"),
+        (2, "一件好看的立领的很特别的紫色风衣"),
     ]
 
-    with open(&quot;caption_image.pkl&quot;, &#39;wb&#39;) as f:
+    with open("caption_image.pkl", 'wb') as f:
         pickle.dump([caption_list, image_id2embed], f)
 
-    print(f&#39;图像嵌入的数量:{len(image_id2embed)}&#39;)
-    print(f&#39;图像文本的数量:{len(caption_list)}&#39;)
+    print(f'图像嵌入的数量:{len(image_id2embed)}')
+    print(f'图像文本的数量:{len(caption_list)}')
 
 
-if __name__ == &#39;__main__&#39;:
+if __name__ == '__main__':
     main()
 </code></pre>
+</p>
 <h3 id="sec-3">15.4.3 模型结构</h3>
-<p>图片
+<pre><code class="language-text">图片
 clip的图像编码器
 图片嵌入（维度：512）
 投影
@@ -205,10 +208,11 @@ gpt2
 clip的图像编码
 器！
 图片描述文本
-转换成gpt2的词嵌入</p>
+转换成gpt2的词嵌入
+</code></pre>
 <p>图 15.4 clipcap的模型设计要点</p>
 <p>model.py</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 import torch.nn as nn
 from transformers import GPT2LMHeadModel
 
@@ -217,7 +221,7 @@ from config import LLM_PATH, IMAGE_TOKEN_LENGTH, IMAGE_EMBD_DIM
 
 
 class MLP(nn.Module):
-    &quot;&quot;&quot;投影层&quot;&quot;&quot;
+    """投影层"""
     def __init__(self, sizes: Sequence[int]):
         super().__init__()
 
@@ -272,9 +276,10 @@ class ClipCaptionModel(nn.Module):
         logits = out.logits
         return logits
 </code></pre>
+</p>
 <h3 id="sec-4">15.4.4 准备训练数据集</h3>
 <p>clipcap_dataset.py</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 from torch.utils.data import Dataset
 import pickle
 from typing import Tuple
@@ -286,10 +291,10 @@ class ClipCapDataset(Dataset):
         # 填充符
         pad_id = tokenizer.pad_token_id
         # 取出图片的文本和图片的嵌入
-        with open(&quot;caption_image.pkl&quot;, &#39;rb&#39;) as f:
+        with open("caption_image.pkl", 'rb') as f:
             caption_list, image_id2embed = pickle.load(f)
-        print(&#39;图片嵌入的总数:{}&#39;.format(len(image_id2embed)))
-        print(&#39;图片描述的总数:{}&#39;.format(len(caption_list)))
+        print('图片嵌入的总数:{}'.format(len(image_id2embed)))
+        print('图片描述的总数:{}'.format(len(caption_list)))
 
         image_embed_list = []
         caption_ids_list = []
@@ -327,7 +332,7 @@ class ClipCapDataset(Dataset):
             caption_ids_list.append(caption_ids)
             mask_list.append(mask)
         # 保存训练数据
-        with open(&quot;train_data.pkl&quot;, &#39;wb&#39;) as f:
+        with open("train_data.pkl", 'wb') as f:
             pickle.dump([
                 image_embed_list, # clip输出的图片特征的列表
                 caption_ids_list, # 图片文本的input_ids的列表
@@ -336,7 +341,7 @@ class ClipCapDataset(Dataset):
         self.image_embed_list = image_embed_list
         self.caption_ids_list = caption_ids_list
         self.mask_list = mask_list
-        print(f&#39;训练数据总数：{len(self.image_embed_list)}&#39;)
+        print(f'训练数据总数：{len(self.image_embed_list)}')
 
     def __len__(self) -&gt; int:
         return len(self.caption_ids_list)
@@ -347,8 +352,9 @@ class ClipCapDataset(Dataset):
         mask = self.mask_list[index]
         return image_embed, caption_ids, mask
 </code></pre>
+</p>
 <h3 id="sec-5">15.4.5 训练</h3>
-<p>image_end
+<pre><code class="language-text">image_end
 t1
 t2
 t3
@@ -362,10 +368,11 @@ t4
 t5
 t6
 10个图片嵌入的最后一个嵌入
-只计算这部分的损失</p>
+只计算这部分的损失
+</code></pre>
 <p>图 15.5 clipcap的训练目标</p>
 <p>train.py</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 from torch.utils.data import DataLoader
 from transformers import BertTokenizer
 from tqdm import tqdm
@@ -412,7 +419,7 @@ def train(model, train_loader, optimizer):
             optimizer.step()
             optimizer.zero_grad()
 
-    torch.save(model.state_dict(), f&#39;model.pt&#39;)
+    torch.save(model.state_dict(), f'model.pt')
 
 
 def main():
@@ -428,16 +435,18 @@ def main():
     train(model, train_dataloader, optimizer)
 
 
-if __name__ == &#39;__main__&#39;:
+if __name__ == '__main__':
     main()
 </code></pre>
+</p>
 <h3 id="sec-6">15.4.6 推理</h3>
-<p>image_end
+<pre><code class="language-text">image_end
 10个图片嵌入的最后一个嵌入
-预测下一个token</p>
+预测下一个token
+</code></pre>
 <p>图 15.6 clipcap 只根据图片的嵌入预测文本的 token，也就是看图说话，不再需要文本了！</p>
 <p>infer.py</p>
-<pre><code class="language-python">from PIL import Image
+<p><pre><code class="language-python">from PIL import Image
 import torch
 from transformers import BertTokenizer, ChineseCLIPModel, ChineseCLIPProcessor
 from model import ClipCaptionModel
@@ -446,9 +455,9 @@ from config import LLM_PATH, CLIP_MODEL_PATH, IMAGE_TOKEN_LENGTH, LLM_WORD_EMBD_
 
 
 def generate(model, image_embeds, tokenizer):
-    &quot;&quot;&quot;
+    """
     :param image_embeds: [B, IMAGE_EMBD_DIM=512]
-    &quot;&quot;&quot;
+    """
 
     b_size = image_embeds.size(0)
     pad_id = tokenizer.pad_token_id
@@ -472,7 +481,7 @@ def generate(model, image_embeds, tokenizer):
         # 采样下一个token
         next_token_logits = logits[:, -1, :] # 取最后一个单词的预测分布
         next_token_logits = next_token_logits / temperature
-        next_token_logits[:, unk_id] = -float(&#39;Inf&#39;) # 将unk设为无穷小
+        next_token_logits[:, unk_id] = -float('Inf') # 将unk设为无穷小
 
         # 采样下一个token，多项分布
         next_token_ids = torch.multinomial(
@@ -510,7 +519,7 @@ def generate(model, image_embeds, tokenizer):
     captions = []
     for caption_id in caption_ids:
         caption = tokenizer.convert_ids_to_tokens(caption_id)
-        caption = &#39;&#39;.join(caption)
+        caption = ''.join(caption)
         captions.append(caption)
 
     return captions
@@ -523,7 +532,7 @@ def main():
     model = ClipCaptionModel().to(device)
     # 加载权重
     model.load_state_dict(torch.load(
-        &quot;model.pt&quot;,
+        "model.pt",
         map_location=device
     ), False)
     model.eval()
@@ -531,8 +540,8 @@ def main():
     # 加载clip模型
     clip_model = ChineseCLIPModel.from_pretrained(CLIP_MODEL_PATH)
     processor = ChineseCLIPProcessor.from_pretrained(CLIP_MODEL_PATH)
-    inputs_1 = processor(images=Image.open(&quot;1.jpg&quot;), return_tensors=&quot;pt&quot;)
-    inputs_2 = processor(images=Image.open(&quot;2.jpg&quot;), return_tensors=&quot;pt&quot;)
+    inputs_1 = processor(images=Image.open("1.jpg"), return_tensors="pt")
+    inputs_2 = processor(images=Image.open("2.jpg"), return_tensors="pt")
     image_1_features = clip_model.get_image_features(**inputs_1)
     image_2_features = clip_model.get_image_features(**inputs_2)
     image_1_features = image_1_features / \
@@ -556,9 +565,10 @@ def main():
     print(captions)
 
 
-if __name__ == &#39;__main__&#39;:
+if __name__ == '__main__':
     main()
 </code></pre>
+</p>
 
           <hr>
 

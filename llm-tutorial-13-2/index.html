@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">Vision Transformer</a>
                 </span>
               <h1>13.2 补丁嵌入（Patch Embedding）</h1>
@@ -131,7 +131,7 @@
           
           <p>图 13.2 补丁的例子</p>
 <p>补丁嵌入类</p>
-<pre><code class="language-python">class PatchEmbedding(nn.Module):
+<p><pre><code class="language-python">class PatchEmbedding(nn.Module):
     def __init__(
         self,
         d_model, # 模型的维度
@@ -165,27 +165,32 @@
         x = x.transpose(1, 2) # (B, d_model, P) -&gt; (B, P, d_model)
         return x
 </code></pre>
+</p>
 <p>创建 Vision Transformer 的第一步是将输入图像拆分为补丁，并创建这些补丁的线性嵌入序列。我们能够通过使用 PyTorch 的 Conv2d 方法来实现这一点。</p>
 <p>Conv2d 方法获取输入图像，将它们拆分为补丁，并提供大小等于 d_model 的线性投影。通过将 kernel_size 和步幅设置为补丁大小，我们确保补丁大小正确且没有重叠。</p>
-<pre><code class="language-python">self.linear_project = nn.Conv2d(
+<p><pre><code class="language-python">self.linear_project = nn.Conv2d(
     self.n_channels,
     self.d_model,
     kernel_size=self.patch_size,
     stride=self.patch_size
 )
 </code></pre>
+</p>
 <p>在 forward 方法中，我们通过 linear_project/Conv2d 方法传递具有形状 (B, C, H, W) 的输入，并输出形状 (B, d_model, P_col, P_row) 的张量。</p>
-<pre><code class="language-python">def forward(self, x):
+<p><pre><code class="language-python">def forward(self, x):
     x = self.linear_project(x) # (B, C, H, W) -&gt; (B, d_model, P_col, P_row)
 </code></pre>
+</p>
 <p>图 13.3 将图像转换为补丁：第一步</p>
 <p>我们使用展平方法将补丁列和补丁行维度组合成一个补丁维度，从而得到 (B, d_model, P) 的形状</p>
-<pre><code class="language-python">x = x.flatten(2) # (B, d_model, P_col, P_row) -&gt; (B, d_model, P)
+<p><pre><code class="language-python">x = x.flatten(2) # (B, d_model, P_col, P_row) -&gt; (B, d_model, P)
 </code></pre>
+</p>
 <p>图 13.4 将图像转换为补丁：第二步</p>
 <p>最后，我们使用转置方法切换 d_model 和补丁维度，得到 (B, P, d_model) 的形状。</p>
-<pre><code class="language-python">x = x.transpose(1, 2) # (B, d_model, P) -&gt; (B, P, d_model)
+<p><pre><code class="language-python">x = x.transpose(1, 2) # (B, d_model, P) -&gt; (B, P, d_model)
 </code></pre>
+</p>
 <p>图 13.5 将图像转换为补丁：第三步</p>
 
           <hr>

@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">使用GRPO微调大语言模型——复刻 DeepSeek-R1</a>
                 </span>
               <h1>12.3 GRPO 应用场景</h1>
@@ -146,7 +146,7 @@
 </ul>
 <p>权重应该反映数据集的复杂性——PubMedQA 的曝光度增加了 3 倍，以处理其细微差别。我们这里对数据集进行了打乱。由于 PubMedQA 样本量增加了 3 倍，因此将这些样本展示给模型的几率也增加了 3 倍。</p>
 <p>模型在训练过程中的答案</p>
-<pre><code>Prompt（提示）：
+<p><pre><code>Prompt（提示）：
 
 在以下科学背景下：
 
@@ -157,27 +157,28 @@
 本研究显示，重复 DUVR 暴露所产生的生物学效应可以被一款广谱日常护理产品所预防，且其所提供的防护水平会随具体检测终点而变化。
 
 回答下列问题：
-一款广谱防晒是否能预防代表温带地区的日常亚红斑量太阳紫外线重复暴露所导致的累积性损伤？请用 &quot;yes&quot; / &quot;no&quot; / &quot;maybe&quot; 作答。你需要仔细阅读背景并推理后回答。
+一款广谱防晒是否能预防代表温带地区的日常亚红斑量太阳紫外线重复暴露所导致的累积性损伤？请用 "yes" / "no" / "maybe" 作答。你需要仔细阅读背景并推理后回答。
 
 Model Response（模型回答）：
 
 &lt;reasoning&gt;
-提供的背景讨论了一项研究：重复的亚红斑量 UV（DUVR）暴露在 4 周内会产生不利影响。它还提到使用了一款广谱日常护理产品（SPF 8，UVA 防护因子 7，UVA 3* 评级）进行评估。研究的目的是判断该广谱产品是否能预防这类重复暴露引起的累积性损伤。文本中说明，该研究显示重复 DUVR 的生物学效应可以被这款产品预防，说明其具有保护作用。虽然不同终点的防护程度不同，但整体表述支持其确实能预防累积损伤。因此答案应为&quot;yes&quot;。
+提供的背景讨论了一项研究：重复的亚红斑量 UV（DUVR）暴露在 4 周内会产生不利影响。它还提到使用了一款广谱日常护理产品（SPF 8，UVA 防护因子 7，UVA 3* 评级）进行评估。研究的目的是判断该广谱产品是否能预防这类重复暴露引起的累积性损伤。文本中说明，该研究显示重复 DUVR 的生物学效应可以被这款产品预防，说明其具有保护作用。虽然不同终点的防护程度不同，但整体表述支持其确实能预防累积损伤。因此答案应为"yes"。
 &lt;/reasoning&gt;
 
 &lt;answer&gt;
 yes
 &lt;/answer&gt;
 </code></pre>
+</p>
 <p>TRL 代码如下：</p>
-<pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+<p><pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_dataset, Dataset, interleave_datasets, concatenate_datasets
 import re
 
 
 # Load and prep dataset
-SYSTEM_PROMPT = &quot;&quot;&quot;
+SYSTEM_PROMPT = """
 Respond in the following format:
 &lt;reasoning&gt;
 ...
@@ -185,133 +186,133 @@ Respond in the following format:
 &lt;answer&gt;
 ...
 &lt;/answer&gt;
-&quot;&quot;&quot;
+"""
 
-XML_COT_FORMAT = &quot;&quot;&quot;\
+XML_COT_FORMAT = """\
 &lt;reasoning&gt;
 {reasoning}
 &lt;/reasoning&gt;
 &lt;answer&gt;
 {answer}
 &lt;/answer&gt;
-&quot;&quot;&quot;
+"""
 
 
 def extract_xml_answer(text: str) -&gt; str:
-    answer = text.split(&quot;&lt;answer&gt;&quot;)[-1]
-    answer = answer.split(&quot;&lt;/answer&gt;&quot;)[0]
+    answer = text.split("&lt;answer&gt;")[-1]
+    answer = answer.split("&lt;/answer&gt;")[0]
     return answer.strip()
 
 
 def extract_hash_answer(text: str) -&gt; str | None:
-    if &quot;####&quot; not in text:
+    if "####" not in text:
         return None
-    return text.split(&quot;####&quot;)[1].strip()
+    return text.split("####")[1].strip()
 
 # uncomment middle messages for 1-shot prompting
 
 
-def get_datasets(split=&quot;train&quot;) -&gt; Dataset:
-    data = load_dataset(&#39;gsm8k&#39;, &#39;main&#39;)[split] # type: ignore
+def get_datasets(split="train") -&gt; Dataset:
+    data = load_dataset('gsm8k', 'main')[split] # type: ignore
     data = data.map(lambda x: { # type: ignore
-        &#39;prompt&#39;: [
-            {&#39;role&#39;: &#39;system&#39;, &#39;content&#39;: SYSTEM_PROMPT},
-            {&#39;role&#39;: &#39;user&#39;, &#39;content&#39;: x[&#39;question&#39;]}
+        'prompt': [
+            {'role': 'system', 'content': SYSTEM_PROMPT},
+            {'role': 'user', 'content': x['question']}
         ],
-        &#39;answer&#39;: extract_hash_answer(x[&#39;answer&#39;]),
-        &#39;db_set&#39;: &#39;gsm8k&#39;
+        'answer': extract_hash_answer(x['answer']),
+        'db_set': 'gsm8k'
     }) # type: ignore
-    data = data.remove_columns([&#39;question&#39;])
+    data = data.remove_columns(['question'])
 
     # two times more than other datasets
-    data_qa = load_dataset(&quot;PubMedQA&quot;, &quot;pqa_artificial&quot;)[split]
-    data_qa = data_qa.filter(lambda x: len(&quot;\n&quot;.join(x[&#39;context&#39;][&#39;contexts&#39;])) &lt; 1024) # avoid long traces
+    data_qa = load_dataset("PubMedQA", "pqa_artificial")[split]
+    data_qa = data_qa.filter(lambda x: len("\n".join(x['context']['contexts'])) &lt; 1024) # avoid long traces
     data_qa = data_qa.map(lambda x: { # type: ignore
-        &#39;prompt&#39;: [
-            {&#39;role&#39;: &#39;system&#39;, &#39;content&#39;: SYSTEM_PROMPT},
+        'prompt': [
+            {'role': 'system', 'content': SYSTEM_PROMPT},
             {
-                &quot;role&quot;: &quot;user&quot;,
-                &quot;content&quot;: &quot;Given the scientific context below:\n&quot; +
-                &quot;\n&quot;.join(x[&#39;context&#39;][&#39;contexts&#39;]) +
-                &quot;\n\nAnswer the following question:\n&quot; +
-                x[&#39;question&#39;] +
-                &quot; with &#39;yes&#39;, &#39;no&#39; or &#39;maybe&#39;. You need to carefully review the context and reason before answering.&quot;
+                "role": "user",
+                "content": "Given the scientific context below:\n" +
+                "\n".join(x['context']['contexts']) +
+                "\n\nAnswer the following question:\n" +
+                x['question'] +
+                " with 'yes', 'no' or 'maybe'. You need to carefully review the context and reason before answering."
             },
         ],
-        &#39;answer&#39;: x[&#39;final_decision&#39;],
-        &#39;db_set&#39;: &#39;pubmedqa&#39;
+        'answer': x['final_decision'],
+        'db_set': 'pubmedqa'
     }) # type: ignore
-    data_qa = data_qa.remove_columns([&#39;pubid&#39;, &#39;question&#39;, &#39;context&#39;, &#39;long_answer&#39;, &#39;final_decision&#39;])
+    data_qa = data_qa.remove_columns(['pubid', 'question', 'context', 'long_answer', 'final_decision'])
 
     categories = [
-        &#39;Lab_Medicine&#39;,
-        &#39;Wearables&#39;,
-        &#39;Dermatology&#39;,
-        &#39;Gastroenterology&#39;,
-        &#39;Internal_Medicine&#39;,
-        &#39;Oncology&#39;,
-        &#39;Orthopedics&#39;,
-        &#39;General_Surgery&#39;,
-        &#39;Ophthalmology&#39;,
-        &#39;Audiology&#39;,
-        &#39;Head_Neck_Surgery&#39;,
-        &#39;Elderly_Care&#39;,
-        &#39;Pediatrics&#39;,
-        &#39;Allergy_Immunology&#39;,
-        &#39;Rheumatology&#39;,
-        &#39;Pharmacy&#39;,
-        &#39;Obstetrics_Gynecology&#39;,
-        &#39;Microbiology&#39;,
-        &#39;Dentistry&#39;,
-        &#39;Physical_Medicine_and_Rehabilitation&#39;,
-        &#39;Neurology&#39;,
-        &#39;Psychiatry&#39;,
-        &#39;Pathology&#39;,
-        &#39;Genetics&#39;,
-        &#39;Rare_Diseases&#39;,
-        &#39;Hematology&#39;,
-        &#39;Emergency&#39;,
-        &#39;Endocrinology&#39;,
-        &#39;Radiology&#39;,
-        &#39;Cardiology&#39;,
-        &#39;Pulmonology&#39;,
-        &#39;Infectious_Diseases&#39;,
-        &#39;Critical_Care&#39;,
-        &#39;Pediatric_Surgery&#39;,
-        &#39;Neuroscience&#39;,
-        &#39;Epidemiology&#39;,
-        &#39;Fitness_Sports&#39;,
-        &#39;Health_Education&#39;,
-        &#39;Health_Economics&#39;,
-        &#39;Health_Entrepreneurship&#39;,
-        &#39;Hospital_Management&#39;,
-        &#39;Mental_Health&#39;,
-        &#39;Nutrition&#39;,
-        &#39;Palliative_Care&#39;,
-        &#39;Preventive_Medicine&#39;,
-        &#39;Public_Health&#39;,
-        &#39;Social_Media_Addiction&#39;,
-        &#39;Sleep&#39;,
-        &#39;Supplements&#39;,
-        &#39;Vaccination&#39;,
-        &#39;Work_Health&#39;,
-        &#39;Wellbeing&#39;
+        'Lab_Medicine',
+        'Wearables',
+        'Dermatology',
+        'Gastroenterology',
+        'Internal_Medicine',
+        'Oncology',
+        'Orthopedics',
+        'General_Surgery',
+        'Ophthalmology',
+        'Audiology',
+        'Head_Neck_Surgery',
+        'Elderly_Care',
+        'Pediatrics',
+        'Allergy_Immunology',
+        'Rheumatology',
+        'Pharmacy',
+        'Obstetrics_Gynecology',
+        'Microbiology',
+        'Dentistry',
+        'Physical_Medicine_and_Rehabilitation',
+        'Neurology',
+        'Psychiatry',
+        'Pathology',
+        'Genetics',
+        'Rare_Diseases',
+        'Hematology',
+        'Emergency',
+        'Endocrinology',
+        'Radiology',
+        'Cardiology',
+        'Pulmonology',
+        'Infectious_Diseases',
+        'Critical_Care',
+        'Pediatric_Surgery',
+        'Neuroscience',
+        'Epidemiology',
+        'Fitness_Sports',
+        'Health_Education',
+        'Health_Economics',
+        'Health_Entrepreneurship',
+        'Hospital_Management',
+        'Mental_Health',
+        'Nutrition',
+        'Palliative_Care',
+        'Preventive_Medicine',
+        'Public_Health',
+        'Social_Media_Addiction',
+        'Sleep',
+        'Supplements',
+        'Vaccination',
+        'Work_Health',
+        'Wellbeing'
     ]
-    data_mc = concatenate_datasets([load_dataset(&quot;Health_Benchmarks&quot;, i)[i] for i in categories])
+    data_mc = concatenate_datasets([load_dataset("Health_Benchmarks", i)[i] for i in categories])
     data_mc = data_mc.map(lambda x: { # type: ignore
-        &#39;prompt&#39;: [
-            {&#39;role&#39;: &#39;system&#39;, &#39;content&#39;: SYSTEM_PROMPT},
+        'prompt': [
+            {'role': 'system', 'content': SYSTEM_PROMPT},
             {
-                &quot;role&quot;: &quot;user&quot;,
-                &quot;content&quot;: &quot;\n\nAnswer the following question:\n&quot; +
-                x[&#39;Questions&#39;] +
-                &quot;\n With &#39;A&#39;, &#39;B&#39;, &#39;C&#39; or &#39;D&#39;. You need to carefully review the context and reason before answering.&quot;
+                "role": "user",
+                "content": "\n\nAnswer the following question:\n" +
+                x['Questions'] +
+                "\n With 'A', 'B', 'C' or 'D'. You need to carefully review the context and reason before answering."
             },
         ],
-        &#39;answer&#39;: x[&#39;Answers&#39;],
-        &#39;db_set&#39;: &#39;med_mc&#39;
+        'answer': x['Answers'],
+        'db_set': 'med_mc'
     }) # type: ignore
-    data_mc = data_mc.remove_columns([&#39;Answers&#39;, &#39;Questions&#39;])
+    data_mc = data_mc.remove_columns(['Answers', 'Questions'])
 
     dataset = concatenate_datasets([data, data_qa, data_mc])
     return dataset
@@ -320,21 +321,21 @@ def get_datasets(split=&quot;train&quot;) -&gt; Dataset:
 dataset = get_datasets()
 dataset = dataset.shuffle(seed=42)
 train_test_split = dataset.train_test_split(test_size=0.1)
-train_dataset = train_test_split[&quot;train&quot;]
-test_dataset = train_test_split[&quot;test&quot;]
-print(f&quot;train size: {len(train_dataset)}, test size: {len(test_dataset)}&quot;)
+train_dataset = train_test_split["train"]
+test_dataset = train_test_split["test"]
+print(f"train size: {len(train_dataset)}, test size: {len(test_dataset)}")
 
 
 # Reward functions
 def correctness_reward_func(prompts, completions, answer, db_set, **kwargs) -&gt; list[float]:
-    responses = [completion[0][&#39;content&#39;] for completion in completions]
-    q = prompts[0][-1][&#39;content&#39;]
+    responses = [completion[0]['content'] for completion in completions]
+    q = prompts[0][-1]['content']
     extracted_responses = [extract_xml_answer(r) for r in responses]
-    print(&#39;-&#39;*20, f&quot;Question:\n{q}&quot;, f&quot;\nAnswer:\n{answer[0]}&quot;,
-          f&quot;\nResponse:\n{responses[0]}&quot;, f&quot;\nExtracted:\n{extracted_responses[0]}&quot;)
+    print('-'*20, f"Question:\n{q}", f"\nAnswer:\n{answer[0]}",
+          f"\nResponse:\n{responses[0]}", f"\nExtracted:\n{extracted_responses[0]}")
     rewards = []
     for r, a, dt in zip(extracted_responses, answer, db_set):
-        if dt == &quot;gsm8k&quot;:
+        if dt == "gsm8k":
             if a in r:
                 rewards.append(1.0)
             elif r == a:
@@ -347,67 +348,67 @@ def correctness_reward_func(prompts, completions, answer, db_set, **kwargs) -&gt
 
 
 def int_reward_func(completions, db_set, **kwargs) -&gt; list[float]:
-    responses = [completion[0][&#39;content&#39;] for completion in completions]
+    responses = [completion[0]['content'] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
     rewards = []
     for r, dt in zip(extracted_responses, db_set):
-        if dt == &quot;gsm8k&quot;:
+        if dt == "gsm8k":
             rewards.append(0.5 if r.isdigit() else 0.0)
-        elif dt == &quot;pubmedqa&quot;:
-            rewards.append(0.5 if (&#39;yes&#39; in r.lower() or &#39;no&#39; in r.lower() or &#39;maybe&#39; in r.lower()) else 0.0)
+        elif dt == "pubmedqa":
+            rewards.append(0.5 if ('yes' in r.lower() or 'no' in r.lower() or 'maybe' in r.lower()) else 0.0)
         else:
-            rewards.append(0.5 if (&#39;a&#39; in r.lower() or &#39;b&#39; in r.lower() or &#39;c&#39; in r.lower() or &#39;d&#39; in r.lower()) else 0.0)
+            rewards.append(0.5 if ('a' in r.lower() or 'b' in r.lower() or 'c' in r.lower() or 'd' in r.lower()) else 0.0)
     return rewards
 
 
 def strict_format_reward_func(completions, **kwargs) -&gt; list[float]:
-    &quot;&quot;&quot;Reward function that checks if the completion has a specific format.&quot;&quot;&quot;
-    pattern = r&quot;^&lt;reasoning&gt;\n.*?\n&lt;/reasoning&gt;\n&lt;answer&gt;\n.*?\n&lt;/answer&gt;\n$&quot;
-    responses = [completion[0][&quot;content&quot;] for completion in completions]
+    """Reward function that checks if the completion has a specific format."""
+    pattern = r"^&lt;reasoning&gt;\n.*?\n&lt;/reasoning&gt;\n&lt;answer&gt;\n.*?\n&lt;/answer&gt;\n$"
+    responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
 
 def soft_format_reward_func(completions, **kwargs) -&gt; list[float]:
-    &quot;&quot;&quot;Reward function that checks if the completion has a specific format.&quot;&quot;&quot;
-    pattern = r&quot;&lt;reasoning&gt;.*?&lt;/reasoning&gt;\s*&lt;answer&gt;.*?&lt;/answer&gt;&quot;
-    responses = [completion[0][&quot;content&quot;] for completion in completions]
+    """Reward function that checks if the completion has a specific format."""
+    pattern = r"&lt;reasoning&gt;.*?&lt;/reasoning&gt;\s*&lt;answer&gt;.*?&lt;/answer&gt;"
+    responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
 
 def count_xml(text) -&gt; float:
     count = 0.0
-    if text.count(&quot;&lt;reasoning&gt;\n&quot;) == 1:
+    if text.count("&lt;reasoning&gt;\n") == 1:
         count += 0.125
-    if text.count(&quot;\n&lt;/reasoning&gt;\n&quot;) == 1:
+    if text.count("\n&lt;/reasoning&gt;\n") == 1:
         count += 0.125
-    if text.count(&quot;\n&lt;answer&gt;\n&quot;) == 1:
+    if text.count("\n&lt;answer&gt;\n") == 1:
         count += 0.125
-        count -= len(text.split(&quot;\n&lt;/answer&gt;\n&quot;)[-1])*0.001
-    if text.count(&quot;\n&lt;/answer&gt;&quot;) == 1:
+        count -= len(text.split("\n&lt;/answer&gt;\n")[-1])*0.001
+    if text.count("\n&lt;/answer&gt;") == 1:
         count += 0.125
-        count -= (len(text.split(&quot;\n&lt;/answer&gt;&quot;)[-1]) - 1)*0.001
+        count -= (len(text.split("\n&lt;/answer&gt;")[-1]) - 1)*0.001
     return count
 
 
 def xmlcount_reward_func(completions, **kwargs) -&gt; list[float]:
-    contents = [completion[0][&quot;content&quot;] for completion in completions]
+    contents = [completion[0]["content"] for completion in completions]
     return [count_xml(c) for c in contents]
 
 
-training_args = GRPOConfig(output_dir=&quot;outputs&quot;, num_generations=2, per_device_train_batch_size=4)
+training_args = GRPOConfig(output_dir="outputs", num_generations=2, per_device_train_batch_size=4)
 
 
 # 加载模型
 model = AutoModelForCausalLM.from_pretrained(
-    &quot;../GRPO/Qwen2.5-3B-Instruct/&quot;,
-    torch_dtype=&quot;auto&quot;,
-    device_map=&quot;auto&quot;
+    "../GRPO/Qwen2.5-3B-Instruct/",
+    torch_dtype="auto",
+    device_map="auto"
 )
 
 tokenizer = AutoTokenizer.from_pretrained(
-    &quot;../GRPO/Qwen2.5-3B-Instruct/&quot;)
+    "../GRPO/Qwen2.5-3B-Instruct/")
 
 
 trainer = GRPOTrainer(
@@ -426,6 +427,7 @@ trainer = GRPOTrainer(
 )
 trainer.train()
 </code></pre>
+</p>
 <h3 id="sec-2">12.3.2 Text-To-SQL</h3>
 <p>GITHUB 地址
 底座模型：Qwen2.5-Coder-7B-Instruct</p>
@@ -478,11 +480,12 @@ schema 匹配度涨了，只是模型学会了“看到这种问题就用这几�
 <p>修好数据库路径后，终于有了真正的执行奖励。模型生成 SQL → 在真实数据库上执行 → 对比结果。
 训练跑起来了，execution reward 从 0 开始涨，一切看起来很美好。
 然后，在训练到 22% 的时候，整个 8 卡训练突然挂了。
-查日志，看到这行：</p>
+查日志，看到这行：
 <pre><code>WorkNCCL(SeqNum=7034, OpType=_ALLGATHER_BASE)
 ran for 1800063ms before timing out
 </code></pre>
-<p>翻译：某个 GPU 在一个同步操作上卡了 30 分钟，其他 7 张卡等不住了，集体超时退出。
+
+翻译：某个 GPU 在一个同步操作上卡了 30 分钟，其他 7 张卡等不住了，集体超时退出。
 根因：模型生成了一条带笛卡尔积的 SQL，类似 <code>SELECT * FROM A, B, C WHERE ...</code>，三张大表做交叉连接，结果集是天文数字。SQLite 老老实实地算，直到超时。
 这张卡在执行这条 SQL，其他卡早就算完了在等它同步。等了 30 分钟，NCCL watchdog 判定超时，SIGABRT 杀掉所有进程。
 DDP 训练的致命弱点：一个 rank 卡住 = 全部卡住。
@@ -490,12 +493,13 @@ DDP 训练的致命弱点：一个 rank 卡住 = 全部卡住。
 第一次用 <code>signal.alarm(30)</code> 设超时——失败。SIGALRM 只能发给主线程，DDP 的 worker 线程收不到。
 第二次用 <code>threading.Timer</code> ——失败。SQLite 的连接不是线程安全的，跨线程关闭连接会 segfault。
 第三次用 <code>ThreadPoolExecutor</code>：把 SQL 执行扔到独立线程池，用 <code>.result(timeout=30)</code> 等结果。超时就放弃，返回 reward=0。终于稳了。</p>
-<pre><code class="language-python">executor = ThreadPoolExecutor(max_workers=1)
+<p><pre><code class="language-python">executor = ThreadPoolExecutor(max_workers=1)
 try:
     result = executor.submit(run_sql, db, sql).result(timeout=30)
 except TimeoutError:
     result = None # reward = 0
 </code></pre>
+</p>
 <p>教训：RL 训练里跑外部程序（SQL 执行、代码运行、API 调用），一定要加超时。尤其是多卡 DDP 环境，一个 rank 的阻塞会传染给所有 rank。</p>
 <h4 id="sec-8">12.3.3.5 第三个坑(算法)：算法选错，KL 散度爆炸 38 倍</h4>
 <p>GRPO 的几个比较有名的变体，我都无脑试了一波：
@@ -596,14 +600,15 @@ REINFORCE++ 走另一个极端，特别保守。KL 稳如老狗，但 reward 也
 结果完全无效。日志显示 frac_reward_zero_std 几乎 100%——模型已经“会”了，没有学习信号。GRPO 需要奖励方差才能学习。</p>
 <p><strong>三、NGRPO 突破</strong></p>
 <p>核心问题：所有生成的 reward 相同时，advantage = 0，模型无法学习。
-受 NGRPO 论文启发，我们添加虚拟满分样本：</p>
+受 NGRPO 论文启发，我们添加虚拟满分样本：
 <pre><code class="language-python">rewards = [0.8, 0.8, 0.8, 0.8]
 augmented = rewards + [1.0] # 虚拟满分样本
 mean = sum(augmented) / len(augmented) # 0.84
 std = sqrt(variance(augmented)) # 0.08
 advantage = (r - mean) / std # 非零！
 </code></pre>
-<p>即使真实样本得分相同，虚拟样本也能提供参照点，产生非零梯度。
+
+即使真实样本得分相同，虚拟样本也能提供参照点，产生非零梯度。
 结果：平均分 +13 点，tool 准确率 +14 点，intraday +35 点。关键指标 frac_reward_zero_std : 0.0。</p>
 <p><strong>四、各种“高级”方法的尝试</strong></p>
 <p>基于 NGRPO 拿到满意的 baseline 后，尝试了多种论文方法，效果都不如预期。</p>
@@ -616,38 +621,42 @@ advantage = (r - mean) / std # 非零！
 <p><strong>五、DART 的启示</strong></p>
 <p>SFT 实验中观察到奇怪现象：reasoning 变好但 tool 选择变差。我想到刚读到的一篇 DART 论文 (arXiv:2602.00994) 提到：
 Reasoning 和 Tool-use 的梯度方向几乎正交，联合训练会导致两种能力互相干扰。
-我们实现了简化版 Token-Level 梯度分离：</p>
-<pre><code class="language-python">reasoning_tokens = tokens_in(&quot;reasoning&quot;: &quot;...&quot;)
-tool_tokens = tokens_in(&quot;action&quot;: {&quot;tool&quot;: ...})
+我们实现了简化版 Token-Level 梯度分离：
+<pre><code class="language-python">reasoning_tokens = tokens_in("reasoning": "...")
+tool_tokens = tokens_in("action": {"tool": ...})
 loss = 0.3 * reasoning_loss + 0.7 * tool_loss
 </code></pre>
-<p>整体略低于 NGRPO，但 Combo 提升到 78%。DART 在复杂场景确实有效，但需要足够训练数据。</p>
+
+整体略低于 NGRPO，但 Combo 提升到 78%。DART 在复杂场景确实有效，但需要足够训练数据。</p>
 <p><strong>六、数据混合的教训</strong></p>
 <p>大量增加 combo 数据后，transfer/order 等场景性能暴跌，combo 也没提升多少。降低比例后效果依然较差。数据混合比例极其敏感。</p>
 <p><strong>七、ReAct Agent 的突破</strong></p>
 <p>我停下来重新思考：Combo 场景本质是多步规划问题，不是简单的工具选择。
-原训练数据：</p>
-<pre><code class="language-json">{&quot;input&quot;: &quot;转账10万再提现5万&quot;, &quot;output&quot;: &#39;{&quot;tool&quot;: &quot;check_balance&quot;}&#39;}
+原训练数据：
+<pre><code class="language-json">{"input": "转账10万再提现5万", "output": '{"tool": "check_balance"}'}
 </code></pre>
-<p>label 本身就错了！测试期望 <code>transfer_funds</code>，训练却教 <code>check_balance</code>。
-重新设计输出格式：</p>
+
+label 本身就错了！测试期望 <code>transfer_funds</code>，训练却教 <code>check_balance</code>。
+重新设计输出格式：
 <pre><code class="language-json">{
-    &quot;thought&quot;: &quot;两步操作：先转账再提现。执行转账。&quot;,
-    &quot;action&quot;: {&quot;tool&quot;: &quot;transfer_funds&quot;, &quot;params&quot;: {&quot;amount&quot;: 1000000}},
-    &quot;plan&quot;: [&quot;transfer 10 lakh&quot;, &quot;withdraw 5 lakh&quot;]
+    "thought": "两步操作：先转账再提现。执行转账。",
+    "action": {"tool": "transfer_funds", "params": {"amount": 1000000}},
+    "plan": ["transfer 10 lakh", "withdraw 5 lakh"]
 }
 </code></pre>
-<p>thought 让模型先思考，action 输出第一步实际操作，plan 规划后续步骤。
+
+thought 让模型先思考，action 输出第一步实际操作，plan 规划后续步骤。
 结果：combo 91%，平均分 89%，tool 准确率 92%。问题定义比算法更重要。</p>
 <p><strong>八、细节优化</strong></p>
-<p>ReAct 成功后继续强化弱类别，但提升有限。深挖日志发现奖励函数问题：</p>
+<p>ReAct 成功后继续强化弱类别，但提升有限。深挖日志发现奖励函数问题：
 <pre><code class="language-python">reasoning: +0.2
 action.tool: +0.3
 valid_tool: +0.2
 params: +0.1
 # 最大分: 0.8 ← 问题所在！
 </code></pre>
-<p>上限 0.8，所有正确输出得分相同，没有区分度。调整到 1.0 后立即提升 6%。
+
+上限 0.8，所有正确输出得分相同，没有区分度。调整到 1.0 后立即提升 6%。
 分析错误模式发现模型过度使用 check_market_status，添加针对性惩罚 −0.3。
 最终：平均分 96%，tool 准确率 97%，最低的 settlement 也到 79%。针对具体错误模式设计惩罚比通用算法改进更有效。</p>
 <p><strong>九、核心经验</strong></p>
@@ -685,8 +694,8 @@ NGRPO 通用解决零梯度问题，DART 适合复杂场景，PRS/难度感知�
 <p><strong>注意！</strong>
 问题定义 &gt; 数据质量 &gt; 算法选择</p>
 <p><strong>十、最终方案</strong></p>
-<pre><code class="language-python"># 模型
-base_model = &quot;Qwen/Qwen2.5-7B-Instruct&quot;
+<p><pre><code class="language-python"># 模型
+base_model = "Qwen/Qwen2.5-7B-Instruct"
 lora_r, lora_alpha = 16, 32
 
 # 训练
@@ -696,18 +705,19 @@ learning_rate, epochs = 5e-6, 4
 # 奖励函数
 def reward(completion, prompt):
     score = 0.0
-    if &#39;thought&#39; in parsed: score += 0.2
-    if &#39;action&#39; in parsed and &#39;tool&#39; in action:
+    if 'thought' in parsed: score += 0.2
+    if 'action' in parsed and 'tool' in action:
         score += 0.2
     if tool in valid_tools: score += 0.2
-    if &#39;params&#39; in action: score += 0.1
-    if &#39;plan&#39; in parsed: score += 0.2
-    if tool == &#39;check_market_status&#39; and not market_keywords_in_prompt:
+    if 'params' in action: score += 0.1
+    if 'plan' in parsed: score += 0.2
+    if tool == 'check_market_status' and not market_keywords_in_prompt:
         score -= 0.3
     return max(0, min(score, 1.0))
 
 use_virtual_max_reward = True # NGRPO
 </code></pre>
+</p>
 <p><strong>十一、总结</strong></p>
 <ul>
 <li>过采样实验发现了零梯度问题</li>

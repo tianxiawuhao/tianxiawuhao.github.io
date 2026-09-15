@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">CLIP</a>
                 </span>
               <h1>14.2 图像和文本编码器</h1>
@@ -131,7 +131,7 @@
           
           <p>我们将首先构建图像和文本编码器。两者分别将图像和文本嵌入到单个 token 中，然后可用于对比损失计算。</p>
 <h3 id="sec-1">14.2.1 位置嵌入</h3>
-<pre><code class="language-python">class PositionalEmbedding(nn.Module):
+<p><pre><code class="language-python">class PositionalEmbedding(nn.Module):
     def __init__(self, width, max_seq_length):
         super().__init__()
         # 创建一个 (token的数量, 嵌入的维度) 形状的全0张量
@@ -145,15 +145,16 @@
                 else:
                     pe[pos][i] = np.cos(pos/(10000 ** ((i-1)/width)))
         # 位置编码信息进行冻结，不参与反向传播
-        self.register_buffer(&#39;pe&#39;, pe.unsqueeze(0))
+        self.register_buffer('pe', pe.unsqueeze(0))
 
     def forward(self, x):
         # 直接将位置编码和token的嵌入进行相加
         x = x + self.pe
         return x
 </code></pre>
+</p>
 <h3 id="sec-2">14.2.2 注意力头</h3>
-<pre><code class="language-python">class AttentionHead(nn.Module):
+<p><pre><code class="language-python">class AttentionHead(nn.Module):
     def __init__(self, width, head_size):
         super().__init__()
         self.head_size = head_size
@@ -171,19 +172,21 @@
         attention = attention / (self.head_size ** 0.5)
         # 掩码
         if mask is not None:
-            attention = attention.masked_fill(mask == 0, float(&quot;-inf&quot;))
+            attention = attention.masked_fill(mask == 0, float("-inf"))
         attention = torch.softmax(attention, dim=-1)
         attention = attention @ V
         return attention
 </code></pre>
+</p>
 <p>Transformer 编码器和解码器之间的主要区别在于解码器使用注意力掩码，而编码器则不使用。虽然 CLIP 是仅编码器模型（Encoder-Only），但由于在分词时，对输入文本添加了 pad（填充符），所以仍然需要与文本编码器一起使用掩码。请注意，掩码是可选的，因此这个注意力头可用于文本和视觉编码器。</p>
 <p>图 14.2 注意力分数的掩码</p>
-<pre><code class="language-python"># 使用注意力掩码
+<p><pre><code class="language-python"># 使用注意力掩码
 if mask is not None:
-    attention = attention.masked_fill(mask == 0, float(&quot;-inf&quot;))
+    attention = attention.masked_fill(mask == 0, float("-inf"))
 </code></pre>
+</p>
 <h3 id="sec-3">14.2.3 多头注意力</h3>
-<pre><code class="language-python">class MultiHeadAttention(nn.Module):
+<p><pre><code class="language-python">class MultiHeadAttention(nn.Module):
     def __init__(self, width, n_heads):
         super().__init__()
         self.head_size = width // n_heads
@@ -199,8 +202,9 @@ if mask is not None:
         out = self.W_o(out)
         return out
 </code></pre>
+</p>
 <h3 id="sec-4">14.2.4 Transformer 编码器</h3>
-<pre><code class="language-python">class TransformerEncoder(nn.Module):
+<p><pre><code class="language-python">class TransformerEncoder(nn.Module):
     def __init__(self, width, n_heads, r_mlp=4):
         super().__init__()
         self.width = width # 嵌入的维度d_model
@@ -227,15 +231,16 @@ if mask is not None:
         x = x + self.mlp(self.ln2(x))
         return x
 </code></pre>
+</p>
 <h3 id="sec-5">14.2.5 文本的分词器</h3>
 <p>我们的词汇表是 ascii 码，所以 vocab_size = 256。</p>
-<pre><code class="language-python">def tokenizer(text, encode=True, mask=None, max_seq_length=32):
+<p><pre><code class="language-python">def tokenizer(text, encode=True, mask=None, max_seq_length=32):
     if encode:
         out = chr(2) + text + chr(3) # 添加 SOT token 和 EOT token
-        out = out + &quot;&quot;.join([
+        out = out + "".join([
             chr(0) for _ in range(max_seq_length-len(out))
         ]) # 添加Padding
-        out = torch.IntTensor(list(out.encode(&quot;utf-8&quot;))) # 对文本进行编码
+        out = torch.IntTensor(list(out.encode("utf-8"))) # 对文本进行编码
         mask = torch.ones(len(out.nonzero()))
         mask = torch.cat((
             mask,
@@ -244,29 +249,34 @@ if mask is not None:
     else:
         # 将input_ids解码为text文本
         out = [chr(x) for x in text[1:len(mask.nonzero())-1]]
-        out = &quot;&quot;.join(out)
+        out = "".join(out)
         mask = None
 
     return out, mask
 </code></pre>
+</p>
 <p>Transformer 无法处理原始文本，因此我们需要做的第一件事是在将输入字符串通过文本编码器之前对其进行分词。</p>
 <p>在本教程中，我们将进行一个简单版本的分词，其中我们只使用 UTF-8 编码。为什么使用 UTF-8 编码进行分词？因为我们只会在示例中使用简单的 ascii 码文本。对于更复杂的示例，可能需要使用 BPE 分词器。这是因为使用 UTF-8 编码时，词表大小（vocab_size）为256，这意味着对于更复杂的示例，可能会有更长的输入序列，由于上下文长度有限，这在计算注意力时效率低下。</p>
 <p>图 14.3 分词过程</p>
 <p>分词器的第一步是将文本的开头和文本的结尾 token 添加到输入字符串中。</p>
-<pre><code class="language-python">text = chr(2) + text + chr(3)
+<p><pre><code class="language-python">text = chr(2) + text + chr(3)
 </code></pre>
+</p>
 <p>添加文本的开头和文本的结尾 token 后，我们需要将序列的长度填充到最大序列长度。</p>
-<pre><code class="language-python">text = text + &quot;&quot;.join([chr(0) for _ in range(10-len(text))])
+<p><pre><code class="language-python">text = text + "".join([chr(0) for _ in range(10-len(text))])
 </code></pre>
+</p>
 <p>我们通过将文本序列编码为 UTF-8 并将输出转换为 IntTensor 来完成分词。</p>
-<pre><code class="language-python">text = torch.IntTensor(list(text.encode(&quot;utf-8&quot;)))
+<p><pre><code class="language-python">text = torch.IntTensor(list(text.encode("utf-8")))
 </code></pre>
+</p>
 <p>对文本进行分词后，我们需要为文本创建掩码。虽然 Transformer 中通常使用的掩码用于确保 token 不与未来的 token 通信，但我们在这里应用的掩码只是使 pad token 被忽略。因此，掩码将只是一个大小等于最大序列长度的张量，其中元素在有填充的情况下为0，否则为1。</p>
-<pre><code class="language-python">mask = torch.ones(len(text.nonzero()))
+<p><pre><code class="language-python">mask = torch.ones(len(text.nonzero()))
 mask = torch.cat((mask,torch.zeros(10-len(mask)))).type(torch.IntTensor)
 </code></pre>
+</p>
 <h3 id="sec-6">14.2.6 文本编码器</h3>
-<pre><code class="language-python">class TextEncoder(nn.Module):
+<p><pre><code class="language-python">class TextEncoder(nn.Module):
     def __init__(
         self,
         vocab_size, # 词汇表大小=256
@@ -312,39 +322,47 @@ mask = torch.cat((mask,torch.zeros(10-len(mask)))).type(torch.IntTensor)
         x = x / torch.norm(x, dim=-1, keepdim=True)
         return x
 </code></pre>
+</p>
 <p>对于文本编码器，我们将使用常规 Transformer 模型。创建文本编码器的第一步是创建大小为 (vocab_size, width) 的嵌入表。此嵌入表包含一个向量表示，其大小等于词汇表中每个 token 的 Transformer 模型的 width。</p>
-<pre><code class="language-python">self.encoder_embedding = nn.Embedding(vocab_size, width)
+<p><pre><code class="language-python">self.encoder_embedding = nn.Embedding(vocab_size, width)
 </code></pre>
+</p>
 <p>在输出 Transformer 的结果之前，我们需要将特征嵌入到联合嵌入空间中。我们将通过获取文本特征的点积以及使用 nn.Parameter 创建的可学习的投影来实现这一点。</p>
-<pre><code class="language-python">self.projection = nn.Parameter(torch.randn(width, emb_dim))
+<p><pre><code class="language-python">self.projection = nn.Parameter(torch.randn(width, emb_dim))
 </code></pre>
+</p>
 <p>在 forward 方法中，我们要做的第一件事是通过嵌入表传递文本的 token。</p>
-<pre><code class="language-python">x = self.encoder_embedding(text)
+<p><pre><code class="language-python">x = self.encoder_embedding(text)
 </code></pre>
+</p>
 <p>然后，我们需要将位置编码添加到嵌入表的输出中。</p>
-<pre><code class="language-python">x = self.positional_embedding(x)
+<p><pre><code class="language-python">x = self.positional_embedding(x)
 </code></pre>
+</p>
 <p>添加位置编码后，我们现在可以将其与掩码一起通过编码器层。</p>
-<pre><code class="language-python">for encoder_layer in self.encoder:
+<p><pre><code class="language-python">for encoder_layer in self.encoder:
     x = encoder_layer(x, mask=mask)
 </code></pre>
+</p>
 <p>编码器层的输出是文本的特征。我们将使用从 EOT 的嵌入中抽取的特征。</p>
-<pre><code class="language-python"># 从EOT的嵌入抽取特征
+<p><pre><code class="language-python"># 从EOT的嵌入抽取特征
 x = x[torch.arange(
     text.shape[0]),
     torch.sub(torch.sum(mask[:,0],dim=1),1)
 ]
 </code></pre>
+</p>
 <p>最后，我们通过计算特征和投影之间的点积，将文本嵌入映射到 CLIP 嵌入空间中，并通过除以归一化的点积对其进行归一化。</p>
 <p>为什么要做映射？</p>
 <p>主要是为了在 CLIP 嵌入空间中，文本嵌入向量的维度和图像嵌入向量的维度一致。向量除以向量的模长，就是模长为1的向量。这样文本嵌入向量和图像嵌入向量都变成了模长为1的向量。两个向量的点积，就是两个向量的余弦相似度！</p>
-<pre><code class="language-python">if self.projection is not None:
+<p><pre><code class="language-python">if self.projection is not None:
     x = x @ self.projection
 x = x / torch.norm(x, dim=-1, keepdim=True)
 return x
 </code></pre>
+</p>
 <h3 id="sec-7">14.2.7 图像编码器</h3>
-<pre><code class="language-python">class ImageEncoder(nn.Module):
+<p><pre><code class="language-python">class ImageEncoder(nn.Module):
     def __init__(
         self,
         width, # 补丁嵌入的维度d_model
@@ -359,9 +377,9 @@ return x
 
         assert img_size[0] % patch_size[0] == 0 \
             and img_size[1] % patch_size[1] == 0, \
-            &quot;img_size必须能被patch_size整除&quot;
+            "img_size必须能被patch_size整除"
         assert width % n_heads == 0, \
-            &quot;width必须能被n_heads整除&quot;
+            "width必须能被n_heads整除"
 
         self.n_patches = (img_size[0] * img_size[1]) \
             // (patch_size[0] * patch_size[1])
@@ -408,6 +426,7 @@ return x
         x = x / torch.norm(x, dim=-1, keepdim=True)
         return x
 </code></pre>
+</p>
 
           <hr>
 

@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">大语言模型</a>
                 <a href="/tutorial/" class="tag">microgpt</a>
                 </span>
               <h1>1.6 训练循环</h1>
@@ -130,7 +130,7 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <p>现在我们将所有部分串联起来。训练循环会重复执行以下步骤：（1）选取一个文档，（2）对文档中的词元进行模型前向传播，（3）计算损失值，（4）通过反向传播获取梯度，（5）更新参数。</p>
-<pre><code class="language-python"># Let there be Adam, the blessed optimizer and its buffers
+<p><pre><code class="language-python"># Let there be Adam, the blessed optimizer and its buffers
 learning_rate, beta1, beta2, eps_adam = 0.01, 0.85, 0.99, 1e-8
 m = [0.0] * len(params) # first moment buffer
 v = [0.0] * len(params) # second moment buffer
@@ -168,8 +168,9 @@ for step in range(num_steps):
         p.data -= lr_t * m_hat / (v_hat ** 0.5 + eps_adam)
         p.grad = 0
     
-    print(f&quot;step {step+1:4d} / {num_steps:4d} | loss {loss.data:.4f}&quot;)
+    print(f"step {step+1:4d} / {num_steps:4d} | loss {loss.data:.4f}")
 </code></pre>
+</p>
 <p>让我们逐一解析每个部分：</p>
 <p><strong>分词。</strong> 每个训练步骤会选取一个文档，并在其两侧添加 BOS：例如，名称“emma”会变成[BOS，e，m，m，a，BOS]。模型的任务是根据前面的词元预测下一个词元。</p>
 <p><strong>前向传播与损失计算。</strong> 我们逐个将词元输入模型，在过程中逐步构建KV缓存。在每个位置上，模型输出27个logits值，通过softmax函数将其转换为概率。该位置的损失即为正确下一个词元的负对数概率：-log P(target)。这被称为交叉熵损失。直观而言，损失衡量的是预测偏差程度：模型对实际出现的后续内容感到“惊讶”的程度。若模型对正确词元赋予1.0的概率，则完全不会感到惊讶，损失为0；若赋予接近0的概率，则模型会非常惊讶，损失趋近于 $+\infty$。我们将文档中每个位置的损失取平均值，得到单一的标量损失值。</p>

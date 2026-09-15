@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">扩散模型</a>
                 </span>
               <h1>16.2 扩散模型理论简介</h1>
@@ -129,6 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <h3 id="sec-1">16.2.1 概述</h3>
 <p>图 16.8 正向扩散和反向扩散</p>
 <p>扩散模型的训练可以分为两部分：</p>
@@ -137,7 +138,7 @@
 <li>反向扩散过程 → 从图像中去除噪声。</li>
 </ol>
 <h3 id="sec-2">16.2.2 正向扩散过程</h3>
-<p>加噪声图片
+<pre><code class="language-text">加噪声图片
 的分布
 输出
 均值
@@ -159,7 +160,8 @@ x0 ~ q(x)
 (
 , 以及
 =一个小的数值,
-=一个大的数值)</p>
+=一个大的数值)
+</code></pre>
 <p>图 16.9 正向扩散公式图解</p>
 <p><strong>正态分布</strong></p>
 <p>$$
@@ -178,11 +180,11 @@ $$</p>
 x_t = \sqrt{1 - \beta_t} x_{t-1} + \sqrt{\beta_t} \varepsilon_{t-1} \tag{16.3}
 $$</p>
 <p>式 (16.3) 的代码实现，逐步向图片中添加噪声</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
-image = plt.imread(&quot;./flower.png&quot;)
+image = plt.imread("./flower.png")
 print(image.shape)
 
 preprocess = transforms.ToTensor()
@@ -221,11 +223,12 @@ plt.figure(figsize=(15, 6))
 for i, img in enumerate(imgs[:10]):
     plt.subplot(2, 5, i + 1)
     plt.imshow(img)
-    plt.title(f&quot;Noise: {i * 100}&quot;)
-    plt.axis(&quot;off&quot;)
+    plt.title(f"Noise: {i * 100}")
+    plt.axis("off")
 
 plt.show()
 </code></pre>
+</p>
 <p>一步一步的添加噪声太麻烦了！</p>
 <p>根据上面的公式，如果想要从原始图片 $x_0$ 得到添加了500 步噪声的图片 $x_{500}$ 需要迭代500 次！</p>
 <p>但我们不需要设计一种算法来迭代地向图像中添加噪声，而是可以使用闭式公式（解析解）在特定的时间步 $t$ 直接对噪声图像进行采样。</p>
@@ -236,17 +239,17 @@ x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon \tag{16.
 $$</p>
 <p>其中：</p>
 <ul>
-<li>$\bar{\alpha}<em>t = \alpha_t \alpha</em>{t-1} \dots \alpha_1$</li>
+<li>$\bar{\alpha}_t = \alpha_t \alpha_{t-1} \dots \alpha_1$</li>
 <li>$\alpha_t = 1 - \beta_t$</li>
 <li>$\varepsilon \sim \mathcal{N}(0, 1)$</li>
 </ul>
 <p>现在我们可以使用此公式在任何时间步直接对 $x_t$ 进行采样，这使得前向扩散过程更快。</p>
 <p>式 (16.4) 的实现，使用闭式解添加噪声</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
-image = plt.imread(&quot;./flower.png&quot;)
+image = plt.imread("./flower.png")
 print(image.shape)
 
 preprocess = transforms.ToTensor()
@@ -293,27 +296,29 @@ x_t = add_noise(x, t, betas)
 
 img = reverse_to_img(x_t)
 plt.imshow(img)
-plt.title(f&quot;Noise: {t}&quot;)
-plt.axis(&quot;off&quot;)
+plt.title(f"Noise: {t}")
+plt.axis("off")
 plt.show()
 </code></pre>
+</p>
 <h3 id="sec-3">16.2.3 反向扩散过程</h3>
 <p>反向扩散过程是从一张完全的高斯噪声图片中，逐步去除噪声，来生成一张图片。这个逆向过程很难，相当于一滴墨水在水里面扩散开来（正向扩散），想要将变黑的水逆向为原来的墨水刚滴入水中时的状态。这几乎不可能做到，所以我们用神经网络来解决这个问题。下面是训练神经网络的原理。</p>
-<p>预测出的t步噪声
+<pre><code class="language-text">预测出的t步噪声
 真实的t步噪声
 时间步t
 添加t步噪声后的图像
 神经网络
 模型
 MSE
-反向传播</p>
+反向传播
+</code></pre>
 <p>图 16.10 以噪声为预测目标</p>
 <p>因此最终的训练目标如下：</p>
 <p>$$
-x_t = \sqrt{\bar{\alpha}<em>t} x_0 + \sqrt{1 - \bar{\alpha}<em>t} \varepsilon
+x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon
 $$
 $$
-\mathcal{L}</em>{\text{simple}} = \mathbb{E}</em>{t, x_0, \varepsilon} [|\varepsilon - \varepsilon_{\theta}(x_t, t)|^2]
+\mathcal{L}_{\text{simple}} = \mathbb{E}_{t, x_0, \varepsilon} [\|\varepsilon - \varepsilon_{\theta}(x_t, t)\|^2]
 $$
 时间步t 的图片
 \tag{16.5}
@@ -328,7 +333,7 @@ $$</p>
 </ol>
 <p>图 16.11 训练 unet</p>
 <h4 id="sec-6">16.2.4.2 训练</h4>
-<pre><code>1 Repeat
+<p><pre><code>1 Repeat
 2   x_0 ~ q(x_0)        ▷ 从数据集中抽取一张图片
 3   t ~ Uniform({1, ..., T})  ▷ 从均匀分布中采样一个时间步
 4   ε ~ N(0, I)         ▷ 从正态分布中采样一个噪声
@@ -336,6 +341,7 @@ $$</p>
 6   ∇_θ || ε - ε_θ(√(α_t) x_0 + √(1 - α_t) ε, t) ||^2   (16.6)
 7 Until 收敛
 </code></pre>
+</p>
 <p>图 16.12 U-net 训练算法</p>
 <p>官方的训练算法如上，下图是一个训练步骤的示意图：</p>
 <p>针对每一个训练步骤（step）</p>
@@ -358,7 +364,7 @@ $$</p>
 </ol>
 <p>图 16.13 扩散模型训练步骤</p>
 <h4 id="sec-7">16.2.4.3 反向扩散</h4>
-<pre><code>1 x_T ~ N(0, I)          ▷ 从高斯分布中采样一张纯噪声图片
+<p><pre><code>1 x_T ~ N(0, I)          ▷ 从高斯分布中采样一张纯噪声图片
 2 for t = T, ..., 1 do
 3   z ~ N(0, I) if t &gt; 1, else z = 0
 4   x_{t-1} = 1/√(α_t) (x_t - (1-α_t)/√(1-ᾱ_t) ε_θ(x_t, t)) + σ_t z
@@ -366,6 +372,7 @@ $$</p>
 5 end for
 6 return x_0
 </code></pre>
+</p>
 <p>图 16.14 采样算法（去噪算法，反向扩散算法）</p>
 <p>我们可以使用上述算法从噪声中生成图像。下图是它的说明：</p>
 <p>反向扩散/去噪/采样</p>

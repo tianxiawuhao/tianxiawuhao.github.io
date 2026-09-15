@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">条件扩散模型</a>
                 </span>
               <h1>18.2 条件扩散模型的实现</h1>
@@ -129,18 +129,20 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>我们已经使用神经网络实现了 $\boldsymbol{\varepsilon}_{\theta}(x_t, t)$。$\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 的参数 $t$ 是整数，可以通过正弦位置编码变换为向量。而新添加的条件 $y$ 是标签，也是整数。这个整数 $y$ 可以通过嵌入层（embedding layer）变换为向量。具体来说，$y$ 被变换成向量，然后与变换后的 $t$ 向量相加。</p>
-<p>t
+<pre><code class="language-text">t
 y
 正弦位置编码
 嵌入层
 +
-v</p>
+v
+</code></pre>
 <p>图 18.4 在扩散模型中添加嵌入层</p>
 <p><strong>提示</strong></p>
 <p>嵌入层的初始值被设置为随机值，然后通过训练进行优化。这样就可以训练得到与每个标签相对应的匹配任务的向量。而由于与时刻 $t$ 相关的特定任务的训练要素很少，因此我们使用了一种称为正弦位置编码的固定向量变换的方法。</p>
 <p>以下是代码示例。这里我们在上一章中实现的 UNet 类中添加了名为 UNetCond 类的代码，类名中的 Cond 是 Conditional（条件）的缩写。</p>
-<pre><code class="language-python">class UNetCond(nn.Module):
+<p><pre><code class="language-python">class UNetCond(nn.Module):
     def __init__(self, in_ch=1, time_embed_dim=100, num_labels=None):
         super().__init__()
         self.time_embed_dim = time_embed_dim
@@ -153,7 +155,7 @@ v</p>
         self.out = nn.Conv2d(64, in_ch, 1)
 
         self.maxpool = nn.MaxPool2d(2)
-        self.upsample = nn.Upsample(scale_factor=2, mode=&quot;bilinear&quot;)
+        self.upsample = nn.Upsample(scale_factor=2, mode="bilinear")
 
         # ❶ 处理标签的嵌入层
         if num_labels is not None:
@@ -182,9 +184,10 @@ v</p>
         x = self.out(x)
         return x
 </code></pre>
+</p>
 <p>代码的主要修改有两处。在代码❶处，我们准备了处理标签的嵌入层（nn.Embedding）。具体来说，就是通过 <code>nn.Embedding(num_labels, time_embed_dim)</code> 将共计 num_labels 个不同整数变换为 time_embed_dim 维的向量。在代码❷处，通过 nn.Embedding 层处理标签，然后再加到变换后的时间数据的向量中。</p>
 <p>接下来是 Diffuser 类。对于 Diffuser 类，修改生成数据的方法。下面只展示了修改部分的代码。</p>
-<pre><code class="language-python">class Diffuser:
+<p><pre><code class="language-python">class Diffuser:
     def denoise(self, model, x, t, labels):
         # ...（省略）
         with torch.no_grad():
@@ -203,8 +206,9 @@ v</p>
         #...
         return images, labels
 </code></pre>
+</p>
 <p>修改的部分还向模型提供了标签。具体来说，标签是在生成数据和去噪过程中提供的。最后是训练的代码。</p>
-<pre><code class="language-python">diffuser = Diffuser(num_timesteps, device=device)
+<p><pre><code class="language-python">diffuser = Diffuser(num_timesteps, device=device)
 model = UNetCond(num_labels=10) ❶
 model.to(device)
 optimizer = Adam(model.parameters(), lr=lr)
@@ -229,13 +233,14 @@ for epoch in range(epochs):
         loss_sum += loss.item()
         cnt += 1
 </code></pre>
+</p>
 <p>训练代码的修改内容如下所示。</p>
 <p>❶ <code>UNetCond(num_labels=10)</code> 创建一个具有10个分类的条件扩散模型。
 ❷ <code>labels.to(device)</code> 在 device 上准备标签数据。
 ❸ <code>model(x_noisy, t, labels)</code> 向模型提供 labels 进行训练。</p>
 <p>以上就是条件扩散模型的实现。现在运行代码。经过10轮训练后，最终生成了下图所示的图像。虽然仍有改进的余地，但生成的图像是符合条件的。在下一节中，我们将探讨进一步改进这个条件扩散模型的方法。</p>
 <p>完整代码如下：</p>
-<pre><code class="language-python">import math
+<p><pre><code class="language-python">import math
 import torch
 import torchvision
 import matplotlib.pyplot as plt
@@ -252,7 +257,7 @@ batch_size = 128
 num_timesteps = 1000
 epochs = 10
 lr = 1e-3
-device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def show_images(images, labels=None, rows=2, cols=10):
@@ -261,7 +266,7 @@ def show_images(images, labels=None, rows=2, cols=10):
     for r in range(rows):
         for c in range(cols):
             ax = fig.add_subplot(rows, cols, i + 1)
-            plt.imshow(images[i], cmap=&#39;gray&#39;)
+            plt.imshow(images[i], cmap='gray')
             if labels is not None:
                 ax.set_xlabel(labels[i].item())
             ax.get_xaxis().set_ticks([])
@@ -270,7 +275,7 @@ def show_images(images, labels=None, rows=2, cols=10):
     plt.tight_layout()
     plt.show()
 
-def _pos_encoding(time_idx, output_dim, device=&quot;cpu&quot;):
+def _pos_encoding(time_idx, output_dim, device="cpu"):
     t, D = time_idx, output_dim
     v = torch.zeros(D, device=device)
 
@@ -281,7 +286,7 @@ def _pos_encoding(time_idx, output_dim, device=&quot;cpu&quot;):
     v[1::2] = torch.cos(t / div_term[1::2])
     return v
 
-def pos_encoding(timesteps, output_dim, device=&#39;cpu&#39;):
+def pos_encoding(timesteps, output_dim, device='cpu'):
     batch_size = len(timesteps)
     device = timesteps.device
     v = torch.zeros(batch_size, output_dim, device=device)
@@ -326,7 +331,7 @@ class UNetCond(nn.Module):
         self.out = nn.Conv2d(64, in_ch, 1)
 
         self.maxpool = nn.MaxPool2d(2)
-        self.upsample = nn.Upsample(scale_factor=2, mode=&#39;bilinear&#39;)
+        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
         # 如果条件标签不为None
         if num_labels is not None:
             # 将标签转换为嵌入，嵌入和时间步的嵌入形状相同
@@ -361,7 +366,7 @@ class Diffuser:
         num_timesteps=1000,
         beta_start=0.0001,
         beta_end=0.02,
-        device=&#39;cpu&#39;
+        device='cpu'
     ):
         self.num_timesteps = num_timesteps
         self.device = device
@@ -443,7 +448,7 @@ class Diffuser:
 
 preprocess = transforms.ToTensor()
 dataset = torchvision.datasets.MNIST(
-    root=&#39;./../datasets&#39;, download=True, transform=preprocess)
+    root='./../datasets', download=True, transform=preprocess)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 diffuser = Diffuser(num_timesteps, device=device)
@@ -481,18 +486,19 @@ for epoch in range(epochs):
 
     loss_avg = loss_sum / cnt
     losses.append(loss_avg)
-    print(f&#39;Epoch {epoch} | Loss: {loss_avg}&#39;)
+    print(f'Epoch {epoch} | Loss: {loss_avg}')
 
 # plot losses
 plt.plot(losses)
-plt.xlabel(&#39;Epoch&#39;)
-plt.ylabel(&#39;Loss&#39;)
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
 plt.show()
 
 # generate samples
 images, labels = diffuser.sample(model)
 show_images(images, labels)
 </code></pre>
+</p>
 
           <hr>
 

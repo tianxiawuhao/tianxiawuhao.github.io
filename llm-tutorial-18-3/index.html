@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">条件扩散模型</a>
                 </span>
               <h1>18.3 得分函数</h1>
@@ -129,6 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>在上面的内容里面，我们实现了一个简单的条件扩散模型。这个“简单”的意思是我们只是向模型提供了条件而已。因此，模型有可能会轻视我们提供的条件，甚至在最坏的情况下有可能会忽略我们提供的条件。接下来，我们将介绍一种称为“指引”的方法。指引是一种将给定条件纳入模型并给予更多重视的机制。</p>
 <p>要理解指引机制，首先需要了解得分函数。</p>
 <h3 id="sec-1">18.3.1 什么是得分函数</h3>
@@ -139,42 +140,45 @@ $$</p>
 <p>这里需要强调的是，梯度是针对数据向量计算的，而不是针对任何参数向量。注意 $s(x)$ 是一个与 $x$ 维度相同的向量值函数，并且其中的每个元素 $s_i(x) = \frac{\partial \log p(x)}{\partial x_i}$ 都与 $x$ 的相应元素 $x_i$ 相关联。例如，如果 $x$ 是一个图像，那么 $s(x)$ 也可以表示为一个同尺寸的图像，其中对应的像素是图像的得分。下图显示了二维中的概率密度示例以及相应的得分函数。</p>
 <p>图 18.5 得分函数的示意图，图中显示了两种信息的融合：由高斯混合分布构成的二维分布，表示为热图；以及由式 (18.5) 定义的相应得分函数，其作为向量绘制在 $x$ 值的规则网络上</p>
 <p>为了理解得分函数的用处，考虑两个函数 $q(x)$ 和 $p(x)$，它们具有得分相等的属性，所以对于 $x$ 的所有值，$\nabla_x \log q(x) = \nabla_x \log p(x)$。如果我们对这个等式的两边关于 $x$ 积分并取指数，则可以得到 $q(x) = K p(x)$，其中 $K$ 是一个独立于 $x$ 的常数。所以如果我们能学习到一个得分函数的模型 $s(x, w)$，就可以重建原始数据分布，所得结果与之前的相比，最多相差一个常数倍数。</p>
-<p>在实现扩散模型时，我们使用神经网络对 $\boldsymbol{\varepsilon}<em>{\theta}(x_t, t)$ 进行了建模。$\boldsymbol{\varepsilon}</em>{\theta}(x_t, t)$ 基于 $x_t$ 和 $t$ 来推断噪声 $\varepsilon$。下图是这个过程的示意图。</p>
-<p>x t
+<p>在实现扩散模型时，我们使用神经网络对 $\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 进行了建模。$\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 基于 $x_t$ 和 $t$ 来推断噪声 $\varepsilon$。下图是这个过程的示意图。</p>
+<pre><code class="language-text">x t
 t
 NN θ
 θ(x , t)
 t
 ε
-ε</p>
+ε
+</code></pre>
 <p>图 18.6 扩散模型中使用的推断噪声 $\varepsilon$ 的神经网络</p>
 <p>此时有以下与 $\varepsilon$ 相关的数学式成立（稍后将给出证明）。</p>
 <p>$$
-\varepsilon \approx -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t) \tag{18.6}
+\varepsilon \approx -\sqrt{1 - \bar{\alpha}_t} \nabla_{x_t} \log p(x_t) \tag{18.6}
 $$</p>
 <p>$\nabla$ 是表示梯度的符号，读作“那勃乐”（Nabla）。$\nabla_{x_t} \log p(x_t)$ 是对数似然 $\log p(x_t)$ 对输入数据 $x_t$ 的梯度，称为“得分函数”或“得分”。</p>
 <p><strong>提示</strong></p>
 <p>$p(x_t)$ 是表示数据 $x_t$ 为“真”的随机密度函数。而 $p_{\theta}(x_t)$ 表示使用参数对真的概率密度函数进行近似的概率密度函数。由于 $\nabla_{x_t} \log p(x_t)$ 和 $\nabla_{x_t} \log p_{\theta}(x_t)$ 表示关于输入 $x_t$ 的梯度，因此称为“得分”。另外，在某些领域，关于参数的梯度（$\nabla_{\theta} \log p_{\theta}(x_t)$）也称为“得分”。在本书中，我们将对输入的梯度称为“得分”。</p>
 <p>根据式 (18.6)，$\varepsilon$ 可以近似表示为 $\nabla_{x_t} \log p(x_t)$。值得注意的是，$\varepsilon$ 与 $\nabla_{x_t} \log p(x_t)$ 之间只相差负常数倍（$-\sqrt{1 - \bar{\alpha}_t}$）。这说明以 $-\sqrt{1 - \bar{\alpha}_t} \varepsilon$ 来代替 $\varepsilon$ 作为训练数据的神经网络也是可行的。</p>
-<h2 id="sec-2">x t
+<pre><code class="language-text">x t
 t
 NN θ
 θ(x , t)
 t
 1
 1-α t
-ε</h2>
-<p>S
+ε
+-
+S
 x tlogp( )
-x t</p>
+x t
+</code></pre>
 <p>图 18.7 用于推断得分的神经网络</p>
-<p>图中的神经网络将得分的近似值 $-\sqrt{1 - \bar{\alpha}<em>t} \varepsilon$ 推断为 $s</em>{\theta}(x_t, t)$。因此，我们也可以通过推断得分的神经网络来实现扩散模型。</p>
+<p>图中的神经网络将得分的近似值 $-\sqrt{1 - \bar{\alpha}_t} \varepsilon$ 推断为 $s_{\theta}(x_t, t)$。因此，我们也可以通过推断得分的神经网络来实现扩散模型。</p>
 <p><strong>提示</strong></p>
 <p>生成模型中包括对得分进行建模的方法。这些模型统称为基于得分的模型。以对数似然最大化的方式可以推导出各种模型（GMM、VAE、扩散模型等）。这些模型可以被称为基于似然的模型。重要的是，扩散模型也可以作为基于得分的模型推导得出。</p>
-<h3 id="sec-3">18.3.2 式 (18.6) 的证明</h3>
+<h3 id="sec-2">18.3.2 式 (18.6) 的证明</h3>
 <p>现在让我们来证明式 (18.6) 成立。</p>
 <p>$$
-\varepsilon \approx -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t) \tag{18.7}
+\varepsilon \approx -\sqrt{1 - \bar{\alpha}_t} \nabla_{x_t} \log p(x_t) \tag{18.7}
 $$</p>
 <p>我们先来复习一下。时刻 $t$ 的噪声数据 $x_t$ 可以基于以下正态分布从原始数据 $x_0$ 生成。</p>
 <p>$$
@@ -197,46 +201,30 @@ $$</p>
 <p><strong>Tweedie 公式的应用</strong></p>
 <p>当基于 $x_t \sim \mathcal{N}(x_t; \sqrt{\bar{\alpha}_t} x_0, (1 - \bar{\alpha}_t) I)$ 得到样本 $x_t$ 时，有以下式子成立。</p>
 <p>$$
-\mathbb{E}[\sqrt{\bar{\alpha}_t} x_0 | x_t] = x_t + (1 - \bar{\alpha}<em>t) I \nabla</em>{x_t} \log p(x_t) = x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \tag{18.11}
+\mathbb{E}[\sqrt{\bar{\alpha}_t} x_0 | x_t] = x_t + (1 - \bar{\alpha}_t) I \nabla_{x_t} \log p(x_t) = x_t + (1 - \bar{\alpha}_t) \nabla_{x_t} \log p(x_t) \tag{18.11}
 $$</p>
 <p>然后，利用式 (18.9) 中的 $x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon$ 成立这一事实将式子展开，如下所示。</p>
 <p>$$
 \begin{aligned}
-\mathbb{E}[\sqrt{\bar{\alpha}_t} x_0 | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
-\Leftrightarrow \mathbb{E}[x_t - \sqrt{1 - \bar{\alpha}_t} \varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
-\Leftrightarrow \mathbb{E}[x_t | x_t] - \mathbb{E}[\sqrt{1 - \bar{\alpha}_t} \varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
-\Leftrightarrow x_t - \sqrt{1 - \bar{\alpha}_t} \mathbb{E}[\varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}<em>t) \nabla</em>{x_t} \log p(x_t) \
-\therefore \mathbb{E}[\varepsilon | x_t] &amp;= -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t)
+\mathbb{E}[\sqrt{\bar{\alpha}_t} x_0 | x_t] &amp;= x_t + (1 - \bar{\alpha}_t) \nabla_{x_t} \log p(x_t) \\
+\Leftrightarrow \mathbb{E}[x_t - \sqrt{1 - \bar{\alpha}_t} \varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}_t) \nabla_{x_t} \log p(x_t) \\
+\Leftrightarrow \mathbb{E}[x_t | x_t] - \mathbb{E}[\sqrt{1 - \bar{\alpha}_t} \varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}_t) \nabla_{x_t} \log p(x_t) \\
+\Leftrightarrow x_t - \sqrt{1 - \bar{\alpha}_t} \mathbb{E}[\varepsilon | x_t] &amp;= x_t + (1 - \bar{\alpha}_t) \nabla_{x_t} \log p(x_t) \\
+\therefore \mathbb{E}[\varepsilon | x_t] &amp;= -\sqrt{1 - \bar{\alpha}_t} \nabla_{x_t} \log p(x_t)
 \end{aligned}
 \tag{18.12}
 $$</p>
 <p>期望值 $\mathbb{E}[\varepsilon | x_t]$ 可以用蒙特卡洛方法近似。这里我们用一个采样数据来近似 $x_t$。这样就得到了以下数学式。</p>
 <p>$$
-\varepsilon \approx -\sqrt{1 - \bar{\alpha}<em>t} \nabla</em>{x_t} \log p(x_t) \tag{18.13}
+\varepsilon \approx -\sqrt{1 - \bar{\alpha}_t} \nabla_{x_t} \log p(x_t) \tag{18.13}
 $$</p>
 <p>这样我们就完成了推导。</p>
 
           <hr>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li>
-<a href="#sec-1">18.3.1 什么是得分函数</a>
-<ul>
-</ul>
-</li>
-<li>
-<a href="#sec-2">x t
-t
-NN θ
-θ(x , t)
-t
-1
-1-α t
-ε</a>
-<ul>
-<li><a href="#sec-3">18.3.2 式 (18.6) 的证明</a></li>
-</ul>
-</li>
+<li><a href="#sec-1">18.3.1 什么是得分函数</a></li>
+<li><a href="#sec-2">18.3.2 式 (18.6) 的证明</a></li>
 </ul>
 </div>
 <hr />

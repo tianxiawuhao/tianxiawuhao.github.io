@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">使用DPO微调大语言模型</a>
                 </span>
               <h1>10.1 DPO理论介绍以及DPO存在的问题</h1>
@@ -129,7 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p><strong>提示</strong></p>
 <ul>
 <li>DPO: Direct Preference Optimization</li>
@@ -137,12 +137,13 @@
 </ul>
 <h3 id="sec-1">10.1.1 偏好数据集</h3>
 <p>DPO 需要偏好数据集来微调 LLM。偏好数据集的格式如下：</p>
-<pre><code class="language-json">{
-    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
-    &quot;chosen&quot;: &quot;这部电影很好看.&quot;,
-    &quot;rejected&quot;: &quot;这部电影不好看.&quot;
+<p><pre><code class="language-json">{
+    "prompt": "这部电影怎么样?",
+    "chosen": "这部电影很好看.",
+    "rejected": "这部电影不好看."
 }
 </code></pre>
+</p>
 <p>数据集构建的方法：</p>
 <ul>
 <li>针对同一个prompt，通过调整温度，让LLM输出不同的回答。然后让数据标注工程师来标注对不同回答的偏好。</li>
@@ -155,27 +156,29 @@
 <ol>
 <li>正负例区分不明显</li>
 </ol>
-<pre><code class="language-json">{
-    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
-    &quot;chosen&quot;: &quot;这部电影很好看。&quot;,
-    &quot;rejected&quot;: &quot;这部电影挺好看。&quot;
+<p><pre><code class="language-json">{
+    "prompt": "这部电影怎么样?",
+    "chosen": "这部电影很好看。",
+    "rejected": "这部电影挺好看。"
 }
 </code></pre>
+</p>
 <p>人类都无法识别哪个应该是正例，哪个应该是负例。</p>
 <ol start="2">
 <li>数据集中存在偏好循环</li>
 </ol>
-<pre><code class="language-json">{
-    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
-    &quot;chosen&quot;: &quot;这部电影很好看。&quot;,
-    &quot;rejected&quot;: &quot;这部电影很差。&quot;
+<p><pre><code class="language-json">{
+    "prompt": "这部电影怎么样?",
+    "chosen": "这部电影很好看。",
+    "rejected": "这部电影很差。"
 },
 {
-    &quot;prompt&quot;: &quot;这部电影怎么样?&quot;,
-    &quot;chosen&quot;: &quot;这部电影很差。&quot;,
-    &quot;rejected&quot;: &quot;这部电影很好看。&quot;
+    "prompt": "这部电影怎么样?",
+    "chosen": "这部电影很差。",
+    "rejected": "这部电影很好看。"
 }
 </code></pre>
+</p>
 <p>当模型看到以上数据时，就不知道人类的偏好是什么了。无法学到任何东西。因为第一个人标注的数据的偏好是 $A &gt; B$，第二个人标注的数据的偏好是 $B &gt; A$，那么模型看到的偏好是 $A &gt; B &gt; A$。这就是偏好循环。</p>
 <h3 id="sec-2">10.1.2 DPO目标函数</h3>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-10-1.png" alt="图10.1 DPO目标函数" loading="lazy"><figcaption>图10.1 DPO目标函数</figcaption></figure>
@@ -183,15 +186,15 @@
 <p>这里我们思考一下，给定提示词 $x$ 的情况下，模型输出补全 $y$ 的概率是多少呢？如下所示：</p>
 <p>$$
 \begin{aligned}
-\pi_{\theta}(y|x) &amp;= P_{\mathrm{LLM}<em>{\theta}}(y_0|x)P</em>{\mathrm{LLM}<em>{\theta}}(y_1|x,y_0)\dots P</em>{\mathrm{LLM}<em>{\theta}}(y_t|x,y</em>{&lt; t})\
-&amp;= \prod_{t = 0}^{|y|}P_{\mathrm{LLM}<em>{\theta}}(y_t|x,y</em>{&lt; t})
+\pi_{\theta}(y|x) &amp;= P_{\mathrm{LLM}_{\theta}}(y_0|x)P_{\mathrm{LLM}_{\theta}}(y_1|x,y_0)\dots P_{\mathrm{LLM}_{\theta}}(y_t|x,y_{&lt; t})\\
+&amp;= \prod_{t = 0}^{|y|}P_{\mathrm{LLM}_{\theta}}(y_t|x,y_{&lt; t})
 \end{aligned} \tag{10.2}
 $$</p>
 <p>然后根据 $\log$ 的性质也就是 $\log \frac{A}{B} = \log A - \log B$。可以推导出目标函数最内部的表达式的另一种形式。</p>
 <p>$$
 \begin{aligned}
-&amp;\log \frac{\pi_{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)} -\log \frac{\pi_{\mathrm{ref}}(y_w|x)}{\pi_{\mathrm{ref}}(y_l|x)}\
-&amp;= \log \pi_{\theta}(y_w|x) - \log \pi_{\theta}(y_l|x) - \log \pi_{\mathrm{ref}}(y_w|x) + \log \pi_{\mathrm{ref}}(y_l|x)\
+&amp;\log \frac{\pi_{\theta}(y_w|x)}{\pi_{\theta}(y_l|x)} -\log \frac{\pi_{\mathrm{ref}}(y_w|x)}{\pi_{\mathrm{ref}}(y_l|x)}\\
+&amp;= \log \pi_{\theta}(y_w|x) - \log \pi_{\theta}(y_l|x) - \log \pi_{\mathrm{ref}}(y_w|x) + \log \pi_{\mathrm{ref}}(y_l|x)\\
 &amp;= \log \pi_{\theta}(y_w|x) - \log \pi_{\mathrm{ref}}(y_w|x) - (\log \pi_{\theta}(y_l|x) - \log \pi_{\mathrm{ref}}(y_l|x))
 \end{aligned} \tag{10.3}
 $$</p>

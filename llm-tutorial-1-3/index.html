@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">大语言模型</a>
                 <a href="/tutorial/" class="tag">microgpt</a>
                 </span>
               <h1>1.3 自动微分（Autograd）</h1>
@@ -132,42 +132,47 @@
           <p>这是代码中最优雅的部分。Value类实现了自动微分——即通过任意数学运算链计算导数的能力。这正是神经网络训练得以实现的关键。</p>
 <p><strong>导数为什么这么重要？</strong></p>
 <p>训练神经网络意味着寻找能使损失函数最小化的参数值。损失函数衡量的是模型预测的偏差程度。为了降低损失，我们需要了解：对于每个参数，如果对其进行微小调整，损失会增加还是减少？这就是损失函数对每个参数的导数（梯度）。</p>
-<pre><code>Parameter: 0.5
+<p><pre><code>Parameter: 0.5
 nudge right → 0.501 → loss = 2.38 ← went up
 original → 0.500 → loss = 2.37
 nudge left → 0.499 → loss = 2.36 ← went down
 Gradient is positive → move the parameter left (decrease it)
 </code></pre>
+</p>
 <p>由于有4,192个参数，我们需要4,192个梯度。如果通过逐个微调每个参数来计算这些梯度，则需要进行4,192次正向传播。而反向传播只需一次反向传播即可计算出所有梯度。这就是自动梯度的魔力。</p>
-<pre><code class="language-python">class Value:
+<p><pre><code class="language-python">class Value:
     def __init__(self, data, children=(), local_grads=()):
         self.data = data
         self.grad = 0
         self._children = children
         self._local_grads = local_grads
 </code></pre>
+</p>
 <p>每个Value存储三项内容：计算结果（data）、其梯度（grad，在反向传播过程中填充）以及生成方式（_children和_local_grads）。这些内容共同构成一个计算图——即每项数学运算的记录。当你写下 $c = a + b$ 时，生成的Value会记住它是通过加法从a和b得出的：</p>
-<pre><code>a (data=3.0)
+<p><pre><code>a (data=3.0)
 b (data=2.0)
 (+) → c (data=5.0)
 children: (a, b)
 local_grads: (1, 1) ← derivative of (a+b) w.r.t. a is 1,
 derivative of (a+b) w.r.t. b is 1
 </code></pre>
+</p>
 <p>对于乘法，局部梯度有所不同：</p>
-<pre><code class="language-python">def __mul__(self, other):
+<p><pre><code class="language-python">def __mul__(self, other):
     return Value(self.data * other.data, (self, other), (other.data, self.data))
 </code></pre>
-<pre><code>a (data=3.0)
+</p>
+<p><pre><code>a (data=3.0)
 b (data=2.0)
 (×) → c (data=6.0)
 children: (a, b)
 local_grads: (2.0, 3.0) ← d(a×b)/da = b = 2.0
 d(a×b)/db = a = 3.0
 </code></pre>
+</p>
 <p>这是微积分中的乘法法则：$a \times b$ 对a的导数是b，反之亦然。Value类中的每项运算都包含其自身的导数规则。</p>
 <p>backward()方法以反向顺序遍历计算图，并利用链式求导法则累计梯度：如果z依赖于y，而y又依赖于x，则 $\frac{dz}{dx} = \frac{dz}{dy} \cdot \frac{dy}{dx}$</p>
-<pre><code class="language-python">def backward(self):
+<p><pre><code class="language-python">def backward(self):
     topo = []
     visited = set()
     def build_topo(v):
@@ -182,8 +187,9 @@ d(a×b)/db = a = 3.0
         for child, local_grad in zip(v._children, v._local_grads):
             child.grad += local_grad * v.grad
 </code></pre>
+</p>
 <p>首先，build_topo执行拓扑排序——它排列所有节点，使得每个节点都出现在其子节点之后。然后，梯度从损失（其梯度按定义为1）反向流经每个操作，最终到达每个参数。</p>
-<pre><code>1 Forward pass (left to right): compute values
+<p><pre><code>1 Forward pass (left to right): compute values
 a = 3.0 → (×) → d = 6.0 → (+) → f = 7.0 → (-log) → loss = -1.95
 b = 2.0     e = 1.0
 
@@ -195,11 +201,12 @@ e.grad = f.grad × 1 = -0.143 chain rule through +
 a.grad = d.grad × b.data = -0.143 × 2 = -0.286 chain rule through ×
 b.grad = d.grad × a.data = -0.143 × 3 = -0.429 chain rule through ×
 </code></pre>
+</p>
 <p><code>←</code> 中的<code>child.grad = local_grad × v.grad</code> 很重要——当一个值在多个操作中被使用时，其梯度会累积来自所有操作的贡献。这处理了一个参数通过多条路径影响损失的情况。</p>
 <p>这正是PyTorch、TensorFlow和JAX所实现的反向传播算法。区别在于这些框架基于张量（多维数值数组）运行，并可在GPU上执行。而microGPT则对单个标量值进行操作，这使得其速度慢约1,000,000倍，但在概念上完全一致。</p>
 <p>训练神经网络需要梯度：对于模型中的每个参数，我们需要知道“如果我将这个数值稍微调高一点，损失值会上升还是下降？变化幅度是多少？”计算图有许多输入（模型参数和输入词元），但最终汇聚成一个标量输出：损失值（我们将在下文准确定义损失值）。反向传播从该单一输出开始，沿计算图逆向推进，计算损失值相对于每个输入的梯度。这依赖于微积分中的链式法则。在实际应用中，PyTorch等库会自动处理这一过程。在此，我们通过一个名为Value的类从头实现该功能：</p>
-<pre><code class="language-python">class Value:
-    _slots_ = {&#39;data&#39;, &#39;grad&#39;, &#39;_children&#39;, &#39;_local_grads&#39;}
+<p><pre><code class="language-python">class Value:
+    _slots_ = {'data', 'grad', '_children', '_local_grads'}
     
     def __init__(self, data, children=(), local_grads=()):
         self.data = data # scalar value of this node calculated during forward pass
@@ -242,6 +249,7 @@ b.grad = d.grad × a.data = -0.143 × 3 = -0.429 chain rule through ×
             for child, local_grad in zip(v._children, v._local_grads):
                 child.grad += local_grad * v.grad
 </code></pre>
+</p>
 <p>这是数学和算法上最密集的部分。简单来说，一个Value包装了一个单一的标量数字（.data），并追踪它是如何被计算出来的。可以把每个操作想象成一个小乐高积木：它接收一些输入，产生一个输出（前向传播），并且知道其输出相对于每个输入的变化情况（局部梯度）。这就是自动微分从每个积木中需要的全部信息。其余的一切都只是链式法则，将这些积木串联起来。</p>
 <p>每次使用Value对象进行数学运算（加法、乘法等）时，结果都会生成一个新的Value，它会记住其输入值（_children）以及该运算的局部导数（_local_grads）。例如，_mul_记录了 $\frac{\partial(a \cdot b)}{\partial a} = b$ 和 $\frac{\partial(a \cdot b)}{\partial b} = a$。完整的积木块集合如下：</p>
 <table>
@@ -290,7 +298,7 @@ b.grad = d.grad × a.data = -0.143 × 3 = -0.429 chain rule through ×
 <p>注意这里的 $+=$（累加，而非赋值）。当某个值在计算图中被多处使用（即图存在分支）时，梯度会沿每个分支独立回流，且必须求和。这是多元链式法则的必然结果：若c通过多条路径影响L，则总导数等于各路径贡献之和。</p>
 <p>在backward()完成以后，图中的每个Value都包含一个.grad，其中含有 $\frac{\partial L}{\partial x}$，这告诉我们如果调整该值，最终损失将如何变化。</p>
 <p>以下是一个具体示例。注意a被使用了两次（图出现分支），因此其梯度是两条路径之和：</p>
-<pre><code class="language-python">a = Value(2.0)
+<p><pre><code class="language-python">a = Value(2.0)
 b = Value(3.0)
 c = a * b # c = 6.0
 L = c + a # L = 8.0
@@ -298,8 +306,9 @@ L.backward()
 print(a.grad) # 4.0 (dL/da = b + 1 = 3 + 1, via both paths)
 print(b.grad) # 2.0 (dL/db = a = 2)
 </code></pre>
+</p>
 <p>这正是PyTorch的.backward()所提供的：</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 a = torch.tensor(2.0, requires_grad=True)
 b = torch.tensor(3.0, requires_grad=True)
 c = a * b
@@ -308,6 +317,7 @@ L.backward()
 print(a.grad) # tensor(4.)
 print(b.grad) # tensor(2.)
 </code></pre>
+</p>
 <p>这是PyTorch的loss.backward()所运行的相同算法，只不过是在标量而非张量（标量数组）上执行——算法上完全一致，但规模更小、更简单，当然效率也低得多。</p>
 <p>让我们解读一下上面.backward()给出的结果。自动微分计算得出，如果 $L = a*b + a$，$a = 2$ 和 $b = 3$ 成立，那么a.grad = 4.0反映的是a对L的局部影响程度。当你微调输入a时，L会朝哪个方向变化？这里，L对a的导数为4.0，意味着若将a增加微小量（如0.001），L将增加约4倍于此的值（0.004）。同理，b.grad = 2.0表示对b施加相同幅度的调整，会使L增加约2倍于此的值（0.002）。换言之，这些梯度既指明了每个输入对最终输出（损失值）的影响方向（正负取决于符号），也揭示了影响陡峭程度（梯度幅值）。这使我们能够通过迭代微调神经网络参数来降低损失值，从而提升其预测性能。</p>
 <p>有了自动求导机制，我们就可以定义Transformer模型了。microGPT遵循GPT-2架构，并做了少量简化。</p>

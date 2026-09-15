@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">使用PPO微调大语言模型——复刻 InstructGPT</a>
                 </span>
               <h1>11.3 PPO微调LLM实战</h1>
@@ -129,7 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>应用场景：在电商场景中，很多商品由于没有人买而变成了“长尾商品”。而我们需要为这些长尾商品“自动”生成一些正向评论，来吸引买家。所以需要训练一个能够编写正向评论的LLM。</p>
 <ol>
 <li>首先对一个预训练LLM（gpt2，Qwen2.5-0.5B等）进行SFT，让LLM可以编写商品评论。这里的问题在于这个LLM虽然能够写电商评论，但写出来的可能是正向评论也可能是负向评论。</li>
@@ -138,7 +138,7 @@
 </ol>
 <h3 id="sec-1">11.3.1 GPT2模型结构以及分词器</h3>
 <p>文件 <code>gpt_model.py</code> 中编写gpt2的模型结构。</p>
-<pre><code class="language-python">import torch
+<p><pre><code class="language-python">import torch
 import torch.nn as nn
 
 class LayerNorm(nn.Module):
@@ -170,9 +170,9 @@ class FeedForward(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(cfg[&quot;emb_dim&quot;], 4 * cfg[&quot;emb_dim&quot;]),
+            nn.Linear(cfg["emb_dim"], 4 * cfg["emb_dim"]),
             GELU(),
-            nn.Linear(4 * cfg[&quot;emb_dim&quot;], cfg[&quot;emb_dim&quot;]),
+            nn.Linear(4 * cfg["emb_dim"], cfg["emb_dim"]),
         )
 
     def forward(self, x):
@@ -182,7 +182,7 @@ class FeedForward(nn.Module):
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
-        assert d_out % num_heads == 0, &quot;d_out must be divisible by n_heads&quot;
+        assert d_out % num_heads == 0, "d_out must be divisible by n_heads"
 
         self.d_out = d_out
         self.num_heads = num_heads
@@ -195,7 +195,7 @@ class MultiHeadAttention(nn.Module):
         # 用线性层合并多个注意力头的输出
         self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
-        self.register_buffer(&quot;mask&quot;, torch.triu(
+        self.register_buffer("mask", torch.triu(
             torch.ones(context_length, context_length), diagonal=1))
 
     def forward(self, x):
@@ -244,16 +244,16 @@ class TransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.att = MultiHeadAttention(
-            d_in=cfg[&quot;emb_dim&quot;],
-            d_out=cfg[&quot;emb_dim&quot;],
-            context_length=cfg[&quot;context_length&quot;],
-            num_heads=cfg[&quot;n_heads&quot;],
-            dropout=cfg[&quot;drop_rate&quot;],
-            qkv_bias=cfg[&quot;qkv_bias&quot;])
+            d_in=cfg["emb_dim"],
+            d_out=cfg["emb_dim"],
+            context_length=cfg["context_length"],
+            num_heads=cfg["n_heads"],
+            dropout=cfg["drop_rate"],
+            qkv_bias=cfg["qkv_bias"])
         self.ff = FeedForward(cfg)
-        self.norm1 = LayerNorm(cfg[&quot;emb_dim&quot;])
-        self.norm2 = LayerNorm(cfg[&quot;emb_dim&quot;])
-        self.drop_resid = nn.Dropout(cfg[&quot;drop_rate&quot;])
+        self.norm1 = LayerNorm(cfg["emb_dim"])
+        self.norm2 = LayerNorm(cfg["emb_dim"])
+        self.drop_resid = nn.Dropout(cfg["drop_rate"])
 
     def forward(self, x):
         # x: (B, T, emb_dim)
@@ -277,16 +277,16 @@ class TransformerBlock(nn.Module):
 class GPTModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.tok_emb = nn.Embedding(cfg[&quot;vocab_size&quot;], cfg[&quot;emb_dim&quot;])
-        self.pos_emb = nn.Embedding(cfg[&quot;context_length&quot;], cfg[&quot;emb_dim&quot;])
-        self.drop_emb = nn.Dropout(cfg[&quot;drop_rate&quot;])
+        self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
+        self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
+        self.drop_emb = nn.Dropout(cfg["drop_rate"])
 
         self.trf_blocks = nn.Sequential(
-            *[TransformerBlock(cfg) for _ in range(cfg[&quot;n_layers&quot;])])
+            *[TransformerBlock(cfg) for _ in range(cfg["n_layers"])])
 
-        self.final_norm = LayerNorm(cfg[&quot;emb_dim&quot;])
+        self.final_norm = LayerNorm(cfg["emb_dim"])
         self.out_head = nn.Linear(
-            cfg[&quot;emb_dim&quot;], cfg[&quot;vocab_size&quot;], bias=False)
+            cfg["emb_dim"], cfg["vocab_size"], bias=False)
 
     def forward(self, in_idx):
         batch_size, seq_len = in_idx.shape # (B, T)
@@ -299,12 +299,13 @@ class GPTModel(nn.Module):
         last_hidden_state = x
         logits = self.out_head(x)
         return {
-            &quot;logits&quot;: logits, # shape: (B, T, vocab_size)
-            &quot;last_hidden_state&quot;: last_hidden_state, # shape: (B, T, emb_dim)
+            "logits": logits, # shape: (B, T, vocab_size)
+            "last_hidden_state": last_hidden_state, # shape: (B, T, emb_dim)
         }
 </code></pre>
+</p>
 <p>分词器文件 <code>gpt_tokenizer.py</code></p>
-<pre><code class="language-python">from pathlib import Path
+<p><pre><code class="language-python">from pathlib import Path
 
 from tokenizers import BertWordPieceTokenizer
 
@@ -313,7 +314,7 @@ class ChineseGPT2Tokenizer:
     def __init__(self, model_path):
         model_path = Path(model_path)
         self.tokenizer = BertWordPieceTokenizer(
-            str(model_path / &quot;vocab.txt&quot;),
+            str(model_path / "vocab.txt"),
             lowercase=False,
             strip_accent=None,
             clean_text=True,
@@ -335,46 +336,47 @@ class ChineseGPT2Tokenizer:
     def token_to_id(self, token):
         return self.tokenizer.token_to_id(token)
 </code></pre>
+</p>
 <h3 id="sec-2">11.3.2 加载预训练权重</h3>
 <p>我们从网上下载 <code>gpt2-chinese-cluecorpusmall</code> 权重之后，需要用我们自己定义的模型结构来加载预训练的权重。</p>
 <p>文件 <code>gpt_load_weight.py</code> 如下：</p>
-<pre><code class="language-python">from gpt_model import GPTModel, generate, token_ids_to_text, text_to_token_ids
+<p><pre><code class="language-python">from gpt_model import GPTModel, generate, token_ids_to_text, text_to_token_ids
 import numpy as np
 import torch
 from gpt_tokenizer import ChineseGPT2Tokenizer
 
-MODEL_PATH = &quot;./gpt2-chinese-cluecorpusmall&quot;
-PROMPT = &quot;这本书真是&quot;
+MODEL_PATH = "./gpt2-chinese-cluecorpusmall"
+PROMPT = "这本书真是"
 MAX_NEW_TOKENS = 30
 
 BASE_CONFIG = {
-    &quot;vocab_size&quot;: 21128, # Vocabulary size
-    &quot;context_length&quot;: 1024, # Context length
-    &quot;drop_rate&quot;: 0.0, # Dropout rate
-    &quot;qkv_bias&quot;: True, # Query-key-value bias
-    &quot;emb_dim&quot;: 768,
-    &quot;n_layers&quot;: 12,
-    &quot;n_heads&quot;: 12,
+    "vocab_size": 21128, # Vocabulary size
+    "context_length": 1024, # Context length
+    "drop_rate": 0.0, # Dropout rate
+    "qkv_bias": True, # Query-key-value bias
+    "emb_dim": 768,
+    "n_layers": 12,
+    "n_heads": 12,
 }
 
 
 def assign_check(left, right):
     if left.shape != right.shape:
         raise ValueError(
-            f&quot;Shape mismatch. Left: {left.shape}, Right: {right.shape}&quot;
+            f"Shape mismatch. Left: {left.shape}, Right: {right.shape}"
         )
     return torch.nn.Parameter(right.clone().detach())
 
 
 def load_weights_from_state_dict(gpt, d, cfg=BASE_CONFIG):
     gpt.pos_emb.weight = assign_check(
-        gpt.pos_emb.weight, d[&quot;transformer.wpe.weight&quot;])
+        gpt.pos_emb.weight, d["transformer.wpe.weight"])
     gpt.tok_emb.weight = assign_check(
-        gpt.tok_emb.weight, d[&quot;transformer.wte.weight&quot;])
+        gpt.tok_emb.weight, d["transformer.wte.weight"])
 
-    for b in range(cfg[&quot;n_layers&quot;]):
+    for b in range(cfg["n_layers"]):
         q_w, k_w, v_w = np.split(
-            d[f&quot;transformer.h.{b}.attn.c_attn.weight&quot;], 3, axis=-1)
+            d[f"transformer.h.{b}.attn.c_attn.weight"], 3, axis=-1)
         gpt.trf_blocks[b].att.W_query.weight = assign_check(
             gpt.trf_blocks[b].att.W_query.weight, q_w.T)
         gpt.trf_blocks[b].att.W_key.weight = assign_check(
@@ -383,7 +385,7 @@ def load_weights_from_state_dict(gpt, d, cfg=BASE_CONFIG):
             gpt.trf_blocks[b].att.W_value.weight, v_w.T)
 
         q_b, k_b, v_b = np.split(
-            d[f&quot;transformer.h.{b}.attn.c_attn.bias&quot;], 3, axis=-1)
+            d[f"transformer.h.{b}.attn.c_attn.bias"], 3, axis=-1)
         gpt.trf_blocks[b].att.W_query.bias = assign_check(
             gpt.trf_blocks[b].att.W_query.bias, q_b)
         gpt.trf_blocks[b].att.W_key.bias = assign_check(
@@ -392,41 +394,41 @@ def load_weights_from_state_dict(gpt, d, cfg=BASE_CONFIG):
             gpt.trf_blocks[b].att.W_value.bias, v_b)
 
         gpt.trf_blocks[b].att.out_proj.weight = assign_check(
-            gpt.trf_blocks[b].att.out_proj.weight, d[f&quot;transformer.h.{b}.attn.c_proj.weight&quot;].T)
+            gpt.trf_blocks[b].att.out_proj.weight, d[f"transformer.h.{b}.attn.c_proj.weight"].T)
         gpt.trf_blocks[b].att.out_proj.bias = assign_check(
-            gpt.trf_blocks[b].att.out_proj.bias, d[f&quot;transformer.h.{b}.attn.c_proj.bias&quot;])
+            gpt.trf_blocks[b].att.out_proj.bias, d[f"transformer.h.{b}.attn.c_proj.bias"])
 
         gpt.trf_blocks[b].ff.layers[0].weight = assign_check(
-            gpt.trf_blocks[b].ff.layers[0].weight, d[f&quot;transformer.h.{b}.mlp.c_fc.weight&quot;].T)
+            gpt.trf_blocks[b].ff.layers[0].weight, d[f"transformer.h.{b}.mlp.c_fc.weight"].T)
         gpt.trf_blocks[b].ff.layers[0].bias = assign_check(
-            gpt.trf_blocks[b].ff.layers[0].bias, d[f&quot;transformer.h.{b}.mlp.c_fc.bias&quot;])
+            gpt.trf_blocks[b].ff.layers[0].bias, d[f"transformer.h.{b}.mlp.c_fc.bias"])
         gpt.trf_blocks[b].ff.layers[2].weight = assign_check(
-            gpt.trf_blocks[b].ff.layers[2].weight, d[f&quot;transformer.h.{b}.mlp.c_proj.weight&quot;].T)
+            gpt.trf_blocks[b].ff.layers[2].weight, d[f"transformer.h.{b}.mlp.c_proj.weight"].T)
         gpt.trf_blocks[b].ff.layers[2].bias = assign_check(
-            gpt.trf_blocks[b].ff.layers[2].bias, d[f&quot;transformer.h.{b}.mlp.c_proj.bias&quot;])
+            gpt.trf_blocks[b].ff.layers[2].bias, d[f"transformer.h.{b}.mlp.c_proj.bias"])
 
         gpt.trf_blocks[b].norm1.scale = assign_check(
-            gpt.trf_blocks[b].norm1.scale, d[f&quot;transformer.h.{b}.ln_1.weight&quot;])
+            gpt.trf_blocks[b].norm1.scale, d[f"transformer.h.{b}.ln_1.weight"])
         gpt.trf_blocks[b].norm1.shift = assign_check(
-            gpt.trf_blocks[b].norm1.shift, d[f&quot;transformer.h.{b}.ln_1.bias&quot;])
+            gpt.trf_blocks[b].norm1.shift, d[f"transformer.h.{b}.ln_1.bias"])
         gpt.trf_blocks[b].norm2.scale = assign_check(
-            gpt.trf_blocks[b].norm2.scale, d[f&quot;transformer.h.{b}.ln_2.weight&quot;])
+            gpt.trf_blocks[b].norm2.scale, d[f"transformer.h.{b}.ln_2.weight"])
         gpt.trf_blocks[b].norm2.shift = assign_check(
-            gpt.trf_blocks[b].norm2.shift, d[f&quot;transformer.h.{b}.ln_2.bias&quot;])
+            gpt.trf_blocks[b].norm2.shift, d[f"transformer.h.{b}.ln_2.bias"])
 
     gpt.final_norm.scale = assign_check(
-        gpt.final_norm.scale, d[&quot;transformer.ln_f.weight&quot;])
+        gpt.final_norm.scale, d["transformer.ln_f.weight"])
     gpt.final_norm.shift = assign_check(
-        gpt.final_norm.shift, d[&quot;transformer.ln_f.bias&quot;])
+        gpt.final_norm.shift, d["transformer.ln_f.bias"])
     gpt.out_head.weight = assign_check(
-        gpt.out_head.weight, d[&quot;transformer.wte.weight&quot;])
+        gpt.out_head.weight, d["transformer.wte.weight"])
 
 
 def load_weights(gpt, gpt_hf, cfg=BASE_CONFIG):
     load_weights_from_state_dict(gpt, gpt_hf.state_dict(), cfg)
 
 
-if __name__ == &quot;__main__&quot;:
+if __name__ == "__main__":
     from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 
     model = AutoModelForCausalLM.from_pretrained(MODEL_PATH)
@@ -435,7 +437,7 @@ if __name__ == &quot;__main__&quot;:
 
     gpt = GPTModel(BASE_CONFIG) # 初始化一个自己手摇的GPT-2模型
 
-    device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     load_weights(gpt, model) # 将从huggingface下载的权重赋值到我们自己初始化的gpt模型
     gpt.to(device).eval()
     model.to(device).eval()
@@ -447,19 +449,19 @@ if __name__ == &quot;__main__&quot;:
         model=gpt,
         idx=input_ids,
         max_new_tokens=MAX_NEW_TOKENS,
-        context_size=BASE_CONFIG[&quot;context_length&quot;],
+        context_size=BASE_CONFIG["context_length"],
         top_k=None,
         temperature=0.0
     )
 
-    print(&quot;Custom generate:&quot;)
+    print("Custom generate:")
     print(token_ids_to_text(token_ids, tokenizer))
 
     g = pipeline(
-        &quot;text-generation&quot;,
+        "text-generation",
         model=model,
         tokenizer=hf_tokenizer,
-        device=0 if device.type == &quot;cuda&quot; else -1,
+        device=0 if device.type == "cuda" else -1,
     )
     pipeline_output = g(
         PROMPT,
@@ -469,19 +471,20 @@ if __name__ == &quot;__main__&quot;:
         return_tensors=True,
     )
     pipeline_token_ids = torch.tensor(
-        pipeline_output[0][&quot;generated_token_ids&quot;], device=device
+        pipeline_output[0]["generated_token_ids"], device=device
     ).unsqueeze(0)
 
-    print(&quot;Transformers pipeline:&quot;)
+    print("Transformers pipeline:")
     print(token_ids_to_text(pipeline_token_ids, tokenizer))
-    print(&quot;Same token ids:&quot;, torch.equal(token_ids.cpu(), pipeline_token_ids.cpu()))
+    print("Same token ids:", torch.equal(token_ids.cpu(), pipeline_token_ids.cpu()))
 </code></pre>
+</p>
 <h3 id="sec-3">11.3.3 监督微调（SFT）</h3>
 <p>我们的目标是训练一个可以写电商评论的大语言模型。所以我们对 gpt2 进行微调，让它可以写电商评论。</p>
 <p>由于我们使用的文本，既有正向情感的文本，也有负向情感的文本，所以训练出来的模型，在给定提示词（例如：“这本书”）时，可能写出正向情感的评论也可能写出负向情感的评论。</p>
 <p><strong>预训练模型</strong></p>
 <p>我们使用的底座模型是中文版 gpt2：“gpt2-chinese-cluecorpussmall”。</p>
-<pre><code class="language-python">import os
+<p><pre><code class="language-python">import os
 import shutil
 from pathlib import Path
 from pprint import pprint
@@ -496,50 +499,50 @@ from gpt_load_weight import BASE_CONFIG, load_weights_from_state_dict
 from gpt_tokenizer import ChineseGPT2Tokenizer
 
 
-PRETRAINED_MODEL_PATH = Path(&quot;./gpt2-chinese-cluecorpussmall&quot;)
-OUTPUT_DIR = Path(&quot;./gpt2-sft&quot;)
-DATASET_CACHE_DIR = Path(&quot;./.cache/hf_datasets&quot;)
-CSV_PATH = &quot;online_shopping_10_cats.csv&quot;
-PROMPT = &quot;这本书真是&quot;
-MAX_NEW_TOKENS = int(os.getenv(&quot;SFT_MAX_NEW_TOKENS&quot;, &quot;300&quot;))
+PRETRAINED_MODEL_PATH = Path("./gpt2-chinese-cluecorpussmall")
+OUTPUT_DIR = Path("./gpt2-sft")
+DATASET_CACHE_DIR = Path("./.cache/hf_datasets")
+CSV_PATH = "online_shopping_10_cats.csv"
+PROMPT = "这本书真是"
+MAX_NEW_TOKENS = int(os.getenv("SFT_MAX_NEW_TOKENS", "300"))
 BATCH_SIZE = 2
 LEARNING_RATE = 5e-5
 NUM_EPOCHS = 1
-MAX_TRAIN_STEPS = int(os.getenv(&quot;SFT_MAX_STEPS&quot;, &quot;0&quot;)) or None
+MAX_TRAIN_STEPS = int(os.getenv("SFT_MAX_STEPS", "0")) or None
 
 
 def tokenize(batch):
     return {
-        &quot;input_ids&quot;: [
+        "input_ids": [
             tokenizer.encode(text, add_special_tokens=False)
-            for text in batch[&quot;review&quot;]
+            for text in batch["review"]
         ]
     }
 
 
 # 整理数据
-# [&quot;abc&quot;, &quot;abcd&quot;]
+# ["abc", "abcd"]
 # {
-#   &quot;input_ids&quot;: [[1,2,3,pad],[1,2,3,4]],
-#   &quot;labels&quot;: [[1,2,3,-100],[1,2,3,4]]
+#   "input_ids": [[1,2,3,pad],[1,2,3,4]],
+#   "labels": [[1,2,3,-100],[1,2,3,4]]
 # }
 def causal_lm_collate(batch):
-    pad_id = tokenizer.token_to_id(&quot;[PAD]&quot;)
+    pad_id = tokenizer.token_to_id("[PAD]")
     # 一批数据中最长数据的长度
-    max_len = max(len(item[&quot;input_ids&quot;]) for item in batch)
+    max_len = max(len(item["input_ids"]) for item in batch)
 
     input_ids = []
     labels = []
     for item in batch:
-        ids = item[&quot;input_ids&quot;]
+        ids = item["input_ids"]
         pad_len = max_len - len(ids)
         input_ids.append(ids + [pad_id] * pad_len)
         # labels中的pad替换为-100
         labels.append(ids + [-100] * pad_len)
 
     return {
-        &quot;input_ids&quot;: torch.tensor(input_ids, dtype=torch.long),
-        &quot;labels&quot;: torch.tensor(labels, dtype=torch.long),
+        "input_ids": torch.tensor(input_ids, dtype=torch.long),
+        "labels": torch.tensor(labels, dtype=torch.long),
     }
 
 
@@ -556,21 +559,21 @@ def calc_loss(logits, labels):
 torch.manual_seed(42)
 
 dataset = load_dataset(
-    &quot;csv&quot;,
+    "csv",
     data_files=CSV_PATH,
     cache_dir=str(DATASET_CACHE_DIR),
 )
 
-ds_train = dataset[&quot;train&quot;]
+ds_train = dataset["train"]
 ds_train = ds_train.filter(
-    lambda x: x[&quot;review&quot;] is not None and len(x[&quot;review&quot;]) &gt; 20 and len(x[&quot;review&quot;]) &lt; 512
+    lambda x: x["review"] is not None and len(x["review"]) &gt; 20 and len(x["review"]) &lt; 512
 )
 
 tokenizer = ChineseGPT2Tokenizer(PRETRAINED_MODEL_PATH)
 model = GPTModel(BASE_CONFIG)
 state_dict = torch.load(
-    PRETRAINED_MODEL_PATH / &quot;pytorch_model.bin&quot;,
-    map_location=&quot;cpu&quot;,
+    PRETRAINED_MODEL_PATH / "pytorch_model.bin",
+    map_location="cpu",
 )
 load_weights_from_state_dict(model, state_dict)
 
@@ -578,9 +581,9 @@ tokenized_dataset_train = ds_train.map(
     tokenize,
     batched=True,
     batch_size=512,
-    remove_columns=[&quot;cat&quot;, &quot;label&quot;, &quot;review&quot;],
+    remove_columns=["cat", "label", "review"],
 )
-tokenized_dataset_train.set_format(type=&quot;python&quot;)
+tokenized_dataset_train.set_format(type="python")
 
 train_dataLoader = DataLoader(
     tokenized_dataset_train,
@@ -589,7 +592,7 @@ train_dataLoader = DataLoader(
 )
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
 global_step = 0
@@ -597,11 +600,11 @@ for epoch in range(NUM_EPOCHS):
     model.train()
     for i, batch in enumerate(train_dataLoader):
         # [a,b,c,pad] of input_ids is [1,2,3,pad_id]
-        input_ids = batch[&quot;input_ids&quot;].to(device)
+        input_ids = batch["input_ids"].to(device)
         # [1,2,3,-100]
-        labels = batch[&quot;labels&quot;].to(device)
+        labels = batch["labels"].to(device)
 
-        logits = model(input_ids)[&quot;logits&quot;]
+        logits = model(input_ids)["logits"]
         loss = calc_loss(logits, labels)
 
         optimizer.zero_grad()
@@ -609,7 +612,7 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
 
         if i % 100 == 0:
-            print(f&quot;Epoch: {epoch}, Step: {i}, Loss: {loss.item()}&quot;)
+            print(f"Epoch: {epoch}, Step: {i}, Loss: {loss.item()}")
 
         global_step += 1
         if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
@@ -619,8 +622,8 @@ for epoch in range(NUM_EPOCHS):
         break
 
 OUTPUT_DIR.mkdir(exist_ok=True)
-torch.save(model.state_dict(), OUTPUT_DIR / &quot;model.pt&quot;)
-shutil.copy2(PRETRAINED_MODEL_PATH / &quot;vocab.txt&quot;, OUTPUT_DIR / &quot;vocab.txt&quot;)
+torch.save(model.state_dict(), OUTPUT_DIR / "model.pt")
+shutil.copy2(PRETRAINED_MODEL_PATH / "vocab.txt", OUTPUT_DIR / "vocab.txt")
 
 model.eval()
 with torch.no_grad():
@@ -629,13 +632,14 @@ with torch.no_grad():
         model=model,
         idx=input_ids,
         max_new_tokens=MAX_NEW_TOKENS,
-        context_size=BASE_CONFIG[&quot;context_length&quot;],
+        context_size=BASE_CONFIG["context_length"],
         top_k=50,
         temperature=1.0
     )
 
-    pprint([f&quot;generated_text&quot;: token_ids_to_text(token_ids, tokenizer)])
+    pprint([f"generated_text": token_ids_to_text(token_ids, tokenizer)])
 </code></pre>
+</p>
 <h3 id="sec-4">11.3.4 训练奖励模型（Reward Model）</h3>
 <p>我们会将 gpt2 预训练模型微调成一个分类模型（奖励模型）。</p>
 <p>我们要训练一个模型作为奖励模型，也就是给模型输入文本，模型可以给一个评分出来。</p>
@@ -643,7 +647,7 @@ with torch.no_grad():
 </p>
 <p>我们的评论在输入奖励模型之前会先在末尾添加一个 reward_token，作为标记。作用和 Bert 用来训练分类模型时添加的 CLS_TOKEN 是一样的。</p>
 <p>我们将评论输入 gpt2 模型，然后提取 gpt2 输出的最后一层隐藏层（last_hidden_state），并送入一个我们自己定义的线性层（reward_head），然后取输出的最后一个元素作为评分。</p>
-<pre><code class="language-python">import os
+<p><pre><code class="language-python">import os
 from pathlib import Path
 
 import torch
@@ -657,66 +661,66 @@ from gpt_load_weight import BASE_CONFIG, load_weights_from_state_dict
 from gpt_tokenizer import ChineseGPT2Tokenizer
 
 
-MODEL_PATH = Path(&quot;./gpt2-chinese-cluecorpussmall&quot;)
-DATASET_CACHE_DIR = Path(&quot;./.cache/hf_datasets&quot;)
-CSV_PATH = &quot;online_shopping_10_cats.csv&quot;
+MODEL_PATH = Path("./gpt2-chinese-cluecorpussmall")
+DATASET_CACHE_DIR = Path("./.cache/hf_datasets")
+CSV_PATH = "online_shopping_10_cats.csv"
 BATCH_SIZE = 2
 LEARNING_RATE = 1e-4
 NUM_EPOCHS = 1
-MAX_TRAIN_STEPS = int(os.getenv(&quot;RM_MAX_STEPS&quot;, &quot;0&quot;)) or None
-MAX_EVAL_STEPS = int(os.getenv(&quot;RM_MAX_EVAL_STEPS&quot;, &quot;0&quot;)) or None
+MAX_TRAIN_STEPS = int(os.getenv("RM_MAX_STEPS", "0")) or None
+MAX_EVAL_STEPS = int(os.getenv("RM_MAX_EVAL_STEPS", "0")) or None
 
 tokenizer = ChineseGPT2Tokenizer(MODEL_PATH)
-REWARD_TOKEN_ID = tokenizer.token_to_id(&quot;[PAD]&quot;)
-PAD_TOKEN_ID = tokenizer.token_to_id(&quot;[PAD]&quot;)
+REWARD_TOKEN_ID = tokenizer.token_to_id("[PAD]")
+PAD_TOKEN_ID = tokenizer.token_to_id("[PAD]")
 
 ds = load_dataset(
-    &quot;csv&quot;,
+    "csv",
     data_files=CSV_PATH,
     cache_dir=str(DATASET_CACHE_DIR),
 )
-ds_train = ds[&quot;train&quot;]
+ds_train = ds["train"]
 
 ds_train = ds_train.filter(
-    lambda x: x[&quot;review&quot;] is not None and len(x[&quot;review&quot;]) &gt; 20 and len(x[&quot;review&quot;]) &lt; 512
+    lambda x: x["review"] is not None and len(x["review"]) &gt; 20 and len(x["review"]) &lt; 512
 )
 
-print(&quot;数据集的数量：&quot;, len(ds_train))
+print("数据集的数量：", len(ds_train))
 
 
 def tokenize(batch):
     input_ids = [
         tokenizer.encode(text, add_special_tokens=False) + [REWARD_TOKEN_ID]
-        for text in batch[&quot;review&quot;]
+        for text in batch["review"]
     ]
     return {
-        &quot;input_ids&quot;: input_ids,
-        &quot;score&quot;: [float(label) for label in batch[&quot;label&quot;]],
+        "input_ids": input_ids,
+        "score": [float(label) for label in batch["label"]],
         # reward_token_id的索引
-        &quot;score_index&quot;: [len(ids) - 1 for ids in input_ids],
+        "score_index": [len(ids) - 1 for ids in input_ids],
     }
 
 
 def padding_collate(batch):
-    max_len = max(len(item[&quot;input_ids&quot;]) for item in batch)
+    max_len = max(len(item["input_ids"]) for item in batch)
 
     input_ids = []
     attention_mask = []
     score = []
     score_index = []
     for item in batch:
-        ids = item[&quot;input_ids&quot;]
+        ids = item["input_ids"]
         pad_len = max_len - len(ids)
         input_ids.append(ids + [PAD_TOKEN_ID] * pad_len)
         attention_mask.append([1] * len(ids) + [0] * pad_len)
-        score.append(item[&quot;score&quot;])
-        score_index.append(item[&quot;score_index&quot;])
+        score.append(item["score"])
+        score_index.append(item["score_index"])
 
     return {
-        &quot;input_ids&quot;: torch.tensor(input_ids, dtype=torch.long),
-        &quot;attention_mask&quot;: torch.tensor(attention_mask, dtype=torch.long),
-        &quot;score&quot;: torch.tensor(score, dtype=torch.float),
-        &quot;score_index&quot;: torch.tensor(score_index, dtype=torch.long),
+        "input_ids": torch.tensor(input_ids, dtype=torch.long),
+        "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+        "score": torch.tensor(score, dtype=torch.float),
+        "score_index": torch.tensor(score_index, dtype=torch.long),
     }
 
 
@@ -724,9 +728,9 @@ tokenized_dataset_train = ds_train.map(
     tokenize,
     batched=True,
     batch_size=512,
-    remove_columns=[&quot;cat&quot;, &quot;label&quot;, &quot;review&quot;],
+    remove_columns=["cat", "label", "review"],
 )
-tokenized_dataset_train.set_format(type=&quot;python&quot;)
+tokenized_dataset_train.set_format(type="python")
 
 
 class RewardModel(nn.Module):
@@ -734,17 +738,17 @@ class RewardModel(nn.Module):
         super().__init__()
         self.llm = GPTModel(BASE_CONFIG)
         state_dict = torch.load(
-            Path(model_path) / &quot;pytorch_model.bin&quot;,
-            map_location=&quot;cpu&quot;,
+            Path(model_path) / "pytorch_model.bin",
+            map_location="cpu",
         )
         load_weights_from_state_dict(self.llm, state_dict)
-        self.reward_head = nn.Linear(BASE_CONFIG[&quot;emb_dim&quot;], 1)
+        self.reward_head = nn.Linear(BASE_CONFIG["emb_dim"], 1)
 
     def forward(self, input_ids, attention_mask=None):
         # input_ids: (B, T)
         outputs = self.llm(input_ids)
         # last_hidden_state: (B, T, emb_dim)
-        last_hidden_state = outputs[&quot;last_hidden_state&quot;]
+        last_hidden_state = outputs["last_hidden_state"]
         # self.reward_head(last_hidden_state): (B, T, 1)
         # .squeeze(-1)之后的形状，也就是reward的形状(B, T)
         reward = self.reward_head(last_hidden_state).squeeze(-1)
@@ -760,7 +764,7 @@ train_dataloader = DataLoader(
     collate_fn=padding_collate,
 )
 
-device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.BCELoss()
@@ -773,15 +777,15 @@ for epoch in range(NUM_EPOCHS):
     for i, batch in enumerate(train_dataloader):
         inputs = {key: value.to(device) for key, value in batch.items()}
         model_inputs = {
-            &quot;input_ids&quot;: inputs[&quot;input_ids&quot;],
-            &quot;attention_mask&quot;: inputs[&quot;attention_mask&quot;],
+            "input_ids": inputs["input_ids"],
+            "attention_mask": inputs["attention_mask"],
         }
 
         scores = model(**model_inputs)
         batch_indices = torch.arange(scores.shape[0], device=device)
         # 取出批次中每一条数据中reward_token_id的索引对应的分数
-        score = scores[batch_indices, inputs[&quot;score_index&quot;]]
-        target = inputs[&quot;score&quot;]
+        score = scores[batch_indices, inputs["score_index"]]
+        target = inputs["score"]
         loss = criterion(score, target)
 
         optimizer.zero_grad()
@@ -789,7 +793,7 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
 
         if i % 100 == 0:
-            print(&quot;Step-&quot;, i, &quot;, Loss: &quot;, loss.item(), flush=True)
+            print("Step-", i, ", Loss: ", loss.item(), flush=True)
 
         global_step += 1
         if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
@@ -798,7 +802,7 @@ for epoch in range(NUM_EPOCHS):
     if MAX_TRAIN_STEPS is not None and global_step &gt;= MAX_TRAIN_STEPS:
         break
 
-torch.save(model.state_dict(), &quot;reward_model.pt&quot;)
+torch.save(model.state_dict(), "reward_model.pt")
 
 model.eval()
 
@@ -808,14 +812,14 @@ all_labels = []
 for i, batch in enumerate(train_dataloader):
     inputs = {key: value.to(device) for key, value in batch.items()}
     model_inputs = {
-        &quot;input_ids&quot;: inputs[&quot;input_ids&quot;],
-        &quot;attention_mask&quot;: inputs[&quot;attention_mask&quot;],
+        "input_ids": inputs["input_ids"],
+        "attention_mask": inputs["attention_mask"],
     }
     with torch.no_grad():
         scores = model(**model_inputs)
         batch_indices = torch.arange(scores.shape[0], device=device)
-        score = scores[batch_indices, inputs[&quot;score_index&quot;]]
-        target = inputs[&quot;score&quot;]
+        score = scores[batch_indices, inputs["score_index"]]
+        target = inputs["score"]
         predictions = (score &gt; 0.5).int()
 
         all_predictions.extend(predictions.cpu().numpy())
@@ -826,14 +830,16 @@ for i, batch in enumerate(train_dataloader):
 
 print(confusion_matrix(all_labels, all_predictions))
 </code></pre>
+</p>
 <p>结果的格式如下：</p>
-<pre><code class="language-python">混淆矩阵:
+<p><pre><code class="language-python">混淆矩阵:
 [[364, 60], # 第一行：真实标签为0的情况：364个预测正确，60个预测错误
  [ 31, 412]] # 第二行：真实标签为1的情况：31个预测错误，412个预测正确
 </code></pre>
+</p>
 <h3 id="sec-5">11.3.5 对gpt2-sft进行PPO微调</h3>
 <h4 id="sec-6">11.3.5.1 导入依赖</h4>
-<pre><code class="language-python">from transformers import DataCollatorWithPadding, AutoModelForCausalLM, AutoTokenizer
+<p><pre><code class="language-python">from transformers import DataCollatorWithPadding, AutoModelForCausalLM, AutoTokenizer
 from copy import deepcopy
 from torch.utils.data import DataLoader
 import random
@@ -843,10 +849,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-model_path = &quot;./gpt2-sft&quot;
+model_path = "./gpt2-sft"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 tokenizer.pad_token = tokenizer.eos_token
 </code></pre>
+</p>
 <h4 id="sec-7">11.3.5.2 准备提示词</h4>
 <p>我们需要搞一些提示词，给到gpt2-sft，让它补全。补全的内容交给奖励模型评分。然后决定惩罚gpt2-sft还是奖励gpt2-sft。</p>
 <p><strong>危险</strong></p>
@@ -854,11 +861,11 @@ tokenizer.pad_token = tokenizer.eos_token
 <p>截取前几个字作为提示词</p>
 <p>东西太小了，光有数量没有质量！很失望！</p>
 <p>为PPO准备提示词 Python</p>
-<pre><code class="language-python">ds = load_dataset(&quot;csv&quot;, data_files=&quot;online_shopping_10_cats.csv&quot;)
-ds_train = ds[&quot;train&quot;]
+<p><pre><code class="language-python">ds = load_dataset("csv", data_files="online_shopping_10_cats.csv")
+ds_train = ds["train"]
 
-ds_train = ds_train.filter(lambda x: x[&quot;review&quot;] != None and len(
-    x[&quot;review&quot;]) &gt; 20 and len(x[&quot;review&quot;]) &lt; 1024)
+ds_train = ds_train.filter(lambda x: x["review"] != None and len(
+    x["review"]) &gt; 20 and len(x["review"]) &lt; 1024)
 
 # 截取评论数据的前2～8个token作为提示词
 input_min_token_length = 2
@@ -871,22 +878,22 @@ def tokenize(sample):
     # 提示词token的数量随机选择一个
     input_size = random.choice(input_token_length_range)
     # 如果input_size=3，截取review字段文本的前3个token出来
-    sample[&quot;input_ids&quot;] = tokenizer.encode(sample[&quot;review&quot;])[:input_size]
+    sample["input_ids"] = tokenizer.encode(sample["review"])[:input_size]
     # 提示词掩码为1
-    sample[&quot;attention_mask&quot;] = [1] * len(sample[&quot;input_ids&quot;])
+    sample["attention_mask"] = [1] * len(sample["input_ids"])
     # 提示词对应的文本
-    sample[&quot;query&quot;] = tokenizer.decode(sample[&quot;input_ids&quot;])
+    sample["query"] = tokenizer.decode(sample["input_ids"])
     return sample
 
 
 map_kwargs = {
-    &quot;batched&quot;: False,
-    &quot;remove_columns&quot;: [&quot;cat&quot;, &quot;review&quot;, &quot;label&quot;]
+    "batched": False,
+    "remove_columns": ["cat", "review", "label"]
 }
 
 tokenized_dataset_train = ds_train.map(tokenize, **map_kwargs)
 
-tokenized_dataset_train.set_format(type=&quot;torch&quot;)
+tokenized_dataset_train.set_format(type="torch")
 
 batch_size = 32
 
@@ -901,12 +908,13 @@ train_dataloader = DataLoader(
     shuffle=True
 )
 </code></pre>
+</p>
 <h4 id="sec-8">11.3.5.3 ActorCritic 模型结构</h4>
 <p>在倒立摆环境中，我们的Actor是PolicyNet，Critic是ValueNet。</p>
 <p>在InstructGPT中，演员模型和价值模型合并成了一个模型ActorCriticModel。这样actor和critic可以共享gpt2-sft模型的权重。</p>
 <p>演员评论家模型 Python</p>
-<pre><code class="language-python">class ActorCriticModel(nn.Module):
-    &quot;&quot;&quot;GPT2模型+价值头&quot;&quot;&quot;
+<p><pre><code class="language-python">class ActorCriticModel(nn.Module):
+    """GPT2模型+价值头"""
     def __init__(self, model_path):
         super().__init__()
         # 这个要初始化为我们微调出来的gpt2-sft模型
@@ -934,18 +942,19 @@ train_dataloader = DataLoader(
         return logits, value
 
     def generate(self, *args, **kwargs):
-        &quot;&quot;&quot;生成文本&quot;&quot;&quot;
+        """生成文本"""
         return self.llm.generate(*args, **kwargs)
 </code></pre>
+</p>
 <h4 id="sec-9">11.3.5.4 加载模型</h4>
 <p>将需要的模型都加载到显存 Python</p>
-<pre><code class="language-python">device = torch.device(&quot;cuda&quot;)
+<p><pre><code class="language-python">device = torch.device("cuda")
 
 # 将奖励模型加载
 reward_model = RewardModel(model_path)
 reward_model.load_state_dict(torch.load(
-    &quot;reward_model.pt&quot;,
-    map_location=&quot;cpu&quot;))
+    "reward_model.pt",
+    map_location="cpu"))
 # 加载演员评论家模型
 model = ActorCriticModel(model_path)
 model = model.to(device)
@@ -956,18 +965,20 @@ ref_model = deepcopy(model)
 # 设置reward_token
 REWARD_TOKEN_ID = tokenizer.eos_token_id
 </code></pre>
+</p>
 <h4 id="sec-10">11.3.5.5 奖励 $R_t$ 的计算</h4>
-<p>这
+<pre><code class="language-text">这
 本
 书
 真
 好
 看
 提示词
-保留这部分奖励</p>
+保留这部分奖励
+</code></pre>
 <p>图 11.5 提示词为“这本书”，补全为“真好看”的 $R_t$ 的计算</p>
 <p>下面的函数 compute_rewards 在计算输出的每个token的 $R_t$ 的同时，顺便计算了每个token的价值，也就是 $V(S_t)$。</p>
-<pre><code class="language-python">def compute_rewards(
+<p><pre><code class="language-python">def compute_rewards(
     input_data, # 输入数据（提示词+补全）
     query_tensors, # 提示词张量
     response_tensors, # 补全的张量
@@ -985,7 +996,7 @@ REWARD_TOKEN_ID = tokenizer.eos_token_id
         ref_logp = F.log_softmax(ref_logits[:, :-1, :], dim=-1)
         # 实际生成的token序列
         # 自回归模型是预测下一个token，所以去掉第一个token
-        labels = input_data[&quot;input_ids&quot;][:, 1:] # (B, T-1)
+        labels = input_data["input_ids"][:, 1:] # (B, T-1)
         # 使用gather提取实际token的概率
         # logp 是 vocab_size 大小的张量
         logp = torch.gather(logp, 2, labels.unsqueeze(-1)).squeeze(-1) # (B, T-1)
@@ -996,7 +1007,7 @@ REWARD_TOKEN_ID = tokenizer.eos_token_id
         beta = 0.2
         # 最终奖励的计算的右边式子：[-βlog π_θ(y_0|x)/π_ref(y_0|x), -βlog π_θ(y_1|x,y_0)/π_ref(y_1|x,y_0), ...]
         rewards = - beta * kl
-        attention_mask = input_data[&quot;attention_mask&quot;]
+        attention_mask = input_data["attention_mask"]
         # 预测下一个token，所以去掉第一个mask
         masks = torch.zeros_like(attention_mask[:, 1:])
         masks[:,:] = attention_mask[:, 1:]
@@ -1021,8 +1032,9 @@ REWARD_TOKEN_ID = tokenizer.eos_token_id
 
     return logp, rewards, values[:, :-1], masks
 </code></pre>
+</p>
 <p>values[j, :-1] *= masks[j, :] 是为什么呢？</p>
-<p>这
+<pre><code class="language-text">这
 本
 书
 真
@@ -1033,10 +1045,11 @@ eos_token
 gpt2-sft
 v_head
 提示词
-保留这部分的价值</p>
+保留这部分的价值
+</code></pre>
 <p>图 11.6 去掉最后一个的价值</p>
 <h4 id="sec-11">11.3.5.6 广义优势估计（GAE）的计算</h4>
-<pre><code class="language-python">def masked_mean(values, mask):
+<p><pre><code class="language-python">def masked_mean(values, mask):
     # 计算带掩码的平均值
     return (values * mask).sum() / mask.sum()
 
@@ -1047,14 +1060,14 @@ def masked_var(values, mask):
     return masked_mean(centred_values ** 2, mask)
 
 def masked_whiten(values, mask):
-    &quot;&quot;&quot;对数据进行带掩码的白化处理，让有效数据的方差变为1，但均值保持不变&quot;&quot;&quot;
+    """对数据进行带掩码的白化处理，让有效数据的方差变为1，但均值保持不变"""
     mean, var = masked_mean(values, mask), masked_var(values, mask)
     whitened = (values - mean) * torch.rsqrt(var + 1e-8)
     whitened += mean
     return whitened
 
 def compute_advantage(rewards, values, masks):
-    &quot;&quot;&quot;广义优势估计（GAE）&quot;&quot;&quot;
+    """广义优势估计（GAE）"""
     lastgae = 0.0
     advantage_reversed = []
     # 补全的token数量
@@ -1078,8 +1091,9 @@ def compute_advantage(rewards, values, masks):
     gae_targets = advantages + values
     return advantages, gae_targets
 </code></pre>
+</p>
 <h4 id="sec-12">11.3.5.7 损失的计算</h4>
-<pre><code class="language-python">def compute_loss(
+<p><pre><code class="language-python">def compute_loss(
     old_logprobs, # 旧策略输出的概率log π_θ_old(a_t|s_t)
     logprobs, # 正在微调的模型输出的对数概率log π_θ(a_t|s_t)
     vpreds, # 价值 V(S_t)
@@ -1100,6 +1114,7 @@ def compute_advantage(rewards, values, masks):
 
     return loss
 </code></pre>
+</p>
 <h4 id="sec-13">11.3.5.8 PPO 训练循环</h4>
 <p>训练流程：</p>
 <ul>
@@ -1111,7 +1126,7 @@ def compute_advantage(rewards, values, masks):
 <li>使用32条轨迹更新32次策略模型 $\pi_{\theta}$。更新后的策略模型作为下一轮ppo微调的 $\pi_{\theta_{\mathrm{old}}}$。</li>
 </ul>
 <p>使用旧策略采集的轨迹更新4次策略 Python</p>
-<pre><code class="language-python">data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+<p><pre><code class="language-python">data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
 learning_rate = 1e-5
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -1129,8 +1144,8 @@ def ppo_update(input_data, old_logprobs, masks, advantages, gae_targets):
             mini_batch_inds = batch_inds[start:start+mini_batch_size]
 
             mb_model_inputs = {
-                &quot;input_ids&quot;: input_data[&quot;input_ids&quot;][mini_batch_inds],
-                &quot;attention_mask&quot;: input_data[&quot;attention_mask&quot;][mini_batch_inds]
+                "input_ids": input_data["input_ids"][mini_batch_inds],
+                "attention_mask": input_data["attention_mask"][mini_batch_inds]
             }
             # 模型的输出是token的logits和value
             # mb_vpreds：[V(S_0), V(S_1), ..., V(S_T)]
@@ -1141,7 +1156,7 @@ def ppo_update(input_data, old_logprobs, masks, advantages, gae_targets):
             mb_logprobs = torch.gather(
                 mb_logits,
                 2,
-                mb_model_inputs[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+                mb_model_inputs["input_ids"][:, 1:].unsqueeze(-1)
             ).squeeze(-1)
 
             loss = compute_loss(
@@ -1157,19 +1172,20 @@ def ppo_update(input_data, old_logprobs, masks, advantages, gae_targets):
             # 使用4条轨迹更新了一次π_θ
             loss.backward()
             optimizer.step()
-            print(&quot;loss/total&quot;, loss.item())
-    print(&quot;ppo update finished&quot;)
+            print("loss/total", loss.item())
+    print("ppo update finished")
 </code></pre>
+</p>
 <p>主训练循环代码如下</p>
-<pre><code class="language-python">count = 0
+<p><pre><code class="language-python">count = 0
 for epoch in range(num_epochs):
     for batch in train_dataloader:
         if count == 1:
             break
         count += 1
         # 生成补全内容（回复）
-        query_tensors = batch[&quot;input_ids&quot;] # 提示词的张量
-        query_attention_masks = batch[&quot;attention_mask&quot;]
+        query_tensors = batch["input_ids"] # 提示词的张量
+        query_attention_masks = batch["attention_mask"]
 
         response_tensors = [] # 补全的张量
         query_response_tensors = [] # 提示词+补全的张量
@@ -1183,7 +1199,7 @@ for epoch in range(num_epochs):
                 output_min_length,
                 output_max_length)))
             # 设置补全长度属性
-            generation_kwargs[&quot;max_new_tokens&quot;] = new_tokens
+            generation_kwargs["max_new_tokens"] = new_tokens
             # 使用π_θ_old采样一条轨迹：提示词 + 补全
             query_response = model.generate(
                 input_ids=query.unsqueeze(0),
@@ -1215,8 +1231,8 @@ for epoch in range(num_epochs):
 
         input_data = data_collator([
             {
-                &quot;input_ids&quot;: ids,
-                &quot;attention_mask&quot;: torch.ones_like(ids)
+                "input_ids": ids,
+                "attention_mask": torch.ones_like(ids)
             }
             for ids in query_response_tensors
         ]).to(device)
@@ -1232,11 +1248,12 @@ for epoch in range(num_epochs):
         advantages, gae_targets = compute_advantage(rewards, values, masks)
 
         # 小批次训练
-        if input_data[&quot;input_ids&quot;].shape[0] != 32:
+        if input_data["input_ids"].shape[0] != 32:
             break
         # 使用采集到的32条轨迹更新策略
         ppo_update(input_data, old_logprobs, masks, advantages, gae_targets)
 </code></pre>
+</p>
 <h4 id="sec-14">11.3.5.9 评估模型</h4>
 <p>主要对比PPO微调后的模型和微调前的模型。对比方法：</p>
 <ul>
@@ -1248,7 +1265,7 @@ for epoch in range(num_epochs):
 <li>对比打分情况</li>
 </ul>
 <p>对比微调前后的模型的补全的打分情况 Python</p>
-<pre><code class="language-python">train_gen_lengths = [0] * len(tokenized_dataset_train)
+<p><pre><code class="language-python">train_gen_lengths = [0] * len(tokenized_dataset_train)
 for i in range(len(tokenized_dataset_train)):
     train_gen_lengths[i] = random.choice(list(range(
         output_min_length,
@@ -1263,13 +1280,13 @@ def validate():
             break
         count += 1
         # 生成补全内容
-        query_tensors = batch[&quot;input_ids&quot;]
-        query_attention_masks = batch[&quot;attention_mask&quot;]
+        query_tensors = batch["input_ids"]
+        query_attention_masks = batch["attention_mask"]
         for i, query in enumerate(query_tensors):
             query = query.to(device)
             query_attention_mask = query_attention_masks[i].to(device)
             new_tokens = train_gen_lengths[b * len(query_tensors) + i]
-            generation_kwargs[&quot;max_new_tokens&quot;] = new_tokens
+            generation_kwargs["max_new_tokens"] = new_tokens
             query_response = model.generate(
                 input_ids=query.unsqueeze(0),
                 attention_mask=query_attention_mask.unsqueeze(0),
@@ -1286,15 +1303,16 @@ def validate():
             ).squeeze(0)[-1]
             score = 2 * (score - 0.5)
             scores.append(score.item())
-    print(&quot;平均分数：&quot;, sum(scores) / len(scores))
+    print("平均分数：", sum(scores) / len(scores))
 
 
 validate()
 
-model_path = &quot;./gpt2-sft&quot;
+model_path = "./gpt2-sft"
 model = ActorCriticModel(model_path).to(device)
 validate()
 </code></pre>
+</p>
 <hr>
 
           <hr>

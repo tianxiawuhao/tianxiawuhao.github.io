@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">使用GRPO微调大语言模型——复刻 DeepSeek-R1</a>
                 </span>
               <h1>12.2 使用DAPO（GRPO的变种）微调Qwen2.5-3B-Instruct</h1>
@@ -129,6 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <h3 id="sec-1">12.2.1 实现思路及任务要求</h3>
 <p>我们要从零复刻一个类似 DeepSeek-R1 的模型，产生思维链！</p>
 <p>我们的实现不采用原始的 GRPO 算法，而是采用字节提出的 DAPO 算法，DAPO 对原始的 GRPO 有如下几项改进：</p>
@@ -138,7 +139,7 @@
 </ol>
 <p>我们的算法伪代码如下：</p>
 <p><strong>DAPO 算法伪代码</strong></p>
-<pre><code>1. 对于每个训练步骤，随机选取 N 个问题：q_1, q_2, ..., q_N。
+<p><pre><code>1. 对于每个训练步骤，随机选取 N 个问题：q_1, q_2, ..., q_N。
 2. 对于每个问题 q_i，采样 G 条回答（轨迹）：a_{i,1}, a_{i,2}, ..., a_{i,G}。 |&gt; G 为一组轨迹中轨迹的数量
 3. 计算每个回答 a_{i,j} 的奖励 r_{i,j}。
    • a_{i,j} 为第 i 个问题的第 j 条回答。
@@ -158,6 +159,7 @@
 7. 使用梯度更新策略网络 π_θ。
 8. goto 1
 </code></pre>
+</p>
 <p>伪代码中第6步的解释</p>
 <p>GRPO 目标函数最内层为</p>
 <p>$$
@@ -166,18 +168,19 @@ $$</p>
 <p>如果 GRPO 使用旧策略采集的轨迹只更新一次策略的话，相当于在 $\theta = \theta_{\mathrm{old}}$ 处进行求导（梯度）。由于此时 $\theta = \theta_{\mathrm{old}}$，所以裁剪不会发生。也就是如下：</p>
 <p>$$
 \begin{aligned}
-&amp;\nabla_{\theta}\min \left[ \frac{\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})} A_{\tau_i,t}, \mathrm{clip}\left(\frac{\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})}, 1 - \varepsilon, 1 + \varepsilon\right) A_{\tau_i,t} \right] \bigg|<em>{\theta = \theta</em>{\mathrm{old}}}\
-&amp;= \nabla_{\theta} \left{ \frac{\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})} A_{\tau_i,t} \right} \bigg|<em>{\theta = \theta</em>{\mathrm{old}}}\
-&amp;= \frac{\nabla_{\theta}\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})|<em>{\theta = \theta</em>{\mathrm{old}}}}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})} A_{\tau_i,t} \quad (\text{log梯度技巧})\
-&amp;= \nabla_{\theta}{A_{\tau_i,t} \cdot \log \pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}|<em>{\theta = \theta</em>{\mathrm{old}}}
+&amp;\nabla_{\theta}\min \left[ \frac{\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})} A_{\tau_i,t}, \mathrm{clip}\left(\frac{\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})}, 1 - \varepsilon, 1 + \varepsilon\right) A_{\tau_i,t} \right] \bigg|_{\theta = \theta_{\mathrm{old}}}\\
+&amp;= \nabla_{\theta} \left\{ \frac{\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})} A_{\tau_i,t} \right\} \bigg|_{\theta = \theta_{\mathrm{old}}}\\
+&amp;= \frac{\nabla_{\theta}\pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})|_{\theta = \theta_{\mathrm{old}}}}{\pi_{\theta_{\mathrm{old}}}(a_{\tau_i,t}|s_{\tau_i,t})} A_{\tau_i,t} \quad (\text{log梯度技巧})\\
+&amp;= \nabla_{\theta}\{A_{\tau_i,t} \cdot \log \pi_{\theta}(a_{\tau_i,t}|s_{\tau_i,t})\}|_{\theta = \theta_{\mathrm{old}}}
 \end{aligned} \tag{12.6}
 $$</p>
 <p>我们的任务是什么？我们想要训练一个能够玩类似24点游戏的LLM。叫做 CountDown Task。我们将在 CountDown Task 中微调 Qwen2.5-3B-Instruct 模型。给定一个包含 3 个或 4 个数字的列表和一个目标数字，模型需要使用简单的算术运算（+、-、*、/）生成一个数学表达式，该表达式的求值结果等于目标数字。例如：</p>
 <p>我们用的数据格式如下：</p>
-<pre><code class="language-json">nums: [37, 81, 10], target: 34
+<p><pre><code class="language-json">nums: [37, 81, 10], target: 34
 </code></pre>
+</p>
 <p>我们会先将上面的数据格式化成如下数据：</p>
-<pre><code class="language-text">&lt;|im_start|&gt;system
+<p><pre><code class="language-text">&lt;|im_start|&gt;system
 你是一个有用的助手。你首先在脑海中思考推理过程，然后为用户提供答案。&lt;|im_end|&gt;
 &lt;|im_start|&gt;user
 使用这些数字 [37 81 10]，创建一个等于 34 的等式。你可以使用基本算术运算（+、-、*、/），每个数字只能使用一次。在 &lt;think&gt; &lt;/think&gt; 标签中展示你的解题过程。并在 &lt;answer&gt; &lt;/answer&gt; 标签中返回最终答案，例如 &lt;answer&gt; (1 + 2) / 3 &lt;/answer&gt;。&lt;|im_end|&gt;
@@ -185,13 +188,15 @@ $$</p>
 让我一步步来解决这个问题。
 &lt;think&gt;
 </code></pre>
+</p>
 <p>上面的数据输入给我们微调后的模型，模型应该输出的补全如下：</p>
-<pre><code class="language-text">可以通过组合给定的数字 37 81 10 使它们满足运算为 34 。首先通过 81 减去 37 得到 44 ，再进行减法运算 44 减去 10 等于 34 ，最后将这两步结果利用小括号组合在一起形成数学表达式为 (81 - 37) - 10 等于 34 。
+<p><pre><code class="language-text">可以通过组合给定的数字 37 81 10 使它们满足运算为 34 。首先通过 81 减去 37 得到 44 ，再进行减法运算 44 减去 10 等于 34 ，最后将这两步结果利用小括号组合在一起形成数学表达式为 (81 - 37) - 10 等于 34 。
 &lt;/think&gt;
 &lt;answer&gt; (81 - 37) - 10 &lt;/answer&gt;&lt;|im_end|&gt;
 </code></pre>
+</p>
 <p>完整的提示词+补全的数据如下：</p>
-<pre><code class="language-text">&lt;|im_start|&gt;system
+<p><pre><code class="language-text">&lt;|im_start|&gt;system
 你是一个有用的助手。你首先在脑海中思考推理过程，然后为用户提供答案。&lt;|im_end|&gt;
 &lt;|im_start|&gt;user
 使用这些数字 [37 81 10]，创建一个等于 34 的等式。你可以使用基本算术运算（+、-、*、/），每个数字只能使用一次。在 &lt;think&gt; &lt;/think&gt; 标签中展示你的解题过程。并在 &lt;answer&gt; &lt;/answer&gt; 标签中返回最终答案，例如 &lt;answer&gt; (1 + 2) / 3 &lt;/answer&gt;。&lt;|im_end|&gt;
@@ -201,6 +206,7 @@ $$</p>
 &lt;/think&gt;
 &lt;answer&gt; (81 - 37) - 10 &lt;/answer&gt;&lt;|im_end|&gt;
 </code></pre>
+</p>
 <h3 id="sec-2">12.2.2 奖励函数的设计</h3>
 <p>在使用 GRPO 玩倒立摆游戏时，我们的奖励很简单，例如一条轨迹执行了5步动作，轨迹就结束了，那么这条轨迹的回报是5。</p>
 <p>那么在 LLM 这个环境中，我们应该如何给一条轨迹（模型输出的补全）奖励呢？因为 GRPO 是需要给一整条轨迹计算回报的。</p>
@@ -210,24 +216,27 @@ $$</p>
 <li>答案奖励：如果模型的最终答案恰好使用了提供的数字，并且每个数字只使用了一次，并正确求值为目标值，则模型将获得1的奖励，否则将获得0的奖励。</li>
 </ol>
 <p>例如下面的补全只能拿到0.1分的回报。因为格式是没问题的，但是 <code>&lt;answer&gt;&lt;/answer&gt;</code> 标签内的答案有问题，包含了不该有的 <code>= 34</code>。</p>
-<pre><code class="language-text">可以通过组合给定的数字 37 81 10 使它们满足运算为 34 。首先通过 81 减去 37 得到 44 ，再进行减法运算 44 减去 10 等于 34 ，最后将这两步结果利用小括号组合在一起形成数学表达式为 (81 - 37) - 10 等于 34 。
+<p><pre><code class="language-text">可以通过组合给定的数字 37 81 10 使它们满足运算为 34 。首先通过 81 减去 37 得到 44 ，再进行减法运算 44 减去 10 等于 34 ，最后将这两步结果利用小括号组合在一起形成数学表达式为 (81 - 37) - 10 等于 34 。
 &lt;/think&gt;
 &lt;answer&gt; (81 - 37) - 10 = 34&lt;/answer&gt;&lt;|im_end|&gt;
 </code></pre>
+</p>
 <p>只有下面这种补全才能拿到1.1的满分。既带有 <code>&lt;think&gt;&lt;/think&gt;</code> 标签和 <code>&lt;answer&gt;&lt;/answer&gt;</code> 标签，<code>&lt;answer&gt;&lt;/answer&gt;</code> 标签内的答案 <code>(81 - 37) - 10</code> 也是完全正确的。</p>
-<pre><code class="language-text">可以通过组合给定的数字 37 81 10 使它们满足运算为 34 。首先通过 81 减去 37 得到 44 ，再进行减法运算 44 减去 10 等于 34 ，最后将这两步结果利用小括号组合在一起形成数学表达式为 (81 - 37) - 10 等于 34 。
+<p><pre><code class="language-text">可以通过组合给定的数字 37 81 10 使它们满足运算为 34 。首先通过 81 减去 37 得到 44 ，再进行减法运算 44 减去 10 等于 34 ，最后将这两步结果利用小括号组合在一起形成数学表达式为 (81 - 37) - 10 等于 34 。
 &lt;/think&gt;
 &lt;answer&gt; (81 - 37) - 10&lt;/answer&gt;&lt;|im_end|&gt;
 </code></pre>
+</p>
 <p>所以可以看到，我们的奖励函数是很严格的！</p>
 <h3 id="sec-3">12.2.3 代码实现</h3>
 <p>创建文件夹</p>
-<pre><code class="language-shell">$ mkdir GRPO-Zero
+<p><pre><code class="language-shell">$ mkdir GRPO-Zero
 </code></pre>
+</p>
 <h4 id="sec-4">12.2.3.1 模型结构</h4>
 <p>Qwen2 的模型结构，保存在文件 <code>qwen2_model.py</code> 中。</p>
 <p>Qwen2.5模型结构 Python</p>
-<pre><code class="language-python">import json
+<p><pre><code class="language-python">import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -242,13 +251,13 @@ class Qwen2Config:
     attention_dropout: float = 0.0
     bos_token_id: int = 151643
     eos_token_id: int = 151645
-    hidden_act: str = &quot;silu&quot;
+    hidden_act: str = "silu"
     hidden_size: int = 2048
     initializer_range: float = 0.02
     intermediate_size: int = 11008
     max_position_embeddings: int = 32768
     max_window_layers: int = 70
-    model_type: str = &quot;qwen2&quot;
+    model_type: str = "qwen2"
     num_attention_heads: int = 16
     num_hidden_layers: int = 36
     num_key_value_heads: int = 2
@@ -256,7 +265,7 @@ class Qwen2Config:
     rope_theta: float = 1000000.0
     sliding_window: int = 32768
     tie_word_embeddings: bool = True
-    torch_dtype: str = &quot;bfloat16&quot;
+    torch_dtype: str = "bfloat16"
     use_cache: bool = True
     use_sliding_window: bool = False
     vocab_size: int = 151936
@@ -280,7 +289,7 @@ class RMSNorm(torch.nn.Module):
 
 
 def rotate_half(x):
-    &quot;&quot;&quot;Rotates half the hidden dims of the input.&quot;&quot;&quot;
+    """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
@@ -339,8 +348,8 @@ class Attention(nn.Module):
         cache_shape = (max_batch_size, max_seq_len, self.n_kv_heads, self.head_dim)
         cache_k = torch.zeros(cache_shape, dtype=dtype, device=device)
         cache_v = torch.zeros(cache_shape, dtype=dtype, device=device)
-        self.register_buffer(&quot;cache_k&quot;, cache_k, persistent=False)
-        self.register_buffer(&quot;cache_v&quot;, cache_v, persistent=False)
+        self.register_buffer("cache_k", cache_k, persistent=False)
+        self.register_buffer("cache_v", cache_v, persistent=False)
 
     def del_kv_cache(self):
         self.cache_k = None
@@ -438,7 +447,7 @@ class Qwen2RotaryEmbedding(nn.Module):
                 base
                 ** (torch.arange(0, dim, 2, dtype=torch.int64).float().to(device) / dim)
             )
-        self.register_buffer(&quot;inv_freq&quot;, inv_freq, persistent=False)
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     @torch.no_grad()
     def forward(self, x, pos):
@@ -534,50 +543,51 @@ class Transformer(nn.Module):
 
     @classmethod
     def from_pretrained(cls, ckpt_path, device: torch.device):
-        config_file = Path(ckpt_path) / &quot;config.json&quot;
-        with open(config_file, &quot;r&quot;) as f:
+        config_file = Path(ckpt_path) / "config.json"
+        with open(config_file, "r") as f:
             config = json.load(f)
         args = Qwen2Config(
-            attention_dropout=config[&quot;attention_dropout&quot;],
-            bos_token_id=config[&quot;bos_token_id&quot;],
-            eos_token_id=config[&quot;eos_token_id&quot;],
-            hidden_act=config[&quot;hidden_act&quot;],
-            hidden_size=config[&quot;hidden_size&quot;],
-            initializer_range=config[&quot;initializer_range&quot;],
-            intermediate_size=config[&quot;intermediate_size&quot;],
-            max_position_embeddings=config[&quot;max_position_embeddings&quot;],
-            max_window_layers=config[&quot;max_window_layers&quot;],
-            model_type=config[&quot;model_type&quot;],
-            num_hidden_layers=config[&quot;num_hidden_layers&quot;],
-            num_attention_heads=config[&quot;num_attention_heads&quot;],
-            num_key_value_heads=config[&quot;num_key_value_heads&quot;],
-            vocab_size=config[&quot;vocab_size&quot;],
-            rms_norm_eps=config[&quot;rms_norm_eps&quot;],
-            rope_theta=config[&quot;rope_theta&quot;],
-            sliding_window=config[&quot;sliding_window&quot;],
-            use_sliding_window=config[&quot;use_sliding_window&quot;],
-            use_cache=config[&quot;use_cache&quot;],
-            tie_word_embeddings=config[&quot;tie_word_embeddings&quot;],
-            torch_dtype=config[&quot;torch_dtype&quot;],
+            attention_dropout=config["attention_dropout"],
+            bos_token_id=config["bos_token_id"],
+            eos_token_id=config["eos_token_id"],
+            hidden_act=config["hidden_act"],
+            hidden_size=config["hidden_size"],
+            initializer_range=config["initializer_range"],
+            intermediate_size=config["intermediate_size"],
+            max_position_embeddings=config["max_position_embeddings"],
+            max_window_layers=config["max_window_layers"],
+            model_type=config["model_type"],
+            num_hidden_layers=config["num_hidden_layers"],
+            num_attention_heads=config["num_attention_heads"],
+            num_key_value_heads=config["num_key_value_heads"],
+            vocab_size=config["vocab_size"],
+            rms_norm_eps=config["rms_norm_eps"],
+            rope_theta=config["rope_theta"],
+            sliding_window=config["sliding_window"],
+            use_sliding_window=config["use_sliding_window"],
+            use_cache=config["use_cache"],
+            tie_word_embeddings=config["tie_word_embeddings"],
+            torch_dtype=config["torch_dtype"],
         )
-        with torch.device(&quot;meta&quot;):
+        with torch.device("meta"):
             model = cls(params=args, device=device)
 
         import safetensors.torch
 
-        model_weight_files = sorted(Path(ckpt_path).glob(&quot;model*.safetensors&quot;))
+        model_weight_files = sorted(Path(ckpt_path).glob("model*.safetensors"))
         weights = {}
         for file in model_weight_files:
-            weights.update(safetensors.torch.load_file(file, device=&quot;cpu&quot;))
-        # remove &quot;model.&quot; prefix from keys
-        weights = {k.replace(&quot;model.&quot;, &quot;&quot;): v for k, v in weights.items()}
+            weights.update(safetensors.torch.load_file(file, device="cpu"))
+        # remove "model." prefix from keys
+        weights = {k.replace("model.", ""): v for k, v in weights.items()}
         model.load_state_dict(weights, strict=True, assign=True)
         return model.to(device)
 </code></pre>
+</p>
 <h4 id="sec-5">12.2.3.2 分词器</h4>
 <p>分词器代码保存在文件 <code>tokenizer.py</code> 中。</p>
 <p>分词器实现 Python</p>
-<pre><code class="language-python">import json
+<p><pre><code class="language-python">import json
 from pathlib import Path
 from typing import Dict, List
 
@@ -587,19 +597,19 @@ from tokenizers import Tokenizer as TokenizerBase
 
 
 class Tokenizer:
-    &quot;&quot;&quot;Tokenizer with chat template supported using jinja2 engine&quot;&quot;&quot;
+    """Tokenizer with chat template supported using jinja2 engine"""
 
     def __init__(self, tokenizer_path: str):
         super().__init__()
-        tokenizer_config_path = Path(tokenizer_path).parent / &quot;tokenizer_config.json&quot;
+        tokenizer_config_path = Path(tokenizer_path).parent / "tokenizer_config.json"
         self.tokenizer_config = json.load(open(tokenizer_config_path))
         self.tokenizer = TokenizerBase.from_file(tokenizer_path)
         self.chat_template = Environment().from_string(
-            self.tokenizer_config[&quot;chat_template&quot;]
+            self.tokenizer_config["chat_template"]
         )
-        self.eos_token = self.tokenizer_config[&quot;eos_token&quot;]
+        self.eos_token = self.tokenizer_config["eos_token"]
         self.eos_token_id = self.tokenizer.token_to_id(self.eos_token)
-        self.pad_token = self.tokenizer_config[&quot;pad_token&quot;]
+        self.pad_token = self.tokenizer_config["pad_token"]
         self.pad_token_id = self.tokenizer.token_to_id(self.pad_token)
 
     def encode_chat(self, messages: List[Dict[str, str]]) -&gt; str:
@@ -616,18 +626,19 @@ class Tokenizer:
     def detokenize(self, token_ids: List[int]) -&gt; str:
         return self.tokenizer.decode(token_ids, skip_special_tokens=False)
 </code></pre>
+</p>
 <h4 id="sec-6">12.2.3.3 任务定义</h4>
 <p>首先创建 <code>data_types.py</code>，内容如下：</p>
-<pre><code class="language-python">from dataclasses import dataclass
+<p><pre><code class="language-python">from dataclasses import dataclass
 from typing import Dict, List
 
 
 @dataclass
 class Episode:
-    &quot;&quot;&quot;存储一个回合（Episode）或者说一条轨迹的所有相关信息&quot;&quot;&quot;
-    &quot;&quot;&quot;一个回合 = 问题 + 一条回答&quot;&quot;&quot;
+    """存储一个回合（Episode）或者说一条轨迹的所有相关信息"""
+    """一个回合 = 问题 + 一条回答"""
     prefix: str # 问题
-    text: str # &quot;问题+回答&quot;整个文本
+    text: str # "问题+回答"整个文本
     prefix_token_ids: List[int] # 问题的input_ids
     prefix_tokens: List[str] # 问题的token组成的列表
     generated_token_ids: List[int] # 生成的回答的token列表
@@ -638,15 +649,16 @@ class Episode:
 
 @dataclass
 class MiniBatch:
-    &quot;&quot;&quot;每个Step训练所需的微批次数据&quot;&quot;&quot;
+    """每个Step训练所需的微批次数据"""
     prefix: List[str] # 问题列表
     prefix_tokens: List[List[str]]
     prefix_token_ids: List[List[int]]
     numbers: List[List[int]] # 问题的数字列表
     target: List[int] # 问题对应的答案数字
 </code></pre>
+</p>
 <p>创建文件 <code>countdown_task.py</code>，内容如下</p>
-<pre><code class="language-python">import re
+<p><pre><code class="language-python">import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -657,35 +669,35 @@ from data_types import MiniBatch
 from tokenizer import Tokenizer
 
 SYSTEM_MESSAGE = (
-    &quot;你是一个有用的助手。你首先在脑海中思考推理过程，&quot;
-    &quot;然后为用户提供答案。&quot;
+    "你是一个有用的助手。你首先在脑海中思考推理过程，"
+    "然后为用户提供答案。"
 )
 # `{numbers}` 和 `{target}` 是占位符，构建训练数据时会被替换
 USER_TEMPLATE = (
-    &quot;使用这些数字 {numbers}，创建一个等于 {target} 的等式。&quot;
-    &quot;你可以使用基本算术运算（+、-、*、/），每个数字只能使用一次。&quot;
-    &quot;在 &lt;think&gt; &lt;/think&gt; 标签中展示你的解题过程。&quot;
-    &quot;并在 &lt;answer&gt; &lt;/answer&gt; 标签中返回最终答案，例如 &lt;answer&gt; (1 + 2) / 3 &lt;/answer&gt;。&quot;
+    "使用这些数字 {numbers}，创建一个等于 {target} 的等式。"
+    "你可以使用基本算术运算（+、-、*、/），每个数字只能使用一次。"
+    "在 &lt;think&gt; &lt;/think&gt; 标签中展示你的解题过程。"
+    "并在 &lt;answer&gt; &lt;/answer&gt; 标签中返回最终答案，例如 &lt;answer&gt; (1 + 2) / 3 &lt;/answer&gt;。"
 )
 
-RESPONSE_PROMPT = &quot;让我一步步来解决这个问题。\n&lt;think&gt;&quot;
+RESPONSE_PROMPT = "让我一步步来解决这个问题。\n&lt;think&gt;"
 
 
 class CountdownTasksDataset(Dataset):
-    &quot;&quot;&quot;准备训练数据集&quot;&quot;&quot;
+    """准备训练数据集"""
 
     def __init__(
         self,
         tokenizer: Tokenizer, # 分词器
         data_path: str, # 数据集的路径
-        split: str = &quot;train&quot;,
+        split: str = "train",
         test_size: int = 100,
     ):
-        data = pd.read_parquet(Path(data_path) / &quot;data&quot;)
+        data = pd.read_parquet(Path(data_path) / "data")
         # 索引 `test_size` 后面的数据用作测试数据
         self.data = (
             data.iloc[:-test_size] \
-            if split == &quot;train&quot; \
+            if split == "train" \
             else data.iloc[-test_size:]
         )
         self.tokenizer = tokenizer
@@ -697,14 +709,14 @@ class CountdownTasksDataset(Dataset):
         item = self.data.iloc[idx].to_dict()
         item.update(
             self.encode_prefix(
-                item[&quot;nums&quot;], # 数字列表
-                item[&quot;target&quot;] # 目标数字
+                item["nums"], # 数字列表
+                item["target"] # 目标数字
             )
         )
         return item
 
     def encode_prefix(self, numbers: List[int], target: int):
-        &quot;&quot;&quot;Prefix 是模型 *真正的* 输入，也就是问题&quot;&quot;&quot;
+        """Prefix 是模型 *真正的* 输入，也就是问题"""
         # 格式化对话模板
         user_message = USER_TEMPLATE.format(
             numbers=numbers,
@@ -712,30 +724,30 @@ class CountdownTasksDataset(Dataset):
         )
         prefix = self.tokenizer.encode_chat_with_response_prompt(
             [
-                {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: SYSTEM_MESSAGE},
-                {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_message},
+                {"role": "system", "content": SYSTEM_MESSAGE},
+                {"role": "user", "content": user_message},
             ],
             RESPONSE_PROMPT,
         )
         # 将问题切分
         tokens = self.tokenizer.tokenize(prefix)
         return {
-            &quot;prefix&quot;: prefix, # 问题字符串
-            &quot;prefix_tokens&quot;: tokens.tokens, # 问题切分后的字符串列表
-            &quot;prefix_token_ids&quot;: tokens.ids, # input_ids
+            "prefix": prefix, # 问题字符串
+            "prefix_tokens": tokens.tokens, # 问题切分后的字符串列表
+            "prefix_token_ids": tokens.ids, # input_ids
         }
 
     @staticmethod
     def collate_fn(batch: List[Dict[str, Any]]) -&gt; MiniBatch:
-        &quot;&quot;&quot;将数据整理到一个批次中&quot;&quot;&quot;
-        numbers = [item[&quot;nums&quot;] for item in batch]
-        target = [item[&quot;target&quot;] for item in batch]
-        prefix = [item[&quot;prefix&quot;] for item in batch]
+        """将数据整理到一个批次中"""
+        numbers = [item["nums"] for item in batch]
+        target = [item["target"] for item in batch]
+        prefix = [item["prefix"] for item in batch]
         prefix_tokens = [
-            item[&quot;prefix_tokens&quot;] for item in batch
+            item["prefix_tokens"] for item in batch
         ]
         prefix_token_ids = [
-            item[&quot;prefix_token_ids&quot;] for item in batch
+            item["prefix_token_ids"] for item in batch
         ]
         return MiniBatch(
             numbers=numbers,
@@ -750,17 +762,17 @@ def format_reward_function(
     response: str, # 模型的回答
     end_token: Optional[str] = None # 结尾token
 ) -&gt; float:
-    &quot;&quot;&quot;
+    """
     检查模型的回复是否符合格式 &lt;think&gt;...&lt;/think&gt;&lt;answer&gt;...&lt;/answer&gt;
-    &quot;&quot;&quot;
+    """
     # 如果存在end token，则去掉
     if end_token and response.endswith(end_token):
         response = response[: -len(end_token)]
 
-    think_regex = r&quot;&lt;think&gt;.*?&lt;\/think&gt;&quot;
-    answer_regex = r&quot;&lt;answer&gt;.*?&lt;\/answer&gt;&quot;
+    think_regex = r"&lt;think&gt;.*?&lt;\/think&gt;"
+    answer_regex = r"&lt;answer&gt;.*?&lt;\/answer&gt;"
     full_format_regex = \
-        r&quot;^&lt;think&gt;.*?&lt;\/think&gt;\n&lt;answer&gt;.*?&lt;\/answer&gt;$&quot;
+        r"^&lt;think&gt;.*?&lt;\/think&gt;\n&lt;answer&gt;.*?&lt;\/answer&gt;$"
 
     think_match = re.search(think_regex, response, re.DOTALL)
     answer_match = re.search(answer_regex, response, re.DOTALL)
@@ -790,14 +802,14 @@ def answer_reward_function(
     numbers: List[int] = None, # 数字列表
     target: int = None # 目标数字
 ) -&gt; float:
-    &quot;&quot;&quot;
+    """
     检查答案中：
     1. 是否使用了所有给的数字
     2. 每个数字是否使用了一次
     3. 答案中包含的表达式的求值结果是否等于目标数字
-    &quot;&quot;&quot;
+    """
     # 答案的正则表达式
-    answer_regex = r&quot;&lt;answer&gt;(.*?)&lt;\/answer&gt;&quot;
+    answer_regex = r"&lt;answer&gt;(.*?)&lt;\/answer&gt;"
     # 回答中是否有答案标签对
     answer_match = re.search(answer_regex, response, re.DOTALL)
     # 如果在回答中没有搜索到答案，那么给0分
@@ -809,20 +821,20 @@ def answer_reward_function(
     if not answer_content:
         return 0.0
     # 如果答案标签中，除了表达式以外，还有其它内容，给0分
-    allowed_chars = r&quot;^[0-9+\-*/() ]+$&quot;
+    allowed_chars = r"^[0-9+\-*/() ]+$"
     if not re.match(allowed_chars, answer_content):
         return 0.0
 
     # 检查答案中，每个数字是否只使用了一次
     used_numbers = [
-        int(n) for n in re.findall(r&quot;\d+&quot;, answer_content)
+        int(n) for n in re.findall(r"\d+", answer_content)
     ]
     if sorted(used_numbers) != sorted(numbers):
         return 0.0
 
     # 检查答案中包含的表达式的求值结果是否为目标数字
     try:
-        result = eval(answer_content, {&quot;__builtins__&quot;: None}, {})
+        result = eval(answer_content, {"__builtins__": None}, {})
         if abs(float(result) - float(target)) &lt; 1e-5:
             return 1.0
     except:
@@ -837,12 +849,12 @@ def reward_function(
     target: int = None,
     end_token: str = None,
 ) -&gt; Dict[str, Any]:
-    &quot;&quot;&quot;Countdown Task 的奖励函数。
+    """Countdown Task 的奖励函数。
 
     总奖励 = 0.1 * 格式奖励 + 答案准确性奖励
-    &quot;&quot;&quot;
+    """
     format_reward = format_reward_function(
-        &quot;&lt;think&gt;&quot; + response,
+        "&lt;think&gt;" + response,
         end_token
     )
     answer_reward = answer_reward_function(
@@ -851,16 +863,17 @@ def reward_function(
         target
     )
     return {
-        &quot;reward&quot;: format_reward * 0.1 + answer_reward,
-        &quot;reward_info&quot;: {
-            &quot;format_reward&quot;: format_reward,
-            &quot;answer_reward&quot;: answer_reward,
+        "reward": format_reward * 0.1 + answer_reward,
+        "reward_info": {
+            "format_reward": format_reward,
+            "answer_reward": answer_reward,
         },
     }
 </code></pre>
+</p>
 <h4 id="sec-7">12.2.3.4 GRPO（DAPO）算法的实现</h4>
 <p>创建文件 <code>grpo.py</code>，内容如下：</p>
-<pre><code class="language-python">import dataclasses
+<p><pre><code class="language-python">import dataclasses
 import gc
 import math
 from collections import defaultdict
@@ -941,9 +954,9 @@ def rollout(
     # 并行的预测下一个token
     for cur_pos in range(min_prompt_len, total_len):
         print(
-            f&quot;\r* 生成轨迹:{cur_pos-min_prompt_len:&gt;4d}/{total_len-min_prompt_len:&gt;4d}&quot;,
+            f"\r* 生成轨迹:{cur_pos-min_prompt_len:&gt;4d}/{total_len-min_prompt_len:&gt;4d}",
             flush=True,
-            end=&quot;&quot;,
+            end="",
         )
         # 针对批次中的所有训练数据，并行采样下一个token
         # 根据文本的 prev_pos~cur_pos 部分生成下一个token
@@ -1034,20 +1047,20 @@ def rollout(
                 prefix_tokens=batch.prefix_tokens[i],
                 generated_token_ids=generated_token_ids,
                 is_finished=is_finished_list[idx],
-                reward=rewards[&quot;reward&quot;],
-                reward_info=rewards[&quot;reward_info&quot;],
+                reward=rewards["reward"],
+                reward_info=rewards["reward_info"],
             )
             episodes.append(episode)
     # 清除输出内容
-    print(&quot;\r&quot;, end=&quot; &quot; * 100, flush=True)
+    print("\r", end=" " * 100, flush=True)
     return episodes
 
 
 def normalize_rewards_per_group(
     episodes: List[Episode]
 ) -&gt; List[Episode]:
-    &quot;&quot;&quot;归一化每个组的奖励. 使用 prefix（问题） 区分不同的组.&quot;&quot;&quot;
-    &quot;&quot;&quot;每条轨迹的reward字段替换为轨迹的优势&quot;&quot;&quot;
+    """归一化每个组的奖励. 使用 prefix（问题） 区分不同的组."""
+    """每条轨迹的reward字段替换为轨迹的优势"""
     groups = defaultdict(list)
     for episode in episodes:
         groups[tuple(episode.prefix)].append(episode)
@@ -1077,7 +1090,7 @@ def normalize_rewards_per_group(
 
 
 def compute_entropy(logits: torch.Tensor) -&gt; torch.Tensor:
-    &quot;&quot;&quot;计算熵，熵越小不确定性越小，用来监控模型训练的稳定性，不参与反向传播&quot;&quot;&quot;
+    """计算熵，熵越小不确定性越小，用来监控模型训练的稳定性，不参与反向传播"""
     probs = torch.nn.functional.softmax(logits, dim=-1)
     entropy = \
         torch.logsumexp(logits, dim=-1) \
@@ -1096,7 +1109,7 @@ def update_policy(
     device: torch.device,
     dtype: torch.dtype,
 ):
-    &quot;&quot;&quot;使用GRPO算法更新策略.&quot;&quot;&quot;
+    """使用GRPO算法更新策略."""
     # 计算出每一条回答的组内优势
     episodes = normalize_rewards_per_group(episodes)
     # 按照回合的token数量排序，更有效的微批次训练
@@ -1113,9 +1126,9 @@ def update_policy(
 
     for i in range(0, len(episodes), micro_batch_size):
         print(
-            f&quot;\r* 计算策略梯度: {i:&gt;2d}/{len(episodes):&gt;2d}&quot;,
+            f"\r* 计算策略梯度: {i:&gt;2d}/{len(episodes):&gt;2d}",
             flush=True,
-            end=&quot;&quot;,
+            end="",
         )
         j = min(i + micro_batch_size, len(episodes))
         batch_episodes = episodes[i:j]
@@ -1173,14 +1186,14 @@ def update_policy(
             logits = model.forward(input_token_ids).float()
             # 在 one-hot 分类里，
             # 交叉熵等于对正确类别概率取负对数，
-            # 所以&quot;负对数概率&quot;与&quot;交叉熵&quot;指的是同一个目标函数。
+            # 所以"负对数概率"与"交叉熵"指的是同一个目标函数。
             # log π_θ(a|s) = -cross_entropy
             # -Σ_j a_j · log â_j = -log â_t，a_t是真实标签，â_t是模型预测为a_t的概率。
             log_probs = -torch.nn.functional.cross_entropy(
                 logits.reshape(-1, logits.size(-1)),
                 target_token_ids.reshape(-1),
                 ignore_index=pad_token_id,
-                reduction=&quot;none&quot;,
+                reduction="none",
             ).reshape(input_token_ids.shape[0], -1)
 
         with torch.no_grad():
@@ -1206,14 +1219,15 @@ def update_policy(
         # 清空梯度
         optimizer.zero_grad(set_to_none=True)
     return {
-        &quot;loss&quot;: loss.item(),
-        &quot;grad_norm&quot;: grad_norm.item(),
-        &quot;entropy&quot;: entropy.item(),
+        "loss": loss.item(),
+        "grad_norm": grad_norm.item(),
+        "entropy": entropy.item(),
     }
 </code></pre>
+</p>
 <h4 id="sec-8">12.2.3.5 训练循环</h4>
 <p>创建文件 <code>train.py</code>，内容如下：</p>
-<pre><code class="language-python">import html
+<p><pre><code class="language-python">import html
 import time
 from argparse import ArgumentParser
 from datetime import datetime
@@ -1232,11 +1246,11 @@ from tokenizer import Tokenizer
 
 
 def evaluate(model, tokenizer, device, dtype):
-    &quot;&quot;&quot;每隔10个step，使用测试数据集评估一下，看能做对多少题&quot;&quot;&quot;
+    """每隔10个step，使用测试数据集评估一下，看能做对多少题"""
     test_dataset = CountdownTasksDataset(
-        data_path=&quot;Countdown-Tasks-3to4&quot;,
+        data_path="Countdown-Tasks-3to4",
         tokenizer=tokenizer,
-        split=&quot;test&quot;,
+        split="test",
         test_size=128, # 128条测试数据
     )
     generator = torch.Generator(device=device)
@@ -1265,7 +1279,7 @@ def evaluate(model, tokenizer, device, dtype):
             dtype=dtype,
         )
         success.extend([
-            episode.reward_info[&quot;answer_reward&quot;] \
+            episode.reward_info["answer_reward"] \
             for episode in episodes
         ])
     return np.mean(success)
@@ -1273,9 +1287,9 @@ def evaluate(model, tokenizer, device, dtype):
 
 def main():
     pretrained_model_path = Path(
-        &quot;./Qwen2.5-3B-Instruct/&quot;
+        "./Qwen2.5-3B-Instruct/"
     )
-    device = torch.device(&quot;cuda&quot;)
+    device = torch.device("cuda")
     dtype = torch.bfloat16
     torch.set_default_device(device)
     torch.random.manual_seed(1337)
@@ -1287,14 +1301,14 @@ def main():
     NUM_ANSWERS_PER_QUESTION = \
         BATCH_SIZE // NUM_QUESTIONS_PER_BATCH
 
-    current_time = datetime.now().strftime(r&quot;%Y%m%d-%H%M%S&quot;)
-    tb_writer = SummaryWriter(log_dir=f&quot;./logs/{current_time}&quot;)
-    tokenizer = Tokenizer(&quot;./Qwen2.5-3B-Instruct/tokenizer.json&quot;)
+    current_time = datetime.now().strftime(r"%Y%m%d-%H%M%S")
+    tb_writer = SummaryWriter(log_dir=f"./logs/{current_time}")
+    tokenizer = Tokenizer("./Qwen2.5-3B-Instruct/tokenizer.json")
 
     train_dataset = CountdownTasksDataset(
-        data_path=&quot;./Countdown-Tasks-3to4/&quot;,
+        data_path="./Countdown-Tasks-3to4/",
         tokenizer=tokenizer,
-        split=&quot;train&quot;,
+        split="train",
         test_size=128,
     )
     generator = torch.Generator(device=device)
@@ -1319,7 +1333,7 @@ def main():
     )
 
     start_time = time.time()
-    ckpt_dir = Path(&quot;ckpt&quot;)
+    ckpt_dir = Path("ckpt")
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     for step, batch in enumerate(train_dataloader, start=1):
@@ -1353,11 +1367,11 @@ def main():
         # 计算一些统计信息，然后保存到日志文件中
         reward = [episode.reward for episode in episodes]
         formatted_reward = [
-            episode.reward_info[&quot;format_reward&quot;] \
+            episode.reward_info["format_reward"] \
             for episode in episodes
         ]
         answer_reward = [
-            episode.reward_info[&quot;answer_reward&quot;] \
+            episode.reward_info["answer_reward"] \
             for episode in episodes
         ]
         num_finished_episodes = sum(
@@ -1367,21 +1381,21 @@ def main():
         std_reward = np.std(reward)
         success_rate = np.mean(answer_reward)
         format_reward = np.mean(formatted_reward)
-        grad_norm = results[&quot;grad_norm&quot;]
-        entropy = results[&quot;entropy&quot;]
-        lr = optimizer.param_groups[0][&quot;lr&quot;]
-        loss = results[&quot;loss&quot;]
+        grad_norm = results["grad_norm"]
+        entropy = results["entropy"]
+        lr = optimizer.param_groups[0]["lr"]
+        loss = results["loss"]
         mean_response_len = np.mean(
             [len(episode.generated_token_ids) \
              for episode in episodes]
         )
         print(
-            f&quot;\r步骤 {step}, 平均奖励: {mean_reward:.2f}, &quot;
-            f&quot;计算正确率: {success_rate:.2f}, &quot;
-            f&quot;梯度裁剪: {grad_norm:.2f}, 时长: {duration:.2f}, &quot;
-            f&quot;结束的回合的数量: {num_finished_episodes}, &quot;
-            f&quot;平均回答长度: {mean_response_len:.2f}, &quot;
-            f&quot;熵: {entropy:.2f}&quot;
+            f"\r步骤 {step}, 平均奖励: {mean_reward:.2f}, "
+            f"计算正确率: {success_rate:.2f}, "
+            f"梯度裁剪: {grad_norm:.2f}, 时长: {duration:.2f}, "
+            f"结束的回合的数量: {num_finished_episodes}, "
+            f"平均回答长度: {mean_response_len:.2f}, "
+            f"熵: {entropy:.2f}"
         )
         # 每隔10步评估一次
         if step % 10 == 0:
@@ -1391,54 +1405,56 @@ def main():
                 device,
                 dtype
             )
-            print(f&quot;\r评估数据集回答正确率: \
-                {eval_success_rate:.2f}&quot; \
-                + &quot; &quot; * 100)
+            print(f"\r评估数据集回答正确率: \
+                {eval_success_rate:.2f}" \
+                + " " * 100)
             tb_writer.add_scalar(
-                &quot;回答正确率/评估&quot;,
+                "回答正确率/评估",
                 eval_success_rate,
                 step
             )
 
-        tb_writer.add_scalar(&quot;损失&quot;, loss, step)
-        tb_writer.add_scalar(&quot;平均奖励&quot;, mean_reward, step)
-        tb_writer.add_scalar(&quot;奖励的标准差&quot;, std_reward, step)
+        tb_writer.add_scalar("损失", loss, step)
+        tb_writer.add_scalar("平均奖励", mean_reward, step)
+        tb_writer.add_scalar("奖励的标准差", std_reward, step)
         tb_writer.add_scalar(
-            &quot;回答正确率/训练&quot;, success_rate, step)
-        tb_writer.add_scalar(&quot;格式奖励&quot;, format_reward, step)
-        tb_writer.add_scalar(&quot;梯度裁剪&quot;, grad_norm, step)
-        tb_writer.add_scalar(&quot;时长&quot;, duration, step)
+            "回答正确率/训练", success_rate, step)
+        tb_writer.add_scalar("格式奖励", format_reward, step)
+        tb_writer.add_scalar("梯度裁剪", grad_norm, step)
+        tb_writer.add_scalar("时长", duration, step)
         tb_writer.add_scalar(
-            &quot;结束的回合数量&quot;,
+            "结束的回合数量",
             num_finished_episodes,
             step
         )
-        tb_writer.add_scalar(&quot;学习率&quot;, lr, step)
+        tb_writer.add_scalar("学习率", lr, step)
         tb_writer.add_scalar(
-            &quot;平均回答长度&quot;, mean_response_len, step)
-        tb_writer.add_scalar(&quot;熵&quot;, entropy, step)
+            "平均回答长度", mean_response_len, step)
+        tb_writer.add_scalar("熵", entropy, step)
         for i, episode in enumerate(episodes):
             # TensorBoard 将文本处理为markdown格式
             text = html.escape(episode.text)
             tb_writer.add_text(
-                f&quot;text_{i}&quot;,
-                f&quot;&lt;pre&gt;{text}&lt;/pre&gt;&quot;,
+                f"text_{i}",
+                f"&lt;pre&gt;{text}&lt;/pre&gt;",
                 step
             )
 
         # 每隔100步保存模型的检查点
         if step % 100 == 0:
-            output_file = ckpt_dir / f&quot;ckpt_{step:06d}.pt&quot;
+            output_file = ckpt_dir / f"ckpt_{step:06d}.pt"
             torch.save(model.state_dict(), output_file)
-            print(f&quot;将检查点保存到 {output_file}&quot;)
+            print(f"将检查点保存到 {output_file}")
 
 
-if __name__ == &quot;__main__&quot;:
+if __name__ == "__main__":
     main()
 </code></pre>
+</p>
 <p>执行如下命令开始训练！</p>
-<pre><code class="language-shell">$ uv run train.py
+<p><pre><code class="language-shell">$ uv run train.py
 </code></pre>
+</p>
 
           <hr>
 

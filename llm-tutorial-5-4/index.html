@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">策略梯度法</a>
                 </span>
               <h1>5.4 Actor-Critic（演员-评论家架构）</h1>
@@ -129,7 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>如果在上节介绍的带基线的REINFORCE中使用价值函数作为基线，那么就可以将其视为基于价值且基于策略的方法。本节将进一步改进带基线的REINFORCE，推导一个叫作Actor-Critic的算法。Actor-Critic也是基于价值且基于策略的方法。</p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-5-13.png" alt="图5.13 演员评论家架构" loading="lazy"><figcaption>图5.13 演员评论家架构</figcaption></figure>
 </p>
@@ -172,7 +172,7 @@
 <h3 id="sec-2">5.4.2 Actor-Critic的代码实现</h3>
 <p>下面实现Actor-Critic。策略和价值函数这两个神经网络的代码如下所示。</p>
 <p>策略网络和价值网络</p>
-<pre><code class="language-python">class PolicyNet(nn.Module):
+<p><pre><code class="language-python">class PolicyNet(nn.Module):
     def __init__(self, action_size):
         super().__init__()
         self.l1 = nn.Linear(4, 128)
@@ -194,8 +194,9 @@ class ValueNet(nn.Module):
         x = self.l2(x)
         return x
 </code></pre>
+</p>
 <p>上面的代码将策略的网络实现了为PolicyNet类，将价值函数的网络实现为了ValueNet类。策略的最终输出是Softmax函数的输出，所以输出的是概率。接下来是Agent类的代码。</p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     def __init__(self):
         self.gamma = 0.98 # 折扣因子
         self.lr_pi = 0.0002 # 策略网络的学习率 α_actor
@@ -245,10 +246,11 @@ class ValueNet(nn.Module):
         self.optimizer_v.step()
         self.optimizer_pi.step()
 </code></pre>
+</p>
 <p>get_action方法可以基于策略取出动作。需要注意的是，由于输入到神经网络中的数据将作为小批量进行处理，因此在处理其中一个数据（状态）时需要小批量的轴。另外，get_action方法返回了两个值，即选择的动作及其概率。选择动作的概率将在稍后的损失函数计算中使用。</p>
 <p>update方法可以训练价值函数和策略。在代码①处为价值函数（self.v）计算损失。为此要计算TD目标（target），求出当前状态下其与价值函数（v）的均方差。然后，在代码②处为策略（self.pi）计算损失。需要将其乘以-1的值作为损失。剩下的就是一直以来的神经网络的训练代码。</p>
 <p>训练循环 Python</p>
-<pre><code class="language-python">env = gym.make(&quot;CartPole-v0&quot;)
+<p><pre><code class="language-python">env = gym.make("CartPole-v0")
 agent = Agent()
 return_list = []
 episode_list = []
@@ -270,11 +272,12 @@ for episode in range(2000):
     return_list.append(total_reward)
     episode_list.append(episode)
     if episode % 100 == 0:
-        print(&quot;回合: { }, 总奖励: { }, 1f} &quot;.format(episode, total_reward))
+        print("回合: { }, 总奖励: { }, 1f} ".format(episode, total_reward))
 
-plot_loss(episode_list, return_list, &quot;actor-critic-pg-loss.pdf&quot;)
+plot_loss(episode_list, return_list, "actor-critic-pg-loss.pdf")
 test_agent(agent, env)
 </code></pre>
+</p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-5-15.png" alt="图5.15 actor-critic每一轮的回报走势图" loading="lazy"><figcaption>图5.15 actor-critic每一轮的回报走势图</figcaption></figure>
 </p>
 

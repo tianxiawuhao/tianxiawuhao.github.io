@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">组相对策略优化（GRPO）</a>
                 </span>
               <h1>8.2 使用GRPO玩倒立摆游戏</h1>
@@ -129,8 +129,8 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
-          <pre><code class="language-python">def __init__(self, action_size):
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p><pre><code class="language-python">def __init__(self, action_size):
     super().__init__()
     self.l1 = nn.Linear(4, 128)
     self.l2 = nn.Linear(128, action_size)
@@ -140,8 +140,9 @@ def forward(self, x):
     x = F.softmax(self.l2(x), dim=1)
     return x
 </code></pre>
+</p>
 <p>智能体代码如下：</p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     def __init__(self):
         self.lr = 0.0002
         self.action_size = 2
@@ -155,12 +156,13 @@ def forward(self, x):
 
         return action, probs
 </code></pre>
+</p>
 <p>将采样一条轨迹封装为一个函数</p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     ...
 
     def rollout(self, env):
-        &quot;&quot;&quot;采样一条轨迹&quot;&quot;&quot;
+        """采样一条轨迹"""
         state = env.reset()
         states, log_probs, actions = [], [], []
         episode_reward = 0
@@ -180,6 +182,7 @@ def forward(self, x):
 
         return states, log_probs, actions, episode_reward
 </code></pre>
+</p>
 <p>GRPO 的优势计算是和 PPO 的优势计算有区别的地方。PPO 使用了价值函数网络评估每个动作的价值，并且使用了广义优势估计（GAE）。而 GRPO 创造性的提出了组相对优势。</p>
 <p>也就是轨迹 $\tau_{i}$ 相对于组内其它轨迹的优势是多少？也就是如下轨迹 $\tau_{i}$ 的奖励是：</p>
 <p>$$
@@ -199,11 +202,11 @@ A_{i,t} = A_{i} \tag{8.5}
 $$</p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-8-1.png" alt="图8.1 组内优势的计算，要注意的是动作的优势等于所在轨迹的组内优势" loading="lazy"><figcaption>图8.1 组内优势的计算，要注意的是动作的优势等于所在轨迹的组内优势</figcaption></figure>
 </p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     ...
 
     def calc_advantages_with_gpro(self, trajectories):
-        &quot;&quot;&quot;使用一组轨迹计算某条轨迹的组内优势&quot;&quot;&quot;
+        """使用一组轨迹计算某条轨迹的组内优势"""
         # 【轨迹0的奖励，轨迹1的奖励，...】
         rewards = [r for _, _, _, r in trajectories]
         mean_reward = sum(rewards) / len(rewards)
@@ -213,8 +216,9 @@ $$</p>
 
         return advantages
 </code></pre>
+</p>
 <p>使用 GRPO 算法更新策略的代码如下</p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     ...
 
     def update(self, trajectories):
@@ -223,7 +227,7 @@ $$</p>
         for step in range(20):
             loss = 0.0
             for traj, advantage in zip(trajectories, advantages):
-                &quot;&quot;&quot;遍历组里面的每一条轨迹和对应的组内优势&quot;&quot;&quot;
+                """遍历组里面的每一条轨迹和对应的组内优势"""
                 states, log_probs, actions, _ = traj
                 states = torch.tensor(states)
                 log_probs = torch.tensor(log_probs).view(-1, 1)
@@ -242,8 +246,9 @@ $$</p>
 
         return None
 </code></pre>
+</p>
 <p>训练循环如下：</p>
-<pre><code class="language-python">def train(agent, env):
+<p><pre><code class="language-python">def train(agent, env):
     G = 8 # 一组轨迹有8条
     returns = []
     for _ in range(50):
@@ -256,15 +261,16 @@ $$</p>
         returns.append(episode_reward)
         agent.update(trajectories)
 
-env = gym.make(&quot;CartPole-v0&quot;)
+env = gym.make("CartPole-v0")
 agent = Agent()
 returns = []
 
 train(agent, env)
 
 episodes = [i for i in range(len(returns))]
-plot_loss(len(returns), returns, &quot;grpo-loss.pdf&quot;)
+plot_loss(len(returns), returns, "grpo-loss.pdf")
 </code></pre>
+</p>
 <hr>
 <h1 id="sec-1">基于人类反馈的强化学习</h1>
 

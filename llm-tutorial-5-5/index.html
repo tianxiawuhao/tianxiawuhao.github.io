@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">策略梯度法</a>
                 </span>
               <h1>5.5 Actor-Critic 的代码实现（完整采集一条轨迹的版本）</h1>
@@ -129,8 +129,8 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
-          <pre><code class="language-python"># actor-critic的实现
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <p><pre><code class="language-python"># actor-critic的实现
 import gym
 import random
 import matplotlib.pyplot as plt
@@ -145,41 +145,41 @@ from torch.distributions import Categorical
 
 
 def show_animation(imgs):
-    rc(&quot;animation&quot;, html=&quot;jshtml&quot;)
+    rc("animation", html="jshtml")
     fig, ax = plt.subplots(1, 1, figsize=(5, 3))
     frames = []
-    text = ax.text(10, 20, &quot;&quot;, fontsize=12, color=&quot;black&quot;)
+    text = ax.text(10, 20, "", fontsize=12, color="black")
 
     for i, img in enumerate(img):
         frame = [ax.imshow(img, animated=True)]
-        frame.append(ax.text(10, 20, f&quot;Step: {i+1}&quot;, animated=True)) # Step数表示
+        frame.append(ax.text(10, 20, f"Step: {i+1}", animated=True)) # Step数表示
         frames.append(frame)
 
-    ax.axis(&quot;off&quot;)
+    ax.axis("off")
 
     ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
 
     # 保存动画
-    ani.save(&quot;cartpole.mp4&quot;, writer=&quot;ffmpeg&quot;)
-    ani.save(&quot;cartpole.gif&quot;, writer=&quot;pillow&quot;)
+    ani.save("cartpole.mp4", writer="ffmpeg")
+    ani.save("cartpole.gif", writer="pillow")
 
     plt.close(fig)
     return ani
 
 
 def plot_loss(episode_list, return_list, filename):
-    &quot;&quot;&quot;绘制奖励图像&quot;&quot;&quot;
+    """绘制奖励图像"""
     f = plt.figure()
     plt.plot(episode_list, return_list)
-    plt.xlabel(&quot;Episodes&quot;)
-    plt.ylabel(&quot;Returns&quot;)
-    plt.title(&quot;CartPole-v0&quot;)
+    plt.xlabel("Episodes")
+    plt.ylabel("Returns")
+    plt.title("CartPole-v0")
     plt.show()
-    f.savefig(filename, bbox_inches=&quot;tight&quot;)
+    f.savefig(filename, bbox_inches="tight")
 
 
 class PolicyNet(nn.Module):
-    &quot;&quot;&quot;策略神经网络的结构&quot;&quot;&quot;
+    """策略神经网络的结构"""
 
     def __init__(self, action_size):
         super().__init__()
@@ -193,7 +193,7 @@ class PolicyNet(nn.Module):
 
 
 class ValueNet(nn.Module):
-    &quot;&quot;&quot;价值函数神经网络V_ω&quot;&quot;&quot;
+    """价值函数神经网络V_ω"""
 
     def __init__(self):
         super().__init__()
@@ -224,7 +224,7 @@ class Agent:
         return action, probs
 
     def rollout(self, env):
-        &quot;&quot;&quot;采样一条轨迹&quot;&quot;&quot;
+        """采样一条轨迹"""
         state = env.reset()
         states, next_states, actions, rewards, dones = [], [], [], [], []
         done = False
@@ -234,7 +234,7 @@ class Agent:
             next_state, reward, done, _ = env.step(action)
 
             states.append(state) # S
-            next_states.append(next_state) # S&#39;
+            next_states.append(next_state) # S'
             actions.append(action) # A
             rewards.append(reward) # R
             dones.append(done) # done
@@ -249,7 +249,7 @@ class Agent:
         return states, next_states, actions, rewards, dones
 
     def update(self, trajectory):
-        &quot;&quot;&quot;整条轨迹的actor-critic更新&quot;&quot;&quot;
+        """整条轨迹的actor-critic更新"""
         states, next_states, actions, rewards, dones = trajectory
 
         states = torch.tensor(states) # [S0,S1,S2,...,ST-1]
@@ -294,7 +294,7 @@ class Agent:
         self.optimizer_v.step()
 
 
-env = gym.make(&quot;CartPole-v0&quot;)
+env = gym.make("CartPole-v0")
 agent = Agent()
 return_list = []
 episode_list = []
@@ -308,10 +308,11 @@ for episode in range(3000):
     return_list.append(sum(trajectory[3]))
     episode_list.append(episode)
     if episode % 100 == 0:
-        print(f&quot;回合: {episode}, 总奖励: {sum(trajectory[3])}&quot;)
+        print(f"回合: {episode}, 总奖励: {sum(trajectory[3])}")
 
-plot_loss(episode_list, return_list, &quot;sample-one-trajectory-actor-critic-pg-loss.pdf&quot;)
+plot_loss(episode_list, return_list, "sample-one-trajectory-actor-critic-pg-loss.pdf")
 </code></pre>
+</p>
 <p>损失图像如下</p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-5-16.png" alt="图5.16 采样一条完整的轨迹来计算单步TD误差" loading="lazy"><figcaption>图5.16 采样一条完整的轨迹来计算单步TD误差</figcaption></figure>
 </p>

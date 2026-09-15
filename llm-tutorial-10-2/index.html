@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">使用DPO微调大语言模型</a>
                 </span>
               <h1>10.2 DPO实战</h1>
@@ -129,7 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>我们遵循RLHF的标准流程：预训练LLM $\Longrightarrow$ SFT $\Longrightarrow$ DPO</p>
 <h3 id="sec-1">10.2.1 第一步：对预训练模型进行基于指令的监督微调（SFT）</h3>
 <p><strong>提示</strong></p>
@@ -147,7 +147,7 @@
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-10-4.png" alt="图10.4 将只针对答案计算损失推广到批次" loading="lazy"><figcaption>图10.4 将只针对答案计算损失推广到批次</figcaption></figure>
 </p>
 <p>首先导入需要的依赖。</p>
-<pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+<p><pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import numpy as np
 import os
@@ -155,16 +155,18 @@ from dataclasses import dataclass
 import datasets
 import time
 </code></pre>
+</p>
 <p>接下来我们导入模型和分词器。</p>
-<pre><code class="language-python">device = &quot;cuda&quot;
-model_path = &quot;./Qwen3-0.6B-Base&quot;
+<p><pre><code class="language-python">device = "cuda"
+model_path = "./Qwen3-0.6B-Base"
 
-model = AutoModelForCausalLM.from_pretrained(model_path, dtype=&quot;auto&quot;, device_map=&quot;auto&quot;)
+model = AutoModelForCausalLM.from_pretrained(model_path, dtype="auto", device_map="auto")
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 </code></pre>
+</p>
 <p>然后我们设置一下生成文本的参数。保证测试的一致性。</p>
 <p>其中151645为 <code>&lt;|im_end|&gt;</code>，151643为 <code>&lt;|endoftext|&gt;</code></p>
-<pre><code class="language-python">model.generation_config.do_sample = True
+<p><pre><code class="language-python">model.generation_config.do_sample = True
 model.generation_config.eos_token_id = [151645,151643]
 model.generation_config.pad_token_id = 151643
 model.generation_config.temperature = 0.7
@@ -172,9 +174,10 @@ model.generation_config.top_p = 0.8
 model.generation_config.top_k = 20
 model.generation_config.repetition_penalty = 1.05
 </code></pre>
+</p>
 <p><strong>代码10.4 模型生成的配置</strong></p>
 <p>然后我们定义一下SFT阶段的训练超参数。</p>
-<pre><code class="language-python">@dataclass
+<p><pre><code class="language-python">@dataclass
 class SFTConfig:
     max_length = 2500
     batch_size = 2
@@ -184,11 +187,12 @@ class SFTConfig:
     min_lr = 2e-6
     warmup_steps = 1000
 </code></pre>
+</p>
 <p>接下来我们导入训练数据并将训练数据转换成input_ids。</p>
-<pre><code class="language-python">ultrachat_200k_data = datasets.load_dataset(&quot;/ultrachat_200k&quot;)
+<p><pre><code class="language-python">ultrachat_200k_data = datasets.load_dataset("/ultrachat_200k")
 
 def tokenize_and_format(data):
-    &quot;&quot;&quot;使用模型自带的聊天模板格式化训练数据&quot;&quot;&quot;
+    """使用模型自带的聊天模板格式化训练数据"""
     input_ids = tokenizer.apply_chat_template(
         data,
         tokenize=True,
@@ -202,22 +206,23 @@ def tokenize_and_format(data):
 train_data = []
 i = 0
 while True:
-    data = ultrachat_200k_data[&quot;train_sft&quot;][i][&quot;messages&quot;]
+    data = ultrachat_200k_data["train_sft"][i]["messages"]
     # 添加系统提示词
     data.insert(
         0,
-        {&quot;content&quot;: &quot;You are a helpful assistant&quot;, &quot;role&quot;: &quot;system&quot;}
+        {"content": "You are a helpful assistant", "role": "system"}
     )
     input_ids = tokenize_and_format(data)
     train_data.append(input_ids)
     i += 1
     if i % 1000 == 0:
-        print(f&quot;已处理{i}条数据&quot;)
+        print(f"已处理{i}条数据")
     if i == 50000:
         break
 </code></pre>
+</p>
 <p>接下来我们编写一下学习率的线性预热和余弦衰减的函数。</p>
-<pre><code class="language-python">def linear_warmup(current_step, warmup_steps, max_lr):
+<p><pre><code class="language-python">def linear_warmup(current_step, warmup_steps, max_lr):
     if current_step &lt; warmup_steps:
         return max_lr * current_step / warmup_steps
     else:
@@ -231,6 +236,7 @@ def cosine_decay(current_step, warmup_steps, total_steps, max_lr, min_lr):
         decay = 0.5 * (1 + np.cos(np.pi * progress))
         return (max_lr - min_lr) * decay + min_lr
 </code></pre>
+</p>
 <p><strong>代码10.5 学习率调度：线性预热和余弦衰减</strong></p>
 <h3 id="sec-2">基于指令SFT的掩码设置</h3>
 <p>基于指令SFT的掩码设置</p>
@@ -239,15 +245,16 @@ def cosine_decay(current_step, warmup_steps, total_steps, max_lr, min_lr):
 <li>实现方式：构造损失掩码，仅针对每轮对话（含多轮）的模型“输出”部分（也就是回答部分）进行损失计算</li>
 </ul>
 <p>假设我们的多轮对话数据是</p>
-<pre><code class="language-python">data = [
-    {&quot;content&quot;: &quot;你是谁？&quot;, &quot;role&quot;: &quot;user&quot;},
-    {&quot;content&quot;: &quot;我是左元。&quot;, &quot;role&quot;: &quot;assistant&quot;},
-    {&quot;content&quot;: &quot;你会强化学习吗?&quot;, &quot;role&quot;: &quot;user&quot;},
-    {&quot;content&quot;: &quot;略知一二。&quot;, &quot;role&quot;: &quot;assistant&quot;},
+<p><pre><code class="language-python">data = [
+    {"content": "你是谁？", "role": "user"},
+    {"content": "我是左元。", "role": "assistant"},
+    {"content": "你会强化学习吗?", "role": "user"},
+    {"content": "略知一二。", "role": "assistant"},
 ]
 </code></pre>
+</p>
 <p>经过模型的对话模板格式化之后是</p>
-<pre><code class="language-text">&lt;im_start&gt;system
+<p><pre><code class="language-text">&lt;im_start&gt;system
 You are a helpful assistant &lt;im_end&gt;
 &lt;im_start&gt;user
 你是谁？&lt;im_end&gt;
@@ -258,21 +265,22 @@ You are a helpful assistant &lt;im_end&gt;
 &lt;im_start&gt;assistant
 &lt;think&gt;&lt;/think&gt;略知一二。&lt;im_end&gt;
 </code></pre>
+</p>
 <p>代码如下：</p>
-<pre><code class="language-python">def create_answer_mask(input_ids, tokenizer):
-    &quot;&quot;&quot;
+<p><pre><code class="language-python">def create_answer_mask(input_ids, tokenizer):
+    """
     创建仅对助手回答部分计算损失的掩码
     Args:
         input_ids: 输入token序列 [batch_size, seq_len]
         tokenizer: 分词器
     Returns:
         answer_mask: 助手回答部分为1，其他部分为0的掩码
-    &quot;&quot;&quot;
+    """
     batch_size, seq_len = input_ids.shape
     answer_mask = torch.zeros_like(input_ids)
 
     # 获取结束标记的token id
-    eos_token_id = tokenizer.encode(&quot;&lt;im_end&gt;&quot;)[0]
+    eos_token_id = tokenizer.encode("&lt;im_end&gt;")[0]
 
     for batch_idx in range(batch_size):
         # 找到所有 &lt;im_end&gt; 的位置
@@ -298,7 +306,7 @@ You are a helpful assistant &lt;im_end&gt;
 
 
 def _parse_conversation_turns(eos_positions):
-    &quot;&quot;&quot;
+    """
     解析对话轮次，分离用户和助手的结束位置
     对话格式：
     &lt;im_start&gt;user\n{user_msg}&lt;im_end&gt;\n&lt;im_start&gt;assistant\n{assistant_msg}
@@ -309,7 +317,7 @@ def _parse_conversation_turns(eos_positions):
     eos_positions[3]: 第2轮user结束
     eos_positions[4]: 第2轮assistant结束
     ...
-    &quot;&quot;&quot;
+    """
     # 跳过system系统提示词部分，从第一个user开始
     conversation_eos = eos_positions[1:] # 去掉system的&lt;im_end&gt;
 
@@ -322,14 +330,14 @@ def _parse_conversation_turns(eos_positions):
 
 
 def _set_answer_masks(mask, user_ends, assistant_ends, seq_len):
-    &quot;&quot;&quot;
+    """
     为助手回答部分设置掩码
     Args:
         mask: 当前样本的掩码 [seq_len]
         user_ends: 用户消息结束位置列表
         assistant_ends: 助手消息结束位置列表
         seq_len: 序列长度
-    &quot;&quot;&quot;
+    """
     num_user_turns = len(user_ends)
     num_assistant_turns = len(assistant_ends)
 
@@ -352,9 +360,10 @@ def _set_answer_masks(mask, user_ends, assistant_ends, seq_len):
         last_answer_start = last_user_end + 3
         mask[last_answer_start:] = 1 # 到序列结尾
 </code></pre>
+</p>
 <p><strong>代码10.6 答案掩码</strong></p>
 <p>设置模型的训练超参数：</p>
-<pre><code class="language-python">batch_size = SFTConfig.batch_size
+<p><pre><code class="language-python">batch_size = SFTConfig.batch_size
 gradient_accumulation_steps = SFTConfig.gradient_accumulation_steps
 log_iter = SFTConfig.log_iter
 max_lr = SFTConfig.max_lr
@@ -363,26 +372,28 @@ warmup_steps = SFTConfig.warmup_steps
 total_steps = len(train_data) // batch_size
 optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
 </code></pre>
+</p>
 <p>编写日志记录函数</p>
-<pre><code class="language-python">with open(&quot;log.txt&quot;, &quot;a&quot;) as my_file:
-    my_file.write(f&quot; \
-    time:{time.strftime(&#39;%Y-%m-%d, %H:%M:%S&#39;)}, \
+<p><pre><code class="language-python">with open("log.txt", "a") as my_file:
+    my_file.write(f" \
+    time:{time.strftime('%Y-%m-%d, %H:%M:%S')}, \
     batch_size:{batch_size}, \
     warmup_steps:{warmup_steps}, \
     max_lr:{max_lr}, \
-    min_lr:{min_lr}\n&quot;)
+    min_lr:{min_lr}\n")
 
 # 定义一个日志记录函数
 def log_call(iters, iters_average_loss):
-    with open(&quot;log.txt&quot;, &quot;a&quot;) as my_file:
-        my_file.write(f&quot; \
-        time:{time.strftime(&#39;%Y-%m-%d, %H:%M:%S&#39;)}, \
+    with open("log.txt", "a") as my_file:
+        my_file.write(f" \
+        time:{time.strftime('%Y-%m-%d, %H:%M:%S')}, \
         iters:{iters+1}, \
-        iters_average_loss:{iters_average_loss:.4f}\n&quot;)
+        iters_average_loss:{iters_average_loss:.4f}\n")
 </code></pre>
+</p>
 <p><strong>代码10.7 日志相关配置</strong></p>
 <p>主训练循环如下</p>
-<pre><code class="language-python">model.train()
+<p><pre><code class="language-python">model.train()
 training_losses = []
 model.zero_grad() # 训练开始时清空梯度
 skipped_batches_count = 0
@@ -415,7 +426,7 @@ for batch_idx in range(total_batches):
         padded_sequence = torch.nn.functional.pad(
             torch.tensor(original_sequence),
             (0, padding_length),
-            mode=&quot;constant&quot;,
+            mode="constant",
             value=pad_token_id
         ).tolist()
         padded_sequences_list.append(padded_sequence)
@@ -451,7 +462,7 @@ for batch_idx in range(total_batches):
     min_answer_tokens = tokens_per_sample.min().item() # 最少的有效token数
 
     if min_answer_tokens == 0:
-        print(f&quot;跳过第{batch_idx + 1}批次：回答部分数据不足&quot;)
+        print(f"跳过第{batch_idx + 1}批次：回答部分数据不足")
         skipped_batches_count += 1
         continue # 跳过当前批次
 
@@ -501,7 +512,7 @@ for batch_idx in range(total_batches):
 
     # 更新优化器的学习率
     for param_group in optimizer.param_groups:
-        param_group[&quot;lr&quot;] = current_learning_rate
+        param_group["lr"] = current_learning_rate
 
     # 梯度累积：只在累积步数达到或最后一个批次时更新权重
     is_accumulation_step = (batch_idx + 1) \
@@ -529,32 +540,33 @@ for batch_idx in range(total_batches):
         recent_average_loss = np.nanmean(recent_losses)
 
         # 输出训练状态
-        current_time = time.strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
-        print(f&quot;时间: {current_time} | &quot;
-              f&quot;批次: {batch_idx + 1}/{total_batches} | &quot;
-              f&quot;最近{len(recent_losses)}批次平均损失: {recent_average_loss:.4f} | &quot;
-              f&quot;学习率: {current_learning_rate:.2e}&quot;)
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"时间: {current_time} | "
+              f"批次: {batch_idx + 1}/{total_batches} | "
+              f"最近{len(recent_losses)}批次平均损失: {recent_average_loss:.4f} | "
+              f"学习率: {current_learning_rate:.2e}")
 
         # 调用外部日志记录函数
         log_call(batch_idx, recent_average_loss)
 
 ## ======================== 训练完成总结 ========================
-print(&quot;训练完成!&quot;)
-print(f&quot;训练统计:&quot;)
-print(f&quot; - 总批次数: {total_batches}&quot;)
-print(f&quot; - 跳过批次数: {skipped_batches_count}&quot;)
-print(f&quot; - 有效批次数: {total_batches - skipped_batches_count}&quot;)
-print(f&quot; - 最终平均损失: {np.nanmean(training_losses[-100:]):.4f}&quot;)
+print("训练完成!")
+print(f"训练统计:")
+print(f" - 总批次数: {total_batches}")
+print(f" - 跳过批次数: {skipped_batches_count}")
+print(f" - 有效批次数: {total_batches - skipped_batches_count}")
+print(f" - 最终平均损失: {np.nanmean(training_losses[-100:]):.4f}")
 
 if skipped_batches_count &gt; 0:
     skip_ratio = skipped_batches_count / total_batches * 100
-    print(f&quot;跳过批次占比: {skip_ratio:.2f}%&quot;)
+    print(f"跳过批次占比: {skip_ratio:.2f}%")
     if skip_ratio &gt; 10:
-        print(&quot;建议: 跳过批次过多, 考虑增加最大序列长度或优化数据预处理&quot;)
+        print("建议: 跳过批次过多, 考虑增加最大序列长度或优化数据预处理")
 
-model.save_pretrained(&quot;./Qwen3-0.6B-SFT/&quot;)
-tokenizer.save_pretrained(&quot;./Qwen3-0.6B-SFT/&quot;)
+model.save_pretrained("./Qwen3-0.6B-SFT/")
+tokenizer.save_pretrained("./Qwen3-0.6B-SFT/")
 </code></pre>
+</p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-10-5.png" alt="图10.5 我们是从model_inputs中寻找回答部分，然后计算预测的损失" loading="lazy"><figcaption>图10.5 我们是从model_inputs中寻找回答部分，然后计算预测的损失</figcaption></figure>
 </p>
 <p>为什么要取交集？也就是代码 <code>final_loss_mask = (assistant_answer_mask &amp; padding_mask)</code> 为什么要这么写？</p>
@@ -591,33 +603,34 @@ tokenizer.save_pretrained(&quot;./Qwen3-0.6B-SFT/&quot;)
 <p><strong>危险</strong></p>
 <p>我们使用DPO算法要微调的模型是上一节中保存的“Qwen3-0.6B-SFT”。</p>
 <p>加载我们要微调的模型。</p>
-<pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+<p><pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 from dataclasses import dataclass
 import datasets
 import torch
 import numpy as np
 import os
 
-device = &quot;cuda&quot;
-model_path = &quot;./Qwen3-0.6B-SFT&quot;
+device = "cuda"
+model_path = "./Qwen3-0.6B-SFT"
 
 # 加载模型
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
-    dtype=&quot;auto&quot;,
-    device_map=&quot;auto&quot;
+    dtype="auto",
+    device_map="auto"
 )
 # 冻结的参考模型
 ref_model = AutoModelForCausalLM.from_pretrained(
     model_path,
-    dtype=&quot;auto&quot;,
-    device_map=&quot;auto&quot;
+    dtype="auto",
+    device_map="auto"
 )
 # 加载分词器
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 </code></pre>
+</p>
 <p>生成回答的配置和SFT时相同，见代码10.4。定义模型训练的超参数。</p>
-<pre><code class="language-python">@dataclass
+<p><pre><code class="language-python">@dataclass
 class DPOConfig:
     max_length = 1700
     batch_size = 2
@@ -628,11 +641,13 @@ class DPOConfig:
     min_lr = 1e-7
     warmup_steps:int = 300
 </code></pre>
+</p>
 <p>接下来导入正负例数据集。</p>
-<pre><code class="language-python">binarized_data = datasets.load_dataset(&quot;./ultrafeedback_binarized&quot;)
+<p><pre><code class="language-python">binarized_data = datasets.load_dataset("./ultrafeedback_binarized")
 </code></pre>
+</p>
 <p>处理数据集</p>
-<pre><code class="language-python">def tokenize_and_format(data):
+<p><pre><code class="language-python">def tokenize_and_format(data):
     input_ids = tokenizer.apply_chat_template(
         data,
         tokenize=True,
@@ -646,43 +661,44 @@ class DPOConfig:
 chosen_input_ids_list = []
 i = 0
 while True:
-    data = binarized_data[&quot;train_sft&quot;][i][&quot;chosen&quot;]
+    data = binarized_data["train_sft"][i]["chosen"]
     data.insert(
         0,
-        {&quot;content&quot;: &quot;You are a helpful assistant&quot;, &quot;role&quot;: &quot;system&quot;}
+        {"content": "You are a helpful assistant", "role": "system"}
     )
     input_ids = tokenize_and_format(data)
     chosen_input_ids_list.append(input_ids)
     i += 1
-    if i % 10000 == 0 or i == len(binarized_data[&quot;train_sft&quot;]):
-        print(f&quot;偏好数据已处理{i}条数据&quot;)
+    if i % 10000 == 0 or i == len(binarized_data["train_sft"]):
+        print(f"偏好数据已处理{i}条数据")
     if i == 30000:
         break
-print(&quot;_&quot; * 70)
+print("_" * 70)
 
 #############
 ## 生成不偏好数据的input_ids
 rejected_input_ids_list = []
 i = 0
 while True:
-    data = binarized_data[&quot;train_sft&quot;][i][&quot;rejected&quot;]
+    data = binarized_data["train_sft"][i]["rejected"]
     data.insert(
         0,
-        {&quot;content&quot;: &quot;You are a helpful assistant&quot;, &quot;role&quot;: &quot;system&quot;}
+        {"content": "You are a helpful assistant", "role": "system"}
     )
     input_ids = tokenize_and_format(data)
     rejected_input_ids_list.append(input_ids)
     i += 1
-    if i % 10000 == 0 or i == len(binarized_data[&quot;train_sft&quot;]):
-        print(f&quot;非偏好数据已处理{i}条数据&quot;)
+    if i % 10000 == 0 or i == len(binarized_data["train_sft"]):
+        print(f"非偏好数据已处理{i}条数据")
     if i == 30000:
         break
 
 ## 确保数据条数一致
 assert len(chosen_input_ids_list) == len(rejected_input_ids_list)
 </code></pre>
+</p>
 <p>设置一下训练的超参数</p>
-<pre><code class="language-python">beta = DPOConfig.beta # β超参数
+<p><pre><code class="language-python">beta = DPOConfig.beta # β超参数
 batch_size = DPOConfig.batch_size
 gradient_accumulation_steps = DPOConfig.gradient_accumulation_steps
 log_iter = DPOConfig.log_iter
@@ -692,10 +708,11 @@ warmup_steps = DPOConfig.warmup_steps
 total_steps = len(chosen_input_ids_list) // batch_size
 optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
 </code></pre>
+</p>
 <p>配置 logging 日志记录模型训练过程参见代码10.7。复用SFT阶段设置的余弦衰减学习率曲线，参见代码10.5。将回答部分进行掩码的代码，参见代码10.6。</p>
 <p>计算平均对数概率</p>
-<pre><code class="language-python">def _compute_average_log_probability(logits, target_labels, mask):
-    &quot;&quot;&quot;
+<p><pre><code class="language-python">def _compute_average_log_probability(logits, target_labels, mask):
+    """
     计算带掩码的平均对数概率
     Args:
         logits: 模型输出 [batch_size, seq_len, vocab_size]
@@ -703,7 +720,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
         mask: 计算掩码 [batch_size, seq_len]
     Returns:
         average_log_prob: 每个样本的平均对数概率 [batch_size]
-    &quot;&quot;&quot;
+    """
     # 计算softmax概率分布
     probabilities = torch.softmax(logits, dim=-1)
 
@@ -728,8 +745,9 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
 
     return average_log_prob
 </code></pre>
+</p>
 <p>DPO训练循环如下：</p>
-<pre><code class="language-python">model.train()
+<p><pre><code class="language-python">model.train()
 
 # ======================= 训练指标记录列表 =======================
 training_losses = []
@@ -776,7 +794,7 @@ for batch_idx in range(total_batches):
         padded_sequence = torch.nn.functional.pad(
             torch.tensor(original_sequence),
             (0, padding_length),
-            mode=&quot;constant&quot;,
+            mode="constant",
             value=pad_token_id
         ).tolist()
         # 将填充过的数据放入列表
@@ -793,7 +811,7 @@ for batch_idx in range(total_batches):
         padded_sequence = torch.nn.functional.pad(
             torch.tensor(original_sequence),
             (0, padding_length),
-            mode=&quot;constant&quot;,
+            mode="constant",
             value=pad_token_id
         ).tolist()
 
@@ -849,7 +867,7 @@ for batch_idx in range(total_batches):
     rejected_min_tokens = rejected_final_mask.sum(dim=-1).min().item()
 
     if preferred_min_tokens == 0 or rejected_min_tokens == 0:
-        print(f&quot;跳过第{batch_idx + 1}批次：偏好对数据回答部分不足&quot;)
+        print(f"跳过第{batch_idx + 1}批次：偏好对数据回答部分不足")
         skipped_batches_count += 1
         continue # 跳过当前批次
 
@@ -946,7 +964,7 @@ for batch_idx in range(total_batches):
     )
 
     for param_group in optimizer.param_groups:
-        param_group[&quot;lr&quot;] = current_learning_rate
+        param_group["lr"] = current_learning_rate
 
     # 梯度累积和权重更新
     is_accumulation_step = (batch_idx + 1) % gradient_accumulation_steps == 0
@@ -988,51 +1006,52 @@ for batch_idx in range(total_batches):
         recent_margin = np.nanmean(reward_margins[-log_iter:])
 
         # 格式化输出训练状态
-        current_time = time.strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
-        print(f&quot;时间: {current_time}&quot;)
-        print(f&quot;批次: {batch_idx + 1}/{total_batches}&quot;)
-        print(f&quot;最近{log_iter}批次指标: &quot;)
-        print(f&quot; - 平均损失: {recent_loss:.4f}&quot;)
-        print(f&quot; - 偏好对数概率: {recent_preferred_logprob:.4f}&quot;)
-        print(f&quot; - 拒绝对数概率: {recent_rejected_logprob:.4f}&quot;)
-        print(f&quot; - 偏好奖励: {recent_preferred_reward:.4f}&quot;)
-        print(f&quot; - 拒绝奖励: {recent_rejected_reward:.4f}&quot;)
-        print(f&quot; - 奖励边际: {recent_margin:.4f}&quot;)
-        print(f&quot;学习率: {current_learning_rate:.2e}&quot;)
-        print(&quot;&quot; * 80)
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"时间: {current_time}")
+        print(f"批次: {batch_idx + 1}/{total_batches}")
+        print(f"最近{log_iter}批次指标: ")
+        print(f" - 平均损失: {recent_loss:.4f}")
+        print(f" - 偏好对数概率: {recent_preferred_logprob:.4f}")
+        print(f" - 拒绝对数概率: {recent_rejected_logprob:.4f}")
+        print(f" - 偏好奖励: {recent_preferred_reward:.4f}")
+        print(f" - 拒绝奖励: {recent_rejected_reward:.4f}")
+        print(f" - 奖励边际: {recent_margin:.4f}")
+        print(f"学习率: {current_learning_rate:.2e}")
+        print("" * 80)
 
         # 调用外部日志记录
         log_call(batch_idx, recent_loss)
 
 ## ======================= 训练完成总结 =======================
 
-print(&quot;DPO训练完成!&quot;)
-print(f&quot;训练统计: &quot;)
-print(f&quot; - 总批次数: {total_batches}&quot;)
-print(f&quot; - 跳过批次数：{skipped_batches_count}&quot;)
-print(f&quot; - 有效批次数：{total_batches - skipped_batches_count}&quot;)
+print("DPO训练完成!")
+print(f"训练统计: ")
+print(f" - 总批次数: {total_batches}")
+print(f" - 跳过批次数：{skipped_batches_count}")
+print(f" - 有效批次数：{total_batches - skipped_batches_count}")
 
 # 输出最终训练指标
 if training_losses:
     final_metrics = {
-        &quot;loss&quot;: np.nanmean(training_losses[-100:]),
-        &quot;preferred_logprob&quot;: np.nanmean(preferred_log_probabilities[-100:]),
-        &quot;rejected_logprob&quot;: np.nanmean(rejected_log_probabilities[-100:]),
-        &quot;preferred_reward&quot;: np.nanmean(preferred_rewards[-100:]),
-        &quot;rejected_reward&quot;: np.nanmean(rejected_rewards[-100:]),
-        &quot;margin&quot;: np.nanmean(reward_margins[-100:])
+        "loss": np.nanmean(training_losses[-100:]),
+        "preferred_logprob": np.nanmean(preferred_log_probabilities[-100:]),
+        "rejected_logprob": np.nanmean(rejected_log_probabilities[-100:]),
+        "preferred_reward": np.nanmean(preferred_rewards[-100:]),
+        "rejected_reward": np.nanmean(rejected_rewards[-100:]),
+        "margin": np.nanmean(reward_margins[-100:])
     }
 
-    print(f&quot;最终指标（最近100批次平均）：&quot;)
+    print(f"最终指标（最近100批次平均）：")
     for metric_name, metric_value in final_metrics.items():
-        print(f&quot; - {metric_name}: {metric_value:.4f}&quot;)
+        print(f" - {metric_name}: {metric_value:.4f}")
 
 if skipped_batches_count &gt; 0:
     skip_ratio = skipped_batches_count / total_batches * 100
-    print(f&quot;跳过批次占比：{skip_ratio:.2f}%&quot;)
+    print(f"跳过批次占比：{skip_ratio:.2f}%")
     if skip_ratio &gt; 10:
-        print(&quot;建议：跳过批次过多，考虑增加最大序列长度或优化数据预处理&quot;)
+        print("建议：跳过批次过多，考虑增加最大序列长度或优化数据预处理")
 </code></pre>
+</p>
 <hr>
 
           <hr>

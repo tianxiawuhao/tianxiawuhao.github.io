@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">扩散模型背后的数学理论</a>
                 </span>
               <h1>17.1 正向扩散过程</h1>
@@ -129,6 +129,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>由于我们正在创建一个生成模型，我们希望找到真实图像的分布。</p>
 <p>给定一个目标和未知的概率分布，可以构造一条马尔可夫链，用来近似该目标概率分布。执行近似时包含的步骤越多，样本的分布就越接近真实分布。</p>
 <p>当当前决策仅取决于你所在的位置而非起点时，过程就是马尔可夫过程。存在概率转移矩阵，我们可以构建一个链结构，称为马尔可夫链。</p>
@@ -151,7 +152,7 @@ $$</p>
 <li>正向扩散过程 $\longrightarrow$ 给图像添加噪声。</li>
 <li>反向扩散过程 $\longrightarrow$ 从图像中去除噪声。</li>
 </ol>
-<p>加噪声图片
+<pre><code class="language-text">加噪声图片
 的分布
 输出
 均值
@@ -173,7 +174,8 @@ x0 ~ q(x)
 (
 , 以及
 =一个小的数值,
-=一个大的数值)</p>
+=一个大的数值)
+</code></pre>
 <p>图 17.3 正向扩散公式图解</p>
 <p>正向扩散过程逐步将高斯噪声添加到输入图像 $x_0$ 中，总共会有 $T$ 步。该过程将产生一系列带噪声的图像样本 $x_1, \dots, x_T$。</p>
 <p>当 $T \rightarrow \infty$ 时，最终结果将变成完全噪声图像，就像从各向同性的高斯分布中采样出来的噪声一样。</p>
@@ -205,21 +207,21 @@ $$
 \alpha_t = 1 - \beta_t
 $$
 $$
-\bar{\alpha}<em>t = \prod</em>{i=1}^t \alpha_i
+\bar{\alpha}_t = \prod_{i=1}^t \alpha_i
 \tag{17.5}
 $$</p>
 <p>然后我们开始推导</p>
 <p>$$
 \begin{aligned}
-x_t &amp;= \sqrt{1 - \beta_t} x_{t-1} + \sqrt{\beta_t} \varepsilon_{t-1} \
-&amp;= \sqrt{\alpha_t} x_{t-1} + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \
-&amp;= \sqrt{\alpha_t} (\sqrt{\alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_{t-1}} \varepsilon_{t-2}) + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \
-&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{\alpha_t (1 - \alpha_{t-1})} \varepsilon_{t-2} + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \
-&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \mathcal{N}(0, \alpha_t (1 - \alpha_{t-1}) I) + \mathcal{N}(0, (1 - \alpha_t) I) \
-&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \mathcal{N}(0, (1 - \alpha_t \alpha_{t-1}) I) \
-&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_t \alpha_{t-1}} \varepsilon_{t-2} \
-&amp;\vdots \
-&amp;= \sqrt{\alpha_t \alpha_{t-1} \dots \alpha_1} x_0 + \sqrt{1 - \alpha_t \alpha_{t-1} \dots \alpha_1} \varepsilon \
+x_t &amp;= \sqrt{1 - \beta_t} x_{t-1} + \sqrt{\beta_t} \varepsilon_{t-1} \\
+&amp;= \sqrt{\alpha_t} x_{t-1} + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \\
+&amp;= \sqrt{\alpha_t} (\sqrt{\alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_{t-1}} \varepsilon_{t-2}) + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \\
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{\alpha_t (1 - \alpha_{t-1})} \varepsilon_{t-2} + \sqrt{1 - \alpha_t} \varepsilon_{t-1} \\
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \mathcal{N}(0, \alpha_t (1 - \alpha_{t-1}) I) + \mathcal{N}(0, (1 - \alpha_t) I) \\
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \mathcal{N}(0, (1 - \alpha_t \alpha_{t-1}) I) \\
+&amp;= \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_t \alpha_{t-1}} \varepsilon_{t-2} \\
+&amp;\vdots \\
+&amp;= \sqrt{\alpha_t \alpha_{t-1} \dots \alpha_1} x_0 + \sqrt{1 - \alpha_t \alpha_{t-1} \dots \alpha_1} \varepsilon \\
 &amp;= \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1 - \bar{\alpha}_t} \varepsilon
 \end{aligned}
 \tag{17.6}

@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">近端策略优化（PPO）</a>
                 </span>
               <h1>6.3 PPO代码实现</h1>
@@ -129,14 +129,14 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <h3 id="sec-1">6.3.1 网络结构的定义</h3>
 <ul>
 <li>演员网络：策略网络</li>
 <li>评论家网络：价值函数网络</li>
 </ul>
 <p>策略网络和价值函数网络的定义 Python</p>
-<pre><code class="language-python">class PolicyNet(nn.Module):
+<p><pre><code class="language-python">class PolicyNet(nn.Module):
     def __init__(self, action_size):
         super().__init__()
         self.l1 = nn.Linear(4, 128)
@@ -158,9 +158,10 @@ class ValueNet(nn.Module):
         x = self.l2(x)
         return x
 </code></pre>
+</p>
 <h3 id="sec-2">6.3.2 PPO算法的实现</h3>
 <p>我们来实现Agent，代码如下：</p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     def __init__(self):
         self.gamma = 0.98
         self.lr_pi = 0.001
@@ -180,7 +181,7 @@ class ValueNet(nn.Module):
         return action, probs
 
     def rollout(self, env):
-        &quot;&quot;&quot;采集一条轨迹&quot;&quot;&quot;
+        """采集一条轨迹"""
         state = env.reset()
         states, next_states, actions, action_probs, rewards, dones = [], [], [], [], [], []
         done = False
@@ -198,13 +199,14 @@ class ValueNet(nn.Module):
 
         return states, next_states, actions, action_probs, rewards, dones
 </code></pre>
+</p>
 <p>接下来我们要实现智能体的更新（update）代码，在PPO算法中，我们需要用到旧策略采样的轨迹。所以需要保存旧策略采样的轨迹的完整信息。</p>
 <p>我们采样的轨迹是：</p>
 <p>$$\tau = [s_0, a_0, R_0, s_1, a_1, R_1, \cdots, s_T, a_T, R_T] \quad (6.12)$$</p>
 <p>那么我们使用元组来保存一条轨迹的信息。结构如下</p>
 <p>$$\text{一条轨迹的详细信息} = \left\{ \begin{array}{l} \text{states} : [s_0, s_1, ..., s_{T-1}] \\ \text{next\_states} : [s_1, s_2, ..., s_T] \\ \text{actions} : [a_0, a_1, ..., a_{T-1}] \\ \text{action\_probs} : [\pi_{\theta_{old}}(a_0|s_0), \pi_{\theta_{old}}(a_1|s_1), ..., \pi_{\theta_{old}}(a_{T-1}|s_{T-1})] \\ \text{rewards} : [R_0, R_1, ..., R_{T-1}] \\ \text{dones} : [\text{False, False, ..., True}] \end{array} \right. \quad (6.13)$$</p>
 <p>有了旧策略采样的轨迹的所有详细信息，我们就可以来实现PPO算法了。代码如下。</p>
-<pre><code class="language-python">class Agent:
+<p><pre><code class="language-python">class Agent:
     ...
 
     def update(self, trajectory):
@@ -251,7 +253,7 @@ class ValueNet(nn.Module):
             # π loss = -1/T Σ min(surr1, surr2)
             pi_loss = torch.mean(-torch.min(surr1, surr2))
             # V loss = 1/T Σ (V(s_t) - (A^GAE_t + V(s_t)))²
-            # 这里的&#39;gae+V&#39;是常数，不在计算图中
+            # 这里的'gae+V'是常数，不在计算图中
             v_loss = torch.mean(F.mse_loss(self.v(states), gae + V))
             self.optimizer_pi.zero_grad()
             self.optimizer_v.zero_grad()
@@ -260,6 +262,7 @@ class ValueNet(nn.Module):
             self.optimizer_pi.step()
             self.optimizer_v.step()
 </code></pre>
+</p>
 <p><strong>比值的计算方法</strong></p>
 <p>$$\because A = e^{\log A}$$
 $$\therefore \frac{A}{B} = e^{\log A - \log B} = \frac{e^{\log A}}{e^{\log B}}$$</p>
@@ -270,7 +273,7 @@ $$\therefore \frac{A}{B} = e^{\log A - \log B} = \frac{e^{\log A}}{e^{\log B}}$$
 <p>$$V_{\omega}(s_t) \stackrel{\text{def}}{=} \text{GAE Target} = \text{GAE} + V_{\omega_{\text{old}}}(s_t) \quad (6.16)$$</p>
 <p>TD Target 和 GAE Target 要从计算图中剔除，作为常数使用。</p>
 <h3 id="sec-3">6.3.3 广义优势估计的计算</h3>
-<pre><code class="language-python">def compute_gae(gamma, td_delta):
+<p><pre><code class="language-python">def compute_gae(gamma, td_delta):
     # δ_t
     td_delta = td_delta.detach().numpy()
     gae_list = []
@@ -283,8 +286,9 @@ $$\therefore \frac{A}{B} = e^{\log A - \log B} = \frac{e^{\log A}}{e^{\log B}}$$
     gae_list.reverse()
     return torch.tensor(gae_list)
 </code></pre>
+</p>
 <h3 id="sec-4">6.3.4 训练循环</h3>
-<pre><code class="language-python">def train(env, agent):
+<p><pre><code class="language-python">def train(env, agent):
     return_list = []
     episode_list = []
     for episode in range(500):
@@ -296,22 +300,23 @@ $$\therefore \frac{A}{B} = e^{\log A - \log B} = \frac{e^{\log A}}{e^{\log B}}$$
         episode_list.append(episode)
 
         if (episode + 1) % 10 == 0:
-            print(f&quot;回合: {episode}, 回报: {episode_reward}&quot;)
+            print(f"回合: {episode}, 回报: {episode_reward}")
 
     return return_list, episode_list
 
 def main():
-    env = gym.make(&quot;CartPole-v0&quot;)
+    env = gym.make("CartPole-v0")
     env.seed(0)
     torch.manual_seed(0)
     agent = Agent()
     return_list, episode_list = train(env, agent)
-    plot_loss(episode_list, return_list, &quot;ppo-loss.pdf&quot;)
+    plot_loss(episode_list, return_list, "ppo-loss.pdf")
     test_agent(agent, env)
 
-if __name__ == &quot;__main__&quot;:
+if __name__ == "__main__":
     main()
 </code></pre>
+</p>
 <p>获得的奖励可视化如下：</p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-6-8.png" alt="图6.8 PPO算法获得的奖励" loading="lazy"><figcaption>图6.8 PPO算法获得的奖励</figcaption></figure>
 </p>

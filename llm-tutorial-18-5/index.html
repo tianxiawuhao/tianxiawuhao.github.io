@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">条件扩散模型</a>
                 </span>
               <h1>18.5 无分类器指引</h1>
@@ -129,24 +129,26 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>分类器指引可以生成强调条件的数据。然而，分类器指引在实际应用中存在一个问题，即需要单独准备一个分类器。针对分类器指引的这一缺点进行改进的技术是无分类器指引。</p>
 <h3 id="sec-1">18.5.1 无分类器指引的理论知识</h3>
 <p>顾名思义，无分类器指引就是不需要分类器的指引。它的机制可以通过以下过程得出。</p>
 <p>$$
 \begin{aligned}
-&amp;\nabla_{x_t} \log p(x_t | y) \
-&amp;= \nabla_{x_t} \log p(x_t) + \gamma \nabla_{x_t} \log p(y | x_t) \
-&amp;= \nabla_{x_t} \log p(x_t) + \gamma \nabla_{x_t} \log \frac{p(x_t | y) p(y)}{p(x_t)} \
-&amp;= \nabla_{x_t} \log p(x_t) + \gamma \left( \nabla_{x_t} \log p(x_t | y) + \underbrace{\nabla_{x_t} \log p(y)}<em>{0} - \nabla</em>{x_t} \log p(x_t) \right) \
+&amp;\nabla_{x_t} \log p(x_t | y) \\
+&amp;= \nabla_{x_t} \log p(x_t) + \gamma \nabla_{x_t} \log p(y | x_t) \\
+&amp;= \nabla_{x_t} \log p(x_t) + \gamma \nabla_{x_t} \log \frac{p(x_t | y) p(y)}{p(x_t)} \\
+&amp;= \nabla_{x_t} \log p(x_t) + \gamma \left( \nabla_{x_t} \log p(x_t | y) + \underbrace{\nabla_{x_t} \log p(y)}_{0} - \nabla_{x_t} \log p(x_t) \right) \\
 &amp;= \nabla_{x_t} \log p(x_t) + \gamma (\nabla_{x_t} \log p(x_t | y) - \nabla_{x_t} \log p(x_t))
 \end{aligned}
 \tag{18.19}
 $$</p>
 <p>上面我们使用贝叶斯定理进行了式子的展开，最后得到了上面的式子。根据上面的式子，可以推导出无分类器指引。上式的意思是从点 $\nabla_{x_t} \log p(x_t)$ 出发，沿着 $\nabla_{x_t} \log p(x_t | y)$ 的方向前进了 $\gamma$ 倍的距离。下图是这个式子的示意图。</p>
-<p>1
+<pre><code class="language-text">1
 倍
 γ
-γ</p>
+γ
+</code></pre>
 <p>图 18.11 上面式子的可视化</p>
 <p>式子中的 $\nabla_{x_t} \log p(x_t)$ 和 $\nabla_{x_t} \log p(x_t | y)$ 分别表示无条件得分和条件得分。它们可以由以下两个神经网络进行推断。</p>
 <ul>
@@ -168,7 +170,7 @@ $$</p>
 <p>在提供文本的图像生成服务中，我们经常会用到一种名为反向提示词（negative prompt）的技术。反向提示词是一种指定不希望生成的文本的技术。在上面的公式的 $\varnothing$ 中插入反向提示词即可实现这一技术。</p>
 <h3 id="sec-2">18.5.2 无分类器指引的实现</h3>
 <p>下面我们通过修改节中的部分代码来实现无分类器指引。先来回忆一下前面已经实现的 UNetCond 类，然后在这个类中实现 forward() 方法，代码如下所示。</p>
-<pre><code class="language-python">class UNetCond(nn.Module):
+<p><pre><code class="language-python">class UNetCond(nn.Module):
     #...（省略）
     def forward(self, x, timesteps, labels=None):
         t = pos_encoding(timesteps, self.time_embed_dim)
@@ -177,9 +179,10 @@ $$</p>
             t += self.label_emb(labels)
         #...
 </code></pre>
+</p>
 <p>从上面的代码来看，只有指定了参数 labels，才会处理类标签。如果没有指定参数（当 labels=None 时），则不做任何处理。这相当于“无条件”的处理。</p>
 <p>无分类器指引的训练是在“无条件”和“有条件”两种情况下进行的条件扩散模型的训练。例如，我们可以以一定的比例进行“无条件”的训练，除此之外进行“有条件”的训练。基于这一点，我们可以按如下方式实现。</p>
-<pre><code class="language-python">for epoch in range(epochs):
+<p><pre><code class="language-python">for epoch in range(epochs):
     loss_sum = 0.0
     cnt = 0
 
@@ -189,7 +192,7 @@ $$</p>
         labels = labels.to(device)
         t = torch.randint(1, num_timesteps+1, (len(x),), device=device)
 
-        # 以10%的概率进行&quot;无条件&quot;的训练
+        # 以10%的概率进行"无条件"的训练
         if np.random.random() &lt; 0.1:
             labels = None
 
@@ -202,9 +205,10 @@ $$</p>
         loss_sum += loss.item()
         cnt += 1
 </code></pre>
+</p>
 <p>上面的代码以10%的概率进行了“无条件”的训练。对于“无条件”的情况，设置 labels=None。</p>
 <p>最后是 Diffuser 类进行去噪处理的代码。</p>
-<pre><code class="language-python">class Diffuser:
+<p><pre><code class="language-python">class Diffuser:
     #...（省略）
 
     def denoise(self, model, x, t, labels, gamma):
@@ -215,6 +219,7 @@ $$</p>
             eps = eps_uncond + gamma * (eps_cond - eps_uncond)
         #...
 </code></pre>
+</p>
 <p>参数 gamma 的值越大，就越应该重视条件部分。另外，这里实现的是如下数学式的代码。</p>
 <p>$$
 \varepsilon \approx \varepsilon_{\theta}(x_t, t, \varnothing) + \gamma (\varepsilon_{\theta}(x_t, t, y) - \varepsilon_{\theta}(x_t, t, \varnothing)) \tag{18.21}
@@ -222,7 +227,7 @@ $$</p>
 <p>经过以上修改之后，我们就完成了无分类器指引的实现。这里以 $\gamma = 3$（gamma=3.0）生成了数据。</p>
 <p>无分类器指引可以通过 $\gamma$ 来调整条件的重视程度。而且由于无需另外训练分类器，因此在资源和时间方面更为高效。</p>
 <p>完整代码如下：</p>
-<pre><code class="language-python">import math
+<p><pre><code class="language-python">import math
 import numpy as np
 import torch
 import torchvision
@@ -240,7 +245,7 @@ batch_size = 128
 num_timesteps = 1000
 epochs = 10
 lr = 1e-3
-device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def show_images(images, labels=None, rows=2, cols=10):
@@ -249,7 +254,7 @@ def show_images(images, labels=None, rows=2, cols=10):
     for r in range(rows):
         for c in range(cols):
             ax = fig.add_subplot(rows, cols, i + 1)
-            plt.imshow(images[i], cmap=&quot;gray&quot;)
+            plt.imshow(images[i], cmap="gray")
             if labels is not None:
                 ax.set_xlabel(labels[i].item())
             ax.get_xaxis().set_ticks([])
@@ -259,7 +264,7 @@ def show_images(images, labels=None, rows=2, cols=10):
     plt.show()
 
 
-def _pos_encoding(time_idx, output_dim, device=&quot;cpu&quot;):
+def _pos_encoding(time_idx, output_dim, device="cpu"):
     t, D = time_idx, output_dim
     v = torch.zeros(D, device=device)
 
@@ -271,7 +276,7 @@ def _pos_encoding(time_idx, output_dim, device=&quot;cpu&quot;):
     return v
 
 
-def pos_encoding(timesteps, output_dim, device=&quot;cpu&quot;):
+def pos_encoding(timesteps, output_dim, device="cpu"):
     batch_size = len(timesteps)
     device = timesteps.device
     v = torch.zeros(batch_size, output_dim, device=device)
@@ -318,7 +323,7 @@ class UNetCond(nn.Module):
         self.out = nn.Conv2d(64, in_ch, 1)
 
         self.maxpool = nn.MaxPool2d(2)
-        self.upsample = nn.Upsample(scale_factor=2, mode=&quot;bilinear&quot;)
+        self.upsample = nn.Upsample(scale_factor=2, mode="bilinear")
 
         if num_labels is not None:
             self.label_emb = nn.Embedding(num_labels, time_embed_dim)
@@ -347,7 +352,7 @@ class UNetCond(nn.Module):
 
 
 class Diffuser:
-    def __init__(self, num_timesteps=1000, beta_start=0.0001, beta_end=0.02, device=&quot;cpu&quot;):
+    def __init__(self, num_timesteps=1000, beta_start=0.0001, beta_end=0.02, device="cpu"):
         self.num_timesteps = num_timesteps
         self.device = device
         self.betas = torch.linspace(beta_start, beta_end, num_timesteps, device=device)
@@ -417,7 +422,7 @@ class Diffuser:
 
 
 preprocess = transforms.ToTensor()
-dataset = torchvision.datasets.MNIST(root=&quot;./data&quot;, download=True, transform=preprocess)
+dataset = torchvision.datasets.MNIST(root="./data", download=True, transform=preprocess)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 diffuser = Diffuser(num_timesteps, device=device)
@@ -456,18 +461,19 @@ for epoch in range(epochs):
 
     loss_avg = loss_sum / cnt
     losses.append(loss_avg)
-    print(f&quot;Epoch {epoch} | Loss: {loss_avg}&quot;)
+    print(f"Epoch {epoch} | Loss: {loss_avg}")
 
 # plot losses
 plt.plot(losses)
-plt.xlabel(&quot;Epoch&quot;)
-plt.ylabel(&quot;Loss&quot;)
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
 plt.show()
 
 # generate samples
 images, labels = diffuser.sample(model)
 show_images(images, labels)
 </code></pre>
+</p>
 
           <hr>
 

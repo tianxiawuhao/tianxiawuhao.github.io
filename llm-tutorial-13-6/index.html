@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">多模态</a>
                 <a href="/tutorial/" class="tag">Vision Transformer</a>
                 </span>
               <h1>13.6 Transformer 编码器</h1>
@@ -130,7 +130,7 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <p>Transformer 编码器</p>
-<pre><code class="language-python">class TransformerEncoder(nn.Module):
+<p><pre><code class="language-python">class TransformerEncoder(nn.Module):
     def __init__(self, d_model, n_heads, r_mlp=4):
         super().__init__()
         self.d_model = d_model
@@ -157,27 +157,31 @@
         out = out + self.mlp(self.ln2(out)) # 跳跃连接
         return out
 </code></pre>
+</p>
 <p>Transformer 编码器由两个子层组成：第一个子层执行多头注意力，第二个子层包含 MLP。多头注意力子层执行 token 之间的通信，而 MLP 子层允许 token 单独“思考”与它们通信的内容。</p>
 <p>层归一化是一种优化技术，可跨其特征独立归一化批处理中的每个输入。对于我们的模型，我们将在每个子层的开头通过层归一化模块传递我们的输入。</p>
-<pre><code class="language-python">self.ln1 = nn.LayerNorm(d_model)
+<p><pre><code class="language-python">self.ln1 = nn.LayerNorm(d_model)
 self.ln2 = nn.LayerNorm(d_model)
 </code></pre>
+</p>
 <p>MLP 将由两个线性层组成，中间有一个 GELU 层。使用 GELU 代替 RELU，因为它没有 RELU 在零点不可导的限制。</p>
-<pre><code class="language-python"># 编码器的MLP
+<p><pre><code class="language-python"># 编码器的MLP
 self.mlp = nn.Sequential(
     nn.Linear(width, width*r_mlp),
     nn.GELU(),
     nn.Linear(width*r_mlp, width)
 )
 </code></pre>
+</p>
 <p>在编码器的 forward 方法中，输入在执行多头注意力之前通过第一层归一化模块。通过执行多头注意力将原始输入添加到输出中，以创建残差连接。</p>
 <p>然后，在输入 MLP 之前，它会通过另一个层归一化模块。通过将 MLP 的输出添加到第一个残差连接的输出，创建另一个残差连接。</p>
 <p>残差连接用于通过创建一条路径来帮助防止梯度消失问题，以便梯度不受阻碍地反向传播回原始输入。</p>
-<pre><code class="language-python">def forward(self, x):
+<p><pre><code class="language-python">def forward(self, x):
     out = x + self.mha(self.ln1(x))
     out = out + self.mlp(self.ln2(out))
     return out
 </code></pre>
+</p>
 
           <hr>
 

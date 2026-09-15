@@ -109,7 +109,7 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">强化学习</a>
                 <a href="/tutorial/" class="tag">强化学习简介</a>
                 </span>
               <h1>4.3 倒立摆环境编程实践</h1>
@@ -129,14 +129,16 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}</style>
           <p>安装依赖</p>
-<pre><code class="language-shell">$ pip install gym==0.25.2
+<p><pre><code class="language-shell">$ pip install gym==0.25.2
 $ pip install numpy==1.26
 $ pip install pygame
 </code></pre>
+</p>
 <p>后续基于倒立摆环境的所有依赖如下：</p>
 <p>倒立摆环境需要的所有依赖 Python</p>
-<pre><code class="language-python">import gym
+<p><pre><code class="language-python">import gym
 import random
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -148,9 +150,11 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 </code></pre>
+</p>
 <p>然后我们来创建一个倒立摆环境。</p>
-<pre><code class="language-python">env = gym.make(&quot;CartPole-v0&quot;)
+<p><pre><code class="language-python">env = gym.make("CartPole-v0")
 </code></pre>
+</p>
 <p>这样就生成了倒立摆的环境。</p>
 <p>将推车向右或向左移动，以保持杆子的平衡。倒立摆的结束条件是杆子的平衡被打破（杆子超过一定的角度），或者推车的移动位置超出了某个范围。</p>
 <p>继续执行下面的代码</p>
@@ -163,18 +167,20 @@ from torch.distributions import Categorical
 </ul>
 <p>另外，我们可以通过 env.action_space 获得行动的维度（可采取的行动数）。它的输出是一个名为 Discrete(2) 的类实例。这意味着有两个候选行动。具体来说，0 对应的是向左移动推车的行动，1 对应的是向右移动推车的行动。下面实际地采取行动，向前推进一个时间步。</p>
 <p>执行1步动作</p>
-<pre><code class="language-python">action = 0 #或者1
+<p><pre><code class="language-python">action = 0 #或者1
 next_state, reward, done, info = env.step(action)
 print(next_state)
 </code></pre>
+</p>
 <p>代码通过 env.step(action) 采取行动。作为结果，我们得到了以下 4 个信息。执行 1 步动作后得到的信息：</p>
-<p>下一个状态 next_state: $S_1$
+<pre><code class="language-text">下一个状态 next_state: $S_1$
 奖励 reward: $R_0$
 是否结束的标志位 done
-附加信息 info</p>
+附加信息 info
+</code></pre>
 <p>reward是标量值（float）。这次的任务在保持平衡的时候总是会得到奖励1。info包含有助于调试的信息（如环境模型）。但在实现和评估强化学习的算法时，基本不会用到info。</p>
 <p>我们先来实现一个随机智能体。也就是这个智能体的策略非常简单，无论环境处于什么状态，我们都是从两个动作中随机采样一个动作。代码如下。</p>
-<pre><code class="language-python">state = env.reset() # 重置环境的状态
+<p><pre><code class="language-python">state = env.reset() # 重置环境的状态
 done = False # 游戏是否结束，初始值为False，也就是未结束
 episode_rewards = [] # 每回合奖励[R0, R1, ..., RT]
 total_reward = 0 # 带折扣因子的回报（总奖励）
@@ -184,7 +190,7 @@ gamma = 0.95 # 折扣因子γ
 # done=True时结束
 while not done:
     # 渲染画面，并保存帧
-    frames.append(env.render(mode=&quot;rgb_array&quot;))
+    frames.append(env.render(mode="rgb_array"))
 
     # 随机选择一个动作A_t，0：向左推，1：向右推
     action = random.choice([0, 1])
@@ -199,9 +205,10 @@ for r in episode_rewards[::-1]:
     # G_t = R_t + γG_{t+1}
     total_reward = r + gamma * total_reward
 
-print(&quot;total_reward:&quot;, total_reward)
+print("total_reward:", total_reward)
 env.close()
 </code></pre>
+</p>
 <p>动态规划思想</p>
 <p>回报（总奖励的逆序计算）</p>
 <p>从时间0开始的回报为 $G_0 = R_0 + \gamma R_1 + \gamma^2 R_2 + \gamma^3 R_3 = R_0 + \gamma G_1$
@@ -216,27 +223,28 @@ env.close()
 <p>前向过程：采样一条轨迹，得到每个时刻的即时奖励。
 反向过程：逆序计算回报。</p>
 <p>然后我们将创建一个函数show_animation来将倒立摆环境的每一帧保存成动画，后续就可以播放了。代码如下：</p>
-<pre><code class="language-python">def show_animation(imgs):
-    rc(&quot;animation&quot;, html=&quot;jshtml&quot;)
+<p><pre><code class="language-python">def show_animation(imgs):
+    rc("animation", html="jshtml")
     fig, ax = plt.subplots(1, 1, figsize=(5, 3))
     frames = []
-    text = ax.text(10, 20, &quot;&quot;, fontsize=12, color=&quot;black&quot;)
+    text = ax.text(10, 20, "", fontsize=12, color="black")
     for i, img in enumerate(imgs):
         frame = [ax.imshow(img, animated=True)]
-        frame.append(ax.text(10, 20, f&quot;Step: {i+1}&quot;, animated=True)) # Step表示
+        frame.append(ax.text(10, 20, f"Step: {i+1}", animated=True)) # Step表示
         frames.append(frame)
 
-    ax.axis(&quot;off&quot;)
+    ax.axis("off")
 
     ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
 
     # 保存动画
-    ani.save(&quot;cartpole.mp4&quot;, writer=&quot;ffmpeg&quot;)
-    ani.save(&quot;cartpole.gif&quot;, writer=&quot;pillow&quot;)
+    ani.save("cartpole.mp4", writer="ffmpeg")
+    ani.save("cartpole.gif", writer="pillow")
 
     plt.close(fig)
     return ani
 </code></pre>
+</p>
 <p>然后我们播放动画。</p>
 <p>由于我们使用的是随机策略，所以倒立摆游戏很快就结束了。</p>
 
