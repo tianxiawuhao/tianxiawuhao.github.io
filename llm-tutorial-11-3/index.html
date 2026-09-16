@@ -137,7 +137,7 @@
 </ol>
 <h3 id="sec-1">11.3.1 GPT2模型结构以及分词器</h3>
 <p>文件 <code>gpt_model.py</code> 中编写gpt2的模型结构。</p>
-<p><pre><code class="language-python">import torch
+<p><pre translate="no"><code class="language-python">import torch
 import torch.nn as nn
 
 class LayerNorm(nn.Module):
@@ -299,7 +299,7 @@ class GPTModel(nn.Module):
 </code></pre>
 </p>
 <p>分词器文件 <code>gpt_tokenizer.py</code></p>
-<p><pre><code class="language-python">from pathlib import Path
+<p><pre translate="no"><code class="language-python">from pathlib import Path
 
 from tokenizers import BertWordPieceTokenizer
 
@@ -333,7 +333,7 @@ class ChineseGPT2Tokenizer:
 <h3 id="sec-2">11.3.2 加载预训练权重</h3>
 <p>我们从网上下载 <code>gpt2-chinese-cluecorpusmall</code> 权重之后，需要用我们自己定义的模型结构来加载预训练的权重。</p>
 <p>文件 <code>gpt_load_weight.py</code> 如下：</p>
-<p><pre><code class="language-python">from gpt_model import GPTModel, generate, token_ids_to_text, text_to_token_ids
+<p><pre translate="no"><code class="language-python">from gpt_model import GPTModel, generate, token_ids_to_text, text_to_token_ids
 import numpy as np
 import torch
 from gpt_tokenizer import ChineseGPT2Tokenizer
@@ -473,7 +473,7 @@ if __name__ == "__main__":
 <p>由于我们使用的文本，既有正向情感的文本，也有负向情感的文本，所以训练出来的模型，在给定提示词（例如：“这本书”）时，可能写出正向情感的评论也可能写出负向情感的评论。</p>
 <p><strong>预训练模型</strong></p>
 <p>我们使用的底座模型是中文版 gpt2：“gpt2-chinese-cluecorpussmall”。</p>
-<p><pre><code class="language-python">import os
+<p><pre translate="no"><code class="language-python">import os
 import shutil
 from pathlib import Path
 from pprint import pprint
@@ -633,7 +633,7 @@ with torch.no_grad():
 </p>
 <p>我们的评论在输入奖励模型之前会先在末尾添加一个 reward_token，作为标记。作用和 Bert 用来训练分类模型时添加的 CLS_TOKEN 是一样的。</p>
 <p>我们将评论输入 gpt2 模型，然后提取 gpt2 输出的最后一层隐藏层（last_hidden_state），并送入一个我们自己定义的线性层（reward_head），然后取输出的最后一个元素作为评分。</p>
-<p><pre><code class="language-python">import os
+<p><pre translate="no"><code class="language-python">import os
 from pathlib import Path
 
 import torch
@@ -812,14 +812,14 @@ print(confusion_matrix(all_labels, all_predictions))
 </code></pre>
 </p>
 <p>结果的格式如下：</p>
-<p><pre><code class="language-python">混淆矩阵:
+<p><pre translate="no"><code class="language-python">混淆矩阵:
 [[364, 60], # 第一行：真实标签为0的情况：364个预测正确，60个预测错误
  [ 31, 412]] # 第二行：真实标签为1的情况：31个预测错误，412个预测正确
 </code></pre>
 </p>
 <h3 id="sec-5">11.3.5 对gpt2-sft进行PPO微调</h3>
 <h4 id="sec-6">11.3.5.1 导入依赖</h4>
-<p><pre><code class="language-python">from transformers import DataCollatorWithPadding, AutoModelForCausalLM, AutoTokenizer
+<p><pre translate="no"><code class="language-python">from transformers import DataCollatorWithPadding, AutoModelForCausalLM, AutoTokenizer
 from copy import deepcopy
 from torch.utils.data import DataLoader
 import random
@@ -841,7 +841,7 @@ tokenizer.pad_token = tokenizer.eos_token
 <p>截取前几个字作为提示词</p>
 <p>东西太小了，光有数量没有质量！很失望！</p>
 <p>为PPO准备提示词 Python</p>
-<p><pre><code class="language-python">ds = load_dataset("csv", data_files="online_shopping_10_cats.csv")
+<p><pre translate="no"><code class="language-python">ds = load_dataset("csv", data_files="online_shopping_10_cats.csv")
 ds_train = ds["train"]
 
 ds_train = ds_train.filter(lambda x: x["review"] != None and len(
@@ -892,7 +892,7 @@ train_dataloader = DataLoader(
 <p>在倒立摆环境中，我们的Actor是PolicyNet，Critic是ValueNet。</p>
 <p>在InstructGPT中，演员模型和价值模型合并成了一个模型ActorCriticModel。这样actor和critic可以共享gpt2-sft模型的权重。</p>
 <p>演员评论家模型 Python</p>
-<p><pre><code class="language-python">class ActorCriticModel(nn.Module):
+<p><pre translate="no"><code class="language-python">class ActorCriticModel(nn.Module):
     """GPT2模型+价值头"""
     def __init__(self, model_path):
         super().__init__()
@@ -927,7 +927,7 @@ train_dataloader = DataLoader(
 </p>
 <h4 id="sec-9">11.3.5.4 加载模型</h4>
 <p>将需要的模型都加载到显存 Python</p>
-<p><pre><code class="language-python">device = torch.device("cuda")
+<p><pre translate="no"><code class="language-python">device = torch.device("cuda")
 
 # 将奖励模型加载
 reward_model = RewardModel(model_path)
@@ -949,7 +949,7 @@ REWARD_TOKEN_ID = tokenizer.eos_token_id
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-11-5.png" alt="图 11.5 提示词为“这本书”，补全为“真好看”的 $R_t$ 的计算" loading="lazy"><figcaption>图 11.5 提示词为“这本书”，补全为“真好看”的 $R_t$ 的计算</figcaption></figure>
 </p>
 <p>下面的函数 compute_rewards 在计算输出的每个token的 $R_t$ 的同时，顺便计算了每个token的价值，也就是 $V(S_t)$。</p>
-<p><pre><code class="language-python">def compute_rewards(
+<p><pre translate="no"><code class="language-python">def compute_rewards(
     input_data, # 输入数据（提示词+补全）
     query_tensors, # 提示词张量
     response_tensors, # 补全的张量
@@ -1008,7 +1008,7 @@ REWARD_TOKEN_ID = tokenizer.eos_token_id
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-11-6.png" alt="图 11.6 去掉最后一个的价值" loading="lazy"><figcaption>图 11.6 去掉最后一个的价值</figcaption></figure>
 </p>
 <h4 id="sec-11">11.3.5.6 广义优势估计（GAE）的计算</h4>
-<p><pre><code class="language-python">def masked_mean(values, mask):
+<p><pre translate="no"><code class="language-python">def masked_mean(values, mask):
     # 计算带掩码的平均值
     return (values * mask).sum() / mask.sum()
 
@@ -1052,7 +1052,7 @@ def compute_advantage(rewards, values, masks):
 </code></pre>
 </p>
 <h4 id="sec-12">11.3.5.7 损失的计算</h4>
-<p><pre><code class="language-python">def compute_loss(
+<p><pre translate="no"><code class="language-python">def compute_loss(
     old_logprobs, # 旧策略输出的概率log π_θ_old(a_t|s_t)
     logprobs, # 正在微调的模型输出的对数概率log π_θ(a_t|s_t)
     vpreds, # 价值 V(S_t)
@@ -1085,7 +1085,7 @@ def compute_advantage(rewards, values, masks):
 <li>使用32条轨迹更新32次策略模型 $\pi_{\theta}$。更新后的策略模型作为下一轮ppo微调的 $\pi_{\theta_{\mathrm{old}}}$。</li>
 </ul>
 <p>使用旧策略采集的轨迹更新4次策略 Python</p>
-<p><pre><code class="language-python">data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+<p><pre translate="no"><code class="language-python">data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
 learning_rate = 1e-5
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -1136,7 +1136,7 @@ def ppo_update(input_data, old_logprobs, masks, advantages, gae_targets):
 </code></pre>
 </p>
 <p>主训练循环代码如下</p>
-<p><pre><code class="language-python">count = 0
+<p><pre translate="no"><code class="language-python">count = 0
 for epoch in range(num_epochs):
     for batch in train_dataloader:
         if count == 1:
@@ -1224,7 +1224,7 @@ for epoch in range(num_epochs):
 <li>对比打分情况</li>
 </ul>
 <p>对比微调前后的模型的补全的打分情况 Python</p>
-<p><pre><code class="language-python">train_gen_lengths = [0] * len(tokenized_dataset_train)
+<p><pre translate="no"><code class="language-python">train_gen_lengths = [0] * len(tokenized_dataset_train)
 for i in range(len(tokenized_dataset_train)):
     train_gen_lengths[i] = random.choice(list(range(
         output_min_length,

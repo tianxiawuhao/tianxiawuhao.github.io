@@ -130,11 +130,17 @@
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p>我们已经使用神经网络实现了 $\boldsymbol{\varepsilon}_{\theta}(x_t, t)$。$\boldsymbol{\varepsilon}_{\theta}(x_t, t)$ 的参数 $t$ 是整数，可以通过正弦位置编码变换为向量。而新添加的条件 $y$ 是标签，也是整数。这个整数 $y$ 可以通过嵌入层（embedding layer）变换为向量。具体来说，$y$ 被变换成向量，然后与变换后的 $t$ 向量相加。</p>
+<pre translate="no"><code class="language-text">t
+y
+嵌入层
++
+v
+</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-18-4.png" alt="图 18.4 在扩散模型中添加嵌入层" loading="lazy"><figcaption>图 18.4 在扩散模型中添加嵌入层</figcaption></figure>
 <p><strong>提示</strong></p>
 <p>嵌入层的初始值被设置为随机值，然后通过训练进行优化。这样就可以训练得到与每个标签相对应的匹配任务的向量。而由于与时刻 $t$ 相关的特定任务的训练要素很少，因此我们使用了一种称为正弦位置编码的固定向量变换的方法。</p>
 <p>以下是代码示例。这里我们在上一章中实现的 UNet 类中添加了名为 UNetCond 类的代码，类名中的 Cond 是 Conditional（条件）的缩写。</p>
-<p><pre><code class="language-python">class UNetCond(nn.Module):
+<p><pre translate="no"><code class="language-python">class UNetCond(nn.Module):
     def __init__(self, in_ch=1, time_embed_dim=100, num_labels=None):
         super().__init__()
         self.time_embed_dim = time_embed_dim
@@ -179,7 +185,7 @@
 </p>
 <p>代码的主要修改有两处。在代码❶处，我们准备了处理标签的嵌入层（nn.Embedding）。具体来说，就是通过 <code>nn.Embedding(num_labels, time_embed_dim)</code> 将共计 num_labels 个不同整数变换为 time_embed_dim 维的向量。在代码❷处，通过 nn.Embedding 层处理标签，然后再加到变换后的时间数据的向量中。</p>
 <p>接下来是 Diffuser 类。对于 Diffuser 类，修改生成数据的方法。下面只展示了修改部分的代码。</p>
-<p><pre><code class="language-python">class Diffuser:
+<p><pre translate="no"><code class="language-python">class Diffuser:
     def denoise(self, model, x, t, labels):
         # ...（省略）
         with torch.no_grad():
@@ -200,7 +206,7 @@
 </code></pre>
 </p>
 <p>修改的部分还向模型提供了标签。具体来说，标签是在生成数据和去噪过程中提供的。最后是训练的代码。</p>
-<p><pre><code class="language-python">diffuser = Diffuser(num_timesteps, device=device)
+<p><pre translate="no"><code class="language-python">diffuser = Diffuser(num_timesteps, device=device)
 model = UNetCond(num_labels=10) ❶
 model.to(device)
 optimizer = Adam(model.parameters(), lr=lr)
@@ -232,7 +238,7 @@ for epoch in range(epochs):
 ❸ <code>model(x_noisy, t, labels)</code> 向模型提供 labels 进行训练。</p>
 <p>以上就是条件扩散模型的实现。现在运行代码。经过10轮训练后，最终生成了下图所示的图像。虽然仍有改进的余地，但生成的图像是符合条件的。在下一节中，我们将探讨进一步改进这个条件扩散模型的方法。</p>
 <p>完整代码如下：</p>
-<p><pre><code class="language-python">import math
+<p><pre translate="no"><code class="language-python">import math
 import torch
 import torchvision
 import matplotlib.pyplot as plt

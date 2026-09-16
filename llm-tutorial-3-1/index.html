@@ -130,7 +130,7 @@
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p>创建一个文件 gpt_model.py。我们首先导入需要的依赖。</p>
-<p><pre><code class="language-python">import tiktoken # 分词器库
+<p><pre translate="no"><code class="language-python">import tiktoken # 分词器库
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -140,7 +140,7 @@ from torch.utils.data import Dataset, DataLoader
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-3-1.png" alt="图3.1 分词" loading="lazy"><figcaption>图3.1 分词</figcaption></figure>
 </p>
 <p>接下来我们构建数据集。</p>
-<p><pre><code class="language-python">class GPTDatasetV1(Dataset):
+<p><pre translate="no"><code class="language-python">class GPTDatasetV1(Dataset):
     def __init__(self, txt, tokenizer, max_length, stride):
         self.input_ids = []
         self.target_ids = []
@@ -163,7 +163,7 @@ from torch.utils.data import Dataset, DataLoader
 </code></pre>
 </p>
 <p>然后我们封装一个工具函数，用来创建训练数据集。</p>
-<p><pre><code class="language-python">def create_dataLoader_v1(
+<p><pre translate="no"><code class="language-python">def create_dataLoader_v1(
     txt,
     batch_size=4,
     max_length=256,
@@ -191,7 +191,7 @@ from torch.utils.data import Dataset, DataLoader
 </p>
 <h3 id="sec-2">3.1.2 模型结构</h3>
 <p>接下来我们自顶向下的来定义模型结构。</p>
-<p><pre><code class="language-python">class GPTModel(nn.Module):
+<p><pre translate="no"><code class="language-python">class GPTModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
@@ -227,7 +227,7 @@ from torch.utils.data import Dataset, DataLoader
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-3-4.png" alt="图3.4 一条数据和一批数据的词嵌入示例" loading="lazy"><figcaption>图3.4 一条数据和一批数据的词嵌入示例</figcaption></figure>
 </p>
 <p>在PyTorch中，嵌入层实现的功能与执行矩阵乘法的线性层相同；我们使用嵌入层主要是出于计算效率的考虑。</p>
-<p><pre><code class="language-python"># 假设我们有以下3个训练样本。
+<p><pre translate="no"><code class="language-python"># 假设我们有以下3个训练样本。
 # 它们可能代表LLM上下文中的token ID
 idx = torch.tensor([2, 3, 1])
 
@@ -242,7 +242,7 @@ out_dim = 5
 </code></pre>
 </p>
 <p>实现一个简单的嵌入层</p>
-<p><pre><code class="language-python">torch.manual_seed(123)
+<p><pre translate="no"><code class="language-python">torch.manual_seed(123)
 embedding = torch.nn.Embedding(num_idx, out_dim)
 print(embedding.weight) # 查看嵌入权重
 # 获取训练示例 ID 为 1 的向量表示
@@ -256,22 +256,22 @@ print(embedding(idx))
 </p>
 <p>现在我们用独热编码和 nn.Linear 实现和上面的嵌入层一样的功能。</p>
 <p>首先将 token ID 转换为独热编码</p>
-<p><pre><code class="language-python">onehot = torch.nn.functional.one_hot(idx)
+<p><pre translate="no"><code class="language-python">onehot = torch.nn.functional.one_hot(idx)
 print(onehot)
 </code></pre>
 </p>
 <p>接下来，我们初始化一个线性变换层，它会执行一个矩阵乘法：$XW^T$</p>
-<p><pre><code class="language-python">torch.manual_seed(123)
+<p><pre translate="no"><code class="language-python">torch.manual_seed(123)
 linear = torch.nn.Linear(num_idx, out_dim, bias=False)
 print(linear.weight)
 </code></pre>
 </p>
 <p>请注意，PyTorch 中的线性层同样是用小的随机权重初始化的；为了与上面的 Embedding 层直接比较，我们必须使用相同的小随机权重，这就是我们在此处重新赋值它们的原因：</p>
-<p><pre><code class="language-python">linear.weight = torch.nn.Parameter(embedding.weight.T)
+<p><pre translate="no"><code class="language-python">linear.weight = torch.nn.Parameter(embedding.weight.T)
 </code></pre>
 </p>
 <p>现在我们可以将线性层应用于输入数据的独热编码表示</p>
-<p><pre><code class="language-python">print(linear(onehot.float()))
+<p><pre translate="no"><code class="language-python">print(linear(onehot.float()))
 print(embedding(idx))
 </code></pre>
 </p>
@@ -281,18 +281,18 @@ print(embedding(idx))
 <p>这种在独热编码上使用矩阵乘法的做法等价于嵌入层查找操作，但当处理大型嵌入矩阵时会效率低下，因为存在大量与零相乘的无效计算。</p>
 <h4 id="sec-4">3.1.2.2 位置编码</h4>
 <p>GPT-2 使用的是可学习位置编码。</p>
-<p><pre><code class="language-python">self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
+<p><pre translate="no"><code class="language-python">self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
 </code></pre>
 </p>
 <p>为 token id 的位置构建一个嵌入查找表，例如如果我们的 context_length 为 256 的话。那么查找表如下：</p>
 <p><strong>表3.1 上下文长度为256的位置嵌入查找表</strong></p>
 <p>所以</p>
-<p><pre><code class="language-python">pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
+<p><pre translate="no"><code class="language-python">pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
 </code></pre>
 </p>
 <p>为[0，1，...，seq_len-1]中的每个位置分配了一个768元素的向量，作为对应的位置编码。也就是将序列的每个位置编号组成的序列变换成形状（batch_size，seq_len，emb_dim）。</p>
 <p>然后我们就会将token的词嵌入向量和token所在位置的位置嵌入向量直接相加。</p>
-<p><pre><code class="language-python">x = tok_embeds + pos_embeds
+<p><pre translate="no"><code class="language-python">x = tok_embeds + pos_embeds
 </code></pre>
 </p>
 <p>初看起来，在token向量上面添加位置信息会破坏输入向量，使得网络的任务变得更加难以完成。不过，从两个随机选择的不相关向量在高维空间中几乎是正交的这一现象中，我们可以了解到这一方法为什么能够很好的发挥作用，这表明网络能够相对独立的处理token的身份信息和位置信息。另外，请注意，由于Transformer中的层与层之间都有残差连接，因此位置信息从一层转到下一层的过程中不会丢失。</p>
@@ -308,11 +308,11 @@ print(embedding(idx))
 <p>所以 x = tok_embeds + pos_embeds 是一样的！但很明显，两个“我”指代的人名是不一样的，所以这两个语义在GPT-2中如何进行区分呢？那就是注意力机制，或者说Transformer模块了！</p>
 <h4 id="sec-5">3.1.2.3 仅解码器的Transformer</h4>
 <p>在模型的初始化时，我们堆叠了很多层的TransformerBlock。</p>
-<p><pre><code class="language-python">self.trf_blocks = nn.Sequential(*[TransformerBlock(cfg) for _ in range(cfg["n_layers"])])
+<p><pre translate="no"><code class="language-python">self.trf_blocks = nn.Sequential(*[TransformerBlock(cfg) for _ in range(cfg["n_layers"])])
 </code></pre>
 </p>
 <p>然后在前向传播的过程中，</p>
-<p><pre><code class="language-python">x = self.trf_blocks(x)
+<p><pre translate="no"><code class="language-python">x = self.trf_blocks(x)
 </code></pre>
 </p>
 <p>堆叠很多层TransformerBlock，然后顺序执行。这里也可以看出TransformerBlock的输入和输出的形状必须一致！否则无法堆叠！</p>
@@ -320,7 +320,7 @@ print(embedding(idx))
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-3-5.png" alt="图3.5 进入self.trf_blocks的数据" loading="lazy"><figcaption>图3.5 进入self.trf_blocks的数据</figcaption></figure>
 </p>
 <p>接下来我们编写TransformerBlock的代码</p>
-<p><pre><code class="language-python">class TransformerBlock(nn.Module):
+<p><pre translate="no"><code class="language-python">class TransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.att = MultiHeadAttention(
@@ -364,7 +364,7 @@ print(embedding(idx))
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-3-8.png" alt="图3.8 层归一化" loading="lazy"><figcaption>图3.8 层归一化</figcaption></figure>
 </p>
 <p>针对这一行也就是嵌入向量进行归一化，这样不受批次中数据多少的影响有助于训练稳定性</p>
-<p><pre><code class="language-python">class LayerNorm(nn.Module):
+<p><pre translate="no"><code class="language-python">class LayerNorm(nn.Module):
     def __init__(self, emb_dim):
         super().__init__()
         self.eps = 1e-5
@@ -386,7 +386,7 @@ print(embedding(idx))
 </p>
 <p>LayerNorm中有两个参数 $\gamma$ 和 $\beta$ 会在训练时更新。</p>
 <h4 id="sec-7">3.1.2.5 多头注意力</h4>
-<p><pre><code class="language-python">class MultiHeadAttention(nn.Module):
+<p><pre translate="no"><code class="language-python">class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
         assert d_out % num_heads == 0, "d_out 必须能被 n_heads 整除"
@@ -489,12 +489,12 @@ FFN子层：对每个token的表示单独进行非线性变换</p>
 <p>当然，这不是说“知识只存在FFN中”，但FFN确实是参数量很大的部分，往往承载了大量可学习模式。</p>
 <p>Attention把信息聚合过来之后，需要有一个模块对聚合后的信息做“解释”。</p>
 <p>例如句子：</p>
-<p><pre><code>The bank is near the river.
+<p><pre translate="no"><code>The bank is near the river.
 </code></pre>
 </p>
 <p>Attention 可以让 bank 关注 river，但 FFN 可以进一步把 bank 的表示推向“河岸”这个语义区域。</p>
 <p>另一个句子：</p>
-<p><pre><code>I deposited money in the bank.
+<p><pre translate="no"><code>I deposited money in the bank.
 </code></pre>
 </p>
 <p>Attention 可以让 bank 关注 money，FFN 再把它加工成“银行机构”的语义表示。</p>
@@ -512,7 +512,7 @@ FFN子层：对每个token的表示单独进行非线性变换</p>
 <p>这也是为什么它对模型能力非常关键。</p>
 <p>Transformer block 中的 Feed Forward Network 的作用是：</p>
 <p>对每个 token 的上下文表示进行独立的非线性变换，提升模型表达能力、重组特征，并承担大量模式/知识存储功能。</p>
-<p><pre><code class="language-python">class GELU(nn.Module):
+<p><pre translate="no"><code class="language-python">class GELU(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -536,7 +536,7 @@ class FeedForward(nn.Module):
 </code></pre>
 </p>
 <h4 id="sec-9">3.1.2.7 简单的推理代码</h4>
-<p><pre><code class="language-python">def generate_text_simple(model, idx, max_new_tokens, context_size):
+<p><pre translate="no"><code class="language-python">def generate_text_simple(model, idx, max_new_tokens, context_size):
     # idx的形状为(B, T)
     for _ in range(max_new_tokens):
         # 将当前上下文裁剪到我们支持的上下文长度
@@ -562,7 +562,7 @@ class FeedForward(nn.Module):
 </code></pre>
 </p>
 <p>main函数如下：</p>
-<p><pre><code class="language-python">if __name__ == "__main__":
+<p><pre translate="no"><code class="language-python">if __name__ == "__main__":
 
     GPT_CONFIG_124M = {
         "vocab_size": 50257, # 词汇表大小

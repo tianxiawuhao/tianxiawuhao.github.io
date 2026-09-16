@@ -129,7 +129,7 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
-          <p><pre><code class="language-python">class CLIP(nn.Module):
+          <p><pre translate="no"><code class="language-python">class CLIP(nn.Module):
     def __init__(
         self,
         emb_dim, # 经过可学习投影后的嵌入维度
@@ -199,36 +199,36 @@
 </p>
 <p>当给定一批图像和标题时，CLIP 应该告诉我们哪些标题与哪些图像搭配。它通过一起训练文本编码器和图像编码器来最大化应该在一起的对的成对余弦相似度分数，并最小化不应该在一起的对来做到这一点。</p>
 <p>为此，我们首先需要从图像和文本编码器中获取特征的嵌入。</p>
-<p><pre><code class="language-python">def forward(self, image, text, mask=None):
+<p><pre translate="no"><code class="language-python">def forward(self, image, text, mask=None):
     I_e = self.image_encoder(image)
     T_e = self.text_encoder(text, mask=mask)
 </code></pre>
 </p>
 <p>使用嵌入的特征，我们可以通过使用嵌入的图像特征和嵌入文本特征的转置版本之间的点积来计算缩放的成对余弦相似度。余弦相似度应沿图中正确的图像和文本配对在一起的对角线最大化。</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-14-4.png" alt="图 14.4 余弦相似度的计算" loading="lazy"><figcaption>图 14.4 余弦相似度的计算</figcaption></figure>
-<p><pre><code class="language-python">logits = (I_e @ T_e.transpose(-2, -1)) * torch.exp(self.temperature)
+<p><pre translate="no"><code class="language-python">logits = (I_e @ T_e.transpose(-2, -1)) * torch.exp(self.temperature)
 </code></pre>
 </p>
 <p>这在 I_e 和 T_e 分别包含 N 个批次时工作，从而产生上图所示的矩阵。为了最大化相关图像之间的余弦相似度，CLIP 使用对称/对比损失。我们可以通过首先创建与批次中的每条数据相对应的标签来计算此损失。</p>
-<p><pre><code class="language-python"># 对称损失函数
+<p><pre translate="no"><code class="language-python"># 对称损失函数
 labels = torch.arange(logits.shape[0]).to(self.device)
 </code></pre>
 </p>
 <p>然后，我们计算沿 logit 行的交叉熵损失，以获得图像的损失。</p>
-<p><pre><code class="language-python">loss_i = nn.functional.cross_entropy(logits.transpose(-2, -1), labels)
+<p><pre translate="no"><code class="language-python">loss_i = nn.functional.cross_entropy(logits.transpose(-2, -1), labels)
 </code></pre>
 </p>
 <p>文本的损失是通过计算沿列的交叉熵损失来计算的。</p>
-<p><pre><code class="language-python">loss_t = nn.functional.cross_entropy(logits, labels)
+<p><pre translate="no"><code class="language-python">loss_t = nn.functional.cross_entropy(logits, labels)
 </code></pre>
 </p>
 <p>我们通过计算图像损失和文本损失之间的平均值来获得最终损失。</p>
-<p><pre><code class="language-python">loss = (loss_i + loss_t) / 2
+<p><pre translate="no"><code class="language-python">loss = (loss_i + loss_t) / 2
 return loss
 </code></pre>
 </p>
 <h3 id="sec-1">14.3.1 数据</h3>
-<p><pre><code class="language-python">class MNIST(Dataset):
+<p><pre translate="no"><code class="language-python">class MNIST(Dataset):
     def __init__(self, train=True):
         self.dataset = load_dataset("./../datasets/clip-mnist/")
         self.transform = T.ToTensor()
@@ -268,32 +268,32 @@ return loss
 </code></pre>
 </p>
 <p>在本教程中，我们将使用 MNIST 数据集。我们选择这个数据集是因为它相当小并且保持训练时间合理。</p>
-<p><pre><code class="language-python">self.dataset = load_dataset("clip-mnist")
+<p><pre translate="no"><code class="language-python">self.dataset = load_dataset("clip-mnist")
 </code></pre>
 </p>
 <p>对于数据集中的每个条目，我们将需要3样东西：图像、文本和文本掩码。</p>
 <p>对于图像，我们唯一需要进行的更改是将图像转换为张量。</p>
-<p><pre><code class="language-python">img = self.dataset[self.split][i]["image"]
+<p><pre translate="no"><code class="language-python">img = self.dataset[self.split][i]["image"]
 img = self.transform(img)
 </code></pre>
 </p>
 <p>对于标题，我们需要将其传递给我们创建的分词器，以获取 token 表示以及 token 的掩码。</p>
-<p><pre><code class="language-python">cap, mask = tokenizer(self.captions[self.dataset[self.split][i]["label"]])
+<p><pre translate="no"><code class="language-python">cap, mask = tokenizer(self.captions[self.dataset[self.split][i]["label"]])
 </code></pre>
 </p>
 <p>我们从分词器获得的掩码是大小为 max_seq_length 的1维张量。在文本编码器中，掩码将应用于形状为 (max_seq_length, max_seq_length) 的注意力分数。因此，我们需要扩展掩码，以便将其应用于注意力分数的每一行。</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-14-5.png" alt="图 14.5 复制掩码" loading="lazy"><figcaption>图 14.5 复制掩码</figcaption></figure>
-<p><pre><code class="language-python">mask = mask.repeat(len(mask), 1)
+<p><pre translate="no"><code class="language-python">mask = mask.repeat(len(mask), 1)
 </code></pre>
 </p>
 <p>图像、标题和掩码作为字典保存在数据集中。</p>
-<p><pre><code class="language-python">return {"image": img, "caption": cap, "mask": mask}
+<p><pre translate="no"><code class="language-python">return {"image": img, "caption": cap, "mask": mask}
 </code></pre>
 </p>
 <p><strong>不要和因果注意力混淆！</strong></p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-14-6.png" alt="图 14.6 因果注意力分数的掩码" loading="lazy"><figcaption>图 14.6 因果注意力分数的掩码</figcaption></figure>
 <p>创建 [context_length, context_length] 的上三角矩阵。</p>
-<p><pre><code class="language-python">self.register_buffer(
+<p><pre translate="no"><code class="language-python">self.register_buffer(
     'mask',
     torch.triu(torch.ones(
         context_length,
@@ -302,14 +302,14 @@ img = self.transform(img)
 </code></pre>
 </p>
 <p>将注意力分数的上三角置为 <code>-torch.inf</code>，下三角保留。得到注意力分数的下三角矩阵。</p>
-<p><pre><code class="language-python">attention_score.masked_fill_(
+<p><pre translate="no"><code class="language-python">attention_score.masked_fill_(
     self.mask[:seq_len, :seq_len].bool(),
     -torch.inf
 )
 </code></pre>
 </p>
 <h3 id="sec-2">14.3.2 训练参数</h3>
-<p><pre><code class="language-python">emb_dim = 32 # 文本编码器和图像编码器输出的张量的维度
+<p><pre translate="no"><code class="language-python">emb_dim = 32 # 文本编码器和图像编码器输出的张量的维度
 vit_width = 9 # 图像编码器的嵌入的宽度
 img_size = (28,28)
 patch_size = (14,14)
@@ -327,7 +327,7 @@ batch_size = 128
 </code></pre>
 </p>
 <h3 id="sec-3">14.3.3 加载数据集</h3>
-<p><pre><code class="language-python">train_set = MNIST(train=True)
+<p><pre translate="no"><code class="language-python">train_set = MNIST(train=True)
 test_set = MNIST(train=False)
 
 train_loader = DataLoader(train_set, shuffle=True, batch_size=batch_size)
@@ -335,7 +335,7 @@ test_loader = DataLoader(test_set, shuffle=False, batch_size=batch_size)
 </code></pre>
 </p>
 <h3 id="sec-4">14.3.4 训练模型</h3>
-<p><pre><code class="language-python">device = torch.device("cuda")
+<p><pre translate="no"><code class="language-python">device = torch.device("cuda")
 
 model = CLIP(
     emb_dim,
@@ -375,7 +375,7 @@ for epoch in range(epochs):
 </code></pre>
 </p>
 <h3 id="sec-5">14.3.5 评估模型</h3>
-<p><pre><code class="language-python"># 加载最好的模型
+<p><pre translate="no"><code class="language-python"># 加载最好的模型
 model = CLIP(
     emb_dim,
     vit_width,
@@ -441,7 +441,7 @@ print(f'\n预测准确率: {100 * correct // total} %')
 <p>我们通过获取模型训练的标题并将其与实际标题进行比较来测试模型。在训练时，我们使用了相同的标题模板（&quot;A image of a(n) {class}&quot;），因此这个测试阶段与任何其他图像分类器几乎相同。</p>
 <p>我们实现了大约 85% 的模型准确率。</p>
 <h3 id="sec-6">14.3.6 零样本分类</h3>
-<p><pre><code class="language-python"># 加载模型
+<p><pre translate="no"><code class="language-python"># 加载模型
 model = CLIP(
     emb_dim,
     vit_width,

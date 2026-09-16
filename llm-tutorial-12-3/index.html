@@ -146,7 +146,7 @@
 </ul>
 <p>权重应该反映数据集的复杂性——PubMedQA 的曝光度增加了 3 倍，以处理其细微差别。我们这里对数据集进行了打乱。由于 PubMedQA 样本量增加了 3 倍，因此将这些样本展示给模型的几率也增加了 3 倍。</p>
 <p>模型在训练过程中的答案</p>
-<p><pre><code>Prompt（提示）：
+<p><pre translate="no"><code>Prompt（提示）：
 
 在以下科学背景下：
 
@@ -171,7 +171,7 @@ yes
 </code></pre>
 </p>
 <p>TRL 代码如下：</p>
-<p><pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+<p><pre translate="no"><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_dataset, Dataset, interleave_datasets, concatenate_datasets
 import re
@@ -467,7 +467,7 @@ schema 匹配度涨了，只是模型学会了“看到这种问题就用这几�
 训练跑起来了，execution reward 从 0 开始涨，一切看起来很美好。
 然后，在训练到 22% 的时候，整个 8 卡训练突然挂了。
 查日志，看到这行：
-<pre><code>WorkNCCL(SeqNum=7034, OpType=_ALLGATHER_BASE)
+<pre translate="no"><code>WorkNCCL(SeqNum=7034, OpType=_ALLGATHER_BASE)
 ran for 1800063ms before timing out
 </code></pre>
 
@@ -479,7 +479,7 @@ DDP 训练的致命弱点：一个 rank 卡住 = 全部卡住。
 第一次用 <code>signal.alarm(30)</code> 设超时——失败。SIGALRM 只能发给主线程，DDP 的 worker 线程收不到。
 第二次用 <code>threading.Timer</code> ——失败。SQLite 的连接不是线程安全的，跨线程关闭连接会 segfault。
 第三次用 <code>ThreadPoolExecutor</code>：把 SQL 执行扔到独立线程池，用 <code>.result(timeout=30)</code> 等结果。超时就放弃，返回 reward=0。终于稳了。</p>
-<p><pre><code class="language-python">executor = ThreadPoolExecutor(max_workers=1)
+<p><pre translate="no"><code class="language-python">executor = ThreadPoolExecutor(max_workers=1)
 try:
     result = executor.submit(run_sql, db, sql).result(timeout=30)
 except TimeoutError:
@@ -556,7 +556,7 @@ REINFORCE++ 走另一个极端，特别保守。KL 稳如老狗，但 reward 也
 <p><strong>三、NGRPO 突破</strong></p>
 <p>核心问题：所有生成的 reward 相同时，advantage = 0，模型无法学习。
 受 NGRPO 论文启发，我们添加虚拟满分样本：
-<pre><code class="language-python">rewards = [0.8, 0.8, 0.8, 0.8]
+<pre translate="no"><code class="language-python">rewards = [0.8, 0.8, 0.8, 0.8]
 augmented = rewards + [1.0] # 虚拟满分样本
 mean = sum(augmented) / len(augmented) # 0.84
 std = sqrt(variance(augmented)) # 0.08
@@ -577,7 +577,7 @@ advantage = (r - mean) / std # 非零！
 <p>SFT 实验中观察到奇怪现象：reasoning 变好但 tool 选择变差。我想到刚读到的一篇 DART 论文 (arXiv:2602.00994) 提到：
 Reasoning 和 Tool-use 的梯度方向几乎正交，联合训练会导致两种能力互相干扰。
 我们实现了简化版 Token-Level 梯度分离：
-<pre><code class="language-python">reasoning_tokens = tokens_in("reasoning": "...")
+<pre translate="no"><code class="language-python">reasoning_tokens = tokens_in("reasoning": "...")
 tool_tokens = tokens_in("action": {"tool": ...})
 loss = 0.3 * reasoning_loss + 0.7 * tool_loss
 </code></pre>
@@ -588,12 +588,12 @@ loss = 0.3 * reasoning_loss + 0.7 * tool_loss
 <p><strong>七、ReAct Agent 的突破</strong></p>
 <p>我停下来重新思考：Combo 场景本质是多步规划问题，不是简单的工具选择。
 原训练数据：
-<pre><code class="language-json">{"input": "转账10万再提现5万", "output": '{"tool": "check_balance"}'}
+<pre translate="no"><code class="language-json">{"input": "转账10万再提现5万", "output": '{"tool": "check_balance"}'}
 </code></pre>
 
 label 本身就错了！测试期望 <code>transfer_funds</code>，训练却教 <code>check_balance</code>。
 重新设计输出格式：
-<pre><code class="language-json">{
+<pre translate="no"><code class="language-json">{
     "thought": "两步操作：先转账再提现。执行转账。",
     "action": {"tool": "transfer_funds", "params": {"amount": 1000000}},
     "plan": ["transfer 10 lakh", "withdraw 5 lakh"]
@@ -604,7 +604,7 @@ thought 让模型先思考，action 输出第一步实际操作，plan 规划后
 结果：combo 91%，平均分 89%，tool 准确率 92%。问题定义比算法更重要。</p>
 <p><strong>八、细节优化</strong></p>
 <p>ReAct 成功后继续强化弱类别，但提升有限。深挖日志发现奖励函数问题：
-<pre><code class="language-python">reasoning: +0.2
+<pre translate="no"><code class="language-python">reasoning: +0.2
 action.tool: +0.3
 valid_tool: +0.2
 params: +0.1
@@ -627,7 +627,7 @@ NGRPO 通用解决零梯度问题，DART 适合复杂场景，PRS/难度感知�
 <p><strong>注意！</strong>
 问题定义 &gt; 数据质量 &gt; 算法选择</p>
 <p><strong>十、最终方案</strong></p>
-<p><pre><code class="language-python"># 模型
+<p><pre translate="no"><code class="language-python"># 模型
 base_model = "Qwen/Qwen2.5-7B-Instruct"
 lora_r, lora_alpha = 16, 32
 

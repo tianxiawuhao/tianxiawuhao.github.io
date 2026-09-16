@@ -145,7 +145,7 @@
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-10-4.png" alt="图10.4 将只针对答案计算损失推广到批次" loading="lazy"><figcaption>图10.4 将只针对答案计算损失推广到批次</figcaption></figure>
 </p>
 <p>首先导入需要的依赖。</p>
-<p><pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+<p><pre translate="no"><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import numpy as np
 import os
@@ -155,7 +155,7 @@ import time
 </code></pre>
 </p>
 <p>接下来我们导入模型和分词器。</p>
-<p><pre><code class="language-python">device = "cuda"
+<p><pre translate="no"><code class="language-python">device = "cuda"
 model_path = "./Qwen3-0.6B-Base"
 
 model = AutoModelForCausalLM.from_pretrained(model_path, dtype="auto", device_map="auto")
@@ -164,7 +164,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_path)
 </p>
 <p>然后我们设置一下生成文本的参数。保证测试的一致性。</p>
 <p>其中151645为 <code>&lt;|im_end|&gt;</code>，151643为 <code>&lt;|endoftext|&gt;</code></p>
-<p><pre><code class="language-python">model.generation_config.do_sample = True
+<p><pre translate="no"><code class="language-python">model.generation_config.do_sample = True
 model.generation_config.eos_token_id = [151645,151643]
 model.generation_config.pad_token_id = 151643
 model.generation_config.temperature = 0.7
@@ -175,7 +175,7 @@ model.generation_config.repetition_penalty = 1.05
 </p>
 <p><strong>代码10.4 模型生成的配置</strong></p>
 <p>然后我们定义一下SFT阶段的训练超参数。</p>
-<p><pre><code class="language-python">@dataclass
+<p><pre translate="no"><code class="language-python">@dataclass
 class SFTConfig:
     max_length = 2500
     batch_size = 2
@@ -187,7 +187,7 @@ class SFTConfig:
 </code></pre>
 </p>
 <p>接下来我们导入训练数据并将训练数据转换成input_ids。</p>
-<p><pre><code class="language-python">ultrachat_200k_data = datasets.load_dataset("/ultrachat_200k")
+<p><pre translate="no"><code class="language-python">ultrachat_200k_data = datasets.load_dataset("/ultrachat_200k")
 
 def tokenize_and_format(data):
     """使用模型自带的聊天模板格式化训练数据"""
@@ -220,7 +220,7 @@ while True:
 </code></pre>
 </p>
 <p>接下来我们编写一下学习率的线性预热和余弦衰减的函数。</p>
-<p><pre><code class="language-python">def linear_warmup(current_step, warmup_steps, max_lr):
+<p><pre translate="no"><code class="language-python">def linear_warmup(current_step, warmup_steps, max_lr):
     if current_step &lt; warmup_steps:
         return max_lr * current_step / warmup_steps
     else:
@@ -243,7 +243,7 @@ def cosine_decay(current_step, warmup_steps, total_steps, max_lr, min_lr):
 <li>实现方式：构造损失掩码，仅针对每轮对话（含多轮）的模型“输出”部分（也就是回答部分）进行损失计算</li>
 </ul>
 <p>假设我们的多轮对话数据是</p>
-<p><pre><code class="language-python">data = [
+<p><pre translate="no"><code class="language-python">data = [
     {"content": "你是谁？", "role": "user"},
     {"content": "我是左元。", "role": "assistant"},
     {"content": "你会强化学习吗?", "role": "user"},
@@ -252,7 +252,7 @@ def cosine_decay(current_step, warmup_steps, total_steps, max_lr, min_lr):
 </code></pre>
 </p>
 <p>经过模型的对话模板格式化之后是</p>
-<p><pre><code class="language-text">&lt;im_start&gt;system
+<p><pre translate="no"><code class="language-text">&lt;im_start&gt;system
 You are a helpful assistant &lt;im_end&gt;
 &lt;im_start&gt;user
 你是谁？&lt;im_end&gt;
@@ -265,7 +265,7 @@ You are a helpful assistant &lt;im_end&gt;
 </code></pre>
 </p>
 <p>代码如下：</p>
-<p><pre><code class="language-python">def create_answer_mask(input_ids, tokenizer):
+<p><pre translate="no"><code class="language-python">def create_answer_mask(input_ids, tokenizer):
     """
     创建仅对助手回答部分计算损失的掩码
     Args:
@@ -359,7 +359,7 @@ def _set_answer_masks(mask, user_ends, assistant_ends, seq_len):
 </p>
 <p><strong>代码10.6 答案掩码</strong></p>
 <p>设置模型的训练超参数：</p>
-<p><pre><code class="language-python">batch_size = SFTConfig.batch_size
+<p><pre translate="no"><code class="language-python">batch_size = SFTConfig.batch_size
 gradient_accumulation_steps = SFTConfig.gradient_accumulation_steps
 log_iter = SFTConfig.log_iter
 max_lr = SFTConfig.max_lr
@@ -370,7 +370,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
 </code></pre>
 </p>
 <p>编写日志记录函数</p>
-<p><pre><code class="language-python">with open("log.txt", "a") as my_file:
+<p><pre translate="no"><code class="language-python">with open("log.txt", "a") as my_file:
     my_file.write(f" \
     time:{time.strftime('%Y-%m-%d, %H:%M:%S')}, \
     batch_size:{batch_size}, \
@@ -389,7 +389,7 @@ def log_call(iters, iters_average_loss):
 </p>
 <p><strong>代码10.7 日志相关配置</strong></p>
 <p>主训练循环如下</p>
-<p><pre><code class="language-python">model.train()
+<p><pre translate="no"><code class="language-python">model.train()
 training_losses = []
 model.zero_grad() # 训练开始时清空梯度
 skipped_batches_count = 0
@@ -599,7 +599,7 @@ tokenizer.save_pretrained("./Qwen3-0.6B-SFT/")
 <p><strong>危险</strong></p>
 <p>我们使用DPO算法要微调的模型是上一节中保存的“Qwen3-0.6B-SFT”。</p>
 <p>加载我们要微调的模型。</p>
-<p><pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+<p><pre translate="no"><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 from dataclasses import dataclass
 import datasets
 import torch
@@ -626,7 +626,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_path)
 </code></pre>
 </p>
 <p>生成回答的配置和SFT时相同，见代码10.4。定义模型训练的超参数。</p>
-<p><pre><code class="language-python">@dataclass
+<p><pre translate="no"><code class="language-python">@dataclass
 class DPOConfig:
     max_length = 1700
     batch_size = 2
@@ -639,11 +639,11 @@ class DPOConfig:
 </code></pre>
 </p>
 <p>接下来导入正负例数据集。</p>
-<p><pre><code class="language-python">binarized_data = datasets.load_dataset("./ultrafeedback_binarized")
+<p><pre translate="no"><code class="language-python">binarized_data = datasets.load_dataset("./ultrafeedback_binarized")
 </code></pre>
 </p>
 <p>处理数据集</p>
-<p><pre><code class="language-python">def tokenize_and_format(data):
+<p><pre translate="no"><code class="language-python">def tokenize_and_format(data):
     input_ids = tokenizer.apply_chat_template(
         data,
         tokenize=True,
@@ -694,7 +694,7 @@ assert len(chosen_input_ids_list) == len(rejected_input_ids_list)
 </code></pre>
 </p>
 <p>设置一下训练的超参数</p>
-<p><pre><code class="language-python">beta = DPOConfig.beta # β超参数
+<p><pre translate="no"><code class="language-python">beta = DPOConfig.beta # β超参数
 batch_size = DPOConfig.batch_size
 gradient_accumulation_steps = DPOConfig.gradient_accumulation_steps
 log_iter = DPOConfig.log_iter
@@ -707,7 +707,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
 </p>
 <p>配置 logging 日志记录模型训练过程参见代码10.7。复用SFT阶段设置的余弦衰减学习率曲线，参见代码10.5。将回答部分进行掩码的代码，参见代码10.6。</p>
 <p>计算平均对数概率</p>
-<p><pre><code class="language-python">def _compute_average_log_probability(logits, target_labels, mask):
+<p><pre translate="no"><code class="language-python">def _compute_average_log_probability(logits, target_labels, mask):
     """
     计算带掩码的平均对数概率
     Args:
@@ -743,7 +743,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=max_lr)
 </code></pre>
 </p>
 <p>DPO训练循环如下：</p>
-<p><pre><code class="language-python">model.train()
+<p><pre translate="no"><code class="language-python">model.train()
 
 # ======================= 训练指标记录列表 =======================
 training_losses = []

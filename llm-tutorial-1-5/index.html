@@ -130,12 +130,12 @@
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p>模型架构是一个无状态函数：它接收一个token、一个位置、参数以及来自先前位置的缓存键/值，并返回模型认为序列中下一个应出现的token的对数概率（分数）。我们沿用GPT-2架构并做了少量简化：使用RMSNorm替代LayerNorm，取消偏置项，用ReLU替代GeLU。首先，三个小型辅助函数：</p>
-<p><pre><code class="language-python">def linear(x, w):
+<p><pre translate="no"><code class="language-python">def linear(x, w):
     return [sum(wi * xi for wi, xi in zip(wo, x)) for wo in w]
 </code></pre>
 </p>
 <p>linear是矩阵向量乘法。它接收向量 $\mathbf{x}$ 和权重矩阵 $\mathbf{W}$，并对 $\mathbf{W}$ 的每一行计算一个点积。这是神经网络的基本构建模块：一种学习得到的线性变换。</p>
-<p><pre><code class="language-python">def softmax(logits):
+<p><pre translate="no"><code class="language-python">def softmax(logits):
     max_val = max(val.data for val in logits)
     exp = [(val - max_val).exp() for val in logits]
     total = sum(exp)
@@ -143,7 +143,7 @@
 </code></pre>
 </p>
 <p>softmax将原始分数向量（logits）从 $-\infty$ 到 $+\infty$ 的范围转换为概率分布：所有值最终落在[0,1]范围内且总和为1。我们首先减去最大值以保证数值稳定性（这在数学上不会改变结果，但能防止exp中的溢出）。</p>
-<p><pre><code class="language-python">def rmsnorm(x):
+<p><pre translate="no"><code class="language-python">def rmsnorm(x):
     ms = sum(xi * xi for xi in x) / len(x)
     scale = (ms + 1e-5) ** -0.5
     return [xi * scale for xi in x]
@@ -151,7 +151,7 @@
 </p>
 <p>rmsnorm（均方根归一化）通过重新缩放向量，使其数值具有单位均方根。这能防止激活值在网络中传播时过度增长或收缩，从而稳定训练过程。它是原始GPT-2中使用的层归一化（LayerNorm）的简化变体。</p>
 <p>现在来看模型本身：</p>
-<p><pre><code class="language-python">def gpt(token_id, pos_id, keys, values):
+<p><pre translate="no"><code class="language-python">def gpt(token_id, pos_id, keys, values):
     tok_emb = state_dict["wte"][token_id] # token embedding
     pos_emb = state_dict["wpe"][pos_id] # position embedding
     x = [t + p for t, p in zip(tok_emb, pos_emb)] # joint token and position embedding

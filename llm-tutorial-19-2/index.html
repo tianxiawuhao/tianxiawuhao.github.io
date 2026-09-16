@@ -135,6 +135,11 @@
 <p>先验模型的作用：根据文本标题预测CLIP 图像嵌入。也可以放弃先验模型，而以CLIP 文本嵌入为条件，而不是用先验模型生成的CLIP 图像嵌入作为条件，但使用先验模型的效果最佳。</p>
 <p>先验模型是一个仅解码器架构的Transformer。</p>
 <h3 id="sec-1">19.2.1 先验模型的训练</h3>
+<pre translate="no"><code class="language-text">向量
+可学习嵌入
+可学习嵌入
+MLP
+</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-3.png" alt="图 19.3 先验模型的训练原理" loading="lazy"><figcaption>图 19.3 先验模型的训练原理</figcaption></figure>
 <p>要训练一个模型，我们必须搞清楚模型的输入和输出（预测目标）。</p>
 <p>训练先验模型时，我们手上有的是：图文对和一个训练好的CLIP 模型。</p>
@@ -167,6 +172,16 @@
 <li>训练好的CLIP 模型</li>
 <li>训练好的先验模型</li>
 </ol>
+<pre translate="no"><code class="language-text">向量
+嵌入
+白噪声
+学好的嵌入
+可学习嵌入
+MLP
+预测的CLIP图像特征向量1
+向量
+max
+</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-4.png" alt="图 19.4 先验模型的推理流程" loading="lazy"><figcaption>图 19.4 先验模型的推理流程</figcaption></figure>
 <p>先验模型的输入有6 个：</p>
 <ol>
@@ -194,7 +209,7 @@
 $$</p>
 <p>这些值被剪裁为小于或等于0.999，以防止在 $t = T$ 附近出现奇点。因为我们使用包含低分辨率图像的 FashionMNIST 数据集，所以我们将使用余弦方差计划。</p>
 <p>综合起来，前向扩散过程的代码看起来是这样的：</p>
-<p><pre><code class="language-python"># Gets elements from indicies and makes sure output has a certain dimension
+<p><pre translate="no"><code class="language-python"># Gets elements from indicies and makes sure output has a certain dimension
 def extract_and_expand(x, idx, shape):
     return x[idx].reshape(idx.shape[0], *((1, ) * (len(shape) - 1)))
 
@@ -260,7 +275,7 @@ def forward_diffusion(x_0, schedule_values, t):
 </p>
 <h4 id="sec-5">19.2.3.2 时间步嵌入</h4>
 <p>时间步嵌入是扩散的重要组成部分。这是因为不同时间步的图像具有不同的噪声量。为了在我们的模型中利用这些信息，我们将使用正弦位置编码。这些位置编码与Transformer 中常用的位置编码相同。主要区别在于，我们的输入时间步很可能不会按顺序排列，并且包含所有可能的时间步，因此我们只需要获取与输入时间步对应的位置编码。</p>
-<p><pre><code class="language-python">class SinusoidalPositionalEncodings(nn.Module):
+<p><pre translate="no"><code class="language-python">class SinusoidalPositionalEncodings(nn.Module):
     def __init__(
         self,
         max_seq_length, # 最大序列长度
@@ -285,7 +300,7 @@ def forward_diffusion(x_0, schedule_values, t):
 </code></pre>
 </p>
 <p>然后，这些时间编码通过 MLP 来进一步捕获时间信息。</p>
-<p><pre><code class="language-python">self.time_mlp = nn.Sequential(
+<p><pre translate="no"><code class="language-python">self.time_mlp = nn.Sequential(
     SinusoidalPositionalEmbedding(
         config.decoder.max_time,
         config.decoder.model_channels
@@ -305,7 +320,7 @@ def forward_diffusion(x_0, schedule_values, t):
 <p>有多种方法可以调节时间步嵌入的输入，这些方法在本章的UNet：残差块部分中进行了描述。</p>
 <h4 id="sec-6">19.2.3.3 冻结模型</h4>
 <p>先验模型首先将图像的文本标题作为输入，然后获取CLIP 文本嵌入和图像嵌入。加载CLIP 模型时，所有层都应冻结，并将模式设置为eval。</p>
-<p><pre><code class="language-python">def freeze_model(model, set_eval=True):
+<p><pre translate="no"><code class="language-python">def freeze_model(model, set_eval=True):
     if set_eval:
         model.eval()
 
@@ -335,7 +350,7 @@ text_embeddings = self.clip.text_encoder(
 <p>然后，它会获取批次中每个图像的随机时间步，并使用它们从前向扩散中获取噪声CLIP 图像嵌入。</p>
 <p><strong>危险</strong></p>
 <p>不是对图片加噪声，而是对CLIP 图片嵌入加噪声！</p>
-<p><pre><code class="language-python"># Forward
+<p><pre translate="no"><code class="language-python"># Forward
 # 随机采样一个时间步
 timesteps = torch.randint(
     0, self.config.prior.max_time, (images.shape[0],)) # (B, )
@@ -348,7 +363,7 @@ noisy_image_embedding, _ = forward_diffusion(
 </code></pre>
 </p>
 <p>然后将时间步通过MLP 以获得时间步嵌入。</p>
-<p><pre><code class="language-python"># Constructor
+<p><pre translate="no"><code class="language-python"># Constructor
 self.time_mlp = nn.Sequential(
     SinusoidalPositionalEmbedding(
         config.prior.max_time,
@@ -373,7 +388,7 @@ timestep_embeddings = self.time_mlp(timesteps) # (B, ) -&gt; (B, latent_dim)
 </p>
 <h4 id="sec-8">19.2.3.5 可学习的嵌入</h4>
 <p>先验模型的另一个重要部分是可以训练的嵌入层。这些嵌入是 Torch 的一个参数，将用于预测最终输出。从构造函数中学习到的嵌入需要在 Forward 方法中进行扩展，以便批次中的每个项目都有一个嵌入。</p>
-<p><pre><code class="language-python"># 初始化一个随机的需要学习的嵌入参数
+<p><pre translate="no"><code class="language-python"># 初始化一个随机的需要学习的嵌入参数
 self.learned_embedding = nn.Parameter(torch.randn(config.latent_dim))
 
 # Forward
@@ -386,7 +401,7 @@ learned_embeddings = self.learned_embedding.repeat(
 </p>
 <h4 id="sec-9">19.2.3.6 输入的拼接</h4>
 <p>文本标题、CLIP 文本嵌入、时间步嵌入、加噪声的CLIP 图像嵌入以及需要学习的嵌入将被连接成一个序列。所有这些项都将具有形状 (B, latent_dim)，但我们需要在中间添加一个额外的维度，使它们具有形状 (B, 1, latent_dim)。我们将在这个新维度上进行连接，使序列具有形状 (B, 5, latent_dim)。如果使用包含更高质量图像的数据集，一种提高模型质量的可能方法是将文本嵌入、图像嵌入和/或时间步嵌入传递到卷积层，以增加序列长度。</p>
-<p><pre><code class="language-python">tokens = torch.cat((
+<p><pre translate="no"><code class="language-python">tokens = torch.cat((
     captions, # 图像标题
     text_embeddings, # CLIP文本嵌入
     timestep_embeddings, # 时间步嵌入
@@ -396,7 +411,7 @@ learned_embeddings = self.learned_embedding.repeat(
 </code></pre>
 </p>
 <p>然后，该序列会输入到一个带有因果注意力掩码的仅解码器架构的Transformer。因果注意力掩码是一个由1组成的下三角矩阵，它使得某个 token 只能关注在它之前出现的token。</p>
-<p><pre><code class="language-python"># 初始化
+<p><pre translate="no"><code class="language-python"># 初始化
 self.decoder = nn.ModuleList(
     [TransformerBlock(
         config.latent_dim,
@@ -420,7 +435,7 @@ for block in self.decoder:
 </p>
 <h4 id="sec-10">19.2.3.7 预测目标</h4>
 <p>最后，我们从 Transformer 的输出中获取学习到的嵌入，并将其传递给 LayerNorm 和 Linear 层以获得预测的图像嵌入。</p>
-<p><pre><code class="language-python"># 初始化
+<p><pre translate="no"><code class="language-python"># 初始化
 self.output = nn.Sequential(
     nn.LayerNorm(config.latent_dim),
     nn.Linear(
@@ -435,11 +450,11 @@ pred_image_embeddings = self.output(tokens[:, -1, :])
 </code></pre>
 </p>
 <p>虽然通常情况下，扩散模型会预测噪声，并通过迭代去除噪声来生成样本，但unCLIP 论文中提到，最好直接预测CLIP 图像嵌入。该模型的损失函数应该是预测值与实际CLIP 图像嵌入之间的均方误差损失。</p>
-<p><pre><code class="language-python">loss = nn.functional.mse_loss(pred_image_embeddings, image_embeddings)
+<p><pre translate="no"><code class="language-python">loss = nn.functional.mse_loss(pred_image_embeddings, image_embeddings)
 </code></pre>
 </p>
 <p>在采样过程中，为了提高质量，模型应该生成两个CLIP 图像嵌入的样本，并选择与CLIP 文本嵌入点积较高的样本。</p>
-<p><pre><code class="language-python">def get_one_sample(self, text_embeddings, captions):
+<p><pre translate="no"><code class="language-python">def get_one_sample(self, text_embeddings, captions):
     # 获取一个和CLIP文本嵌入形状相同的白噪声
     # 而clip的图像嵌入和文本嵌入的形状相同
     noisy_image_embeddings = torch.randn(
@@ -528,7 +543,7 @@ def sample(self, captions, masks=None):
 </p>
 <h4 id="sec-11">19.2.3.8 先验模型完整代码</h4>
 <p>综合以上所有，扩散先验模型的代码看起来应该是这样的：</p>
-<p><pre><code class="language-python">class DiffusionPrior(nn.Module):
+<p><pre translate="no"><code class="language-python">class DiffusionPrior(nn.Module):
     def __init__(self, config):
         super().__init__()
         # 加载clip模型

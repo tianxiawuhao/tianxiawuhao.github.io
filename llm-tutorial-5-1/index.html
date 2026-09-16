@@ -211,7 +211,7 @@
 <p>$$\begin{array}{l}{J(\theta) = \sum_{t = 0}^{T}G(\tau)\log \pi_{\theta}(A_t|S_t)}\\ {= G(\tau)\log \left(\prod_{t = 0}^{T}\pi_{\theta}(A_t|S_t)\right)} \end{array} \quad (5.18)$$</p>
 <p>最大化目标就会提升某些状态对应的动作的概率。</p>
 <p>策略神经网络 $\pi_{\theta}$</p>
-<p><pre><code class="language-python">class PolicyNet(nn.Module):
+<p><pre translate="no"><code class="language-python">class PolicyNet(nn.Module):
     def __init__(self, action_size):
         super().__init__()
         self.l1 = nn.Linear(4, 128) # 推车环境中状态是一个4维数组
@@ -233,7 +233,7 @@
 <p>$$y_i = \frac{\mathrm{e}^{x_i}}{\sum_{k=1}^{n}\mathrm{e}^{x_k}} \quad (5.19)$$</p>
 <p>这里的e是自然常数（值为2.71828...的无限小数）。softmax函数的输出值全部为0以上1以下的实数，它们的合计值为1（$\sum_{i=1}^{n}y_i = 1$）。因此，softmax函数的输出可以作为概率使用。</p>
 <p>下面是Agent类的代码。首先显示初始化和get_action方法。</p>
-<p><pre><code class="language-python">class Agent:
+<p><pre translate="no"><code class="language-python">class Agent:
     def __init__(self):
         self.gamma = 0.98 # 折扣因子γ
         self.lr = 0.0002 # 学习率α
@@ -257,7 +257,7 @@
 <p>get_action方法决定了在state状态下采取的动作。为此，可以通过self.pi(state)进行神经网络的前向传播，得到概率分布probs。然后，基于该概率分布，进行一次动作的采样。该方法还返回了所有动作的概率（上面代码中的probs）。</p>
 <p>下面来试用一下get_action方法。代码如下所示。</p>
 <p>执行1步动作然后反向传播，观察结果</p>
-<p><pre><code class="language-python">env = gym.make("CartPole-v0")
+<p><pre translate="no"><code class="language-python">env = gym.make("CartPole-v0")
 
 state = env.reset() # S_0
 
@@ -283,13 +283,13 @@ print("动作的概率：", probs[action].item())
 <p>上面的代码取出了初始状态下的动作及其概率。另外，它还显示了使用虚拟的权重来计算由下面的式子表示的梯度的代码（这是从式子取出的 $t=0$ 的相关项的式子）。</p>
 <p>$$G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_0|S_0) \quad (5.20)$$</p>
 <p>作为参考，下面对照列出了上面的代码中出现的变量与相应的数学式。</p>
-<pre><code class="language-text">probs[action]: $\pi_{\theta}(A_0|S_0)$
+<pre translate="no"><code class="language-text">probs[action]: $\pi_{\theta}(A_0|S_0)$
 G: $G(\tau)$
 J: $G(\tau)\log \pi_{\theta}(A_0|S_0)$
 </code></pre>
 <p>求出J之后，通过J.backward()求 $G(\tau)\nabla_{\theta}\log \pi_{\theta}(A_0|S_0)$。下面是Agent类剩下的代码。</p>
 <p>我们先来编写采集一条轨迹的详细信息的代码。</p>
-<p><pre><code class="language-python">class Agent:
+<p><pre translate="no"><code class="language-python">class Agent:
     ...
 
     def rollout(self, env):
@@ -313,7 +313,7 @@ J: $G(\tau)\log \pi_{\theta}(A_0|S_0)$
 </p>
 <p><strong>代码5.2 采集一条轨迹的详细数据，接代码5.1</strong></p>
 <p>然后编写更新策略的代码：</p>
-<p><pre><code class="language-python">class Agent:
+<p><pre translate="no"><code class="language-python">class Agent:
     ...
 
     def update(self, trajectory):
@@ -337,14 +337,14 @@ J: $G(\tau)\log \pi_{\theta}(A_0|S_0)$
 <p>在训练神经网络时，通常要设置损失函数。对于这个例子，我们可以将目标函数 $J(\theta)$ 乘以-1所得到的 $-J(\theta)$ 作为损失函数，此时可以通过梯度下降法的最优化方法（SGD、Adam等）更新参数。</p>
 <p>代码5.3中第10～14行可以改写成并行版本，代码如下：</p>
 <p>并行版本 Python</p>
-<p><pre><code class="language-python">states = torch.tensor(states)
+<p><pre translate="no"><code class="language-python">states = torch.tensor(states)
 actions = torch.tensor(actions).view(-1, 1)
 log_probs = torch.log(self.pi(states).gather(1, actions))
 loss = -torch.sum(log_probs) * G
 </code></pre>
 </p>
 <p>最后在倒立摆环境中训练智能体。代码如下所示。</p>
-<p><pre><code class="language-python">env = gym.make("CartPole-v0")
+<p><pre translate="no"><code class="language-python">env = gym.make("CartPole-v0")
 agent = Agent()
 return_list = []
 episode_list = []
@@ -364,7 +364,7 @@ for episode in range(3000):
 <p>首先，在while语句中，增加智能体获得的奖励（reward）和行动的概率（prob）。然后在离开while语句后（回合结束时），通过agent.update()更新策略。</p>
 <p>运行此代码，随着回合的推进，获得的奖励也会增加。下图是结果的示意图。</p>
 <p>绘制示意图的代码如下：</p>
-<p><pre><code class="language-python">def plot_loss(episode_list, return_list, filename):
+<p><pre translate="no"><code class="language-python">def plot_loss(episode_list, return_list, filename):
     f = plt.figure()
     plt.plot(episode_list, return_list)
     plt.xlabel("Episodes")
@@ -380,7 +380,7 @@ plot_loss(episode_list, return_list, "pg-loss.pdf")
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-5-9.png" alt="图5.9 策略梯度算法获得的奖励" loading="lazy"><figcaption>图5.9 策略梯度算法获得的奖励</figcaption></figure>
 </p>
 <p>我们可以测试一下训练的策略神经网络。看看倒立摆能不能坚持很长时间。</p>
-<p><pre><code class="language-python">def test_agent(agent, env):
+<p><pre translate="no"><code class="language-python">def test_agent(agent, env):
     state = env.reset()
     done = False
     frames = []
