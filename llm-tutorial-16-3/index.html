@@ -239,30 +239,6 @@ MSE</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-18.png" alt="图 16.18 U-Net 执行语义分割" loading="lazy"><figcaption>图 16.18 U-Net 执行语义分割</figcaption></figure>
 <p>图中 U-Net 的输入是形状为 $(C, H, W)$ 的图像数据，其中，$C$ 是输入图像的通道数（RGB 图像为3），$H$ 是图像的高度，$W$ 是图像的宽度。输出是形状为 $(D, H, W)$ 的张量，其中 $D$ 是要分类的类别数。模型对每个像素输出 $D$ 个类别的概率分布。而在扩散模型中，输出被设置为 $(C, H, W)$（$D=C$），即输入和输出的通道数都被设置为 $C$。</p>
 <p>U-Net 的名称源于网络结构的形状，因为它与字母“U”的形状相似。</p>
-<pre translate="no"><code class="language-text">1
-64 64
-28x28
-64
-128
-128
-14x14
-128
-7x7
-256
-256
-128
-128
-128+256
-14x14
-28x28
-64+128
-64
-64
-1
-conv 3x3, BatchNorm, ReLU
-copy
-maxpool 2x2
-</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-19.png" alt="图 16.19 本章要实现的 U-Net" loading="lazy"><figcaption>图 16.19 本章要实现的 U-Net</figcaption></figure>
 <p>U-Net 的处理过程分为前半部分的“缩小阶段”和后半部分的“扩大阶段”。在前半部分的缩小阶段中，在卷积层进行处理的同时，特征图会逐渐缩小。缩小特征图的层称为“下采样层”。在后半部分的扩大阶段中，在卷积层进行特征抽取的同时，特征图会逐渐扩大，这与前半部分正好相反。扩大特征图的层称为“上采样层”。</p>
 <p>U-Net 的重要特征是跳跃连接（skip connection）。这是一种在网络的缩小阶段和扩大阶段之间直接传递特征图的机制。这种跳跃连接使得 U-Net 能够捕捉对象整体的特征，同时使用更精细的空间位置信息进行处理。</p>
@@ -365,31 +341,8 @@ def _pos_encoding(t, output_dim, device="cpu"):
 <p>最后将正弦位置编码嵌入到 U-Net 中。这里我们将正弦位置编码嵌入到之前实现的 ConvBlock 类中。ConvBlock 是拥有两个卷积层的处理单元。我们使用 ConvBlock 实现了 U-Net，如图所示。</p>
 <p>x</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-21.png" alt="图 16.21 我们实现的 U-Net" loading="lazy"><figcaption>图 16.21 我们实现的 U-Net</figcaption></figure>
-<pre translate="no"><code class="language-text">x
-NEW
-NEW
-NEW
-NEW
-NEW
-pos_encoding
-v
-t
-</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-22.png" alt="图 16.22 加入正弦位置编码的 U-Net" loading="lazy"><figcaption>图 16.22 加入正弦位置编码的 U-Net</figcaption></figure>
 <p>如图所示，新的 ConvBlock 中也将接收正弦位置编码信息 v 作为输入。然后在这个新的 ConvBlock 内部执行下图所示的处理。</p>
-<pre translate="no"><code class="language-text">NEW
-MLP
-NEW
-x
-+
-(N, C)
-(N, C, 1, 1)
-v
-y
-x
-v
-y
-</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-23.png" alt="图 16.23 新的 ConvBlock 类" loading="lazy"><figcaption>图 16.23 新的 ConvBlock 类</figcaption></figure>
 <p>图中的 x 的形状为 $(N, C, H, W)$，v 的形状为 $(N, D)$。v 被 MLP（多层感知机，这里指由全连接层组成的神经网络）变换为 $(N, C)$ 的形状，然后再被变换为 $(N, C, 1, 1)$ 的形状。通过这个变形，广播函数得以应用于随后的加法运算中。新的 ConvBlock 的实现如下所示。</p>
 <p><pre translate="no"><code class="language-python">class ConvBlock(nn.Module):

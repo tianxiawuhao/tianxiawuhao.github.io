@@ -417,17 +417,6 @@ x = x.view(b, h, w, c).permute(0, 3, 1, 2)
 </code></pre>
 </p>
 <h3 id="sec-6">19.3.6 模型的训练</h3>
-<pre translate="no"><code class="language-text">UNET
-x_t
-t
-先验模型根据文本预测的CLIP图片嵌
-入
-模型
-最大时间步T
-的嵌入
-白噪声组成
-的嵌入
-</code></pre>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-19-9.png" alt="图 19.9 解码器训练流程" loading="lazy"><figcaption>图 19.9 解码器训练流程</figcaption></figure>
 <p>在训练解码器时，模型需要做的第一件事就是设置条件信息。为此，我们首先需要从先验模型中采样以获取CLIP 图像嵌入。与CLIP 模型一样，在加载先验模型时，应冻结层并将模式设置为eval。</p>
 <p><pre translate="no"><code class="language-python"># 初始化先验网络
@@ -521,7 +510,7 @@ self.in_conv = nn.Conv2d(
 x = self.in_conv(x)
 </code></pre>
 </p>
-<p>现在，含噪图像已达到所需的通道数，它们可以与条件信息一起通过UNet 层。UNet 将包含四个编码器层和解码器层，中间有一个瓶颈层。对于每层的通道数，我们将使用[1, 2, 4, 8]作为层通道数与模型通道数的比值。UNet 的编码器、解码器和瓶颈层都将包含两个残差块。在瓶颈残差块之间以及编码器和解码器内层的每个残差块之后，放置了注意力块。跳跃连接连接位于编码器和解码器的残差块之间。</p>
+<p>现在，含噪图像已达到所需的通道数，它们可以与条件信息一起通过UNet 层。UNet 将包含四个编码器层和解码器层，中间有一个瓶颈层。对于每层的通道数，我们将使用<code translate="no">[1, 2, 4, 8]</code>作为层通道数与模型通道数的比值。UNet 的编码器、解码器和瓶颈层都将包含两个残差块。在瓶颈残差块之间以及编码器和解码器内层的每个残差块之后，放置了注意力块。跳跃连接连接位于编码器和解码器的残差块之间。</p>
 <p><pre translate="no"><code class="language-python"># Config
 model_channels:int = 32
 channel_ratios:list[int] = field(default_factory=lambda: [1, 2, 4, 8])
