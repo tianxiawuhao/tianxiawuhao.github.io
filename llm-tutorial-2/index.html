@@ -7,17 +7,17 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="强化学习,undefined">
+<meta name="keywords" content="大语言模型,LLM简介">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>2 为什么要这样做？ | tianxia</title>
+<title>2 LLM简介 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
 <link
   href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
   rel='stylesheet' type='text/css'>
-<link rel="alternate" type="application/rss+xml" title="2 为什么要这样做？ | tianxia » Feed"
+<link rel="alternate" type="application/rss+xml" title="2 LLM简介 | tianxia » Feed"
   href="/atom.xml">
 <link rel="stylesheet"
   href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
@@ -30,7 +30,7 @@
 
 <script>hljs.initHighlightingOnLoad();</script>
 
-  <meta property="og:description" content="2 为什么要这样做？" />
+  <meta property="og:description" content="2 LLM简介" />
   <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-2/" />
   <meta property="og:locale" content="zh-CN" />
   <meta property="og:type" content="website" />
@@ -109,12 +109,13 @@
             <!-- 没Title并且有headerType为Post：文章Header -->
             <div class="post-heading">
               <span class="tags">
-                <a href="/tutorial/" class="tag">强化学习</a>
-</span>
-              <h1>2 为什么要这样做？</h1>
+                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">LLM简介</a>
+                </span>
+              <h1>2 LLM简介</h1>
               <span class="meta">
                 Posted on
-                undefined，undefined min read</span>
+                2025-04-02，4 min read</span>
             </div>
           
         
@@ -129,60 +130,77 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
-          <p>你可能会问：“如果只奖励最后一个词，前面的词怎么知道自己做得好不好？”</p>
-<p>虽然物理上的奖励（奖励模型给的得分）只发生在最后一步，但PPO使用了广义优势估计（GAE）来回传这个信号：</p>
-<ol>
-<li><p>价值函数的预测：Critic网络（价值网络）会预测每一个token的 $V(S_t)$。它会学到：“虽然我现在只拿到了微小的KL惩罚，但我知道只要我顺着这个方向走，最后能拿到巨大的奖励模型给的得分。”</p>
-</li>
-<li><p>信号回传：通过折扣因子 $\gamma$ 和GAE参数 $\lambda$，最后一步的巨大奖励会沿着时间轴向前传播。</p>
-</li>
-</ol>
+          <h2 id="sec-1">2.1 大语言模型要解决的问题是什么？</h2>
+<p>大语言模型要解决的问题是预测下一个token（next token prediction，NTP）。</p>
+<p><figure class="tutorial-figure"><img src="attachments/tutorial-figs/fig-2-1.png" alt="图2.1 预测下一个token" loading="lazy"><figcaption>图2.1 预测下一个token</figcaption></figure>
+</p>
+<h2 id="sec-2">2.2 如何训练一个能预测下一个token的模型？</h2>
 <ul>
-<li>如果奖励模型给的得分很高，那么 $y_{T-1}, y_{T-2} \dots$ 的优势（Advantage）都会变高。</li>
-<li>这就告诉了前面的token：“你们铺垫得很好，导致最后结局很棒。”</li>
+<li>训练数据（输入-目标对）长什么样子？</li>
+<li>模型结构如何设计？神经网络本质上是一个函数，这个函数长什么样子？参数有多少？</li>
+<li>神经网络接收输入之后，输出和目标之间的损失（差异）怎么衡量？也就是说损失函数怎么设计？</li>
+<li>如何让损失函数最小化？梯度下降法以及变种：SGD，Adam，AdamW，Muon等优化器</li>
+<li>梯度下降法需要求损失函数对于参数的导数（梯度），那么梯度如何得来？反向传播算法求参数的梯度：loss.backward()。</li>
 </ul>
-<ol start="3">
-<li>举个具体的例子</li>
-</ol>
-<p>Prompt: “你好”</p>
-<p>Response: “你好呀<eos_token>”（4个token）</p>
-<p>假设 $\beta = 0.1$，奖励模型RM给整句打分1.0。</p>
-<p>token1（“你”）：
-$R_1 = -0.1 \times \mathrm{KL}(\#\#)$
-（没有RM分数）</p>
-<p>token2（“好”）：
-$R_2 = -0.1 \times \mathrm{KL}(\#\#)$
-（没有RM分数）</p>
-<p>token3（“呀”）：
-$R_3 = -0.1 \times \mathrm{KL}(\#\#)$
-（没有RM分数）</p>
-<p>token4（“<eos_token>”）：
-$R_4 = -0.1 \times \mathrm{KL}(&lt;\mathrm{eos\_token}) + 1.0$
-（这里加上了奖励模型RM的最终大奖）</p>
-<p><strong>总结</strong></p>
-<ul>
-<li>奖励模型RM给的分数是“稀疏奖励”（Sparse Reward）：只在结局出现一次。</li>
-<li>KL惩罚是“稠密奖励”（Dense Reward）：每一步都有，时刻约束模型不要乱说话。</li>
-<li>依靠GAE：把最后的稀疏奖励“抹匀”分摊给前面的每一个动作，让前面的词也能获得梯度更新。</li>
-</ul>
-<p><strong>GAE将奖励模型的得分回传到前面的token</strong></p>
-<p>假设 $\lambda = 1.0, \gamma = 1.0$，那么时刻0的广义优势估计为：</p>
-<p>$$
-A_{0}^{\mathrm{GAE}} = \delta_{0} + \delta_{1} + \dots +\delta_{T} \tag{11.5}
-$$</p>
-<p>其中</p>
-<p>$$
-\delta_{T} = R_{T} - V_{\omega}(S_{T}) \tag{11.6}
-$$</p>
-<p>$R_T$ 中包含了奖励模型的得分，所以时刻0的广义优势估计中也包含了奖励模型的得分。</p>
+<h2 id="sec-3">2.3 训练数据（输入-目标对）长什么样子？</h2>
+<p>文本数据：“君不见黄河之水天上来”</p>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">输入</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">预测目标</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">------</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">----------</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水天</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水天</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水天上</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水天上</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">君不见黄河之水天上来</td></tr></table>
+
+<p>可以看到训练数据可以通过程序处理原始文本数据，自动生成，所以叫做“自监督学习”。也就是说，预测目标不是人类标注而来，而是程序通过切分文本自动标注的。为了充分利用GPU的并行计算能力，训练数据一般如下组织。</p>
+<p><figure class="tutorial-figure"><img src="attachments/tutorial-figs/fig-2-2.png" alt="图2.2 数据组织方法" loading="lazy"><figcaption>图2.2 数据组织方法</figcaption></figure>
+</p>
+<h2 id="sec-4">2.4 模型结构的设计</h2>
+<p>Decoder-Only Transformer。仅解码器的Transformer架构。</p>
+<p><figure class="tutorial-figure"><img src="attachments/tutorial-figs/fig-2-3.png" alt="图2.3 GPT-2架构" loading="lazy"><figcaption>图2.3 GPT-2架构</figcaption></figure>
+</p>
+<h2 id="sec-5">2.5 损失函数的设计</h2>
+<p>LLM本质上是一个分类模型。从极大似然估计的角度看到LLM。假设训练数据为“abcd”，那么我们希望下面的概率越大越好。</p>
+<p>$$P_{\theta}(\mathrm{d}|\mathrm{abc}) \cdot P_{\theta}(\mathrm{c}|\mathrm{ab}) \cdot P_{\theta}(\mathrm{b}|\mathrm{a}) \quad (2.1)$$</p>
+<p>其中 $\theta$ 是神经网络的参数。最大化上面的式子等价于最大化下面的式子</p>
+<p>$$\begin{array}{rl} &amp; {\log \{P_{\theta}(\mathrm{d}|\mathrm{abc}) \cdot P_{\theta}(\mathrm{c}|\mathrm{ab}) \cdot P_{\theta}(\mathrm{b}|\mathrm{a})\}}\\ &amp; {= \log P_{\theta}(\mathrm{d}|\mathrm{abc}) + \log P_{\theta}(\mathrm{c}|\mathrm{ab}) + \log P_{\theta}(\mathrm{b}|\mathrm{a})} \end{array} \quad (2.2)$$</p>
+<p>而最大化上面的式子，等价于最小化下面的式子</p>
+<p>$$-\log P_{\theta}(\mathrm{d}|\mathrm{abc}) - \log P_{\theta}(\mathrm{c}|\mathrm{ab}) - \log P_{\theta}(\mathrm{b}|\mathrm{a}) \quad (2.3)$$</p>
+<p>而上面的这个式子就是交叉熵损失函数！</p>
+<p>也就是给定输入“ab”，我们希望预测的下一个token属于分类“c”的概率越大越好。给定输入“abc”，我们希望预测的下一个token属于分类“d”的概率越大越好。</p>
+<p><figure class="tutorial-figure"><img src="attachments/tutorial-figs/fig-2-4.png" alt="图2.4 LLM本质是个分类模型" loading="lazy"><figcaption>图2.4 LLM本质是个分类模型</figcaption></figure>
+</p>
+<hr>
 
           <hr>
 
-          <hr />
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#sec-1">2.1 大语言模型要解决的问题是什么？</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-2">2.2 如何训练一个能预测下一个token的模型？</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-3">2.3 训练数据（输入-目标对）长什么样子？</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-4">2.4 模型结构的设计</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-5">2.5 损失函数的设计</a>
+<ul>
+</ul>
+</li>
+</ul>
+</div>
+<hr />
           
             <nav class="post-pn">
-      <a class="prev-post" href="/llm-tutorial-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">1 奖励的时间步分配</span></a>
-      <a class="next-post" href="/llm-tutorial-11-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">11.3 PPO微调LLM实战</span></a>
+      <a class="prev-post" href="/llm-tutorial-1-10/"><span class="pn-label">← 上一篇</span><span class="pn-title">1.10 FAQ</span></a>
+      <a class="next-post" href="/llm-tutorial-3-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">3.1 GPT-2模型结构的定义以及数据集的准备</span></a>
       </nav>
           
           
