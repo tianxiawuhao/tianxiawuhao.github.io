@@ -148,7 +148,7 @@ self.betas = torch.linspace(
 </code></pre>
 </p>
 <p>这样就计算出了每个时间步的 $\alpha_t$。</p>
-<p>而由于 $\bar{\alpha}_t = \prod_{s=1}^t \alpha_s$，所以使用 <code>torch.cumprod</code> 来计算</p>
+<p>而由于 $\bar{\alpha}_t = \prod_{s=1}^t \alpha_s$，所以使用 <code translate="no">torch.cumprod</code> 来计算</p>
 <p><pre translate="no"><code class="language-python">self.alpha_bars = torch.cumprod(self.alphas, dim=0)
 </code></pre>
 </p>
@@ -224,7 +224,7 @@ MSE</p>
     return mu + noise * std
 </code></pre>
 </p>
-<p><pre translate="no"><code>1 x_T ~ N(0, I)          ▷ 从高斯分布中采样一张纯噪声图片
+<p><pre translate="no"><code translate="no">1 x_T ~ N(0, I)          ▷ 从高斯分布中采样一张纯噪声图片
 2 for t = T, ..., 1 do
 3   z ~ N(0, I) if t &gt; 1, else z = 0
 4   x_{t-1} = 1/√(α_t) (x_t - (1-α_t)/√(1-ᾱ_t) ε_θ(x_t, t)) + σ_t z
@@ -323,7 +323,7 @@ class ConvBlock(nn.Module):
 <p>这段代码使用最大池化（nn.MaxPool2d）来缩小数据。这会使张量的大小缩小 $\frac{1}{2}$。而在扩大数据的处理中，代码使用了双线性插值的上采样（nn.Upsample）。这会使张量的大小扩大2倍。</p>
 <p><strong>双线性插值</strong></p>
 <p>双线性插值是一种用于扩大图像大小的技术。双线性插值可以创建新的像素，其值基于原始图像中像素的值计算得出。这样就能平滑地扩大图像。</p>
-<p>进行 U-Net 的跳跃连接的代码是 <code>torch.cat([x, x1], dim=1)</code>。<code>torch.cat()</code> 函数是连接张量的函数，其中 <code>dim=1</code> 指定了连接的维度。在本例中，如果 x 的形状是 $(N, C, H, W)$，x1 的形状是 $(N, I, H, W)$，那么连接后的张量的形状就是 $(N, C + I, H, W)$。</p>
+<p>进行 U-Net 的跳跃连接的代码是 <code translate="no">torch.cat([x, x1], dim=1)</code>。<code translate="no">torch.cat()</code> 函数是连接张量的函数，其中 <code translate="no">dim=1</code> 指定了连接的维度。在本例中，如果 x 的形状是 $(N, C, H, W)$，x1 的形状是 $(N, I, H, W)$，那么连接后的张量的形状就是 $(N, C + I, H, W)$。</p>
 <p>上面我们实现了处理 $x_t$ 的 U-Net。剩下的任务是将时刻 $t$ 引入 U-Net 中。需要注意的是这里的 $t$ 是整数。在神经网络中，将整数变换为向量可以提高训练和预测的效率。扩散模型在对时刻 $t$ 进行编码时，常常使用正弦位置编码。</p>
 <p>正弦位置编码因在论文“Attention Is All You Need”的 Transformer 模型中使用而闻名。正弦位置编码的意思是“使用正弦波（sin 波）对位置信息进行编码”。位置信息是指序列数据中每个元素出现的位置。例如，在自然语言处理任务中，单词出现的位置就相当于位置信息。扩散模型的时刻 $t$ 也是位置信息。</p>
 <p>正弦位置编码可以将整数 $t$ 变换为向量 $\mathbf{v}$。如果变换后的向量 $\mathbf{v}$ 的维度为 $D$，则其第 $i$ 个元素的数学式如下所示。</p>
@@ -336,8 +336,8 @@ class ConvBlock(nn.Module):
 \tag{16.8}
 $$</p>
 <p>上面的正弦位置编码不以绝对值来编码位置信息，而是通过具有循环特性的 sin 函数和 cos 函数来编码位置信息。这样一来，位置信息中的相对差异和循环模式就能清晰地显示出来，使模型能够更有效地学习序列数据中的相对位置关系。</p>
-<p>下面我们来实现正弦位置编码。首先，我们将实现对单个时刻数据（整数）进行编码的函数 <code>_pos_encoding()</code>。然后，我们将使用它来实现一个名为 <code>pos_encoding()</code> 的处理批量数据的函数。</p>
-<p>以下是 <code>_pos_encoding()</code> 的代码。</p>
+<p>下面我们来实现正弦位置编码。首先，我们将实现对单个时刻数据（整数）进行编码的函数 <code translate="no">_pos_encoding()</code>。然后，我们将使用它来实现一个名为 <code translate="no">pos_encoding()</code> 的处理批量数据的函数。</p>
+<p>以下是 <code translate="no">_pos_encoding()</code> 的代码。</p>
 <p><pre translate="no"><code class="language-python">import torch
 
 def _pos_encoding(t, output_dim, device="cpu"):
@@ -351,7 +351,7 @@ def _pos_encoding(t, output_dim, device="cpu"):
     return v
 </code></pre>
 </p>
-<p>这段代码基于输入时刻（$t$）和输出维度（<code>output_dim</code>）进行位置编码。代码通过 <code>torch.arange(D)</code> 创建张量 <code>[0, 1, ..., D]</code>。然后使用切片语法 <code>v[0::2]</code> 来指定“从 v 的第0个元素开始，每次跳过一个元素后的所有元素”。也就是说，指定向量 v 的偶数索引(0, 2, 4, ...)对应的元素，并对这些元素进行正弦编码。</p>
+<p>这段代码基于输入时刻（$t$）和输出维度（<code translate="no">output_dim</code>）进行位置编码。代码通过 <code translate="no">torch.arange(D)</code> 创建张量 <code translate="no">[0, 1, ..., D]</code>。然后使用切片语法 <code translate="no">v[0::2]</code> 来指定“从 v 的第0个元素开始，每次跳过一个元素后的所有元素”。也就是说，指定向量 v 的偶数索引(0, 2, 4, ...)对应的元素，并对这些元素进行正弦编码。</p>
 <p>接下来，我们将实现用于处理批量数据的正弦位置编码。为了易于理解，这里使用 for 语句来实现，代码如下所示。</p>
 <p><pre translate="no"><code class="language-python">def pos_encoding(ts, output_dim, device="cpu"):
     batch_size = len(ts)
@@ -361,7 +361,7 @@ def _pos_encoding(t, output_dim, device="cpu"):
     return v
 </code></pre>
 </p>
-<p>参数 <code>ts</code> 是张量。对于该张量的每个元素，调用刚刚实现的 <code>_pos_encoding</code> 函数。这样我们就完成了正弦位置编码的实现。</p>
+<p>参数 <code translate="no">ts</code> 是张量。对于该张量的每个元素，调用刚刚实现的 <code translate="no">_pos_encoding</code> 函数。这样我们就完成了正弦位置编码的实现。</p>
 <p>最后将正弦位置编码嵌入到 U-Net 中。这里我们将正弦位置编码嵌入到之前实现的 ConvBlock 类中。ConvBlock 是拥有两个卷积层的处理单元。我们使用 ConvBlock 实现了 U-Net，如图所示。</p>
 <p>x</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-21.png" alt="图 16.21 我们实现的 U-Net" loading="lazy"><figcaption>图 16.21 我们实现的 U-Net</figcaption></figure>
@@ -417,7 +417,7 @@ y
         return y
 </code></pre>
 </p>
-<p>参数 <code>time_embed_dim</code> 是通过正弦位置编码变换后的向量的维度。名为 <code>self.mlp</code> 的全连接层可以将维度为 <code>time_embed_dim</code> 的向量变换为维度为 <code>in_ch</code> 的向量。</p>
+<p>参数 <code translate="no">time_embed_dim</code> 是通过正弦位置编码变换后的向量的维度。名为 <code translate="no">self.mlp</code> 的全连接层可以将维度为 <code translate="no">time_embed_dim</code> 的向量变换为维度为 <code translate="no">in_ch</code> 的向量。</p>
 <p>最后使用这个新的 ConvBlock 类来实现 UNet 类。代码如下所示。</p>
 <p><pre translate="no"><code class="language-python">class UNet(nn.Module):
     def __init__(self, in_ch=1, time_embed_dim=100):

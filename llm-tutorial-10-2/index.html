@@ -163,7 +163,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_path)
 </code></pre>
 </p>
 <p>然后我们设置一下生成文本的参数。保证测试的一致性。</p>
-<p>其中151645为 <code>&lt;|im_end|&gt;</code>，151643为 <code>&lt;|endoftext|&gt;</code></p>
+<p>其中151645为 <code translate="no">&lt;|im_end|&gt;</code>，151643为 <code translate="no">&lt;|endoftext|&gt;</code></p>
 <p><pre translate="no"><code class="language-python">model.generation_config.do_sample = True
 model.generation_config.eos_token_id = [151645,151643]
 model.generation_config.pad_token_id = 151643
@@ -565,8 +565,8 @@ tokenizer.save_pretrained("./Qwen3-0.6B-SFT/")
 </p>
 <p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-10-5.png" alt="图10.5 我们是从model_inputs中寻找回答部分，然后计算预测的损失" loading="lazy"><figcaption>图10.5 我们是从model_inputs中寻找回答部分，然后计算预测的损失</figcaption></figure>
 </p>
-<p>为什么要取交集？也就是代码 <code>final_loss_mask = (assistant_answer_mask &amp; padding_mask)</code> 为什么要这么写？</p>
-<p>注意到 <code>padding_mask = torch.where(target_labels == pad_token_id, 0, 1)</code> 是将 target_labels 中的填充符 pad_token 置为 0。因为我们是右填充逻辑。</p>
+<p>为什么要取交集？也就是代码 <code translate="no">final_loss_mask = (assistant_answer_mask &amp; padding_mask)</code> 为什么要这么写？</p>
+<p>注意到 <code translate="no">padding_mask = torch.where(target_labels == pad_token_id, 0, 1)</code> 是将 target_labels 中的填充符 pad_token 置为 0。因为我们是右填充逻辑。</p>
 <p>在绝大多数标准场景下，这个“取交集”的操作确实是冗余的，但保留它也无伤大雅，甚至是一种防御性编程的好习惯。</p>
 <p>下面为你详细拆解为什么它是“冗余”的，以及为什么在某些边缘情况下它又是“必要”的。</p>
 <ol>
@@ -587,14 +587,14 @@ tokenizer.save_pretrained("./Qwen3-0.6B-SFT/")
 </ol>
 <p>虽然逻辑上冗余，但在工程实践中，保留 &amp; padding_mask 有两个好处：</p>
 <p>A. 防止掩码生成函数的 Bug</p>
-<p><code>create_answer_mask</code> 是一个复杂的逻辑函数（涉及查找 <code>&lt;im_start&gt;</code>，<code>&lt;im_end&gt;</code> 索引）。如果这个函数写得有瑕疵，比如：</p>
+<p><code translate="no">create_answer_mask</code> 是一个复杂的逻辑函数（涉及查找 <code translate="no">&lt;im_start&gt;</code>，<code translate="no">&lt;im_end&gt;</code> 索引）。如果这个函数写得有瑕疵，比如：</p>
 <ul>
 <li>索引计算错误，导致掩码划多了，划到了 Padding 区域。</li>
 <li>数据集本身有脏数据，导致解析错位。</li>
 </ul>
 <p>此时，&amp; padding_mask 就像一道安全闸，强制把 Loss 计算限制在非 Padding 区域，防止模型去学习“预测 Padding Token”，避免模型变傻。</p>
 <p>B. 处理截断（Truncation）的边缘情况</p>
-<p>在代码中，我们使用了 <code>truncation=True</code>。如果一条数据非常长，恰好在 Assistant 回答的一半被截断了，且后面紧接着就是 Padding（这种情况在我们的代码中不会出现！虽然在 truncation 后通常没有 padding，但也取决于具体实现），双重掩码能确保万无一失。</p>
+<p>在代码中，我们使用了 <code translate="no">truncation=True</code>。如果一条数据非常长，恰好在 Assistant 回答的一半被截断了，且后面紧接着就是 Padding（这种情况在我们的代码中不会出现！虽然在 truncation 后通常没有 padding，但也取决于具体实现），双重掩码能确保万无一失。</p>
 <h3 id="sec-3">10.2.2 第二步：使用DPO算法对SFT后的模型进行微调</h3>
 <p><strong>危险</strong></p>
 <p>我们使用DPO算法要微调的模型是上一节中保存的“Qwen3-0.6B-SFT”。</p>

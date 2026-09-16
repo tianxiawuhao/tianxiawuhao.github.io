@@ -130,7 +130,7 @@
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <h3 id="sec-1">12.3.1 医疗思维链</h3>
-<p>我们使用 Hugging Face 的 <code>interleave_datasets</code> 混合三个关键数据集：</p>
+<p>我们使用 Hugging Face 的 <code translate="no">interleave_datasets</code> 混合三个关键数据集：</p>
 <p>PubMedQA（占总数据的70%）：</p>
 <ul>
 <li>临床问答，答案为 yes/no/maybe</li>
@@ -146,7 +146,7 @@
 </ul>
 <p>权重应该反映数据集的复杂性——PubMedQA 的曝光度增加了 3 倍，以处理其细微差别。我们这里对数据集进行了打乱。由于 PubMedQA 样本量增加了 3 倍，因此将这些样本展示给模型的几率也增加了 3 倍。</p>
 <p>模型在训练过程中的答案</p>
-<p><pre translate="no"><code>Prompt（提示）：
+<p><pre translate="no"><code translate="no">Prompt（提示）：
 
 在以下科学背景下：
 
@@ -446,7 +446,7 @@ trainer.train()
 </ul>
 <p>代理奖励（辅助平滑梯度）：</p>
 <ul>
-<li>格式规范：输出是否按要求的 XML 标签格式（<code>&lt;reasoning&gt;</code> + <code>&lt;answer&gt;</code>）</li>
+<li>格式规范：输出是否按要求的 XML 标签格式（<code translate="no">&lt;reasoning&gt;</code> + <code translate="no">&lt;answer&gt;</code>）</li>
 <li>语法正确：SQL 能不能被parser 解析</li>
 <li>Schema 匹配：用到的表名列名跟标准答案的 Jaccard 相似度</li>
 <li>N-gram 相似度：跟标准 SQL 的 bigram 重合度</li>
@@ -467,18 +467,18 @@ schema 匹配度涨了，只是模型学会了“看到这种问题就用这几�
 训练跑起来了，execution reward 从 0 开始涨，一切看起来很美好。
 然后，在训练到 22% 的时候，整个 8 卡训练突然挂了。
 查日志，看到这行：
-<pre translate="no"><code>WorkNCCL(SeqNum=7034, OpType=_ALLGATHER_BASE)
+<pre translate="no"><code translate="no">WorkNCCL(SeqNum=7034, OpType=_ALLGATHER_BASE)
 ran for 1800063ms before timing out
 </code></pre>
 
 翻译：某个 GPU 在一个同步操作上卡了 30 分钟，其他 7 张卡等不住了，集体超时退出。
-根因：模型生成了一条带笛卡尔积的 SQL，类似 <code>SELECT * FROM A, B, C WHERE ...</code>，三张大表做交叉连接，结果集是天文数字。SQLite 老老实实地算，直到超时。
+根因：模型生成了一条带笛卡尔积的 SQL，类似 <code translate="no">SELECT * FROM A, B, C WHERE ...</code>，三张大表做交叉连接，结果集是天文数字。SQLite 老老实实地算，直到超时。
 这张卡在执行这条 SQL，其他卡早就算完了在等它同步。等了 30 分钟，NCCL watchdog 判定超时，SIGABRT 杀掉所有进程。
 DDP 训练的致命弱点：一个 rank 卡住 = 全部卡住。
 作为 Text2SQL 领域的新手，修了三次才搞定：
-第一次用 <code>signal.alarm(30)</code> 设超时——失败。SIGALRM 只能发给主线程，DDP 的 worker 线程收不到。
-第二次用 <code>threading.Timer</code> ——失败。SQLite 的连接不是线程安全的，跨线程关闭连接会 segfault。
-第三次用 <code>ThreadPoolExecutor</code>：把 SQL 执行扔到独立线程池，用 <code>.result(timeout=30)</code> 等结果。超时就放弃，返回 reward=0。终于稳了。</p>
+第一次用 <code translate="no">signal.alarm(30)</code> 设超时——失败。SIGALRM 只能发给主线程，DDP 的 worker 线程收不到。
+第二次用 <code translate="no">threading.Timer</code> ——失败。SQLite 的连接不是线程安全的，跨线程关闭连接会 segfault。
+第三次用 <code translate="no">ThreadPoolExecutor</code>：把 SQL 执行扔到独立线程池，用 <code translate="no">.result(timeout=30)</code> 等结果。超时就放弃，返回 reward=0。终于稳了。</p>
 <p><pre translate="no"><code class="language-python">executor = ThreadPoolExecutor(max_workers=1)
 try:
     result = executor.submit(run_sql, db, sql).result(timeout=30)
@@ -538,7 +538,7 @@ REINFORCE++ 走另一个极端，特别保守。KL 稳如老狗，但 reward 也
 <p>1.2 任务定义
 训练一个 Mutual Fund Assistant SubAgent，根据用户请求准确选择工具（API）。
 可用工具：
-<code>check_balance</code>、<code>transfer_funds</code>、<code>withdraw_funds</code>、<code>place_order</code>、<code>get_transaction_history</code>、<code>check_market_status</code>
+<code translate="no">check_balance</code>、<code translate="no">transfer_funds</code>、<code translate="no">withdraw_funds</code>、<code translate="no">place_order</code>、<code translate="no">get_transaction_history</code>、<code translate="no">check_market_status</code>
 场景分级：</p>
 <ul>
 <li>简单：“查一下我的余额” → check_balance</li>
@@ -591,7 +591,7 @@ loss = 0.3 * reasoning_loss + 0.7 * tool_loss
 <pre translate="no"><code class="language-json">{"input": "转账10万再提现5万", "output": '{"tool": "check_balance"}'}
 </code></pre>
 
-label 本身就错了！测试期望 <code>transfer_funds</code>，训练却教 <code>check_balance</code>。
+label 本身就错了！测试期望 <code translate="no">transfer_funds</code>，训练却教 <code translate="no">check_balance</code>。
 重新设计输出格式：
 <pre translate="no"><code class="language-json">{
     "thought": "两步操作：先转账再提现。执行转账。",
