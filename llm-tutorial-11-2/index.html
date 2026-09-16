@@ -167,12 +167,11 @@ $$</p>
 </ul>
 <p>防止 Reward Hacking（奖励黑客）：如果没有约束，RL模型会利用奖励模型的漏洞，生成一些人类读起来不通顺、但奖励模型误判为高分的奇怪句子（例如重复乱码）。保持语言流畅性：SFT模型通常能生成通顺的自然语言。通过锚定SFT模型，保证了RL微调的模型生成的句子依然是“人话”。计算细节：这个惩罚是“逐token计算”的，也就是如果 $\pi_{\theta}$ 对某个token的生成概率远高于 $\pi_{\mathrm{ref}}$ 说明模型在“冒险”偏离原来的轨道，惩罚就会变大。奖励模型的打分鼓励模型往“人类喜欢”的方向走。KL惩罚拽住模型，不让它跑得太偏，避免它为了高分而变成“怪兽”。在标准的InstructGPT实现中，奖励模型（RM）的分数通常只加在最后一个token上，而KL惩罚是加在每一个token上的。让我们把这个过程像切蛋糕一样切开来看：</p>
 <p>让我们把这个过程像切蛋糕一样切开来看：</p>
-<h3 id="sec-1">11.2.1 奖励的时间步分配</h3>
 <p>假设模型生成了一个长度为T的句子：$y = [y_{1},y_{2},\dots ,y_{T}]$</p>
 <p>在PPO的每一个时间步t，智能体获得的即时奖励 $R_t$ 是这样计算的：</p>
 <table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">时间步（token）</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">即时奖励Rt的构成</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">解释</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">中间token (t < T)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">只有KL惩罚<br>$R_t = -\beta \log \frac{\pi_{\theta}(y_t | x,y_{&lt; t})}{\pi_{\mathrm{ref}}(y_t | x,y_{&lt; t})}$</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">此时句子还没写完，奖励模型无法打分。我们只关心这一步有没有“偏离初心”（KL散度）。</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">最后一个token (t = T)</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">KL惩罚 + RM总分<br>$R_T = -\beta \log \frac{\pi_{\theta}(y_T | x,y_{&lt; T})}{\pi_{\mathrm{ref}}(y_T | x,y_{&lt; T})} + \text{奖励模型给的分数}$</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">句子结束（遇到`<eos_token>`），奖励模型RM终于看完了整句话，给出一个得分，叠加在最后一步上。</td></tr></table>
 
-<h3 id="sec-2">11.2.2 为什么要这样做？</h3>
+<h3 id="sec-1">11.2.2 为什么要这样做？</h3>
 <p>你可能会问：“如果只奖励最后一个词，前面的词怎么知道自己做得好不好？”</p>
 <p>虽然物理上的奖励（奖励模型给的得分）只发生在最后一步，但PPO使用了广义优势估计（GAE）来回传这个信号：</p>
 <ol>
@@ -223,8 +222,7 @@ $$</p>
           <hr>
 
           <div class="toc-container"><ul class="markdownIt-TOC">
-<li><a href="#sec-1">11.2.1 奖励的时间步分配</a></li>
-<li><a href="#sec-2">11.2.2 为什么要这样做？</a></li>
+<li><a href="#sec-1">11.2.2 为什么要这样做？</a></li>
 </ul>
 </div>
 <hr />
