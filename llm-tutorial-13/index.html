@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="多模态,Vision Transformer">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>13 Vision Transformer | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="13 Vision Transformer | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="13 Vision Transformer" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-13/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/ai-tutorial/" class="tag">AI教程</a>
+                <a href="/tutorial/" class="tag">Vision Transformer</a>
+                </span>
+              <h1>13 Vision Transformer</h1>
+              <span class="meta">
+                Posted on
+                2025-05-09，34 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
+          <p><strong>提示</strong></p>
+<p>ViT: Vision Transformer</p>
+<p>基于自注意力的 Transformer 模型由 Vaswani 等人在 2017 年的论文《Attention Is All You Need》中首次提出，并已广泛应用于自然语言处理中。Transformer 模型是 OpenAI 用来创建 ChatGPT 的模型。Transformer 不仅适用于文本，还适用于图像，基本上可以处理任何序列数据。2021 年，Dosovitsky 等人在他们的论文《An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale》中引入了将 Transformer 用于计算机视觉任务（例如图像分类）的想法。在他们的论文中，与卷积网络相比，他们的 Vision Transformer 模型能够取得出色的结果，并且需要更少的资源来训练。</p>
+<p>在本教程中，我们将从头开始构建一个 Vision Transformer 模型，并在 MNIST 数据集上进行测试。</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-1.png" alt="图 13.1 Vit 架构图" loading="lazy"><figcaption>图 13.1 Vit 架构图</figcaption></figure>
+</p>
+<h2 id="sec-1">13.1 导入库和模块</h2>
+<p>本章所需依赖</p>
+<p><pre><code class="language-python">import torch
+import torch.nn as nn
+import torchvision.transforms as T
+from torch.optim import Adam
+from torchvision.datasets.mnist import MNIST
+from torch.utils.data import DataLoader
+import numpy as np
+</code></pre>
+</p>
+<h2 id="sec-2">13.2 补丁嵌入（Patch Embedding）</h2>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-2.png" alt="图 13.2 补丁的例子" loading="lazy"><figcaption>图 13.2 补丁的例子</figcaption></figure>
+</p>
+<p>补丁嵌入类</p>
+<p><pre><code class="language-python">class PatchEmbedding(nn.Module):
+    def __init__(
+        self,
+        d_model, # 模型的维度
+        img_size, # 图片大小
+        patch_size, # 补丁大小
+        n_channels # 通道数量
+    ):
+        super().__init__()
+
+        self.d_model = d_model
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.n_channels = n_channels
+
+        self.linear_project = nn.Conv2d(
+            self.n_channels, # in_channels
+            self.d_model, # out_channels
+            kernel_size=self.patch_size, # kernel_size
+            stride=self.patch_size # stride
+        )
+
+    # B: 批次大小
+    # C: 通道数量
+    # H: 图像高度
+    # W: 图像宽度
+    # P_col: 补丁的列
+    # P_row: 补丁的行
+    def forward(self, x):
+        x = self.linear_project(x) # (B, C, H, W) -&gt; (B, d_model, P_col, P_row)
+        x = x.flatten(2) # (B, d_model, P_col, P_row) -&gt; (B, d_model, P)
+        x = x.transpose(1, 2) # (B, d_model, P) -&gt; (B, P, d_model)
+        return x
+</code></pre>
+</p>
+<p>创建 Vision Transformer 的第一步是将输入图像拆分为补丁，并创建这些补丁的线性嵌入序列。我们能够通过使用 PyTorch 的 Conv2d 方法来实现这一点。</p>
+<p>Conv2d 方法获取输入图像，将它们拆分为补丁，并提供大小等于 d_model 的线性投影。通过将 kernel_size 和步幅设置为补丁大小，我们确保补丁大小正确且没有重叠。</p>
+<p><pre><code class="language-python">self.linear_project = nn.Conv2d(
+    self.n_channels,
+    self.d_model,
+    kernel_size=self.patch_size,
+    stride=self.patch_size
+)
+</code></pre>
+</p>
+<p>在 forward 方法中，我们通过 linear_project/Conv2d 方法传递具有形状 (B, C, H, W) 的输入，并输出形状 (B, d_model, P_col, P_row) 的张量。</p>
+<p><pre><code class="language-python">def forward(self, x):
+    x = self.linear_project(x) # (B, C, H, W) -&gt; (B, d_model, P_col, P_row)
+</code></pre>
+</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-3.png" alt="图 13.3 将图像转换为补丁：第一步" loading="lazy"><figcaption>图 13.3 将图像转换为补丁：第一步</figcaption></figure>
+</p>
+<p>我们使用展平方法将补丁列和补丁行维度组合成一个补丁维度，从而得到 (B, d_model, P) 的形状</p>
+<p><pre><code class="language-python">x = x.flatten(2) # (B, d_model, P_col, P_row) -&gt; (B, d_model, P)
+</code></pre>
+</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-4.png" alt="图 13.4 将图像转换为补丁：第二步" loading="lazy"><figcaption>图 13.4 将图像转换为补丁：第二步</figcaption></figure>
+</p>
+<p>最后，我们使用转置方法切换 d_model 和补丁维度，得到 (B, P, d_model) 的形状。</p>
+<p><pre><code class="language-python">x = x.transpose(1, 2) # (B, d_model, P) -&gt; (B, P, d_model)
+</code></pre>
+</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-5.png" alt="图 13.5 将图像转换为补丁：第三步" loading="lazy"><figcaption>图 13.5 将图像转换为补丁：第三步</figcaption></figure>
+</p>
+<h2 id="sec-3">13.3 类别对应的 token 和位置编码</h2>
+<p>位置编码类</p>
+<p><pre><code class="language-python">class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_seq_length):
+        super().__init__()
+        # 类别token
+        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
+        # 创建位置编码
+        pe = torch.zeros(max_seq_length, d_model)
+
+        for pos in range(max_seq_length):
+            for i in range(d_model):
+                if i % 2 == 0:
+                    pe[pos][i] = np.sin(pos/(10000 ** (i/d_model)))
+                else:
+                    pe[pos][i] = np.cos(pos/(10000 ** ((i-1)/d_model)))
+        # 将位置编码固定
+        self.register_buffer("pe", pe.unsqueeze(0))
+
+    def forward(self, x):
+        # 为批次中的每张图片分配一个类别token
+        tokens_batch = self.cls_token.expand(x.size()[0], -1, -1)
+        # 将类别token添加到每个图像的补丁嵌入数组的开头
+        x = torch.cat((tokens_batch, x), dim=1)
+        # 将位置编码添加到嵌入中
+        x = x + self.pe
+        return x
+</code></pre>
+</p>
+<p>ViT 模型使用向补丁嵌入添加可学习的类别 token 的标准方法来执行分类。</p>
+<p><pre><code class="language-python"># class token: 类别或者分类对应的token
+self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
+</code></pre>
+</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-6.png" alt="图 13.6 位置编码的作用" loading="lazy"><figcaption>图 13.6 位置编码的作用</figcaption></figure>
+</p>
+<p>与 LSTM 等按顺序接受嵌入的模型不同，Transformer 并行的接受嵌入。虽然这提高了速度，但 Transformer 不知道序列的顺序是什么。这是一个很大的问题，因为改变序列的顺序很可能会改变其含义。上图就是一个例子，它显示更改图像的补丁顺序可以将图像从 O 更改为更接近 X 的图像。为了解决这个问题，需要将位置编码添加到嵌入中。每个位置编码对于它所表示的位置都是唯一的，这允许模型识别每个补丁嵌入应该在的位置。为了将位置编码添加到补丁嵌入中，它们必须具有相同的维度，d_model。我们使用下面的公式获得位置编码。</p>
+<p>定义 13.1 — 位置编码</p>
+<p>$$
+PE(pos, 2i) = \sin\left(\frac{pos}{10000^{\frac{2i}{d_{model}}}}\right)
+$$
+$$
+PE(pos, 2i+1) = \cos\left(\frac{pos}{10000^{\frac{2i}{d_{model}}}}\right)
+\tag{13.1}
+$$</p>
+<p><pre><code class="language-python"># max_seq_length：补丁嵌入的数量，d_model：嵌入维度
+pe = torch.zeros(max_seq_length, d_model)
+
+for pos in range(max_seq_length):
+    for i in range(d_model):
+        if i % 2 == 0:
+            pe[pos][i] = np.sin(pos/(10000 ** (i/d_model)))
+        else:
+            pe[pos][i] = np.cos(pos/(10000 ** ((i-1)/d_model)))
+# 禁止pe更新，pe保存在了显存中，不会被反向传播更新
+self.register_buffer('pe', pe.unsqueeze(0))
+</code></pre>
+</p>
+<p>在 forward 方法中，输入是多个图像的一批补丁嵌入。例如，32x32 的图像可以分解为 16 个 8x8 大小的补丁。在此 max_seq_length 中，需要为 16+1=17 才能创建足够的位置嵌入，每个补丁一个，分类对应的 token 一个。</p>
+<p>因此，我们需要使用 expand 函数才能使用 self.cls_token 为批处理中的每个图像创建分类对应的 token。注意力机制会将有关整个序列的信息编码到序列中的每个 token 中。由于每个 token 都受到其自身信息的偏见，因此分类对应的 token 会创建序列中所有 token 的独立的摘要信息。</p>
+<p><pre><code class="language-python">def forward(self, x):
+    tokens_batch = self.cls_token.expand(x.size()[0], -1, -1)
+</code></pre>
+</p>
+<p>然后，使用 torch.cat 方法将这些分类 token 添加到每个补丁嵌入的开头。</p>
+<p><pre><code class="language-python">x = torch.cat((tokens_batch, x), dim=1)
+</code></pre>
+</p>
+<p>位置编码在输出之前添加。</p>
+<p><pre><code class="language-python">x = x + self.pe
+return x
+</code></pre>
+</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-7.png" alt="图 13.7" loading="lazy"><figcaption>图 13.7</figcaption></figure>
+</p>
+<p>左图：使用 Conv2d 运算分成 16 个 8x8 块的 32x32 MNIST 图像。右图：添加位置编码和类别 token 后的 16 个图像补丁，使用随机数据初始化。</p>
+<p>请注意，我们已经用 64 个卷积核初始化了 Conv2d 运算，每个卷积核中的每个补丁只占用一个像素，以免扭曲图像。</p>
+<h2 id="sec-4">13.4 注意力头</h2>
+<p>注意力头</p>
+<p><pre><code class="language-python">class AttentionHead(nn.Module):
+    def __init__(self, d_model, head_size):
+        super().__init__()
+        self.head_size = head_size
+
+        self.query = nn.Linear(d_model, head_size)
+        self.key = nn.Linear(d_model, head_size)
+        self.value = nn.Linear(d_model, head_size)
+
+    def forward(self, x):
+        # 计算Q, K, V
+        Q = self.query(x)
+        K = self.key(x)
+        V = self.value(x)
+
+        # QK^T
+        attention = Q @ K.transpose(-2, -1)
+
+        # softmax(QK^T / sqrt(d_head)) V
+        attention = attention / (self.head_size ** 0.5)
+        attention = torch.softmax(attention, dim=-1)
+        attention = attention @ V
+
+        return attention
+</code></pre>
+</p>
+<p><figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-13-8.png" alt="图 13.8 注意力机制" loading="lazy"><figcaption>图 13.8 注意力机制</figcaption></figure>
+</p>
+<p>ViT 使用注意力机制，这是一种通信机制，允许模型专注于图像的重要部分。可以使用下面的公式计算注意力分数。</p>
+<p>$$
+\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V \tag{13.2}
+$$</p>
+<p>计算注意力的第一步是获取 token 的 Q、K 和 V。token 的 Q 是 token 要查找的内容，K 是 token 包含的内容，V 是 token 之间的互信息。Q、K 和 V 可以通过线性层传递 token 来计算。</p>
+<p><pre><code class="language-python">def forward(self, x):
+    # 计算Q，K，V
+    Q = self.query(x)
+    K = self.key(x)
+    V = self.value(x)
+</code></pre>
+</p>
+<p>我们能够通过计算 Q 和 K 的点积来获取序列中 token 之间的关系。</p>
+<p><pre><code class="language-python">attention = Q @ K.transpose(-2, -1)
+</code></pre>
+</p>
+<p>我们需要缩放这些值以控制初始化时的方差，以便 token 能够聚合来自多个其他 token 的信息。通过将点积除以注意力头大小的平方根来应用缩放。</p>
+<p><pre><code class="language-python">attention = attention / (self.head_size ** 0.5)
+</code></pre>
+</p>
+<p>然后，我们需要对缩放的点积应用 softmax。</p>
+<p><pre><code class="language-python">attention = torch.softmax(attention, dim=-1)
+</code></pre>
+</p>
+<p>最后，我们需要得到 softmax 和 V 矩阵之间的点积。这本质上是在相应的 token 之间传递信息。</p>
+<p><pre><code class="language-python">attention = attention @ V
+return attention
+</code></pre>
+</p>
+<h2 id="sec-5">13.5 多头注意力</h2>
+<p>多头注意力</p>
+<p><pre><code class="language-python">class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, n_heads):
+        super().__init__()
+        self.head_size = d_model // n_heads
+        self.W_o = nn.Linear(d_model, d_model)
+        self.heads = nn.ModuleList([
+            AttentionHead(d_model, self.head_size) for _ in range(n_heads)
+        ])
+
+    def forward(self, x):
+        # 拼接多个注意力头
+        out = torch.cat([head(x) for head in self.heads], dim=-1)
+        out = self.W_o(out)
+        return out
+</code></pre>
+</p>
+<p>多头注意力只是并行运行多个头的自注意力并将它们组合起来。我们可以通过将注意力头添加到模块列表中来做到这一点，</p>
+<p><pre><code class="language-python">self.heads = nn.ModuleList([
+    AttentionHead(d_model, self.head_size)
+    for _ in range(n_heads)
+])
+</code></pre>
+</p>
+<p>传递输入然后拼接。</p>
+<p><pre><code class="language-python">def forward(self, x):
+    # 拼接多个注意力头
+    out = torch.cat([head(x) for head in self.heads], dim=-1)
+</code></pre>
+</p>
+<p>然后，我们需要将输出传递给另一个线性层。</p>
+<p><pre><code class="language-python">out = self.W_o(out)
+return out
+</code></pre>
+</p>
+<h2 id="sec-6">13.6 Transformer 编码器</h2>
+<p>Transformer 编码器</p>
+<p><pre><code class="language-python">class TransformerEncoder(nn.Module):
+    def __init__(self, d_model, n_heads, r_mlp=4):
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+
+        # 层归一化
+        self.ln1 = nn.LayerNorm(d_model)
+
+        # 多头注意力
+        self.mha = MultiHeadAttention(d_model, n_heads)
+
+        # 层归一化
+        self.ln2 = nn.LayerNorm(d_model)
+
+        # MLP
+        self.mlp = nn.Sequential(
+            nn.Linear(d_model, d_model*r_mlp),
+            nn.GELU(),
+            nn.Linear(d_model*r_mlp, d_model)
+        )
+
+    def forward(self, x):
+        out = x + self.mha(self.ln1(x)) # 跳跃连接
+        out = out + self.mlp(self.ln2(out)) # 跳跃连接
+        return out
+</code></pre>
+</p>
+<p>Transformer 编码器由两个子层组成：第一个子层执行多头注意力，第二个子层包含 MLP。多头注意力子层执行 token 之间的通信，而 MLP 子层允许 token 单独“思考”与它们通信的内容。</p>
+<p>层归一化是一种优化技术，可跨其特征独立归一化批处理中的每个输入。对于我们的模型，我们将在每个子层的开头通过层归一化模块传递我们的输入。</p>
+<p><pre><code class="language-python">self.ln1 = nn.LayerNorm(d_model)
+self.ln2 = nn.LayerNorm(d_model)
+</code></pre>
+</p>
+<p>MLP 将由两个线性层组成，中间有一个 GELU 层。使用 GELU 代替 RELU，因为它没有 RELU 在零点不可导的限制。</p>
+<p><pre><code class="language-python"># 编码器的MLP
+self.mlp = nn.Sequential(
+    nn.Linear(width, width*r_mlp),
+    nn.GELU(),
+    nn.Linear(width*r_mlp, width)
+)
+</code></pre>
+</p>
+<p>在编码器的 forward 方法中，输入在执行多头注意力之前通过第一层归一化模块。通过执行多头注意力将原始输入添加到输出中，以创建残差连接。</p>
+<p>然后，在输入 MLP 之前，它会通过另一个层归一化模块。通过将 MLP 的输出添加到第一个残差连接的输出，创建另一个残差连接。</p>
+<p>残差连接用于通过创建一条路径来帮助防止梯度消失问题，以便梯度不受阻碍地反向传播回原始输入。</p>
+<p><pre><code class="language-python">def forward(self, x):
+    out = x + self.mha(self.ln1(x))
+    out = out + self.mlp(self.ln2(out))
+    return out
+</code></pre>
+</p>
+<h2 id="sec-7">13.7 Vision Transformer</h2>
+<p>ViT 类</p>
+<p><pre><code class="language-python">class VisionTransformer(nn.Module):
+    def __init__(
+        self,
+        d_model,
+        n_classes,
+        img_size,
+        patch_size,
+        n_channels,
+        n_heads,
+        n_layers
+    ):
+        super().__init__()
+
+        assert img_size[0] % patch_size[0] == 0 \
+            and img_size[1] % patch_size[1] == 0, \
+            "img_size 必须能被 patch_size 整除"
+        assert d_model % n_heads == 0, \
+            "d_model 必须能被 n_heads 整除"
+
+        self.d_model = d_model # 模型维度，嵌入的维度（宽度）
+        self.n_classes = n_classes # 类别的数量
+        self.img_size = img_size # 图片大小
+        self.patch_size = patch_size # 补丁大小
+        self.n_channels = n_channels # 通道数
+        self.n_heads = n_heads # 注意力头的数量
+        # 补丁的数量 = 32×32 / 4×4
+        self.n_patches = (self.img_size[0] * self.img_size[1]) \
+            // (self.patch_size[0] * self.patch_size[1])
+        # 序列的长度 = 1（分类token） + 补丁的数量
+        self.max_seq_length = self.n_patches + 1
+        # 补丁嵌入
+        self.patch_embedding = PatchEmbedding(
+            self.d_model,
+            self.img_size,
+            self.patch_size,
+            self.n_channels
+        )
+        # 位置编码
+        self.positional_encoding = PositionalEncoding(
+            self.d_model,
+            self.max_seq_length
+        )
+        self.transformer_encoder = nn.Sequential(*[
+            TransformerEncoder(self.d_model, self.n_heads)
+            for _ in range(n_layers)
+        ])
+
+        # 用于分类的MLP
+        self.classifier = nn.Sequential(
+            nn.Linear(self.d_model, self.n_classes),
+            nn.Softmax(dim=-1)
+        )
+
+    def forward(self, images):
+        # 将图片转换成补丁的嵌入（embedding）
+        x = self.patch_embedding(images)
+        # 添加位置编码
+        x = self.positional_encoding(x)
+        # 编码
+        x = self.transformer_encoder(x)
+        # 分类的线性层
+        x = self.classifier(x[:,0])
+        return x
+</code></pre>
+</p>
+<p>在创建我们的 VisionTransformer 类时，我们首先需要确保输入图像可以均匀地分成大小为 patch_size 的补丁，并且模型的维数可以被注意力头的数量整除。</p>
+<p><pre><code class="language-python">assert img_size[0] % patch_size[0] == 0 \
+    and img_size[1] % patch_size[1] == 0, \
+    "img_size 必须能被 patch_size 整除"
+assert d_model % n_heads == 0, \
+    "d_model 必须能被 n_heads 整除"
+</code></pre>
+</p>
+<p>我们还需要计算位置编码的最大序列长度，该长度等于补丁的数量加1。补丁的数量可以通过将输入图像的高和宽的乘积除以补丁大小的高和宽的乘积来计算。</p>
+<p><pre><code class="language-python">self.n_patches = (self.img_size[0] * self.img_size[1]) \
+    // (self.patch_size[0] * self.patch_size[1])
+self.max_seq_length = self.n_patches + 1
+</code></pre>
+</p>
+<p>VisionTransformer 还需要能够拥有多个编码器模块。这可以通过将编码器层列表放入顺序包装器中来实现。</p>
+<p><pre><code class="language-python">self.encoder = nn.Sequential(*[
+    TransformerEncoder(self.d_model, self.n_heads) for _ in range(n_layers)
+])
+</code></pre>
+</p>
+<p>VisionTransformer 模型的最后一部分是 MLP 分类头。它由一个线性层和一个 softmax 层组成。</p>
+<p><pre><code class="language-python">self.classifier = nn.Sequential(
+    nn.Linear(self.d_model, self.n_classes),
+    nn.Softmax(dim=-1)
+)
+</code></pre>
+</p>
+<p>在 forward 方法中，输入图像首先经过补丁嵌入层，将图像分割成补丁，并获取这些补丁的线性嵌入序列。然后，它们经过位置编码层，添加分类 token 和位置编码，最后经过编码器模块。之后，分类 token 再经过分类 MLP，以确定图像的类别。</p>
+<p><pre><code class="language-python">def forward(self, images):
+    x = self.patch_embedding(images)
+    x = self.position_embedding(x)
+    x = self.encoder(x)
+    x = self.classifier(x[:,0])
+    return x
+</code></pre>
+</p>
+<p>我们已经完成了模型的构建。现在我们需要对其进行训练和测试。</p>
+<h2 id="sec-8">13.8 训练参数</h2>
+<p><pre><code class="language-python">d_model = 9 # 嵌入的维度9
+n_classes = 10 # 类别数量为10
+img_size = (32,32) # 图片大小为32x32
+patch_size = (16,16) # 补丁的大小是16x16
+n_channels = 1 # 灰度图片通道数量为1
+n_heads = 3 # 3个注意力头
+n_layers = 3 # 3层编码器
+batch_size = 128 # 每个批次128张图片
+epochs = 5 # 训练5个epoch
+alpha = 0.005 # 学习率5e-3
+</code></pre>
+</p>
+<h2 id="sec-9">13.9 加载 MNIST 数据集</h2>
+<p><pre><code class="language-python">transform = T.Compose([
+    T.Resize(img_size), # 28x28 --&gt; 32x32
+    T.ToTensor() # 转换成torch.tensor
+])
+
+train_set = MNIST(
+    root="datasets", train=True, download=True, transform=transform
+)
+test_set = MNIST(
+    root="datasets", train=False, download=True, transform=transform
+)
+
+train_loader = DataLoader(train_set, shuffle=True, batch_size=batch_size)
+test_loader = DataLoader(test_set, shuffle=False, batch_size=batch_size)
+</code></pre>
+</p>
+<h2 id="sec-10">13.10 训练循环</h2>
+<p>下面的代码使用 MNIST 训练集训练我们的 VisionTransformer 类，并展示了整个 epoch 的平均损失。</p>
+<p><pre><code class="language-python">device = torch.device("cuda")
+
+ViT = VisionTransformer(
+    d_model,
+    n_classes,
+    img_size,
+    patch_size,
+    n_channels,
+    n_heads,
+    n_layers
+).to(device)
+
+optimizer = Adam(ViT.parameters(), lr=alpha)
+criterion = nn.CrossEntropyLoss()
+
+for epoch in range(epochs):
+    training_loss = 0.0
+    for i, data in enumerate(train_loader, 0):
+        # 取出图像和对应的标签
+        inputs, labels = data
+        inputs, labels = inputs.to(device), labels.to(device)
+
+        optimizer.zero_grad()
+        outputs = ViT(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        training_loss += loss.item()
+
+    print(f"Epoch {epoch + 1}/{epochs} loss: \
+        {training_loss / len(train_loader) :.3f}")
+</code></pre>
+</p>
+<h2 id="sec-11">13.11 评估模型</h2>
+<p><pre><code class="language-python">correct = 0
+total = 0
+
+with torch.no_grad():
+    for data in test_loader:
+        images, labels = data
+        images, labels = images.to(device), labels.to(device)
+        outputs = ViT(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+    print(f"\n预测准确率: {100 * correct // total} %")
+</code></pre>
+</p>
+<p>使用此模型，我们仅用 5 个 epoch 就能够在 MNIST 数据集上实现约 92% 的准确率。此示例展示了自注意力机制可以替代深度卷积网络。</p>
+<hr>
+
+          <hr>
+
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#sec-1">13.1 导入库和模块</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-2">13.2 补丁嵌入（Patch Embedding）</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-3">13.3 类别对应的 token 和位置编码</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-4">13.4 注意力头</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-5">13.5 多头注意力</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-6">13.6 Transformer 编码器</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-7">13.7 Vision Transformer</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-8">13.8 训练参数</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-9">13.9 加载 MNIST 数据集</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-10">13.10 训练循环</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-11">13.11 评估模型</a>
+<ul>
+</ul>
+</li>
+</ul>
+</div>
+<hr />
+          
+            <nav class="post-pn">
+      <a class="prev-post" href="/llm-tutorial-12-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">12.3 GRPO 应用场景</span></a>
+      <a class="next-post" href="/llm-tutorial-14-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">14.1 导入库和模块</span></a>
+      </nav>
+          
+          
+          
+          
+          <div class="comment" style="text-align: center;">
+            
+
+            
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
