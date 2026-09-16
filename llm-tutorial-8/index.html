@@ -7,17 +7,17 @@
 <meta content="yes" name="apple-mobile-web-app-capable" />
 <meta content="black" name="apple-mobile-web-app-status-bar-style" />
 <meta name="referrer" content="never">
-<meta name="keywords" content="强化学习,undefined">
+<meta name="keywords" content="强化学习,组相对策略优化（GRPO）">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>8.2 使用GRPO玩倒立摆游戏 | tianxia</title>
+<title>8 组相对策略优化（GRPO） | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
 <link
   href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
   rel='stylesheet' type='text/css'>
-<link rel="alternate" type="application/rss+xml" title="8.2 使用GRPO玩倒立摆游戏 | tianxia » Feed"
+<link rel="alternate" type="application/rss+xml" title="8 组相对策略优化（GRPO） | tianxia » Feed"
   href="/atom.xml">
 <link rel="stylesheet"
   href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
@@ -30,8 +30,8 @@
 
 <script>hljs.initHighlightingOnLoad();</script>
 
-  <meta property="og:description" content="8.2 使用GRPO玩倒立摆游戏" />
-  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-8-2/" />
+  <meta property="og:description" content="8 组相对策略优化（GRPO）" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-8/" />
   <meta property="og:locale" content="zh-CN" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="tianxia" />
@@ -110,11 +110,12 @@
             <div class="post-heading">
               <span class="tags">
                 <a href="/ai-tutorial/" class="tag">AI教程</a>
-</span>
-              <h1>8.2 使用GRPO玩倒立摆游戏</h1>
+                <a href="/tutorial/" class="tag">组相对策略优化（GRPO）</a>
+                </span>
+              <h1>8 组相对策略优化（GRPO）</h1>
               <span class="meta">
                 Posted on
-                2025-04-27，9 min read</span>
+                2025-04-26，11 min read</span>
             </div>
           
         
@@ -129,7 +130,26 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
-          <p><pre><code class="language-python">def __init__(self, action_size):
+          <h2 id="sec-1">8.1 GRPO原理</h2>
+<p><strong>GRPO</strong></p>
+<p>Group Relative Policy Optimization：组相对策略优化</p>
+<p><strong>定理8.1—GRPO的目标函数</strong></p>
+<p>$$
+J(\theta)^{\mathrm{GRPO}} = \frac{1}{G}\sum_{i = 1}^{G}\frac{1}{|\tau_i|}\sum_{t = 1}^{|\tau_i|}\min \left[\rho A_{\tau_i,t},\mathrm{clip}(p,1 - \epsilon ,1 + \epsilon)A_{\tau_i,t}\right] \tag{8.1}
+$$</p>
+<p>先来说明一下GRPO目标函数中每个数学符号的含义：</p>
+<ul>
+<li>$\pi_{\theta}$ 表示正在更新的策略。</li>
+<li>$\pi_{\theta_{\mathrm{old}}}$ 表示上一轮训练好的旧策略。</li>
+<li>$G$ 表示使用旧策略 $\pi_{\theta_{\mathrm{old}}}$ 采样的一组轨迹的数量，也就是如果我们使用旧策略采样了10条轨迹，那么 $G = 10$。</li>
+<li>$\tau_{i}$ 表示第 $i$ 条轨迹。</li>
+<li>$|\tau_{i}|$ 表示第 $i$ 条轨迹的动作数量。</li>
+<li>$\pi_{\theta}\left(a_{\tau_{i},t}|s_{\tau_{i},t}\right)$ 表示第 $i$ 条轨迹的第 $t$ 个时刻的状态为 $s_{\tau_{i},t}$，以及在这个状态下正在更新的策略 $\pi_{\theta}$ 采取动作 $a_{\tau_{i},t}$ 的概率。</li>
+<li>$\pi_{\theta_{\mathrm{old}}}\left(a_{\tau_{i},t}|s_{\tau_{i},t}\right)$ 表示第 $i$ 条轨迹的第 $t$ 个时刻的状态为 $s_{\tau_{i},t}$，以及在这个状态下正在更新的策略 $\pi_{\theta_{\mathrm{old}}}$ 采取动作 $a_{\tau_{i},t}$ 的概率。</li>
+<li>$A_{\tau_{i},t}$ 表示第 $i$ 条轨迹的第 $t$ 个时刻的动作的优势。</li>
+</ul>
+<h2 id="sec-2">8.2 使用GRPO玩倒立摆游戏</h2>
+<p><pre><code class="language-python">def __init__(self, action_size):
     super().__init__()
     self.l1 = nn.Linear(4, 128)
     self.l2 = nn.Linear(128, action_size)
@@ -270,15 +290,26 @@ episodes = [i for i in range(len(returns))]
 plot_loss(len(returns), returns, "grpo-loss.pdf")
 </code></pre>
 </p>
-<hr>
-<h1 id="sec-1">基于人类反馈的强化学习</h1>
 
           <hr>
 
-          <hr />
+          <div class="toc-container"><ul class="markdownIt-TOC">
+<li>
+<a href="#sec-1">8.1 GRPO原理</a>
+<ul>
+</ul>
+</li>
+<li>
+<a href="#sec-2">8.2 使用GRPO玩倒立摆游戏</a>
+<ul>
+</ul>
+</li>
+</ul>
+</div>
+<hr />
           
             <nav class="post-pn">
-      <a class="prev-post" href="/llm-tutorial-8-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">8.1 GRPO原理</span></a>
+      <a class="prev-post" href="/llm-tutorial-7-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">7.3 补充知识</span></a>
       <a class="next-post" href="/llm-tutorial-9-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">9.1 LLM训练流程</span></a>
       </nav>
           
