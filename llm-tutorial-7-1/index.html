@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           
-          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.08);border:1px dashed rgba(127,127,127,.35);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink2,#666);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}@media (max-width:900px){.katex-display{font-size:92%}}</style>
           <p>在使用策略梯度算法训练智能体时，一个挑战是它们容易出现性能崩溃：智能体会突然表现很差。这种情况很难恢复，因为智能体会开始生成质量较差的轨迹，而这些轨迹又被用于进一步训练策略。</p>
 <p>我们还看到，原始策略梯度法样本效率很低，因为我们使用策略采样一条轨迹，然后更新完策略之后，轨迹就直接被丢弃了。</p>
 <p>Schulman等人提出的近端策略优化（Proximal Policy Optimization，PPO）是一类优化算法，用来解决这两个问题。PPO的核心思想是用替代（surrogate）目标替换掉原始的目标函数，它通过保证策略的单调改进来避免性能崩溃。PPO还有一个优点就是样本效率比较高，因为PPO会使用旧策略采样的轨迹更新很多次策略模型。</p>
@@ -219,20 +219,20 @@ D_{\text{KL}}(P \parallel Q) &amp;= -H(P) + H(P, Q) \tag{7.12} \\
 <h4 id="sec-4">7.1.3.1 什么是重要性采样？</h4>
 <p>重要性采样利用从其他概率分布中采样的数据来计算某个概率分布的期望值。为了说明重要性采样，下面来看一个计算期望值 $\mathbb{E}_{\pi}[x]$ 的简单例子。设 $x$ 是随机变量，$x$ 的概率用 $\pi(x)$ 表示。期望值的式子如下所示。</p>
 <p>$$
-\mathbb{E}_{\pi}`[x]` = \sum x\pi(x) \tag{7.14}
+\mathbb{E}_{\pi}[x] = \sum x\pi(x) \tag{7.14}
 $$</p>
 <p>我们先复习一下学过的内容。为了用蒙特卡洛方法近似这个期望值，我们从概率分布 $\pi$ 对 $x$ 进行采样，并取其平均值。数学式如下所示：</p>
 <p>$$
 \begin{aligned}
 &amp; \text{采样: } x^{(i)} \sim \pi \quad (i = 1, 2, \dots, n) \\
-&amp; \mathbb{E}_{\pi}`[x]` \simeq \frac{x^{(1)} + x^{(2)} + \cdots + x^{(n)}}{n} \tag{7.15}
+&amp; \mathbb{E}_{\pi}[x] \simeq \frac{x^{(1)} + x^{(2)} + \cdots + x^{(n)}}{n} \tag{7.15}
 \end{aligned}
 $$</p>
 <p>式子中的符号 $x^{(i)} \sim \pi$ 表示第 $i$ 个数据 $x^{(i)}$ 是从概率分布 $\pi$ 中采样的。</p>
 <p>接下来回到正题。我们现在探讨的是从别的概率分布中采样 $x$ 的场景。假设 $x$ 是从概率分布 $b$（而不是 $\pi$）中采样的。在这种情况下，期望值 $\mathbb{E}_{\pi}[x]$ 如何被近似呢？解决这个问题的关键在于下面这个式子的变形。</p>
 <p>$$
 \begin{aligned}
-\mathbb{E}_{\pi}`[x]` &amp;= \sum x\pi(x) \\
+\mathbb{E}_{\pi}[x] &amp;= \sum x\pi(x) \\
 &amp;= \sum x \frac{b(x)}{b(x)} \pi(x) \\
 &amp;= \sum x \frac{\pi(x)}{b(x)} b(x)
 \end{aligned}
@@ -240,13 +240,13 @@ $$</p>
 <p>这里的要点是插入 $\frac{b(x)}{b(x)}$。$\frac{b(x)}{b(x)}$ 总是为 1，所以等式成立。然后，我们将式子变为 $\sum \cdots b(x)$ 的形式，如上面的式子所示，这样它就可以被视为概率分布 $b(x)$ 的期望值了。实际上对上面的式子变形，可以得到以下式子。</p>
 <p>$$
 \begin{aligned}
-\mathbb{E}_{\pi}`[x]` &amp;= \sum x\frac{\pi(x)}{b(x)} b(x) \\
+\mathbb{E}_{\pi}[x] &amp;= \sum x\frac{\pi(x)}{b(x)} b(x) \\
 &amp;= \mathbb{E}_{b}\left[x\frac{\pi(x)}{b(x)}\right] \tag{7.17}
 \end{aligned}
 $$</p>
 <p>这里需要注意的是式子中的 $\mathbb{E}_{b}$，它表示的是概率分布 $b$ 的期望值。另外每个 $x$ 都要乘以 $\frac{\pi(x)}{b(x)}$ 这一点也很重要。如果 $\rho(x) = \frac{\pi(x)}{b(x)}$，那么我们就可以把式子看作每个 $x$ 都乘以权重 $\rho(x)$。根据以上探讨，基于式的蒙特卡洛方法如下所示。</p>
 <p>$$
-\mathbb{E}_{\pi}`[x]` \approx \frac{\rho(x^{(1)})x^{(1)} + \rho(x^{(2)})x^{(2)} + \dots +\rho(x^{(n)})x^{(n)}}{n} \tag{7.18}
+\mathbb{E}_{\pi}[x] \approx \frac{\rho(x^{(1)})x^{(1)} + \rho(x^{(2)})x^{(2)} + \dots +\rho(x^{(n)})x^{(n)}}{n} \tag{7.18}
 $$</p>
 <p>这样我们就使用从不同于 $\pi$ 的概率分布 $b$ 中采样的数据计算出了 $\mathbb{E}_{\pi}[x]$。下面来实现重要性采样的代码。这里我们对下图所示的概率分布进行重要性采样。</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-7-1.png" alt="图7.1 概率分布 $\pi$ 和 $b$" loading="lazy"><figcaption>图7.1 概率分布 $\pi$ 和 $b$</figcaption></figure>
@@ -274,7 +274,7 @@ print("MC: {:.2f} (var: {:.2f})".format(mean, var)) # 输出: MC: 2.78 (var: 0.2
 </p>
 <p>首先，套用定义式求期望值。求出的结果是2.7（这是真实的值）。然后，使用蒙特卡洛方法来求这个值。这里只基于概率分布pi采样100个数据，然后求平均值。为此，我们用NumPy的np.mean方法求出了平均值。结果是2.78，接近于真实值。作为参考，我们还使用NumPy的np.var方法求出了方差。方差的值是0.27。在与下一次重要性采样的结果进行比较时，这个值将被用作参考。方差用于表示数据的离散程度。期望值和方差之间的关系可以用以下式子表示。</p>
 <p>$$
-\mathrm{Var}`[X]` = \mathbb{E}[(X - \mathbb{E}`[X]`)^2] \tag{7.19}
+\mathrm{Var}[X] = \mathbb{E}[(X - \mathbb{E}[X])^2] \tag{7.19}
 $$</p>
 <p>方差是数据 $X$ 和 $X$ 的平均值 $\mathbb{E}[X]$ 之间的差的平方的期望值。直观地说，它代表了数据的离散程度，如下图所示。</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-7-2.png" alt="图7.2 将每个数据作为二维平面上的点时的方差的示意图（圆心是平均值）" loading="lazy"><figcaption>图7.2 将每个数据作为二维平面上的点时的方差的示意图（圆心是平均值）</figcaption></figure>
