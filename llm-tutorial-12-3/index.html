@@ -161,11 +161,11 @@
 
 Model Response（模型回答）：
 
-&lt;reasoning&gt;
+<code translate="no">&lt;reasoning&gt;</code>
 提供的背景讨论了一项研究：重复的亚红斑量 UV（DUVR）暴露在 4 周内会产生不利影响。它还提到使用了一款广谱日常护理产品（SPF 8，UVA 防护因子 7，UVA 3* 评级）进行评估。研究的目的是判断该广谱产品是否能预防这类重复暴露引起的累积性损伤。文本中说明，该研究显示重复 DUVR 的生物学效应可以被这款产品预防，说明其具有保护作用。虽然不同终点的防护程度不同，但整体表述支持其确实能预防累积损伤。因此答案应为"yes"。
 &lt;/reasoning&gt;
 
-&lt;answer&gt;
+<code translate="no">&lt;answer&gt;</code>
 yes
 &lt;/answer&gt;
 </code></pre>
@@ -179,23 +179,23 @@ import re
 # Load and prep dataset
 SYSTEM_PROMPT = """
 Respond in the following format:
-&lt;reasoning&gt;
+<code translate="no">&lt;reasoning&gt;</code>
 &lt;/reasoning&gt;
-&lt;answer&gt;
+<code translate="no">&lt;answer&gt;</code>
 &lt;/answer&gt;
 """
 
 XML_COT_FORMAT = """\
-&lt;reasoning&gt;
+<code translate="no">&lt;reasoning&gt;</code>
 {reasoning}
 &lt;/reasoning&gt;
-&lt;answer&gt;
+<code translate="no">&lt;answer&gt;</code>
 {answer}
 &lt;/answer&gt;
 """
 
 def extract_xml_answer(text: str) -&gt; str:
-    answer = text.split("&lt;answer&gt;")[-1]
+    answer = text.split("<code translate="no">&lt;answer&gt;</code>")[-1]
     answer = answer.split("&lt;/answer&gt;")[0]
     return answer.strip()
 
@@ -353,25 +353,25 @@ def int_reward_func(completions, db_set, **kwargs) -&gt; list[float]:
 
 def strict_format_reward_func(completions, **kwargs) -&gt; list[float]:
     """Reward function that checks if the completion has a specific format."""
-    pattern = r"^&lt;reasoning&gt;\n.*?\n&lt;/reasoning&gt;\n&lt;answer&gt;\n.*?\n&lt;/answer&gt;\n$"
+    pattern = r"^<code translate="no">&lt;reasoning&gt;</code>\n.*?\n&lt;/reasoning&gt;\n<code translate="no">&lt;answer&gt;</code>\n.*?\n&lt;/answer&gt;\n$"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
 def soft_format_reward_func(completions, **kwargs) -&gt; list[float]:
     """Reward function that checks if the completion has a specific format."""
-    pattern = r"&lt;reasoning&gt;.*?&lt;/reasoning&gt;\s*&lt;answer&gt;.*?&lt;/answer&gt;"
+    pattern = r"<code translate="no">&lt;reasoning&gt;</code>.*?&lt;/reasoning&gt;\s*<code translate="no">&lt;answer&gt;</code>.*?&lt;/answer&gt;"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
 def count_xml(text) -&gt; float:
     count = 0.0
-    if text.count("&lt;reasoning&gt;\n") == 1:
+    if text.count("<code translate="no">&lt;reasoning&gt;</code>\n") == 1:
         count += 0.125
     if text.count("\n&lt;/reasoning&gt;\n") == 1:
         count += 0.125
-    if text.count("\n&lt;answer&gt;\n") == 1:
+    if text.count("\n<code translate="no">&lt;answer&gt;</code>\n") == 1:
         count += 0.125
         count -= len(text.split("\n&lt;/answer&gt;\n")[-1])*0.001
     if text.count("\n&lt;/answer&gt;") == 1:
@@ -614,7 +614,7 @@ params: +0.1
 最终：平均分 96%，tool 准确率 97%，最低的 settlement 也到 79%。针对具体错误模式设计惩罚比通用算法改进更有效。</p>
 <p><strong>九、核心经验</strong></p>
 <p>关键监控指标</p>
-<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">指标</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">健康范围</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">问题信号</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">frac_reward_zero_std</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">< 30%</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">> 50% 奖励函数有问题</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">reward</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">接近 1.0</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">< 0.8 奖励上限太低</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">grad_norm</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">非零</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">持续为 0 没有学习</td></tr></table>
+<table style="border-collapse:collapse;margin:14px 0;font-size:14px;width:100%"><tr><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">指标</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">健康范围</th><th style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left;background:rgba(127,127,127,.08)">问题信号</th></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">frac_reward_zero_std</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">`&lt; 30%</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">>` 50% 奖励函数有问题</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">reward</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">接近 1.0</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">&lt; 0.8 奖励上限太低</td></tr><tr><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">grad_norm</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">非零</td><td style="border:1px solid var(--line,#ddd);padding:6px 10px;text-align:left">持续为 0 没有学习</td></tr></table>
 
 <p>奖励函数设计
 最大分必须能达到 1.0，要有足够区分度，针对具体错误模式设计惩罚，持续监控 frac_reward_zero_std。</p>

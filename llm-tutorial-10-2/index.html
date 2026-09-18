@@ -250,16 +250,16 @@ def cosine_decay(current_step, warmup_steps, total_steps, max_lr, min_lr):
 </code></pre>
 </p>
 <p>经过模型的对话模板格式化之后是</p>
-<p><pre translate="no"><code class="language-text">&lt;im_start&gt;system
-You are a helpful assistant &lt;im_end&gt;
-&lt;im_start&gt;user
-你是谁？&lt;im_end&gt;
-&lt;im_start&gt;assistant
-我是左元。&lt;im_end&gt;
-&lt;im_start&gt;user
-你会强化学习吗？&lt;im_end&gt;
-&lt;im_start&gt;assistant
-&lt;think&gt;&lt;/think&gt;略知一二。&lt;im_end&gt;
+<p><pre translate="no"><code class="language-text"><code translate="no">&lt;im_start&gt;</code>system
+You are a helpful assistant <code translate="no">&lt;im_end&gt;</code>
+<code translate="no">&lt;im_start&gt;</code>user
+你是谁？<code translate="no">&lt;im_end&gt;</code>
+<code translate="no">&lt;im_start&gt;</code>assistant
+我是左元。<code translate="no">&lt;im_end&gt;</code>
+<code translate="no">&lt;im_start&gt;</code>user
+你会强化学习吗？<code translate="no">&lt;im_end&gt;</code>
+<code translate="no">&lt;im_start&gt;</code>assistant
+<code translate="no">&lt;think&gt;</code>&lt;/think&gt;略知一二。<code translate="no">&lt;im_end&gt;</code>
 </code></pre>
 </p>
 <p>代码如下：</p>
@@ -276,10 +276,10 @@ You are a helpful assistant &lt;im_end&gt;
     answer_mask = torch.zeros_like(input_ids)
 
     # 获取结束标记的token id
-    eos_token_id = tokenizer.encode("&lt;im_end&gt;")[0]
+    eos_token_id = tokenizer.encode("<code translate="no">&lt;im_end&gt;</code>")[0]
 
     for batch_idx in range(batch_size):
-        # 找到所有 &lt;im_end&gt; 的位置
+        # 找到所有 <code translate="no">&lt;im_end&gt;</code> 的位置
         eos_positions = torch.where(
             input_ids[batch_idx] == eos_token_id
         )[0].tolist()
@@ -304,8 +304,8 @@ def _parse_conversation_turns(eos_positions):
     """
     解析对话轮次，分离用户和助手的结束位置
     对话格式：
-    &lt;im_start&gt;user\n{user_msg}&lt;im_end&gt;\n&lt;im_start&gt;assistant\n{assistant_msg}
-    &lt;im_end&gt;\n
+    <code translate="no">&lt;im_start&gt;</code>user\n{user_msg}<code translate="no">&lt;im_end&gt;</code>\n<code translate="no">&lt;im_start&gt;</code>assistant\n{assistant_msg}
+    <code translate="no">&lt;im_end&gt;</code>\n
     eos_positions[0]: system结束（如果有）
     eos_positions[1]: 第1轮user结束
     eos_positions[2]: 第1轮assistant结束
@@ -313,10 +313,10 @@ def _parse_conversation_turns(eos_positions):
     eos_positions[4]: 第2轮assistant结束
     """
     # 跳过system系统提示词部分，从第一个user开始
-    conversation_eos = eos_positions[1:] # 去掉system的&lt;im_end&gt;
+    conversation_eos = eos_positions[1:] # 去掉system的<code translate="no">&lt;im_end&gt;</code>
 
     # 偶数索引：user结束位置，奇数索引：assistant结束位置
-    # pos + 1 为跳过&lt;im_end&gt;，此时pos+1指向\n
+    # pos + 1 为跳过<code translate="no">&lt;im_end&gt;</code>，此时pos+1指向\n
     user_ends = [pos + 1 for pos in conversation_eos[::2]]
     assistant_ends = [pos + 1 for pos in conversation_eos[1::2]]
 
@@ -337,10 +337,10 @@ def _set_answer_masks(mask, user_ends, assistant_ends, seq_len):
     if num_user_turns == num_assistant_turns:
         # 完整对话: 每轮都有用户问题和助手回答
         for user_end, assistant_end in zip(user_ends, assistant_ends):
-            answer_start = user_end + 3 # 跳过 &lt;im_start&gt; assistant 这2个token.
+            answer_start = user_end + 3 # 跳过 <code translate="no">&lt;im_start&gt;</code> assistant 这2个token.
             # answer_start指向assistant后面的\n
-            answer_end = assistant_end - 1 # 不包含&lt;im_end&gt;后面的\n
-            mask[answer_start:answer_end] = 1 # 左闭右开区间，所以掩码不包含&lt;im_end&gt;
+            answer_end = assistant_end - 1 # 不包含<code translate="no">&lt;im_end&gt;</code>后面的\n
+            mask[answer_start:answer_end] = 1 # 左闭右开区间，所以掩码不包含<code translate="no">&lt;im_end&gt;</code>
     elif num_user_turns == num_assistant_turns + 1:
         # 未完成对话: 最后一轮助手回答被截断
         # 处理完整的对话轮次
@@ -406,7 +406,7 @@ for batch_idx in range(total_batches):
 
     ## 对批次数据进行填充，使所有序列长度一致以便并行计算
     padded_sequences_list = []
-    ## 将&lt;|endoftext|&gt;设置为填充符
+    ## 将<code translate="no">&lt;|endoftext|&gt;</code>设置为填充符
     pad_token_id = model.generation_config.eos_token_id[-1]
 
     for seq_idx in range(batch_size):
