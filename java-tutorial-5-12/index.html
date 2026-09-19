@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>代码能跑只是最低标准。真正决定成本的是三个月后你还能不能读懂它、敢不敢改它。如果一段业务逻辑隔了一个季度再回来看，需要花半小时才能弄明白，这份“隐形账单”在写下它的那天就已经记上了。本章讲的是一整套让代码保持可改的习惯。第一步说清重构的定义与动手时机，第二步落到命名和分层这类每天都要做的动作，第三步给出识别坏味道与最常用重构手法的路径，最后补齐两件最容易被忽视、一旦出事却最贵的事——日志规范与异常规范。适合已经能独立写业务、开始接手别人代码，或需要给团队定规矩的读者。</p>
+<p>代码能跑只是最低标准。真正决定成本的是三个月后你还能不能读懂它、敢不敢改它。如果一段业务逻辑隔了一个季度再回来看，需要花半小时才能弄明白，这份“隐形账单”在写下它的那天就已经记上了。本章讲的是一整套让代码保持可改的习惯。第一步说清重构的定义与动手时机，第二步落到命名和分层这类每天都要做的动作，第三步给出识别坏味道与最常用重构手法的路径，第四步交代现代 Java 写法（Optional / Stream / <code>var</code> / 字符串格式化）的适用边界，最后补齐两件最容易被忽视、一旦出事却最贵的事——日志规范与异常规范。适合已经能独立写业务、开始接手别人代码，或需要给团队定规矩的读者。</p>
 
 <h2>一、重构：不改变可观察行为，只改结构</h2>
 
@@ -187,13 +187,15 @@ double price() {
 
 <h2>四、日志规范：留证据，而不是刷屏</h2>
 
-<p>日志是线上排查唯一的现场记录，但写错方式会比不写更糟。<strong>第一，用门面，不用实现。</strong>应用中不要直接调用 Log4j、Logback 的 API，而应依赖 SLF4J 的 API。这样日志实现可以替换，各类的日志处理方式也保持统一。</p>
+<p>日志是线上排查唯一的现场记录，但写错方式会比不写更糟。<strong>第一，用门面，不用实现。</strong>应用中不要直接调用 Log4j、Logback 的 API，而应依赖 SLF4J 的 API。这样日志实现可以替换，各类的日志处理方式也保持统一。Spring Boot 3.x 的默认组合就是 SLF4J 2.x 门面 + Logback 1.4/1.5 实现，通常不需要额外配置；Log4j 1.x 已停止维护（EOL），只作为“不要选它”的历史注脚存在。</p>
+
+<p>与日志同类的还有 <code>System.out.println</code>：它没有级别、没有时间戳、没有上下文，在生产环境属于禁止项。临时调试用完就删，需要长期保留的信息一律落到日志门面。</p>
 
 <p><strong>第二，用占位符，别拼字符串。</strong>trace、debug、info 级别的输出必须使用条件输出形式或占位符方式。原因很实在：如果写成 <code>log.debug("symbol: " + symbol)</code>，即便当前级别是 warn、这条日志根本不会打印，字符串拼接依然会执行；<code>symbol</code> 是对象时还会调用 <code>toString()</code>，白白浪费资源。只有需要复杂计算时才用 <code>isDebugEnabled()</code> 包一层。</p>
 
 <p><strong>第三，分类与分级。</strong>扩展日志按 <code>appName_logType_logName.log</code> 命名，<code>logType</code> 可取 stats、desc、monitor、visit 等，<code>logName</code> 写日志描述，好处是看文件名就知道它属于哪个应用、什么类型、什么目的。错误日志与业务日志分开存放，便于查看和监控。</p>
 
-<p>日志文件建议至少保存 15 天，因为有些异常以“周”为频次发生。生产环境禁止输出 debug 日志，有选择地输出 info；用户输入参数错误适合用 warn 记录；error 只记录系统逻辑出错、异常这类重要信息。另外要避免重复打印，务必在 log4j.xml 中设置 <code>additivity=false</code>。</p>
+<p>日志文件建议至少保存 15 天，因为有些异常以“周”为频次发生。生产环境禁止输出 debug 日志，有选择地输出 info；用户输入参数错误适合用 warn 记录；error 只记录系统逻辑出错、异常这类重要信息。日志重复打印的根因是 appender 的叠加，在 Logback 里等价于把 logger 的 <code>additivity</code> 设为 <code>false</code>（<code>&lt;logger name="..." additivity="false"&gt;</code>），log4j2 同理；Log4j 1.x 时代的 <code>log4j.xml</code> 配置方式已随实现一起过时，Spring Boot 3.x 项目的配置文件是 <code>logback-spring.xml</code>。</p>
 
 <pre><code class="language-java">private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
@@ -215,15 +217,82 @@ public Order findById(Long id) {
     }
 }</code></pre>
 
-<h2>五、异常规范：不吞、不滥用、分层兜底</h2>
+<h2>五、现代 Java 写法：Optional、Stream、var 与字符串取舍</h2>
+
+<p>语言本身在往前跑，很多曾经要靠约定维持的写法已经有了更好的替代。Java 17 是当前的长期支持版本，下面四条是日常最常遇到的取舍。</p>
+
+<p><strong>Optional 用来表达“这里可能没有”，不是用来替代一切 null。</strong>它最适合做<em>方法的返回值</em>，让“可能为空”成为签名的一部分；不适合做字段、方法参数或放进集合，那只会多一层包装。取值时用 <code>orElse</code> / <code>orElseGet</code> / <code>orElseThrow</code> 给出兜底策略，而不是 <code>get()</code>——<code>Optional.get()</code> 为空时照样抛 <code>NoSuchElementException</code>，等于换个名字的 NPE。还要注意 <code>orElse</code> 的实参无论是否命中都会先求值，带副作用的兜底必须用 <code>orElseGet(Supplier)</code>。</p>
+
+<p><strong>Stream 适合“转换—过滤—收集”这类无状态流水线。</strong>集合的遍历与变换优先用 Stream，代码更短也更难写出下标越界；但不要为了用而用：需要下标、需要提前跳出、需要复用中间变量时，普通 for 循环反而更清楚。流里要保持无副作用，在 <code>forEach</code> 中修改外部集合一类写法应当避免；耗时较长的流处理（尤其并行流）不要占用 Web 请求线程，IO 密集任务交给线程池，并行流默认用的是公共 ForkJoinPool。</p>
+
+<pre><code class="language-java">// 传统写法：多层判空 + 手工收集
+public List&lt;String&gt; activeNames(List&lt;User&gt; users) {
+    List&lt;String&gt; result = new ArrayList&lt;&gt;();
+    if (users != null) {
+        for (User user : users) {
+            if (user != null &amp;&amp; user.isActive()) {
+                String name = user.getName();
+                if (name != null &amp;&amp; !name.isEmpty()) {
+                    result.add(name.trim());
+                }
+            }
+        }
+    }
+    return result;
+}
+
+// 现代写法：用 Stream 表达“过滤 + 映射 + 收集”，用 Optional 兜住单值缺失
+public List&lt;String&gt; activeNames(List&lt;User&gt; users) {
+    return Optional.ofNullable(users).orElseGet(List::of).stream()
+            .filter(Objects::nonNull)
+            .filter(User::isActive)
+            .map(User::getName)
+            .filter(StringUtils::hasText)
+            .map(String::trim)
+            .toList();                      // Java 16+ 的 Stream.toList()
+}
+
+// 单值场景：把“可能没有”写进返回值，而不是返回 null
+public Optional&lt;User&gt; findById(Long id) {
+    return Optional.ofNullable(userDao.selectById(id));
+}
+
+// 调用方：有副作用的兜底要用 orElseGet，否则无论命中与否都会执行
+User user = userService.findById(id)
+        .orElseGet(() -&gt; User.guest());</code></pre>
+
+<p><strong><code>var</code> 的适用范围很窄：只用于局部变量，且右边必须自解释。</strong>Java 10 引入局部变量类型推断，<code>var</code> 不是动态类型，编译期类型就已固定。它可以用在局部变量声明、for / for-each 的循环变量、try-with-resources 的资源和 lambda 参数（需显式标注类型时写 <code>(var a, var b)</code>）；<strong>不能</strong>用于字段、方法参数、返回值类型，也不能写 <code>var x = null</code> 或先声明后赋值。用与不用只有一条标准：读代码的人能否一眼看出类型——<code>var orders = new HashMap&lt;String, List&lt;Order&gt;&gt;();</code> 右边已写全，用 <code>var</code> 只是省掉重复；而 <code>var result = service.handle(request);</code> 抹掉了关键信息，应当写出类型。团队若没有统一约定，把 <code>var</code> 限制在“右侧构造函数或静态工厂显式给出类型”的场景最安全。</p>
+
+<p><strong><code>String.format</code> 还是字符串拼接？</strong>按场景选：一两段拼接直接用 <code>+</code> 更易读（Java 9 起 <code>+</code> 由 <code>invokedynamic</code> / <code>StringConcatFactory</code> 实现，不必再担心早期版本循环拼接的性能问题）；需要统一格式（补零、金额、日期模板）或文案要抽到常量与配置文件时用 <code>String.format</code>，代价是每次调用都要解析格式串，所以别放进热点循环；循环里累积文本用 <code>StringBuilder</code>，拼接集合元素用 <code>String.join</code>。日志输出永远优先占位符 <code>log.info("id={}, name={}", id, name)</code>，而不是先格式化再传字符串——级别关闭时占位符不产生格式化开销。</p>
+
+<pre><code class="language-java">// 好：简单拼接 + 日志占位符
+String key = "order:" + orderId;
+log.info("订单已创建, id={}, amount={}", orderId, amountFen);
+
+// 好：格式模板集中管理（补零、金额展示）
+private static final String ORDER_NO_FORMAT = "TW%08d";
+String orderNo = String.format(ORDER_NO_FORMAT, seq);
+
+// 不好：热点循环里反复 format；日志里先拼好再传
+for (Order order : orders) {
+    log.debug("处理订单 " + order.getId());     // 级别关闭时拼接照样执行
+}
+// 改成
+for (Order order : orders) {
+    log.debug("处理订单, id={}", order.getId());
+}</code></pre>
+
+<h2>六、异常规范：不吞、不滥用、分层兜底</h2>
 
 <p>异常处理写不好，往往比不处理更危险，因为它会把故障现场悄悄抹掉。<strong>不要大段代码 try-catch。</strong>把一大段代码整体包进 try 里是不负责任的做法。catch 时要分清稳定代码与非稳定代码。稳定代码指无论如何都不会出错的代码，例如纯内存计算、已校验过的参数拼接；只把真正非稳定的部分（IO、网络、数据库、第三方调用）包住，并尽可能区分异常类型，分别做对应处理。</p>
 
-<p><strong>不要吞异常。</strong>catch 之后什么都不做，等于把现场销毁。至少要记录日志，或转换成业务异常继续向上传递，并且必须保留原始异常作为 cause，例如 <code>throw new OrderQueryException(msg, e)</code>。如果不带 <code>e</code>，异常链就断了，排查时只剩一句“查询失败”，看不到根因。<strong>不要用异常做流程控制。</strong>异常的代价主要在构造时填充堆栈信息，把它当 if-else 使用既慢又难读。</p>
+<p><strong>不要吞异常。</strong>catch 之后什么都不做，等于把现场销毁。至少要记录日志，或转换成业务异常继续向上传递，并且必须保留原始异常作为 cause，例如 <code>throw new OrderQueryException(msg, e)</code>。如果不带 <code>e</code>，异常链就断了，排查时只剩一句“查询失败”，看不到根因。还有两种“看起来很勤快、其实在销毁现场”的写法要一并清掉：<code>e.printStackTrace()</code>（输出到标准错误流，绕过日志配置，生产环境等于丢失现场且污染容器输出）应改为 <code>log.error("...", e)</code>；<code>catch (Exception e) {}</code> 这类只 catch 不处理则属于上面说的“吞异常”。<strong>不要用异常做流程控制。</strong>异常的代价主要在构造时填充堆栈信息，把它当 if-else 使用既慢又难读。</p>
 
-<p><strong>资源必须释放，底层异常不要外泄。</strong>优先使用 try-with-resources（JDK 7 及以上），由编译器生成关闭逻辑。沿用 finally 手工关闭时，不要在 finally 里 <code>return</code>，因为这会吞掉 try 中尚未抛出的异常。对外接口也不要直接抛 <code>SQLException</code>、<code>IOException</code> 这类底层异常，那会让调用方被迫依赖你的具体实现，应转换成自定义业务异常（类名以 <code>Exception</code> 结尾）再抛出。</p>
+<p><strong>资源必须释放，底层异常不要外泄。</strong>优先使用 try-with-resources（JDK 7 引入 <code>AutoCloseable</code> 后成为标准写法，JDK 9 起还可以在括号里复用已声明的 effectively final 变量），由编译器生成关闭逻辑。沿用 finally 手工关闭时，不要在 finally 里 <code>return</code>，因为这会吞掉 try 中尚未抛出的异常。对外接口也不要直接抛 <code>SQLException</code>、<code>IOException</code> 这类底层异常，那会让调用方被迫依赖你的具体实现，应转换成自定义业务异常（类名以 <code>Exception</code> 结尾）再抛出。异常消息本身用字符串拼接通常无伤大雅（异常只在出错路径上构造），但拼进 <code>log.error</code> 就回到上一节的占位符问题：日志参数一律交给 <code>{}</code>，只有异常对象放最后一个参数。</p>
 
-<p>本章收束成五条约定。重构是在不改变可观察行为的前提下降低修改成本，用三次法则决定时机，小步加测试保证安全，改动已发布接口要保留旧接口并标记 <code>@Deprecated</code>。命名与分层是最廉价的可读性投入，靠 <code>get</code>/<code>list</code>/<code>count</code> 与 DO/DTO/VO 这类约定让代码自解释；坏味道出现时用提炼函数、以查询取代临时变量等手法小步改掉。日志要用 SLF4J 门面、占位符与明确的分级分类；异常要小范围捕获、区分类型、带上原始 cause，分层兜底而不是层层重复打印。把这五件事固定成团队约定，代码才会越改越顺，而不是越改越贵。下一章回到 JVM，从运行时数据区开始，看这些代码在虚拟机里究竟落在哪块内存。</p>
+<h2>七、小结</h2>
+
+<p>本章收束成六条约定。重构是在不改变可观察行为的前提下降低修改成本，用三次法则决定时机，小步加测试保证安全，改动已发布接口要保留旧接口并标记 <code>@Deprecated</code>。命名与分层是最廉价的可读性投入，靠 <code>get</code>/<code>list</code>/<code>count</code> 与 DO/DTO/VO 这类约定让代码自解释；坏味道出现时用提炼函数、以查询取代临时变量等手法小步改掉。日志要用 SLF4J 门面、占位符与明确的分级分类；异常要小范围捕获、区分类型、带上原始 cause，分层兜底而不是层层重复打印。现代写法这四条同样是约定的一部分：Optional 只做返回值、Stream 只在表达力更强时用、<code>var</code> 以“类型自解释”为界、格式化在 <code>+</code> / <code>format</code> / <code>StringBuilder</code> 之间按场景选。把这六件事固定成团队约定，代码才会越改越顺，而不是越改越贵。下一章回到 JVM，从运行时数据区开始，看这些代码在虚拟机里究竟落在哪块内存。</p>
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-5-11/"><span class="pn-label">← 上一篇</span><span class="pn-title">微信生态开发</span></a>
       <a class="next-post" href="/java-tutorial-5-13/"><span class="pn-label">下一篇 →</span><span class="pn-title">设计原则与 UML</span></a>
