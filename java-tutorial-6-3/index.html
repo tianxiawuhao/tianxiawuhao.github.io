@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>你写下的 <code>.java</code> 文件编译后只是磁盘上的 <code>.class</code> 二进制文件，它是怎么变成方法区里的运行时结构、变成能被 <code>new</code> 的 <code>Class</code> 对象的？本章讲清三件事：类加载的完整生命周期、双亲委派模型解决的问题、以及如何用自定义类加载器实现热部署。适合想弄明白 <code>ClassNotFoundException</code>、<code>NoClassDefFoundError</code> 背后机制的读者。</p>
+<p>你写下的 <code>.java</code> 文件编译后只是磁盘上的 <code>.class</code> 二进制文件。它是怎么变成方法区里的运行时结构、又怎么变成能被 <code>new</code> 的 <code>Class</code> 对象的？本章讲清三件事：类加载的完整生命周期、双亲委派模型解决的问题，以及如何用自定义类加载器实现热部署。内容适合想弄明白 <code>ClassNotFoundException</code>、<code>NoClassDefFoundError</code> 背后机制的读者。</p>
 
 <h2>一、类加载的完整生命周期</h2>
 
@@ -148,26 +148,26 @@
 <li><strong>初始化</strong>：执行编译器生成的类构造器 <code>&lt;clinit&gt;()</code> 方法。</li>
 </ul>
 
-<p>初始化阶段是唯一被《Java 虚拟机规范》严格规定「何时必须发生」的阶段，主要触发时机包括：使用 <code>new</code> 实例化对象、读写静态字段、调用静态方法、反射调用、初始化子类时必须先初始化其父类，以及 JDK 7 之后 <code>java.lang.invoke.MethodHandle</code> 解析结果为 <code>REF_getStatic</code> / <code>REF_putStatic</code> / <code>REF_invokeStatic</code> 且对应类未初始化时。此外，虚拟机启动时指定的主类（含 <code>main</code> 方法的类）必须先初始化——注意是「指定的主类」，不是随便哪个类。</p>
+<p>初始化阶段是唯一被《Java 虚拟机规范》严格规定“何时必须发生”的阶段。主要触发时机包括：使用 <code>new</code> 实例化对象、读写静态字段、调用静态方法、反射调用；初始化子类时必须先初始化其父类；以及 JDK 7 之后，<code>java.lang.invoke.MethodHandle</code> 的解析结果为 <code>REF_getStatic</code> / <code>REF_putStatic</code> / <code>REF_invokeStatic</code> 且对应类未初始化时。此外，虚拟机启动时指定的主类（含 <code>main</code> 方法的类）必须先初始化——注意是“指定的主类”，不是随便哪个类。</p>
 
 <p>关于 <code>&lt;clinit&gt;()</code>，有四个容易考的细节：</p>
 
 <ol>
-<li>它由编译器收集<strong>静态字段赋值</strong>与<strong>静态代码块</strong>语句合并生成，顺序由源码书写顺序决定。因此静态块只能读取写在它<em>之前</em>的静态字段，之后的字段可赋值不可读。</li>
+<li>它由编译器收集<strong>静态字段赋值</strong>与<strong>静态代码块</strong>语句合并生成，顺序由源码书写顺序决定。因此静态块只能读取写在它<em>之前</em>的静态字段；写在它之后的字段可以赋值，但不能读取。</li>
 <li>虚拟机保证子类的 <code>&lt;clinit&gt;()</code> 执行前，父类的 <code>&lt;clinit&gt;()</code> 已执行完毕（接口不要求先执行父接口的）。</li>
 <li><code>&lt;clinit&gt;()</code> 不是必须的：没有静态赋值也没有静态块的类，编译器可以不生成它。</li>
-<li>虚拟机会对 <code>&lt;clinit&gt;()</code> 加锁同步：多线程同时初始化一个类时，只有一个线程执行，其余线程阻塞等待。这个锁也带来了著名的坑——静态块里做耗时操作或死锁，会导致其他线程长时间阻塞。</li>
+<li>虚拟机会对 <code>&lt;clinit&gt;()</code> 加锁同步：多线程同时初始化一个类时，只有一个线程执行，其余线程阻塞等待。这个锁也带来了著名的坑——静态块里做耗时操作或发生死锁，会导致其他线程长时间阻塞。</li>
 </ol>
 
 <p>与 <code>&lt;clinit&gt;()</code> 相对的是实例构造器 <code>&lt;init&gt;()</code>，即构造方法，它在 <code>new</code> 时调用。两者名字相似，触发时机完全不同。</p>
 
-<h2>二、类加载器与「类相等」的判定</h2>
+<h2>二、类加载器与“类相等”的判定</h2>
 
-<p>类加载阶段中「通过全限定名获取二进制字节流」这个动作，由<strong>类加载器（ClassLoader）</strong>实现。这里有个关键结论：<strong>一个类在 JVM 中的唯一性，由「类本身」和「加载它的类加载器」共同确定</strong>。每个类加载器都拥有独立的类名称空间，因此判断两个类是否「相等」（<code>equals</code>、<code>isAssignableFrom</code>、<code>instanceof</code>）的前提是它们由同一个类加载器加载。</p>
+<p>类加载阶段中“通过全限定名获取二进制字节流”这个动作，由<strong>类加载器（ClassLoader）</strong>实现。这里有个关键结论：<strong>一个类在 JVM 中的唯一性，由“类本身”和“加载它的类加载器”共同确定</strong>。每个类加载器都拥有独立的类名称空间，因此判断两个类是否“相等”（<code>equals</code>、<code>isAssignableFrom</code>、<code>instanceof</code>）的前提是它们由同一个类加载器加载。</p>
 
-<p>这也是「同一个 <code>.class</code> 被两个加载器各加载一次，得到两个不同的 <code>Class</code> 对象，互相强转就抛 <code>ClassCastException</code>」的原因——在 JVM 眼里它们就是两个类。</p>
+<p>这也是“同一个 <code>.class</code> 被两个加载器各加载一次，得到两个不同的 <code>Class</code> 对象，互相强转就抛 <code>ClassCastException</code>”的原因——在 JVM 眼里它们就是两个类。</p>
 
-<p>从虚拟机视角看，类加载器只有两种：启动类加载器（Bootstrap ClassLoader，由 C++ 实现，是虚拟机自身的一部分）和其他所有由 Java 实现、继承自 <code>java.lang.ClassLoader</code> 的加载器。从开发者视角看，JDK 8 及以前常见的是三层结构：</p>
+<p>从虚拟机视角看，类加载器只有两种：一种是启动类加载器（Bootstrap ClassLoader，由 C++ 实现，是虚拟机自身的一部分），另一种是其余所有由 Java 实现、继承自 <code>java.lang.ClassLoader</code> 的加载器。从开发者视角看，JDK 8 及以前常见的是三层结构：</p>
 
 <ul>
 <li><strong>启动类加载器</strong>：加载 <code>JAVA_HOME/lib</code> 目录，或被 <code>-Xbootclasspath</code> 参数指定路径中的类。它在 Java 代码里拿不到，<code>String.class.getClassLoader()</code> 返回 <code>null</code>。</li>
@@ -175,13 +175,13 @@
 <li><strong>应用程序类加载器</strong>：由 <code>sun.misc.Launcher$AppClassLoader</code> 实现，加载用户类路径 <code>classpath</code> 上的类。它通常是程序中的默认加载器。</li>
 </ul>
 
-<p><strong>版本差异要特别注意</strong>：JDK 9 引入模块化后，扩展类加载器已被移除，<code>lib/ext</code> 目录与 <code>java.ext.dirs</code> 不再生效，取而代之的是<strong>平台类加载器（PlatformClassLoader）</strong>，它加载的也不再是 <code>ext</code> 目录，而是平台模块。JDK 11 之后启动类加载器也改由 Java 实现（<code>jdk.internal.loader.ClassLoaders$BootClassLoader</code>），但它对上层依然表现为 <code>null</code>。</p>
+<p><strong>版本差异要特别注意</strong>：JDK 9 引入模块化后，扩展类加载器已被移除，<code>lib/ext</code> 目录与 <code>java.ext.dirs</code> 不再生效。取而代之的是<strong>平台类加载器（PlatformClassLoader）</strong>，它加载的不再是 <code>ext</code> 目录，而是平台模块。JDK 11 之后启动类加载器也改由 Java 实现（<code>jdk.internal.loader.ClassLoaders$BootClassLoader</code>），但它对上层依然表现为 <code>null</code>。</p>
 
 <h2>三、双亲委派模型</h2>
 
 <p>类加载器之间不是继承关系，而是<strong>组合</strong>关系：每个加载器通过 <code>getParent()</code> 持有父加载器引用，<code>setParent()</code> 可以指定。这种层次关系就是双亲委派模型，它在 JDK 1.2 引入。它<strong>不是强制约束</strong>，JVM 规范并未要求，只是推荐实现方式。</p>
 
-<p>工作过程可以概括为一句话：<strong>收到加载请求先交给父加载器，父加载器加载不了，子加载器才自己加载。</strong></p>
+<p>它的工作过程可以概括为一句话：<strong>收到加载请求先交给父加载器，父加载器加载不了，子加载器才自己加载。</strong></p>
 
 <ol>
 <li>类加载器收到请求，首先检查自己是否已经加载过该类，有则直接返回缓存的 <code>Class</code>。</li>
@@ -192,7 +192,7 @@
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-3/02-parent-delegation.svg" alt="双亲委派模型示意图"><figcaption>图 2：双亲委派 —— 请求先向上委派给父加载器，父加载器加载不到才回退调用自己的 findClass</figcaption></figure>
 
-<p>它解决两个问题：<strong>保证核心类库唯一</strong>（<code>java.lang.Object</code> 无论谁请求都由启动类加载器加载，不会被重复加载）和<strong>防止核心 API 被篡改</strong>（自定义一个 <code>java.lang.String</code> 放进 classpath，委派机制会让它永远加载不到）。</p>
+<p>它解决两个问题。一是<strong>保证核心类库唯一</strong>：<code>java.lang.Object</code> 无论谁请求都由启动类加载器加载，不会被重复加载。二是<strong>防止核心 API 被篡改</strong>：即使自定义一个 <code>java.lang.String</code> 放进 classpath，委派机制也会让它永远加载不到。</p>
 
 <p>实现上，这段逻辑写在 <code>ClassLoader.loadClass()</code> 里，源码骨架如下：</p>
 
@@ -262,9 +262,9 @@
     }
 }</code></pre>
 
-<p>理解这个例子，就能理解热部署的原理：老版本应用的 Class 对象无法被卸载（有 GC Root 引用）、也无法被就地替换，那么<strong>换一个加载器重新加载一遍，得到新的 Class</strong> 就等价于「替换了类」。容器就是这样做的——为每个 Web 应用创建一个独立的 <code>WebAppClassLoader</code>，重启应用时丢弃整个加载器，旧类随之在 GC 中被回收。</p>
+<p>理解这个例子，就能理解热部署的原理：老版本应用的 Class 对象既无法被卸载（有 GC Root 引用），也无法被就地替换。那就<strong>换一个加载器重新加载一遍，得到新的 Class</strong>，等价于“替换了类”。容器就是这样做的——为每个 Web 应用创建一个独立的 <code>WebAppClassLoader</code>，重启应用时丢弃整个加载器，旧类随之在 GC 中被回收。</p>
 
-<p>Tomcat 的加载器顺序是很有意思的例外：它<strong>先尝试自己加载</strong>（Web 应用自己的 <code>WEB-INF/classes</code> 与 <code>WEB-INF/lib</code>），失败后再委派给父加载器。这是典型的「打破双亲委派」——因为同一个 Tomcat 里跑多个应用，每个应用需要用自己的版本加载同名的类。但它依然会排除 <code>java.*</code> 等核心包，把核心类强行交给启动类加载器。</p>
+<p>Tomcat 的加载器顺序是很有意思的例外：它<strong>先尝试自己加载</strong>（Web 应用自己的 <code>WEB-INF/classes</code> 与 <code>WEB-INF/lib</code>），失败后再委派给父加载器。这是典型的“打破双亲委派”，因为同一个 Tomcat 里跑多个应用，每个应用需要用自己的版本加载同名的类。但它依然会排除 <code>java.*</code> 等核心包，把核心类强行交给启动类加载器。</p>
 
 <p>最后用一个最小例子验证触发时机——注意静态块的打印在 <code>forName</code> 时就出现了，而不是 <code>newInstance</code> 时：</p>
 
@@ -278,11 +278,11 @@
     }
 }</code></pre>
 
-<p>最后是几个高频坑。<strong>静态块没执行？</strong> <code>&lt;clinit&gt;()</code> 只在实际使用类时触发，只声明该类型的引用或访问 <code>static final</code> 常量都不会触发初始化。<strong><code>ClassNotFoundException</code> 与 <code>NoClassDefFoundError</code> 混着报？</strong> 前者来自显式加载（<code>Class.forName</code>、<code>loadClass</code>）找不到类；后者常是「类第一次初始化失败」之后再被使用——静态块抛异常会先抛 <code>ExceptionInInitializerError</code>，排查时要往前翻第一条异常。<strong>热部署时报 <code>OutOfMemoryError: PermGen space</code>（JDK 8 后是 Metaspace）？</strong> 通常是 ThreadLocal 或静态集合持有旧类引用，使加载器无法回收，其加载的整个类空间一起泄漏，用 <code>jmap</code>/MAT 查 <code>WebAppClassLoader</code> 实例数量是有效切入点。<strong><code>getClassLoader()</code> 返回 <code>null</code> 不是 bug</strong>，只说明类由启动类加载器加载（如 <code>String</code>），直接链式调用 <code>getResource</code> 会 NPE。<strong><code>Class.forName(name)</code> 与 <code>loadClass(name)</code> 不等价</strong>：前者默认初始化类（静态块执行），后者只加载不初始化；注册 JDBC 驱动要用前者，只做反射分析用后者更轻。</p>
+<p>最后是几个高频坑。<strong>静态块没执行？</strong> <code>&lt;clinit&gt;()</code> 只在实际使用类时触发，只声明该类型的引用或访问 <code>static final</code> 常量都不会触发初始化。<strong><code>ClassNotFoundException</code> 与 <code>NoClassDefFoundError</code> 混着报？</strong> 前者来自显式加载（<code>Class.forName</code>、<code>loadClass</code>）找不到类；后者常是“类第一次初始化失败”之后再被使用——静态块抛异常时，会先抛 <code>ExceptionInInitializerError</code>，排查时要往前翻第一条异常。<strong>热部署时报 <code>OutOfMemoryError: PermGen space</code>（JDK 8 后是 Metaspace）？</strong> 通常是 ThreadLocal 或静态集合持有旧类引用，使加载器无法回收，其加载的整个类空间随之泄漏。用 <code>jmap</code>/MAT 查看 <code>WebAppClassLoader</code> 实例数量是有效切入点。<strong><code>getClassLoader()</code> 返回 <code>null</code> 不是 bug</strong>，只说明类由启动类加载器加载（如 <code>String</code>），直接链式调用 <code>getResource</code> 会 NPE。<strong><code>Class.forName(name)</code> 与 <code>loadClass(name)</code> 不等价</strong>：前者默认初始化类（静态块执行），后者只加载不初始化；注册 JDBC 驱动要用前者，只做反射分析用后者更轻。</p>
 
 <h2>小结</h2>
 
-<p>类加载是 JVM 把「静态文件」变成「可执行类型」的唯一入口。记住三句话：<strong>生命周期是「加载—链接（验证、准备、解析）—初始化—使用—卸载」，初始化由 <code>&lt;clinit&gt;()</code> 负责，准备阶段只给静态字段零值；类的唯一性由「类 + 加载它的加载器」共同决定，跨加载器的同名类无法互换；双亲委派实现在 <code>loadClass</code> 中，覆盖 <code>findClass</code> 是遵守它，覆盖 <code>loadClass</code> 才是打破它。</strong>热部署、容器隔离、JDBC 驱动注册这些看似无关的现象，背后都是这套机制在起作用。</p>
+<p>类加载是 JVM 把“静态文件”变成“可执行类型”的唯一入口。记住三句话：<strong>生命周期是“加载—链接（验证、准备、解析）—初始化—使用—卸载”，初始化由 <code>&lt;clinit&gt;()</code> 负责，准备阶段只给静态字段零值；类的唯一性由“类 + 加载它的加载器”共同决定，跨加载器的同名类无法互换；双亲委派实现在 <code>loadClass</code> 中，覆盖 <code>findClass</code> 是遵守它，覆盖 <code>loadClass</code> 才是打破它。</strong>热部署、容器隔离、JDBC 驱动注册这些看似无关的现象，背后都是这套机制在起作用。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-6-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">垃圾回收与调优</span></a>

@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章讲了堆里的对象怎么来，这一章接着回答另一半问题：对象什么时候被回收，以及回收时程序为什么会卡一下。GC 不是"配好参数就完事"的黑盒——搞不清对象存活判定、分代假设和收集器差异，就只能对着日志猜。本章从"哪些内存要回收"讲到 G1 与低延迟收集器，再落到日志解读和调优参数，适合已能读懂 JVM 内存结构、想让线上应用少 Full GC、少长停顿的读者。</p>
+<p>上一章讲了堆里的对象怎么来，这一章接着回答另一半问题：对象什么时候被回收，以及回收时程序为什么会卡一下。GC 不是“配好参数就完事”的黑盒：搞不清对象存活判定、分代假设和收集器差异，就只能对着日志猜。本章从“哪些内存要回收”讲到 G1 与低延迟收集器，再落到日志解读和调优参数，适合已能读懂 JVM 内存结构、想让线上应用少 Full GC、少长停顿的读者。</p>
 
 <h2>一、先判断死活：引用计数与可达性分析</h2>
 
@@ -154,33 +154,33 @@ public class RefCountTest {
 
 <p>主流 JVM 采用的是<strong>可达性分析</strong>：从一组称为 <strong>GC Roots</strong> 的根对象出发遍历引用链，走不到的对象判为可回收。可作为 GC Roots 的包括虚拟机栈（栈帧局部变量表）中引用的对象、方法区中类静态属性引用的对象、方法区中常量引用的对象、本地方法栈中 JNI 引用的对象，此外还有被同步锁持有的对象等。</p>
 
-<p>需要补充的是 Java 的四种引用强度：<strong>强引用</strong>（<code>Object o = new Object()</code>）只要存在就绝不回收；<strong>软引用</strong>（<code>SoftReference</code>）在将要发生内存溢出前才被列入回收范围；<strong>弱引用</strong>（<code>WeakReference</code>）只能活到下一次 GC；<strong>虚引用</strong>（<code>PhantomReference</code>）无法取得对象实例，只用于回收时收到通知。可达性分析基于的正是强引用。对象即使被判不可达，也不是立刻死亡：还会经历一次筛选，若 <code>finalize()</code> 中重新与引用链建立关联，就能逃过本次回收。</p>
+<p>此外还要说清 Java 的四种引用强度：<strong>强引用</strong>（<code>Object o = new Object()</code>）只要存在就绝不回收；<strong>软引用</strong>（<code>SoftReference</code>）在将要发生内存溢出前才被列入回收范围；<strong>弱引用</strong>（<code>WeakReference</code>）只能活到下一次 GC；<strong>虚引用</strong>（<code>PhantomReference</code>）无法取得对象实例，只用于回收时收到通知。可达性分析基于的正是强引用。对象即使被判不可达，也不是立刻死亡：还会经历一次筛选，若 <code>finalize()</code> 中重新与引用链建立关联，就能逃过本次回收。</p>
 
 <h2>二、三种基础算法与分代收集</h2>
 
-<p>收集算法只有三类，区别在"标记之后怎么清"。</p>
+<p>收集算法只有三类，区别在“标记之后怎么清”。</p>
 
 <ul>
 <li><strong>标记-清除</strong>：标记存活对象后直接回收未标记部分。实现简单、不需要移动对象，但清除后<strong>内存碎片严重</strong>，且标记与清除都要遍历对象，效率受限。</li>
-<li><strong>复制算法</strong>：把空间一分为二，只使用其中一块；回收时把存活对象整体复制到另一块，再清空原空间并交换角色。没有碎片、分配靠指针碰撞极快，代价是可用内存减半，且存活对象多时复制开销大。</li>
+<li><strong>标记-复制</strong>：把空间一分为二，只使用其中一块；回收时把存活对象整体复制到另一块，再清空原空间并交换角色。没有碎片、分配靠指针碰撞极快，代价是可用内存减半，且存活对象多时复制开销大。</li>
 <li><strong>标记-整理</strong>：标记后把存活对象向一端移动，再清理边界外的空间。解决了碎片问题，但移动对象并更新引用同样昂贵。</li>
 </ul>
 
-<p>没有哪种算法通吃，于是有了<strong>分代收集</strong>：依据"绝大多数对象朝生夕灭、熬过越多次 GC 的对象越难死"这一经验规律，把堆分成新生代与老年代分别施策。HotSpot 中新生代默认按 <code>Eden : Survivor0 : Survivor1 = 8 : 1 : 1</code> 划分，新对象优先在 Eden 分配；Minor GC 时 Eden 与 From Survivor 中的存活对象被<strong>复制</strong>到 To Survivor，然后清空前两者并交换两个 Survivor 的角色。对象每熬过一次 GC 年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）或 Survivor 空间不足时晋升老年代。老年代存活率高适合标记-整理或标记-清除，空间不足时触发 Full GC。大对象（如 <code>new byte[4 * 1024 * 1024]</code>）通常直接进入老年代，避免在 Eden 与 Survivor 间反复复制。</p>
+<p>没有哪种算法通吃，于是有了<strong>分代收集</strong>。它的依据是一条经验规律：绝大多数对象朝生夕灭，熬过越多次 GC 的对象越难死。堆因此被划成新生代与老年代，分别施策。HotSpot 中新生代默认按 <code>Eden : Survivor0 : Survivor1 = 8 : 1 : 1</code> 划分，新对象优先在 Eden 分配。Minor GC 时，Eden 与 From Survivor 中的存活对象被<strong>复制</strong>到 To Survivor，然后清空前两者并交换两个 Survivor 的角色。对象每熬过一次 GC 年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）或 Survivor 空间不足时晋升老年代。老年代存活率高，适合标记-整理或标记-清除，空间不足时触发 Full GC。大对象（如 <code>new byte[4 * 1024 * 1024]</code>）通常直接进入老年代，避免在 Eden 与 Survivor 间反复复制。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-2/01-generational-heap-gc.svg" alt="分代堆结构示意图：新生代按 Eden 比 S0 比 S1 等于 8 比 1 比 1 划分，熬过阈值的对象晋升老年代；下方对比 Minor GC 与 Full GC 的触发条件与停顿差异"><figcaption>图 1：分代堆结构——新生代 8:1:1 与对象晋升路径</figcaption></figure>
 
 <h2>三、收集器的演进：从 Serial 到 G1 与低延迟收集器</h2>
 
-<p>算法要有落地实现，HotSpot 的收集器可以按"是否并行、是否并发、作用于哪一代"来区分。并行（Parallel）指多条 GC 线程同时工作，但用户线程仍然暂停；并发（Concurrent）指 GC 线程与用户线程同时运行，能显著缩短单次停顿，代价是占用 CPU 并产生浮动垃圾。</p>
+<p>算法要有落地实现，HotSpot 的收集器可以按“是否并行、是否并发、作用范围是哪一代”来区分。并行（Parallel）指多条 GC 线程同时工作，但用户线程仍然暂停；并发（Concurrent）指 GC 线程与用户线程同时运行，能显著缩短单次停顿，代价是占用 CPU 并产生浮动垃圾。</p>
 
 <ul>
-<li><strong>Serial / Serial Old</strong>：单线程收集，收集时必须暂停所有用户线程，即 <strong>STW（Stop-The-World）</strong>。简单高效，适合客户端或小堆场景。</li>
+<li><strong>Serial / Serial Old</strong>：单线程收集，收集时必须暂停所有用户线程，也就是 <strong>STW（Stop-The-World）</strong>。简单高效，适合客户端或小堆场景。</li>
 <li><strong>ParNew</strong>：Serial 的多线程版本，仍作用于新生代，常与 CMS 搭配。</li>
-<li><strong>Parallel Scavenge / Parallel Old</strong>：新生代复制、老年代标记-整理的多线程组合，目标不是最短停顿而是<strong>可控吞吐量</strong>，可用 <code>-XX:MaxGCPauseMillis</code> 与 <code>-XX:GCTimeRatio</code> 调节。它同样会 STW，只是并行缩短了停顿，并非"不暂停用户线程"。</li>
+<li><strong>Parallel Scavenge / Parallel Old</strong>：新生代复制、老年代标记-整理的多线程组合，目标不是最短停顿而是<strong>可控吞吐量</strong>，可用 <code>-XX:MaxGCPauseMillis</code> 与 <code>-XX:GCTimeRatio</code> 调节。它同样会 STW，只是并行缩短了停顿，并非“不暂停用户线程”。</li>
 <li><strong>CMS</strong>：以最短停顿为目标的并发收集器，作用于老年代，采用标记-清除算法，流程为初始标记（STW）→ 并发标记 → 并发预清理 → 重新标记（STW）→ 并发清除 → 并发重置。缺点是产生内存碎片、无法处理浮动垃圾，且并发阶段会与应用争抢 CPU，JDK 9 起已废弃、JDK 14 移除。</li>
-<li><strong>G1</strong>：把堆划分为大小相等的 <strong>Region</strong>，新生代与老年代只是 Region 的逻辑集合，不再要求连续。它维护每个 Region 的回收价值（垃圾占比与回收耗时）列表，在 <code>-XX:MaxGCPauseMillis</code> 的停顿目标下优先回收收益最高的 Region，因此能建立<strong>可预测的停顿模型</strong>。跨 Region 引用靠每个 Region 的 <strong>Remembered Set</strong> 记录，避免全堆扫描；超过 Region 容量 50% 的巨型对象放入 <strong>Humongous</strong> 区，连续 H 区不足时可能被迫 Full GC。G1 的回收模式有 Young GC（Eden 耗尽触发）、Mixed GC（老年代占比达到 <code>-XX:InitiatingHeapOccupancyPercent</code>，默认 45% 时触发，回收全部年轻代加部分老年代）和 Full GC。注意 Mixed GC 不等于 Full GC，它只回收<strong>部分</strong>老年代 Region。G1 在 JDK 7 引入，<strong>JDK 9 起成为默认收集器</strong>。</li>
-<li><strong>ZGC / Shenandoah</strong>：面向超大堆与极低延迟，借染色指针与读屏障把停顿压到毫秒级且与堆大小基本无关，ZGC 的目标停顿在 10ms 以内，适合堆上百 GB 的在线服务。其实现细节已超出本章范围，此处不展开。</li>
+<li><strong>G1</strong>：把堆划分为大小相等的 <strong>Region</strong>，新生代与老年代只是 Region 的逻辑集合，不再要求连续。它维护每个 Region 的回收价值（垃圾占比与回收耗时）列表，在 <code>-XX:MaxGCPauseMillis</code> 的停顿目标下优先回收收益最高的 Region，从而建立<strong>可预测的停顿模型</strong>。跨 Region 引用靠每个 Region 的 <strong>Remembered Set</strong> 记录，避免全堆扫描；超过 Region 容量一半的巨型对象放入 <strong>Humongous</strong> 区，连续 H 区不足时可能被迫 Full GC。G1 的回收模式有 Young GC（Eden 耗尽触发）、Mixed GC（老年代占用达到 <code>-XX:InitiatingHeapOccupancyPercent</code>，默认 45% 时触发，回收全部年轻代加部分老年代）和 Full GC。注意 Mixed GC 不等于 Full GC，它只回收<strong>部分</strong>老年代 Region。G1 在 JDK 7 引入，<strong>JDK 9 起成为默认收集器</strong>。</li>
+<li><strong>ZGC / Shenandoah</strong>：面向超大堆与极低延迟，借助染色指针与读屏障把停顿压到毫秒级且与堆大小基本无关，ZGC 的目标停顿在 10ms 以内，适合堆上百 GB 的在线服务。实现细节超出本章范围，这里不再展开。</li>
 </ul>
 
 <h2>四、打开 GC 日志：从看懂到会调</h2>
@@ -198,26 +198,26 @@ java -XX:+UseG1GC -Xms2g -Xmx2g \
      -Xlog:gc*,gc+heap=info:file=/var/log/app/gc.log:time,uptime,level,tags \
      -jar app.jar</code></pre>
 
-<p>日志读起来并不难，抓住三段信息即可：<strong>回收类型</strong>（<code>GC</code> 为 Minor/Young，<code>Full GC</code> 为全堆）、<strong>前后容量</strong>（<code>4416K-&gt;512K(4928K)</code> 表示该区域回收前占用、回收后占用与总容量）、<strong>耗时</strong>（如 <code>0.0046102 secs</code>，也可用 <code>[Times: user=... sys=... real=...]</code> 对照用户态、内核态与墙钟时间）。下面是一段串行收集器的真实输出：</p>
+<p>日志读起来并不难，抓住三段信息即可。第一段是<strong>回收类型</strong>：<code>GC</code> 表示 Minor/Young GC，<code>Full GC</code> 表示全堆回收。第二段是<strong>前后容量</strong>：<code>4416K-&gt;512K(4928K)</code> 依次表示该区域回收前占用、回收后占用与总容量。第三段是<strong>耗时</strong>，如 <code>0.0046102 secs</code>，也可以用 <code>[Times: user=... sys=... real=...]</code> 对照用户态、内核态与墙钟时间。下面是一段串行收集器的真实输出：</p>
 
 <pre><code class="language-text">[GC (Allocation Failure) [DefNew: 4416K-&gt;512K(4928K), 0.0046102 secs]
  4416K-&gt;1973K(15872K), 0.0046533 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]
 [Full GC (Allocation Failure) [Tenured: 10944K-&gt;3107K(10944K), 0.0085637 secs]
  15871K-&gt;3107K(15872K), [Metaspace: 3496K-&gt;3496K(1056768K)], 0.0085974 secs]</code></pre>
 
-<p>在此基础上做取舍：追求吞吐量选 Parallel，追平均停顿选 G1，追极致低延迟且堆巨大再看 ZGC。常用的观察与调节手段包括 <code>jstat -gcutil &lt;pid&gt; 1000</code> 实时看各代占用与 GC 次数、<code>jmap -histo:live &lt;pid&gt;</code> 看对象分布、以及把日志交给 GCeasy 之类工具可视化。参数方面，<code>-Xms</code> 与 <code>-Xmx</code> 设成相等可避免堆反复伸缩；<code>-Xmn</code> 或 <code>-XX:NewRatio</code> 控制新生代比例；<code>-XX:SurvivorRatio</code> 调整 Eden 与 Survivor 比例；<code>-XX:+HeapDumpOnOutOfMemoryError</code> 保证 OOM 现场可查。注意 <code>-XX:MaxGCPauseMillis</code> 只是<strong>期望值</strong>，JVM 会尽力而为但不保证达到；把堆设得过小反而会让 GC 更频繁。</p>
+<p>在此基础上做取舍：追求吞吐量选 Parallel，追求更低平均停顿选 G1，追求极致低延迟且堆巨大再看 ZGC。常用的观察手段包括：用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 实时查看各代占用与 GC 次数，用 <code>jmap -histo:live &lt;pid&gt;</code> 查看对象分布，以及把日志交给 GCeasy 之类工具可视化。参数方面，<code>-Xms</code> 与 <code>-Xmx</code> 设成相等可避免堆反复伸缩；<code>-Xmn</code> 或 <code>-XX:NewRatio</code> 控制新生代比例；<code>-XX:SurvivorRatio</code> 调整 Eden 与 Survivor 的比例；<code>-XX:+HeapDumpOnOutOfMemoryError</code> 保证 OOM 现场可查。注意 <code>-XX:MaxGCPauseMillis</code> 只是<strong>期望值</strong>，JVM 会尽力而为但不保证达到；把堆设得过小反而会让 GC 更频繁。</p>
 
 <h3>三类常见坑</h3>
 
-<p><strong>坑一，把 STW 说成"不影响用户线程"。</strong>所有分代收集器的 Minor GC 与 Full GC 都会停顿用户线程，并行只是缩短停顿，并发才有部分阶段与应用同时运行，但仍需初始标记与重新标记两次 STW。用"某收集器完全不暂停"来判断选型一定会踩坑。</p>
+<p><strong>坑一，把 STW 说成“不影响用户线程”。</strong>所有分代收集器的 Minor GC 与 Full GC 都会停顿用户线程，并行只是缩短停顿，并发才有部分阶段与应用同时运行，但仍需初始标记与重新标记两次 STW。用“某收集器完全不暂停”来判断选型一定会踩坑。</p>
 
-<p><strong>坑二，<code>System.gc()</code> 与显式引用。</strong>显式调用 <code>System.gc()</code> 可能触发 Full GC，生产代码里应避免；<code>-XX:+DisableExplicitGC</code> 可将其屏蔽，但要注意 NIO 直接内存依赖它回收 <code>DirectByteBuffer</code>，屏蔽后堆外内存可能迟迟不释放。此外，把对象放进静态集合、ThreadLocal 未 <code>remove()</code>、监听器未注销，都会制造长生命周期的强引用，让对象"看起来没用了却回收不掉"。</p>
+<p><strong>坑二，<code>System.gc()</code> 与显式引用。</strong>显式调用 <code>System.gc()</code> 可能触发 Full GC，生产代码里应避免；<code>-XX:+DisableExplicitGC</code> 可将其屏蔽，但要注意 NIO 直接内存依赖它回收 <code>DirectByteBuffer</code>，屏蔽后堆外内存可能迟迟不释放。此外，把对象放进静态集合、ThreadLocal 未 <code>remove()</code>、监听器未注销，都会制造长生命周期的强引用，让对象看起来没用了却回收不掉。</p>
 
-<p><strong>坑三，永久代与元空间的版本差异。</strong>JDK 7 及以前方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC；<strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束，且类卸载条件严格（该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用）。所以看到旧文章里"持久代被写满导致 Full GC"的说法时要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
+<p><strong>坑三，永久代与元空间的版本差异。</strong>JDK 7 及以前方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC；<strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束，且类卸载条件严格（该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用）。所以看到旧文章里“永久代被写满导致 Full GC”的说法时，要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
 
 <h2>五、小结</h2>
 
-<p>这一章的主线是：GC 先解决"谁是垃圾"，再解决"怎么清、什么时候清"。判活用可达性分析而非引用计数；回收用标记-清除、复制、标记-整理三种基础算法，靠分代假设把新生代交给复制、老年代交给标记-整理或标记-清除；收集器层面，Parallel 换吞吐量、CMS 换低停顿但有碎片、G1 用 Region + RSet + 停顿预测模型兼顾两者，ZGC 面向超大堆的极低延迟。落到实践，先开日志与 jstat 观测，再动 <code>-Xms/-Xmx</code>、新生代比例与停顿目标这些参数，并牢记所有分代收集器都有 STW、<code>System.gc()</code> 与长生命周期引用是最常见的两类人为故障。下一章我们进入具体的线上排查工具与方法。</p>
+<p>这一章的主线是：GC 先解决“谁是垃圾”，再解决“怎么清、什么时候清”。判活用可达性分析而非引用计数；回收用标记-清除、复制、标记-整理三种基础算法，靠分代假设把新生代交给复制、老年代交给标记-整理或标记-清除；收集器层面，Parallel 换吞吐量、CMS 换低停顿但有碎片、G1 用 Region + RSet + 停顿预测模型兼顾两者，ZGC 面向超大堆的极低延迟。落到实践，先开日志并用 jstat 观测，再调整 <code>-Xms/-Xmx</code>、新生代比例与停顿目标这些参数。最后要牢记：所有分代收集器都有 STW，而显式 <code>System.gc()</code> 调用与长生命周期引用是最常见的两类人为故障。下一章进入具体的线上排查工具与方法。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-6-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">JVM 内存结构与对象</span></a>
