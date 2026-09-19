@@ -128,17 +128,17 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>服务拆分之后，第一道门槛往往不是业务代码，而是「怎么知道对方在哪」。服务实例的地址会随发布、扩容、宕机不断变化，写死在配置文件里的 IP 迟早失效；节点挂了要能自动摘除，流量涨了要能多开几个实例，出了问题还要能快速回滚。把这些问题收拢起来统一解决，就是「服务分发与治理」。本章面向已经会写 Spring Boot 单体应用、准备把系统拆成多个服务的读者，从注册中心接入讲到路由灰度、限流熔断与分布式事务，帮你在动手前先建立一张完整的地图。</p>
+<p>服务拆分之后，第一道门槛往往不是业务代码，而是“怎么知道对方在哪”。服务实例的地址会随发布、扩容、宕机不断变化，写死在配置文件里的 IP 迟早失效；节点挂了要能自动摘除，流量涨了要能多开几个实例，出了问题还要能快速回滚。把这些问题收拢起来统一解决，就是“服务分发与治理”。本章面向已经会写 Spring Boot 单体应用、准备把系统拆成多个服务的读者，从注册中心接入讲到路由灰度、限流熔断与分布式事务，帮你在动手前先建立一张完整的地图。</p>
 
 <h2>为什么需要服务分发与治理</h2>
-<p>在没有治理组件之前，服务间调用通常是「配置里写死地址 + 自己写重试」。这套做法有三个绕不过去的坑。一是地址静态化，扩容缩容必须改配置重启；二是可用性靠人工，某个节点假死了，调用方仍然会把请求打过去；三是缺少统一的观测点，一个请求跨了五六个服务后，慢在哪儿只能靠猜。</p>
+<p>在没有治理组件之前，服务间调用通常是“配置里写死地址 + 自己写重试”。这套做法有三个绕不过去的坑。一是地址静态化，扩容缩容必须改配置重启；二是可用性靠人工，某个节点假死了，调用方仍然会把请求打过去；三是缺少统一的观测点，一个请求跨了五六个服务后，慢在哪儿只能靠猜。</p>
 <p>治理层要交付的核心能力可以归纳为四件事：<strong>服务发现</strong>（实例注册与健康检查）、<strong>服务路由</strong>（负载均衡、灰度、权重）、<strong>流量防护</strong>（限流、熔断、降级）和<strong>可观测与一致性</strong>（链路追踪、分布式事务）。前两件是基础设施，后两件决定了系统出事时能不能扛住、能不能查清。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-13/01-governance-map.svg" alt="服务分发与治理四类核心能力示意图"><figcaption>图 1：服务分发与治理的四类能力——服务发现、服务路由、流量防护、可观测与一致性</figcaption></figure>
-<p>本章默认以 Spring Cloud Alibaba 技术栈为主线（Nacos + Spring Cloud LoadBalancer/Gateway）。Dubbo 的治理思路与之类似，只是注册中心、协议和扩展点不同。两者并非替代关系：实际项目中 Dubbo 负责内部高性能 RPC，Spring Cloud 负责网关与周边组件，混合使用也很常见。需要注意的是，「Dubbo 已停止维护」的说法已经过时。Dubbo 自 2018 年重启维护并进入 Apache 基金会，目前仍在持续发布，3.x 系列已支持 Triple 协议与云原生部署。选型时应以当下的社区活跃度为准。</p>
+<p>本章默认以 Spring Cloud Alibaba 技术栈为主线（Nacos + Spring Cloud LoadBalancer/Gateway）。Dubbo 的治理思路与之类似，只是注册中心、协议和扩展点不同。两者并非替代关系：实际项目中 Dubbo 负责内部高性能 RPC，Spring Cloud 负责网关与周边组件，混合使用也很常见。需要注意的是，“Dubbo 已停止维护”的说法已经过时。Dubbo 自 2018 年重启维护并进入 Apache 基金会，目前仍在持续发布，3.x 系列已支持 Triple 协议与云原生部署。选型时应以当下的社区活跃度为准。</p>
 
 <h2>用 Nacos 做注册中心：把地址交给注册表</h2>
-<p>注册中心是治理体系的入口。服务启动时把「服务名 + IP + 端口」注册上去，并周期性发送心跳；注册中心负责健康检查、剔除失效实例、把最新的实例列表推送给订阅方。Nacos 同时提供注册中心和配置中心，一个组件解决两件事，是当前国内落地最广的选择。</p>
+<p>注册中心是治理体系的入口。服务启动时把“服务名 + IP + 端口”注册上去，并周期性发送心跳；注册中心负责健康检查、剔除失效实例、把最新的实例列表推送给订阅方。Nacos 同时提供注册中心和配置中心，一个组件解决两件事，是当前国内落地最广的选择。</p>
 <p>以聚合工程为例。先在父工程的 <code>dependencyManagement</code> 中统一引入 <code>spring-cloud-alibaba-dependencies</code>，其中 <code>type</code> 为 <code>pom</code>、<code>scope</code> 为 <code>import</code>。再在服务提供者子工程中声明 <code>spring-cloud-starter-alibaba-nacos-discovery</code>，版本交由父工程统一管理，避免各模块版本漂移。依赖就绪后，在启动类上开启服务注册发现，并暴露一个测试接口：</p>
 <pre><code class="language-java">@SpringBootApplication
 @EnableDiscoveryClient          // 开启服务注册与发现
@@ -165,7 +165,7 @@ spring:
       discovery:
         server-addr: 127.0.0.1:8848   # Nacos-server 地址
         namespace: public             # 多环境隔离时按需指定</code></pre>
-<p>启动后访问 Nacos 控制台，默认地址为 <code>http://127.0.0.1:8848/nacos</code>，初始账号与密码均为 <code>nacos</code>。在「服务管理 → 服务列表」中应能看到 <code>nacos-provide</code>。这一步能通，说明注册链路没有问题，再往下排查调用问题就会容易很多。</p>
+<p>启动后访问 Nacos 控制台，默认地址为 <code>http://127.0.0.1:8848/nacos</code>，初始账号与密码均为 <code>nacos</code>。在“服务管理 → 服务列表”中应能看到 <code>nacos-provide</code>。这一步能通，说明注册链路没有问题，再往下排查调用问题就会容易很多。</p>
 
 <h2>服务调用与负载均衡：Ribbon 与 Spring Cloud LoadBalancer</h2>
 <p>注册只是第一步，真正把请求发出去的是调用方。在早期的 Spring Cloud 里，客户端负载均衡由 Ribbon 完成。给 <code>RestTemplate</code> 加上 <code>@LoadBalanced</code> 后，它就会拦截请求，把 URL 中的服务名解析成一组真实实例地址，再按策略挑一个。</p>
@@ -189,7 +189,7 @@ public class NacosConsumerApplication {
         return restTemplate.getForObject("http://nacos-provide/helloNacos", String.class);
     }
 }</code></pre>
-<p>这里的服务名必须与提供者在 Nacos 上注册的 <code>spring.application.name</code> 完全一致。不一致时会报 <code>No instances available for xxx</code>，这是最常见的启动问题之一。另外要注意版本差异。Ribbon 自 Spring Cloud 2020.0（Ilford）起已进入维护状态，新的 Spring Cloud Alibaba 版本默认使用 <strong>Spring Cloud LoadBalancer</strong>。如果依赖中同时存在 <code>spring-cloud-starter-netflix-ribbon</code>，需要显式排除它，并通过 <code>spring.cloud.loadbalancer.nacos.enabled=true</code> 一类配置启用 Nacos 的负载均衡集成，否则负载均衡策略不会生效。生产上还应把超时、重试与熔断一起配置：重试可配 <code>spring.cloud.loadbalancer.retry</code> 或 Feign 的 retryer，避免默认无限等待。</p>
+<p>这里的服务名必须与提供者在 Nacos 上注册的 <code>spring.application.name</code> 完全一致。不一致时会报 <code>No instances available for xxx</code>，这是最常见的启动问题之一。另外要注意版本差异。Ribbon 自 Spring Cloud 2020.0（Ilford）起已进入维护状态。新的 Spring Cloud Alibaba 版本默认改用 <strong>Spring Cloud LoadBalancer</strong>。如果依赖中同时存在 <code>spring-cloud-starter-netflix-ribbon</code>，需要显式排除它，并通过 <code>spring.cloud.loadbalancer.nacos.enabled=true</code> 一类配置启用 Nacos 的负载均衡集成，否则负载均衡策略不会生效。生产上还应把超时、重试与熔断一起配置：重试可配 <code>spring.cloud.loadbalancer.retry</code> 或 Feign 的 retryer，避免默认无限等待。</p>
 
 <h2>路由灰度与流量防护：网关该做的三件事</h2>
 <p>当服务多起来之后，调用方不应该再直接访问每个服务，而是统一经过网关。Spring Cloud Gateway 是官方第二代网关（取代 Zuul 1.x），承担路由转发、鉴权、限流等职责。一个典型的路由规则如下：</p>
@@ -207,13 +207,13 @@ public class NacosConsumerApplication {
               args:
                 redis-rate-limiter.replenishRate: 100   # 每秒放行令牌数
                 redis-rate-limiter.burstCapacity: 200   # 桶容量，允许的瞬时突发</code></pre>
-<p><strong>灰度发布</strong>是治理能力中最实用的一项。思路是给实例打上元数据标签（如 <code>version: v2</code>），再在网关或负载均衡器中按标签筛选目标实例，让一小部分流量先进新版本。Nacos 支持在控制台为实例编辑元数据，配合自定义的负载均衡规则即可实现「先放 5% 流量」；Dubbo 则原生提供基于权重的条件路由与标签路由，灰度配置项更直接。</p>
-<p><strong>限流与熔断</strong>解决的是「上游被打挂」的问题。限流在入口处按 QPS 或并发数放行，Gateway 的 <code>RequestRateLimiter</code> 与 Sentinel 的流控规则都属于这一类。熔断则在依赖方持续失败时快速失败并走降级逻辑，避免线程被慢调用耗尽；早期方案是 Hystrix，现在更常用 Resilience4j 或 Sentinel。两者互补：限流保护自己，熔断保护调用链。</p>
+<p><strong>灰度发布</strong>是治理能力中最实用的一项。思路是给实例打上元数据标签（如 <code>version: v2</code>），再在网关或负载均衡器中按标签筛选目标实例，让一小部分流量先进新版本。Nacos 支持在控制台为实例编辑元数据，配合自定义的负载均衡规则即可实现“先放 5% 流量”；Dubbo 则原生提供基于权重的条件路由与标签路由，灰度配置项更直接。</p>
+<p><strong>限流与熔断</strong>解决的是“上游被打挂”的问题。限流在入口处按 QPS 或并发数放行，Gateway 的 <code>RequestRateLimiter</code> 与 Sentinel 的流控规则都属于这一类。熔断则在依赖方持续失败时快速失败并走降级逻辑，避免线程被慢调用耗尽；早期方案是 Hystrix，现在更常用 Resilience4j 或 Sentinel。两者互补：限流保护自己，熔断保护调用链。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-13/02-gateway-gray.svg" alt="请求穿过网关的限流与灰度分流示意图"><figcaption>图 2：请求穿过网关——入口限流、路由转发、按标签灰度分流与 TraceId 透传</figcaption></figure>
 
 <h2>链路追踪与分布式事务：把问题查清、把数据对齐</h2>
-<p>拆分之后，一次用户请求会跨多个服务，排查问题必须能把它「串起来」。链路追踪的做法是：入口生成全局唯一的 TraceId，跨服务调用时通过 HTTP Header 或 RPC 上下文透传。同时记录每段的 SpanId 与耗时，最后汇总到 Zipkin、SkyWalking 等后端展示。Spring Cloud Sleuth 曾是标准方案，但在 Spring Boot 3 与 Spring Cloud 2022 之后已被 <strong>Micrometer Tracing</strong> 取代。新项目应直接使用 Micrometer Tracing，再按需桥接 Brave 或 OTel。</p>
+<p>拆分之后，一次用户请求会跨多个服务，排查问题必须能把它“串起来”。链路追踪的做法是：入口生成全局唯一的 TraceId，跨服务调用时通过 HTTP Header 或 RPC 上下文透传。同时记录每段的 SpanId 与耗时，最后汇总到 Zipkin、SkyWalking 等后端展示。Spring Cloud Sleuth 曾是标准方案，但在 Spring Boot 3 与 Spring Cloud 2022 之后已被 <strong>Micrometer Tracing</strong> 取代。新项目应直接使用 Micrometer Tracing，再按需桥接 Brave 或 OTel。</p>
 <p>另一类难题是跨库数据一致性。单体时代一个本地事务就能解决的事，拆成两个服务后变成两个独立事务，中间任何一步失败都会留下脏数据。TCC（Try-Confirm-Cancel）是常用的服务化两阶段方案：Try 阶段预留资源，Confirm 阶段确认提交，Cancel 阶段释放预留。它把一致性责任交给业务代码，因此实现时有四个必须处理的细节：</p>
 <ul>
     <li><strong>允许空回滚</strong>：Try 请求因网络超时未到达，协调者却发起了 Cancel，Cancel 必须能安全地无事发生。</li>
@@ -221,10 +221,10 @@ public class NacosConsumerApplication {
     <li><strong>幂等</strong>：Try / Confirm / Cancel 都可能因重传或补偿被重复调用，重复执行的结果必须与执行一次一致。</li>
     <li><strong>并发控制</strong>：Try 预留的资源在二阶段前不能被其他事务修改，需要加锁或版本号校验，同时尽量降低锁粒度以保住并发度。</li>
 </ul>
-<p>注意 TCC 与本地事务的边界：TCC 只保证各参与方最终一致，不提供隔离性，中间态对外可见，业务上要接受「预留中」这个短暂状态。若业务无法改造，也可以考虑基于消息队列的最终一致方案或 Seata 的 AT 模式，但同样需要评估性能与侵入性。</p>
+<p>注意 TCC 与本地事务的边界：TCC 只保证各参与方最终一致，不提供隔离性，中间态对外可见，业务上要接受“预留中”这个短暂状态。若业务无法改造，也可以考虑基于消息队列的最终一致方案或 Seata 的 AT 模式，但同样需要评估性能与侵入性。</p>
 
 <h2>小结</h2>
-<p>服务分发与治理本质上是把「地址管理、流量分配、故障隔离、问题定位」这四件事从业务代码中抽出来，交给基础设施统一处理。落地顺序建议是：先用 Nacos 完成注册与发现，让调用方只依赖服务名；再引入网关统一入口，配上限流与灰度规则；随后接入链路追踪，让问题可观测。最后才根据业务一致性要求，选择 TCC 或消息最终一致方案。每一步都要在依赖版本上确认清楚——Ribbon、Hystrix、Sleuth 这些曾经的标准组件都已进入维护或替换阶段，照搬旧教程的依赖很容易在启动阶段就卡住。</p>
+<p>服务分发与治理本质上是把“地址管理、流量分配、故障隔离、问题定位”这四件事从业务代码中抽出来，交给基础设施统一处理。落地顺序建议是：先用 Nacos 完成注册与发现，让调用方只依赖服务名；再引入网关统一入口，配上限流与灰度规则；随后接入链路追踪，让问题可观测。最后才根据业务一致性要求，选择 TCC 或消息最终一致方案。每一步都要在依赖版本上确认清楚——Ribbon、Hystrix、Sleuth 这些曾经的标准组件都已进入维护或替换阶段，照搬旧教程的依赖很容易在启动阶段就卡住。</p>
           </article>
   <!-- Footer -->
   <footer>

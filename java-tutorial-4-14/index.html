@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>系统里一旦出现「登录」，你迟早会撞上两个问题：<strong>你是谁</strong>（身份验证，Authentication）和<strong>你能干什么</strong>（授权，Authorization，也叫访问控制）。很多项目把这两件事揉进拦截器里手写，结果越写越乱：改密码规则要动登录逻辑，加角色要改好几处判断。本章把它们拆开讲清，并以 Spring Security 为主线，串起过滤器链、方法安全、Shiro 的 Realm 与 JWT 的取舍。适合已能写 Spring Boot 接口、正打算给项目加权限控制，或要应付「认证与授权怎么实现」这类面试题的读者。</p>
+<p>系统里一旦出现“登录”，你迟早会撞上两个问题：<strong>你是谁</strong>（身份验证，Authentication）和<strong>你能干什么</strong>（授权，Authorization，也叫访问控制）。很多项目把这两件事揉进拦截器里手写，结果越写越乱：改密码规则要动登录逻辑，加角色要改好几处判断。本章把它们拆开讲清，并以 Spring Security 为主线，串起过滤器链、方法安全、Shiro 的 Realm 与 JWT 的取舍。适合已能写 Spring Boot 接口、正打算给项目加权限控制，或要应付“认证与授权怎么实现”这类面试题的读者。</p>
 
 <h2>一、认证与授权：两个必须分开的问题</h2>
 
-<p>认证回答「你是谁」，产出可信的身份对象；授权回答「你能不能访问这个资源」，输入是身份、资源与规则。框架把二者拆成两套接口，是因为变化频率不同：认证方式可能从密码换成短信、扫码、单点登录，授权规则则通常只是角色表在变，混写会让任何一边的变化牵连另一边。</p>
+<p>认证回答“你是谁”，产出可信的身份对象；授权回答“你能不能访问这个资源”，输入是身份、资源与规则。框架把二者拆成两套接口，是因为变化频率不同：认证方式可能从密码换成短信、扫码、单点登录，授权规则则通常只是角色表在变，混写会让任何一边的变化牵连另一边。</p>
 
 <p>Spring Security 里认证的总入口是 <code>AuthenticationManager</code>，它只有一个方法：</p>
 
@@ -152,7 +152,7 @@
 }
 </code></pre>
 
-<p>Provider 只处理它 <code>supports()</code> 认领的 <code>Authentication</code> 子类型，认不出就跳过，因此一个应用能同时支持表单登录、记住我、Token 等多种机制。全部 Provider 返回 <code>null</code> 时交给父（parent）Manager，父为空则抛异常。</p>
+<p>Provider 只处理它 <code>supports()</code> 认领的 <code>Authentication</code> 子类型，认不出就跳过，因此一个应用能同时支持表单登录、Remember-Me、Token 等多种机制。全部 Provider 返回 <code>null</code> 时交给父（parent）Manager，父为空则抛异常。</p>
 
 <h2>二、授权：AccessDecisionManager 与投票器</h2>
 
@@ -163,11 +163,11 @@
         throws AccessDeniedException, InsufficientAuthenticationException;
 </code></pre>
 
-<p><code>object</code> 是泛化的「被保护资源」，Web 请求和 Java 方法都算；<code>ConfigAttribute</code> 是描述规则的字符串，最常见的就是 <code>ROLE_ADMIN</code> 这类角色名。Manager 只负责委托给一组 <code>DecisionVoter</code> 投票。默认实现 <strong>AffirmativeBased</strong> 只要有一票通过就放行，另有 ConsensusBased 少数服从多数、UnanimousBased 必须全票通过。自定义授权通常是增加 Voter，而不是重写 Manager；规则里写 SpEL，如 <code>hasRole('FOO')</code>，同样依靠一个能解析表达式的 Voter 实现。</p>
+<p><code>object</code> 是泛化的“被保护资源”，Web 请求和 Java 方法都算；<code>ConfigAttribute</code> 是描述规则的字符串，最常见的就是 <code>ROLE_ADMIN</code> 这类角色名。Manager 只负责委托给一组 <code>DecisionVoter</code> 投票。默认实现 <strong>AffirmativeBased</strong> 只要有一票通过就放行，另有 ConsensusBased 少数服从多数、UnanimousBased 必须全票通过。自定义授权通常是增加 Voter，而不是重写 Manager；规则里写 SpEL，如 <code>hasRole('FOO')</code>，同样依靠一个能解析表达式的 Voter 实现。</p>
 
 <h2>三、Web 层：过滤器链是怎么装进去的</h2>
 
-<p>Spring Security 在 Web 层基于 Servlet 过滤器：先由 <code>DelegatingFilterProxy</code> 注册到容器，再委托给 Bean <code>FilterChainProxy</code>，其固定名字为 <code>springSecurityFilterChain</code>。它内部可持有<strong>多条</strong>过滤器链，按顺序匹配路径，<strong>第一个匹配上的链独占处理</strong>。默认 Boot 应用通常有 6 条链：第一条放行静态资源，最后一条匹配 <code>/**</code>。兜底链内含认证、授权、异常处理等约 11 个过滤器。要加规则，可实现 <code>WebSecurityConfigurerAdapter</code>。Boot 2.7 起推荐直接注册 <code>SecurityFilterChain</code> Bean，并用 <code>@Order</code> 排在兜底链之前：</p>
+<p>Spring Security 在 Web 层基于 Servlet 过滤器：先由 <code>DelegatingFilterProxy</code> 注册到容器（注册名固定为 <code>springSecurityFilterChain</code>），再委托给同名的 <code>FilterChainProxy</code> Bean。它内部可持有<strong>多条</strong>过滤器链，按顺序匹配路径，<strong>第一个匹配上的链独占处理</strong>。默认的 Spring Boot 应用通常有 6 条过滤器链：第一条放行静态资源，最后一条匹配 <code>/**</code>。兜底链内含认证、授权、异常处理等约 11 个过滤器。要加规则，可以继承 <code>WebSecurityConfigurerAdapter</code>（Security 5.7 之前的主流写法），也可以注册 <code>SecurityFilterChain</code> Bean。Boot 2.7 起推荐后者，并用 <code>@Order</code> 把它排在兜底链之前。下面这段是前一种写法：</p>
 
 <pre><code class="language-java">@Configuration
 @Order(SecurityProperties.BASIC_AUTH_ORDER - 10)
@@ -182,11 +182,11 @@ public class ApiSecurityConfig extends WebSecurityConfigurerAdapter {
 }
 </code></pre>
 
-<p>最容易犯的错是把两个层级的匹配器搞混：<code>antMatcher()</code> 决定「这条链管不管这个请求」，<code>antMatchers()</code> 决定「链内部这个路径要什么权限」。另一个坑是 Boot 会自动注册容器里所有 <code>Filter</code> Bean，自定义安全过滤器会被执行两遍，应改用 <code>FilterRegistrationBean</code> 关闭自动注册再手动加进安全链。</p>
+<p>最容易犯的错是把两个层级的匹配器搞混：<code>antMatcher()</code> 决定“这条链管不管这个请求”，<code>antMatchers()</code> 决定“链内部这个路径要什么权限”。另一个坑是 Boot 会自动注册容器里所有 <code>Filter</code> Bean，自定义安全过滤器会被执行两遍，应改用 <code>FilterRegistrationBean</code> 关闭自动注册再手动加进安全链。</p>
 
 <h2>四、方法安全、上下文与 Shiro 的对照</h2>
 
-<p>Web 安全管「哪些 URL 谁能进」，方法安全管「哪个 Service 方法谁能调」，粒度更细。在启动类加 <code>@EnableGlobalMethodSecurity</code>，Security 5.6 及以上推荐改用 <code>@EnableMethodSecurity</code>，之后即可在方法上打注解：</p>
+<p>Web 安全管“哪些 URL 谁能进”，方法安全管“哪个 Service 方法谁能调”，粒度更细。在启动类加 <code>@EnableGlobalMethodSecurity</code>，Security 5.6 及以上推荐改用 <code>@EnableMethodSecurity</code>，之后即可在方法上打注解：</p>
 
 <pre><code class="language-java">@Service
 public class OrderService {
@@ -202,7 +202,7 @@ public class OrderService {
 }
 </code></pre>
 
-<p>被拒绝时抛 <code>AccessDeniedException</code>。方法安全靠 AOP 代理，<strong>同类内部自调用不走代理</strong>，注解会失效，这是最常见的「加了注解却没生效」的原因。当前用户存在 <code>SecurityContext</code> 中，<code>SecurityContextHolder</code> 底层是 <code>ThreadLocal</code>。控制器里可用 <code>@AuthenticationPrincipal User user</code> 拿到类型安全的当前用户，但任务丢进 <code>@Async</code> 线程池后上下文就断了。此时需要用 <code>DelegatingSecurityContextExecutorService</code> 之类的包装传递上下文。</p>
+<p>被拒绝时抛 <code>AccessDeniedException</code>。方法安全靠 AOP 代理，<strong>同类内部自调用不走代理</strong>，注解会失效，这是最常见的“加了注解却没生效”的原因。当前用户存在 <code>SecurityContext</code> 中，<code>SecurityContextHolder</code> 底层是 <code>ThreadLocal</code>。控制器里可用 <code>@AuthenticationPrincipal User user</code> 拿到类型安全的当前用户，但任务丢进 <code>@Async</code> 线程池后上下文就断了。此时需要用 <code>DelegatingSecurityContextExecutorService</code> 之类的包装传递上下文。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-14/01-auth-flow.svg" alt="认证与授权请求流程图"><figcaption>图 1：一次受保护请求的处理流程——过滤器链先认证，再由投票器决定是否放行</figcaption></figure>
 
@@ -219,7 +219,7 @@ shiroFilterFactoryBean.setLoginUrl("/login");
 shiroFilterFactoryBean.setSuccessUrl("/index");
 </code></pre>
 
-<p>它用 <code>LinkedHashMap</code> 而不是 <code>HashMap</code>，就是为了保住这个顺序。<strong>JWT</strong> 解决的是「服务端无状态」与「跨域、多端」问题，本身只承载身份声明，<strong>不解决授权</strong>。token 里塞角色只能做粗粒度判断，且过期前无法撤销，生产上一般配短有效期加刷新令牌，或叠加 Redis 黑名单。</p>
+<p>它使用 <code>LinkedHashMap</code> 而不是 <code>HashMap</code>，正是为了保住这个顺序。<strong>JWT</strong> 解决的是“服务端无状态”与“跨域、多端”问题，本身只承载身份声明，<strong>不解决授权</strong>。Token 里塞角色只能做粗粒度判断，且过期前无法撤销，生产上一般配短有效期加刷新令牌，或叠加 Redis 黑名单。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-14/02-scheme-compare.svg" alt="Spring Security、Shiro 与 JWT 的定位对比"><figcaption>图 2：Spring Security、Shiro 与 JWT 的定位——JWT 只负责携带身份，不解决授权</figcaption></figure>
 
