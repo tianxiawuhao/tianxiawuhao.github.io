@@ -146,6 +146,9 @@ System.out.println(e == a);       // false new 一定新建对象，不走缓存
 System.out.println(e.equals(a));  // true  equals 比的是值
 </code></pre>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-10/01-integer-cache.svg" alt="包装类缓存池范围与自动装箱的 == 判定：命中缓存复用对象，超出范围 new 新对象"><figcaption>图 1：缓存池范围与 == 的判定——自动装箱走 valueOf，命中 -128~127 才复用同一对象，比较一律用 equals()</figcaption></figure>
+
+
 <p>顺带纠正一个流传很广的说法：<code>boolean</code> 在局部变量和操作数栈里确实按 <code>int</code> 处理，但 JVM 是支持 <code>boolean[]</code> 的，它用 <code>byte</code> 数组实现；「JVM 不支持 boolean 数组」是错的。实战建议也很简单：包装类型比较一律用 <code>equals()</code>，或者先拆箱成基本类型再比；能不用 <code>new Integer(...)</code> 就不用。</p>
 
 <h2>二、String：不可变性、字符串常量池与拼接</h2>
@@ -215,6 +218,9 @@ public final class Point {
 <p><strong>Set。</strong><code>HashSet</code> 底层是哈希表，存取无序且不允许重复，靠 <code>hashCode()</code> 加 <code>equals()</code> 保证唯一；<code>TreeSet</code> 底层是红黑树，天然有序，排序规则来自元素实现的 <code>Comparable</code>（自然排序）或构造时传入的 <code>Comparator</code>；<code>LinkedHashSet</code> 在哈希表之外再维护一条双向链表，因此保持插入顺序。</p>
 
 <p><strong>Map。</strong><code>HashMap</code> 是数组加链表，Java 8 起在链表长度达到 8 且容量不小于 64 时把该桶转成红黑树，把最坏查找从 O(n) 降到 O(log n)；容量保持 2 的幂、默认负载因子 0.75，扩容时容量翻倍并重算桶位置。遍历时 <code>entrySet()</code> 比先 <code>keySet()</code> 再 <code>get(key)</code> 更快，因为后者多了一次查找。另外 <code>HashMap</code> 允许一个 <code>null</code> key 和多个 <code>null</code> value，而 <code>ConcurrentHashMap</code> 都不允许，这是两者最容易被追问的差别。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-10/02-collection-cheatsheet.svg" alt="List、Set、Map 的底层结构与选型速查，附遍历安全陷阱"><figcaption>图 2：集合选型速查——四种底层结构（数组、链表、哈希表、红黑树）决定了查询与增删的取舍，遍历中删除要用 removeIf()</figcaption></figure>
+
 
 <pre><code class="language-java">Map&lt;String, Integer&gt; counts = new HashMap&lt;&gt;();
 counts.put("java", 1);
