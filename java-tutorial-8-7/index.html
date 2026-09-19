@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>RabbitMQ 与 RocketMQ | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>RabbitMQ 与 RocketMQ</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，6 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>上一章的 Kafka 擅长吞吐，但它并不是所有场景的最优解：业务系统里大量消息只有几 KB、要求毫秒级投递、还要能按业务字段灵活路由，这时候 RabbitMQ 和 RocketMQ 往往更顺手。本章解决两个问题：一是把 RabbitMQ 的交换机路由模型和端到端可靠投递讲清楚；二是讲清 RocketMQ 的存储与消费模型，最后给出选型判断。适合已经会写 Java、正在为项目挑一款 MQ 或准备面试的读者。</p>
+
+<h2>一、MQ 到底解决什么问题</h2>
+
+<p>先用一句话定位：消息队列是介于生产者和消费者之间的异步通信中间件，核心价值是三件事——<strong>异步</strong>、<strong>解耦</strong>、<strong>削峰</strong>。典型例子是下单：写库只用 3&nbsp;ms，但发短信、加积分、更新搜索索引各要几百毫秒，串行执行用户就要等近 1 秒；改成写库后发一条消息，接口总耗时降到十几毫秒，下游各自慢慢消费。</p>
+
+<p>代价也必须清楚：引入 MQ 后系统可用性下降（MQ 挂了整条链路就断）、一致性变复杂（消息可能重复或丢失）、运维成本上升。因此下面讨论的所有机制，本质上都是在为这三个代价买单。</p>
+
+<h2>二、RabbitMQ：以 Broker 为中心的路由模型</h2>
+
+<h3>2.1 Exchange 才是路由的核心</h3>
+
+<p>RabbitMQ 用 Erlang 编写，实现 AMQP 0-9-1 协议。它和 Kafka 最大的架构差异是：生产者<strong>不直接把消息写进队列</strong>，而是发给 Exchange（交换机），由 Exchange 按 Binding（绑定）和 Routing Key 决定投递到哪些 Queue。生产者对队列是无感知的，这正是它能做灵活路由的原因。</p>
+
+<ul>
+<li><strong>direct</strong>：Routing Key 完全匹配，用于点对点精确投递。</li>
+<li><strong>fanout</strong>：忽略 Routing Key，广播到所有绑定队列。</li>
+<li><strong>topic</strong>：通配符匹配，<code>*</code> 匹配一个单词，<code>#</code> 匹配零个或多个单词。例如绑定 <code>order.*.pay</code> 能收到 <code>order.cn.pay</code>，绑定 <code>order.#</code> 能收到 <code>order.cn.pay.success</code>。</li>
+<li><strong>headers</strong>：按消息头键值匹配，性能不如前三种，实际项目用得很少。</li>
+</ul>
+
+<p>另外要区分两套"模型"的说法：AMQP 协议层面是 Exchange/Queue/Binding 这套模型，而教学资料里常说的"5 种消息模型"（简单、work、订阅、路由、主题）其实是同一套组件的不同用法组合，第 6 种 RPC 已经不属于消息队列范畴。</p>
+
+<h3>2.2 写一个最小可运行的生产者与消费者</h3>
+
+<p>以官方 <code>amqp-client</code> 5.x 为例，声明一个 direct 交换机并发送持久化消息：</p>
+
+<pre><code class="language-java">ConnectionFactory factory = new ConnectionFactory();
+factory.setHost("192.168.1.10");
+factory.setPort(5672);
+factory.setUsername("guest");
+factory.setPassword("guest");
+
+try (Connection conn = factory.newConnection();
+     Channel channel = conn.createChannel()) {
+
+    // 声明交换机与队列，并绑定路由键；服务端已存在时不会重复创建
+    channel.exchangeDeclare("order.exchange", BuiltinExchangeType.DIRECT, true);
+    channel.queueDeclare("order.pay.queue", true, false, false, null);
+    channel.queueBind("order.pay.queue", "order.exchange", "order.pay");
+
+    // MessageProperties.PERSISTENT_TEXT_PLAIN 让消息落盘
+    channel.basicPublish("order.exchange", "order.pay",
+            MessageProperties.PERSISTENT_TEXT_PLAIN, "order-1001-paid".getBytes(StandardCharsets.UTF_8));
+}</code></pre>
+
+<p>消费端的关键是<strong>手动确认</strong>，而不是自动 ack：</p>
+
+<pre><code class="language-java">channel.basicQos(1); // 每次只预取 1 条，避免快慢消费者把内存撑爆
+channel.basicConsume("order.pay.queue", false, (tag, delivery) -&gt; {
+    try {
+        handle(new String(delivery.getBody(), StandardCharsets.UTF_8));
+        channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+    } catch (Exception e) {
+        // requeue=false 表示不重回队列，交给死信交换机处理，避免死循环重投
+        channel.basicNack(delivery.getEnvelope().getDeliveryTag(), false, false);
+    }
+}, tag -&gt; { });</code></pre>
+
+<h3>2.3 可靠投递：三个环节都不能漏</h3>
+
+<p>消息丢失可能发生在三处，必须分别设防：</p>
+
+<ul>
+<li><strong>生产者到 Broker</strong>：开事务（<code>txSelect/txCommit/txRollback</code>）或更常用的 confirm 模式。信道进入 confirm 模式后每条消息获得唯一递增 ID，Broker 确认后才回调 ack；未确认的消息可重发。</li>
+<li><strong>Broker 内部</strong>：队列声明为 durable、消息标记为持久化，并且刷盘成功后才算落盘；节点故障还需镜像队列（classic mirror queue）或 Quorum Queue 兜底。</li>
+<li><strong>Broker 到消费者</strong>：关闭 autoAck，业务处理成功后再 <code>basicAck</code>；失败走 <code>basicNack</code> 或直接送死信交换机（DLX）配 TTL 实现延迟队列。</li>
+</ul>
+
+<p>因此"消息不丢"不是某个开关，而是一组配置叠加，代价是吞吐下降。<strong>不要给所有消息都开全套持久化与 confirm</strong>：日志、埋点这类可容忍丢失的消息用瞬时投递即可。</p>
+
+<h3>2.4 顺序性：RabbitMQ 的软肋</h3>
+
+<p>RabbitMQ 只保证<strong>单队列 + 单消费者</strong>范围内有序。一个队列挂多个消费者、或消费者内部用线程池并发处理，顺序立刻被打破。要严格顺序只有两条路：拆多个队列、每队列一个消费者；或者单队列单消费者、内部用内存队列排队再按 key 哈希分发。这也是 rocketmq、Kafka 在顺序场景更受欢迎的原因。</p>
+
+<h2>三、RocketMQ：CommitLog 与 ConsumeQueue 的分层存储</h2>
+
+<h3>3.1 存储结构决定了它的读写特性</h3>
+
+<p>RocketMQ 由阿里开源，用 Java 编写，最初服务于双十一的交易链路。它把消息存储拆成三层：</p>
+
+<ul>
+<li><strong>CommitLog</strong>：所有消息按到达顺序追加写在一个文件组里，单文件默认 1&nbsp;GB。写入完全顺序，是它高吞吐的根基。</li>
+<li><strong>ConsumeQueue</strong>：每个 Topic 的每个队列一个轻量索引，只记录消息在 CommitLog 中的物理偏移、消息大小和 Tag 的哈希值，定长 20 字节。所以队列本身几乎不占空间。</li>
+<li><strong>IndexFile</strong>：按 Message Key 建立的哈希索引，供控制台按业务键查询，结构类似 HashMap。</li>
+</ul>
+
+<p>这个设计的取舍很鲜明：写是纯顺序写，读却变成随机读。RocketMQ 依赖 page cache 预读、把 IO 调度算法调成 deadline 或 NOOP，来把随机读尽量变成"顺序跳跃"，官方称这类读性能可提升 5 倍以上；同时因为 CommitLog 里保存了全部元信息，ConsumeQueue 即使损坏也能重建。</p>
+
+<h3>3.2 刷盘、主从与消息重试</h3>
+
+<p>刷盘分异步与同步：异步刷盘写进 page cache 就返回，靠后台线程刷盘，性能高但机器掉电可能丢少量消息；同步刷盘要等落盘才返回，可靠性高、RT 变长。主从复制同理，异步复制在 Master 磁盘损坏时可能丢极少量消息，<strong>同步双写</strong>才能完全避免单点，但明显影响性能，适合资金类业务。</p>
+
+<p>消费失败时，RocketMQ 会把消息投递到 <code>%RETRY%消费组名</code> 这个重试 Topic，按延迟级别逐次退避，默认重试 16 次后进入死信队列。这里要分清两种失败：反序列化失败、数据本身无法处理（如号码已注销）这类"永远失败"的消息应立即人工介入，不要傻等重试；下游数据库或外部服务不可用这类"暂时失败"，则适合延迟重试。</p>
+
+<p>发送消息时用 <code>MessageQueueSelector</code> 把同一业务键的消息固定发到同一队列，就能获得分区有序：</p>
+
+<pre><code class="language-java">DefaultMQProducer producer = new DefaultMQProducer("order_producer_group");
+producer.setNamesrvAddr("192.168.1.10:9876");
+producer.start();
+
+Message msg = new Message("OrderTopic", "PAY", ("order-1001-paid").getBytes(StandardCharsets.UTF_8));
+// 按订单号哈希选队列：同一订单的消息必定落在同一队列，从而保证分区有序
+SendResult result = producer.send(msg, (queues, m, arg) -&gt; {
+    int index = Math.abs(arg.hashCode()) % queues.size();
+    return queues.get(index);
+}, "order-1001");
+System.out.println(result.getSendStatus() + " " + result.getMsgId());</code></pre>
+
+<h3>3.3 事务消息与定时消息</h3>
+
+<p>RocketMQ 的事务消息采用两阶段思路：先发送半消息（对消费者不可见），执行本地事务，再根据结果提交或回滚；若 Broker 长时间未收到二次确认，会回查生产者的本地事务状态。它的实现绕开了按 Key 查消息，而是复用第一条消息的 Offset 定位状态，因此半消息数量大时会产生较多脏页，需要关注。定时消息方面，RocketMQ 只支持固定延迟级别而非任意时间精度（4.x 为 18 个级别，5.x 扩展为 24 个级别、最长 2 小时，具体以所部署版本的 <code>messageDelayLevel</code> 配置为准）。</p>
+
+<p>至于投递语义，RocketMQ 与 RabbitMQ 一样，默认只保证 At Least Once（至少一次），Exactly Once 在分布式环境下开销极大，工程上的做法是业务侧做幂等去重，例如把消息 ID 或业务唯一键写入数据库唯一索引。</p>
+
+<h2>四、怎么选：一张对照表</h2>
+
+<ul>
+<li><strong>RabbitMQ</strong>：单机吞吐约万级，延迟低至微秒—毫秒级，路由最灵活，管理界面完善，社区成熟；Erlang 生态导致二次开发门槛高，堆积大量消息时性能明显下滑。</li>
+<li><strong>RocketMQ</strong>：单机吞吐十万级，支持事务消息、定时消息、按时间回溯消费和亿级堆积，Java 技术栈易改造，有活跃中文社区；生态与多语言客户端不如 Kafka 广泛。</li>
+<li><strong>Kafka</strong>：吞吐最高，适合日志、埋点、流式计算，但队列数过多时性能下降，早期版本不具备事务消息与完善的重试机制。</li>
+</ul>
+
+<p>落地建议是：业务解耦、需要复杂路由或低延迟的场景选 RabbitMQ；交易、订单等需要事务消息、顺序消息和海量堆积的场景选 RocketMQ；日志管道和大数据链路选 Kafka。如果团队同时维护多套成本高，也要接受"用一套 MQ 覆盖所有场景"必然在某些场景上做妥协。</p>
+
+<h2>五、小结</h2>
+
+<p>本章要点有四个：第一，RabbitMQ 的核心是 Exchange/Binding/Routing Key 的路由模型，direct、fanout、topic 三种类型覆盖了绝大多数业务；第二，可靠投递必须在生产者、Broker、消费者三端同时设防，confirm 加手动 ack 加持久化是标配，且要按消息重要性分级；第三，RocketMQ 的高吞吐来自 CommitLog 顺序写加 ConsumeQueue 轻量索引的分层存储，代价是随机读，顺序消息要靠队列选择器加单队列单线程消费；第四，选型没有银弹，按业务对吞吐、延迟、可靠性和堆积能力的要求取舍。下一章我们继续看消息中间件在真实项目中的落地与排障。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
