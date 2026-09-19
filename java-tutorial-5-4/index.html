@@ -134,7 +134,7 @@
 
 <h2>单例模式：保证一个类只有一个实例</h2>
 <p>单例的意图是"保证一个类仅有一个实例，并提供一个访问它的全局访问点"，典型场景是配置中心、连接池、缓存、序列号生成器。实现只有三个要素：<strong>构造方法私有化</strong>（外部无法<code>new</code>）、<strong>类内部自己持有唯一实例</strong>（用<code>private static</code>字段）、<strong>暴露一个静态方法返回该实例</strong>。</p>
-<p>写法上有一条演进路线，值得按顺序理解：饿汉式在类加载时就创建，简单且线程安全；懒汉式延迟创建，但"先判断再创建"不是原子操作，多线程下会造出两个对象；给<code>getInstance()</code>整个加<code>synchronized</code>虽然安全，却让每次读取都要抢锁；双重检查锁定（DCL）把锁缩小到创建那一刻，但<strong>实例字段必须用<code>volatile</code>修饰</strong>——否则指令重排可能让另一个线程拿到"引用已赋值、构造却未完成"的半成品对象，这一点在 Java 5 修正内存模型之后才真正成立。生产代码里更推荐下面两种免锁写法。</p>
+<p>写法上有一条演进路线，值得按顺序理解：饿汉式在类加载时就创建，简单且线程安全；懒汉式延迟创建，但"先判断再创建"不是原子操作，多线程下会造出两个对象；给<code>getInstance()</code>整个加<code>synchronized</code>虽然安全，却让每次读取都要抢锁；双重检查锁定（DCL）把锁缩小到创建那一刻，但<strong>实例字段必须用<code>volatile</code>修饰</strong>——否则指令重排可能让另一个线程拿到"引用已赋值、构造却还没走完"的半成品对象，这一点在 Java 5 修正内存模型之后才真正成立。生产代码里更推荐下面两种免锁写法。</p>
 <pre><code class="language-java">// 写法一：静态内部类（延迟加载 + 由 JVM 保证线程安全）
 public final class ConfigHolder {
     private ConfigHolder() {}
