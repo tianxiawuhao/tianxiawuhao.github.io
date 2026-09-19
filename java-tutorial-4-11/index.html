@@ -134,6 +134,8 @@
 
 <p>没有注册中心时，调用方只能把被调方地址写死在配置里，靠 Nginx 或 F5 转发。服务一多就有两个痛点：地址散落在几十份配置里，扩容一台机器要通知所有调用方；某台实例已经挂了，调用方仍然把请求发过去，只能靠超时自己发现。注册中心解决这两件事——服务启动时上报自己的地址并周期性发送心跳，调用方拉取可用实例列表并在本地缓存，实例下线或心跳超时后被剔除。配置中心则解决另一半：把配置从代码仓库搬出来集中存放、分环境管理、改完动态生效，服务重启次数大幅下降。简单说，注册中心管"人在哪"，配置中心管"怎么干活"。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-11/01-registry-config.svg" alt="Spring Cloud 注册中心与配置中心分工示意图"><figcaption>图 1：注册中心解决服务注册与发现，配置中心解决配置集中管理与热更新</figcaption></figure>
+
 <h2>二、Eureka：服务注册与发现</h2>
 
 <p>Eureka 分服务端（Eureka Server，即注册中心）和客户端（Eureka Client，即各微服务）。先在父工程导入 Spring Cloud 依赖管理，再在注册中心工程引入 <code>spring-cloud-starter-netflix-eureka-server</code>，启动类加 <code>@EnableEurekaServer</code>：</p>
@@ -248,6 +250,8 @@ public interface RemoteClient {
 }</code></pre>
 
 <p>两个容易踩的坑：方法只要带参数，就必须在 <code>@PathVariable("id")</code>、<code>@RequestParam("name")</code> 里显式写出参数名，不能像 Controller 那样省略；返回值若是自定义复杂对象，该类必须有可访问的无参构造函数，否则反序列化失败。另外老资料里的 <code>@FeginClient</code> 是拼写错误，正确拼写为 Feign；<code>name</code> 与 <code>value</code> 等价，指定的是注册中心里的服务名而非域名。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-11/02-feign-fallback.svg" alt="Feign 声明式调用与熔断降级链路示意图"><figcaption>图 2：一次 Feign 调用——动态代理、客户端负载均衡与熔断降级</figcaption></figure>
 
 <h2>五、容错与限流：别让一个服务拖垮全站</h2>
 

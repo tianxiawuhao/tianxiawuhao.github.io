@@ -133,6 +133,8 @@
 <h2>为什么需要服务分发与治理</h2>
 <p>在没有治理组件之前，服务间调用通常是「配置里写死地址 + 自己写重试」。这套做法有三个绕不过去的坑：一是地址静态化，扩容缩容必须改配置重启；二是可用性靠人工，某个节点假死了调用方仍然会把请求打过去；三是缺少统一的观测点，一个请求跨了五六个服务后，慢在哪儿只能靠猜。</p>
 <p>治理层要交付的核心能力可以归纳为四件事：<strong>服务发现</strong>（实例注册与健康检查）、<strong>服务路由</strong>（负载均衡、灰度、权重）、<strong>流量防护</strong>（限流、熔断、降级）和<strong>可观测与一致性</strong>（链路追踪、分布式事务）。前两件是基础设施，后两件决定了系统出事时能不能扛住、能不能查清。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-13/01-governance-map.svg" alt="服务分发与治理四类核心能力示意图"><figcaption>图 1：服务分发与治理的四类能力——服务发现、服务路由、流量防护、可观测与一致性</figcaption></figure>
 <p>需要说明的是，本章默认以 Spring Cloud Alibaba 技术栈为主线（Nacos + Spring Cloud LoadBalancer/Gateway），Dubbo 的治理思路与之类似，只是注册中心、协议和扩展点不同。两者并非替代关系，实际项目中 Dubbo 负责内部高性能 RPC，Spring Cloud 负责网关与周边组件，混合使用也很常见——原资料中「Dubbo 已停止维护」的说法已经过时，Dubbo 自 2018 年重启维护并进入 Apache 基金会，目前仍在持续发布（3.x 系列支持 Triple 协议与云原生部署），选型时应以当下的社区活跃度为准。</p>
 
 <h2>用 Nacos 做注册中心：把地址交给注册表</h2>
@@ -207,6 +209,8 @@ public class NacosConsumerApplication {
                 redis-rate-limiter.burstCapacity: 200   # 桶容量，允许的瞬时突发</code></pre>
 <p><strong>灰度发布</strong>是治理能力里最实用的一个。思路是给实例打上元数据标签（如 <code>version: v2</code>），再在网关或负载均衡器中按标签筛选目标实例，让一小部分流量先进新版本。Nacos 支持在控制台为实例编辑元数据，配合自定义的负载均衡规则即可实现「先放 5% 流量」；Dubbo 则原生提供基于权重的条件路由与标签路由，灰度配置项更直接。</p>
 <p><strong>限流与熔断</strong>解决的是「上游被打挂」的问题。限流在入口处按 QPS 或并发数放行（Gateway 的 <code>RequestRateLimiter</code>、Sentinel 的流控规则都属于这一类）；熔断则在依赖方持续失败时快速失败并走降级逻辑，避免线程被慢调用耗尽（早期是 Hystrix，现在更常用 Resilience4j 或 Sentinel）。两者是互补的：限流保护自己，熔断保护调用链。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-13/02-gateway-gray.svg" alt="请求穿过网关的限流与灰度分流示意图"><figcaption>图 2：请求穿过网关——入口限流、路由转发、按标签灰度分流与 TraceId 透传</figcaption></figure>
 
 <h2>链路追踪与分布式事务：把问题查清、把数据对齐</h2>
 <p>拆分之后，一次用户请求会跨多个服务，排查问题必须能把它「串起来」。链路追踪的做法是：入口生成全局唯一的 TraceId，跨服务调用时通过 HTTP Header 或 RPC 上下文透传，同时记录每段的 SpanId 与耗时，最后汇总到 Zipkin、SkyWalking 等后端展示。Spring Cloud Sleuth 曾是标准方案，Sleuth 在 Spring Boot 3 / Spring Cloud 2022 之后已被 <strong>Micrometer Tracing</strong> 取代，新项目应直接使用 Micrometer Tracing + Brave/OTel 桥接。</p>

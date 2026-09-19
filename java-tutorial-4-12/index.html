@@ -144,6 +144,8 @@
 
 <p><strong>第四是寻址。</strong>服务提供者的地址会变：上线、下线、扩容、机房迁移。所以调用方不能把地址写死在配置里，而要向注册中心订阅地址列表，并在每次调用前按负载均衡算法挑一台。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-12/01-rpc-anatomy.svg" alt="RPC 代理序列化传输寻址示意图"><figcaption>图 1：RPC 把方法调用编码成字节流——代理、序列化、传输、寻址</figcaption></figure>
+
 <p>这里要纠正一个常见的误解：RPC 不是某一个具体协议，而是一套"调用语义 + 治理能力"的抽象。Dubbo 底层可以挂载 dubbo、rmi、hessian、http、rest、grpc 等多种协议。所以"用 Dubbo 就等于二进制长连接"并不准确——dubbo 协议默认是单连接长连接，但 hessian、rmi、http 等协议走的是短连接。</p>
 
 <p>与 REST 风格对比：Dubbo 这类二进制 RPC 报文小、连接复用率高、自带服务治理，但要求调用双方共享同一份接口定义（通常是同一个 API 依赖包），耦合更紧；HTTP + JSON 更通用、跨语言、易调试，代价是报文体积和解析开销更大。两者不是替代关系，而是"内部高频调用"与"对外开放接口"的分工。</p>
@@ -161,6 +163,8 @@
 </ul>
 
 <p>一次服务的完整生命周期按官方定义的 0～5 步走：容器启动并加载 Provider；Provider 启动时向注册中心注册自己提供的服务；Consumer 启动时向注册中心订阅自己需要的服务；注册中心把提供者地址列表返回给 Consumer，并在地址变更时基于长连接推送新列表；Consumer 从地址列表中按软负载均衡算法选一台调用，失败则换一台重试；Consumer 与 Provider 各自在内存中累计调用次数和耗时，定时每分钟上报给监控中心。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-12/02-dubbo-roles.svg" alt="Dubbo 五角色与调用生命周期示意图"><figcaption>图 2：Dubbo 的五个角色与 0～5 步调用生命周期</figcaption></figure>
 
 <p>这段流程里有三个容易被忽略的细节。其一，<strong>地址推送是基于长连接的订阅机制</strong>，而不是消费方定时轮询，因此服务上下线能在秒级感知。其二，<strong>Consumer 会把地址列表缓存在本地</strong>，注册中心整体故障时已有调用关系仍然可用，这正是"注册中心宕机不等于系统不可用"的原因。其三，<strong>失败换一台重试属于集群容错（Failover），不是负载均衡本身</strong>；负载均衡只负责"选哪一台"，重试是选失败之后的补救动作。</p>
 

@@ -114,7 +114,7 @@
               <h1>常用工具类</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，9 min read</span>
+                2026-09-19，6 min read</span>
             </div>
           
         
@@ -128,23 +128,15 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>写业务代码时，真正占篇幅的往往不是业务逻辑，而是判空、拼接、类型转换、属性拷贝这些重复劳动。一个 Service 里塞进十几个 <code>if (str != null &amp;&amp; !"".equals(str.trim()))</code>，代码就变得又长又难读。工具类要解决的正是这个问题：把高频、易错的通用操作收敛成一行调用。</p>
+<p>写业务代码时，占篇幅的往往不是业务逻辑，而是判空、拼接、类型转换、属性拷贝这些重复劳动。一个 Service 里塞进十几个 <code>if (str != null &amp;&amp; !"".equals(str.trim()))</code>，代码就变得又长又难读。工具类解决的正是这个问题：把高频、易错的通用操作收敛成一行调用。</p>
 
-<p>本章梳理 Java 项目里最常用的几类工具库——Apache Commons Lang、Apache Commons Collections、Apache Commons BeanUtils、Spring 的 BeanUtils 与 DigestUtils，以及 JDK 自带的 <code>Objects</code> 和 <code>UUID</code>。如果你已经能写基本的分支循环，但还在手写判空和 get/set 拷贝，这一章会明显提升你的代码质量与阅读速度。</p>
+<p>本章梳理 Java 项目里最常用的几类工具：Apache Commons Lang、Commons Collections、Commons BeanUtils、Spring 的 BeanUtils 与 DigestUtils，以及 JDK 自带的 <code>Objects</code>。适合已能写基本分支循环、但还在手写判空和 get/set 拷贝的读者。</p>
 
 <h2>一、StringUtils：判断空字符串的正确姿势</h2>
 
-<p>字符串判空是最典型的例子。JDK 的 <code>String.isBlank()</code>（Java 11 起）只判断是否为空或全为空白字符，长度为零才返回 true；Apache Commons Lang3 的 <code>StringUtils</code> 则提供了更符合业务语义的一组方法：</p>
+<p>Commons Lang3 的 <code>StringUtils</code> 提供了比手写更符合业务语义的方法。<code>isEmpty</code> 在长度为 0 或为 null 时返回 true，<strong>不做 trim</strong>；<code>isBlank</code> 在 null、空串、只含空白字符时都返回 true，等价于先 trim 再判空。业务里更常用 <code>defaultIfBlank(str, "默认值")</code>，为空时给默认值，比三目运算清晰；此外还有 <code>join(数组, 分隔符)</code>、<code>split</code>、<code>trimToNull</code>、<code>capitalize</code>。</p>
 
-<ul>
-  <li><code>isEmpty(CharSequence)</code>：长度为 0 或为 null 时返回 true，<strong>不做 trim</strong>。</li>
-  <li><code>isBlank(CharSequence)</code>：null、空串、以及只包含空白字符时都返回 true，等价于先 trim 再判空。</li>
-  <li><code>isNotBlank</code> / <code>isNotEmpty</code>：对应的取反方法。</li>
-  <li><code>defaultIfBlank(str, "默认值")</code>：为空时给默认值，比三目运算清晰。</li>
-  <li><code>join(数组, 分隔符)</code>、<code>split(str, 分隔符)</code>、<code>trimToNull(str)</code>、<code>capitalize(str)</code>：拼接、切分、去空白转 null、首字母大写。</li>
-</ul>
-
-<p>需要注意，Spring 也有一份 <code>org.springframework.util.StringUtils</code>，它没有 <code>isBlank</code>，判断依据是 <code>hasText</code>（非空白）与 <code>hasLength</code>（长度大于 0）。两个同名类经常被同时引入，写代码时务必看清 import 来源，否则会遇到「方法明明存在却编译不通过」的困惑。</p>
+<p>注意 Spring 也有一份 <code>org.springframework.util.StringUtils</code>，它没有 <code>isBlank</code>，判断依据是 <code>hasText</code>（非空白）与 <code>hasLength</code>（长度大于 0）。两个同名类常被同时引入，务必看清 import 来源，否则会遇到「方法存在却编译不通过」的困惑。</p>
 
 <pre><code class="language-java">import org.apache.commons.lang3.StringUtils;
 
@@ -154,32 +146,20 @@ public class StringDemo {
         System.out.println(StringUtils.isBlank("  "));   // true，trim 后为空
         System.out.println(StringUtils.isBlank(null));   // true，null 安全
 
-        // 业务里更常用的写法：为空就取默认值
         String name = StringUtils.defaultIfBlank("  ", "匿名用户");
         System.out.println(name);                        // 匿名用户
-
-        // 拼接与切分
-        String joined = StringUtils.join(new String[]{"a", "b", "c"}, "-");
-        System.out.println(joined);                      // a-b-c
-        System.out.println(StringUtils.trimToNull("   ") == null); // true
     }
 }</code></pre>
 
-<p>另外，<code>org.apache.commons.lang3.StringEscapeUtils</code> 已经废弃，官方建议迁移到 <code>org.apache.commons.text.StringEscapeUtils</code>（即 commons-text 包）。它的 <code>escapeHtml4</code> 用于把 <code>&lt;div&gt;</code> 这类内容转成 HTML 实体以输出到页面，<code>escapeXml</code>、<code>escapeJson</code>、<code>escapeJava</code> 分别对应不同场景；<strong>转义方向别记反</strong>：<code>escape*</code> 是「原文 → 实体」，<code>unescape*</code> 才是「实体 → 原文」。注意它只做转义，不能替代参数化查询或输出编码等安全手段。</p>
+<p><code>org.apache.commons.lang3.StringEscapeUtils</code> 已废弃，官方建议迁移到 commons-text 包的 <code>StringEscapeUtils</code>。<code>escapeHtml4</code> 把 <code>&lt;div&gt;</code> 这类内容转成 HTML 实体，方向别记反：<code>escape*</code> 是「原文 → 实体」，<code>unescape*</code> 才是「实体 → 原文」。它只做转义，不能替代参数化查询等安全手段。</p>
 
-<h2>二、集合、数组与 IO 工具</h2>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-2/01-stringutils-blank.svg" alt="StringUtils isEmpty 与 isBlank 的判定对比表"><figcaption>图 1：isEmpty 与 isBlank 的判定差别——只有 isBlank 把纯空白串判为空</figcaption></figure>
 
-<p>集合工具类里最常用的是 <code>org.apache.commons.collections4.CollectionUtils</code>（Commons Collections 3 的包名是 <code>org.apache.commons.collections</code>，两者 API 包路径不同，别混用）。它解决了 JDK 集合 API 的两处不顺手：判空要写两遍，以及筛选、转换只能靠手写循环。</p>
+<h2>二、集合、数组与日期</h2>
 
-<ul>
-  <li><code>isEmpty</code> / <code>isNotEmpty</code>：一次性处理 null 与空集合，省掉一个 <code>== null</code> 判断。</li>
-  <li><code>select</code>：按条件筛选，返回新集合，原集合不受影响；<code>filter</code> 语义相近。</li>
-  <li><code>transform</code>：对每个元素做转换，返回新集合，作用类似 Stream 的 <code>map</code>。</li>
-  <li><code>isEqualCollection</code>：忽略顺序比较两个集合的元素是否一致。</li>
-  <li><code>CollectionUtils.emptyIfNull(list)</code>：把 null 换成空集合，避免调用方到处判空。</li>
-</ul>
+<p>集合工具最常用 <code>org.apache.commons.collections4.CollectionUtils</code>（Commons Collections 3 的包名是 <code>org.apache.commons.collections</code>，包路径不同，别混用）。它解决 JDK 集合 API 的两处不顺手：<code>isEmpty</code> 一次处理 null 与空集合；<code>select</code> 按条件筛选并返回新集合，原集合不受影响；<code>transform</code> 对每个元素做转换，类似 Stream 的 <code>map</code>；<code>emptyIfNull(list)</code> 把 null 换成空集合，避免调用方到处判空。</p>
 
-<p>数组与文件方面，<code>org.apache.commons.lang3.ArrayUtils</code> 提供 <code>contains</code>、<code>add</code>、<code>addAll</code>、<code>subarray</code>、<code>indexOf</code>、<code>isEquals</code>、<code>isEmpty</code> 等方法；<code>org.apache.commons.io.FileUtils</code> 与 <code>IOUtils</code> 负责文件与流的读写、复制、静默关闭，其中 <code>closeQuietly</code> 常放在 finally 块里 <code>closeQuietly</code>，而 <code>FileUtils.deleteQuietly</code>、<code>forceMkdir</code>、<code>readFileToString</code>、<code>writeStringToFile</code> 是使用频率最高的几个。Java 7 之后有 try-with-resources，新代码优先用它管理流，<code>IOUtils</code> 更多用于流拷贝与编码转换。</p>
+<p>数组用 <code>ArrayUtils</code> 的 <code>contains</code>、<code>add</code>、<code>subarray</code>；文件与流用 <code>FileUtils.deleteQuietly</code>、<code>forceMkdir</code>、<code>readFileToString</code> 与 <code>IOUtils.copy</code>。不过 Java 7 之后有 try-with-resources，新代码优先用它管理流。</p>
 
 <pre><code class="language-java">import org.apache.commons.collections4.CollectionUtils;
 import java.util.ArrayList;
@@ -189,91 +169,51 @@ import java.util.List;
 public class CollectionDemo {
     public static void main(String[] args) {
         List&lt;Integer&gt; nums = Arrays.asList(1, 2, 3, 4, 5, 6);
-
-        // 筛选偶数：无需手写 for 循环和临时集合
         List&lt;Integer&gt; evens = new ArrayList&lt;&gt;(
                 CollectionUtils.select(nums, n -&gt; n % 2 == 0));
-        System.out.println(evens);                       // [2, 4, 6]
+        System.out.println(evens);                          // [2, 4, 6]
 
-        // 判空与去 null：Controller 接收参数后立刻规整
         List&lt;String&gt; tags = null;
         for (String tag : CollectionUtils.emptyIfNull(tags)) {
-            System.out.println(tag);                     // 不会抛 NPE，直接不循环
+            System.out.println(tag);                        // 不抛 NPE，直接不循环
         }
-        System.out.println(CollectionUtils.isEmpty(tags)); // true
+        System.out.println(CollectionUtils.isEmpty(tags));   // true
     }
 }</code></pre>
 
-<h3>日期与随机数：别再用过时的 Calendar</h3>
-
-<p>日期时间的推荐做法是直接用 <code>java.time</code>（Java 8 起）：<code>LocalDateTime.now()</code>、<code>DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")</code>、<code>Duration.between(a, b)</code>。旧项目里常见的 <code>java.util.Date</code> 与 <code>SimpleDateFormat</code> 有两个硬伤：<code>Date</code> 的月份从 0 开始、年份需要减去 1900，极易出错；<code>SimpleDateFormat</code> 不是线程安全的，作为静态字段共享会在并发下产生错乱结果甚至抛异常。</p>
-
-<p>随机数与唯一标识方面，<code>UUID.randomUUID().toString().replace("-", "")</code> 可以生成 32 位十六进制字符串作业务主键或幂等键。安全敏感的随机数（验证码、令牌、盐值）必须用 <code>java.security.SecureRandom</code>，而不是 <code>java.util.Random</code>，因为后者的种子可被推导。<code>org.apache.commons.lang3.RandomStringUtils.randomNumeric(length)</code> 适合生成纯数字串，它<strong>不保证首位非 0</strong>，需要定长数字编号时记得自行补齐或校验。摘要计算推荐 <code>org.apache.commons.codec.digest.DigestUtils</code>：<code>md5Hex</code>、<code>sha256Hex</code> 返回十六进制字符串，<code>sha512Hex</code> 对应 SHA-512；而 <code>DigestUtils.md5(String)</code> 返回的是 16 字节数组 <code>byte[]</code>，不是「16 位字符串」，需要字符串时请用 <code>md5Hex</code>。</p>
+<p>日期时间直接用 <code>java.time</code>（Java 8 起）：<code>LocalDateTime.now()</code>、<code>DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")</code>。旧的 <code>Date</code> 与 <code>SimpleDateFormat</code> 有两个硬伤：<code>Date</code> 月份从 0 开始、年份需减 1900，极易算错；<code>SimpleDateFormat</code> 不是线程安全的，作为静态字段共享会在并发下错乱。摘要计算推荐 <code>DigestUtils.md5Hex</code> 与 <code>sha256Hex</code>，注意 <code>DigestUtils.md5(String)</code> 返回 16 字节数组 <code>byte[]</code>，不是「16 位字符串」。</p>
 
 <h2>三、BeanUtils：属性拷贝与它的三个坑</h2>
 
-<p>实体类（Entity/PO）与展示对象（VO/DTO）字段高度重合，逐个 get/set 赋值既啰嗦又容易漏字段。<code>BeanUtils.copyProperties</code> 利用反射与自省机制按属性名自动拷贝，一行顶十几行。但它的参数顺序是新手最容易踩的坑：</p>
+<p>实体类（Entity/PO）与展示对象（VO/DTO）字段高度重合，逐个 get/set 既啰嗦又容易漏字段。<code>BeanUtils.copyProperties</code> 利用反射与自省按属性名自动拷贝，但有两个同名方法参数顺序完全相反：Commons 的 <code>copyProperties(目标对象, 源对象)</code> 目标在前；Spring 的 <code>copyProperties(源对象, 目标对象)</code> 源在前。写反了不报错，只会静默地把字段拷成 null，排查非常费时。</p>
 
-<ul>
-  <li><code>org.apache.commons.beanutils.BeanUtils.copyProperties(目标对象, 源对象)</code>：<strong>目标在前、源在后</strong>。</li>
-  <li><code>org.springframework.beans.BeanUtils.copyProperties(源对象, 目标对象)</code>：<strong>源在前、目标在后</strong>。</li>
-</ul>
+<p>另外两个坑：它<strong>只拷贝同名同类型的属性</strong>，字段名不一致时不会自动映射，需要手动赋值或改用 MapStruct；反射拷贝在批量循环中性能不如直接赋值。若两个类结构差距很大，也可用 JSON 中转（<code>JSON.parseObject(json, UserVO.class)</code>），只要求属性名一致、不要求类型继承关系，代价是多一次序列化开销。</p>
 
-<p>两个同名方法参数顺序完全相反，写反了不会报错，只会静默地把字段拷成 null，排查起来非常费时。除此之外还有两个坑：一是它<strong>只拷贝同名同类型的属性</strong>，源和目标字段名不一致时不会自动映射，需要手动赋值或用 MapStruct、Dozer 这类映射框架；二是反射拷贝在批量循环中性能不如直接赋值，同时要注意不要因过度使用而破坏封装，把不该暴露的内部字段带到对外接口上。</p>
-
-<pre><code class="language-java">public class User {
-    private String name;
-    private Integer age;
-    // 省略 getter / setter
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public Integer getAge() { return age; }
-    public void setAge(Integer age) { this.age = age; }
-}
-
-public class UserVO {
-    private String name;
-    private Integer age;
-    // 省略 getter / setter
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public Integer getAge() { return age; }
-    public void setAge(Integer age) { this.age = age; }
-}</code></pre>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-2/02-beanutils-order.svg" alt="Spring 与 Commons 的 copyProperties 参数顺序对比"><figcaption>图 2：两个 copyProperties 的参数顺序相反，写反会静默拷成 null</figcaption></figure>
 
 <pre><code class="language-java">import org.springframework.beans.BeanUtils;
 
 public class CopyDemo {
     public static void main(String[] args) {
-        User user = new User();
+        User user = new User();          // 有 name、age 属性及 getter/setter
         user.setName("张三");
         user.setAge(20);
 
-        UserVO vo = new UserVO();
+        UserVO vo = new UserVO();        // 字段与 User 同名
         // Spring：源在前、目标在后
         BeanUtils.copyProperties(user, vo);
         System.out.println(vo.getName());   // 张三
 
-        // Commons BeanUtils 的顺序恰好相反，切勿照搬：
+        // Commons BeanUtils 顺序恰好相反，切勿照搬：
         // org.apache.commons.beanutils.BeanUtils.copyProperties(vo, user);
     }
 }</code></pre>
 
-<p>如果两个类结构差距很大，用 JSON 中转也很常见：先用 Fastjson 或 Jackson 把源对象序列化成字符串，再反序列化成目标类型（<code>JSON.parseObject(json, UserVO.class)</code>）。这种方式只要求属性名一致、不要求类型继承关系，代价是多一次序列化开销，且字段名不匹配时同样会丢数据。</p>
+<h2>四、Objects 与密码工具</h2>
 
-<h2>四、JDK 自带的 Objects 与密码工具</h2>
+<p>引入第三方库前，先看看 JDK 已提供了什么。<code>java.util.Objects</code> 从 Java 7 起覆盖了大部分判空与比较场景：<code>Objects.equals(a, b)</code> 在内存地址相同或 <code>a.equals(b)</code> 为 true 时返回 true；<code>Objects.hashCode(o)</code> 在 o 为 null 时返回 0；<code>Objects.toString(o, nullDefault)</code> 在 null 时给默认值；<code>Objects.requireNonNull(obj, "message")</code> 抛出带信息的 <code>NullPointerException</code>，适合做方法入口的参数校验。</p>
 
-<p>在引入第三方库之前，先看看 JDK 已经提供了什么。<code>java.util.Objects</code> 从 Java 7 起就覆盖了大部分判空与比较场景，无需任何依赖：</p>
-
-<ul>
-  <li><code>Objects.equals(a, b)</code>：内存地址相同或 <code>a.equals(b)</code> 为 true 即返回 true，参数可为 null。</li>
-  <li><code>Objects.deepEquals(a, b)</code>：数组会比较对应下标的值。</li>
-  <li><code>Objects.hashCode(o)</code>：o 为 null 时返回 0；<code>Objects.hash(values...)</code> 用于重写 hashCode。</li>
-  <li><code>Objects.toString(o, nullDefault)</code>：null 时返回默认值。</li>
-  <li><code>Objects.requireNonNull(obj, "message")</code>：为 null 时抛出带信息的 <code>NullPointerException</code>，适合做方法入口的参数校验。</li>
-</ul>
-
-<p>密码存储是另一个必须用工具类而非自研算法的场景。MD5、SHA 系列都是快速摘要算法，加不加盐都扛不住现代硬件的暴力破解和彩虹表。Spring Security 提供的 <code>BCryptPasswordEncoder</code> 内置随机盐与可调计算强度，是更合适的选择：</p>
+<p>密码存储必须用成熟工具类。MD5、SHA 系列都是快速摘要算法，加不加盐都扛不住暴力破解与彩虹表；Spring Security 的 <code>BCryptPasswordEncoder</code> 内置随机盐与可调计算强度，是更合适的选择：</p>
 
 <pre><code class="language-java">import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -288,19 +228,17 @@ public class PasswordDemo {
         String hash2 = encoder.encode(raw);
         // 每次 encode 都含随机盐，两次结果不同
         System.out.println(Objects.equals(hash1, hash2)); // false
-        // 但用 matches 校验都能通过：数据库只存 hash，不存原文
-        System.out.println(encoder.matches(raw, hash1));  // true
-        System.out.println(encoder.matches(raw, hash2));  // true
+        System.out.println(encoder.matches(raw, hash1));  // true，校验用 matches
     }
 }</code></pre>
 
-<p>所以校验密码只能调用 <code>matches(原文, 密文)</code>，绝不能用「把用户输入重新加密后与数据库字符串做 equals」的方式比对——随机盐会让这种比较永远失败。另外，BCrypt 密文本身就包含盐与强度信息，长度约 60 字符，建库时字段宽度要给足（<code>varchar(100)</code> 更稳妥）。</p>
+<p>校验密码只能调用 <code>matches(原文, 密文)</code>，绝不能用「把用户输入重新加密后与数据库字符串做 equals」的方式比对——随机盐会让这种比较永远失败。BCrypt 密文本身含盐与强度信息，长度约 60 字符，建库时字段宽度要给足。</p>
 
 <h2>五、小结</h2>
 
-<p>工具类的价值在于把容易写错的细节封装起来：<code>StringUtils.isBlank</code> 区分了「空串」与「空白串」，<code>CollectionUtils</code> 省掉了判空和手写循环，<code>BeanUtils.copyProperties</code> 消灭了成片的 get/set，<code>Objects</code> 与 <code>java.time</code> 让你不必依赖第三方库就能写好判空和日期。选择时优先用 JDK 自带 API，其次用社区活跃、维护正常的库；已经废弃的类（如 <code>commons-lang3</code> 的 <code>StringEscapeUtils</code>）要按官方指引迁移。命名上遵循惯例，工具类放在 <code>util</code> 包下并命名为 <code>XxxUtils</code>，与实体类区分开。</p>
+<p>工具类的价值在于把容易写错的细节封装起来：<code>StringUtils.isBlank</code> 区分了「空串」与「空白串」，<code>CollectionUtils</code> 省掉判空与手写循环，<code>BeanUtils.copyProperties</code> 消灭成片的 get/set，<code>Objects</code> 与 <code>java.time</code> 让你不必依赖第三方库就能写好判空和日期。优先用 JDK 自带 API，其次用社区活跃、维护正常的库，已废弃的类按官方指引迁移；工具类放在 <code>util</code> 包下并命名为 <code>XxxUtils</code>。</p>
 
-<p>最后提醒两点：工具类都是静态方法，天然无状态，不要在其中保存可变成员，否则会引入并发问题；使用第三方库时务必在构建文件里声明依赖并统一版本（Maven 的 <code>commons-lang3</code>、<code>commons-collections4</code>、<code>commons-beanutils</code> 坐标），避免同一个库出现多个版本导致 <code>NoSuchMethodError</code>。</p>
+<p>最后两点：工具类都是静态方法，天然无状态，不要在其中保存可变成员，否则会引入并发问题；使用第三方库时务必声明依赖并统一版本（<code>commons-lang3</code>、<code>commons-collections4</code>、<code>commons-beanutils</code>），避免同一库多版本导致 <code>NoSuchMethodError</code>。</p>
           </article>
   <!-- Footer -->
   <footer>

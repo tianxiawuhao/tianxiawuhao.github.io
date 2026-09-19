@@ -132,9 +132,9 @@
 
 <h2>一、认证与授权：两个必须分开的问题</h2>
 
-<p>认证回答「你是谁」，产出的是一个可信的身份对象；授权回答「你能不能访问这个资源」，输入是身份 + 资源 + 规则。框架之所以要把它们拆成两套接口，是因为两者的变化频率完全不同：认证方式可能从用户名密码换成短信、扫码、单点登录，而授权规则通常是角色表在变。混在一起写，任何一边变化都会牵连另一边。</p>
+<p>认证回答「你是谁」，产出可信的身份对象；授权回答「你能不能访问这个资源」，输入是身份、资源与规则。框架把二者拆成两套接口，是因为变化频率不同：认证方式可能从密码换成短信、扫码、单点登录，授权规则则通常只是角色表在变，混写会让任何一边的变化牵连另一边。</p>
 
-<p>在 Spring Security 里，认证的总入口是 <code>AuthenticationManager</code>，它只有一个方法：</p>
+<p>Spring Security 里认证的总入口是 <code>AuthenticationManager</code>，它只有一个方法：</p>
 
 <pre><code class="language-java">public interface AuthenticationManager {
     Authentication authenticate(Authentication authentication)
@@ -167,7 +167,7 @@
 
 <h2>三、Web 层：过滤器链是怎么装进去的</h2>
 
-<p>Spring Security 在 Web 层基于 Servlet 过滤器：通过 <code>DelegatingFilterProxy</code> 注册到容器，再委托给真正的 Bean <code>FilterChainProxy</code>（固定名字 <code>springSecurityFilterChain</code>）。它内部可以持有<strong>多条</strong>过滤器链，按顺序匹配路径，<strong>第一个匹配上的链独占处理</strong>。默认的 Spring Boot 应用通常有 6 条链：第一条放行静态资源（<code>/css/**</code>、<code>/error</code>），最后一条匹配 <code>/**</code>，内含认证、授权、异常处理等约 11 个过滤器。要加规则就实现 <code>WebSecurityConfigurerAdapter</code>（Boot 2.7 起推荐直接注册 <code>SecurityFilterChain</code> Bean），并用 <code>@Order</code> 排在兜底链之前：</p>
+<p>Spring Security 在 Web 层基于 Servlet 过滤器：由 <code>DelegatingFilterProxy</code> 注册到容器，再委托给 Bean <code>FilterChainProxy</code>（固定名字 <code>springSecurityFilterChain</code>）。它内部可持有<strong>多条</strong>过滤器链，按顺序匹配路径，<strong>第一个匹配上的链独占处理</strong>。默认 Boot 应用通常有 6 条链：第一条放行静态资源，最后一条匹配 <code>/**</code>，内含认证、授权、异常处理等约 11 个过滤器。要加规则就实现 <code>WebSecurityConfigurerAdapter</code>（Boot 2.7 起推荐直接注册 <code>SecurityFilterChain</code> Bean），并用 <code>@Order</code> 排在兜底链之前：</p>
 
 <pre><code class="language-java">@Configuration
 @Order(SecurityProperties.BASIC_AUTH_ORDER - 10)
@@ -182,7 +182,7 @@ public class ApiSecurityConfig extends WebSecurityConfigurerAdapter {
 }
 </code></pre>
 
-<p><p>这里最容易犯的错是把两个层级的匹配器搞混：<code>antMatcher()</code> 决定「这条链管不管这个请求」，<code>antMatchers()</code> 决定「链内部这个路径要什么权限」。另一个坑是 Boot 会自动注册容器里所有 <code>Filter</code> Bean，导致自定义安全过滤器执行两遍；应改用 <code>FilterRegistrationBean</code> 关闭自动注册再手动加进安全链。</p>
+<p>最容易犯的错是把两个层级的匹配器搞混：<code>antMatcher()</code> 决定「这条链管不管这个请求」，<code>antMatchers()</code> 决定「链内部这个路径要什么权限」。另一个坑是 Boot 会自动注册容器里所有 <code>Filter</code> Bean，自定义安全过滤器会被执行两遍，应改用 <code>FilterRegistrationBean</code> 关闭自动注册再手动加进安全链。</p>
 
 <h2>四、方法安全、上下文与 Shiro 的对照</h2>
 
@@ -202,13 +202,11 @@ public class OrderService {
 }
 </code></pre>
 
-<p>被拒绝时抛的是 <code>AccessDeniedException</code>。方法安全靠 AOP 代理实现，所以<strong>同类内部自调用不会走代理</strong>，注解会失效——这是线上最常见的「加了权限注解却没生效」的原因。</p>
-
-<p>当前用户存在 <code>SecurityContext</code> 里，而 <code>SecurityContextHolder</code> 底层是 <code>ThreadLocal</code>。所以控制器里可以直接用 <code>@AuthenticationPrincipal User user</code> 拿到类型安全的当前用户；但把逻辑丢进 <code>@Async</code> 线程池后上下文就断了，需要用 <code>DelegatingSecurityContextExecutorService</code> 之类的包装传递。</p>
+<p>被拒绝时抛 <code>AccessDeniedException</code>。方法安全靠 AOP 代理，<strong>同类内部自调用不走代理</strong>，注解会失效——这是最常见的「加了注解却没生效」的原因。当前用户存在 <code>SecurityContext</code> 中，<code>SecurityContextHolder</code> 底层是 <code>ThreadLocal</code>：控制器里可用 <code>@AuthenticationPrincipal User user</code> 拿到类型安全的当前用户，但丢进 <code>@Async</code> 线程池后上下文就断了，需用 <code>DelegatingSecurityContextExecutorService</code> 之类的包装传递。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-14/01-auth-flow.svg" alt="认证与授权请求流程图"><figcaption>图 1：一次受保护请求的处理流程——过滤器链先认证，再由投票器决定是否放行</figcaption></figure>
 
-<p>不想引入 Spring Security 的话，Apache Shiro 更轻：同样分离认证与授权，但一切围绕 <code>Realm</code> 展开。实现 <code>doGetAuthenticationInfo()</code> 返回 <code>SimpleAuthenticationInfo(principal, credentials, realmName)</code>，实现 <code>doGetAuthorizationInfo()</code> 返回角色与权限，再用 <code>HashedCredentialsMatcher</code> 统一散列规则（<code>setHashAlgorithmName("md5")</code>、<code>setHashIterations(2)</code>，<strong>必须与入库时完全一致</strong>，否则永远认证失败）。URL 规则写在 <code>filterChainDefinitionMap</code> 里，<strong>顺序敏感</strong>，<code>anon</code>（匿名可访问）在前、<code>authc</code>（需登录）兜底：</p>
+<p>不想引入 Spring Security 的话，Apache Shiro 更轻：同样分离认证与授权，但一切围绕 <code>Realm</code> 展开。实现 <code>doGetAuthenticationInfo()</code> 返回 <code>SimpleAuthenticationInfo(principal, credentials, realmName)</code>，<code>doGetAuthorizationInfo()</code> 返回角色与权限，再用 <code>HashedCredentialsMatcher</code> 统一散列规则（<strong>必须与入库时完全一致</strong>，否则永远认证失败）。URL 规则写在 <code>filterChainDefinitionMap</code> 里，<strong>顺序敏感</strong>，<code>anon</code> 在前、<code>authc</code> 兜底：</p>
 
 <pre><code class="language-java">Map&lt;String, String&gt; filterChainDefinitionMap = new LinkedHashMap&lt;&gt;();
 filterChainDefinitionMap.put("/login", "anon");
@@ -222,6 +220,8 @@ shiroFilterFactoryBean.setSuccessUrl("/index");
 </code></pre>
 
 <p>它用 <code>LinkedHashMap</code> 而不是 <code>HashMap</code>，就是为了保住这个顺序。而 <strong>JWT</strong> 解决的是「服务端无状态」和「跨域、多端」问题，本身只承载身份声明，<strong>不解决授权</strong>：token 里塞角色只能做粗粒度判断，且过期前无法撤销，生产上一般配短有效期加刷新令牌，或叠加 Redis 黑名单。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-14/02-scheme-compare.svg" alt="Spring Security、Shiro 与 JWT 的定位对比"><figcaption>图 2：Spring Security、Shiro 与 JWT 的定位——JWT 只负责携带身份，不解决授权</figcaption></figure>
 
 <h2>五、小结</h2>
 
