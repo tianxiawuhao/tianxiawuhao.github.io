@@ -176,7 +176,11 @@ try {
 <p>三个名字很像，成因完全不同，混淆是最常见的失分点。</p>
 <p><strong>穿透</strong>：数据在缓存和数据库<strong>都不存在</strong>，缓存永不命中。解法一是缓存空值并设短 TTL（如 30 秒），否则大量伪造 key 会把缓存撑爆；二是前置布隆过滤器，用大 bitmap 拦截“一定不存在”的 key，代价是有误判率且标准实现不支持删除。</p>
 <p><strong>击穿</strong>：数据在数据库<strong>存在</strong>，但某个热点 key 恰好过期，大量并发请求同时回源。它与雪崩的区别是“并发查同一条数据”。解法是互斥锁，只让一个请求回源重建缓存，其余短暂等待后重试。</p>
-<p><strong>雪崩</strong>：<strong>大批 key 同一时刻集中失效</strong>，或缓存服务整体不可用。要分因应对：key 集中过期，就在基础 TTL 上叠加随机值打散；服务宕机，则靠事前高可用（主从 + 哨兵或 Redis Cluster）、事中本地缓存与限流降级（Sentinel/Hystrix 兜流量）、事后快速恢复（开启持久化，避免冷启动打穿数据库）。</p>
+<p><strong>雪崩</strong>：<strong>大批 key 同一时刻集中失效</strong>，或缓存服务整体不可用。要分因应对：</p>
+<ul>
+<li><strong>key 集中过期</strong>：在基础 TTL 上叠加随机值打散。</li>
+<li><strong>服务宕机</strong>：事前靠高可用（主从 + 哨兵或 Redis Cluster），事中靠本地缓存与限流降级（Sentinel/Hystrix 兜流量），事后快速恢复（开启持久化，避免冷启动打穿数据库）。</li>
+</ul>
 <pre><code class="language-java">private static final long BASE_TTL = 1800;   // 基础 TTL 30 分钟
 private static final Random RANDOM = new Random();
 

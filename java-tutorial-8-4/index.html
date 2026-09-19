@@ -260,7 +260,12 @@ raw.keyBy(Browse::getUserId)
 
 <h2>Checkpoint、重启策略与反压</h2>
 
-<p>Checkpoint 是 Flink 容错的核心：JobManager 定期向所有算子注入屏障（Barrier），屏障随数据流一起流动。算子收到屏障时把自身状态快照上传到分布式存储。所有算子都完成快照后，这次 Checkpoint 才算成功；作业失败重启时会从最近一次成功的快照恢复。这带来两个直接结论：<strong>Checkpoint 间隔决定了故障时的重算量</strong>（间隔 10 分钟就最多重算 10 分钟的数据），而<strong>状态大小决定了 Checkpoint 耗时</strong>——这也是大状态作业要开 RocksDB 增量 Checkpoint 的原因。生产环境还应配置重启策略与外部化 Checkpoint：前者让作业自动拉起，后者在作业被取消后仍保留快照用于恢复。语义方面，<code>EXACTLY_ONCE</code> 保证状态不重不漏，但端到端精确一次还需要 Sink 支持事务或幂等写入，Sink 不支持时只能退化为 <code>AT_LEAST_ONCE</code>。</p>
+<p>Checkpoint 是 Flink 容错的核心：JobManager 定期向所有算子注入屏障（Barrier），屏障随数据流一起流动。算子收到屏障时把自身状态快照上传到分布式存储。所有算子都完成快照后，这次 Checkpoint 才算成功；作业失败重启时会从最近一次成功的快照恢复。这带来两个直接结论：</p>
+<ul>
+<li><strong>Checkpoint 间隔决定故障时的重算量</strong>：间隔 10 分钟，就最多重算 10 分钟的数据。</li>
+<li><strong>状态大小决定 Checkpoint 耗时</strong>：这也是大状态作业要开 RocksDB 增量 Checkpoint 的原因。</li>
+</ul>
+<p>生产环境还应配置重启策略与外部化 Checkpoint：前者让作业自动拉起，后者在作业被取消后仍保留快照用于恢复。语义方面，<code>EXACTLY_ONCE</code> 保证状态不重不漏，但端到端精确一次还需要 Sink 支持事务或幂等写入，Sink 不支持时只能退化为 <code>AT_LEAST_ONCE</code>。</p>
 
 <p>反压（Backpressure）是流处理中最常见的“看起来卡住了”的现象。Flink 基于信用机制做流控：下游算子的输入缓冲区写满后，会停止向上游发送信用，上游随之减速，压力最终传导到 Source。这正是期望行为，说明系统在自我保护，而不是 bug。真正要排查的是反压的<strong>根源算子</strong>：在 Flink UI 的作业图中，从出现高反压的算子开始查，它通常就是瓶颈所在——往往因为算子内有同步阻塞操作（比如调用外部 HTTP 或 JDBC）。常见治理手段包括提高瓶颈算子的并行度、把同步 IO 换成 Async I/O、为热点 key 做两阶段聚合（先加随机前缀打散再二次聚合），以及给状态配好 RocksDB 与本地磁盘。另外，数据倾斜是窗口作业的隐形杀手：个别 key 的数据量远超其他 key，会让单个并行子任务独自背下整个作业的压力。此时应先看各子任务的 <code>records</code> 与 <code>bytes</code> 指标是否严重不均，再决定加盐还是拆分逻辑。</p>
 
