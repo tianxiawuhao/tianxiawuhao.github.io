@@ -174,6 +174,26 @@ SELECT * FROM t_order WHERE DATE(created_at) = '2024-01-01';
 
 <p>回答“索引优化”类问题时，不要空谈原则，而要给出定位手段。第一步开慢查询日志（<code>slow_query_log = ON</code>、<code>long_query_time = 1</code>），把超过阈值的 SQL 捞出来。第二步对每条慢 SQL 执行 <code>EXPLAIN</code>，重点看四列。<code>type</code> 是访问类型，从优到劣为 <code>system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>，出现 <code>ALL</code> 基本可判定为全表扫描；<code>key</code> 是实际使用的索引，为 <code>NULL</code> 说明没走索引；<code>rows</code> 是预估扫描行数，越小越好；<code>Extra</code> 中出现 <code>Using filesort</code>、<code>Using temporary</code> 要警惕，出现 <code>Using index</code> 说明是覆盖索引。</p>
 
+<p><code>Extra</code> 是信息量最大的一列，常见取值可以列成一张对照表（8.0 与 8.4 一致）：</p>
+
+<table>
+<thead><tr><th>Extra 取值</th><th>含义</th><th>该怎么做</th></tr></thead>
+<tbody>
+<tr><td>Using index</td><td>覆盖索引，无需回表</td><td>好现象，可保持</td></tr>
+<tr><td>Using where</td><td>Server 层还要过滤返回的行</td><td>结合 <code>rows</code> 判断过滤代价是否过大</td></tr>
+<tr><td>Using index condition</td><td>索引下推生效，过滤下推到引擎层</td><td>好现象，回表已被削减</td></tr>
+<tr><td>Using filesort</td><td>无法用索引完成排序，需额外排序</td><td>让 <code>ORDER BY</code> 列与索引顺序一致</td></tr>
+<tr><td>Using temporary</td><td>使用了内部临时表（<code>GROUP BY</code>、<code>DISTINCT</code>、<code>UNION</code>）</td><td>补合适索引或改写 SQL</td></tr>
+<tr><td>Using join buffer</td><td>被驱动表没走索引，用了连接缓冲</td><td>给关联列加索引</td></tr>
+<tr><td>Using MRR</td><td>使用多范围读，回表按主键排序后批量读</td><td>好现象，减少随机 I/O</td></tr>
+<tr><td>Using index for group-by</td><td>用索引完成分组，未建临时表</td><td>好现象</td></tr>
+<tr><td>Using index for skip scan</td><td>8.0 的索引跳跃扫描，跳过最左列</td><td>仅在能显著降低代价时出现</td></tr>
+<tr><td>Impossible WHERE / Zero limit</td><td>条件恒假或 <code>LIMIT 0</code>，不会真正执行</td><td>检查 SQL 是否写错</td></tr>
+</tbody>
+</table>
+
+<p>8.0 还新增了 <code>EXPLAIN ANALYZE</code>（真正执行并给出各算子实际耗时与行数）和 <code>EXPLAIN FORMAT=JSON / TREE</code>，回答“你如何定位慢 SQL”时提到它们比只说 <code>EXPLAIN</code> 更贴合现状。</p>
+
 <p>常见“索引失效”场景可以归成四类。一是违反最左前缀；二是对索引列做运算或调用函数，如上面的 <code>DATE(created_at)</code>，应改写成 <code>created_at &gt;= '2024-01-01' AND created_at &lt; '2024-01-02'</code>；三是隐式类型转换，例如字符串列用数字查询，或连表两边的字符集不一致；四是以 <code>%</code> 开头的模糊匹配 <code>LIKE '%jack'</code>，只能用 <code>LIKE 'jack%'</code>。此外，<code>OR</code> 连接的条件中只要有一侧无索引，整条语句就可能退化为全表扫描。</p>
 
 <p>超大分页是另一个高频场景。<code>LIMIT 1000000, 10</code> 会先取出并丢弃前一百万行，代价极高。可改成<strong>延迟关联</strong>：让子查询只在索引上扫描并返回主键，再用主键回表取这 10 行。</p>
@@ -226,6 +246,8 @@ UPDATE t_order SET status = 2 WHERE user_id = 1001;
 COMMIT;
 </code></pre>
 
+<p><strong>旧答案 → 现状：查看隔离级别的变量名变了。</strong>旧笔记里的 <code>SELECT @@tx_isolation</code> 在 MySQL 8.0 已废弃并移除；5.7 起系统变量统一更名，<code>tx_isolation</code> 改成 <code>transaction_isolation</code>，<code>tx_read_only</code> 改成 <code>transaction_read_only</code>，现在应写 <code>SELECT @@transaction_isolation;</code>。这两个变量在 5.7 中尚有兼容别名，到 8.0 完全不再识别，写旧名字会直接报 <code>Unknown system variable</code>。同理，<code>innodb_locks_unsafe_for_binlog</code>、<code>innodb_file_format</code> 等 5.x 变量在 8.0 已删除，看到它们就要意识到资料是旧版本。</p>
+
 <h2>四、大表优化与分库分表</h2>
 
 <p>面对“一张表近千万数据，CRUD 变慢怎么办”这类场景题，回答要分层递进，先低成本再高成本。<strong>SQL 与索引层</strong>：先看慢日志，补改索引，消除回表和全表扫描，避免 <code>SELECT *</code>。<strong>表结构层</strong>：选择合适的数据类型，定长字符串用 <code>CHAR</code>、密码哈希用 <code>CHAR(60)</code> 存 BCrypt，字段尽量 <code>NOT NULL</code>，并适度反范式以减少连表。<strong>架构层</strong>：加缓存（Redis）、读写分离、历史数据归档，最后才是分库分表。</p>
@@ -233,6 +255,11 @@ COMMIT;
 <p>分库分表分两个方向。<strong>垂直拆分</strong>是按列或按业务拆：垂直分表把不常用的大字段（<code>text</code>、<code>blob</code>）挪到扩展表，让主表更小、每页能装更多行；垂直分库按业务域拆成订单库、用户库，降低单库压力。<strong>水平拆分</strong>是按行拆：把一张大表按分片键（通常是 <code>user_id</code>）散到多个库或表，如 <code>t_order_0</code>～<code>t_order_7</code>。</p>
 
 <p>但分片是有代价的，面试官往往就在这一步追问：跨库 <code>JOIN</code> 做不了，聚合与排序要改写，<code>AUTO_INCREMENT</code> 主键会冲突（需雪花算法或号段模式），跨分片查询要广播到所有分片，原本单机的事务变成分布式事务。因此分片键的选择至关重要，要保证高频查询都带上分片键，否则一次查询就要扫全部分片。落地时通常借助 ShardingSphere 或 MyCat 这类中间件，由它们完成 SQL 解析、路由、改写与结果归并。若只是读多写少，读写分离（基于 binlog 的主从复制，写主库、读从库）往往比分库分表更划算；但要接受主从延迟导致的“写后立刻读不到”问题，一致性要求高的读仍需走主库。</p>
+<h3>旧参数 → 新参数：redo log 与几个高频配置</h3>
+
+<p>旧笔记里配置 redo log 的写法是 <code>innodb_log_file_size</code> 与 <code>innodb_log_files_in_group</code>，这个组合在 MySQL 8.0.30 起被废弃，取而代之的是 <code>innodb_redo_log_capacity</code>：它用一个变量统一控制 redo log 总容量，InnoDB 在 <code>#innodb_redo</code> 目录下自动维护最多 32 个文件，不再手工调文件个数。默认容量 100MB，高写入负载的实例通常调到 1～4GB 量级，目标是让一次 checkpoint 的间隔能覆盖业务峰值而不是频繁刷盘。8.0.30 之前的版本仍用旧参数，8.4 则只认新参数，所以面试时最好把版本边界说出来，而不是给一个死数字。</p>
+
+<p>其他常见变更也值得一并交代：查询缓存 <code>query_cache_size</code> 在 5.7 已废弃、8.0 彻底删除，不要再提“打开查询缓存加速读”；<code>innodb_buffer_pool_size</code>、<code>innodb_flush_log_at_trx_commit</code>（1 最安全、2 折中）与 <code>sync_binlog</code> 没有更名，仍是核心调优项，但要注意 8.0 默认 <code>binlog_format = ROW</code>，而 <code>binlog_format = STATEMENT</code> 的旧建议早已不推荐。若涉及复制，8.0.22 起 <code>CHANGE MASTER TO</code> 等语句被 <code>CHANGE REPLICATION SOURCE TO</code> 系列取代。</p>
 
 <h2>五、小结</h2>
 
