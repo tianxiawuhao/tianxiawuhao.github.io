@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>JVM 内存结构与对象 | tianxia</title>
+<title>6.1 JVM 内存结构与对象 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>JVM 内存结构与对象</h1>
+              <h1>6.1 JVM 内存结构与对象</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，5 min read</span>
@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>很多人第一次接触 JVM，都是从"堆、栈、方法区"这三个词开始的：面试能背出这一串名词，可真遇到 <code>OutOfMemoryError</code> 时，却说不清到底是谁满了。这一章把运行时数据区、对象创建与内存布局串成一条线，讲清"内存在哪、对象怎么来、引用怎么找对象"。适合能写 Java 代码、想补虚拟机基础，或总分不清 JVM 内存结构与 Java 内存模型（JMM）的读者。</p>
+<p>很多人第一次接触 JVM，都是从“堆、栈、方法区”这三个词开始的：面试能背出这一串名词，可真遇到 <code>OutOfMemoryError</code> 时，却说不清到底是谁满了。上一章讲完业务代码层面的工程实践，本章回到虚拟机内部，把运行时数据区、对象创建与内存布局串成一条线，讲清“内存在哪、对象怎么来、引用怎么找对象”。适合能写 Java 代码、想补虚拟机基础，或总分不清 JVM 内存结构与 Java 内存模型（JMM）的读者。</p>
 
 <h2>一、运行时数据区：五块内存，两种归属</h2>
 
@@ -149,7 +149,7 @@
 <li><strong>方法区</strong>：存放已被加载的类信息、运行时常量池等。JDK 7 及以前它由永久代实现（受 <code>-XX:MaxPermSize</code> 约束）；JDK 8 起改为<strong>元空间（Metaspace）</strong>，改用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束。另外，字符串常量池在 JDK 7 就已经挪进了堆，所以涉及 <code>intern()</code> 的题目要按版本分开回答。</li>
 </ul>
 
-<p>还有<strong>直接内存</strong>：它不属于运行时数据区，NIO 的 <code>DirectByteBuffer</code> 会大量使用，受本机总内存限制——这也是"堆没满却 OOM"的常见来源。</p>
+<p>还有<strong>直接内存</strong>：它不属于运行时数据区，NIO 的 <code>DirectByteBuffer</code> 会大量使用，受本机总内存限制——这也是“堆没满却 OOM”的常见来源。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-1/01-runtime-data-areas.svg" alt="运行时数据区示意图：左侧线程私有区包含程序计数器、虚拟机栈与本地方法栈，右侧线程共享区包含堆与方法区（JDK 8 起为元空间），下方虚线框标注不属于运行时数据区的直接内存"><figcaption>图 1：运行时数据区——三块线程私有内存与两块线程共享内存</figcaption></figure>
 
@@ -158,15 +158,15 @@
 <p>写下 <code>Person p = new Person();</code> 这一行，虚拟机在背后做了六件事。</p>
 
 <ol>
-<li><strong>类加载检查</strong>：先看 new 指令的参数能否在常量池中定位到该类的符号引用，并确认这个类已被加载、解析和初始化；没有的话，先触发类加载。</li>
+<li><strong>类加载检查</strong>：先看 new 指令的参数能否在常量池中定位到该类的符号引用，并确认这个类已被加载、解析和初始化；尚未加载时，先触发类加载。</li>
 <li><strong>分配内存</strong>：对象需要多大，在类加载完成后就已完全确定。若堆内存规整，用<strong>指针碰撞</strong>，把分界指针向空闲一侧挪动对象大小的距离；若内存碎片化，就用<strong>空闲列表</strong>，从列表里挑一块足够大的划出去。用哪种，取决于垃圾收集器是否带压缩整理能力。</li>
-<li><strong>处理并发</strong>：并发分配会出现"指针还没改完，另一个线程已经用旧指针分配"的情况。两种解法：对分配动作用 CAS 加失败重试保证原子性；或者给每个线程预先划一块 <strong>TLAB</strong>（本地线程分配缓冲），在 TLAB 内分配不需要同步，只有 TLAB 用完、申请新的时才加锁。</li>
+<li><strong>处理并发</strong>：并发分配会出现“指针还没改完，另一个线程已经用旧指针分配”的情况。两种解法：对分配动作用 CAS 加失败重试保证原子性；或者给每个线程预先划一块 <strong>TLAB</strong>（本地线程分配缓冲），在 TLAB 内分配不需要同步，只有 TLAB 用完、申请新的时才加锁。</li>
 <li><strong>内存清零</strong>：把分配到的空间初始化为零值。这正是成员变量不赋初值也能直接使用的原因。</li>
 <li><strong>设置对象头</strong>：写入哈希码（多数实现延迟到调用 hashCode 时才计算）、GC 分代年龄、锁状态标志、类型指针等。到这一步，对象在虚拟机眼里已经存在了。</li>
 <li><strong>执行构造器</strong>：调用 <code>&lt;init&gt;</code>，按顺序执行成员变量赋值、普通代码块和构造方法。这时对象才真正可用。</li>
 </ol>
 
-<p>顺便把两个容易混的名字分开：<code>&lt;clinit&gt;</code> 是类构造器，由静态变量赋值语句和 static 代码块合并生成，在类初始化阶段执行，虚拟机会保证它被正确加锁同步，多个线程同时初始化一个类时只有一个线程执行；<code>&lt;init&gt;</code> 是实例构造器，每 new 一次执行一次。下面的例子把两者的执行时机摊开：</p>
+<p>顺便把两个容易混的名字分开。<code>&lt;clinit&gt;</code> 是类构造器，由静态变量赋值语句和 static 代码块合并生成，在类初始化阶段执行。虚拟机会保证它被正确加锁同步，多个线程同时初始化一个类时只有一个线程执行。<code>&lt;init&gt;</code> 则是实例构造器，每 new 一次执行一次。下面的例子把两者的执行时机摊开：</p>
 
 <pre><code class="language-java">public class InitOrder {
     static int staticField = init("静态变量赋值");
@@ -194,14 +194,14 @@
 <p>对象在堆里长什么样？以 HotSpot 为例，可分为三个区域。</p>
 
 <ul>
-<li><strong>对象头</strong>：包含 Mark Word 和类型指针。Mark Word 存对象自身的运行时数据，如哈希码、GC 分代年龄、锁状态标志、偏向线程 ID 等；类型指针指向方法区中该类的元数据，虚拟机靠它确定"这个对象是哪个类的实例"。如果对象是数组，对象头里还要多存一个数组长度。</li>
+<li><strong>对象头</strong>：包含 Mark Word 和类型指针。Mark Word 存对象自身的运行时数据，如哈希码、GC 分代年龄、锁状态标志、偏向线程 ID 等；类型指针指向方法区中该类的元数据，虚拟机靠它确定“这个对象是哪个类的实例”。如果对象是数组，对象头里还要多存一个数组长度。</li>
 <li><strong>实例数据</strong>：真正存放字段内容的部分。父类定义的字段在前，子类定义的在后；HotSpot 默认会做字段重排，让相同宽度的字段尽量排在一起，以减少填充浪费。</li>
 <li><strong>对齐填充</strong>：不是必然存在，也没有业务含义，只起占位作用。HotSpot 要求对象起始地址按 8 字节对齐，实例数据没凑够 8 字节整数倍时补几个字节，所以对象大小总是 8 的倍数。</li>
 </ul>
 
-<p>引用怎么定位到对象，主流有两条路：<strong>句柄</strong>方式会在堆里划出一块句柄池，引用存句柄地址，句柄再分别指向对象实例和类型数据，好处是对象被移动时只需改句柄；<strong>直接指针</strong>方式让引用直接存对象地址，省掉一次间接寻址。HotSpot 采用直接指针，因为对象访问极其频繁，积少成多的定位开销很可观。</p>
+<p>引用怎么定位到对象，主流有两条路。<strong>句柄</strong>方式会在堆里划出一块句柄池，引用存句柄地址，句柄再分别指向对象实例和类型数据，好处是对象被移动时只需改句柄。<strong>直接指针</strong>方式让引用直接存对象地址，省掉一次间接寻址。HotSpot 采用直接指针，因为对象访问极其频繁，积少成多的定位开销很可观。</p>
 
-<p>栈和堆的配合，用一段递归就能直观感受到栈帧的消耗：</p>
+<p>栈和堆的配合，用一段递归就能直观看到栈帧的消耗：</p>
 
 <pre><code class="language-java">public class StackDepth {
     private int depth = 0;
@@ -250,24 +250,19 @@
 }
 </code></pre>
 
-<p>顺便纠正一个流传很广的说法：局部变量重新赋值并不是"去栈里找有没有相同字面量，找到就指过去"。<code>int age = 50; age = 40;</code> 只是同一个局部变量槽里的值被改写；字面量复用只发生在字符串常量池这类场景，与 int 局部变量无关。</p>
+<p>顺便纠正一个流传很广的说法：局部变量重新赋值并不是“去栈里找有没有相同字面量，找到就指过去”。<code>int age = 50; age = 40;</code> 只是同一个局部变量槽里的值被改写；字面量复用只发生在字符串常量池这类场景，与 int 局部变量无关。</p>
 
 <h3>坑二：JVM 内存结构不等于 Java 内存模型</h3>
 
-<p>JVM 内存结构是运行时数据区的物理划分，即本章前几节讲的堆、栈、方法区。Java 内存模型（JMM，见 JSR-133）则并不真实存在，它是一套抽象规范，用来屏蔽硬件与操作系统的访问差异，解决多线程共享内存通信时的原子性、可见性和有序性问题，落地为 <code>volatile</code>、<code>synchronized</code>、<code>final</code> 与 <code>java.util.concurrent</code> 包。被问"内存模型"时，先确认对方问的是哪一个。</p>
+<p>JVM 内存结构是运行时数据区的物理划分，即本章前几节讲的堆、栈、方法区。Java 内存模型（JMM，见 JSR-133）则并不真实存在，它是一套抽象规范，用来屏蔽硬件与操作系统的访问差异。它要解决的是多线程共享内存通信时的原子性、可见性和有序性问题，最终落地为 <code>volatile</code>、<code>synchronized</code>、<code>final</code> 与 <code>java.util.concurrent</code> 包。被问“内存模型”时，先确认对方问的是哪一个。</p>
 
 <h3>坑三：静态变量并不在方法区（JDK 8 起）</h3>
 
-<p>JDK 8 用元空间取代永久代之后，类的元数据放在元空间（本地内存），而静态变量是随 <code>Class</code> 对象一起存放的，<code>Class</code> 对象在堆里。所以"静态变量存在方法区/永久代"这句话只在 JDK 7 及以前成立。</p>
+<p>JDK 8 用元空间取代永久代之后，类的元数据放在元空间（本地内存），而静态变量是随 <code>Class</code> 对象一起存放的，<code>Class</code> 对象在堆里。所以“静态变量存在方法区/永久代”这句话只在 JDK 7 及以前成立。</p>
 
 <h2>五、小结</h2>
 
-<p>把本章压成一条线：线程私有程序计数器、虚拟机栈、本地方法栈；线程共享堆与方法区（JDK 8 起方法区以元空间实现元数据，静态变量随 Class 对象在堆里）；直接内存在运行时数据区之外。对象创建流程是"类加载检查 → 分配内存（指针碰撞或空闲列表，并发靠 CAS 或 TLAB）→ 清零 → 写对象头 → 执行 <code>&lt;init&gt;</code>"，布局是"对象头 + 实例数据 + 对齐填充"，访问走直接指针。参数传递只有值传递，引用传的是地址值的副本。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-5-12/"><span class="pn-label">← 上一篇</span><span class="pn-title">代码重构与规范</span></a>
-      <a class="next-post" href="/java-tutorial-6-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">垃圾回收与调优</span></a>
-      </nav>
+<p>把本章压成一条线：线程私有程序计数器、虚拟机栈、本地方法栈；线程共享堆与方法区（JDK 8 起方法区以元空间实现元数据，静态变量随 Class 对象在堆里）；直接内存在运行时数据区之外。对象创建流程是“类加载检查 → 分配内存（指针碰撞或空闲列表，并发靠 CAS 或 TLAB）→ 清零 → 写对象头 → 执行 <code>&lt;init&gt;</code>”；布局是“对象头 + 实例数据 + 对齐填充”，访问走直接指针。参数传递只有值传递，引用传的是地址值的副本。下一章接着回答另一半问题：这些对象什么时候被回收，回收时程序为什么会卡一下。</p>
           </article>
   <!-- Footer -->
   <footer>

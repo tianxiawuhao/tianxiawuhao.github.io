@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>代码重构与规范 | tianxia</title>
+<title>5.12 代码重构与规范 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>代码重构与规范</h1>
+              <h1>5.12 代码重构与规范</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，6 min read</span>
@@ -128,13 +128,15 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>代码能跑，只是最低标准。真正决定成本的是三个月后你还能不能读懂它、敢不敢改它。如果一段业务逻辑隔了一个季度再回来看，需要花半小时才能弄明白，这份"隐形账单"在写下它的那天就已经记上了。本章讲的是让代码保持可改的一整套习惯：先说清重构的定义与动手时机，再落到命名和分层这类每天都要做的动作，然后给出识别坏味道与最常用重构手法的路径，最后补齐两件最容易被忽视、一旦出事却最贵的事——日志规范与异常规范。适合已经能独立写业务、开始接手别人代码，或需要给团队定规矩的读者。</p>
+<p>代码能跑只是最低标准。真正决定成本的是三个月后你还能不能读懂它、敢不敢改它。如果一段业务逻辑隔了一个季度再回来看，需要花半小时才能弄明白，这份“隐形账单”在写下它的那天就已经记上了。本章讲的是一整套让代码保持可改的习惯。第一步说清重构的定义与动手时机，第二步落到命名和分层这类每天都要做的动作，第三步给出识别坏味道与最常用重构手法的路径，最后补齐两件最容易被忽视、一旦出事却最贵的事——日志规范与异常规范。适合已经能独立写业务、开始接手别人代码，或需要给团队定规矩的读者。</p>
 
 <h2>一、重构：不改变可观察行为，只改结构</h2>
 
-<p>重构（Refactoring）的定义是：对软件内部结构的一种调整，目的是<strong>在不改变软件可观察行为的前提下</strong>，提高其可理解性、降低其修改成本。注意它既不是加功能，也不是修 Bug，唯一的验收标准是"下一次改动需要动的地方更少"。正因为要求行为不变，重构的第一步永远是先有可靠的测试环境：没有测试就大改结构，等于闭着眼睛拆承重墙；有了测试，每次小改都能立刻验证行为未变，这也是"以微小步伐修改程序"的底气——步伐越小，出错时越容易定位。</p>
+<p>重构（Refactoring）的定义是：对软件内部结构的一种调整，目的是<strong>在不改变软件可观察行为的前提下</strong>，提高其可理解性、降低其修改成本。它既不是加功能，也不是修 Bug，唯一的验收标准是“下一次改动需要动的地方更少”。正因为要求行为不变，重构的第一步永远是先有可靠的测试环境。没有测试就大改结构，等于闭着眼睛拆承重墙；有了测试，每次小改都能立刻验证行为未变。这也是“以微小步伐修改程序”的底气——步伐越小，出错时越容易定位。</p>
 
-<p>什么时候动手？<strong>三次法则</strong>给了很实用的答案：第一次做某件事时只管去做，第二次做类似的事时可以去做，第三次再做同样的事就应该重构，也就是"事不过三"。它的另一面是：不要一开始就追求完美设计，因为软件开发无法预先设计，最初不可能穷举所有变化，合理做法是先用简单的设计起步，等变化真的发生时再重构到位。从这个角度看，重构就是在适当的位置插入间接层、在不需要时移除间接层，而间接层的价值不外乎四点：允许逻辑共享、把意图与实现分开、隔离变化、封装条件逻辑。</p>
+<p>什么时候动手？<strong>三次法则</strong>给了很实用的答案：第一次做某件事时只管去做，第二次做类似的事时可以去做，第三次再做同样的事就应该重构，也就是“事不过三”。它的另一面是：不要一开始就追求完美设计。软件开发无法预先设计，最初不可能穷举所有变化，合理做法是先用简单的设计起步，等变化真的发生时再重构到位。</p>
+
+<p>从这个角度看，重构就是在适当的位置插入间接层、在不需要时移除间接层，而间接层的价值不外乎四点：允许逻辑共享、把意图与实现分开、隔离变化、封装条件逻辑。</p>
 
 <p>两个边界必须记住。其一，当现有代码已经过于混乱时，应当<strong>重写</strong>而不是重构。其二，为了可读性，重构有时会让性能略降，不必在写代码时过度纠结性能，真正要盯住的只是那一小部分关键代码。另外，如果重构改动了<strong>已发布</strong>的接口，就必须同时维护新旧两个接口——保留旧接口转调新接口，并用 <code>@Deprecated</code> 标记旧接口、说明替代方案。结论很直接：除非真有必要，不要过早发布接口。</p>
 
@@ -142,17 +144,17 @@
 
 <p>命名不产生任何运行时开销，却直接决定代码能否自解释，是性价比最高的一项规范。类名用 UpperCamelCase（<code>DO</code>、<code>BO</code>、<code>DTO</code>、<code>VO</code> 这类缩写例外），方法名、参数名、成员变量、局部变量统一用 lowerCamelCase，常量全部大写且单词间用下划线分隔，例如 <code>MAX_STOCK_COUNT</code>。抽象类以 <code>Abstract</code> 或 <code>Base</code> 开头，异常类以 <code>Exception</code> 结尾，测试类以被测类名开头、<code>Test</code> 结尾。包名统一小写、单数，点分隔符之间只有一个自然语义的英文单词。</p>
 
-<p>反过来，这些做法一律禁止：用下划线或美元符号开头、结尾（<code>_name</code>、<code>name$</code>）；拼音与英文混用，甚至直接用中文命名；把 <code>AbstractClass</code> 缩写成 <code>AbsClass</code>、把 <code>condition</code> 缩写成 <code>condi</code>——这类缩写严重降低可读性。数组定义写 <code>String[] args</code>，不要写 <code>String args[]</code>。POJO 中布尔类型属性不要加 <code>is</code> 前缀，否则部分 RPC 或序列化框架在反向解析时会"以为"属性名是 <code>deleted</code>，导致属性取不到甚至抛异常。</p>
+<p>反过来，这些做法一律禁止：用下划线或美元符号开头、结尾（<code>_name</code>、<code>name$</code>）；拼音与英文混用，甚至直接用中文命名；把 <code>AbstractClass</code> 缩写成 <code>AbsClass</code>、把 <code>condition</code> 缩写成 <code>condi</code>——这类缩写严重降低可读性。数组定义写 <code>String[] args</code>，不要写 <code>String args[]</code>。POJO 中布尔类型属性不要加 <code>is</code> 前缀，否则部分 RPC 或序列化框架在反向解析时会“以为”属性名是 <code>deleted</code>，导致属性取不到甚至抛异常。</p>
 
 <p>分层命名让调用方不看实现就能猜到行为。Service 与 DAO 层统一约定：取单个对象用 <code>get</code> 前缀，取多个用 <code>list</code>，取统计值用 <code>count</code>，插入用 <code>save</code> 或 <code>insert</code>，删除用 <code>remove</code> 或 <code>delete</code>，修改用 <code>update</code>。领域模型则约定：数据对象 <code>xxxDO</code>（xxx 为数据表名）、传输对象 <code>xxxDTO</code>、展示对象 <code>xxxVO</code>；POJO 是它们的统称，不要命名成 <code>xxxPOJO</code>。</p>
 
-<p>命名之外，分层还划定职责边界。以异常处理为例：DAO 层捕获 <code>Exception</code> 后转换成 <code>DAOException</code> 抛出，<strong>不打印日志</strong>；Service 层捕获并记录出错日志，且尽量带上参数信息，相当于保护案发现场；Web 层已在顶层，绝不应继续往上抛异常，而应转到友好错误页并给出用户能理解的提示；开放接口层则把异常转换成错误码和错误信息返回。这样每层都知道自己该做什么，日志也不会在多层重复打印。</p>
+<p>命名之外，分层还划定职责边界。以异常处理为例：DAO 层捕获 <code>Exception</code> 后转换成 <code>DAOException</code> 抛出，<strong>不打印日志</strong>；Service 层捕获并记录出错日志，且尽量带上参数信息，相当于保护案发现场。<strong>Web 层已在顶层</strong>，绝不应继续往上抛异常，而应转到友好错误页并给出用户能理解的提示；开放接口层则把异常转换成错误码和错误信息返回。这样每层都知道自己该做什么，日志也不会在多层重复打印。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-12/01-layer-exception-log.svg" alt="分层职责示意图：DAO 层转 DAOException 抛出且不打印日志，Service 层捕获并记录带参数的出错日志，Web 层不继续上抛而转友好错误页，开放接口层转成错误码与错误信息；下方列出异常与日志的四条底线"><figcaption>图 1：分层职责——异常沿调用链向上转换，日志只落一次</figcaption></figure>
 
 <h2>三、识别坏味道，再用小步手法改掉</h2>
 
-<p>坏味道（Code Smell）不是 Bug，而是"将来会变贵"的信号。最典型的两类是重复代码（Duplicated Code）和过长函数（Long Function）。重复代码要分场景处理：同一个类的两个函数有相同表达式，用提炼函数（Extract Method）把重复部分抽出来；两个互为兄弟的子类有相同表达式，先 Extract Method，再把函数上移到超类（Pull Up Method）；只有部分相同时，先分离出相同部分与差异部分，再用模板方法（Form Template Method）；若是两个毫不相关的类出现重复代码，则用提炼类（Extract Class）把重复部分提取到独立类中。</p>
+<p>坏味道（Code Smell）不是 Bug，而是“将来会变贵”的信号。最典型的两类是重复代码（Duplicated Code）和过长函数（Long Function）。重复代码要分场景处理，最常用的手法有四种。同一个类的两个函数有相同表达式，用提炼函数（Extract Method）把重复部分抽出来。两个互为兄弟的子类有相同表达式时，先做 Extract Method，再把函数上移到超类（Pull Up Method）。只有部分相同时，先分离出相同部分与差异部分，再用模板方法（Form Template Method）。若是两个毫不相关的类出现重复代码，则用提炼类（Extract Class）把重复部分提取到独立类中。</p>
 
 <p>手法要小步走：改一点、跑一次测试，不要一次改五个文件再一起验证。下面用一段计费代码演示两个最常用的手法——以查询取代临时变量（Replace Temp with Query）与提炼函数（Extract Method）。</p>
 
@@ -181,15 +183,17 @@ double price() {
     return basePrice() * discountFactor();
 }</code></pre>
 
-<p>这里有一个容易忽略的顺序问题：<strong>Replace Temp with Query 往往是 Extract Method 之前必不可少的一步</strong>，因为局部变量会让代码难以提炼——只要临时变量还在，抽出来的函数就得靠参数传递它。同理，当条件表达式过长时，可以用分解条件表达式（Decompose Conditional）把 if、then、else 三段分别提炼成函数，让主流程读起来像一句话。</p>
+<p>这里有一个容易忽略的顺序问题：<strong>Replace Temp with Query 往往是 Extract Method 之前必不可少的一步</strong>。原因在于局部变量会让代码难以提炼：只要临时变量还在，抽出来的函数就得靠参数传递它。同理，当条件表达式过长时，可以用分解条件表达式（Decompose Conditional）把 if、then、else 三段分别提炼成函数，让主流程读起来像一句话。</p>
 
 <h2>四、日志规范：留证据，而不是刷屏</h2>
 
-<p>日志是线上排查唯一的现场记录，但写错方式会比不写更糟。<strong>第一，用门面，不用实现。</strong>应用中不要直接调用 Log4j、Logback 的 API，而应依赖 SLF4J 的 API，这样日志实现可以替换，各类的日志处理方式也保持统一。</p>
+<p>日志是线上排查唯一的现场记录，但写错方式会比不写更糟。<strong>第一，用门面，不用实现。</strong>应用中不要直接调用 Log4j、Logback 的 API，而应依赖 SLF4J 的 API。这样日志实现可以替换，各类的日志处理方式也保持统一。</p>
 
 <p><strong>第二，用占位符，别拼字符串。</strong>trace、debug、info 级别的输出必须使用条件输出形式或占位符方式。原因很实在：如果写成 <code>log.debug("symbol: " + symbol)</code>，即便当前级别是 warn、这条日志根本不会打印，字符串拼接依然会执行；<code>symbol</code> 是对象时还会调用 <code>toString()</code>，白白浪费资源。只有需要复杂计算时才用 <code>isDebugEnabled()</code> 包一层。</p>
 
-<p><strong>第三，分类与分级。</strong>扩展日志按 <code>appName_logType_logName.log</code> 命名，<code>logType</code> 可取 stats、desc、monitor、visit 等，<code>logName</code> 写日志描述，好处是看文件名就知道它属于哪个应用、什么类型、什么目的；错误日志与业务日志分开存放，便于查看和监控。日志文件建议至少保存 15 天，因为有些异常以"周"为频次发生。生产环境禁止输出 debug 日志，有选择地输出 info；用户输入参数错误适合用 warn 记录；error 只记录系统逻辑出错、异常这类重要信息。另外要避免重复打印，务必在 log4j.xml 中设置 <code>additivity=false</code>。</p>
+<p><strong>第三，分类与分级。</strong>扩展日志按 <code>appName_logType_logName.log</code> 命名，<code>logType</code> 可取 stats、desc、monitor、visit 等，<code>logName</code> 写日志描述，好处是看文件名就知道它属于哪个应用、什么类型、什么目的。错误日志与业务日志分开存放，便于查看和监控。</p>
+
+<p>日志文件建议至少保存 15 天，因为有些异常以“周”为频次发生。生产环境禁止输出 debug 日志，有选择地输出 info；用户输入参数错误适合用 warn 记录；error 只记录系统逻辑出错、异常这类重要信息。另外要避免重复打印，务必在 log4j.xml 中设置 <code>additivity=false</code>。</p>
 
 <pre><code class="language-java">private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
@@ -213,18 +217,13 @@ public Order findById(Long id) {
 
 <h2>五、异常规范：不吞、不滥用、分层兜底</h2>
 
-<p>异常处理写不好，往往比不处理更危险，因为它会把故障现场悄悄抹掉。<strong>不要大段代码 try-catch。</strong>把一大段代码整体包进 try 里是不负责任的做法。catch 时要分清稳定代码与非稳定代码——稳定代码指无论如何都不会出错的代码，例如纯内存计算、已校验过的参数拼接；只把真正非稳定的部分（IO、网络、数据库、第三方调用）包住，并尽可能区分异常类型，分别做对应处理。</p>
+<p>异常处理写不好，往往比不处理更危险，因为它会把故障现场悄悄抹掉。<strong>不要大段代码 try-catch。</strong>把一大段代码整体包进 try 里是不负责任的做法。catch 时要分清稳定代码与非稳定代码。稳定代码指无论如何都不会出错的代码，例如纯内存计算、已校验过的参数拼接；只把真正非稳定的部分（IO、网络、数据库、第三方调用）包住，并尽可能区分异常类型，分别做对应处理。</p>
 
-<p><strong>不要吞异常。</strong>catch 之后什么都不做，等于把现场销毁。至少要记录日志，或转换成业务异常继续向上传递，并且必须保留原始异常作为 cause，例如 <code>throw new OrderQueryException(msg, e)</code>；如果不带 <code>e</code>，异常链就断了，排查时只剩一句"查询失败"，看不到根因。<strong>不要用异常做流程控制。</strong>异常的代价主要在构造时填充堆栈信息，把它当 if-else 使用既慢又难读。</p>
+<p><strong>不要吞异常。</strong>catch 之后什么都不做，等于把现场销毁。至少要记录日志，或转换成业务异常继续向上传递，并且必须保留原始异常作为 cause，例如 <code>throw new OrderQueryException(msg, e)</code>。如果不带 <code>e</code>，异常链就断了，排查时只剩一句“查询失败”，看不到根因。<strong>不要用异常做流程控制。</strong>异常的代价主要在构造时填充堆栈信息，把它当 if-else 使用既慢又难读。</p>
 
-<p><strong>资源必须释放，底层异常不要外泄。</strong>优先使用 try-with-resources（JDK 7 及以上），由编译器生成关闭逻辑；沿用 finally 手工关闭时，不要在 finally 里 <code>return</code>，它会吞掉 try 中尚未抛出的异常。对外接口也不要直接抛 <code>SQLException</code>、<code>IOException</code> 这类底层异常，那会让调用方被迫依赖你的具体实现，应转换成自定义业务异常（类名以 <code>Exception</code> 结尾）再抛出。</p>
+<p><strong>资源必须释放，底层异常不要外泄。</strong>优先使用 try-with-resources（JDK 7 及以上），由编译器生成关闭逻辑。沿用 finally 手工关闭时，不要在 finally 里 <code>return</code>，因为这会吞掉 try 中尚未抛出的异常。对外接口也不要直接抛 <code>SQLException</code>、<code>IOException</code> 这类底层异常，那会让调用方被迫依赖你的具体实现，应转换成自定义业务异常（类名以 <code>Exception</code> 结尾）再抛出。</p>
 
-<p>小结：重构是在不改变可观察行为的前提下降低修改成本，用三次法则决定时机，小步加测试保证安全，改动已发布接口要保留旧接口并标记 <code>@Deprecated</code>；命名与分层是最廉价的可读性投入，靠 <code>get</code>/<code>list</code>/<code>count</code> 与 DO/DTO/VO 这类约定让代码自解释；坏味道出现时用提炼函数、以查询取代临时变量等手法小步改掉；日志要用 SLF4J 门面、占位符与明确的分级分类；异常要小范围捕获、区分类型、带上原始 cause，分层兜底而不是层层重复打印。把这五件事固定成团队约定，代码才会越改越顺，而不是越改越贵。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-5-11/"><span class="pn-label">← 上一篇</span><span class="pn-title">微信生态开发</span></a>
-      <a class="next-post" href="/java-tutorial-6-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">JVM 内存结构与对象</span></a>
-      </nav>
+<p>本章收束成五条约定。重构是在不改变可观察行为的前提下降低修改成本，用三次法则决定时机，小步加测试保证安全，改动已发布接口要保留旧接口并标记 <code>@Deprecated</code>。命名与分层是最廉价的可读性投入，靠 <code>get</code>/<code>list</code>/<code>count</code> 与 DO/DTO/VO 这类约定让代码自解释；坏味道出现时用提炼函数、以查询取代临时变量等手法小步改掉。日志要用 SLF4J 门面、占位符与明确的分级分类；异常要小范围捕获、区分类型、带上原始 cause，分层兜底而不是层层重复打印。把这五件事固定成团队约定，代码才会越改越顺，而不是越改越贵。下一章回到 JVM，从运行时数据区开始，看这些代码在虚拟机里究竟落在哪块内存。</p>
           </article>
   <!-- Footer -->
   <footer>
