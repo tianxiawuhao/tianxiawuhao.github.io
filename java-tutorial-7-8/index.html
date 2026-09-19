@@ -114,7 +114,7 @@
               <h1>持续集成与部署</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，7 min read</span>
+                2026-09-19，8 min read</span>
             </div>
           
         
@@ -138,6 +138,7 @@
 
 <p>要搭起这条链路，至少需要四样东西：代码托管（Git）、一台专门跑构建的服务器、一套能无人值守执行的构建脚本（Maven 或 Gradle）、以及能自动跑的测试。请记住最重要的一点：CI 不是"装了个 Jenkins"，Jenkins 只是执行者，真正的资产是那条能被反复执行、能进版本库 review 的流水线定义。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-8/01-ci-cd-pipeline.svg" alt="CI/CD 链路：提交代码、构建与单测、打镜像推私仓、部署测试、灰度上线与回滚"><figcaption>图 1：从提交代码到灰度上线的完整链路——CI 构建与单测、打镜像推私有仓库、部署测试环境、灰度放量，异常时按旧 tag 回滚</figcaption></figure>
 <h2>二、Jenkins 安装与第一条流水线</h2>
 
 <p>很多老教程让你 <code>wget jenkins-2.83-1.1.noarch.rpm</code>，这个版本发布于 2017 年，早已停止维护，大量现代插件不再兼容，照着装会在插件安装页卡住。现在应当使用 LTS 版本，并通过官方仓库安装，方便升级：</p>
@@ -253,6 +254,7 @@ deploy-canary:
 
 <p>灰度发布（金丝雀发布）落地到容器场景，核心是两个动作：让新旧两个版本同时在线，再按比例把流量切过去。老版本保持运行，新版本先接一小部分流量，观察错误率与 P95 延迟，正常就把权重往上调，例如 Nginx 里用 <code>upstream app { server 10.0.0.11:9001 weight=9; server 10.0.0.12:9001 weight=1; }</code> 先放 10%，再依次改成 5:5、1:9，最后把老版本缩容到零。出问题时只要把权重打回 0，流量立刻回到老版本，不需要重新构建部署——这正是灰度比"一刀切上线"安全的地方。想按用户定向灰度（只让内部账号看到新版），可以用 Nginx 的 <code>map</code> 或 <code>split_clients</code> 按请求头、Cookie 分流，也可以交给服务网格或网关来做。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-8/02-canary-release.svg" alt="灰度发布按权重切流量：9:1 到 5:5 再到 1:9，异常时权重打回 0 即刻回滚"><figcaption>图 2：灰度发布靠 Nginx 权重按比例切流量，9:1 → 5:5 → 1:9 逐步放量，观察错误率与 P95 延迟，异常时把权重打回 0 就立即回到老版本</figcaption></figure>
 <h2>五、常见坑与小结</h2>
 
 <p>最后总结几个反复踩的坑。第一，凭据不要写在 Jenkinsfile 或 <code>.gitlab-ci.yml</code> 里，用 Jenkins Credentials 或 GitLab CI Variables，脚本中只引用变量名。第二，别用 <code>latest</code> 作为唯一 tag，用提交号或构建号，<code>latest</code> 只是便于人看的别名。第三，不要让 Jenkins 同时兼任生产服务器：构建期会把 CPU 和内存吃满，直接把线上服务拖垮，构建机与生产机必须分开。第四，失败要通知到位，邮件、企业微信或 Slack 任选其一，否则流水线红灯没人看，等于白搭。第五，灰度必须配自动回滚阈值，例如"五分钟内错误率超过 1% 自动切回"，把判断交给脚本而不是盯着屏幕的人。</p>

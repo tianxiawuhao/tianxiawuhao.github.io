@@ -204,6 +204,7 @@ networks:
 
 <p>几个关键点：<code>services</code> 下的每个键（<code>mysql</code>、<code>app</code>…）既是服务名，也<strong>自动成为该容器在网络里的 DNS 名</strong>。Compose 会为项目创建一张默认网络，同网络内直接用服务名互访，所以 <code>jdbc:mysql://mysql:3306/appdb</code> 里的 <code>mysql</code> 不需要你去查容器 IP——手工 <code>docker run</code> 时代靠 <code>docker inspect</code> 找 IP 的做法在这里彻底不需要了。Nginx 转发同理：</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-7/01-compose-topology.svg" alt="Compose 服务拓扑：nginx 对外暴露，app 用服务名访问 mysql 与 redis 并读写命名卷"><figcaption>图 1：一份 compose.yaml 描述的服务拓扑——只有 nginx 对外暴露 80 端口，app 用服务名 mysql、redis 直接互访，数据落在命名卷中</figcaption></figure>
 <pre><code class="language-nginx"># nginx/default.conf
 server {
     listen 80;
@@ -244,6 +245,7 @@ docker compose -p myapp up -d         # 指定项目名，隔离容器名与网�
 
 <p><strong>1. depends_on 不等于"就绪"。</strong>默认的 <code>depends_on: [mysql]</code> 只保证<strong>启动顺序</strong>：MySQL 进程拉起来了，但数据库初始化可能还要几十秒，此时 app 连过去照样报连接失败。正确做法是给依赖方加 <code>healthcheck</code>，然后用 <code>condition: service_healthy</code>。注意 <code>restart: unless-stopped</code> 只能让崩掉的容器反复重启，不能替代就绪等待。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-7/02-depends-on-healthcheck.svg" alt="只写 depends_on 会在 MySQL 初始化完成前连接失败，healthcheck 加 service_healthy 才能真正等待就绪"><figcaption>图 2：只写 depends_on 时 app 会在 MySQL 初始化完成前就开始连接而失败；补上 healthcheck 与 condition: service_healthy 后，app 才会等到健康检查通过再启动</figcaption></figure>
 <p><strong>2. 数据没落盘，或 down 时误删。</strong>不写 <code>volumes</code> 的数据库，数据只存在容器可写层，<code>docker compose down</code> 后全部消失。反过来，<code>down -v</code> 会删除命名卷，调试时很方便，生产上等同于删库，务必确认后再敲。</p>
 
 <p><strong>3. 变量插值的两层含义。</strong>Compose 会先把文件里的 <code>${VAR}</code> 用宿主机环境变量或同目录 <code>.env</code> 文件替换，<strong>然后</strong>才把结果交给容器；而容器内的 shell 变量则需要 <code>$$</code> 转义后原样传入（上面 healthcheck 就是这么写的）。把密码放在 <code>.env</code> 里并加进 <code>.gitignore</code>，不要把明文提交到仓库。</p>
