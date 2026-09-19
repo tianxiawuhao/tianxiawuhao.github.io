@@ -128,16 +128,16 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>写 Java 程序，大部分时间都在调用 JDK 已经写好的类：拼接字符串、把输入的 "18" 变成数字、算两个日期相差几天、对浮点数取整。这些类的集合就是<strong>常用类库</strong>（API）。本章挑出出场率最高的几个家族——<code>String</code> 与 <code>StringBuilder</code>、八种基本类型的包装类、所有类的祖先 <code>Object</code>、数学工具 <code>Math</code>、日期时间类——讲清它们各自解决什么问题、有哪些必须记住的坑。适合已经会写类和方法、能看懂简单泛型语法的读者。示例基于 JDK 8 及以上，版本差异会单独标注。</p>
+<p>写 Java 程序，大部分时间都在调用 JDK 已经写好的类：拼接字符串、把输入的 “18” 变成数字、算两个日期相差几天、对浮点数取整。这些类的集合就是<strong>常用类库</strong>（API）。本章挑出出场率最高的几个家族：<code>String</code> 与 <code>StringBuilder</code>、八种基本类型的包装类、所有类的祖先 <code>Object</code>、数学工具 <code>Math</code>、日期时间类。下面讲清它们各自解决什么问题、有哪些必须记住的坑。适合已经会写类和方法、能看懂简单泛型语法的读者。示例基于 JDK 8 及以上，版本差异会单独标注。</p>
 
 <h2>一、String：不可变的字符串</h2>
-<p><code>String</code> 的第一个关键性质是<strong>不可变</strong>：对象一旦创建，内容就再也不能被修改。看上去能改的 <code>replace</code>、<code>substring</code>、<code>toUpperCase</code> 其实都返回一个<strong>新对象</strong>，原对象纹丝不动。这样设计是因为字符串常被共享：常量池里同一份字面量会被无数处引用，若允许改动就会互相污染；不可变还带来线程安全、<code>hashCode</code> 可缓存等好处，这也是 <code>String</code> 常被选作 <code>HashMap</code> 键的原因。</p>
-<p>由此引出两个高频问题。第一，<strong>比较内容必须用 <code>equals</code></strong>，<code>==</code> 比较的是引用地址。字面量 "hello" 会被放进字符串常量池复用，所以字面量之间 <code>==</code> 常常为真；而 <code>new String("hello")</code> 会在堆上另开内存，<code>==</code> 立即为假——一旦字符串来自输入、拼接或文件，这种「巧合」就彻底失效。若担心空指针，用 <code>Objects.equals(a, b)</code> 更安全。</p>
-<p>第二，<strong>不要在循环里用 <code>+=</code> 拼接</strong>。每次 <code>+=</code> 都新建一个 <code>String</code> 并整体复制旧内容，循环 n 次的总代价是 O(n²)。需要澄清的是，单独一句 <code>a + b + c</code> 编译器会优化成一次 <code>StringBuilder</code> 拼接，所以「加号一定慢」并不准确；问题出在跨迭代的反复创建。</p>
-<p>几个细节也常被绊住：下标从 0 开始，<code>substring(begin, end)</code> <strong>含 begin 不含 end</strong>；<code>split</code> 的参数是正则表达式，按字面量竖线或点号分割要写 <code>"\\|"</code>、<code>"\\."</code>；JDK 9 起字符串内部改用紧凑字节数组存储，「字符串就是一个 char 数组」的说法已不符合实现。</p>
+<p><code>String</code> 的第一个关键性质是<strong>不可变</strong>：对象一旦创建，内容就再也不能被修改。看上去能改的 <code>replace</code>、<code>substring</code>、<code>toUpperCase</code> 其实都返回一个<strong>新对象</strong>，原对象纹丝不动。这样设计是因为字符串常被共享：常量池里同一份字面量会被无数处引用，若允许改动就会互相污染。不可变还带来线程安全、<code>hashCode</code> 可缓存等好处，这也是 <code>String</code> 常被选作 <code>HashMap</code> 键的原因。</p>
+<p>由此引出两个高频问题。第一，<strong>比较内容必须用 <code>equals</code></strong>，<code>==</code> 比较的是引用地址。字面量 “hello” 会被放进字符串常量池复用，所以字面量之间 <code>==</code> 常常为真；而 <code>new String("hello")</code> 会在堆上另开内存，<code>==</code> 立即为假。一旦字符串来自输入、拼接或文件，这种“巧合”就彻底失效。若担心空指针，用 <code>Objects.equals(a, b)</code> 更安全。</p>
+<p>第二，<strong>不要在循环里用 <code>+=</code> 拼接</strong>。每次 <code>+=</code> 都新建一个 <code>String</code> 并整体复制旧内容，循环 n 次的总代价是 O(n²)。需要澄清的是，单独一句 <code>a + b + c</code> 编译器会优化成一次 <code>StringBuilder</code> 拼接，所以“加号一定慢”并不准确；问题出在跨迭代的反复创建。</p>
+<p>几个细节也常被绊住。下标从 0 开始，<code>substring(begin, end)</code> <strong>含 begin 不含 end</strong>；<code>split</code> 的参数是正则表达式，按字面量竖线或点号分割要写 <code>"\\|"</code>、<code>"\\."</code>。JDK 9 起字符串内部改用紧凑字节数组存储，“字符串就是一个 char 数组”的说法已不符合实现。</p>
 
 <h2>二、StringBuilder：可变的字符缓冲区</h2>
-<p>反复修改字符串就该换成 <code>StringBuilder</code>。它内部维护一个可扩容的字符数组，<code>append</code>、<code>insert</code>、<code>reverse</code> 直接改缓冲区并返回自身，所以能链式书写 <code>sb.append("a").append(1)</code>。要注意 <code>length()</code> 是已存字符数，<code>capacity()</code> 是缓冲区容量，容量不足会自动扩容并复制旧内容：无参构造的容量在 JDK 8 中是 16，JDK 9 后为 16 或「初始字符串长度 + 16」，能预估长度时用 <code>new StringBuilder(1024)</code> 可减少扩容。</p>
+<p>反复修改字符串就该换成 <code>StringBuilder</code>。它内部维护一个可扩容的字符数组，<code>append</code>、<code>insert</code>、<code>reverse</code> 直接改缓冲区并返回自身，所以能链式书写 <code>sb.append("a").append(1)</code>。要注意 <code>length()</code> 是已存字符数，<code>capacity()</code> 是缓冲区容量。容量不足会自动扩容并复制旧内容：无参构造的容量在 JDK 8 中是 16，JDK 9 后为 16 或“初始字符串长度 + 16”。能预估长度时，用 <code>new StringBuilder(1024)</code> 可以减少扩容。</p>
 <pre><code class="language-java">public class StringBuilderDemo {
     public static void main(String[] args) {
         System.out.println(join(new int[]{1, 2, 3}));   // [1, 2, 3]
@@ -165,7 +165,7 @@
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-8/01-string-vs-builder.svg" alt="String 不可变与 StringBuilder 可变缓冲区对比图，含循环拼接 O(n²) 代价说明"><figcaption>图 1：String 与 StringBuilder 对比——String 不可变因而可安全共享，StringBuilder 就地修改因而适合频繁拼接</figcaption></figure>
 
 <h2>三、包装类：基本类型与对象之间的桥</h2>
-<p>八种基本类型不是对象，不能放进集合、不能调用方法、也无法表示「没有值」，于是每种都有一个对应的包装类：<code>byte→Byte</code>、<code>short→Short</code>、<code>int→Integer</code>、<code>long→Long</code>、<code>float→Float</code>、<code>double→Double</code>、<code>char→Character</code>、<code>boolean→Boolean</code>。它们主要做三件事：字符串转基本类型（<code>Integer.parseInt("18")</code>）、基本类型转字符串（<code>String.valueOf(18)</code>）、提供常量与工具方法（<code>Integer.MAX_VALUE</code>）。从 JDK 5 起两者可自动转换：<strong>自动装箱</strong>（<code>Integer i = 10;</code>，编译器调用 <code>Integer.valueOf(10)</code>）与<strong>自动拆箱</strong>（<code>int n = i;</code>，调用 <code>i.intValue()</code>）。</p>
+<p>八种基本类型不是对象，不能放进集合、不能调用方法、也无法表示“没有值”，于是每种都有一个对应的包装类：<code>byte→Byte</code>、<code>short→Short</code>、<code>int→Integer</code>、<code>long→Long</code>、<code>float→Float</code>、<code>double→Double</code>、<code>char→Character</code>、<code>boolean→Boolean</code>。它们主要做三件事：字符串转基本类型（<code>Integer.parseInt("18")</code>）、基本类型转字符串（<code>String.valueOf(18)</code>）、提供常量与工具方法（<code>Integer.MAX_VALUE</code>）。从 JDK 5 起两者可自动转换，即<strong>自动装箱</strong>与<strong>自动拆箱</strong>。自动装箱写 <code>Integer i = 10;</code>，编译器会调用 <code>Integer.valueOf(10)</code>；自动拆箱写 <code>int n = i;</code>，会调用 <code>i.intValue()</code>。</p>
 <pre><code class="language-java">Integer a = 127, b = 127;
 Integer c = 128, d = 128;
 System.out.println(a == b);        // true，命中 -128~127 的缓存
@@ -179,9 +179,9 @@ System.out.println(y);             // 0</code></pre>
 <p>上面的输出暴露了两个陷阱：<code>Integer.valueOf</code> 会缓存 −128 到 127 的对象，区间内 <code>==</code> 恰好为真，超出就变成两个新对象，因此包装类的比较永远用 <code>equals</code>；包装类引用还可以为 <code>null</code>，直接参与运算会因自动拆箱触发空指针。</p>
 
 <h2>四、Object、Math 与日期时间</h2>
-<p><code>Object</code> 是所有类的根父类，所以参数写成 <code>Object</code> 就能接收任意对象。它有三个方法值得关注：<code>toString()</code> 决定对象被打印时的样子，默认是「类名@十六进制哈希」，调试时几乎一定要重写；<code>equals(Object)</code> 默认仍是 <code>==</code>；重写 <code>equals</code> 就必须同时重写 <code>hashCode</code> 并满足「equals 为真则哈希相同」，否则对象存进 <code>HashSet</code> 或当作 <code>HashMap</code> 的键会出现「存进去却查不到」。</p>
-<p><code>Math</code> 全是静态方法：<code>abs</code> 取绝对值，<code>ceil</code>/<code>floor</code> 取上取整与下取整，<code>pow(a, b)</code> 求幂，<code>sqrt</code> 求平方根（别和立方根 <code>cbrt</code> 混淆），<code>max</code>/<code>min</code> 求最值，<code>random()</code> 返回 <code>[0.0, 1.0)</code> 的随机数，生成 <code>[min, max]</code> 整数写成 <code>min + (int) (Math.random() * (max - min + 1))</code>。<code>Math.round</code> 参数为 <code>double</code> 时返回 <code>long</code>，规则是「加 0.5 后向下取整」，所以 <code>Math.round(-1.5)</code> 得 <code>-1</code> 而非 <code>-2</code>。</p>
-<p>日期时间 API 分两代。旧的 <code>Date</code> + <code>Calendar</code> + <code>SimpleDateFormat</code> 坑很多：<code>Calendar</code> 的月份从 0 开始（1 月是 0），<code>Date.getYear()</code> 返回「年份减 1900」，<code>SimpleDateFormat</code> <strong>不是线程安全的</strong>，多线程共用一个实例会解析出错误结果。JDK 8 引入的 <code>java.time</code>（<code>LocalDate</code>、<code>LocalDateTime</code>、<code>Duration</code> 等）全部不可变、线程安全，新代码应当优先使用；只有对接老接口需要 <code>java.util.Date</code> 时才做转换。</p>
+<p><code>Object</code> 是所有类的根父类，所以参数写成 <code>Object</code> 就能接收任意对象。它有三个方法值得关注。<code>toString()</code> 决定对象被打印时的样子，默认是“类名@十六进制哈希”，调试时几乎一定要重写。<code>equals(Object)</code> 默认仍是 <code>==</code>；重写 <code>equals</code> 就必须同时重写 <code>hashCode</code>，并满足“equals 为真则哈希相同”，否则对象存进 <code>HashSet</code>，或当作 <code>HashMap</code> 的键时，会出现“存进去却查不到”。</p>
+<p><code>Math</code> 全是静态方法：<code>abs</code> 取绝对值，<code>ceil</code>/<code>floor</code> 取上取整与下取整，<code>pow(a, b)</code> 求幂，<code>sqrt</code> 求平方根（别和立方根 <code>cbrt</code> 混淆），<code>max</code>/<code>min</code> 求最值。生成 <code>[min, max]</code> 的随机整数写成 <code>min + (int) (Math.random() * (max - min + 1))</code>，其中 <code>random()</code> 返回 <code>[0.0, 1.0)</code> 的随机数。<code>Math.round</code> 参数为 <code>double</code> 时返回 <code>long</code>，规则是“加 0.5 后向下取整”，所以 <code>Math.round(-1.5)</code> 得 <code>-1</code> 而非 <code>-2</code>。</p>
+<p>日期时间 API 分两代。旧的 <code>Date</code> + <code>Calendar</code> + <code>SimpleDateFormat</code> 坑很多：<code>Calendar</code> 的月份从 0 开始（1 月是 0），<code>Date.getYear()</code> 返回“年份减 1900”。<code>SimpleDateFormat</code> <strong>不是线程安全的</strong>，多线程共用一个实例会解析出错误结果。JDK 8 引入的 <code>java.time</code>（<code>LocalDate</code>、<code>LocalDateTime</code>、<code>Duration</code> 等）全部不可变、线程安全，新代码应当优先使用。只有对接老接口需要 <code>java.util.Date</code> 时，才做转换。</p>
 <pre><code class="language-java">import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -202,12 +202,7 @@ public class DateTimeDemo {
 <p>若不得不使用旧 API，请至少守住三条：<code>Calendar</code> 取月份后自行加 1，<code>SimpleDateFormat</code> 不要作为静态共享字段，模式串里 <code>MM</code> 与 <code>mm</code> 分清。</p>
 
 <h2>五、小结</h2>
-<p>本章几条主线的共同线索是「什么时候复用、什么时候新建」。<code>String</code> 不可变因而可以安全共享，代价是修改就得新建，于是有了 <code>StringBuilder</code>；基本类型轻量但不是对象，于是有了包装类，代价是缓存造成的 <code>==</code> 假象与拆箱空指针；<code>Object</code> 的默认实现按地址与哈希判断，重写时要成对处理；<code>Math</code> 是纯静态工具；日期时间上，新的 <code>java.time</code> 用不可变换来了线程安全。记住三条纪律即可避开大部分坑：比较内容用 <code>equals</code>、循环拼接用 <code>StringBuilder</code>、日期时间优先 <code>java.time</code>。下一章进入集合框架，<code>equals</code> 与 <code>hashCode</code> 的约定将成为理解 <code>HashMap</code> 去重与查找的关键。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-7/"><span class="pn-label">← 上一篇</span><span class="pn-title">接口、内部类与枚举</span></a>
-      <a class="next-post" href="/java-tutorial-1-9/"><span class="pn-label">下一篇 →</span><span class="pn-title">集合框架</span></a>
-      </nav>
+<p>本章几条主线的共同线索是“什么时候复用、什么时候新建”。<code>String</code> 不可变因而可以安全共享，代价是修改就得新建，于是有了 <code>StringBuilder</code>。基本类型轻量但不是对象，于是有了包装类，代价是缓存造成的 <code>==</code> 假象与拆箱空指针。<code>Object</code> 的默认实现按地址与哈希判断，重写时要成对处理；<code>Math</code> 是纯静态工具；日期时间上，新的 <code>java.time</code> 用不可变换来了线程安全。记住三条纪律即可避开大部分坑：比较内容用 <code>equals</code>、循环拼接用 <code>StringBuilder</code>、日期时间优先 <code>java.time</code>。下一章进入集合框架，<code>equals</code> 与 <code>hashCode</code> 的约定将成为理解 <code>HashMap</code> 去重与查找的关键。</p>
           </article>
   <!-- Footer -->
   <footer>

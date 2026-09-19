@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们把类、对象、封装和继承串了起来。但 Java 的类型系统还有三块拼图没讲：<strong>接口</strong>把「能做什么」从「怎么做」里剥出来，是面向接口编程的起点；<strong>内部类</strong>让一个类可以藏在另一个类里，写回调和事件监听时几乎绕不开；<strong>枚举</strong>则用类型安全的方式取代满天飞的 <code>static final int</code> 常量。本章面向已经会写类与对象的读者，把这三块一次讲透，并给出可以照抄的代码模板。</p>
+<p>上一章把类、对象、封装和继承串了起来。Java 的类型系统还有三块拼图没讲。<strong>接口</strong>把“能做什么”从“怎么做”里剥出来，是面向接口编程的起点；<strong>内部类</strong>让一个类可以藏在另一个类里，写回调和事件监听时几乎绕不开；<strong>枚举</strong>用类型安全的方式取代满天飞的 <code>static final int</code> 常量。本章面向已经会写类与对象的读者，把这三块一次讲透，并给出可以照抄的代码模板。</p>
 
 <h2>一、接口：一份对外承诺的契约</h2>
 
-<p>接口（interface）只描述「有哪些能力」，不关心「能力怎么实现」。一个类通过 <code>implements</code> 声明自己实现了某个接口，就等于签了合同：接口里声明的抽象方法，一个都不能少。</p>
+<p>接口（interface）只描述“有哪些能力”，不关心“能力怎么实现”。一个类通过 <code>implements</code> 声明自己实现了某个接口，就等于签了合同：接口里声明的抽象方法，一个都不能少。</p>
 
 <pre><code class="language-java">public interface Payable {
     // 接口里的抽象方法默认就是 public abstract，写不写都一样
@@ -157,11 +157,11 @@ class Order implements Payable {
     }
 }</code></pre>
 
-<p>这里有两个容易记混的点：接口里的方法不能有方法体（Java 8 之前），接口里的字段不是普通字段，而是<strong>常量</strong>——它们会被编译器自动加上 <code>public static final</code>，所以必须在声明时就赋值，也不能被实现类修改。</p>
+<p>这里有两个容易记混的点。Java 8 之前，接口里的方法不能有方法体；接口里的字段不是普通字段，而是<strong>常量</strong>。字段会被编译器自动加上 <code>public static final</code>，因此必须在声明时就赋值，也不能被实现类修改。</p>
 
 <h3>为什么需要默认方法</h3>
 
-<p>接口有一个天生的痛点：一旦发布，就不能再往上加抽象方法了。设想 <code>Payable</code> 已经被几百个类实现，此时想给它加一个「是否支持分期」的方法，所有实现类都会编译失败。Java 8 引入的<strong>默认方法</strong>（default method）就是为这件事准备的：允许在接口里写带方法体的方法，实现类不重写也能用。</p>
+<p>接口有一个天生的痛点：一旦发布，就不能再往上加抽象方法。设想 <code>Payable</code> 已经被几百个类实现，此时想给它加一个“是否支持分期”的方法，所有实现类都会编译失败。Java 8 引入的<strong>默认方法</strong>（default method）就是为这件事准备的：允许在接口里写带方法体的方法，实现类不重写也能用。</p>
 
 <pre><code class="language-java">public interface Payable {
     double amount();
@@ -177,11 +177,11 @@ class Order implements Payable {
     }
 }</code></pre>
 
-<p>默认方法不是可有可无的语法糖，JDK 自己就是最大受益者：Java 8 给 <code>Collection</code> 加上 <code>stream()</code>、<code>forEach()</code>，给 <code>List</code> 加上 <code>sort()</code>、<code>replaceAll()</code>，靠的都是默认方法，否则全世界的集合实现类都要跟着改一遍。</p>
+<p>默认方法不是可有可无的语法糖，JDK 自己就是最大的受益者。Java 8 给 <code>Collection</code> 加上 <code>stream()</code>、<code>forEach()</code>，给 <code>List</code> 加上 <code>sort()</code>、<code>replaceAll()</code>，靠的都是默认方法；没有它，全世界的集合实现类都得跟着改一遍。</p>
 
 <h3>默认方法的冲突怎么解</h3>
 
-<p>既然接口能带方法体，就必然遇到「两个接口给了同名的默认方法」这种菱形问题。Java 定的规则很清楚，按优先级从高到低只有三条：</p>
+<p>既然接口能带方法体，就必然遇到“两个接口给了同名的默认方法”这种菱形问题。Java 定的规则很清楚，按优先级从高到低只有三条：</p>
 
 <ol>
   <li><strong>类自己重写的方法最优先</strong>。只要实现类里写了自己的方法，接口的默认版本一律被覆盖。</li>
@@ -209,11 +209,11 @@ class C implements A, B {
 
 <h3>接口 vs 抽象类</h3>
 
-<p>两者都<strong>不能被实例化</strong>，也都可以声明抽象方法，但用途不同。接口表达的是「具备什么能力」，可以多实现，适合给互不相关的类打上同一个能力标签；抽象类表达的是「是什么」，只能单继承，适合承载子类共用的字段和部分实现。经验法则是：先想清楚子类是「是一个 X」还是「能做 X」，前者用抽象类，后者用接口。</p>
+<p>两者都<strong>不能被实例化</strong>，也都可以声明抽象方法，但用途不同。接口表达的是“具备什么能力”，可以多实现，适合给互不相关的类打上同一个能力标签；抽象类表达的是“是什么”，只能单继承，适合承载子类共用的字段和部分实现。经验法则是：先想清楚子类是“是一个 X”还是“能做 X”，前者用抽象类，后者用接口。</p>
 
 <h2>二、内部类：写回调和事件监听的基本功</h2>
 
-<p>把一个类写在另一个类的内部，它就是内部类，外层那个类叫外部类。内部类的价值在于表达「一个事物离不开另一个事物」的关系，比如人和心脏、订单和订单明细；分开写成两个平级类，这种依赖关系就体现不出来，而且内部类还能访问外部类的私有成员。</p>
+<p>把一个类写在另一个类的内部，它就是内部类，外层那个类叫外部类。内部类的价值在于表达“一个事物离不开另一个事物”的关系，比如人和心脏、订单和订单明细。分开写成两个平级类，这种依赖关系就体现不出来；此外，内部类还能访问外部类的私有成员。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-7/02-inner-class.svg" alt="成员内部类按 static 分为两类的对比：静态嵌套类只依赖外部类本身，不持有外部实例；非静态内部类持有外部实例引用，可直接访问外部类实例成员，但在 JDK 16 前不能声明静态成员"><figcaption>图 2：成员内部类的两种形态——静态嵌套类 vs 非静态内部类</figcaption></figure>
 
@@ -254,15 +254,15 @@ class Entry {
     }
 }</code></pre>
 
-<p>从外部创建非静态内部类对象要用 <code>outer.new Inner()</code> 这种略显古怪的语法，原因就在于它必须绑定一个外部类实例。反过来，静态嵌套类不需要外部对象，所以在只需要「一个挂在命名空间下的工具类」时，应该优先选它。</p>
+<p>从外部创建非静态内部类对象要用 <code>outer.new Inner()</code> 这种略显古怪的语法，原因就在于它必须绑定一个外部类实例。静态嵌套类不需要外部对象，因此在只需要“一个挂在命名空间下的工具类”时，应该优先选它。</p>
 
-<p>这里有一个流传很广的说法需要纠正：<strong>「非静态内部类绝对不能有静态成员」只在 JDK 16 之前成立</strong>。在 JDK 15 及更早（JLS 8.1.3），内部类里声明静态字段、静态方法、静态初始化块都是编译错误，唯一的例外是 <code>static final</code> 修饰的常量（基本类型或 <code>String</code> 字面量）。JDK 16 起（JEP 395，随记录类一起放宽）这条限制被取消：内部类可以像普通类一样声明静态字段、静态方法、静态嵌套类型和静态初始化块，只是静态成员依旧不依赖外部实例，语义上仍要自己心里有数。<strong>实践提醒</strong>：当前大量生产项目仍跑在 JDK 8/11 上，写代码时按旧规则来更保险；如果确实需要静态成员，把它提升为静态嵌套类或独立类，意图也更清楚。</p>
+<p>这里有一个流传很广的说法需要纠正：<strong>“非静态内部类绝对不能有静态成员”只在 JDK 16 之前成立</strong>。在 JDK 15 及更早（JLS 8.1.3），内部类里声明静态字段、静态方法、静态初始化块都是编译错误，唯一的例外是 <code>static final</code> 修饰的常量（基本类型或 <code>String</code> 字面量）。JDK 16 起（JEP 395，随记录类一起放宽），这条限制被取消：内部类可以像普通类一样声明静态字段、静态方法、静态嵌套类型和静态初始化块。只是静态成员依旧不依赖外部实例，语义上仍要心里有数。<strong>实践提醒</strong>：当前大量生产项目仍跑在 JDK 8 或 JDK 11 上，写代码时按旧规则来更保险。如果确实需要静态成员，把它提升为静态嵌套类或独立类，意图也更清楚。</p>
 
-<p>顺带解释「非静态内部类为什么不能有静态方法」这个问题的常见误答：网上常说是「静态方法调用时外部类可能还没加载」，这是错的。类初始化时机由 JVM 规范明确列出（<code>new</code>、读写静态字段、调用静态方法，以及反射、父类初始化、启动类等），调用内部类静态方法时必然已经触发初始化，真正的理由是它<strong>与实例绑定的语义冲突</strong>，而不是加载顺序。</p>
+<p>顺带解释“非静态内部类为什么不能有静态方法”这个问题的常见误答。网上常说“静态方法调用时外部类可能还没加载”，这是错的。类初始化时机由 JVM 规范明确列出（<code>new</code>、读写静态字段、调用静态方法，以及反射、父类初始化、启动类等）；调用内部类静态方法时必然已经触发初始化。真正的理由是它<strong>与实例绑定的语义冲突</strong>，而不是加载顺序。</p>
 
 <h3>局部内部类与匿名内部类</h3>
 
-<p>写在方法体里的类叫局部内部类，作用范围仅限该方法。真正在日常代码里高频出现的是它的简写形式——<strong>匿名内部类</strong>：一边定义子类/实现类，一边直接创建对象，用一次就丢。</p>
+<p>写在方法体里的类叫局部内部类，作用范围仅限该方法。日常代码里高频出现的是它的简写形式——<strong>匿名内部类</strong>：一边定义子类或实现类，一边直接创建对象，用一次就丢。</p>
 
 <pre><code class="language-java">interface Greeting {
     void say(String name);
@@ -281,11 +281,11 @@ public class Demo {
     }
 }</code></pre>
 
-<p>几个必须记住的限制：匿名内部类<strong>没有类名</strong>，因此不能定义构造方法，也无法复用；它只能继承一个类或实现一个接口；方法内访问局部变量时，该变量必须是 <code>final</code> 或「事实上的 final」（effectively final，Java 8 起不再强制写 <code>final</code> 关键字，但值不能改）。如果接口是函数式接口（只有一个抽象方法），Java 8 起可以用 Lambda 写成 <code>Greeting g = name -&gt; System.out.println("Hello, " + name);</code>，比匿名内部类更短；但当需要多个方法或需要访问 <code>this</code> 指向内部类自身时，匿名内部类仍然不可替代。</p>
+<p>几个必须记住的限制：匿名内部类<strong>没有类名</strong>，因此不能定义构造方法，也无法复用；它只能继承一个类或实现一个接口；方法内访问局部变量时，该变量必须是 <code>final</code> 或“事实上的 final”（effectively final）。Java 8 起不再强制写 <code>final</code> 关键字，但值不能改。如果接口是函数式接口（只有一个抽象方法），Java 8 起可以改写成 Lambda：<code>Greeting g = name -&gt; System.out.println("Hello, " + name);</code>，比匿名内部类更短。但需要多个方法，或需要让 <code>this</code> 指向内部类自身时，匿名内部类仍然不可替代。</p>
 
 <h2>三、枚举：把常量收进类型里</h2>
 
-<p>在枚举出现之前，表示「订单状态」这类有限取值，通常靠一组常量：</p>
+<p>在枚举出现之前，表示“订单状态”这类有限取值，通常靠一组常量：</p>
 
 <pre><code class="language-java">public class OrderStatus {
     public static final int CREATED = 0;
@@ -293,13 +293,13 @@ public class Demo {
     public static final int SHIPPED = 2;
 }</code></pre>
 
-<p>这种写法的毛病很致命：<code>pay(int status)</code> 的入参是 <code>int</code>，传 <code>999</code> 编译器也放行；两个语义完全不同的常量集还可能撞值；想遍历所有状态、想给状态加个中文描述，都得额外写一堆代码。枚举把「取值范围」变成<strong>类型本身</strong>，编译器替你把关。</p>
+<p>这种写法的毛病很致命。<code>pay(int status)</code> 的入参是 <code>int</code>，传 <code>999</code> 编译器也放行；两个语义完全不同的常量集还可能撞值；想遍历所有状态、想给状态加个中文描述，都得额外写一堆代码。枚举把“取值范围”变成<strong>类型本身</strong>，编译器替你把关。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-7/03-enum-structure.svg" alt="枚举编译后的结构：每个枚举常量是类的一个 public static final 实例，构造方法为 private 只允许内部创建，并支持附加字段、自定义方法、values()、valueOf() 和 switch"><figcaption>图 3：枚举的类型结构——常量即实例，构造方法私有，可带字段与行为</figcaption></figure>
 
 <h3>带字段和方法的枚举</h3>
 
-<p>枚举常量本质上是枚举类的<strong>静态实例</strong>，所以枚举可以像普通类一样有字段、构造方法和方法，只是构造方法只能是私有的（写不写 <code>private</code> 都一样）。</p>
+<p>枚举常量本质上是枚举类的<strong>静态实例</strong>，所以枚举可以像普通类一样有字段、构造方法和方法，只是构造方法只能是私有的（写不写 <code>private</code> 效果一样）。</p>
 
 <pre><code class="language-java">public enum OrderStatus {
     CREATED(0, "已创建"),
@@ -346,7 +346,7 @@ public class Demo {
   <li>枚举实现了 <code>Comparable</code> 与 <code>Serializable</code>，并且<strong>天然是单例</strong>，因此用单元素枚举写单例（《Effective Java》推荐做法）可以天然防住反射和序列化破坏。</li>
 </ul>
 
-<p>枚举与常量类的取舍可以概括为：枚举编译后是 <code>final class</code>（并继承 <code>java.lang.Enum</code>），不可被继承，取值收敛、类型安全、可遍历、可带行为；但枚举常量在类加载时就全部实例化，如果你有成千上万个取值、还需要频繁增删，那么枚举并不合适，此时用配置或数据库表更合理。</p>
+<p>枚举与常量类的取舍可以概括为：枚举编译后是 <code>final class</code>（并继承 <code>java.lang.Enum</code>），不可被继承，取值收敛、类型安全、可遍历、可带行为。但枚举常量在类加载时就全部实例化，如果取值成千上万、还需要频繁增删，那么枚举并不合适，此时用配置或数据库表更合理。</p>
 
 <h2>四、常见坑速查</h2>
 
@@ -354,19 +354,14 @@ public class Demo {
   <li><strong>接口字段当变量用</strong>：接口里的字段是 <code>public static final</code> 常量，实现类里写 <code>CURRENCY_CNY = "USD"</code> 会直接编译失败。</li>
   <li><strong>以为默认方法能覆盖 Object 的方法</strong>：接口不能提供 <code>equals</code>、<code>hashCode</code>、<code>toString</code> 的默认实现，写了也编译不过，这些方法只能由类提供。</li>
   <li><strong>在静态方法里 new 非静态内部类</strong>：非静态内部类需要外部实例，静态上下文里没有 <code>this</code>，必须先 <code>new Outer()</code> 再 <code>outer.new Inner()</code>。</li>
-  <li><strong>匿名内部类里改局部变量</strong>：被匿名内部类捕获的局部变量必须是事实上的 final，想「改」就用只有一个元素的数组或 <code>AtomicInteger</code> 之类的持有对象。</li>
+  <li><strong>匿名内部类里改局部变量</strong>：被匿名内部类捕获的局部变量必须是事实上的 final，想“改”就用只有一个元素的数组或 <code>AtomicInteger</code> 之类的持有对象。</li>
   <li><strong>用 ordinal 存库或比对</strong>：调整常量声明顺序就会让历史数据错位，一律用自己定义的业务编码。</li>
   <li><strong>在循环条件里调 values()</strong>：每次都克隆数组，改成先取出一次再遍历。</li>
 </ul>
 
 <h2>五、小结</h2>
 
-<p>接口定义「能做什么」，从 Java 8 起还允许用默认方法平滑演进，冲突时按「本类优先、子接口次之、否则显式指定」处理；内部类适合表达强依赖关系，非静态内部类持有外部实例并由此获得访问私有成员的便利，代价是必须先有外部对象，而静态嵌套类更轻、更适合工具型嵌套；匿名内部类是一次性的子类/实现类写法，函数式接口场景下可以让位给 Lambda；枚举把有限取值升级为一个类型，配合私有构造、字段和自定义方法，能同时解决类型安全、可遍历和可携带行为三个问题，但要注意 <code>ordinal()</code> 与 <code>values()</code> 的使用边界。下一章我们进入异常处理与常用 API，把这些类型真正用起来。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-6/"><span class="pn-label">← 上一篇</span><span class="pn-title">继承、多态与抽象类</span></a>
-      <a class="next-post" href="/java-tutorial-1-8/"><span class="pn-label">下一篇 →</span><span class="pn-title">常用类库</span></a>
-      </nav>
+<p>接口定义“能做什么”，从 Java 8 起还允许用默认方法平滑演进，冲突时按“本类优先、子接口次之、否则显式指定”处理。内部类适合表达强依赖关系：非静态内部类持有外部实例，并由此获得访问私有成员的便利，代价是必须先有外部对象；静态嵌套类更轻，更适合工具型嵌套。匿名内部类是一次性的子类或实现类写法，函数式接口场景下可以让位给 Lambda。枚举把有限取值升级为一个类型，配合私有构造、字段和自定义方法，能同时解决类型安全、可遍历和可携带行为三个问题，但要注意 <code>ordinal()</code> 与 <code>values()</code> 的使用边界。下一章进入异常处理与常用 API，把这些类型真正用起来。</p>
           </article>
   <!-- Footer -->
   <footer>
