@@ -152,15 +152,43 @@
 <p>文件在物理上是<strong>分块存储</strong>的，块大小由 <code>dfs.blocksize</code> 规定：Hadoop 2.x/3.x 默认 128MB，1.x 默认 64MB。块不能设得太小，否则程序会把大量时间花在反复寻找每个块的起始位置；也不能设得太大，否则单个块从磁盘传输的时间会远大于定位该块的时间，而一个块的处理只能等它传完。经验结论是：块大小主要取决于磁盘传输速率。</p>
 
 <h2>三、写数据、读数据与副本放置</h2>
-<p><strong>写数据流程</strong>分五步：客户端向 NameNode 请求上传文件；NameNode 校验权限与目录，响应“可以上传”； 客户端请求上传第一个 Block（例如 0–128M），并请 NameNode 返回可用的 DataNode；NameNode 返回一组 DataNode，客户端与它们建立 Pipeline 流水线，把 Block 以 packet 为单位传输；全部 Block 传完后通知 NameNode 关闭文件。过程中副本沿流水线逐级复制，因此写一份数据在网络中实际会被放大数倍，这也是副本策略要尽量减少跨机架写入的原因。</p>
-<p><strong>读数据流程</strong>分四步：客户端请求下载文件；NameNode 返回目标文件的元数据（各 Block 所在的 DataNode 列表）； 客户端<strong>就近</strong>选择 DataNode 建立连接并读取 Block；读完后关闭连接。由于同一块可能有多个副本，读取时拥有最大的选择空间。</p>
+<p><strong>写数据流程</strong>分五步：</p>
+<ul>
+<li>客户端向 NameNode 请求上传文件。</li>
+<li>NameNode 校验权限与目录，响应“可以上传”。</li>
+<li>客户端请求上传第一个 Block（例如 0–128M），并请 NameNode 返回可用的 DataNode。</li>
+<li>NameNode 返回一组 DataNode，客户端与它们建立 Pipeline 流水线，把 Block 以 packet 为单位传输。</li>
+<li>全部 Block 传完后通知 NameNode 关闭文件。</li>
+</ul>
+<p>过程中副本沿流水线逐级复制，因此写一份数据在网络中实际会被放大数倍，这也是副本策略要尽量减少跨机架写入的原因。</p>
+<p><strong>读数据流程</strong>分四步：</p>
+<ul>
+<li>客户端请求下载文件。</li>
+<li>NameNode 返回目标文件的元数据（各 Block 所在的 DataNode 列表）。</li>
+<li>客户端<strong>就近</strong>选择 DataNode 建立连接并读取 Block。</li>
+<li>读完后关闭连接。</li>
+</ul>
+<p>由于同一块可能有多个副本，读取时拥有最大的选择空间。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-1/02-hdfs-write-pipeline.svg" alt="HDFS 写数据流程：NameNode 定位可用节点，DataNode 三副本流水线逐级复制"><figcaption>图 2：写数据流程与三副本流水线——副本沿 Pipeline 逐级复制，写一份数据的网络流量会被放大数倍</figcaption></figure>
 <p>“就近”不是凭感觉，而是按网络拓扑算出来的节点距离：两个节点到最近的共同祖先的距离之和。<code>Distance(/d1/r1/n0, /d1/r1/n0)=0</code>（同一节点）、<code>Distance(/d1/r1/n1, /d1/r1/n2)=2</code>（同机架不同节点）、<code>Distance(/d1/r2/n0, /d1/r3/n2)=4</code>（同数据中心不同机架）、<code>Distance(/d1/r2/n1, /d2/r4/n1)=6</code>（不同数据中心）。</p>
 <p>副本数默认为 3，放置遵循机架感知策略。<strong>第一个副本放在客户端所在的节点上（若客户端在集群外则随机选一个节点）</strong>，第二个副本放在<strong>另一个</strong>机架上的随机节点，第三个副本放在第二个副本所在机架的另一个随机节点。这样跨机架的写入流量被压到最小；机架级故障的概率远低于节点级故障，因此可靠性并未下降。</p>
 
 <h2>四、YARN 与 MapReduce：生态中的另外两块拼图</h2>
-<p>HDFS 只解决“存”，计算交给 MapReduce，而“哪台机器有多少资源、任务分给谁”交给 YARN（Yet Another Resource Negotiator）。YARN 有四个核心概念：<strong>ResourceManager（RM）</strong>是整个集群资源（内存、CPU）的总管；<strong>NodeManager（NM）</strong>是单台节点服务器上的资源管理者；<strong>ApplicationMaster（AM）</strong>是单个任务运行的管理者，负责为作业申请资源、协调进度；<strong>Container</strong>是容器，相当于一台被分配出来的独立服务器，任务真正跑在里面。四个角色分别对应全局、单机、单作业与运行单元。</p>
-<p>MapReduce 把计算过程分为两个阶段：Map 阶段并行处理输入数据，Reduce 阶段对 Map 的结果进行汇总。一个完整的 MapReduce 程序在分布式运行时有三类实例进程：MrAppMaster 负责整个程序的过程调度与状态协调；MapTask 负责 Map 阶段的整个数据处理流程；ReduceTask 负责 Reduce 阶段的整个数据处理流程。编程时用户只需写三个部分：Mapper、Reducer 和 Driver。</p>
+<p>HDFS 只解决“存”，计算交给 MapReduce，而“哪台机器有多少资源、任务分给谁”交给 YARN（Yet Another Resource Negotiator）。YARN 有四个核心概念：</p>
+<ul>
+<li><strong>ResourceManager（RM）</strong>：整个集群资源（内存、CPU）的总管。</li>
+<li><strong>NodeManager（NM）</strong>：单台节点服务器上的资源管理者。</li>
+<li><strong>ApplicationMaster（AM）</strong>：单个任务运行的管理者，负责为作业申请资源、协调进度。</li>
+<li><strong>Container</strong>：容器，相当于一台被分配出来的独立服务器，任务真正跑在里面。</li>
+</ul>
+<p>四个角色分别对应全局、单机、单作业与运行单元。</p>
+<p>MapReduce 把计算过程分为两个阶段：Map 阶段并行处理输入数据，Reduce 阶段对 Map 的结果进行汇总。一个完整的 MapReduce 程序在分布式运行时有三类实例进程：</p>
+<ul>
+<li>MrAppMaster 负责整个程序的过程调度与状态协调。</li>
+<li>MapTask 负责 Map 阶段的整个数据处理流程。</li>
+<li>ReduceTask 负责 Reduce 阶段的整个数据处理流程。</li>
+</ul>
+<p>编程时用户只需写三个部分：Mapper、Reducer 和 Driver。</p>
 
 <h2>五、动手示例与常见坑</h2>
 <p>HDFS 提供两套等价的操作入口：命令行和 Java API。命令行里 <code>hadoop fs</code> 与 <code>hdfs dfs</code> 完全等价，前者更通用。</p>

@@ -131,7 +131,15 @@
 <p>上一章把 Hibernate 跑了起来：能拿到 Session，也能存取数据。但真正决定一个 ORM 项目好不好维护的，只有两件事——实体类怎么和表对上号，以及查询怎么写。本章就解决这两件事：先用 JPA 注解把表、主键、外键关系映射清楚，再掌握 HQL 这门面向对象的查询语言，最后弄清一级缓存为什么能让两次 <code>get()</code> 只发一条 SQL、以及它什么时候根本不救你。适合已经会建 Session、跑通第一个增删改查的读者。</p>
 
 <h2>映射注解与主键策略</h2>
-<p>先守住持久化类的几条基本规范。必须有无参构造方法，因为 Hibernate 底层靠反射实例化；属性私有并提供公有 getter/setter；能不用基本类型就不用，工资这类字段用 <code>Double</code> 而不是 <code>double</code>，才能把「忘记录入」的 null 与「被扣完了」的 0 区分开；必须有一个与主键对应的 OID；尽量不要用 <code>final</code> 修饰类，否则延迟加载产生不了代理子类；习惯上实现 <code>Serializable</code>。</p>
+<p>先守住持久化类的几条基本规范，每一条都是硬要求：</p>
+<ul>
+<li>必须有无参构造方法，因为 Hibernate 底层靠反射实例化。</li>
+<li>属性私有，并提供公有 getter/setter。</li>
+<li>能不用基本类型就不用：工资这类字段用 <code>Double</code> 而不是 <code>double</code>，才能把「忘记录入」的 null 与「被扣完了」的 0 区分开。</li>
+<li>必须有一个与主键对应的 OID。</li>
+<li>尽量不要用 <code>final</code> 修饰类，否则延迟加载产生不了代理子类。</li>
+<li>习惯上实现 <code>Serializable</code>。</li>
+</ul>
 <pre><code class="language-java">@Entity
 @Table(name = "cst_customer")
 public class Customer implements Serializable {
@@ -152,7 +160,14 @@ public class Customer implements Serializable {
     // 无参构造 + getter/setter 省略
 }</code></pre>
 <p><code>@Entity</code> 声明这是实体类，类名与表名一致时 <code>@Table</code> 可以省略；<code>@Column</code> 用于属性名和列名对不上的情况。要注意命名策略：Spring Boot 默认会把 <code>custId</code> 隐式转成 <code>cust_id</code>，纯 Hibernate 下这个转换则依赖 physical naming strategy。不确定时就显式写 <code>@Column</code>，不要靠猜。</p>
-<p>主键分两类：把有业务含义的字段当主键叫自然主键（如用客户姓名），一旦业务允许重名就得改表结构；不具业务含义的叫代理主键，通常是一个整数 <code>id</code>，这是推荐做法。<code>@GeneratedValue</code> 的 <code>strategy</code> 有四种取值。<code>IDENTITY</code> 依赖数据库自增列，写法简单，但 Hibernate 无法批量插入；<code>SEQUENCE</code> 使用序列，在 Oracle、PostgreSQL 上首选，可配 <code>@SequenceGenerator</code>，默认 <code>allocationSize=50</code>，想让主键连续不跳号就设成 1；<code>TABLE</code> 用一张序列表模拟，跨数据库但性能最差；<code>AUTO</code> 交给方言决定，在 Hibernate 5.x 上连 MySQL 时往往走 <code>hibernate_sequence</code> 表而不是自增，所以明确要自增就写 <code>IDENTITY</code>。如果项目还在用 <code>hbm.xml</code>，对应写法是 <code>&lt;generator class="native"/&gt;</code>，可选值有 <code>identity</code>、<code>sequence</code>、<code>native</code>、<code>uuid</code>、<code>assigned</code>、<code>increment</code>，其中 <code>native</code> 表示由方言自动在 identity 和 sequence 之间选。</p>
+<p>主键分两类：把有业务含义的字段当主键叫自然主键（如用客户姓名），一旦业务允许重名就得改表结构；不具业务含义的叫代理主键，通常是一个整数 <code>id</code>，这是推荐做法。<code>@GeneratedValue</code> 的 <code>strategy</code> 有四种取值：</p>
+<ul>
+<li><code>IDENTITY</code>：依赖数据库自增列，写法简单，但 Hibernate 无法批量插入。</li>
+<li><code>SEQUENCE</code>：使用序列，在 Oracle、PostgreSQL 上首选，可配 <code>@SequenceGenerator</code>；默认 <code>allocationSize=50</code>，想让主键连续不跳号就设成 1。</li>
+<li><code>TABLE</code>：用一张序列表模拟，跨数据库但性能最差。</li>
+<li><code>AUTO</code>：交给方言决定。在 Hibernate 5.x 上连 MySQL 时往往走 <code>hibernate_sequence</code> 表而不是自增，所以明确要自增就写 <code>IDENTITY</code>。</li>
+</ul>
+<p>如果项目还在用 <code>hbm.xml</code>，对应写法是 <code>&lt;generator class="native"/&gt;</code>，可选值有 <code>identity</code>、<code>sequence</code>、<code>native</code>、<code>uuid</code>、<code>assigned</code>、<code>increment</code>，其中 <code>native</code> 表示由方言自动在 identity 和 sequence 之间选。</p>
 
 <h2>一对多与多对多关联映射</h2>
 <p>做关联映射按四步走：先确定两张表的关系是一对多、多对一还是多对多；再在数据库里建好外键或中间表；然后在实体类里用集合或引用描述关系；最后写映射注解。以客户和联系人为例，一个客户有多个联系人，所以在「一」的一方放集合，在「多」的一方放引用：</p>
@@ -239,8 +254,16 @@ List&lt;Customer&gt; part = session.createQuery(
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-3/02-session-cache.svg" alt="缓存示意图：Session 级一级缓存与快照随 Session 关闭释放，SessionFactory 级二级缓存跨 Session 共享需显式开启，并标注 get、load、list、iterate 的差别"><figcaption>图 2：一级缓存、快照与二级缓存的作用范围</figcaption></figure>
 
 <h2>常见坑与小结</h2>
-<p>最后把最容易踩的几点收在一起：实体类的集合字段要用 <code>HashSet</code> 或 <code>List</code> 初始化，不要留 null；双向关联只 <code>set</code> 一端会导致外键为空或出现多余的 UPDATE，两端都要维护；集合端写了 <code>mappedBy</code> 就不要再加 <code>@JoinColumn</code>；重写 <code>equals()</code> 与 <code>hashCode()</code> 时不要用自增主键计算哈希值，因为瞬时对象的主键还是 null，保存后又会变化，这类对象放进集合会「丢元素」；配了 <code>hibernate.current_session_context_class=thread</code> 后，<code>getCurrentSession()</code> 拿到的 Session 在事务提交后由 Hibernate 自动关闭，不要再手动 <code>close()</code>；排查性能时先看有没有 N+1，<code>@ManyToOne</code> 该 LAZY 就 LAZY，需要一次性取回就用 <code>join fetch</code>。</p>
-<p>小结：映射决定持久层的地基——实体与表的对应、主键策略的选择、外键由谁维护，写错了后面全是补丁；查询决定效率——HQL 用类名和属性名思考问题，参数化设置，分页靠 <code>setFirstResult</code> 与 <code>setMaxResults</code>；缓存是双刃剑——一级缓存自动可用但只在 Session 内有效，二级缓存要显式开启并接受它的失效规则。下一章继续看事务、锁与延迟加载的配合。</p>
+<p>最后把最容易踩的几点收在一起，每一条都来自真实排查现场：</p>
+<ul>
+<li>实体类的集合字段要用 <code>HashSet</code> 或 <code>List</code> 初始化，不要留 null。</li>
+<li>双向关联只 <code>set</code> 一端会导致外键为空或出现多余的 UPDATE，两端都要维护。</li>
+<li>集合端写了 <code>mappedBy</code> 就不要再加 <code>@JoinColumn</code>。</li>
+<li>重写 <code>equals()</code> 与 <code>hashCode()</code> 时不要用自增主键计算哈希值：瞬时对象的主键还是 null，保存后又会变化，这类对象放进集合会「丢元素」。</li>
+<li>配了 <code>hibernate.current_session_context_class=thread</code> 后，<code>getCurrentSession()</code> 拿到的 Session 在事务提交后由 Hibernate 自动关闭，不要再手动 <code>close()</code>。</li>
+<li>排查性能时先看有没有 N+1：<code>@ManyToOne</code> 该 LAZY 就 LAZY，需要一次性取回就用 <code>join fetch</code>。</li>
+</ul>
+<p>小结：映射决定持久层的地基——实体与表的对应、主键策略的选择、外键由谁维护，写错了后面全是补丁。查询决定效率——HQL 用类名和属性名思考问题，参数化设置，分页靠 <code>setFirstResult</code> 与 <code>setMaxResults</code>。缓存是双刃剑——一级缓存自动可用但只在 Session 内有效，二级缓存要显式开启并接受它的失效规则。下一章继续看事务、锁与延迟加载的配合。</p>
           </article>
   <!-- Footer -->
   <footer>
