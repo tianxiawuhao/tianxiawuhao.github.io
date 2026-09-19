@@ -128,24 +128,26 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>学完 MyBatis 的增删改查与结果映射，你已经能让程序跑起来，但一进真实项目就会撞上三堵墙：同一条 SQL 在一个事务里被反复执行，白白压数据库；列表页一次性查出十万行，内存和网络都吃不消；<code>SqlSessionFactory</code> 到处 new，事务边界散落在 Service 里没法统一管理。本章就解决这三件事——一级/二级缓存、分页插件 PageHelper，以及用 Spring 把 MyBatis 收编成 SSM 骨架。适合已经能独立手写 Mapper 接口与 XML 映射的读者。</p>
+<p>学完 MyBatis 的增删改查与结果映射，程序已经能跑起来，但一进真实项目就会撞上三堵墙：同一条 SQL 在一个事务里被反复执行，白白压数据库；列表页一次性查出十万行，内存和网络都吃不消；<code>SqlSessionFactory</code> 到处 new，事务边界散落在 Service 里没法统一管理。本章就解决这三件事——一级/二级缓存、分页插件 PageHelper，以及用 Spring 把 MyBatis 收编成 SSM 骨架。内容适合已经能独立手写 Mapper 接口与 XML 映射的读者。</p>
 
 <h2>一、先看清结构：两级缓存与装饰器</h2>
 
 <p>缓存几乎是所有 ORM 框架的标配，目的是提高查询效率、降低数据库压力。MyBatis 中和缓存相关的类都放在 <code>org.apache.ibatis.cache</code> 包里，核心是一个 <code>Cache</code> 接口，默认实现只有 <code>PerpetualCache</code>，它的内部就是一个 <code>HashMap</code>。围绕这个基本实现，MyBatis 又提供了一批装饰器，用来叠加回收策略、日志记录、定时刷新等能力；无论包装多少层，最里面装的仍是 <code>PerpetualCache</code>。</p>
 
-<p>缓存按作用范围分两级。一级缓存也叫本地缓存，挂在 <code>SqlSession</code> 层面，同一个会话内共享，会话一关就没了；二级缓存挂在 namespace 层面，被同一个 Mapper 的多个 <code>SqlSession</code> 共享，生命周期与应用同步。因此一次查询的取数顺序是：<strong>二级缓存 → 一级缓存 → 数据库</strong>。搞清这个顺序，后面所有配置和坑都能自己推出来。</p>
+<p>缓存按作用范围分两级。一级缓存也叫本地缓存，挂在 <code>SqlSession</code> 层面，同一个会话内共享，会话一关就没了；二级缓存挂在 namespace 层面，被同一个 Mapper 的多个 <code>SqlSession</code> 共享，生命周期与应用同步。因此一次查询的取数顺序是：<strong>二级缓存 → 一级缓存 → 数据库</strong>。理清这个顺序，后面所有配置和坑都能自己推出来。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-8/01-cache-two-levels.svg" alt="MyBatis 两级缓存取数顺序与 Cache 装饰器链示意图"><figcaption>图 1：一次查询的取数顺序是二级缓存 → 一级缓存 → 数据库，Cache 装饰器最里层始终是 PerpetualCache</figcaption></figure>
 
 
 <h2>二、一级缓存：SqlSession 内的本地缓存</h2>
 
-<p>一级缓存默认开启，不需要任何配置。它并不放在 <code>SqlSession</code> 对象本身——<code>DefaultSqlSession</code> 只持有全局的 <code>Configuration</code> 和一个 <code>Executor</code>——而是由 <code>BaseExecutor</code>（<code>SimpleExecutor</code>、<code>ReuseExecutor</code>、<code>BatchExecutor</code> 的父类）在构造时持有一个 <code>PerpetualCache</code>。</p>
+<p>一级缓存默认开启，不需要任何配置。它并不放在 <code>SqlSession</code> 对象本身。原因在于 <code>DefaultSqlSession</code> 只持有全局的 <code>Configuration</code> 和一个 <code>Executor</code>，真正持有 <code>PerpetualCache</code> 的是 <code>BaseExecutor</code>（<code>SimpleExecutor</code>、<code>ReuseExecutor</code>、<code>BatchExecutor</code> 的父类），由它在构造时创建。</p>
 
 <p>是否命中由 <code>CacheKey</code> 决定：statementId、SQL 文本、参数值、<code>RowBounds</code> 分页信息、环境 id 等共同参与计算，任何一项不同都不算同一次查询。命中就直接返回内存里的结果，不再发 SQL。</p>
 
-<p>它的生命周期有三条规则必须记住：会话 <code>openSession()</code> 时创建，<code>close()</code> 时随对象一起释放，缓存不可再用；<code>clearCache()</code> 只清空数据，对象仍可继续使用；只要执行了 <code>insert</code>、<code>update</code>、<code>delete</code>，<code>BaseExecutor.update()</code> 就会无条件调用 <code>clearLocalCache()</code> 清空缓存。下面这段代码可以亲手验证这三条规则：</p>
+<p>它的生命周期有三条规则必须记住：会话 <code>openSession()</code> 时创建，<code>close()</code> 时随对象一起释放，缓存不可再用；<code>clearCache()</code> 只清空数据，对象仍可继续使用；只要执行了 <code>insert</code>、<code>update</code>、<code>delete</code>，<code>BaseExecutor.update()</code> 就会无条件调用 <code>clearLocalCache()</code> 清空缓存。</p>
+
+<p>下面这段代码可以亲手验证这三条规则：</p>
 
 <pre><code class="language-java">SqlSession session1 = sqlSessionFactory.openSession();
 BlogMapper mapper1 = session1.getMapper(BlogMapper.class);
@@ -171,15 +173,17 @@ session2.close();</code></pre>
 
 <p>想看到 SQL 输出，需要在 MyBatis 配置里打开日志，例如把 <code>logImpl</code> 设为 <code>org.apache.ibatis.logging.stdout.StdOutImpl</code>。这里要纠正一个常见说法：清空一级缓存发生在增删改<strong>执行的那一刻</strong>，而不是提交的那一刻，所以不要指望「不提交就不清缓存」。提交真正影响的是二级缓存的写入时机。</p>
 
-<p>一级缓存最大的短板是不能跨会话共享：多个会话对同一份数据可能各持一份旧值，在并发或分布式环境下就会读到脏数据。规避办法是把 <code>localCacheScope</code> 设为 <code>STATEMENT</code>，这样每次查询结束就清掉本地缓存；而在 Spring 环境中还有一点很关键——如果方法上没有事务，每次 Mapper 调用都会新建 <code>SqlSession</code>，一级缓存几乎永远命中不了，只有包在同一个事务里才真正生效。</p>
+<p>一级缓存最大的短板是不能跨会话共享：多个会话对同一份数据可能各持一份旧值，在并发或分布式环境下就会读到脏数据。规避办法是把 <code>localCacheScope</code> 设为 <code>STATEMENT</code>，这样每次查询结束就清掉本地缓存。</p>
+
+<p>在 Spring 环境中还有一点很关键：如果方法上没有事务，每次 Mapper 调用都会新建 <code>SqlSession</code>，一级缓存几乎永远命中不了，只有包在同一个事务里才真正生效。</p>
 
 <h2>三、二级缓存：namespace 级的跨会话缓存</h2>
 
-<p>要让缓存跨会话共享，它就必须待在 <code>SqlSession</code> 之外。MyBatis 的做法是用 <code>CachingExecutor</code> 装饰真正的执行器：查询先问二级缓存，命中直接返回，没命中才委派给 <code>SimpleExecutor</code> 之类走一级缓存和数据库，最后把结果写回二级缓存。</p>
+<p>要让缓存跨会话共享，它就必须待在 <code>SqlSession</code> 之外。MyBatis 的做法是用 <code>CachingExecutor</code> 装饰真正的执行器：查询先问二级缓存，命中直接返回；没命中才委派给 <code>SimpleExecutor</code> 之类走一级缓存和数据库，最后把结果写回二级缓存。</p>
 
-<p>开启分两步。第一步是全局开关 <code>cacheEnabled</code>，它<strong>默认就是 true</strong>，只有显式设成 false 才会关闭，所以正常情况下这一步不用写，源文档里「必须先配置 cacheEnabled=true」的说法是不准确的。第二步是在 Mapper.xml 里加 <code>&lt;cache/&gt;</code> 标签——只有加了它，这个 namespace 才会真正拥有一个缓存对象。</p>
+<p>开启分两步。第一步是全局开关 <code>cacheEnabled</code>，它<strong>默认就是 true</strong>，只有显式设成 false 才会关闭，所以正常情况下这一步不用写；源文档里「必须先配置 cacheEnabled=true」的说法是不准确的。第二步是在 Mapper.xml 里加 <code>&lt;cache/&gt;</code> 标签，只有加了它，这个 namespace 才会真正拥有一个缓存对象。</p>
 
-<p>二级缓存是事务性的：它由 <code>TransactionalCacheManager</code> 管理，查询结果在 <code>putObject</code> 时只是暂存在待提交集合里，必须等 <code>SqlSession</code> 提交或回滚时才真正写入，因此「事务不提交，二级缓存不生效」。</p>
+<p>二级缓存是事务性的：它由 <code>TransactionalCacheManager</code> 管理，查询结果在 <code>putObject</code> 时只是暂存在待提交集合里，必须等 <code>SqlSession</code> 提交或回滚时才真正写入。因此「事务不提交，二级缓存不生效」。</p>
 
 <pre><code class="language-xml">&lt;!-- BlogMapper.xml：为本 namespace 开启二级缓存 --&gt;
 &lt;mapper namespace="com.example.dao.BlogMapper"&gt;
@@ -197,27 +201,29 @@ session2.close();</code></pre>
     &lt;cache-ref namespace="com.example.dao.DepartmentMapper"/&gt;
 &lt;/mapper&gt;</code></pre>
 
-<p>每条语句也能单独控制缓存行为，默认约定是：<code>&lt;select&gt;</code> 的 <code>useCache="true"</code>、<code>flushCache="false"</code>，而 <code>&lt;insert&gt;</code>、<code>&lt;update&gt;</code>、<code>&lt;delete&gt;</code> 的 <code>flushCache="true"</code>，所以增删改天然会刷新缓存。自定义缓存类必须实现 <code>org.apache.ibatis.cache.Cache</code> 接口，并提供接收 <code>String id</code> 的构造器。</p>
+<p>每条语句也能单独控制缓存行为，默认约定是：<code>&lt;select&gt;</code> 的 <code>useCache="true"</code>、<code>flushCache="false"</code>；<code>&lt;insert&gt;</code>、<code>&lt;update&gt;</code>、<code>&lt;delete&gt;</code> 的 <code>flushCache="true"</code>，所以增删改天然会刷新缓存。自定义缓存类必须实现 <code>org.apache.ibatis.cache.Cache</code> 接口，并提供接收 <code>String id</code> 的构造器。</p>
 
-<p>这里要特别纠正源文档的一处硬错误：不要写成 <code>&lt;cache type="org.apache.ibatis.cache.impl.PerpetualCache" size="1024" .../&gt;</code>。一旦指定 <code>type</code>，MyBatis 就完全改用你给的实现、不再叠加默认装饰器，而 <code>PerpetualCache</code> 根本没有 <code>size</code>、<code>eviction</code>、<code>flushInterval</code>、<code>readOnly</code> 这些 setter，启动时会直接抛异常。要配置这些属性，就用不带 <code>type</code> 的默认 <code>&lt;cache/&gt;</code>。</p>
+<p>这里要特别纠正源文档的一处错误写法：不要写成 <code>&lt;cache type="org.apache.ibatis.cache.impl.PerpetualCache" size="1024" .../&gt;</code>。一旦指定 <code>type</code>，MyBatis 就完全改用指定的实现、不再叠加默认装饰器；而 <code>PerpetualCache</code> 根本没有 <code>size</code>、<code>eviction</code>、<code>flushInterval</code>、<code>readOnly</code> 这些 setter，启动时会直接抛异常。要配置这些属性，就用不带 <code>type</code> 的默认 <code>&lt;cache/&gt;</code>。</p>
 
-<p>什么时候才值得开二级缓存？查询为主、按单表划分 namespace 的业务比较合适，比如历史订单查询。如果多个 namespace 操作同一张表，一个刷新了缓存另一个没刷新，照样会脏读；用 <code>cache-ref</code> 共享虽能缓解，但任何一方的增删改都会刷新整块缓存，收益有限。对一致性要求高的系统，更稳妥的做法是接 Redis 这类独立缓存服务。</p>
+<p>什么时候才值得开二级缓存？查询为主、按单表划分 namespace 的业务比较合适，比如历史订单查询。如果多个 namespace 操作同一张表，一个刷新了缓存另一个没刷新，照样会脏读。用 <code>cache-ref</code> 共享虽能缓解，但任何一方的增删改都会刷新整块缓存，收益有限。对一致性要求高的系统，更稳妥的做法是接 Redis 这类独立缓存服务。</p>
 
 <h2>四、分页插件 PageHelper</h2>
 
-<p>手写分页有三件麻烦事：不同数据库的 <code>limit</code> 语法不一样，还得额外写一条 <code>count</code> 语句，而且分页参数会渗透进 Service 代码。PageHelper 以 MyBatis 插件（<code>Interceptor</code>）的形式拦截 <code>Executor.query</code>，自动改写 SQL、自动生成 count 查询，业务代码只需要声明「第几页、每页几条」。</p>
+<p>手写分页有三件麻烦事：不同数据库的 <code>limit</code> 语法不一样；还得额外写一条 <code>count</code> 语句；分页参数会渗透进 Service 代码。PageHelper 以 MyBatis 插件（<code>Interceptor</code>）的形式拦截 <code>Executor.query</code>，自动改写 SQL、自动生成 count 查询，业务代码只需要声明「第几页、每页几条」。</p>
 
-<p>配置时最容易踩版本坑。PageHelper 4.x 的拦截器类是 <code>com.github.pagehelper.PageHelper</code>，还要配 <code>dialect</code> 属性指定数据库类型；5.x 起改为 <code>com.github.pagehelper.PageInterceptor</code>，方言自动识别，<code>dialect</code> 属性已废弃。源文档给出的是 4.x 的旧写法，新项目应写成：</p>
+<p>配置时最容易踩版本坑。PageHelper 4.x 的拦截器类是 <code>com.github.pagehelper.PageHelper</code>，还要配 <code>dialect</code> 属性指定数据库类型；5.x 起改为 <code>com.github.pagehelper.PageInterceptor</code>，方言自动识别，<code>dialect</code> 属性已废弃。源文档给出的是 4.x 的旧写法，新项目应写成 <code>&lt;plugin interceptor="com.github.pagehelper.PageInterceptor"/&gt;</code>，放在 <code>mybatis-config.xml</code> 的 <code>&lt;plugins&gt;</code> 节点内。</p>
 
-<p><code>&lt;plugin interceptor="com.github.pagehelper.PageInterceptor"/&gt;</code>，放在 <code>mybatis-config.xml</code> 的 <code>&lt;plugins&gt;</code> 节点内。顺带说一句，这个配置文件的 DTD 地址正确写法是 <code>http://mybatis.org/dtd/mybatis-3-config.dtd</code>，源文档里的 <code>mybatis3 config.dtd</code> 少了一个连字符，会让解析失败。</p>
+<p>顺带说一句，这个配置文件的 DTD 地址正确写法是 <code>http://mybatis.org/dtd/mybatis-3-config.dtd</code>；源文档里的 <code>mybatis3 config.dtd</code> 少了一个连字符，会让解析失败。</p>
 
-<p>使用上只有三条纪律：<code>PageHelper.startPage(pageNum, pageSize)</code> 必须紧挨着目标查询，它<strong>只对之后的第一条查询生效</strong>；结果用 <code>PageInfo</code> 包装，才能拿到总记录数、总页数等信息；两者之间不要再插入别的查询，否则分页参数会被那条查询悄悄吃掉。另外，PageHelper 默认会先执行 count 再执行分页查询，遇到复杂关联 SQL 时可以用 <code>PageHelper.startPage(pageNum, pageSize, false)</code> 跳过 count。</p>
+<p>使用上只有三条纪律：<code>PageHelper.startPage(pageNum, pageSize)</code> 必须紧挨着目标查询，它<strong>只对之后的第一条查询生效</strong>；结果用 <code>PageInfo</code> 包装，才能拿到总记录数、总页数等信息；两者之间不要再插入别的查询，否则分页参数会被那条查询悄悄吃掉。</p>
+
+<p>另外，PageHelper 默认会先执行 count 再执行分页查询。遇到复杂关联 SQL 时，可以用 <code>PageHelper.startPage(pageNum, pageSize, false)</code> 跳过 count。</p>
 
 <h2>五、与 Spring 整合：SSM 骨架</h2>
 
-<p>SSM 就是 Spring + SpringMVC + MyBatis 的组合：SpringMVC 负责 web 层，Spring 负责 Service 与事务，MyBatis 只管 SQL 映射，中间由 <code>mybatis-spring</code> 桥接。工程上通常按用途拆成 <code>applicationContext-dao.xml</code>、<code>applicationContext-service.xml</code> 和 springmvc.xml，其中 SpringMVC 必须扫描独立的子容器，否则很容易把 Service 重复扫进 web 容器导致事务失效。</p>
+<p>SSM 就是 Spring + Spring MVC + MyBatis 的组合：Spring MVC 负责 web 层，Spring 负责 Service 与事务，MyBatis 只管 SQL 映射，中间由 <code>mybatis-spring</code> 桥接。工程上通常按用途拆成 <code>applicationContext-dao.xml</code>、<code>applicationContext-service.xml</code> 和 springmvc.xml，其中 Spring MVC 必须扫描独立的子容器，否则很容易把 Service 重复扫进 web 容器导致事务失效。</p>
 
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-8/02-ssm-layers.svg" alt="SSM 分层职责与 dao 层配置三件套示意图"><figcaption>图 2：SpringMVC、Spring、MyBatis 的分层职责，以及 dataSource → SqlSessionFactoryBean → MapperScannerConfigurer 三件套</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-8/02-ssm-layers.svg" alt="SSM 分层职责与 dao 层配置三件套示意图"><figcaption>图 2：Spring MVC、Spring、MyBatis 的分层职责，以及 dataSource → SqlSessionFactoryBean → MapperScannerConfigurer 三件套</figcaption></figure>
 
 
 <p>dao 层的配置是标准三件套：数据源、<code>SqlSessionFactoryBean</code>、<code>MapperScannerConfigurer</code>。后者会扫描指定包下的 Mapper 接口，自动生成代理实现并注册成 bean，从此 Service 里只需 <code>@Autowired</code> 一个接口，不必再手工 <code>getMapper()</code>。</p>
@@ -264,11 +270,6 @@ public class BlogServiceImpl implements BlogService {
 <p>事务由 Spring 的 <code>DataSourceTransactionManager</code> 配合 <code>@Transactional</code> 统一管理，通常配在 Service 方法上。这里有个连锁效果值得注意：只有在一个事务内，多次 Mapper 调用才共用同一个 <code>SqlSession</code>，前面讲的一级缓存才真正发挥作用；脱离事务时每次调用都是新会话，缓存形同虚设。</p>
 
 <p><strong>小结</strong>：一级缓存默认开启、随 <code>SqlSession</code> 生灭，命中由 <code>CacheKey</code> 决定，增删改执行即清空，且不能跨会话共享；二级缓存要显式加 <code>&lt;cache/&gt;</code> 才生效，由 <code>CachingExecutor</code> 管理、提交后才写入，适合查询为主且按单表划分 namespace 的场景。分页交给 PageHelper，注意 5.x 用 <code>PageInterceptor</code> 且 <code>startPage</code> 必须紧邻查询。最后用 Spring 把数据源、<code>SqlSessionFactoryBean</code>、Mapper 扫描和事务串起来，一个可用的 SSM 骨架就搭好了。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-4-7/"><span class="pn-label">← 上一篇</span><span class="pn-title">MyBatis 基础</span></a>
-      <a class="next-post" href="/java-tutorial-4-9/"><span class="pn-label">下一篇 →</span><span class="pn-title">Spring Boot 核心</span></a>
-      </nav>
           </article>
   <!-- Footer -->
   <footer>

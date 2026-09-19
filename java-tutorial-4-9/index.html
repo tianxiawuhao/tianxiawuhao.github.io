@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>从 SSM 一路走来的读者大多有过这样的经历：pom.xml 里逐个挑选 jar 并祈祷它们版本兼容，web.xml 里注册 DispatcherServlet，再写一堆 XML 声明 Bean。Spring Boot 并没有给 Spring 增加多少新功能，它只是把「一个可运行的 Spring 应用该有的样子」固化成约定，再用自动配置把约定补齐。本章讲清四件事：起步依赖如何传递依赖、自动配置类如何被筛选并装配、配置文件里的值如何绑到对象上、以及 Profile 怎样让同一份代码跑在不同环境。适合已经能独立搭起 SSM 工程，却说不清「为什么只写一个 main 方法就能跑起来」的读者。</p>
+<p>从 SSM 一路走来的开发者大多有过这样的经历：pom.xml 里逐个挑选 jar 并祈祷它们版本兼容，web.xml 里注册 DispatcherServlet，再写一堆 XML 声明 Bean。Spring Boot 并没有给 Spring 增加多少新功能，它只是把「一个可运行的 Spring 应用该有的样子」固化成约定，再用自动配置把约定补齐。本章讲清四件事：起步依赖如何传递依赖、自动配置类如何被筛选并装配、配置文件里的值如何绑到对象上，以及 Profile 怎样让同一份代码跑在不同环境。内容适合已经能独立搭起 SSM 工程，却说不清「为什么只写一个 main 方法就能跑起来」的读者。</p>
 
 <h2>一、起步依赖：一个坐标换来一整套对齐的 jar</h2>
 
-<p>依赖管理是 Spring 工程里最耗时的环节：既要确定直接依赖，又要确定它们的传递依赖，版本一冲突就是运行期的 <code>NoSuchMethodError</code>。Spring Boot 的思路是把「某类功能所需的一组坐标」打包成 starter，并在父 POM 里统一锁定版本。一个最简的工程只需要两段声明：继承 <code>spring-boot-starter-parent</code>，再引入 <code>spring-boot-starter-web</code>。</p>
+<p>依赖管理是 Spring 工程里最耗时的环节：既要确定直接依赖，又要确定它们的传递依赖，版本一冲突就是运行期的 <code>NoSuchMethodError</code>。Spring Boot 的思路是把某类功能所需的一组坐标打包成 starter，并在父 POM 里统一锁定版本。一个最简的工程只需要两段声明：继承 <code>spring-boot-starter-parent</code>，再引入 <code>spring-boot-starter-web</code>。</p>
 
 <pre><code class="language-xml">&lt;parent&gt;
     &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
@@ -149,16 +149,20 @@
     &lt;/dependency&gt;
 &lt;/dependencies&gt;</code></pre>
 
-<p>这里有个容易搞混的层次：<code>spring-boot-starter-parent</code> 自己的父 POM 才是 <code>spring-boot-dependencies</code>，真正把上百个库的版本写进 <code>properties</code>、并放进 <code>dependencyManagement</code> 与 <code>pluginManagement</code> 的是它。所以子模块引入 starter 时不必写 <code>&lt;version&gt;</code>；而 <code>spring-boot-starter-web</code> 本身几乎没有代码，它只是把 <code>spring-web</code>、<code>spring-webmvc</code>、<code>spring-boot-starter-tomcat</code>（内嵌 Tomcat）、Jackson 等坐标声明为自己的依赖，靠 Maven 的依赖传递「打包」给你。</p>
+<p>这里有个容易搞混的层次：<code>spring-boot-starter-parent</code> 自己的父 POM 才是 <code>spring-boot-dependencies</code>。真正把上百个库的版本写进 <code>properties</code>、并放进 <code>dependencyManagement</code> 与 <code>pluginManagement</code> 的，正是后者。所以子模块引入 starter 时不必写 <code>&lt;version&gt;</code>。</p>
+
+<p>而 <code>spring-boot-starter-web</code> 本身几乎没有代码，它只是把 <code>spring-web</code>、<code>spring-webmvc</code>、<code>spring-boot-starter-tomcat</code>（内嵌 Tomcat）、Jackson 等坐标声明为自己的依赖，靠 Maven 的依赖传递带出对齐的一组 jar。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-9/01-starter-tree.svg" alt="起步依赖与依赖传递结构示意图"><figcaption>图 1：父 POM 统一锁定版本，starter 靠依赖传递带出对齐的一组 jar</figcaption></figure>
 
 
-<p>实践要点：不要给已被父 POM 管理的依赖手动写版本，那会覆盖版本管理；确实要换版本，应改父 POM 暴露的 <code>xxx.version</code> 属性。<strong>版本提醒</strong>：上面的 3.3.5 只是示例，Boot 3.x 要求 Java 17 及以上，且坐标由 <code>javax.*</code> 迁到 <code>jakarta.*</code>；老资料里的 2.0.1.RELEASE 属 2018 年的版本，配置键名（如 <code>server.context-path</code> 已变为 <code>server.servlet.context-path</code>）与依赖坐标都不宜照抄。</p>
+<p>实践要点：不要给已被父 POM 管理的依赖手动写版本，那会覆盖版本管理；确实要换版本，应改父 POM 暴露的 <code>xxx.version</code> 属性。</p>
+
+<p><strong>版本提醒</strong>：上面的 3.3.5 只是示例。Boot 3.x 要求 Java 17 及以上，且坐标由 <code>javax.*</code> 迁到 <code>jakarta.*</code>。老资料里的 2.0.1.RELEASE 属 2018 年的版本，配置键名（如 <code>server.context-path</code> 已变为 <code>server.servlet.context-path</code>）与依赖坐标都不宜照抄。</p>
 
 <h2>二、自动配置：@SpringBootApplication 背后的装配链路</h2>
 
-<p>启动类上只有一个注解，但它是组合注解：<code>@SpringBootConfiguration</code>（本质是 <code>@Configuration</code>）、<code>@ComponentScan</code>（所以业务类必须放在启动类所在包或子包下）、以及真正的开关 <code>@EnableAutoConfiguration</code>。</p>
+<p>启动类上只有一个注解，但它是组合注解，由三部分组成：<code>@SpringBootConfiguration</code>（本质是 <code>@Configuration</code>）、<code>@ComponentScan</code>（所以业务类必须放在启动类所在包或子包下）、以及真正的开关 <code>@EnableAutoConfiguration</code>。</p>
 
 <pre><code class="language-java">@SpringBootApplication   // = @SpringBootConfiguration + @ComponentScan + @EnableAutoConfiguration
 public class DemoApplication {
@@ -194,11 +198,13 @@ public class ServletWebServerFactoryAutoConfiguration {
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-9/02-autoconfig-chain.svg" alt="自动配置装配链路示意图"><figcaption>图 2：从 @SpringBootApplication 到候选清单与条件筛选的装配链路，条件不成立整类不注册</figcaption></figure>
 
-<p>排查自动配置是否生效，最快的手段是加 <code>--debug</code> 启动参数（或在配置里设 <code>debug=true</code>），控制台会打印自动配置报告，Positive matches / Negative matches 会直接告诉你哪个类生效、被哪个条件挡掉。至于某个键该怎么写，最可靠的依据是对应的 <code>XxxProperties</code> 类——例如 <code>server.port</code> 就封装在 <code>ServerProperties</code> 中。</p>
+<p>排查自动配置是否生效，最快的手段是加 <code>--debug</code> 启动参数（或在配置里设 <code>debug=true</code>），控制台会打印自动配置报告，Positive matches / Negative matches 会直接指出哪个类生效、被哪个条件挡掉。至于某个键该怎么写，最可靠的依据是对应的 <code>XxxProperties</code> 类——例如 <code>server.port</code> 就封装在 <code>ServerProperties</code> 中。</p>
 
 <h2>三、配置绑定：@Value 与 @ConfigurationProperties</h2>
 
-<p>约定优于配置不等于不能配置。默认值写在 <code>XxxProperties</code> 类里，覆盖值写在 <code>src/main/resources</code> 下的 <code>application.properties</code> 或 <code>application.yml</code> 中。<code>@Value("${person.name}")</code> 逐个字段注入，写法直观，但只支持简单类型、不做松散绑定、也不便校验，字段一多就是重复劳动；<code>@ConfigurationProperties(prefix = "person")</code> 则按前缀批量绑定，支持松散绑定（<code>person.first-name</code> 能绑到 <code>firstName</code>，环境变量 <code>PERSON_FIRST_NAME</code> 同样有效）、复杂类型，还能配合 <code>@Validated</code> 做校验：</p>
+<p>约定优于配置不等于不能配置。默认值写在 <code>XxxProperties</code> 类里，覆盖值写在 <code>src/main/resources</code> 下的 <code>application.properties</code> 或 <code>application.yml</code> 中。</p>
+
+<p><code>@Value("${person.name}")</code> 逐个字段注入，写法直观，但只支持简单类型、不做松散绑定、也不便校验，字段一多就是重复劳动。<code>@ConfigurationProperties(prefix = "person")</code> 则按前缀批量绑定，支持松散绑定（<code>person.first-name</code> 能绑到 <code>firstName</code>，环境变量 <code>PERSON_FIRST_NAME</code> 同样有效）、复杂类型，还能配合 <code>@Validated</code> 做校验：</p>
 
 <pre><code class="language-java">@Component                    // 必须被 Spring 管理，光写注解不会生效
 @ConfigurationProperties(prefix = "person")
@@ -233,7 +239,9 @@ public class PersonRunner implements ApplicationRunner {
 
 <p>两个前提别漏：配置属性类必须被 Spring 管理（像上面那样加 <code>@Component</code>，或在配置类上用 <code>@EnableConfigurationProperties(PersonProperties.class)</code> 显式引入），否则注解只是摆设；JavaBean 方式绑定需要 setter，而 Spring Boot 2.2 起也支持构造器绑定（<code>@ConstructorBinding</code>，2.6 起类中只有一个有参构造器时可省略），3.x 中 <code>record</code> 也能直接绑定。</p>
 
-<p>顺手纠正两处老笔记的写法。其一，把 <code>@ConfigurationProperties</code> 挂在 <code>@Controller</code> 上、借一次 HTTP 请求来验证，虽然能跑，但让 MVC 组件承担配置职责并不合适，配置属性类应当独立存在。其二，<code>application.properties</code> 是 <code>key=value</code> 格式，把 YAML 的缩进层级（<code>person:</code> 换行缩进 <code>name: zhangsan</code>）写进 properties 文件是无效的，必须写成 <code>person.name=zhangsan</code>。同名键的覆盖顺序是：命令行参数 → 环境变量 → 外部 <code>application-{profile}</code> → 外部 <code>application</code> → jar 内 <code>application-{profile}</code> → jar 内 <code>application</code>；同一位置同时存在 <code>.properties</code> 与 <code>.yml</code> 时，<code>.properties</code> 优先。</p>
+<p>顺手纠正两处老笔记的写法。其一，把 <code>@ConfigurationProperties</code> 挂在 <code>@Controller</code> 上、借一次 HTTP 请求来验证，虽然能跑，但让 MVC 组件承担配置职责并不合适，配置属性类应当独立存在。其二，<code>application.properties</code> 是 <code>key=value</code> 格式，把 YAML 的缩进层级（<code>person:</code> 换行缩进 <code>name: zhangsan</code>）写进 properties 文件是无效的，必须写成 <code>person.name=zhangsan</code>。</p>
+
+<p>同名键的覆盖顺序是：命令行参数 → 环境变量 → 外部 <code>application-{profile}</code> → 外部 <code>application</code> → jar 内 <code>application-{profile}</code> → jar 内 <code>application</code>。同一位置同时存在 <code>.properties</code> 与 <code>.yml</code> 时，<code>.properties</code> 优先。</p>
 
 <h2>四、Profile：同一份代码切换多套环境</h2>
 
@@ -264,22 +272,21 @@ spring:
 server:
   port: 8082</code></pre>
 
-<p>激活方式有四种：配置文件里的 <code>spring.profiles.active</code>、命令行 <code>--spring.profiles.active=prod</code>、环境变量 <code>SPRING_PROFILES_ACTIVE</code>，以及代码中的 <code>SpringApplication.setAdditionalProfiles(...)</code>。被激活的 profile 文档会覆盖默认文档的同名键，因此上面最终生效的端口是 8081。注意版本差异：Boot 2.4 起 <code>spring.profiles.active</code> 不允许写在 profile 专属文档内部（否则抛 <code>InvalidConfigDataPropertyException</code>），profile 文档应改用 <code>spring.config.activate.on-profile</code>，也就是上面的写法；组合多个 profile 的写法也从 <code>spring.profiles.include</code> 调整为 <code>spring.profiles.group</code>。</p>
+<p>激活方式有四种：配置文件里的 <code>spring.profiles.active</code>、命令行 <code>--spring.profiles.active=prod</code>、环境变量 <code>SPRING_PROFILES_ACTIVE</code>，以及代码中的 <code>SpringApplication.setAdditionalProfiles(...)</code>。被激活的 profile 文档会覆盖默认文档的同名键，因此上面最终生效的端口是 8081。</p>
 
-<p>这套开关在部署时同样管用：<code>java -jar app.jar --spring.profiles.active=prod,redis</code> 可以一次激活多个 profile（逗号分隔），<code>java -Dspring.profiles.active=prod -jar app.jar</code> 则以 JVM 系统属性传入；放到云平台上时，把启动命令写进 <code>Procfile</code> 之类的部署描述文件即可，但要确认生产环境没有误带 <code>dev</code>。还有一个常被忽略的点：切换 profile 只改变配置来源，不会改变自动配置的条件判断结果——想换掉某个自动配置的默认行为，仍然要靠自己声明同类型 Bean，或者在注解上用 <code>exclude</code> 排除它。</p>
+<p>注意版本差异：Boot 2.4 起 <code>spring.profiles.active</code> 不允许写在 profile 专属文档内部，否则抛 <code>InvalidConfigDataPropertyException</code>；profile 文档应改用 <code>spring.config.activate.on-profile</code>，也就是上面的写法。组合多个 profile 的写法也从 <code>spring.profiles.include</code> 调整为 <code>spring.profiles.group</code>。</p>
+
+<p>这套开关在部署时同样管用：<code>java -jar app.jar --spring.profiles.active=prod,redis</code> 可以一次激活多个 profile（逗号分隔），<code>java -Dspring.profiles.active=prod -jar app.jar</code> 则以 JVM 系统属性传入。放到云平台上时，把启动命令写进 <code>Procfile</code> 之类的部署描述文件即可，但要确认生产环境没有误带 <code>dev</code>。</p>
+
+<p>还有一个常被忽略的点：切换 profile 只改变配置来源，不会改变自动配置的条件判断结果。想换掉某个自动配置的默认行为，仍然要靠自己声明同类型 Bean，或者在注解上用 <code>exclude</code> 排除它。</p>
 
 <h2>五、起步流程与常见坑</h2>
 
-<p>回头看 <code>SpringApplication.run(DemoApplication.class, args)</code> 这一行，它依次做了：推断应用类型（SERVLET / REACTIVE / NONE）→ 加载 <code>ApplicationContextInitializer</code> 与 <code>ApplicationListener</code> → 准备 <code>Environment</code>（此时读取配置文件与命令行参数）→ 创建并刷新 <code>ApplicationContext</code>（自动配置候选类的条件筛选与注册就发生在这里）→ 启动内嵌 Web 容器 → 发布 <code>ApplicationReadyEvent</code>。这也解释了为什么日志里 <code>Tomcat started on port(s): 8080</code> 总是出现在最后。</p>
+<p>回头看 <code>SpringApplication.run(DemoApplication.class, args)</code> 这一行，它依次做了几件事：推断应用类型（SERVLET / REACTIVE / NONE），加载 <code>ApplicationContextInitializer</code> 与 <code>ApplicationListener</code>，准备 <code>Environment</code>（此时读取配置文件与命令行参数），创建并刷新 <code>ApplicationContext</code>（自动配置候选类的条件筛选与注册就发生在这里），启动内嵌 Web 容器，最后发布 <code>ApplicationReadyEvent</code>。这也解释了为什么日志里 <code>Tomcat started on port(s): 8080</code> 总是出现在最后。</p>
 
 <p>几个反复踩到的坑：启动类要放在所有业务包的父包下，否则 <code>@ComponentScan</code> 默认扫不到别的包；引入 starter 后已经有默认配置，别再手写 XML 或手动 new 对象，要改先查 <code>XxxProperties</code>；Bean 找不到时先看自动配置报告，而不是急着加 <code>@ComponentScan</code>；IDEA 里 devtools 热部署不生效，多半是因为没有打开自动编译（Build project automatically），而不是依赖配错。</p>
 
-<p>小结：起步依赖解决「依赖哪些 jar、版本怎么对齐」，自动配置解决「这些 jar 里的组件何时、按什么条件注册」，配置绑定解决「运行时参数如何变成对象属性」，Profile 解决「同一份代码在不同环境下用不同参数」。四者串起来就是 Spring Boot 的起步流程：约定先给出默认值，配置只在需要偏离约定时出现，条件注解保证默认值不会抢走你自定义的 Bean。下一章我们把 Spring Boot 与 MyBatis 接起来，看这套机制在持久层上的具体表现。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-4-8/"><span class="pn-label">← 上一篇</span><span class="pn-title">MyBatis 进阶与 SSM 整合</span></a>
-      <a class="next-post" href="/java-tutorial-4-10/"><span class="pn-label">下一篇 →</span><span class="pn-title">Spring Boot Web 开发</span></a>
-      </nav>
+<p>小结：起步依赖解决「依赖哪些 jar、版本怎么对齐」，自动配置解决「这些 jar 里的组件何时、按什么条件注册」，配置绑定解决「运行时参数如何变成对象属性」，Profile 解决「同一份代码在不同环境下用不同参数」。四者串起来就是 Spring Boot 的起步流程：约定先给出默认值，配置只在需要偏离约定时出现，条件注解保证默认值不会覆盖自定义的 Bean。下一章把 Spring Boot 与 MyBatis 接起来，看这套机制在持久层上的具体表现。</p>
           </article>
   <!-- Footer -->
   <footer>

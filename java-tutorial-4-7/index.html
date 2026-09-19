@@ -128,17 +128,19 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们用 JdbcTemplate 简化了 JDBC 的样板代码，但 SQL 仍是 Java 里的字符串：条件拼接容易出错，结果集还要手写 RowMapper 逐列取值。MyBatis 换了个思路——把 SQL 搬进 XML 映射文件，由框架负责参数设置与结果封装。本章用一个 <code>tb_user</code> 单表，把「配置 → CRUD → 参数传递 → 结果映射 → 动态 SQL」讲通。</p>
+<p>上一章用 JdbcTemplate 简化了 JDBC 的样板代码，但 SQL 仍是 Java 里的字符串：条件拼接容易出错，结果集还要手写 RowMapper 逐列取值。MyBatis 换了个思路——把 SQL 搬进 XML 映射文件，由框架负责参数设置与结果封装。本章用一张 <code>tb_user</code> 单表，把「配置 → CRUD → 参数传递 → 结果映射 → 动态 SQL」讲通。</p>
 
 <h2>一、为什么需要 MyBatis</h2>
 
-<p>手工 JDBC 查一个用户，要写加载驱动、取连接、创建 <code>PreparedStatement</code>、逐个 <code>setXxx</code> 设参、循环 <code>ResultSet</code> 取值，再在 <code>finally</code> 里关闭三层资源，真正属于业务的只有一行 SQL。归纳起来是四个问题：资源管理繁琐、参数与结果靠手搬、SQL 与 Java 耦合、没有缓存复用。</p>
+<p>手工 JDBC 查一个用户，要写加载驱动、取连接、创建 <code>PreparedStatement</code>、逐个 <code>setXxx</code> 设参、循环 <code>ResultSet</code> 取值，再在 <code>finally</code> 里关闭三层资源；真正属于业务的只有一行 SQL。归纳起来是四个问题：资源管理繁琐、参数与结果靠手搬、SQL 与 Java 耦合、没有缓存复用。</p>
 
-<p>MyBatis 解决的是「自动设参 + 自动映射」：SQL 写在映射文件里，返回值直接声明成 POJO 或 <code>List</code>。它不隐藏 SQL，因此灵活可控，代价是常用 SQL 要自己写；互联网业务因此多选 MyBatis，模型复杂、看重开发速度的项目常选 Hibernate/JPA。</p>
+<p>MyBatis 解决的是「自动设参 + 自动映射」：SQL 写在映射文件里，返回值直接声明成 POJO 或 <code>List</code>。它不隐藏 SQL，因此灵活可控，代价是常用 SQL 要自己写。互联网业务因此多选 MyBatis，模型复杂、看重开发速度的项目常选 Hibernate/JPA。</p>
 
 <h2>二、两个配置文件与 SqlSessionFactory</h2>
 
-<p>配置只有两份：<strong>全局配置文件</strong>（习惯叫 <code>mybatis-config.xml</code>）管数据源、事务与设置项，并登记映射文件；<strong>映射文件</strong>（如 <code>UserMapper.xml</code>）写 SQL、参数类型和结果封装类型，一条 SQL 对应一个 statement。启动时用 <code>SqlSessionFactoryBuilder</code> 读全局配置构建 <code>SqlSessionFactory</code>，每次操作再从工厂开一个 <code>SqlSession</code>——可类比 <code>DataSource</code> 与 <code>Connection</code>：工厂长期存活，会话用完必须关闭。</p>
+<p>配置只有两份。<strong>全局配置文件</strong>（习惯叫 <code>mybatis-config.xml</code>）管数据源、事务与设置项，并登记映射文件；<strong>映射文件</strong>（如 <code>UserMapper.xml</code>）写 SQL、参数类型和结果封装类型，一条 SQL 对应一个 statement。</p>
+
+<p>启动时用 <code>SqlSessionFactoryBuilder</code> 读全局配置，构建 <code>SqlSessionFactory</code>；每次操作再从工厂开一个 <code>SqlSession</code>。这可类比 <code>DataSource</code> 与 <code>Connection</code>：工厂长期存活，会话用完必须关闭。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-7/01-config-session.svg" alt="MyBatis 启动与调用链示意图：mybatis-config.xml 与 UserMapper.xml 由 SqlSessionFactoryBuilder 读取后构建长期存活的 SqlSessionFactory，每次操作从工厂开出 SqlSession，再用 getMapper 得到 Mapper 接口的动态代理去访问数据库"><figcaption>图 1：两份配置文件、一个工厂、每次操作一个 SqlSession 的调用链</figcaption></figure>
 
@@ -172,11 +174,13 @@
   &lt;/mappers&gt;
 &lt;/configuration&gt;</code></pre>
 
-<p>全局配置的子元素顺序是强制的：<code>properties</code> → <code>settings</code> → <code>typeAliases</code> → <code>typeHandlers</code> → <code>plugins</code> → <code>environments</code> → <code>mappers</code>，写反会直接报错。映射文件是 XML，SQL 里的 <code>&amp;lt;</code>、<code>&amp;amp;</code> 必须写成实体引用。</p>
+<p>全局配置的子元素顺序是强制的：<code>properties</code> → <code>settings</code> → <code>typeAliases</code> → <code>typeHandlers</code> → <code>plugins</code> → <code>environments</code> → <code>mappers</code>。顺序写反会直接报错。映射文件本身是 XML，SQL 里的 <code>&amp;lt;</code>、<code>&amp;amp;</code> 必须写成实体引用。</p>
 
 <h2>三、CRUD 与 Mapper 动态代理</h2>
 
-<p>原始写法是 <code>UserDaoImpl</code> 持有 <code>SqlSession</code>，调用 <code>selectOne("UserDaoMapper.queryUserById", id)</code> 这类 API，statement 字符串硬编码在 Java 里。动态代理让「只写接口 + 映射文件」成为可能，前提是四条约定：<code>namespace</code> 等于接口全限定名；statement 的 <code>id</code> 等于方法名；<code>resultType</code> 与返回的元素类型一致；参数类型与接口方法一致（<code>parameterType</code> 通常可省略）。</p>
+<p>原始写法是 <code>UserDaoImpl</code> 持有 <code>SqlSession</code>，调用 <code>selectOne("UserDaoMapper.queryUserById", id)</code> 这类 API，statement 字符串硬编码在 Java 里。动态代理让「只写接口 + 映射文件」成为可能。</p>
+
+<p>它有四条约定：<code>namespace</code> 等于接口全限定名；statement 的 <code>id</code> 等于方法名；<code>resultType</code> 与返回的元素类型一致；参数类型与接口方法一致（<code>parameterType</code> 通常可省略）。</p>
 
 <pre><code class="language-java">public interface UserMapper {
     User queryUserById(Long id);
@@ -188,13 +192,17 @@
 
 <p>调用时只需 <code>UserMapper mapper = sqlSession.getMapper(UserMapper.class);</code>，随后像调普通接口一样使用。自增主键可用 <code>useGeneratedKeys="true"</code> 加 <code>keyProperty="id"</code> 回写到入参对象，插入后直接 <code>user.getId()</code> 就能拿到。</p>
 
-<p><code>#{}</code> 与 <code>${}</code> 的区别是重点：<code>#{}</code> 生成 JDBC 的 <code>?</code> 占位符并预编译，参数不会被当成 SQL 语法，能防注入，应作为默认选择；<code>${}</code> 是纯字符串替换，只适合拼表名、列名、排序字段，接用户输入等于开注入口子。参数个数决定写法：单参数时 <code>#{}</code> 里的名字可以随便写；多参数会被放进 Map，默认键是 <code>arg0/arg1</code> 和 <code>param1/param2</code>，必须用 <code>@Param("userName")</code> 显式命名，否则报「Parameter 'userName' not found」。稳妥做法是都给参数加 <code>@Param</code>。</p>
+<p><code>#{}</code> 与 <code>${}</code> 的区别是重点。<code>#{}</code> 生成 JDBC 的 <code>?</code> 占位符并预编译，参数不会被当成 SQL 语法，能防注入，应作为默认选择；<code>${}</code> 是纯字符串替换，只适合拼表名、列名、排序字段，接用户输入等于开注入口子。</p>
+
+<p>参数个数决定写法：单参数时 <code>#{}</code> 里的名字可以随便写；多参数会被放进 Map，默认键是 <code>arg0/arg1</code> 和 <code>param1/param2</code>，必须用 <code>@Param("userName")</code> 显式命名，否则报 <code>Parameter 'userName' not found</code>。稳妥做法是都给参数加 <code>@Param</code>。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-7/02-placeholder.svg" alt="对比图：#{} 生成 JDBC 的 ? 占位符并预编译，参数不参与 SQL 语法解析，能防注入；${} 是纯字符串替换，会拼进 SQL 文本，只适合表名、列名与排序字段；底部说明多参数需用 @Param 显式命名"><figcaption>图 2：#{} 与 ${} 的取舍——默认只该用能预编译的那个</figcaption></figure>
 
 <h2>四、结果映射与动态 SQL</h2>
 
-<p>字段名与属性名不一致是高频故障：库中是 <code>user_name</code>，POJO 是 <code>userName</code>，属性就会一直是 <code>null</code>。解法有三：全局开启驼峰映射，一次配置全局受益；SQL 里写 <code>user_name as userName</code> 起别名；或用 <code>resultMap</code> 自定义映射，用 <code>&lt;id&gt;</code> 指定主键、<code>&lt;result column="user_name" property="userName"/&gt;</code> 指定不一致的列，配合 <code>autoMapping="true"</code> 让其余同名列自动匹配。它最重，但也是唯一能表达一对多、多对一关联的写法。</p>
+<p>字段名与属性名不一致是高频故障：库中是 <code>user_name</code>，POJO 是 <code>userName</code>，属性就会一直是 <code>null</code>。解法有三：全局开启驼峰映射，一次配置全局受益；在 SQL 里写 <code>user_name as userName</code> 起别名；或用 <code>resultMap</code> 自定义映射。</p>
+
+<p>第三种写法用 <code>&lt;id&gt;</code> 指定主键，用 <code>&lt;result column="user_name" property="userName"/&gt;</code> 指定不一致的列，再配合 <code>autoMapping="true"</code> 让其余同名列自动匹配。它最重，但也是唯一能表达一对多、多对一关联的写法。</p>
 
 <pre><code class="language-xml">&lt;resultMap id="userMap" type="cn.itcast.mybatis.pojo.User" autoMapping="true"&gt;
   &lt;id column="id" property="id" /&gt;
@@ -220,18 +228,13 @@
   &lt;/foreach&gt;
 &lt;/select&gt;</code></pre>
 
-<p>动态 SQL 用 OGNL 表达式驱动标签，替代手写字符串拼接：<code>&lt;if test="..."&gt;</code> 按条件追加片段（判空写 <code>userName != null and userName.trim() != ''</code>）；<code>&lt;where&gt;</code> 自动去掉开头多余的 <code>and</code>，条件全不成立时不生成 <code>where</code>；<code>&lt;set&gt;</code> 用于 update，自动去掉尾部多余逗号；<code>&lt;choose&gt;/&lt;when&gt;/&lt;otherwise&gt;</code> 只命中第一个成立的分支；<code>&lt;foreach&gt;</code> 遍历集合，用 <code>open</code>/<code>separator</code>/<code>close</code> 拼出 <code>in (...)</code>。</p>
+<p>动态 SQL 用 OGNL 表达式驱动标签，替代手写字符串拼接。<code>&lt;if test="..."&gt;</code> 按条件追加片段，判空写 <code>userName != null and userName.trim() != ''</code>；<code>&lt;where&gt;</code> 自动去掉开头多余的 <code>and</code>，条件全不成立时不生成 <code>where</code>；<code>&lt;set&gt;</code> 用于 update，自动去掉尾部多余逗号；<code>&lt;choose&gt;/&lt;when&gt;/&lt;otherwise&gt;</code> 只命中第一个成立的分支；<code>&lt;foreach&gt;</code> 遍历集合，用 <code>open</code>/<code>separator</code>/<code>close</code> 拼出 <code>in (...)</code>。</p>
 
-<p>几个必须记住的坑：<code>openSession()</code> 默认不自动提交，增删改后要调用 <code>commit()</code>，否则数据悄悄丢失；模糊查询建议写 <code>concat('%', #{name}, '%')</code>，不要把 <code>%</code> 与 <code>#{}</code> 拼在一起；一级缓存默认开启且无法关闭，作用域是同一个 <code>SqlSession</code>，增删改或 <code>clearCache()</code> 会清空；二级缓存默认关闭，需在映射文件加 <code>&lt;cache/&gt;</code>，且要求 POJO 实现 <code>Serializable</code>，数据在会话关闭时才写入。</p>
+<p>几个必须记住的坑：<code>openSession()</code> 默认不自动提交，增删改后要调用 <code>commit()</code>，否则数据悄悄丢失；模糊查询建议写 <code>concat('%', #{name}, '%')</code>，不要把 <code>%</code> 与 <code>#{}</code> 拼在一起；一级缓存默认开启且无法关闭，作用域是同一个 <code>SqlSession</code>，增删改或 <code>clearCache()</code> 会清空；二级缓存默认关闭，需在映射文件加 <code>&lt;cache/&gt;</code>，且要求 POJO 实现 <code>Serializable</code>，数据在会话提交或回滚后才写入。</p>
 
 <h2>小结</h2>
 
-<p>MyBatis 的价值不在「替你写 SQL」，而在划清 SQL 与 Java 的边界：全局配置管数据源与映射登记，映射文件管 SQL 与结果封装，Mapper 接口靠动态代理免去实现类，<code>#{}</code> 保证参数安全，动态标签让条件拼接可读可维护。掌握两份配置文件、四条动态代理约定、<code>#{}</code> 与 <code>${}</code> 的取舍、resultMap 与动态标签的组合，就足以应付绝大多数单表 CRUD 与条件查询。下一章我们把 MyBatis 交给 Spring 管理，去掉手工创建 <code>SqlSessionFactory</code> 的样板代码。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-4-6/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spring MVC</span></a>
-      <a class="next-post" href="/java-tutorial-4-8/"><span class="pn-label">下一篇 →</span><span class="pn-title">MyBatis 进阶与 SSM 整合</span></a>
-      </nav>
+<p>MyBatis 的价值不在「替你写 SQL」，而在划清 SQL 与 Java 的边界：全局配置管数据源与映射登记，映射文件管 SQL 与结果封装，Mapper 接口靠动态代理免去实现类，<code>#{}</code> 保证参数安全，动态标签让条件拼接可读可维护。掌握两份配置文件、四条动态代理约定、<code>#{}</code> 与 <code>${}</code> 的取舍、resultMap 与动态标签的组合，就足以应付绝大多数单表 CRUD 与条件查询。下一章把 MyBatis 交给 Spring 管理，去掉手工创建 <code>SqlSessionFactory</code> 的样板代码。</p>
           </article>
   <!-- Footer -->
   <footer>

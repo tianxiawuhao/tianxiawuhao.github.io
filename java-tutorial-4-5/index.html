@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们把对象交给 Spring 容器、把 SQL 交给 MyBatis。但日志、权限校验、事务这类逻辑，几乎每个 Service 方法里都要写一遍：它们不属于任何一条业务规则，却横着穿过所有业务代码。AOP 就是为解决这件事而生的——把这些横切关注点抽成一个切面，在不修改业务代码的前提下织入执行流程；而 Spring 的声明式事务，本质上正是这套机制最重要的一个应用。这一章从动态代理讲起，把切面配置、通知类型、事务传播与隔离级别讲到能动手写，最后集中排掉「@Transactional 不生效」这类最常见的坑。适合已经会写 Service/DAO、被事务不生效折腾过的 Java 开发者。</p>
+<p>前面几章把对象交给了 Spring 容器、把持久化交给了 Hibernate。但日志、权限校验、事务这类逻辑，几乎每个 Service 方法里都要写一遍：它们不属于任何一条业务规则，却横着穿过所有业务代码。AOP 就是为解决这件事而生的——把这些横切关注点抽成一个切面，在不修改业务代码的前提下织入执行流程；Spring 的声明式事务，本质上正是这套机制最重要的应用。这一章从动态代理讲起，把切面配置、通知类型、事务传播与隔离级别讲到能动手写，最后集中排掉「@Transactional 不生效」这类最常见的坑。内容面向已经会写 Service/DAO、被事务不生效折腾过的 Java 开发者。</p>
 
 <h2>一、AOP 的两层地基：横切关注点与动态代理</h2>
 
-<p>AOP（Aspect-Oriented Programming，面向切面编程）不是 OOP 的替代，而是补充。术语要先分清：<b>切面（Aspect）</b>是横切关注点被模块化后的对象；<b>通知（Advice）</b>是切面里真正干活的方法；<b>切点（Pointcut）</b>是「在哪些方法上生效」的匹配规则；<b>连接点（JoinPoint）</b>是程序执行中可以插入通知的时机，如方法调用前、正常返回后、抛出异常后；<b>目标（Target）</b>是被通知的原始对象；<b>代理（Proxy）</b>是目标对象被织入通知后对外暴露的对象；<b>织入（Weaving）</b>则是把切面接到目标上的动作。切点是筛选条件，连接点是被筛出来的记录，一个切点可以匹配多个连接点。</p>
+<p>AOP（Aspect-Oriented Programming，面向切面编程）不是 OOP 的替代，而是补充。术语要先分清。<b>切面（Aspect）</b>是横切关注点被模块化后的对象，<b>通知（Advice）</b>是切面里真正干活的方法，<b>切点（Pointcut）</b>是「在哪些方法上生效」的匹配规则。<b>连接点（JoinPoint）</b>是程序执行中可以插入通知的时机，如方法调用前、正常返回后、抛出异常后；<b>目标（Target）</b>是被通知的原始对象，<b>代理（Proxy）</b>是目标对象被织入通知后对外暴露的对象。<b>织入（Weaving）</b>则是把切面接到目标上的动作。切点是筛选条件，连接点是被筛出来的记录，一个切点可以匹配多个连接点。</p>
 
 <p>Spring AOP 不修改字节码，它靠运行期动态代理完成「织入」，因此有两条必须记住的边界。<b>JDK 动态代理基于接口</b>：只能为实现了接口的类生成代理，代理对象与目标对象是「兄弟」关系（实现同一接口），所以拿到代理后要用接口类型接收。<b>CGLIB 通过生成目标类的子类来增强</b>：不需要接口，但无法代理 final 类、final 方法和 private 方法，也增强不了构造器。目标类有接口时 Spring 默认用 JDK 代理，没有接口时自动改用 CGLIB；Spring Boot 把 <code>proxyTargetClass</code> 默认为 <code>true</code>，即优先使用 CGLIB。当所有通知都写对了、注入实现类类型却报错时，问题往往就出在这里。</p>
 
@@ -140,7 +140,7 @@
 
 <h2>二、动手写切面：五种通知与切入点表达式</h2>
 
-<p>依赖上引入 aspectjweaver 即可（Maven 一个坐标搞定，源文档里逐个列的 aspectjrt.jar、aspectjtools.jar、org.aspectj.matcher.jar 是早期手动导包的产物），再通过 <code>@EnableAspectJAutoProxy</code>（XML 中为 <code>&lt;aop:aspectj-autoproxy/&gt;</code>）开启支持，然后写切面类。注意区分 <code>@After</code> 与 <code>@AfterReturning</code>：前者相当于 finally，方法抛异常也会执行；后者只在方法正常返回后执行，并能通过 <code>returning</code> 取到返回值。源文档把 <code>@AfterReturning</code> 称作「后置通知」、把 <code>@After</code> 说成「方法执行后增强」，还写出不存在的注解 <code>@AfterRunning</code>，这些说法都是错的。</p>
+<p>依赖上引入 aspectjweaver 即可（Maven 一个坐标搞定；网上常见的 aspectjrt.jar、aspectjtools.jar、org.aspectj.matcher.jar 逐个导包，是早期手动管理依赖的产物）。再通过 <code>@EnableAspectJAutoProxy</code>（XML 中为 <code>&lt;aop:aspectj-autoproxy/&gt;</code>）开启支持，然后写切面类。这里要特别区分 <code>@After</code> 与 <code>@AfterReturning</code>：前者相当于 finally，方法抛异常也会执行；后者只在方法正常返回后执行，并能通过 <code>returning</code> 取到返回值。坊间常见的错法是把 <code>@AfterReturning</code> 称作「方法执行后增强」、把 <code>@After</code> 说成「后置通知」，甚至写出并不存在的注解 <code>@AfterRunning</code>，这些说法都不对。</p>
 
 <pre><code class="language-java">package com.demo.aop;
 
@@ -186,7 +186,7 @@ public class LoggingAspect {
     }
 }</code></pre>
 
-<p>切入点表达式就是切面的「查询条件」，完整语法为 <code>execution([修饰符] 返回类型 声明类型?.方法名(参数) [throws 异常])</code>，其中<b>返回类型不能省</b>。源文档示例 <code>execution(public com.demo...AOPoperations.addC(String,String))</code> 就漏了返回类型，AspectJ 会把 <code>com.demo...AOPoperations</code> 当成返回类型；正确写法是 <code>execution(public * com.demo...AOPoperations.addC(String, String))</code>。它举的 <code>execution(* set(..))</code> 也只能匹配名字恰好叫 <code>set</code> 的方法，要匹配所有 set 开头的方法得写 <code>execution(* set*(..))</code>。记住两个通配符：<code>*</code> 匹配任意字符，<code>..</code> 在包路径中表示当前包及其子包、在参数列表中表示任意个任意类型参数——所以 <code>execution(* com.demo.service..*.*(..))</code> 表示 service 包及子包下所有类的所有方法。XML 形式的装配如下：</p>
+<p>切入点表达式就是切面的「查询条件」，完整语法为 <code>execution([修饰符] 返回类型 声明类型?.方法名(参数) [throws 异常])</code>，其中<b>返回类型不能省</b>。举个例子，<code>execution(public com.demo...AOPoperations.addC(String,String))</code> 就漏了返回类型，AspectJ 会把 <code>com.demo...AOPoperations</code> 当成返回类型；正确写法是 <code>execution(public * com.demo...AOPoperations.addC(String, String))</code>。另外，<code>execution(* set(..))</code> 只能匹配名字恰好叫 <code>set</code> 的方法，要匹配所有 set 开头的方法得写 <code>execution(* set*(..))</code>。记住两个通配符：<code>*</code> 匹配任意字符，<code>..</code> 在包路径中表示当前包及其子包、在参数列表中表示任意个任意类型参数。所以 <code>execution(* com.demo.service..*.*(..))</code> 表示 service 包及子包下所有类的所有方法。XML 形式的装配如下：</p>
 
 <pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;beans xmlns="http://www.springframework.org/schema/beans"
@@ -206,7 +206,7 @@ public class LoggingAspect {
 
 <h2>三、声明式事务：@Transactional 背后还是那个代理</h2>
 
-<p>事务是逻辑上一组操作，要么全部成功、要么全部失败，具备原子性、一致性、隔离性、持久性（ACID）。Spring 把事务管理抽象成三个接口：<code>PlatformTransactionManager</code> 真正管理事务，JDBC/MyBatis 用 <code>DataSourceTransactionManager</code>、Hibernate 用 <code>HibernateTransactionManager</code>；<code>TransactionDefinition</code> 描述事务定义，即隔离级别、传播行为、是否只读、超时时间；<code>TransactionStatus</code> 保存事务运行中的状态，如是否存在保存点、是否已完成。<code>@Transactional</code> 做的事就是让 Spring 为标注它的 Bean 生成代理，在方法进入前开启事务、正常返回后提交、抛出异常时回滚。</p>
+<p>事务是逻辑上一组操作，要么全部成功、要么全部失败，具备原子性、一致性、隔离性、持久性（ACID）。Spring 把事务管理抽象成三个接口：<code>PlatformTransactionManager</code> 真正管理事务，JDBC/MyBatis 用 <code>DataSourceTransactionManager</code>、Hibernate 用 <code>HibernateTransactionManager</code>；<code>TransactionDefinition</code> 描述事务定义，即隔离级别、传播行为、是否只读、超时时间；<code>TransactionStatus</code> 保存事务运行中的状态，如是否存在保存点、是否已完成。<code>@Transactional</code> 做的事，就是让 Spring 为标注它的 Bean 生成代理，在方法进入前开启事务、正常返回后提交、抛出异常时回滚。</p>
 
 <pre><code class="language-java">@Service
 public class AccountServiceImpl implements AccountService {
@@ -233,7 +233,9 @@ public class AccountServiceImpl implements AccountService {
     }
 }</code></pre>
 
-<p>默认回滚规则必须记牢：<b>只对 RuntimeException 和 Error 回滚，受检异常默认不回滚</b>。上面 <code>transfer</code> 声明了 <code>throws Exception</code>，所以必须写 <code>rollbackFor = Exception.class</code>；只在个别异常上例外，用 <code>noRollbackFor</code>。<code>readOnly = true</code> 只是给驱动的提示，并不会强制禁止写操作，用在查询方法上帮助优化。XML 方式在老项目里很常见，骨架如下——这里有个几乎人人踩过的细节：事务通知是 Advisor 而不是 Aspect，必须用 <code>&lt;aop:advisor&gt;</code> 织入；写成 <code>&lt;aop:aspect&gt;</code> 会要求 ref 指向普通对象并按方法名匹配，配错在启动阶段就会失败。</p>
+<p>默认回滚规则必须记牢：<b>只对 RuntimeException 和 Error 回滚，受检异常默认不回滚</b>。上面 <code>transfer</code> 声明了 <code>throws Exception</code>，所以必须写 <code>rollbackFor = Exception.class</code>；只在个别异常上例外，用 <code>noRollbackFor</code>。<code>readOnly = true</code> 只是给驱动的提示，并不会强制禁止写操作，用在查询方法上帮助优化。</p>
+
+<p>XML 方式在老项目里很常见，骨架如下。这里有个几乎人人踩过的细节：事务通知是 Advisor 而不是 Aspect，必须用 <code>&lt;aop:advisor&gt;</code> 织入；写成 <code>&lt;aop:aspect&gt;</code> 会要求 ref 指向普通对象并按方法名匹配，配错在启动阶段就会失败。</p>
 
 <pre><code class="language-xml">&lt;!-- 1. 事务管理器：DataSourceTransactionManager 必须注入数据源 --&gt;
 &lt;bean id="transactionManager"
@@ -261,7 +263,7 @@ public class AccountServiceImpl implements AccountService {
 
 <h2>四、传播行为、隔离级别与事务失效场景</h2>
 
-<p>传播行为回答的是「当前方法被调用时，已有事务怎么办」。<code>REQUIRED</code>（默认）有则加入、无则新建；<code>REQUIRES_NEW</code> 挂起当前事务、另开独立事务，适合写日志这类「主事务回滚也不能丢」的操作；<code>SUPPORTS</code> 有则加入、无则以非事务方式运行；<code>NOT_SUPPORTED</code> 挂起当前事务、自己不使用事务；<code>MANDATORY</code> 要求必须已有事务，<code>NEVER</code> 要求必须没有事务，两者不满足都会抛异常；<code>NESTED</code> 在当前事务内开一个保存点，内层回滚不影响外层，但它依赖 JDBC 保存点，<code>DataSourceTransactionManager</code> 支持而 JPA 的 <code>JpaTransactionManager</code> 不支持。</p>
+<p>传播行为回答的是「当前方法被调用时，已有事务怎么办」。<code>REQUIRED</code>（默认）有则加入、无则新建；<code>REQUIRES_NEW</code> 挂起当前事务、另开独立事务，适合写日志这类「主事务回滚也不能丢」的操作；<code>SUPPORTS</code> 有则加入、无则以非事务方式运行；<code>NOT_SUPPORTED</code> 挂起当前事务、自己不使用事务；<code>MANDATORY</code> 要求必须已有事务，<code>NEVER</code> 要求必须没有事务，两者不满足都会抛异常；<code>NESTED</code> 在当前事务内开一个保存点，内层回滚不影响外层。注意 <code>NESTED</code> 依赖 JDBC 保存点，<code>DataSourceTransactionManager</code> 支持，而 JPA 的 <code>JpaTransactionManager</code> 不支持。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-5/02-tx-propagation.svg" alt="事务传播行为对比图：REQUIRED 让方法加入当前事务并与外层一起提交回滚；REQUIRES_NEW 挂起外层事务另开独立事务并立即提交；NESTED 在当前事务内设置保存点，内层回滚只回到保存点"><figcaption>图 2：REQUIRED、REQUIRES_NEW 与 NESTED 的事务边界差别</figcaption></figure>
 
@@ -271,12 +273,7 @@ public class AccountServiceImpl implements AccountService {
 
 <h2>小结</h2>
 
-<p>AOP 用动态代理把横切逻辑织进业务方法：切点决定「在哪里织」，通知决定「什么时候做什么」；声明式事务是这套机制最重要的应用，<code>@Transactional</code> 是否生效，取决于「有没有走代理」和「异常有没有按规则抛出来」。动手时先确认代理类型与接收类型是否匹配，再核对传播行为、隔离级别与回滚规则，最后用自调用、非 public、异常被吞这三项自查不生效问题，大部分故障都能当场定位。存疑项：不同 Spring / Spring Boot 版本对 <code>proxyTargetClass</code> 默认值、以及 <code>NESTED</code> 在各持久化技术下的支持范围存在差异，升级框架时请以对应版本文档为准。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-4-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spring IoC 与依赖注入</span></a>
-      <a class="next-post" href="/java-tutorial-4-6/"><span class="pn-label">下一篇 →</span><span class="pn-title">Spring MVC</span></a>
-      </nav>
+<p>AOP 用动态代理把横切逻辑织进业务方法：切点决定「在哪里织」，通知决定「什么时候做什么」。声明式事务是这套机制最重要的应用，<code>@Transactional</code> 是否生效，取决于「有没有走代理」和「异常有没有按规则抛出来」。动手时先确认代理类型与接收类型是否匹配，再核对传播行为、隔离级别与回滚规则，最后用自调用、非 public、异常被吞这三项自查不生效问题，大部分故障都能当场定位。另外，不同 Spring / Spring Boot 版本对 <code>proxyTargetClass</code> 默认值、以及 <code>NESTED</code> 在各持久化技术下的支持范围存在差异，升级框架时请以对应版本文档为准。</p>
           </article>
   <!-- Footer -->
   <footer>
