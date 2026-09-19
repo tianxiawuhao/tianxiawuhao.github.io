@@ -140,7 +140,7 @@
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-5/01-index-lookup.svg" alt="二级索引查询的回表过程与覆盖索引"><figcaption>图 1：回表与覆盖索引 —— 二级索引叶子只存索引列与主键，取非索引列要回聚簇索引再查一次；所需列全在索引里即可免回表</figcaption></figure>
 
-<pre><code class="language-sql">-- 建表时就规划好索引：等值列在前，范围列在后
+<pre><code class="language-sql">-- 建表时就规划好索引：等值列在前，范围列在后；字符集统一 utf8mb4
 CREATE TABLE t_order (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   user_id     BIGINT       NOT NULL,
@@ -149,7 +149,7 @@ CREATE TABLE t_order (
   created_at  DATETIME     NOT NULL,
   PRIMARY KEY (id),
   KEY idx_user_status_time (user_id, status, created_at)
-) ENGINE = InnoDB;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 -- 走索引：user_id 等值 + status 等值 + created_at 范围，三列都用上
 SELECT id, amount FROM t_order
@@ -161,6 +161,14 @@ SELECT * FROM t_order WHERE status = 1;
 -- 也用不上索引：对索引列做函数运算，破坏了有序性
 SELECT * FROM t_order WHERE DATE(created_at) = '2024-01-01';
 </code></pre>
+
+<p><strong>旧答案 → 现状：字符集 <code>utf8</code> 已过时。</strong>旧笔记里常见 <code>DEFAULT CHARSET = utf8</code>，这在面试中现在要主动纠正：MySQL 的 <code>utf8</code> 是“最多 3 字节”的残缺实现，存不下 4 字节字符（emoji、部分生僻汉字），写入会报 <code>Incorrect string value</code>。正确写法是 <code>utf8mb4</code>。MySQL 8.0 起服务端默认字符集已经是 <code>utf8mb4</code>（默认排序规则 <code>utf8mb4_0900_ai_ci</code>），8.0 中 <code>utf8</code> 已作为 <code>utf8mb3</code> 的别名被标记废弃，所以新项目不再需要显式指定；但升级旧库时仍要检查：库、表、列、连接（<code>character_set_client</code> 等）以及 JDBC URL 要一起改成 <code>utf8mb4</code>，只改表不改连接会出现“列是 4 字节、连接是 3 字节”的隐式转换，既可能乱码也可能让索引失效。</p>
+
+<h3>哈希索引与索引下推（ICP）</h3>
+
+<p>面试里还常补两个 B+ 树之外的考点。<strong>哈希索引</strong>用哈希函数定位，等值查询是 O(1)，但不支持范围查询、排序和最左前缀，且哈希冲突多时退化为链表。InnoDB 只有自适应哈希索引（AHI，内部自动为热点页建哈希，无法人工干预，<code>innodb_adaptive_hash_index</code> 可开关）；Memory 引擎支持显式 <code>USING HASH</code>。另外 InnoDB 支持<strong>函数索引</strong>（MySQL 8.0.13 起，本质是隐藏的虚拟生成列加索引），可以让 <code>DATE(created_at)</code> 这类表达式走索引，但更通用的做法仍是改写 SQL。</p>
+
+<p><strong>索引下推（Index Condition Pushdown，ICP）</strong>从 MySQL 5.6 引入，8.0 默认开启（<code>optimizer_switch</code> 中的 <code>index_condition_pushdown</code>）。没有 ICP 时，联合索引 <code>(a, b)</code> 上执行 <code>WHERE a = 1 AND b LIKE '%x%'</code>，存储引擎只能按 <code>a = 1</code> 取回主键再逐行回表，把 <code>b</code> 的过滤留给 Server 层；开启 ICP 后，<code>b</code> 的过滤被下推到存储引擎，在索引上就完成筛选，能大幅减少回表次数。判断是否生效看 <code>EXPLAIN</code> 的 <code>Extra</code> 是否出现 <code>Using index condition</code>。要注意它减少的是回表开销，不是扫描的索引行数，因此 <code>LIKE '%x%'</code> 依然用不上有序性。</p>
 
 <h2>二、让索引真正生效：EXPLAIN 与慢查询</h2>
 

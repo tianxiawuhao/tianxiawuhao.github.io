@@ -144,6 +144,10 @@
 
 <p>ES 中的索引（index）是一个逻辑概念，相当于 MySQL 中的一张表。索引由若干分片（shard）组成，每个分片是一个完整的 Lucene 索引；副本（replica）是分片的拷贝，用于容灾和分担读请求。建索引时就要确定分片数，因为分片数创建后不能改（只能 reindex 重建，或用 shrink/split 变相调整），副本数则随时可调。</p>
 
+<div class="tut-tip"><strong>版本基线与默认安全（8.x）：</strong>Elasticsearch <strong>8.0 起默认开启安全</strong>：HTTP 层自动配置 TLS、内置 <code>elastic</code> 用户带随机密码、节点间通信也用 TLS，服务端自带并需要 JDK 17+。所以本章的 curl 示例在 8.x 裸装环境下应写成 <code>curl -k -u elastic:&lt;密码&gt; "https://localhost:9200/..."</code>（<code>-k</code> 跳过自签证书校验，仅限本机调试；生产应把 CA 证书导入信任库）。想退回老教程里 <code>http://localhost:9200</code> 的裸写法，必须显式关闭安全（<code>xpack.security.enabled: false</code>），仅限隔离的开发环境；7.x 及更早默认不开启安全，这正是老教程里看不到认证参数的原因。Java 侧同理：8.x 官方推荐 <code>co.elastic.clients:elasticsearch-java</code>（Java API Client），旧的 <code>RestHighLevelClient</code> 自 7.15 起废弃并被逐步移除。</div>
+
+<p>为了让示例聚焦查询语法，下面仍以开发模式（已关闭安全）的 <code>http://localhost:9200</code> 给出；在 8.x 生产集群上执行时，请按上面的形式补齐 <code>https</code>、认证参数与证书校验。</p>
+
 <pre><code class="language-bash"># 建索引：1 个分片、1 个副本（单机开发可把副本设为 0）
 curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 {
@@ -168,7 +172,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 # ik_smart   -> 中华人民共和国 / 人民大会堂
 # ik_max_word -> 中华人民共和国 / 中华人民 / 中华 / 华人 / 人民共和国 / 人民 / 共和国 / 大会堂 / 大会 / 会堂</code></pre>
 
-<p>这里有几个源文档中过时或写错的点必须更正。第一，映射类型（type）在 ES 6.0 被弱化、<strong>在 7.0 已被彻底移除，而不是 9.0</strong>；早在 6.x 就推荐的 _doc 占位写法，在 7.x 之后连位置都不再需要。第二，<code>_all</code> 全字段检索字段同样在 7.0 被移除，需要用 <code>multi_match</code> 显式列出字段，或用 <code>copy_to</code> 自建汇总字段；因此老教程里 <code>?q=guide</code> 这类依赖 <code>_all</code> 的写法在新版本上语义已变。第三，节点角色配置也换了：<code>node.master</code>/<code>node.data</code> 改为 <code>node.roles: [master, data]</code>。Zen1 时代的 <code>discovery.zen.minimum_master_nodes</code> 则被 <code>cluster.initial_master_nodes</code> 取代（7.0 起）。第四，只有 <code>index</code> 参数不存在「搜索时单独关闭索引」的说法：字段一旦不索引，任何查询（包括 term）都搜不到它；但要注意 <code>index: false</code> 的字段仍可用 <code>docvalue</code> 做聚合（需开启），这点常被误解。</p>
+<p>这里有几个源文档中过时或写错的点必须更正。第一，映射类型（type）在 ES 6.0 起被弱化并弃用，<strong>7.0 起一个索引只允许单一类型、请求里的类型名默认不再被接受（<code>include_type_name</code> 默认为 false），彻底移除发生在 7.x～8.x 这一代，绝不是 9.0</strong>；早在 6.x 就推荐的 _doc 占位写法，在 7.x 之后连位置都不再需要，8.0 起 API 层已不再有 type 概念。第二，<code>_all</code> 全字段检索字段同样在 7.0 被移除，需要用 <code>multi_match</code> 显式列出字段，或用 <code>copy_to</code> 自建汇总字段；因此老教程里 <code>?q=guide</code> 这类依赖 <code>_all</code> 的写法在新版本上语义已变。第三，节点角色配置也换了：<code>node.master</code>/<code>node.data</code> 改为 <code>node.roles: [master, data]</code>。Zen1 时代的 <code>discovery.zen.minimum_master_nodes</code> 则被 <code>cluster.initial_master_nodes</code> 取代（7.0 起）。第四，只有 <code>index</code> 参数不存在「搜索时单独关闭索引」的说法：字段一旦不索引，任何查询（包括 term）都搜不到它；但要注意 <code>index: false</code> 的字段仍可用 <code>docvalue</code> 做聚合（需开启），这点常被误解。</p>
 
 <h2>三、查询 DSL：match、term 与 bool 组合</h2>
 
@@ -231,7 +235,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
   <li>查询侧限制聚合的 <code>size</code>；</li>
   <li>查询侧避免 <code>*</code> 通配符开头的查询。</li>
 </ul>
-<p>生产集群至少要三个专有 master 节点（<code>node.roles: [master]</code>）以避免脑裂，数据节点不兼 master 是更稳妥的部署方式。</p>
+<p>生产集群至少要三个专有 master 节点（<code>node.roles: [master]</code>）以避免脑裂，数据节点不兼 master 是更稳妥的部署方式；参与投票的节点数取奇数，<code>cluster.initial_master_nodes</code> 只在集群首次启动时用于引导投票，选主成功后应从配置里去掉，否则重启时有再次成簇的风险。8.x 默认开启安全后节点间通信也走 TLS，扩容新节点时要同步分发证书与凭据，别只改了 <code>node.roles</code>。</p>
 
 <h2>五、小结</h2>
 

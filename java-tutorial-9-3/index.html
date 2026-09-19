@@ -139,14 +139,14 @@
   <li><b>虚拟机栈</b>：每个方法执行时创建一个栈帧，保存局部变量表、操作数栈等。栈深超限抛 <code>StackOverflowError</code>，扩展失败抛 OOM，大小由 <code>-Xss</code> 指定。</li>
   <li><b>本地方法栈</b>：与虚拟机栈类似，只是为 native 方法服务。</li>
   <li><b>堆</b>：对象分配与 GC 的主要区域，不要求连续内存，扩展失败抛 OOM，由 <code>-Xms</code>、<code>-Xmx</code> 控制。</li>
-  <li><b>方法区</b>：存放类信息、常量、静态变量、即时编译后的代码。HotSpot 在 JDK 7 及以前用<b>永久代</b>实现，JDK 8 起改为使用本地内存的<b>元空间</b>。</li>
+  <li><b>方法区</b>：存放类信息、常量、静态变量、即时编译后的代码。<b>旧答案</b>：HotSpot 在 JDK 7 及以前用<b>永久代</b>实现，靠 <code>-XX:MaxPermSize</code> 调大小；<b>现状</b>：JDK 8 起永久代被移除，改用本地内存中的<b>元空间</b>，由 <code>-XX:MaxMetaspaceSize</code> 限制，Java 17/21 上再写 <code>-XX:MaxPermSize</code> 只会被忽略并告警。</li>
   <li><b>运行时常量池</b>：方法区的一部分，Class 常量池的字面量与符号引用在类加载后进入这里，并允许运行期动态添加（<code>String.intern()</code>）。</li>
   <li><b>直接内存</b>：JDK 1.4 的 NIO 可用 Native 库分配堆外内存，由堆中 <code>DirectByteBuffer</code> 引用，省去堆内堆外拷贝；受本机内存限制，同样会 OOM。</li>
 </ul>
 
 <div class="tut-tip"><figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-3/01-runtime-data-areas.svg" alt="JVM 运行时数据区域分为线程私有与线程共享两类"><figcaption>图 1：运行时数据区域 —— 程序计数器、虚拟机栈、本地方法栈线程私有；堆、方法区、运行时常量池与直接内存线程共享，且都可能 OOM</figcaption></figure>
 
-追问：<b>为什么移除永久代？</b>永久代大小受加载类与常量数量影响，每次 Full GC 后还会变化，很难调准，容易 OOM。改为本地内存中的元空间后，由 <code>-XX:MaxMetaspaceSize</code> 限制大小。</div>
+追问：<b>为什么移除永久代？</b>永久代大小受加载类与常量数量影响，每次 Full GC 后还会变化，很难调准，容易 OOM；它位于堆内、还要保存字符串常量等数据，容易与堆争内存。改为本地内存中的元空间后，由 <code>-XX:MaxMetaspaceSize</code> 限制大小，不设上限时只受本机内存约束。</div>
 
 <h2>二、垃圾回收：怎么判断对象已死，什么时候回收</h2>
 
@@ -154,7 +154,7 @@
 
 <p>引用按强度分四类：<b>强引用</b>只要可达就不回收；<b>软引用</b>（<code>SoftReference</code>）内存不足时回收，适合做缓存。<b>弱引用</b>（<code>WeakReference</code>）一 GC 就回收，典型是 <code>ThreadLocal</code> 的 key；<b>虚引用</b>（<code>PhantomReference</code>）取不到对象，只用于回收前通知，配合 <code>ReferenceQueue</code> 清理堆外内存。</p>
 
-<p>堆按分代收集划分：新生代（Eden + 两个 Survivor）用复制算法，老年代用标记-清除或标记-整理。对象优先在 Eden 分配，熬过一次 Minor GC 进入 Survivor 且年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）后晋升老年代，大对象可直接进入老年代。Full GC 的常见诱因是：<code>System.gc()</code>（只是建议）、老年代空间不足、空间分配担保失败、元空间不足以及 CMS 的 Concurrent Mode Failure。所以优化只有一句：<b>让对象尽量在新生代被回收，别活到老年代。</b></p>
+<p>堆按分代收集划分：新生代（Eden + 两个 Survivor）用复制算法，老年代用标记-清除或标记-整理。对象优先在 Eden 分配，熬过一次 Minor GC 进入 Survivor 且年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）后晋升老年代，大对象可直接进入老年代。Full GC 的常见诱因是：<code>System.gc()</code>（只是建议）、老年代空间不足、空间分配担保失败、元空间不足，以及<b>旧答案</b>里常答的 CMS <code>Concurrent Mode Failure</code>（CMS 已在 JDK 14 移除，Java 17/21 上对应的现状是 G1 的 <code>Evacuation Failure</code>、Humongous 大对象分配失败或 ZGC 的分配停顿）。所以优化只有一句：<b>让对象尽量在新生代被回收，别活到老年代。</b></p>
 
 <pre><code class="language-java">// 循环引用：引用计数无法回收，可达性分析可以
 public class RefCountDemo {
@@ -236,26 +236,32 @@ java -Xms3550m -Xmx3550m -Xmn2g -Xss128k -jar app.jar
 #   -Xmn 直接指定新生代大小；也可用 -XX:NewRatio=4 表示新生代:老年代 = 1:4
 #   -XX:SurvivorRatio=4 表示 Eden:单个 Survivor = 4:1（Survivor 有两个）
 
-# 收集器选择：吞吐量优先
+# 收集器选择：吞吐量优先（Parallel，JDK 8 的默认收集器；纯吞吐场景仍常用）
 java -Xmx3800m -Xms3800m -Xmn2g -XX:+UseParallelGC -XX:ParallelGCThreads=20 \
      -XX:+UseParallelOldGC -XX:MaxGCPauseMillis=100 -XX:+UseAdaptiveSizePolicy -jar app.jar
 
-# 收集器选择：响应时间优先（CMS，JDK 9 起废弃，JDK 14 起移除，新项目请用 G1）
+# 收集器选择：响应时间优先（现状：G1，JDK 9 起成为服务端默认收集器）
+java -Xmx3550m -Xms3550m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -jar app.jar
+
+# 【旧答案，只用来讲历史演进】CMS：JDK 9 起废弃，JDK 14 起移除
+# Java 17/21 上写 -XX:+UseConcMarkSweepGC 已不可用，参数会被拒、进程直接起不来
 java -Xmx3550m -Xms3550m -Xmn2g -XX:+UseConcMarkSweepGC -XX:+UseCMSCompactAtFullCollection \
      -XX:CMSFullGCsBeforeCompaction=5 -jar app.jar
 
-# 排查必备：GC 日志
-java -Xms1g -Xmx1g -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/tmp/gc.log -jar app.jar</code></pre>
+# 排查必备：GC 日志（JDK 9 起统一日志框架）
+java -Xms1g -Xmx1g -Xlog:gc*:file=/tmp/gc.log:time,uptime,level,tags -jar app.jar
+# 旧答案：-XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/tmp/gc.log
+# 这些参数自 JDK 9 起被标记过时（写了通常被忽略并告警），别再用于 Java 17/21 项目</code></pre>
 
-<p>思路上，<b>吞吐量优先</b>（批处理、科学计算）适合 Parallel 系列并配较大的新生代；<b>响应时间优先</b>（Web 服务）适合 G1 或已被废弃的 CMS。CMS 用标记-清除、不压缩，久了产生碎片甚至退化为串行 Full GC，需用 <code>-XX:+UseCMSCompactAtFullCollection</code> 配合 <code>-XX:CMSFullGCsBeforeCompaction</code> 定期整理。</p>
+<p>思路上，<b>吞吐量优先</b>（批处理、科学计算）适合 Parallel 系列并配较大的新生代；<b>响应时间优先</b>（Web 服务）适合 G1 —— 它自 JDK 9 起就是服务端默认收集器，Java 17/21 上不用显式指定；堆特别大、要求极低停顿时可评估 ZGC／Shenandoah（JDK 15 起转正，Java 21 上 ZGC 已支持分代）。<b>旧答案里的 CMS</b> 用标记-清除、不压缩，久了产生碎片甚至退化为串行 Full GC，需用 <code>-XX:+UseCMSCompactAtFullCollection</code> 配合 <code>-XX:CMSFullGCsBeforeCompaction</code> 定期整理；这套参数已随 CMS 在 JDK 14 一起消失，面试时只当版本演进讲。</p>
 
 <p>线上排查用 JDK 自带工具即可。<code>jps -l</code> 找进程；<code>jstat -gcutil &lt;pid&gt; 1000</code> 看各区使用率与 GC 次数，据此区分 Minor GC 频繁还是老年代只增不减。<code>jmap -histo:live &lt;pid&gt; | head -30</code> 看对象排名，再用 <code>jmap -dump:format=b,file=heap.hprof &lt;pid&gt;</code> 导出快照交给 MAT，找出“谁在引用这些对象”。CPU 飙高时用 <code>top -Hp &lt;pid&gt;</code> 拿到最耗 CPU 的线程号，转十六进制后到 <code>jstack &lt;pid&gt;</code> 的输出里定位栈，常见原因是死循环、锁竞争或频繁 GC。</p>
 
-<div class="tut-tip">两个坑：<code>-Xmn</code> 与 <code>-XX:NewRatio</code> 同写时后者常不生效；参数里混入全角标点（如 <code>-Xmx2g：</code>）会被忽略甚至启动失败。另注意版本迁移：<code>-XX:MaxPermSize</code> 已换成 <code>-XX:MaxMetaspaceSize</code>，CMS 参数在 JDK 14 后不可用。</div>
+<div class="tut-tip">两个坑：<code>-Xmn</code> 与 <code>-XX:NewRatio</code> 同写时后者常不生效；参数里混入全角标点（如 <code>-Xmx2g：</code>）会被忽略甚至启动失败。另注意版本迁移：<code>-XX:MaxPermSize</code> 自 JDK 8 起失效，改用 <code>-XX:MaxMetaspaceSize</code>；CMS 及 <code>-XX:+UseCMS*</code> 相关参数在 JDK 14 后不可用；GC 日志参数自 JDK 9 起统一为 <code>-Xlog:gc*</code>；默认收集器自 JDK 9 起改为 G1；偏向锁自 JDK 15（JEP 374）起默认禁用、相关参数已废弃并在后续版本移除，别再拿“偏向锁”当加分点。</div>
 
 <h2>小结</h2>
 
-<p>JVM 面试题只有一条主干：内存区域决定“放在哪”，垃圾回收决定“什么时候没”，类加载决定“类怎么进来”，调优排查决定“出问题看什么”。记住这条主线，再补上常被追问的细节：程序计数器不会 OOM，准备阶段只赋零值。子类引用父类静态字段不初始化子类，双亲委派是组合而非继承，CMS 不压缩会产生碎片。答到这些，就足以应付大多数追问。</p>
+<p>JVM 面试题只有一条主干：内存区域决定“放在哪”，垃圾回收决定“什么时候没”，类加载决定“类怎么进来”，调优排查决定“出问题看什么”。记住这条主线，再补上常被追问的细节：程序计数器不会 OOM，准备阶段只赋零值。子类引用父类静态字段不初始化子类，双亲委派是组合而非继承，CMS 不压缩会产生碎片。同时记住版本边界：永久代与 <code>-XX:MaxPermSize</code> 停在 JDK 8，GC 日志在 JDK 9 统一，G1 自 JDK 9 成为默认收集器，CMS 在 JDK 14 移除，偏向锁自 JDK 15 起默认禁用。面试时先给当下的答案，再补一句“老答案为什么不再适用”，比只背旧结论更稳。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-9-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">9.2 并发编程面试题</span></a>

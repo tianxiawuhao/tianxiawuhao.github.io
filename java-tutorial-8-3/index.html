@@ -136,7 +136,7 @@
 
 <p>RDD 常被描述成“只读集合”，更准确的说法是<strong>不可变（immutable）</strong>：RDD 本身不能原地修改，所有“修改”都会生成新的 RDD，新旧 RDD 之间靠<strong>血缘（lineage）</strong>相连。某个分区因节点故障丢失时，Spark 只需顺着血缘重算这一个分区即可恢复。这才是“弹性”与容错的真正含义，而不是把数据存了三份。</p>
 
-<p>一个 Spark 应用由一个 Driver 进程发起。Driver 里的 <code>SparkContext</code> 向集群管理器（YARN、Kubernetes 或 Standalone）申请资源，在每台 Worker 上启动 Executor。Executor 内以 Task 为单位并行计算各个分区。这里有两条约定：传给算子的闭包函数以及它引用的外部对象<strong>必须可序列化</strong>。同一个 JVM 中同时只能有一个活跃的 SparkContext，因此 Spark 2.0 之后统一用 <code>SparkSession</code> 作为入口，由它管理那个唯一的 context。</p>
+<p>一个 Spark 应用由一个 Driver 进程发起。Driver 里的 <code>SparkContext</code> 向集群管理器（YARN、Kubernetes 或 Standalone）申请资源，在每台 Worker 上启动 Executor。Executor 内以 Task 为单位并行计算各个分区。这里有两条约定：传给算子的闭包函数以及它引用的外部对象<strong>必须可序列化</strong>。同一个 JVM 中同时只能有一个活跃的 SparkContext，因此 Spark 2.0 之后统一用 <code>SparkSession</code> 作为入口，由它管理那个唯一的 context；新代码应当写 <code>SparkSession.builder()...</code>，再用 <code>spark.sparkContext()</code> 取回底层 context，直接 <code>new JavaSparkContext(conf)</code> 是 Spark 1.x 时代的常规写法（下面的 WordCount 为贴近 RDD API 原貌仍保留它，能跑，但属于旧风格）。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-3/01-rdd-lazy-dag.svg" alt="Spark 惰性求值：Transformation 只记录血缘，遇到 Action 才提交作业并按宽依赖切 Stage"><figcaption>图 1：惰性求值与 Stage 切分——Transformation 只记血缘，Action 触发 Job，遇到宽依赖切一刀并产生 Shuffle</figcaption></figure>
 <p>还有一条贯穿全章的规则：<strong>惰性求值</strong>。Transformation 只记录“要做什么”，并不会立刻执行；只有遇到 Action，Spark 才把这条计算链提交成作业。</p>
@@ -189,7 +189,7 @@ public class WordCount {
 
 <p>Spark 切 Stage 的规则很简单：<strong>遇到宽依赖就切一刀</strong>，一段连续的窄依赖会被合并进同一个 Stage。Stage 内部按分区数量拆成一堆 Task 并行执行，所以“一个 Job 由若干 Stage 组成，一个 Stage 由若干 Task 组成”。Shuffle 之所以昂贵，是因为它同时做了三件重活：map 端把数据按分区排序后<strong>写到本地磁盘</strong>，先生成索引文件再生成数据文件。reduce 端通过网络<strong>拉取（fetch）</strong>属于自己分区的数据。全程还要反复<strong>序列化与反序列化</strong>。MapReduce 被诟病“不擅长 DAG 计算”，正是因为它的每个依赖都要落盘并重新起作业。Spark 用内存缓存加上 DAG 调度，把窄依赖的中间结果留在了内存与流水线里。</p>
 
-<p>理解了这一点，调优就有了方向：减少不必要的 Shuffle、让 Shuffle 的数据量更小、让每个分区的数据量更均匀。例如 <code>spark.sql.shuffle.partitions</code> 默认 200，数据量小的时候会产生大量几百 KB 的小分区，白白增加调度开销。数据量很大而分区数没跟上，单个 Task 又会因为内存装不下而溢写甚至 OOM。</p>
+<p>理解了这一点，调优就有了方向：减少不必要的 Shuffle、让 Shuffle 的数据量更小、让每个分区的数据量更均匀。例如 <code>spark.sql.shuffle.partitions</code> 在 Spark 3.x 中默认仍是 200：数据量小的时候会产生大量几百 KB 的小分区，白白增加调度开销；数据量很大而分区数没跟上，单个 Task 又会因为内存装不下而溢写甚至 OOM。手工把它改成 400、2000 是 Spark 2.x 时代的标准动作，3.x 里则不必再拍脑袋——AQE 会在运行时按 <code>spark.sql.adaptive.advisoryPartitionSizeInBytes</code>（默认 64MB）自动合并小分区，把它当成“初始上限”即可（详见第五节）。</p>
 
 <h2>四、Spark SQL：从 RDD 到 DataFrame 与 Dataset</h2>
 
@@ -221,7 +221,7 @@ public class SalesByCity {
 }
 </code></pre>
 
-<p>注意 <code>SparkSession</code> 已经是 Spark 2.0 之后唯一入口，旧的 <code>SQLContext</code>、<code>HiveContext</code> 都已被取代。用 Java 写 Spark SQL 时需要 <code>spark-sql_2.13</code> 依赖，只有 <code>spark-core</code> 是不够的。</p>
+<p>注意 <code>SparkSession</code> 已经是 Spark 2.0 之后唯一入口，旧的 <code>SQLContext</code>、<code>HiveContext</code> 都已被取代。用 Java 写 Spark SQL 时需要带 Scala 后缀的 <code>spark-sql_2.13</code> 依赖，只有 <code>spark-core</code> 是不够的。这个后缀必须与集群上安装的 Spark 发行版对应：Scala 2.10 只属于 Spark 1.x，2.11 对应 Spark 2.x（2.4 另提供 2.12），Spark 3.0/3.1 只有 2.12 构建，<strong>Spark 3.2 起才同时提供 2.13</strong>，而官方预编译包默认仍是 2.12（要用 2.13 需下载对应发行版）。所以不要照抄老教程的 <code>_2.10</code>/<code>_2.11</code>，先确认集群的 Scala 主版本。</p>
 
 <h2>五、常见坑与调优清单</h2>
 
@@ -260,11 +260,11 @@ sc.textFile("hdfs:///log/*.log")
 System.out.println("脏数据行数 = " + badLines.value());
 </code></pre>
 
-<p>第二类坑来自数据规模。Driver 内存远小于集群，<code>collect()</code> 会把整个 RDD 拉到 Driver，动辄 OOM。想看样本请用 <code>take(n)</code> 或 DataFrame 的 <code>show()</code>。当 key 分布极度不均（数据倾斜）时，少数 Task 会拖慢整个 Stage，常见解法是给热 key 加随机前缀打散后再两阶段聚合。Spark 3.x 的自适应查询执行（AQE，<code>spark.sql.adaptive.enabled</code> 默认开启）也能自动合并小分区并处理部分倾斜。此外，<code>cache()</code>/<code>persist(MEMORY_AND_DISK)</code> 只在该 RDD 会被多次复用时才值得，用完记得 <code>unpersist()</code>。<code>saveAsTextFile</code> 的目标目录必须<strong>不存在</strong>，否则直接抛 <code>FileAlreadyExistsException</code>。</p>
+<p>第二类坑来自数据规模。Driver 内存远小于集群，<code>collect()</code> 会把整个 RDD 拉到 Driver，动辄 OOM。想看样本请用 <code>take(n)</code> 或 DataFrame 的 <code>show()</code>。当 key 分布极度不均（数据倾斜）时，少数 Task 会拖慢整个 Stage，常见解法是给热 key 加随机前缀打散后再两阶段聚合。自适应查询执行（AQE）在 Spark 3.0 引入时<strong>默认关闭</strong>，要手工设 <code>spark.sql.adaptive.enabled=true</code>，<strong>Spark 3.2 起才默认开启</strong>，它会按运行时统计自动合并小分区、拆分倾斜的大分区（<code>spark.sql.adaptive.skewJoin.enabled</code>）；同一时期引入的还有动态分区裁剪（DPP，<code>spark.sql.optimizer.dynamicPartitionPruning.enabled</code>，3.0 起默认开启），事实表 join 分区维表时能把过滤条件下推到扫描阶段、少读大量数据。这些都依赖 Spark 3.x，跑在 2.4 及更早版本上不会生效。此外，<code>cache()</code>/<code>persist(MEMORY_AND_DISK)</code> 只在该 RDD 会被多次复用时才值得，用完记得 <code>unpersist()</code>。<code>saveAsTextFile</code> 的目标目录必须<strong>不存在</strong>，否则直接抛 <code>FileAlreadyExistsException</code>。</p>
 
 <p>提交方式也容易踩坑：代码里硬编码了 <code>setMaster("local[*]")</code>，再用 <code>spark-submit --master yarn</code> 提交，最终以代码里的 master 为准，作业其实跑在本地。正确做法是代码里不写 master，交给提交命令决定。写出结果时每个分区对应一个 part 文件，分区数过多会产生大量小文件，必要时在写出前用 <code>coalesce()</code> 收敛分区。它只做分区合并，不产生 Shuffle。</p>
 
-<p>第三类坑来自版本与环境。本地调试时日志满屏 INFO，Spark 3.x 要改的是 <code>$SPARK_HOME/conf/log4j2.properties</code>。旧写法 <code>log4j.properties</code> 是 Spark 1.x 时代的产物，而 log4j 1.x 早已停止维护。Windows 上跑本地模式需要 <code>winutils.exe</code>、<code>hadoop.dll</code> 并配置 <code>HADOOP_HOME</code>。依赖版本也要对齐：十年前的老教程常用 <code>spark-core_2.10</code> + Spark 1.6.0 + JDK 1.7，而 Scala 2.10 已不再维护。新项目应当选用 Spark 3.5.x（需 JDK 8/11/17），Scala 侧用 2.13 或 2.12，即 <code>spark-core_2.13</code>、<code>spark-sql_2.13</code>。这样 Java 8 以上的 lambda 语法才能正常编译。</p>
+<p>第三类坑来自版本与环境。本地调试时日志满屏 INFO，要改的是 <code>$SPARK_HOME/conf/log4j2.properties</code>；但 Spark 3.x 内部还跨了一道分界线：Spark 3.0～3.2 用的仍是 log4j 1.2，配置文件叫 <code>log4j.properties</code>，<strong>从 Spark 3.3 起才整体迁到 log4j2</strong>，Spark 4.x 继续沿用 log4j2。log4j 1.x 早已停止维护，所以“改哪个文件”请按你的 Spark 版本判断。Windows 上跑本地模式需要 <code>winutils.exe</code>、<code>hadoop.dll</code> 并配置 <code>HADOOP_HOME</code>。依赖版本也要对齐：十年前的老教程常用 <code>spark-core_2.10</code> + Spark 1.6.0 + JDK 1.7，而 Scala 2.10 已不再维护。新项目应当选用 Spark 3.5.x，它支持 JDK 8/11/17（Java 17 的正式支持自 Spark 3.3 开始，JDK 21 要等 Spark 4.x）；Scala 侧 2.12 与 2.13 都可用，即 <code>spark-core_2.13</code>、<code>spark-sql_2.13</code>（选 2.12 就整体换成 <code>_2.12</code>，两种后缀不能混用）。这样 Java 8 以上的 lambda 语法才能正常编译。</p>
 
 <p>本章把 Spark 的骨架串了一遍。RDD 是不可变、可分区、靠血缘容错的数据集；算子分惰性的 Transformation 与触发计算的 Action。DAG 在宽依赖处切 Stage，Shuffle 的磁盘与网络开销是性能的主要矛盾。DataFrame/Dataset 与 Spark SQL 让优化器有了发挥空间，调优则围绕减少 Shuffle、均衡分区、广播小表和正确使用共享变量展开。把这几点记住，再去看 Spark 的监控页面与任务日志，就不会只见参数不见原理。</p>
           
