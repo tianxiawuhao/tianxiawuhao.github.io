@@ -128,17 +128,18 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们都是「一个 HTML 文件、几个 script 标签」地写页面。这种写法在小 demo 里没问题，可一旦页面分成十几个 JS 文件，就会同时冒出三个麻烦：文件之间靠全局变量通信、互相污染；<code>script</code> 的引入顺序稍微写错就报「undefined」；想用 Less、TypeScript 或还没被浏览器支持的新语法，浏览器直接不认。要解决这些工程化问题，就需要三样东西——一个能跑构建脚本的运行时（Node.js）、一个能下载并锁定第三方库的包管理器（npm），以及一个把源代码翻译、合并成浏览器可运行产物的构建工具（webpack / Vite）。本章就把这条链路一次讲清：从安装 Node、认识 <code>package.json</code>，到模块规范、打包器和脚手架的分工。适合已经会写 HTML/CSS/JS、但还没自己初始化过一个前端工程的读者。</p>
+<p>前面几章都按“一个 HTML 文件、几个 script 标签”的方式写页面。这种写法在小 demo 里没问题。可一旦页面分成十几个 JS 文件，就会同时冒出三个麻烦。一是文件之间靠全局变量通信、互相污染；二是 <code>script</code> 的引入顺序写错就报 undefined；三是想用 Less、TypeScript 或浏览器还不支持的新语法，浏览器直接不认。</p>
+<p>要解决这些工程化问题，需要三样东西——一个能跑构建脚本的运行时（Node.js），一个能下载并锁定第三方库的包管理器（npm），以及一个构建工具（webpack / Vite）。构建工具负责把源代码翻译、合并成浏览器可运行的产物。本章把这条链路讲清：从安装 Node、认识 <code>package.json</code>，到模块规范、打包器和脚手架的分工。适合已经会写 HTML/CSS/JS、但还没自己初始化过一个前端工程的读者。</p>
 
 <h2>一、为什么前端需要 Node.js 和 npm</h2>
-<p>先纠正一个常见误解：Node.js 不是「后端的 JavaScript 框架」，而是一个<strong>让 JavaScript 脱离浏览器运行的运行时</strong>。它把 Chrome 的 V8 引擎抽出来，补上了文件读写、网络、进程等系统能力。这件事对前端的意义在于：webpack、Vite、ESLint 这些工具本身就是 JavaScript 程序，它们需要读写磁盘、遍历依赖、开本地服务器，浏览器里做不到，所以必须跑在 Node 上。换句话说，<strong>你可以不写一行后端代码，但机器上必须有 Node 才能做现代前端开发</strong>。</p>
-<p><strong>npm</strong>（Node Package Manager）随 Node 一起安装，是 JS 生态的包管理器，作用相当于 Java 世界的 Maven：声明依赖、下载依赖、执行脚本。一个工程的身份证明就是根目录下的 <code>package.json</code>，其中 <code>dependencies</code> 是运行时依赖，<code>devDependencies</code> 是只在开发/构建阶段使用的依赖（打包器、编译器、测试框架都属于这一类），<code>scripts</code> 里则是可复用的命令别名。</p>
+<p>先纠正一个常见误解：Node.js 不是“后端的 JavaScript 框架”，而是一个<strong>让 JavaScript 脱离浏览器运行的运行时</strong>。它把 Chrome 的 V8 引擎抽出来，补上了文件读写、网络、进程等系统能力。这件事对前端的意义在于：webpack、Vite、ESLint 这些工具本身就是 JavaScript 程序。它们需要读写磁盘、遍历依赖、开本地服务器，浏览器里做不到，所以必须跑在 Node 上。换句话说，<strong>你可以不写一行后端代码，但机器上必须有 Node 才能做现代前端开发</strong>。</p>
+<p><strong>npm</strong>（Node Package Manager）随 Node 一起安装，是 JS 生态的包管理器，作用相当于 Java 世界的 Maven：声明依赖、下载依赖、执行脚本。一个工程的身份证明就是根目录下的 <code>package.json</code>。其中 <code>dependencies</code> 是运行时依赖，<code>devDependencies</code> 是只在开发或构建阶段使用的依赖，打包器、编译器、测试框架都属于这一类；<code>scripts</code> 里则是可复用的命令别名。</p>
 <ul>
-<li><code>npm i &lt;包名&gt;</code>：安装到 <code>dependencies</code>；<code>npm i -D &lt;包名&gt;</code> 等价于 <code>--save-dev</code>，装到开发依赖。命令行里只有一两个包时，务必分清这两者，否则生产环境会白白装上几百 MB 的构建工具。</li>
+<li><code>npm i &lt;包名&gt;</code>：安装到 <code>dependencies</code>；<code>npm i -D &lt;包名&gt;</code> 等价于 <code>--save-dev</code>，装到开发依赖。装包时务必分清这两者，否则生产环境会白白装上几百 MB 的构建工具。</li>
 <li><code>npm i</code>：按 <code>package.json</code> 还原全部依赖；<code>npm ci</code> 严格按 <code>package-lock.json</code> 安装，适合 CI 环境，速度更快、结果可复现。</li>
 <li><code>npm run &lt;脚本名&gt;</code>：执行 <code>scripts</code> 中定义的命令，例如 <code>npm run dev</code>。局部安装的命令行工具（如 webpack）只有通过 <code>npm run</code> 或 <code>npx</code> 才能被找到，直接敲 <code>webpack</code> 会提示找不到命令。</li>
 </ul>
-<p>国内下载慢是因为默认仓库在国外，可以换成淘宝镜像。这里要提醒一句：很多老笔记里写的 <code>https://registry.npm.taobao.org</code> <strong>已于 2022 年停止服务</strong>，现在应使用 <code>https://registry.npmmirror.com</code>；<code>cnpm</code> 是镜像提供的替代客户端，能在不改全局配置的情况下加速，但它生成的目录结构与官方 npm 并不完全一致，遇到「本地能跑、同学那边装不上」的怪问题时，优先换回 npm 或 pnpm 复现。</p>
+<p>国内下载慢是因为默认仓库在国外，可以换成淘宝镜像。需要提醒的是：旧资料里常见的 <code>https://registry.npm.taobao.org</code> <strong>已于 2022 年停止服务</strong>，现在应使用 <code>https://registry.npmmirror.com</code>。<code>cnpm</code> 是镜像提供的替代客户端，能在不改全局配置的情况下加速，但它生成的目录结构与官方 npm 并不完全一致。遇到“本地能跑、别人装不上”的怪问题时，优先换回 npm 或 pnpm 复现。</p>
 <pre><code class="language-bash"># 1. 安装 Node.js（推荐 LTS 版本），安装后 node 与 npm 一起可用
 node -v
 npm -v
@@ -155,15 +156,15 @@ npm i -D webpack webpack-cli     # 开发依赖，-D 即 --save-dev
 # 4. 查看全局包安装位置（Windows 上非管理员权限常需要改到用户目录）
 npm config get prefix
 npm ls --depth=0                 # 只看顶层依赖</code></pre>
-<p>还有两条纪律：<code>node_modules</code> 体积巨大且可由 lock 文件还原，<strong>永远不要提交进仓库</strong>（写进 <code>.gitignore</code>）；<code>package-lock.json</code> 则<strong>必须提交</strong>，它锁定了整棵依赖树的精确版本，是团队协作结果一致的前提。</p>
+<p>还有两条纪律。<code>node_modules</code> 体积巨大且可由 lock 文件还原，<strong>永远不要提交进仓库</strong>（写进 <code>.gitignore</code>）；<code>package-lock.json</code> 则<strong>必须提交</strong>。它锁定了整棵依赖树的精确版本，是团队协作结果一致的前提。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-9/01-node-build-pipeline.svg" alt="前端工程化链路示意图：npm 按 package.json 安装依赖，源代码经运行在 Node.js 上的 webpack 或 Vite 构建成浏览器可直接运行的产物"><figcaption>图 1：源码经 Node 上的构建工具变成浏览器可运行产物</figcaption></figure>
 
 <h2>二、模块化：CommonJS 与 ES Modules</h2>
-<p>早期前端靠多个 <code>script</code> 标签拼装代码，是同步加载：文件一多，顺序不能错，前一个文件报错后面的全部不执行，而且所有顶层变量都挂在全局对象上。模块化要解决的就是「每个文件有自己的作用域，需要什么显式引入，对外只暴露指定接口」。今天的 JavaScript 有两套主流模块规范。</p>
-<p><strong>CommonJS</strong> 是 Node.js 的模块规范，用 <code>module.exports</code> 导出、<code>require()</code> 引入。它在<strong>运行时</strong>加载：<code>require</code> 执行完才拿到一个对象，因此加载顺序可以写在条件语句里，但也无法在编译期做静态优化；同一个模块被多次 require 只会执行一次（单例），导出的是值的拷贝。</p>
-<p><strong>ES Modules（ESM）</strong> 是 ES6 引入的语言级模块规范，用 <code>export</code> / <code>export default</code> 导出、<code>import</code> 引入。<code>import</code> 语句会被提升到模块顶部，在<strong>编译阶段</strong>就确定依赖关系，因此要求是静态的：不能用变量或表达式拼模块名，也不能写在 <code>if</code> 里。导出的接口与模块内部变量是<strong>动态绑定</strong>，模块内部后来改了值，引入方看到的就是新值——这一点与 CommonJS 的「值拷贝」正好相反。在 Node 里写 ESM 需要文件后缀用 <code>.mjs</code>，或在 <code>package.json</code> 中声明 <code>"type": "module"</code>。</p>
-<p>顺便澄清概念上的混淆：AMD 是 RequireJS 推广的浏览器端异步模块规范，CMD 是国人玉伯的 SeaJS 提出的规范，CommonJS 才是 Node 的服务端规范，三者不是同一件事；UMD 则是为了兼容 AMD、CommonJS 和全局变量三种环境而写的通用包装。至于「浏览器不支持 import」这个说法也已经过时：现代浏览器支持 <code>&lt;script type="module"&gt;</code> 原生加载 ESM（要求带 <code>./</code> 的完整路径并配 MIME 类型），只是<strong>裸模块名</strong>（<code>import Vue from 'vue'</code>）和 Less、TypeScript 等非 JS 资源，浏览器依然处理不了——这正是打包器的舞台。</p>
+<p>早期前端靠多个 <code>script</code> 标签拼装代码，是同步加载。文件一多，顺序就不能错，前一个文件报错后面的全部不执行，而且所有顶层变量都挂在全局对象上。模块化要解决的就是“每个文件有自己的作用域，需要什么显式引入，对外只暴露指定接口”。今天的 JavaScript 有两套主流模块规范。</p>
+<p><strong>CommonJS</strong> 是 Node.js 的模块规范，用 <code>module.exports</code> 导出、<code>require()</code> 引入。它在<strong>运行时</strong>加载：<code>require</code> 执行完才拿到一个对象，因此加载顺序可以写在条件语句里，但也无法在编译期做静态优化。同一个模块被多次 require 只会执行一次（单例），导出的是值的拷贝。</p>
+<p><strong>ES Modules（ESM）</strong> 是 ES6 引入的语言级模块规范，用 <code>export</code> / <code>export default</code> 导出、<code>import</code> 引入。<code>import</code> 语句会被提升到模块顶部，在<strong>编译阶段</strong>就确定依赖关系，因此要求是静态的。不能用变量或表达式拼模块名，也不能写在 <code>if</code> 里。导出的接口与模块内部变量是<strong>动态绑定</strong>，模块内部后来改了值，引入方看到的就是新值——这一点与 CommonJS 的“值拷贝”正好相反。在 Node 里写 ESM 需要文件后缀用 <code>.mjs</code>，或在 <code>package.json</code> 中声明 <code>"type": "module"</code>。</p>
+<p>顺便澄清概念上的混淆。AMD 是 RequireJS 推广的浏览器端异步模块规范，CMD 由 SeaJS 提出，CommonJS 才是 Node 的服务端规范，三者不是同一件事；UMD 则是为兼容 AMD、CommonJS 和全局变量三种环境而写的通用包装。至于“浏览器不支持 import”这个说法也已经过时。现代浏览器支持 <code>&lt;script type="module"&gt;</code> 原生加载 ESM，要求写带 <code>./</code> 的完整路径并配置 MIME 类型。但<strong>裸模块名</strong>（<code>import Vue from 'vue'</code>）和 Less、TypeScript 等非 JS 资源，浏览器依然处理不了，这正是打包器的舞台。</p>
 <pre><code class="language-js">// ---------- math.js：CommonJS 写法 ----------
 function add(a, b) {
   return a + b;
@@ -186,13 +187,13 @@ import math, { multiply } from './math.mjs'; // 默认导出不带大括号，�
 console.log(multiply(2, 3), math.name);</code></pre>
 
 <h2>三、webpack：打包器到底做了什么</h2>
-<p>webpack 是<strong>静态模块打包器</strong>。它从一个入口文件出发，递归分析 <code>import</code>/<code>require</code>，构建出一张依赖关系图（dependency graph），再把这些模块合并成一到多个 <strong>bundle</strong>，最后只用一个 <code>script</code> 标签引入即可。围绕这条主线，它有三个扩展点：</p>
+<p>webpack 是<strong>静态模块打包器</strong>。它从一个入口文件出发，递归分析 <code>import</code>/<code>require</code>，构建出一张依赖关系图（dependency graph），再把这些模块合并成一到多个 <strong>bundle</strong>。最后只用一个 <code>script</code> 标签引入即可。围绕这条主线，它有三个扩展点：</p>
 <ul>
-<li><strong>loader</strong>：把非 JS 资源和高级语法转成能进依赖图的模块，例如 <code>css-loader</code>、<code>less-loader</code>、<code>babel-loader</code>、<code>vue-loader</code>。loader 在 <code>module.rules</code> 中按 <code>test</code> 匹配文件、从右到左执行。</li>
-<li><strong>plugin</strong>：介入构建的整个生命周期，做 loader 做不到的事，如 <code>HtmlWebpackPlugin</code>（按模板生成 HTML 并自动注入 bundle）、<code>MiniCssExtractPlugin</code>（抽出独立 CSS 文件）。</li>
-<li><strong>devServer + devtool</strong>：前者提供本地开发服务器、热更新（HMR）与自动刷新，后者通过 source map 让打包后的代码仍能对应到源文件，从而在 Chrome 里打断点调试。</li>
+<li><strong>loader</strong>：把非 JS 资源和高级语法转成能进依赖图的模块，如 <code>css-loader</code>、<code>less-loader</code>、<code>babel-loader</code>、<code>vue-loader</code>。它在 <code>module.rules</code> 中按 <code>test</code> 匹配文件，并从右到左执行。</li>
+<li><strong>plugin</strong>：介入构建的整个生命周期，做 loader 做不到的事。例如 <code>HtmlWebpackPlugin</code> 按模板生成 HTML 并自动注入 bundle，<code>MiniCssExtractPlugin</code> 抽出独立的 CSS 文件。</li>
+<li><strong>devServer + devtool</strong>：前者提供本地开发服务器、热更新（HMR）与自动刷新。后者通过 source map 让打包后的代码仍能对应到源文件，从而在 Chrome 里打断点调试。</li>
 </ul>
-<p>安装时有两点容易踩坑。第一，<strong>webpack 从 4.0 起把命令行拆到了独立的 <code>webpack-cli</code></strong>，只装 webpack 会提示找不到命令，必须两个一起装；第二，<strong>优先本地安装（<code>-D</code>）而不是全局安装 <code>-g</code></strong>，全局安装会把版本锁死在一台机器上，不同项目需要不同大版本时就会冲突。此外，网上流传的 webpack 3.x + webpack-dev-server 2.x 教程已明显过时：当前主线是 webpack 5，开发服务器也已更名为 <code>webpack serve</code>，旧参数 <code>--inline</code> 在新版本中已被移除，照抄会直接报参数错误。</p>
+<p>安装时有两点容易踩坑。第一，<strong>webpack 从 4.0 起把命令行拆到了独立的 <code>webpack-cli</code></strong>，只装 webpack 会提示找不到命令，必须两个一起装。第二，<strong>优先本地安装（<code>-D</code>）而不是全局安装 <code>-g</code></strong>，全局安装会把版本锁死在一台机器上，不同项目需要不同大版本时就会冲突。此外，网上流传的 webpack 3.x + webpack-dev-server 2.x 教程已明显过时。当前主线是 webpack 5，开发服务器也已更名为 <code>webpack serve</code>。旧参数 <code>--inline</code> 已被移除，照抄会直接报参数错误。</p>
 <pre><code class="language-js">// webpack.config.js —— webpack 5 写法
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
@@ -218,8 +219,8 @@ module.exports = {
 };</code></pre>
 
 <h2>四、脚手架与 Vite：把配置交给工具链</h2>
-<p>手写 webpack 配置能帮你理解原理，但每个新项目都从零配一遍并不划算。<strong>脚手架</strong>就是「预置好目录结构、构建配置和默认依赖」的项目模板，一条命令就能得到可运行的工程骨架。Vue 官方早期提供 Vue CLI（内部封装 webpack），现在已进入维护状态，推荐改用 <code>create-vue</code>，它生成的工程基于 <strong>Vite</strong>。</p>
-<p>Vite 与 webpack 的思路不同：webpack 必须先把整张依赖图打包完，开发服务器才能响应请求，项目一大启动就要几十秒；Vite 在开发阶段<strong>不打包</strong>，而是利用浏览器原生 ESM 按需编译单个模块，并用 esbuild 预构建第三方依赖，因此启动和热更新都在毫秒级；到了生产构建再交给 Rollup 输出优化后的产物。代价是它更依赖现代浏览器（ESM 原生支持）。所以选型可以这样判断：新项目直接 Vite，维护中的老项目（Vue CLI / webpack 配置）继续沿用，不必为了追新重写构建链。</p>
+<p>手写 webpack 配置能帮你理解原理，但每个新项目都从零配一遍并不划算。<strong>脚手架</strong>就是“预置好目录结构、构建配置和默认依赖”的项目模板，一条命令就能得到可运行的工程骨架。Vue 官方早期提供 Vue CLI（内部封装 webpack），现在已进入维护状态，推荐改用 <code>create-vue</code>，它生成的工程基于 <strong>Vite</strong>。</p>
+<p>Vite 与 webpack 的思路不同。webpack 必须先把整张依赖图打包完，开发服务器才能响应请求，项目一大启动就要几十秒。Vite 在开发阶段<strong>不打包</strong>，而是利用浏览器原生 ESM 按需编译单个模块，并用 esbuild 预构建第三方依赖，因此启动和热更新都在毫秒级。到了生产构建，它再交给 Rollup 输出优化后的产物，代价是更依赖现代浏览器（ESM 原生支持）。所以选型可以这样判断：新项目直接 Vite，维护中的老项目（Vue CLI / webpack 配置）继续沿用，不必为了追新重写构建链。</p>
 <pre><code class="language-bash"># 方式一：Vue 官方脚手架（基于 Vite），交互式选择 TypeScript / Router / Pinia 等
 npm create vue@latest my-app
 cd my-app && npm install && npm run dev
@@ -235,18 +236,13 @@ npm create vite@latest my-app -- --template vue
 <ul>
 <li><strong>依赖装了却用不了</strong>：多数是没走 <code>npm run</code>。局部安装的 CLI 不会进入全局 PATH，用 <code>npx webpack</code> 也可以。</li>
 <li><strong>改完配置不生效</strong>：<code>webpack.config.js</code>、<code>vite.config.js</code> 以及依赖的变更都需要<strong>重启</strong>开发服务器，HMR 只处理源码。</li>
-<li><strong>路径写法</strong>：配置里用 <code>path.resolve(__dirname, 'dist')</code> 这类绝对路径，别依赖启动目录；Windows 与 Linux 的路径分隔符不同，拼接交给 <code>path</code>。</li>
+<li><strong>路径写法</strong>：配置里用 <code>path.resolve(__dirname, 'dist')</code> 这类绝对路径，别依赖启动目录。Windows 与 Linux 的路径分隔符不同，拼接交给 <code>path</code>。</li>
 <li><strong>版本混用</strong>：webpack 4/5 与 webpack-cli 的版本要配套；跟着老教程装 webpack 3，就等于放弃了当前所有文档和插件。</li>
 <li><strong>Vue CLI 与 Vite 的配置不通用</strong>：<code>vue.config.js</code> 里的 <code>devServer</code> 写法不能直接搬到 <code>vite.config.js</code>，迁移时按官方文档逐项对照。</li>
 </ul>
 
 <h2>五、小结</h2>
-<p>本章把前端工程化的地基串了起来：<strong>Node.js</strong> 提供运行环境，让构建工具能在浏览器之外跑起来；<strong>npm</strong> 负责依赖声明、安装与命令编排，<code>package.json</code> 与 lock 文件是团队协作的契约；<strong>模块规范</strong>决定了代码如何拆分与引用，CommonJS 服务于 Node 的运行时加载，ESM 是语言标准并支持静态分析与动态绑定；<strong>webpack</strong> 以入口为起点构建依赖图、用 loader 和 plugin 完成转译与优化，用 devServer 与 source map 换取开发体验；<strong>Vite 与脚手架</strong>则把配置收敛成模板，让开发阶段免于打包。理解这条链路之后，再看到脚手架自动生成的一堆配置文件，你就知道每一行大概在解决什么问题了。下一章我们会在这个工程骨架之上，进入组件化开发的具体实践。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-3-8/"><span class="pn-label">← 上一篇</span><span class="pn-title">Vue 进阶</span></a>
-      <a class="next-post" href="/java-tutorial-3-10/"><span class="pn-label">下一篇 →</span><span class="pn-title">HTTP 协议与浏览器原理</span></a>
-      </nav>
+<p>本章把前端工程化的地基串了起来。<strong>Node.js</strong> 提供运行环境，让构建工具能在浏览器之外跑起来；<strong>npm</strong> 负责依赖声明、安装与命令编排，<code>package.json</code> 与 lock 文件是团队协作的契约。<strong>模块规范</strong>决定了代码如何拆分与引用，CommonJS 服务于 Node 的运行时加载，ESM 是语言标准并支持静态分析与动态绑定。<strong>webpack</strong> 以入口为起点构建依赖图，用 loader 和 plugin 完成转译与优化，用 devServer 与 source map 换取开发体验；<strong>Vite 与脚手架</strong>则把配置收敛成模板，让开发阶段免于打包。理解这条链路之后，再看到脚手架自动生成的一堆配置文件，就知道每一行大概在解决什么问题了。下一章将在这个工程骨架之上，进入组件化开发的具体实践。</p>
           </article>
   <!-- Footer -->
   <footer>

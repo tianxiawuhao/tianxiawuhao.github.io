@@ -134,13 +134,13 @@
 
 <p>用 JDBC 查一个用户，至少要写四步：拿连接、拼 SQL、遍历结果集、关闭资源。样板代码之外，真正的痛点是“阻抗失配”：Java 中继承、引用、集合一应俱全，数据库里却是表、外键、行，两者没有天然对应。ORM（Object-Relational Mapping，对象关系映射）就是自动化这层转换的中间件：一张表映射成一个类，一行映射成一个对象，一列映射成一个属性。SQL 的生成、连接与事务则交给框架。</p>
 
-<p>JPA（Java Persistence API，现称 Jakarta Persistence）是一套规范。它只定义注解（<code>@Entity</code>、<code>@Id</code> 等）与接口（<code>EntityManager</code>、<code>Query</code> 等），不提供具体实现。Hibernate 是最流行的实现，这样分层的好处是业务代码只依赖 JPA API，更换实现时改动很小。要注意包名的分水岭：Java EE 与 Spring Boot 2.x 使用 <code>javax.persistence</code>，Spring Boot 3.x 起改用 <code>jakarta.persistence</code>。两边注解同名，却不能混用。与 MyBatis 相比，JPA 是“全自动”——简单 CRUD 几乎不写 SQL；MyBatis 是“半自动”——SQL 由开发者编写，它只做参数与结果映射。复杂报表类查询，JPA 也可以退回 <code>createNativeQuery</code> 写原生 SQL。</p>
+<p>JPA（Java Persistence API，现称 Jakarta Persistence）是一套规范。它只定义注解（<code>@Entity</code>、<code>@Id</code> 等）与接口（<code>EntityManager</code>、<code>Query</code> 等），不提供具体实现。Hibernate 是最流行的实现，这样分层的好处是业务代码只依赖 JPA API，更换实现时改动很小。要注意包名的分水岭。Java EE 与 Spring Boot 2.x 使用 <code>javax.persistence</code>，Spring Boot 3.x 起改用 <code>jakarta.persistence</code>。两边注解同名，却不能混用。与 MyBatis 相比，JPA 是“全自动”——简单 CRUD 几乎不写 SQL；MyBatis 是“半自动”——SQL 由开发者编写，它只做参数与结果映射。复杂报表类查询，JPA 也可以退回 <code>createNativeQuery</code> 写原生 SQL。</p>
 
-<p>ORM 的收益不止省代码：Hibernate 会维护一级缓存与脏检查，同一个工作单元里重复取同一行只发一条 SQL；对象字段改了也不用手写 update，连接、事务、方言差异都被挡在框架内部。代价也要认清——SQL 由框架生成，写得不好可能悄悄退化成 N+1 或全表扫描，排查时必须打开 SQL 日志；映射本身也有学习曲线，注解配错往往到启动或首次查询才暴露。所以 ORM 并不是“不用懂 SQL”，恰恰相反，它要求开发者更懂 SQL，才能看懂框架究竟发出了哪些语句。</p>
+<p>ORM 的收益不止省代码：Hibernate 会维护一级缓存与脏检查，同一个工作单元里重复取同一行只发一条 SQL。对象字段改了也不用手写 update，连接、事务、方言差异都被挡在框架内部。代价也要认清——SQL 由框架生成，写得不好可能悄悄退化成 N+1 或全表扫描，排查时必须打开 SQL 日志；映射本身也有学习曲线，注解配错往往到启动或首次查询才暴露。所以 ORM 并不是“不用懂 SQL”，恰恰相反，它要求开发者更懂 SQL，才能看懂框架究竟发出了哪些语句。</p>
 
 <h2>最小可用配置：persistence.xml</h2>
 
-<p>JPA 要求类路径下的 <code>META-INF/persistence.xml</code> 至少声明一个 <code>persistence-unit</code>，它描述用哪个实现、连哪个库、映射哪些实体。<code>transaction-type="RESOURCE_LOCAL"</code> 表示事务由程序自行管理（通过 <code>EntityTransaction</code>），适合 Java SE 与单元测试；跑在 Java EE 容器里则用 JTA 交给容器。</p>
+<p>JPA 要求类路径下的 <code>META-INF/persistence.xml</code> 至少声明一个 <code>persistence-unit</code>，它描述用哪个实现、连哪个库、映射哪些实体。<code>transaction-type="RESOURCE_LOCAL"</code> 表示事务由程序自行管理（通过 <code>EntityTransaction</code>），适合 Java SE 与单元测试。跑在 Java EE 容器里则用 JTA 交给容器。</p>
 
 <pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence"
@@ -166,7 +166,7 @@
 &lt;/persistence&gt;
 </code></pre>
 
-<p>几个容易踩的点。<strong>provider 类名要和版本对齐</strong>：Hibernate 4.3 与 5.x 使用 <code>org.hibernate.jpa.HibernatePersistenceProvider</code>；老教程里的 <code>org.hibernate.ejb.HibernatePersistence</code> 属于 Hibernate 3/4 早期。在 JPA 2.x 下使用它会直接抛 <code>ClassNotFoundException</code>。<strong><code>hbm2ddl.auto</code> 只该出现在开发期</strong>：<code>update</code> 会自动加表加列，<code>create-drop</code> 每次重建。生产上应当使用 <code>validate</code> 或干脆不配，把 DDL 交给 Flyway、Liquibase 这类迁移工具。<code>show_sql</code> 与 <code>format_sql</code> 的默认值都是 false，想看到 SQL 必须显式配成 <code>true</code>，或把 <code>org.hibernate.SQL</code> 的日志级别设为 debug。Spring Boot 项目通常不再手写这个文件，而是在 <code>application.yml</code> 中配置 <code>spring.datasource.*</code> 与 <code>spring.jpa.*</code>，但底层仍是同一套属性。连接池相关的老属性也可以省掉：Hibernate 4.3 起会自动探测类路径上的连接池，Spring Boot 项目更推荐直接配置 <code>spring.datasource.hikari.*</code>。</p>
+<p>几个容易踩的点。<strong>provider 类名要和版本对齐</strong>：Hibernate 4.3 与 5.x 使用 <code>org.hibernate.jpa.HibernatePersistenceProvider</code>。老教程里的 <code>org.hibernate.ejb.HibernatePersistence</code> 属于 Hibernate 3/4 早期。在 JPA 2.x 下使用它会直接抛 <code>ClassNotFoundException</code>。<strong><code>hbm2ddl.auto</code> 只该出现在开发期</strong>：<code>update</code> 会自动加表加列，<code>create-drop</code> 每次重建。生产上应当使用 <code>validate</code> 或干脆不配，把 DDL 交给 Flyway、Liquibase 这类迁移工具。<code>show_sql</code> 与 <code>format_sql</code> 的默认值都是 false，想看到 SQL 必须显式配成 <code>true</code>，或把 <code>org.hibernate.SQL</code> 的日志级别设为 debug。Spring Boot 项目通常不再手写这个文件，而是在 <code>application.yml</code> 中配置 <code>spring.datasource.*</code> 与 <code>spring.jpa.*</code>，但底层仍是同一套属性。连接池相关的老属性也可以省掉：Hibernate 4.3 起会自动探测类路径上的连接池，Spring Boot 项目更推荐直接配置 <code>spring.datasource.hikari.*</code>。</p>
 
 <h2>实体类：用注解把类映射成表</h2>
 
@@ -194,7 +194,7 @@ public class Customer {
 }
 </code></pre>
 
-<p>逐个说明：<code>@Entity</code> 标记这是一个实体，<code>name</code> 属性默认取类名，JPQL 中使用的就是这个名字；<code>@Table</code> 指定表名，不写则由命名策略从类名推导（<code>CustomerOrder</code> 推导为 <code>customer_order</code>）。<code>@Id</code> 必须落在主键字段上，<code>@GeneratedValue</code> 指定生成策略。<code>IDENTITY</code> 依赖数据库自增列（MySQL、SQL Server），<code>SEQUENCE</code> 依赖序列（Oracle、PostgreSQL），<code>TABLE</code> 用一张专用表模拟，<code>AUTO</code> 则交给实现按数据库方言自行选择。有教程称“AUTO 在 MySQL 下会采用一个特定的表来保存主键”，这个说法并不准确。Hibernate 在 MySQL 上如何实现 AUTO 取决于版本与方言，想要确定的行为就应显式写 <code>IDENTITY</code>。</p>
+<p>逐个说明：<code>@Entity</code> 标记这是一个实体，<code>name</code> 属性默认取类名，JPQL 中使用的就是这个名字。<code>@Table</code> 指定表名，不写则由命名策略从类名推导（<code>CustomerOrder</code> 推导为 <code>customer_order</code>）。<code>@Id</code> 必须落在主键字段上，<code>@GeneratedValue</code> 指定生成策略。<code>IDENTITY</code> 依赖数据库自增列（MySQL、SQL Server），<code>SEQUENCE</code> 依赖序列（Oracle、PostgreSQL）。<code>TABLE</code> 用一张专用表模拟，<code>AUTO</code> 则交给实现按数据库方言自行选择。有教程称“AUTO 在 MySQL 下会采用一个特定的表来保存主键”，这个说法并不准确。Hibernate 在 MySQL 上如何实现 AUTO 取决于版本与方言，想要确定的行为就应显式写 <code>IDENTITY</code>。</p>
 
 <p><code>@Column</code> 的常用属性是 <code>name</code>、<code>nullable</code>、<code>unique</code>、<code>length</code>、<code>insertable</code>、<code>updatable</code>。最后两个属性名容易写错：写成 <code>inserttable</code>、<code>updateable</code> 根本无法通过编译。另外两点：实体不能是 final 类；字段访问与属性访问（注解写在字段上还是 getter 上）要全类统一，混用会在启动时报错。</p>
 
@@ -238,7 +238,7 @@ try {
 }
 </code></pre>
 
-<p>这里的关键是实体的四个状态：new 出来的对象是<strong>瞬时态</strong>；<code>persist</code> 或查询之后进入<strong>持久化态</strong>，此后任何字段改动都会在 flush 时同步到数据库，不需要调用 update；<code>em.close()</code> 或 <code>clear()</code> 之后变成<strong>游离态</strong>；<code>merge</code> 把游离对象的改动复制回一个托管实例并把托管实例返回，所以一定要接住它的返回值。此外，除查询外的写操作必须包含在活动事务中，否则不会真正落库，甚至抛 <code>TransactionRequiredException</code>。最后要注意 <code>EntityManager</code> 自带一级缓存：同一个 <code>em</code> 里连续 <code>find</code> 同一主键两次，第二次不会再发 SQL，拿到的是同一个对象引用，这正是脏检查能生效的前提。</p>
+<p>这里的关键是实体的四个状态：瞬时态、持久化态、游离态与删除态。new 出来的对象是<strong>瞬时态</strong>。<code>persist</code> 或查询之后进入<strong>持久化态</strong>，此后任何字段改动都会在 flush 时同步到数据库，不需要调用 update。<code>em.close()</code> 或 <code>clear()</code> 之后变成<strong>游离态</strong>；调用 <code>remove</code> 后进入删除态，提交事务时执行 DELETE。<code>merge</code> 把游离对象的改动复制回一个托管实例并把托管实例返回，所以一定要接住它的返回值。此外，除查询外的写操作必须包含在活动事务中，否则不会真正落库，甚至抛 <code>TransactionRequiredException</code>。最后要注意 <code>EntityManager</code> 自带一级缓存：同一个 <code>em</code> 里连续 <code>find</code> 同一主键两次，第二次不会再发 SQL，拿到的是同一个对象引用，这正是脏检查能生效的前提。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-8/01-entity-lifecycle.svg" alt="JPA 实体四种状态与 persist、remove、close、merge 的流转关系图"><figcaption>图 1：JPA 实体的四态流转——瞬时态经 persist 进入持久化态，close/clear 后变游离态，merge 把游离对象的改动复制回托管实例，remove 只作用于托管对象</figcaption></figure>
 
