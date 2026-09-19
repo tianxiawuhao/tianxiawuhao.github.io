@@ -135,10 +135,10 @@
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-9/01-sync-routes.svg" alt="四条数据采集路线选型示意图"><figcaption>图 1：四条采集路线——批量关系库、日志文件、binlog 增量与埋点指标流</figcaption></figure>
 
 <p><strong>批量关系型数据库同步</strong>：把 MySQL、Oracle、PostgreSQL 的表整表或按条件搬运到 HDFS、Hive。代表工具是 Apache Sqoop 与阿里开源的 DataX。两者都以 JDBC 读取、支持并发切分、以离线批任务方式运行，区别在于任务模型：Sqoop 把任务翻译成 MapReduce 作业，依赖 Hadoop 集群资源；DataX 是纯单机多线程框架，以 Reader/Writer 插件模型工作，不需要提交 MR。</p>
-<p><strong>日志文件采集</strong>：把不断追加的文本日志从应用服务器汇聚到 HDFS 或 Kafka。代表工具是 Flume。它的模型是 Agent，一个 Agent 由 Source（采集端）、Channel（缓冲）和 Sink（写出端）组成，用事务把三者串起来，保证不丢但可能重复，即至少一次（at-least-once）语义。</p>
+<p><strong>日志文件采集</strong>：把不断追加的文本日志从应用服务器汇聚到 HDFS 或 Kafka。代表工具是 Flume。它的模型是 Agent：一个 Agent 由 Source（采集端）、Channel（缓冲）和 Sink（写出端）组成。三者用事务串起来，保证不丢但可能重复，即至少一次（at-least-once）语义。</p>
 <p><strong>增量变更订阅（CDC）</strong>：不想每天全表扫一遍，而是实时捕获 MySQL 的 binlog，把 insert/update/delete 变成一条条消息送进 Kafka。代表工具是 Canal，以及更通用的 Debezium。这类方案的时效可以做到秒级甚至亚秒级。</p>
 <p><strong>日志／指标实时管道</strong>：Filebeat、Logstash、Fluentd 等更偏轻量采集与清洗，通常与 Kafka、Elasticsearch 搭配。它们与 Flume 定位重叠，选型时按已有技术栈决定即可，不必同时上两套工具。</p>
-<p>这里必须纠正一处常见混淆：在 Hadoop 源码里会看到 <code>DataXceiverServer</code>、<code>DataXceiver</code> 这两个类名，它们是 HDFS DataNode 内部处理数据块读写请求的线程，负责接收客户端与其他 DataNode 的读写流，与阿里开源的离线同步工具 DataX 没有任何关系，只是名字相似。源码里出现 DataXceiver 时，不能把它当成 DataX 的资料来用。</p>
+<p>这里必须纠正一处常见混淆：在 Hadoop 源码里会看到 <code>DataXceiverServer</code>、<code>DataXceiver</code> 这两个类名。它们是 HDFS DataNode 内部处理数据块读写请求的线程，负责接收客户端与其他 DataNode 的读写流，与阿里开源的离线同步工具 DataX 没有任何关系，只是名字相似。源码里出现 DataXceiver 时，不能把它当成 DataX 的资料来用。</p>
 
 <h2>批量同步实战：Sqoop 与 DataX</h2>
 <p>Sqoop 的用法是「一条命令一个任务」，最典型的全量导入如下。</p>
@@ -225,7 +225,7 @@ a1.sources.r1.channels = c1
 a1.sinks.k1.channel = c1</code></pre>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-9/02-flume-agent.svg" alt="Flume Agent 结构示意图"><figcaption>图 2：Source–Channel–Sink 与两个事务，Channel 类型和 positionFile 决定丢不丢、重不重</figcaption></figure>
 
-<p>三个容易出问题的地方：<code>positionFile</code> 记录消费位点，攒够了要保证 Flume 重启后不重跑或漏读，删掉它就等于从头再来；Memory Channel 在进程崩溃时缓冲数据全丢，要求不丢必须换 File Channel，代价是吞吐明显下降；HDFS Sink 按时间滚动文件，rollInterval 与 batchSize 配得不好会产出大量小文件，给 NameNode 添麻烦。</p>
+<p>三个易错点：<code>positionFile</code> 记录消费位点，攒够了要保证 Flume 重启后不重跑或漏读，删掉它就等于从头再来；Memory Channel 在进程崩溃时缓冲数据全丢，要求不丢必须换 File Channel，代价是吞吐明显下降；HDFS Sink 按时间滚动文件，rollInterval 与 batchSize 配得不好会产出大量小文件，给 NameNode 添麻烦。</p>
 <p>Canal 走的是另一条路：它伪装成 MySQL 的从库，向主库发送 dump 协议请求，解析 binlog 后把变更事件投递出去。使用前必须在 MySQL 侧开启 <code>binlog_format=ROW</code>，并给 Canal 账号授予 <code>REPLICATION SLAVE</code>、<code>REPLICATION CLIENT</code> 权限。</p>
 <pre><code class="language-java">CanalConnector connector = CanalConnectors.newSingleConnector(
         new InetSocketAddress("canal01", 11111), "example", "", "");

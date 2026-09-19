@@ -132,9 +132,9 @@
 
 <h2>一、equals 与 hashCode：一条必须同时遵守的契约</h2>
 
-<p><code>equals</code> 默认比较引用地址，<code>hashCode</code> 默认返回由对象地址派生的整数，两者都来自 <code>Object</code>。一旦按“业务值相等”重写 <code>equals</code>，就必须同时重写 <code>hashCode</code>，否则以哈希为基础的集合会立刻出错。《Effective Java》把这条契约写得很明确：如果两个对象 <code>equals</code> 返回 <code>true</code>，它们的 <code>hashCode</code> 必须相等；反过来，<code>hashCode</code> 相等不要求 <code>equals</code> 为 <code>true</code>（这就是哈希冲突）。</p>
+<p><code>equals</code> 默认比较引用地址，<code>hashCode</code> 默认返回由对象地址派生的整数，两者都来自 <code>Object</code>。一旦按“业务值相等”重写 <code>equals</code>，就必须同时重写 <code>hashCode</code>，否则以哈希为基础的集合会立刻出错。《Effective Java》把这条契约写得很明确：如果两个对象 <code>equals</code> 返回 <code>true</code>，它们的 <code>hashCode</code> 必须相等；反过来，<code>hashCode</code> 相等并不要求 <code>equals</code> 为 <code>true</code>，这就是哈希冲突。</p>
 
-<p>违反契约的后果很具体。假设只重写了 <code>equals</code>，两个“相等”的对象会落入哈希表的不同桶，于是 <code>HashSet</code> 里出现两个看起来重复的元素，<code>HashMap</code> 的 <code>get</code> 找不到刚刚 <code>put</code> 进去的键——数据没丢，只是找不到了，这类 bug 排查起来非常耗时。</p>
+<p>违反契约的后果很具体。假设只重写了 <code>equals</code>，两个“相等”的对象会落入哈希表的不同桶，于是 <code>HashSet</code> 里出现两个看起来重复的元素；<code>HashMap</code> 的 <code>get</code> 找不到刚刚 <code>put</code> 进去的键。数据没丢，只是找不到了，这类 bug 排查起来非常耗时。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-1/01-equals-hashcode.svg" alt="equals 与 hashCode 契约对比图：equals 为 true 则 hashCode 必须相等；同时重写 hashCode 时等价对象落进同一个桶，只重写 equals 时两个相等对象落进不同桶，导致 HashSet 出现重复元素、HashMap get 找不到刚 put 的键"><figcaption>图 1：equals 与 hashCode 的契约，以及“只重写 equals”导致的散列错位</figcaption></figure>
 
@@ -176,11 +176,11 @@ public final class User {
 
 <p>由此可以解释两个经典现象。其一，私有方法、静态方法、构造方法都<strong>不能</strong>被覆盖：私有方法对子类不可见，静态方法属于类而不属于对象（只能被隐藏），构造方法根本不参与继承。其二，父类构造方法中调用一个被子类覆盖的方法时，会执行子类的版本，而此时子类字段尚未初始化，读到的是默认值 <code>0</code> 或 <code>null</code>——这正是"构造方法里不要调用可被覆盖的方法"这条规范的原因。</p>
 
-<p>顺便区分三组容易混的词：<code>final</code> 是修饰符（类不可继承、方法不可覆盖、变量不可重新赋值），<code>finally</code> 是异常处理的收尾代码块，<code>finalize</code> 是 <code>Object</code> 上一个已被废弃（Java 9 起标记 <code>@Deprecated</code>）的回收前回调，三者毫无关系。同理，<code>String</code> 是<strong>不可变</strong>类且被 <code>final</code> 修饰，<code>StringBuilder</code> 可变但线程不安全，<code>StringBuffer</code> 可变且方法加了同步。</p>
+<p>顺便区分三组容易混的词：<code>final</code> 是修饰符，类不可继承、方法不可覆盖、变量不可重新赋值；<code>finally</code> 是异常处理的收尾代码块；<code>finalize</code> 是 <code>Object</code> 上一个已被废弃的回收前回调，Java 9 起标记 <code>@Deprecated</code>，三者毫无关系。同理，<code>String</code> 是<strong>不可变</strong>类且被 <code>final</code> 修饰，<code>StringBuilder</code> 可变但线程不安全，<code>StringBuffer</code> 可变且方法加了同步。</p>
 
 <h2>三、集合：数据结构决定你怎么选</h2>
 
-<p>集合类的问题几乎都能回到数据结构上。<code>ArrayList</code> 底层是<strong>动态数组</strong>，按下标随机访问是 O(1)，中间插入删除要搬移元素，是 O(n)；<code>LinkedList</code> 底层是<strong>双向链表</strong>，头尾增删是 O(1)，但按下标访问需要遍历，是 O(n)。所以"ArrayList 查询快、LinkedList 增删快"这句话只在增删发生在两端、或已经持有节点位置时才成立，在中间频繁增删时 LinkedList 还要付出遍历定位的代价，实际项目中绝大多数场景直接用 <code>ArrayList</code> 就好。</p>
+<p>集合类的问题几乎都能回到数据结构上。<code>ArrayList</code> 底层是<strong>动态数组</strong>，按下标随机访问是 O(1)，中间插入删除要搬移元素，是 O(n)；<code>LinkedList</code> 底层是<strong>双向链表</strong>，头尾增删是 O(1)，但按下标访问需要遍历，是 O(n)。所以“ArrayList 查询快、LinkedList 增删快”这句话只在增删发生在两端、或已经持有节点位置时才成立。在中间频繁增删时，LinkedList 还要付出遍历定位的代价，因此实际项目中绝大多数场景直接用 <code>ArrayList</code> 就好。</p>
 
 <p><code>HashMap</code> 底层是<strong>数组 + 链表 + 红黑树</strong>：先用键的 <code>hashCode</code> 经过扰动函数算出桶下标，冲突的键以链表串在同一个桶里；当单个桶的链表长度达到 8 且数组长度达到 64 时，链表转为红黑树，把最坏查找从 O(n) 降到 O(log n)。扩容阈值是“容量 × 负载因子”，默认负载因子 <code>0.75</code>，每次扩容容量翻倍。容量之所以总是 2 的幂，是因为取模被优化成了位运算 <code>(n - 1) &amp; hash</code>——只有 n 是 2 的幂时，结果才等价于 <code>hash % n</code>。另外要记住：<code>HashMap</code> 允许一个 <code>null</code> 键和多个 <code>null</code> 值，线程不安全；需要并发时用 <code>ConcurrentHashMap</code>，而不是早已被淘汰的 <code>Hashtable</code>。需要保持迭代顺序时用 <code>LinkedHashMap</code>，它维护的是<strong>插入顺序</strong>，构造时传入 <code>true</code> 才变成访问顺序，而不是“按哈希值排序”；要按键排序则用 <code>TreeMap</code>。</p>
 
@@ -208,9 +208,9 @@ for (Map.Entry&lt;String, Integer&gt; e : count.entrySet()) {
 
 <h2>四、异常：什么时候该抛，什么时候该接</h2>
 
-<p>异常体系的根是 <code>Throwable</code>，下面分两支。<code>Error</code> 表示 JVM 层面的严重问题，如 <code>OutOfMemoryError</code>、<code>StackOverflowError</code>，程序不该也无法处理；<code>Exception</code> 才是业务代码关心的部分，又分两类：<strong>受检异常</strong>（继承 <code>Exception</code> 但不继承 <code>RuntimeException</code>）必须显式 <code>try-catch</code> 或用 <code>throws</code> 声明；<strong>非受检异常</strong>（<code>RuntimeException</code> 及其子类，如 <code>NullPointerException</code>、<code>ClassCastException</code>、<code>ArithmeticException</code>）编译器不强制处理。</p>
+<p>异常体系的根是 <code>Throwable</code>，下面分两支。<code>Error</code> 表示 JVM 层面的严重问题，如 <code>OutOfMemoryError</code>、<code>StackOverflowError</code>，程序不该也无法处理。<code>Exception</code> 才是业务代码关心的部分，又分两类：<strong>受检异常</strong>（继承 <code>Exception</code> 但不继承 <code>RuntimeException</code>）必须显式 <code>try-catch</code> 或用 <code>throws</code> 声明；<strong>非受检异常</strong>是 <code>RuntimeException</code> 及其子类，如 <code>NullPointerException</code>、<code>ClassCastException</code>、<code>ArithmeticException</code>，编译器不强制处理。</p>
 
-<p><code>try-catch-finally</code> 有三个高频追问。<code>catch</code> 和 <code>finally</code> 都可以省略，但两者不能同时省略；<code>catch</code> 中 <code>return</code> 时 <code>finally</code> 依然会执行，并且如果 <code>finally</code> 里也写了 <code>return</code>，它会<strong>覆盖</strong>前面的返回值，还会吞掉尚未处理的异常——所以规范里明确禁止在 <code>finally</code> 中写 <code>return</code>。资源释放不要再手写 <code>finally</code>，用 try-with-resources 更短也更安全：它按声明的逆序自动调用 <code>close()</code>，并且把 <code>close()</code> 抛出的异常记为“被抑制的异常”（可用 <code>getSuppressed()</code> 取到），不会覆盖主异常。</p>
+<p><code>try-catch-finally</code> 有三个高频追问。<code>catch</code> 和 <code>finally</code> 都可以省略，但两者不能同时省略；<code>catch</code> 中 <code>return</code> 时 <code>finally</code> 依然会执行。如果 <code>finally</code> 里也写了 <code>return</code>，它会<strong>覆盖</strong>前面的返回值，还会吞掉尚未处理的异常，所以规范里明确禁止在 <code>finally</code> 中写 <code>return</code>。资源释放不要再手写 <code>finally</code>，用 try-with-resources 更短也更安全：它按声明的逆序自动调用 <code>close()</code>，并且把 <code>close()</code> 抛出的异常记为“被抑制的异常”，可用 <code>getSuppressed()</code> 取到，因此，不会覆盖主异常。</p>
 
 <pre><code class="language-java">import java.io.BufferedReader;
 import java.io.FileReader;
@@ -234,7 +234,7 @@ public class OrderNotFoundException extends RuntimeException {
 
 <h2>五、泛型与反射：类型擦除带来的陷阱</h2>
 
-<p>泛型最大的考点是<strong>类型擦除</strong>：泛型信息只存在于编译期，编译后 <code>List&lt;String&gt;</code> 和 <code>List&lt;Integer&gt;</code> 在字节码里都是 <code>List</code>，类型参数被替换为上界（无界时是 <code>Object</code>），并在必要处插入强制类型转换。由此推出四个结论：不能写 <code>new T[10]</code> 或 <code>new ArrayList&lt;T&gt;()</code>；不能用 <code>instanceof List&lt;String&gt;</code>；静态成员不能使用类的类型参数；重载不能只靠泛型参数区分。同时，<code>List&lt;String&gt;</code> 不是 <code>List&lt;Object&gt;</code> 的子类型，想让方法接收任意类型的列表要用通配符 <code>List&lt;?&gt;</code>，需要写入时用 <code>List&lt;? super T&gt;</code>，只读取时用 <code>List&lt;? extends T&gt;</code>，即 PECS 原则：生产者用 <code>extends</code>，消费者用 <code>super</code>。</p>
+<p>泛型最大的考点是<strong>类型擦除</strong>：泛型信息只存在于编译期：编译后 <code>List&lt;String&gt;</code> 和 <code>List&lt;Integer&gt;</code> 在字节码里都是 <code>List</code>，类型参数被替换为上界（无界时是 <code>Object</code>），并在必要处插入强制类型转换。由此推出四个结论：不能写 <code>new T[10]</code> 或 <code>new ArrayList&lt;T&gt;()</code>；不能用 <code>instanceof List&lt;String&gt;</code>；静态成员不能使用类的类型参数；重载不能只靠泛型参数区分。同时，<code>List&lt;String&gt;</code> 不是 <code>List&lt;Object&gt;</code> 的子类型，想让方法接收任意类型的列表要用通配符 <code>List&lt;?&gt;</code>，需要写入时用 <code>List&lt;? super T&gt;</code>，只读取时用 <code>List&lt;? extends T&gt;</code>，即 PECS 原则：生产者用 <code>extends</code>，消费者用 <code>super</code>。</p>
 
 <p>反射则是运行期获取类信息的入口，<code>Class.forName</code>、<code>getDeclaredFields</code>、<code>setAccessible(true)</code> 这些 API 让框架得以在不知道具体类的情况下创建对象、注入依赖、解析注解。代价是绕过了编译期检查、性能低于直接调用、对模块化与安全性不友好，所以业务代码里应避免滥用，只在框架、序列化、通用工具等确有必要的地方使用。</p>
 

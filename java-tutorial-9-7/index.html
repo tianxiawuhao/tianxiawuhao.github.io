@@ -128,17 +128,17 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>消息队列与缓存是 Java 后端面试出镜率最高的两个中间件话题。很多人能背出「解耦、异步、削峰」与「穿透、击穿、雪崩」，却说不清为什么会丢消息、为什么双写一定有不一致窗口。本节把两者放在一起讲：它们解决的其实是同一类问题——<strong>用一层中间存储换取解耦与性能，同时必须为这层存储的丢失、重复、失效买单</strong>。目标是把「为什么需要 → 怎么做 → 常见坑」讲成一条完整逻辑链。</p>
+<p>消息队列与缓存是 Java 后端面试出镜率最高的两个中间件话题。很多人能背出“解耦、异步、削峰”与“穿透、击穿、雪崩”，却说不清为什么会丢消息、为什么双写一定有不一致窗口。本章把两者放在一起讲，因为它们解决的其实是同一类问题：<strong>用一层中间存储换取解耦与性能，同时必须为这层存储的丢失、重复、失效买单</strong>。目标是把“为什么需要 → 怎么做 → 常见坑”讲成一条完整逻辑链。</p>
 
 <h2>一、为什么需要消息队列</h2>
 <p><strong>解耦</strong>：A 产生一条数据，下游 B、C、D 都要用。若 A 直接同步调用三个接口，下游新增、下线、超时、重试全要 A 维护。改成 A 只投递一条消息，谁需要谁订阅。</p>
 <p><strong>异步</strong>：A 本地写库 3ms，B、C、D 分别 300ms、450ms、200ms，串行总延迟约 953ms；改为投递 3 条消息（约 5ms），响应降到 8ms 量级。</p>
 <p><strong>削峰</strong>：MQ 作为缓冲池，让下游按自身能力匀速消费。但削峰的前提是峰值总量能在可接受时间内消化完，否则只是推迟崩溃。</p>
-<p>代价也要说清：可用性降低（MQ 挂了链路就断）、复杂度升高（一致性问题、重复消费、可靠投递）。回答「MQ 有什么缺点」时不要只说「复杂」，要落到具体问题上。</p>
+<p>代价也要说清：可用性降低，MQ 挂了链路就断；复杂度升高，带来一致性问题、重复消费、可靠投递等新课题。回答“MQ 有什么缺点”时不要只说“复杂”，要落到具体问题上。</p>
 
 <h2>二、消息队列四大经典问题</h2>
 <h3>1. 消息丢失：分三段兜底</h3>
-<p>生产者端用 confirm 模式（吞吐远高于 transaction 模式）：进入 confirm 后每条消息获得唯一投递序号，Broker 落盘成功回 ACK，失败回 NACK，据此重发。Broker 端靠持久化：<strong>交换机、队列声明 durable，消息 deliveryMode 置为 2</strong>——只设 deliveryMode 而不设队列 durable，重启后队列消失，消息照样丢。消费端改成<strong>手动 ACK</strong>，业务处理成功后再确认。</p>
+<p>生产者端用 confirm 模式，吞吐远高于 transaction 模式：进入 confirm 后每条消息获得唯一投递序号，Broker 落盘成功回 ACK，失败回 NACK，据此重发。Broker 端靠持久化：<strong>交换机、队列声明 durable，消息 deliveryMode 置为 2</strong>。只设 deliveryMode 而不设队列 durable，重启后队列消失，消息照样丢。消费端改成<strong>手动 ACK</strong>，业务处理成功后再确认。</p>
 <pre><code class="language-java">channel.confirmSelect();
 channel.queueDeclare("order.queue", true, false, false, null);
 channel.basicPublish("", "order.queue",
@@ -149,8 +149,8 @@ if (!channel.waitForConfirms(5000)) {
 }
 </code></pre>
 
-<h3>2. 重复消费：用幂等，而不是「保证只消费一次」</h3>
-<p>重复的根因是 ACK 在网络上丢了，Broker 重投。标准答案不是「怎么不重复」，而是<strong>承认重复不可避免，把消费端做成幂等</strong>：消息带全局唯一 ID，消费前用 Redis <code>SET NX</code> 去重；或把写入设计成天然幂等（<code>INSERT ... ON DUPLICATE KEY UPDATE</code>、状态机单向流转）；再用数据库唯一索引兜底。</p>
+<h3>2. 重复消费：用幂等，而不是“保证只消费一次”</h3>
+<p>重复的根因是 ACK 在网络上丢了，Broker 重投。标准答案不是“怎么不重复”，而是<strong>承认重复不可避免，把消费端做成幂等</strong>：消息带全局唯一 ID，消费前用 Redis <code>SET NX</code> 去重；或把写入设计成天然幂等，例如 <code>INSERT ... ON DUPLICATE KEY UPDATE</code>、状态机单向流转；再用数据库唯一索引兜底。</p>
 <pre><code class="language-java">String key = "mq:consumed:" + orderNo;               // 业务唯一键
 Boolean first = redis.opsForValue()
         .setIfAbsent(key, "1", Duration.ofHours(24)); // 底层即 SET NX
@@ -164,19 +164,19 @@ try {
     throw e;
 }
 </code></pre>
-<p>注意去重标记与业务处理并非原子：若标记已写入而进程崩溃，重投会被误判为重复，造成漏消费。高一致性场景应把去重记录与业务数据放进同一本地事务，或用「处理中 → 已完成」两阶段状态。</p>
+<p>注意去重标记与业务处理并非原子。若标记已写入而进程崩溃，重投会被误判为重复，造成漏消费。高一致性场景应把去重记录与业务数据放进同一本地事务，或用“处理中 → 已完成”两阶段状态。</p>
 
 <h3>3. 顺序性：把并行改成串行</h3>
-<p>一个队列被多个消费者订阅时，消息按 round-robin 分发，无法保证处理顺序。做法只有两条：一个队列只对应一个消费者（用多队列换并发）；或消费者内部维护内存队列，按 key 取模分发，每个内存队列单线程处理。Kafka、RocketMQ 是「同一 partition 内有序」，因此要用订单号之类做分区键，保证同一订单的消息落同一分区。</p>
+<p>一个队列被多个消费者订阅时，消息按 round-robin 分发，无法保证处理顺序。做法只有两条：一个队列只对应一个消费者，用多队列换并发；或消费者内部维护内存队列，按 key 取模分发，每个内存队列单线程处理。Kafka、RocketMQ 是“同一 partition 内有序”，因此要用订单号之类做分区键，保证同一订单的消息落同一分区。</p>
 
 <h3>4. 积压：先扩容消费能力，再确认消息还在不在</h3>
-<p>顺序是：先修消费者、恢复速度，停掉现有消费者；临时新建 partition 数量为原来 10 倍的 topic，用一个只转发的消费者把积压数据均匀写入；再用 10 倍机器并行消费；完事恢复原架构。坑在于：若 Broker 配了消息 TTL，积压超过 TTL 的消息会被清理，那就是丢数据而非积压，只能低峰期从数据库捞出来补投。队列快写满且业务允许丢时，可先快速消费丢弃保住可用性，事后再补。</p>
+<p>顺序是：先修消费者、恢复速度，停掉现有消费者；再临时新建 partition 数量为原来 10 倍的 topic，用一个只转发的消费者把积压数据均匀写入；接着用 10 倍机器并行消费；完事恢复原架构。坑在于：若 Broker 配了消息 TTL，积压超过 TTL 的消息会被清理，那就是丢数据而非积压，只能低峰期从数据库捞出来补投。队列快写满且业务允许丢时，可先快速消费丢弃保住可用性，事后再补。</p>
 
 <h2>三、缓存穿透、击穿、雪崩</h2>
 <p>三个名字很像，成因完全不同，混淆是最常见的失分点。</p>
-<p><strong>穿透</strong>：数据在缓存和数据库<strong>都不存在</strong>，缓存永不命中。解法一是缓存空值并设短 TTL（如 30 秒），否则大量伪造 key 会把缓存撑爆；二是前置布隆过滤器，用大 bitmap 拦截「一定不存在」的 key，代价是有误判率且标准实现不支持删除。</p>
-<p><strong>击穿</strong>：数据在数据库<strong>存在</strong>，但某个热点 key 恰好过期，大量并发请求同时回源。它与雪崩的区别是「并发查同一条数据」。解法是互斥锁，只让一个请求回源重建缓存，其余短暂等待后重试。</p>
-<p><strong>雪崩</strong>：<strong>大批 key 同一时刻集中失效</strong>，或缓存服务整体不可用。要分因应对：key 集中过期就在基础 TTL 上叠加随机值打散；服务宕机则靠事前高可用（主从 + 哨兵或 Redis Cluster）、事中本地缓存与限流降级（Sentinel/Hystrix 兜流量）、事后快速恢复（开启持久化，避免冷启动打穿数据库）。</p>
+<p><strong>穿透</strong>：数据在缓存和数据库<strong>都不存在</strong>，缓存永不命中。解法一是缓存空值并设短 TTL（如 30 秒），否则大量伪造 key 会把缓存撑爆；二是前置布隆过滤器，用大 bitmap 拦截“一定不存在”的 key，代价是有误判率且标准实现不支持删除。</p>
+<p><strong>击穿</strong>：数据在数据库<strong>存在</strong>，但某个热点 key 恰好过期，大量并发请求同时回源。它与雪崩的区别是“并发查同一条数据”。解法是互斥锁，只让一个请求回源重建缓存，其余短暂等待后重试。</p>
+<p><strong>雪崩</strong>：<strong>大批 key 同一时刻集中失效</strong>，或缓存服务整体不可用。要分因应对：key 集中过期，就在基础 TTL 上叠加随机值打散；服务宕机，则靠事前高可用（主从 + 哨兵或 Redis Cluster）、事中本地缓存与限流降级（Sentinel/Hystrix 兜流量）、事后快速恢复（开启持久化，避免冷启动打穿数据库）。</p>
 <pre><code class="language-java">private static final long BASE_TTL = 1800;   // 基础 TTL 30 分钟
 private static final Random RANDOM = new Random();
 
@@ -197,10 +197,10 @@ return order;
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-7/01-cache-three-problems.svg" alt="缓存穿透、击穿、雪崩对比"><figcaption>图 1：缓存穿透、击穿、雪崩的成因与解法对比</figcaption></figure>
 
 <h2>四、双写一致性与 Redis 高可用</h2>
-<p>只要同时写缓存和数据库，就一定存在不一致窗口，工程上追求的是把窗口压到足够小。常用组合是 <strong>Cache Aside：先更新数据库，再删除缓存</strong>（而非更新缓存）。删除优于更新，是因为并发更新缓存容易出现「后写的旧值覆盖先写的新值」；删除让下一次读请求自然回源。仍存在「回源读到旧值、写缓存晚于删除」的极小窗口，加固手段是延迟双删或订阅 binlog（如 Canal）异步失效。要求极高一致性时，可把读写串行化到内存队列，代价是吞吐大幅下降。</p>
-<p><strong>持久化</strong>：RDB 是某时刻全量快照，文件紧凑、恢复快，但两次快照之间的数据会丢；AOF 记录写命令，用 <code>appendfsync everysec</code> 折中。需纠正一个流传很广的说法：<strong>「RDB 是 Redis 默认持久化方式」只对 Redis 6.x 及更早版本成立，Redis 7.0 起 AOF 已是默认</strong>，面试最好带版本限定。</p>
-<p><strong>内存淘汰</strong>：内存不足时 <code>noeviction</code> 直接对写命令报错；缓存场景常用 <code>allkeys-lru</code>，只淘汰设了过期时间的 key 则用 <code>volatile-lru</code>、<code>volatile-random</code>、<code>volatile-ttl</code>；4.0 以后还有 LFU 系列（<code>allkeys-lfu</code>、<code>volatile-lfu</code>），对访问频率差异大的热点数据比 LRU 更准。要区分「过期删除策略」（惰性删除 + 定期抽样）与「内存淘汰策略」（内存写满时牺牲谁）。</p>
-<p><strong>分布式锁</strong>：正确的加锁方式是用一条原子命令完成「加锁 + 过期」，并写入客户端唯一标识，解锁时校验标识后用 Lua 删除，避免误删他人的锁。</p>
+<p>只要同时写缓存和数据库，就一定存在不一致窗口，工程上追求的是把窗口压到足够小。常用组合是 <strong>Cache Aside：先更新数据库，再删除缓存</strong>，而不是更新缓存。删除优于更新，是因为并发更新缓存容易出现“后写的旧值覆盖先写的新值”；删除则让下一次读请求自然回源。这条路径仍存在“回源读到旧值、写缓存晚于删除”的极小窗口，加固手段是延迟双删或订阅 binlog（如 Canal）异步失效。要求极高一致性时，可把读写串行化到内存队列，代价是吞吐大幅下降。</p>
+<p><strong>持久化</strong>：RDB 是某时刻全量快照，文件紧凑、恢复快，但两次快照之间的数据会丢；AOF 记录写命令，用 <code>appendfsync everysec</code> 折中。需纠正一个流传很广的说法：<strong>“RDB 是 Redis 默认持久化方式”只对 Redis 6.x 及更早版本成立，Redis 7.0 起 AOF 已是默认</strong>，面试最好带版本限定。</p>
+<p><strong>内存淘汰</strong>：内存不足时 <code>noeviction</code> 直接对写命令报错；缓存场景常用 <code>allkeys-lru</code>，只淘汰设了过期时间的 key 则用 <code>volatile-lru</code>、<code>volatile-random</code>、<code>volatile-ttl</code>；4.0 以后还有 LFU 系列（<code>allkeys-lfu</code>、<code>volatile-lfu</code>），对访问频率差异大的热点数据比 LRU 更准。要区分“过期删除策略”（惰性删除 + 定期抽样）与“内存淘汰策略”（内存写满时牺牲谁）。</p>
+<p><strong>分布式锁</strong>：正确的加锁方式是用一条原子命令完成“加锁 + 过期”，并写入客户端唯一标识；解锁时校验标识后用 Lua 删除，避免误删他人的锁。</p>
 <pre><code class="language-java">// 加锁：SET key value NX EX 30，避免 SETNX 与 EXPIRE 之间宕机造成死锁
 String requestId = UUID.randomUUID().toString();
 Boolean locked = redis.opsForValue()
@@ -214,15 +214,10 @@ String unlockLua = "if redis.call('get', KEYS[1]) == ARGV[1] "
 redis.execute(new DefaultRedisScript&lt;&gt;(unlockLua, Long.class),
         Collections.singletonList("lock:order:1001"), requestId);
 </code></pre>
-<p>锁的过期时间必须大于业务最长执行时间，否则业务没跑完锁就释放，其他线程会同时进入临界区。单机 Redis 主从切换时锁可能丢失，安全性要求高时应用 RedLock 或换 ZooKeeper、etcd。</p>
+<p>锁的过期时间必须大于业务最长执行时间，否则业务没跑完锁就释放，其他线程会同时进入临界区。单机 Redis 主从切换时锁可能丢失，安全性要求高时应用 RedLock，或换用 ZooKeeper、etcd。</p>
 
 <h2>五、小结</h2>
-<p>MQ 的价值是解耦、异步、削峰，代价是可用性与复杂度；四大问题按环节拆解——丢失靠 confirm + 持久化 + 手动 ACK 兜底，重复靠消费端幂等，顺序靠单队列单消费者或按 key 分区，积压先确认消息是否被 TTL 清理再扩容消费。缓存要分清穿透（两边都没有）、击穿（热点 key 过期）、雪崩（大批 key 同时失效或服务不可用）；一致性上用 Cache Aside 先更新库再删缓存，接受窗口极小而非为零。再补上持久化选型、淘汰策略与原子加锁，把成因、方案、代价都讲清楚，面试深度就已超过多数候选人。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-9-6/"><span class="pn-label">← 上一篇</span><span class="pn-title">分布式与微服务面试题</span></a>
-      <a class="next-post" href="/java-tutorial-9-8/"><span class="pn-label">下一篇 →</span><span class="pn-title">系统设计与场景题</span></a>
-      </nav>
+<p>MQ 的价值是解耦、异步、削峰，代价是可用性与复杂度。四大问题按环节拆解：丢失靠 confirm + 持久化 + 手动 ACK 兜底，重复靠消费端幂等，顺序靠单队列单消费者或按 key 分区，积压先确认消息是否被 TTL 清理再扩容消费。缓存要分清穿透（两边都没有）、击穿（热点 key 过期）、雪崩（大批 key 同时失效或服务不可用）。一致性上用 Cache Aside 先更新库再删缓存，接受窗口极小而非为零。再补上持久化选型、淘汰策略与原子加锁，把成因、方案、代价都讲清楚，面试深度就已超过多数候选人。</p>
           </article>
   <!-- Footer -->
   <footer>

@@ -137,11 +137,11 @@
 
 <h2>第一步：规划资源，别让 YARN 和系统抢内存</h2>
 
-<p>运维的第一原则是“资源要显式声明”。NodeManager 默认认为自己有很多资源，如果不显式配置，它会按默认值分配容器，很容易把操作系统和其他进程一起挤死。两个最核心的参数是 <code>yarn.nodemanager.resource.memory-mb</code>（本节点能给容器用的物理内存）和 <code>yarn.nodemanager.resource.cpu-vcores</code>（本节点能给容器用的虚拟核数）。</p>
+<p>运维的第一原则是“资源要显式声明”。NodeManager 默认认为自己有很多资源，如果不显式配置，它会按默认值分配容器，很容易把操作系统和其他进程一起挤死。两个最核心的参数是 <code>yarn.nodemanager.resource.memory-mb</code>，即本节点能给容器用的物理内存；以及 <code>yarn.nodemanager.resource.cpu-vcores</code>，即本节点能给容器用的虚拟核数。</p>
 
 <p>规划时按这个顺序算：先用物理内存减去系统和 DataNode、NodeManager 等常驻进程的占用，剩下的才是容器可用内存。虚拟核数一般不超过物理核数，超过部分只是“超售”，调度器会放行，但任务之间会互相抢 CPU。另外要理解 Container 的“最小/最大内存”决定单个容器能申请的资源粒度；如果最大容器内存设得比任务实际需要还小，任务会直接抛出资源请求异常。</p>
 
-<p>还有一个容易被忽略的坑：<code>yarn.nodemanager.resource.cpu-vcores</code> 和 <code>yarn.nodemanager.resource.pcores-vcores-multiplier</code> 这类“自动探测”参数，只在 <code>yarn.nodemanager.resource.detect-hardware-capabilities</code> 打开且相关值为 <code>-1</code> 时才生效。生产环境建议关掉自动探测、手工写死数值，否则换一台机器跑出来的资源盘子都不一样，容量规划就失去意义。</p>
+<p>还有一个容易被忽略的坑：<code>yarn.nodemanager.resource.cpu-vcores</code> 和 <code>yarn.nodemanager.resource.pcores-vcores-multiplier</code> 这类“自动探测”参数，只在 <code>yarn.nodemanager.resource.detect-hardware-capabilities</code> 打开、且相关值为 <code>-1</code> 时才生效。生产环境建议关掉自动探测、手工写死数值，否则换一台机器跑出来的资源盘子都不一样，容量规划就失去意义。</p>
 
 <h2>第二步：选对调度器，管好队列</h2>
 
@@ -187,7 +187,7 @@
   &lt;/property&gt;
 &lt;/configuration&gt;</code></pre>
 
-<p>队列的容量配置写在 <code>capacity-scheduler.xml</code> 里，典型的最小骨架是给 <code>root.default</code> 设定容量与上限，并用 <code>yarn.scheduler.capacity.root.queues</code> 声明子队列列表。改完队列配置不需要重启集群，执行下面这条命令即可让 RM 重新加载：</p>
+<p>队列的容量配置写在 <code>capacity-scheduler.xml</code> 里，最小骨架是给 <code>root.default</code> 设定容量与上限，并用 <code>yarn.scheduler.capacity.root.queues</code> 声明子队列列表。改完队列配置不需要重启集群，执行下面这条命令即可让 RM 重新加载：</p>
 
 <pre><code class="language-bash"># 重新加载队列配置（不会中断正在运行的作业）
 yarn rmadmin -refreshQueues
@@ -216,24 +216,24 @@ hdfs dfsadmin -refreshNodes
 
 # 页面查看 DataNode 状态：http://hadoop102:9870/dfshealth.html#tab-datanode</code></pre>
 
-<p>缩容（退役）走黑名单：把要下线的节点写进 <code>blacklist</code> 并刷新，节点状态会先变成 <code>decommission in progress</code>（正在把块复制到其他节点），复制完成后变成 <code>decommissioned</code>，这时才可以停进程关机。这里有一个真实的坑：<strong>如果副本数是 3，而当前服役的 DataNode 数量小于等于 3，退役会一直卡在“退役中”</strong>——因为 blocks 无处可复制。必须先把副本数调小，或者先加节点，再退役。黑名单文件内容为空时也要保留文件本身，配置文件缺路径会导致集群启动异常。</p>
+<p>缩容（退役）走黑名单：把要下线的节点写进 <code>blacklist</code> 并刷新，节点状态会先变成 <code>decommission in progress</code>，即正在把块复制到其他节点；复制完成后变成 <code>decommissioned</code>，这时才可以停进程关机。这里有一个真实的坑：<strong>如果副本数是 3，而当前服役的 DataNode 数量小于等于 3，退役会一直卡在“退役中”</strong>——因为 blocks 无处可复制。必须先把副本数调小，或者先加节点，再退役。黑名单文件内容为空时也要保留文件本身，配置文件缺路径会导致集群启动异常。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-10/02-datanode-decommission.svg" alt="DataNode 退役流程图：写入黑名单、refreshNodes 刷新、副本迁移中、decommissioned 完成后停进程；下方橙色卡点提示副本数为 3 且服役节点不超过 3 时退役会一直卡在退役中"><figcaption>图 2：DataNode 退役的四步流程与“副本数 3、服役节点 ≤ 3 时卡在退役中”的卡点</figcaption></figure>
 
 
 <h2>第四步：监控与故障定位</h2>
 
-<p>运维靠三个入口：ResourceManager 的 <code>8088</code> 端口看应用与队列、NameNode 的 <code>9870</code> 端口看 HDFS 健康与 DataNode 状态、JobHistory 的 <code>19888</code> 端口看历史作业。注意 <code>50070</code> 是 Hadoop 2.x 的 NameNode UI 端口，3.x 已经换成 <code>9870</code>，网上很多老教程混用，照抄会连不上。</p>
+<p>运维靠三个入口：ResourceManager 的 <code>8088</code> 端口看应用与队列；NameNode 的 <code>9870</code> 端口看 HDFS 健康与 DataNode 状态；JobHistory 的 <code>19888</code> 端口看历史作业。注意 <code>50070</code> 是 Hadoop 2.x 的 NameNode UI 端口，3.x 已经换成 <code>9870</code>，网上很多老教程混用，照抄会连不上。</p>
 
-<p>还建议开启日志聚集（<code>yarn.log-aggregation-enable</code> 置为 <code>true</code>，并配置 <code>yarn.log.server.url</code> 与保留时间），让容器日志在应用结束后自动上传到 HDFS。否则任务失败后容器一销毁，日志就跟着没了，只能靠猜。开启后必须重启 NodeManager、ResourceManager 和 HistoryServer 才生效。</p>
+<p>还建议开启日志聚集：把 <code>yarn.log-aggregation-enable</code> 置为 <code>true</code>，并配置 <code>yarn.log.server.url</code> 与保留时间，让容器日志在应用结束后自动上传到 HDFS。否则任务失败后容器一销毁，日志就跟着没了，只能靠猜。开启后必须重启 NodeManager、ResourceManager 与 HistoryServer 才生效。</p>
 
-<p>两类典型故障的判断方法：<strong>任务一直处于 ACCEPTED 不分配容器</strong>，先看是不是队列容量被占满、容器最大内存设得比任务需求小、或者 NodeManager 上报的资源总量根本不够；<strong>某台节点越跑越慢</strong>，先查 DataNode 与 NameNode 的心跳，正常间隔 3 秒，持续超时即说明有异常；再用 <code>fio</code> 之类的工具单独测这块盘的读写带宽。慢盘往往表现为“偶尔创建目录要一分钟以上”这类偶发现象，而不是直接报错。</p>
+<p>两类典型故障的判断方法：<strong>任务一直处于 ACCEPTED 不分配容器</strong>，先看是不是队列容量被占满、容器最大内存设得比任务需求小，或 NodeManager 上报的资源总量不够；<strong>某台节点越跑越慢</strong>，先查 DataNode 与 NameNode 的心跳，正常间隔 3 秒，持续超时即说明有异常；再用 <code>fio</code> 这类工具单独测这块盘的读写带宽。慢盘往往表现为“偶尔创建目录要一分钟以上”这类偶发现象，而不是直接报错。</p>
 
 <h2>常见坑与小结</h2>
 
 <p>把踩坑经验收成几条清单：内存单位是 MB，别把 4096 当 4G 写错位数；虚拟核数不能超过物理核数太多，超售换来的是任务互相拖慢；容器最大内存小于任务申请值时任务直接失败，而不是“降级运行”；队列参数可以热加载，但调度器实现类和 NM 资源总量改完要重启；白名单和黑名单文件缺一不可，退役前先确认副本数与节点数；NameNode 与 ResourceManager 都很吃内存，不要和同类重进程挤在同一台机器上。最后别忘了集群时间同步：内网如果没有配置 NTP 同步，时间漂移会直接搞乱调度与日志排查。</p>
 
-<p>小结一下：集群运维的顺序是"先规划资源，再选调度器，然后才是扩缩容和监控"。资源规划决定了集群的上限，调度器决定了资源在多个团队之间的分配规则，扩缩容决定了集群能否随业务伸缩，而监控与日志决定了出故障时你能不能在几分钟内定位，而不是靠重启碰运气。把这四件事做成有文档、可重复的流程，集群才算真正“可运维”。</p>
+<p>小结一下：集群运维的顺序是“先规划资源，再选调度器，然后才是扩缩容和监控”。资源规划决定了集群的上限，调度器决定了资源在多个团队之间的分配规则，扩缩容决定了集群能否随业务伸缩，而监控与日志决定了出故障时你能不能在几分钟内定位，而不是靠重启碰运气。把这四件事做成有文档、可重复的流程，集群才算真正“可运维”。</p>
           </article>
   <!-- Footer -->
   <footer>
