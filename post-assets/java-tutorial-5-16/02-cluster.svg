@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="450" viewBox="0 0 900 450" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Zookeeper 集群角色、ZAB 选举规则与分布式锁流程</title>
+  <rect width="900" height="450" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+  <text x="450" y="30" font-size="17" fill="#1f2b38" text-anchor="middle" font-weight="700">集群架构：一个 Leader、多个 Follower、过半即可用</text>
+
+  <rect x="120" y="52" width="150" height="40" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.6"/>
+  <text x="195" y="77" font-size="12.5" fill="#1f2b38" text-anchor="middle" font-weight="700">Leader</text>
+  <rect x="330" y="52" width="150" height="40" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="405" y="77" font-size="12.5" fill="#1f2b38" text-anchor="middle">Follower</text>
+  <rect x="540" y="52" width="150" height="40" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="615" y="77" font-size="12.5" fill="#1f2b38" text-anchor="middle">Follower</text>
+  <rect x="700" y="112" width="150" height="40" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="775" y="137" font-size="12.5" fill="#1f2b38" text-anchor="middle">Observer</text>
+  <line x1="272" y1="72" x2="326" y2="72" stroke="#c8d3e0" stroke-width="1.4"/>
+  <line x1="482" y1="72" x2="536" y2="72" stroke="#c8d3e0" stroke-width="1.4"/>
+  <line x1="195" y1="92" x2="700" y2="112" stroke="#c8d3e0" stroke-width="1.4" stroke-dasharray="6 4"/>
+
+  <rect x="40" y="176" width="400" height="120" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="60" y="200" font-size="12.5" fill="#1f2b38" text-anchor="start" font-weight="700">半数机制与奇数台</text>
+  <text x="60" y="224" font-size="11.5" fill="#5b6b7c" text-anchor="start">3 台可容忍 1 台故障，5 台可容忍 2 台：可用性 = n+1（n 为一半）</text>
+  <text x="60" y="244" font-size="11.5" fill="#5b6b7c" text-anchor="start">部署 2n+1 台是因为「多一台不提升容错，少一台容错减半」：</text>
+  <text x="60" y="264" font-size="11.5" fill="#5b6b7c" text-anchor="start">4 台与 3 台一样只能容忍 1 台故障，却多一份成本。</text>
+  <text x="60" y="286" font-size="11.5" fill="#e08a1e" text-anchor="start">生产建议 3 台起步，跨机房部署要保证同一分区内仍有多数派</text>
+
+  <rect x="460" y="176" width="400" height="120" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="480" y="200" font-size="12.5" fill="#e08a1e" text-anchor="start" font-weight="700">选举规则（ZAB 协议，非全新集群）</text>
+  <text x="480" y="224" font-size="11.5" fill="#1f2b38" text-anchor="start">投票内容：myid（谁） + zxid（数据有多新）</text>
+  <text x="480" y="246" font-size="11.5" fill="#1f2b38" text-anchor="start">1　逻辑时钟（epoch）小的直接忽略，只认最新一轮选举</text>
+  <text x="480" y="268" font-size="11.5" fill="#1f2b38" text-anchor="start">2　时钟相同，比 zxid（数据 id）：数据新的胜出</text>
+  <text x="480" y="290" font-size="11.5" fill="#1f2b38" text-anchor="start">3　zxid 也相同，比 myid：id 大的胜出（避免平票）</text>
+
+  <line x1="40" y1="316" x2="860" y2="316" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="450" y="342" font-size="13" fill="#1f2b38" text-anchor="middle" font-weight="700">分布式锁：临时顺序节点 + 监听前一个节点</text>
+
+  <rect x="60" y="360" width="150" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="135" y="384" font-size="11.5" fill="#1f2b38" text-anchor="middle" font-weight="700">① 在 /locks 下</text>
+  <text x="135" y="404" font-size="11.5" fill="#1f2b38" text-anchor="middle">创建临时顺序节点</text>
+  <line x1="214" y1="390" x2="254" y2="390" stroke="#c8d3e0" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="258" y="360" width="170" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="343" y="384" font-size="11.5" fill="#1f2b38" text-anchor="middle" font-weight="700">② 取出所有子节点排序</text>
+  <text x="343" y="404" font-size="11.5" fill="#1f2b38" text-anchor="middle">判断自己是不是最小</text>
+  <line x1="432" y1="390" x2="472" y2="390" stroke="#c8d3e0" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="476" y="360" width="170" height="60" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="561" y="384" font-size="11.5" fill="#1f2b38" text-anchor="middle" font-weight="700">③ 是最小 → 拿到锁</text>
+  <text x="561" y="404" font-size="11.5" fill="#5b6b7c" text-anchor="middle">执行业务后删除节点释放</text>
+  <line x1="650" y1="390" x2="690" y2="390" stroke="#c8d3e0" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="694" y="360" width="170" height="60" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="779" y="384" font-size="11.5" fill="#1f2b38" text-anchor="middle" font-weight="700">④ 否则只监听前一个</text>
+  <text x="779" y="404" font-size="11.5" fill="#5b6b7c" text-anchor="middle">被删除时再判断自己是否最小</text>
+</svg>

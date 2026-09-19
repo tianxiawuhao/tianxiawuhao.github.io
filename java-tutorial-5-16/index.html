@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="Zookeeper,分布式协调,分布式锁,ZAB,选主,CAP">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Zookeeper 分布式协调 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Zookeeper 分布式协调</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，9 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>分布式系统里有一类问题不属于任何单个服务，却谁都需要：谁当主节点、配置怎么统一刷新、多个节点如何抢同一把锁、某个服务下线了别人怎么立刻知道。这类问题统称为<strong>分布式协调</strong>，Zookeeper 就是为解决它们而生的中间件。它是 Google Chubby 的开源实现，也是 Hadoop 生态的协调基础。本章讲清它的数据模型与四种节点类型、半数机制与 ZAB 选举、Watch 的通知语义，再用完整的代码把分布式锁、配置中心和 Master 选举做出来，最后回答一个高频面试题：为什么现在不推荐用 Zookeeper 做服务注册中心。学完这一章，9-6 分布式面试题里的协调类问题就有落点了。</p>
+
+<h2>Zookeeper 是什么：四个原语</h2>
+<p>分布式系统的子模块往往不是孤立的，它们需要互相协作：配置要一致、状态要同步、主节点要唯一。Zookeeper 提供的就是这样一套「协调原语」，客户端基于它组合出上层能力。它主要支撑四件事：</p>
+<ul>
+<li><strong>命名服务</strong>：用层次化的目录结构登记资源，形如 <code>/app/service/instance-1</code>，作用类似 DNS。</li>
+<li><strong>配置管理</strong>：把配置集中存在某个节点上，变更时通知所有客户端动态刷新，无需重启。</li>
+<li><strong>分布式锁</strong>：用临时顺序节点实现互斥，会话断开自动释放，不会像 Redis 锁那样因超时而误释放。</li>
+<li><strong>集群管理</strong>：登记成员、感知上下线、在 Leader 宕机后自动选主。</li>
+</ul>
+<p>要理解它为什么能承担这些职责，先要接受一个前提：<strong>Zookeeper 是 CP 系统</strong>。按 CAP 定理，分布式系统在网络分区时只能在一致性与可用性之间二选一：Zookeeper 选择保证一致性——当集群中多数派节点不可达时，少数派一侧会拒绝服务而不是返回可能过期的数据。这个特性对「选主和锁」是必须的（两个主节点会带来灾难），但在另一些场景下会成为缺点，本章最后一节会展开。</p>
+
+<h2>数据模型与四种节点类型</h2>
+<p>Zookeeper 的数据结构是一棵树，每个节点叫 <strong>znode</strong>。它像文件系统，但有两点不同：<strong>每个节点都可以挂数据</strong>（不只是叶子节点），以及<strong>节点有类型</strong>。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-16/01-model.svg" alt="Zookeeper 树形数据模型、四种 znode 节点类型与 Watch 一次性通知机制"><figcaption>图 1：数据模型、节点类型与 Watch 的通知语义</figcaption></figure>
+
+<p>节点类型由「是否持久」和「是否带序号」两个维度组合成四种：</p>
+<ul>
+<li><strong>持久节点（PERSISTENT）</strong>：会话结束后依然存在，用来存放配置、目录结构。</li>
+<li><strong>临时节点（EPHEMERAL）</strong>：<strong>会话断开就自动删除</strong>，这是服务注册与存活探测的基础——进程挂了，会话超时，节点消失，别人立刻知道它下线了。注意临时节点不能有子节点。</li>
+<li><strong>持久顺序节点（PERSISTENT_SEQUENTIAL）</strong>：创建时自动在名字后补一个 10 位自增序号，如 <code>order-0000000001</code>，常用于生成全局有序编号。</li>
+<li><strong>临时顺序节点（EPHEMERAL_SEQUENTIAL）</strong>：分布式锁的标准做法，既保证唯一有序，又能在客户端崩溃时自动清理。</li>
+</ul>
+<p>客户端 API 只有几个：<code>create</code>、<code>delete</code>、<code>exists</code>、<code>getData</code>、<code>setData</code>、<code>getChildren</code>，每个都有同步与异步两种版本。所有写操作都会带一个 <strong>zxid</strong>（事务 ID），它单调递增，是判断数据新旧的依据——后面讲选举时会用到它。</p>
+<p>另一件必须记牢的事是 <strong>Watch 是一次性的</strong>：客户端在 <code>getData</code>、<code>getChildren</code> 或 <code>exists</code> 时可以顺手注册监听，节点变化后服务端推送一次事件，然后这个监听就失效了，<strong>要持续监听必须重新注册</strong>。此外事件只告诉「什么变了」，不告诉「变成什么」，客户端收到通知后需要自己重新读取数据。这直接决定了写代码的方式：通知处理函数里必须重新 <code>getData</code> 并再次注册 Watch，否则只能收到第一次变更。</p>
+
+<h2>集群架构：一个 Leader、多个 Follower、半数可用</h2>
+<p>Zookeeper 集群中的服务器有三种角色：<strong>Leader</strong> 负责发起投票与处理所有写请求；<strong>Follower</strong> 接收读请求、参与投票与写转发；<strong>Observer</strong> 只同步数据、不参与投票，用于在不降低写性能的前提下扩展读能力。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-16/02-cluster.svg" alt="Zookeeper 集群角色、半数机制、ZAB 选举规则与分布式锁流程"><figcaption>图 2：集群角色、半数机制、选举规则与分布式锁流程</figcaption></figure>
+
+<p>集群的关键机制是<strong>半数机制</strong>：只要超过一半的节点存活，集群就能提供服务。3 台机器可以容忍 1 台故障，5 台可以容忍 2 台，即「可用台数 = n + 1」（n 为一半）。<strong>这也是集群部署奇数台的原因</strong>：4 台和 3 台一样只能容忍 1 台故障，多出来的那台只增加成本不增加容错；反过来 2 台比 1 台更脆弱（没有多数派可言）。生产环境通常从 3 台起步，重要系统用 5 台。</p>
+<p>「多数派」还有一个部署上的含义：如果机房之间网络断开，<strong>只有包含多数派节点的那一侧能继续服务</strong>，另一侧会整体不可用。所以跨机房部署 Zookeeper 时，必须保证任意时刻至少有一个分区里有多数派节点，否则会出现「集群还活着但就是连不上」的事故。</p>
+
+<h2>ZAB 协议与选主规则</h2>
+<p>Zookeeper 靠 ZAB（Zookeeper Atomic Broadcast）协议在集群间同步数据并选出 Leader。选举分两种情况。</p>
+<p><strong>全新集群</strong>的选举很简单：没有历史数据时，谁的 <code>myid</code> 大谁当 Leader。以 5 台机器（myid 1～5）依次启动为例：1 启动时只有自己，无法形成多数派，保持 LOOKING 状态；2 启动后两者比较，2 的 id 大，但只有 2 票、未过半，仍无法选出；3 启动后，1、2、3 三台中 3 最大且已获得三票（超过半数 2.5），3 成为 Leader；4、5 之后启动只能当 Follower。</p>
+<p><strong>运行一段时间后的重新选举</strong>要复杂一些，投票内容变成 <code>(myid, zxid)</code> 的组合，规则有三条优先级：</p>
+<ol>
+<li>先比<strong>逻辑时钟（epoch）</strong>，时钟小的那一轮选举结果直接忽略，只认最新一轮；</li>
+<li>时钟相同时比 <strong>zxid（数据 id）</strong>，<strong>数据更新</strong>的节点胜出——这一条保证了选举出的 Leader 一定拥有最完整的数据，不会丢已提交的事务；</li>
+<li>zxid 也相同时比 <strong>myid</strong>，id 大的胜出，用于避免平票。</li>
+</ol>
+<p>面试里常问「为什么选举要比较 zxid 而不只是比 id」：因为一个数据落后的节点当上 Leader，会导致已经提交的写操作回滚丢失，破坏 Zookeeper 保证的一致性语义。</p>
+
+<h2>典型用法：分布式锁、配置中心与 Master 选举</h2>
+<p>把上面的机制组合起来，就能实现分布式协调的几个经典场景，每一种都有对应的节点类型与 Watch 用法。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-16/03-scenarios.svg" alt="Zookeeper 的六类应用场景、所用能力与今天的常见替代方案"><figcaption>图 3：应用场景、依赖的 ZK 能力与替代方案</figcaption></figure>
+
+<h3>分布式锁：临时顺序节点 + 只监听前一个</h3>
+<p>所有客户端在 <code>/locks</code> 下创建临时顺序节点，然后取回全部子节点排序，判断自己是不是最小的：是则拿到锁，否则<strong>只监听排在自己前一个的节点</strong>。</p>
+<pre><code class="language-java">import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooDefs;
+import org.apache.zookeeper.ZooKeeper;
+
+public class DistributedLock {
+
+    private static final String LOCK_ROOT = "/locks";
+    private final ZooKeeper zk;
+    private String currentPath;      // 本次抢锁创建的临时顺序节点
+
+    public DistributedLock(String connectString) throws Exception {
+        CountDownLatch connected = new CountDownLatch(1);
+        this.zk = new ZooKeeper(connectString, 30_000, event -> {
+            if (event.getState() == Watcher.Event.KeeperState.SyncConnected) {
+                connected.countDown();
+            }
+        });
+        connected.await();
+        if (zk.exists(LOCK_ROOT, false) == null) {
+            zk.create(LOCK_ROOT, new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        }
+    }
+
+    /** 加锁：抢不到就只监听前一个节点，避免惊群 */
+    public void lock() throws Exception {
+        // 1. 创建临时顺序节点，例如 /locks/lock-0000000007
+        currentPath = zk.create(LOCK_ROOT + "/lock-", new byte[0],
+                ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
+
+        while (true) {
+            List&lt;String&gt; children = zk.getChildren(LOCK_ROOT, false);
+            Collections.sort(children);                    // 序号即创建顺序
+            String current = currentPath.substring(LOCK_ROOT.length() + 1);
+            if (children.get(0).equals(current)) {
+                return;                                    // 自己最小，拿到锁
+            }
+            // 2. 只监听排在自己前面一个节点，它删除时再醒过来重试
+            String prev = children.get(children.indexOf(current) - 1);
+            CountDownLatch latch = new CountDownLatch(1);
+            zk.exists(LOCK_ROOT + "/" + prev, event -&gt; {
+                if (event.getType() == Watcher.Event.EventType.NodeDeleted) {
+                    latch.countDown();
+                }
+            });
+            latch.await();
+        }
+    }
+
+    /** 释放锁：删除自己的节点；若进程崩溃，会话超时后由服务端自动删除 */
+    public void unlock() throws Exception {
+        if (currentPath != null) {
+            zk.delete(currentPath, -1);
+            currentPath = null;
+        }
+    }
+}</code></pre>
+<p>这段实现里有三个设计要点值得说明。<strong>为什么用临时节点</strong>：客户端崩溃后会话超时，节点被服务端自动删除，锁自然释放，不会死锁；这也是它比 Redis 锁更稳的地方——Redis 锁通常要设过期时间，过期时间短了业务没跑完就误释放，长了又有死锁风险。<strong>为什么只监听前一个</strong>：如果所有等待者都监听锁节点本身，锁一释放就会同时唤醒几十上百个客户端来抢，形成「惊群」；只监听前一个节点，任意时刻只有一个客户端被唤醒，把竞争压力降到了最低。<strong>为什么要循环重试</strong>：Watch 是一次性的，且可能因为会话重连而丢失事件，所以唤醒后要重新判断自己是不是最小，而不是直接认为拿到了锁。</p>
+
+<h3>配置中心：读 + Watch + 重新注册</h3>
+<pre><code class="language-java">import java.nio.charset.StandardCharsets;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+
+/** 配置动态刷新：读取配置并持续监听变更 */
+public class ConfigCenter {
+
+    private static final String CONFIG_PATH = "/config/app1";
+    private final ZooKeeper zk;
+    private volatile String config;
+
+    public ConfigCenter(ZooKeeper zk) {
+        this.zk = zk;
+    }
+
+    public void watchConfig() throws Exception {
+        // 关键：每次读取都重新注册 Watch，否则只能收到一次变更通知
+        byte[] data = zk.getData(CONFIG_PATH, event -&gt; {
+            if (event.getType() == Watcher.Event.EventType.NodeDataChanged) {
+                try {
+                    watchConfig();                 // 重新读取并再次注册
+                } catch (Exception e) {
+                    System.out.println("配置刷新失败: " + e.getMessage());
+                }
+            }
+        }, null);
+        this.config = data == null ? "" : new String(data, StandardCharsets.UTF_8);
+        System.out.println("当前配置: " + config);
+    }
+}</code></pre>
+<p>配置中心的实现就是「读 + 注册 Watch + 变更后重新读取并重新注册」这个循环。工程上要注意两点：一是<strong>通知风暴</strong>，成百上千个客户端同时监听同一个配置节点，一次变更会同时唤醒全部客户端并产生大量读请求，解决思路是客户端本地缓存 + 随机延迟（加抖动）后再拉取；二是<strong>会话超时后的补偿</strong>，会话过期期间可能错过事件，所以客户端重连后必须全量拉一次配置，不能只等通知。</p>
+
+<h3>Master 选举与集群成员感知</h3>
+<p>Master 选举的写法与分布式锁几乎一致：所有候选节点在 <code>/election</code> 下创建临时顺序节点，<strong>序号最小的即为主</strong>，其余监听自己前一个节点。主节点挂掉后会话超时、节点自动删除，下一个节点被唤醒并成为新主。集群成员管理则更简单：每个服务实例启动时在 <code>/services/order</code> 下创建临时节点登记自身地址，其他服务用 <code>getChildren</code> 拿到全部实例列表并注册 Watch，实例上下线时就能及时感知。</p>
+<p>关于命名服务与全局 ID 补一句：利用持久顺序节点的自增序号可以生成全局有序编号，但<strong>性能很低</strong>（每个 ID 都要写一次 Zookeeper），生产环境生成分布式 ID 应该用雪花算法或号段模式，顺序节点只适合「需要严格有序且频率不高」的命名场景。</p>
+
+<h2>注册中心之争：为什么现在不推荐用 Zookeeper</h2>
+<p>Dubbo 早期默认用 Zookeeper 做注册中心，所以很多人默认「注册中心就该用 ZK」。但从 CAP 角度分析，这个选择并不理想。</p>
+<p><strong>Zookeeper 是 CP 系统</strong>：网络分区发生时，处于少数派一侧的节点会直接断开、拒绝服务（因为无法与多数派通信，无法保证数据一致）。<strong>而注册中心需要的是 AP</strong>：服务消费者拿到一份「三秒前的服务列表」远好过「一个错误」——过期的地址最多导致一次请求失败重试，而查不到任何地址会让整个调用链直接不可用。</p>
+<p>实践中还有一个更隐蔽的问题：Zookeeper 客户端在会话超时后会认为「节点不存在」，而下线事件的通知又有延迟，容易造成消费者与注册中心的信息不一致。这也解释了为什么后来 Nacos、Eureka、Consul 这类以 AP 为主的注册中心更受欢迎——它们允许短暂的数据不一致，换取更高的可用性。</p>
+<p>不过要说清楚的是，<strong>「不适合做注册中心」不等于「不该用 Zookeeper」</strong>。它最擅长的恰恰是那些必须强一致的协调场景：选主、分布式锁、元数据管理。而且 Hadoop、HBase、Kafka（2.8 版本前）、SolrCloud、Dubbo 的 ZK 注册模式都深度依赖它，在这些生态里它是既定的基础设施而非可选项。选型时的判断标准是：<strong>要强一致的协调 → ZK 或 etcd；要高可用的服务发现与配置 → Nacos；只是简单加锁 → Redis 更轻</strong>。</p>
+<p>小结：Zookeeper 用一棵树 + 四种节点类型 + 一次性 Watch + 半数派选举，支撑起了分布式协调的四类原语。要记住的关键点有四条：临时节点是「进程存活」的载体、顺序节点是「排队」的载体、Watch 一次性所以必须重新注册、多数派存活才可用所以集群部署奇数台。理解这四条，再看任何基于 ZK 的框架（Dubbo、Kafka、HBase）的实现都会清晰很多。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-5-15/"><span class="pn-label">← 上一篇</span><span class="pn-title">定时任务与实时推送</span></a>
+      <a class="next-post" href="/java-tutorial-6-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">JVM 内存结构与对象</span></a>
+      </nav>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
