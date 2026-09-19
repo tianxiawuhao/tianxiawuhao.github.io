@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Spring AOP 与事务 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Spring AOP 与事务</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，9 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>前面几章我们把对象交给 Spring 容器、把 SQL 交给 MyBatis。但日志、权限校验、事务这类逻辑，几乎每个 Service 方法里都要写一遍：它们不属于任何一条业务规则，却横着穿过所有业务代码。AOP 就是为解决这件事而生的——把这些横切关注点抽成一个切面，在不修改业务代码的前提下织入执行流程；而 Spring 的声明式事务，本质上正是这套机制最重要的一个应用。这一章从动态代理讲起，把切面配置、通知类型、事务传播与隔离级别讲到能动手写，最后集中排掉「@Transactional 不生效」这类最常见的坑。适合已经会写 Service/DAO、被事务不生效折腾过的 Java 开发者。</p>
+
+<h2>一、AOP 的两层地基：横切关注点与动态代理</h2>
+
+<p>AOP（Aspect-Oriented Programming，面向切面编程）不是 OOP 的替代，而是补充。术语要先分清：<b>切面（Aspect）</b>是横切关注点被模块化后的对象；<b>通知（Advice）</b>是切面里真正干活的方法；<b>切点（Pointcut）</b>是「在哪些方法上生效」的匹配规则；<b>连接点（JoinPoint）</b>是程序执行中可以插入通知的时机，如方法调用前、正常返回后、抛出异常后；<b>目标（Target）</b>是被通知的原始对象；<b>代理（Proxy）</b>是目标对象被织入通知后对外暴露的对象；<b>织入（Weaving）</b>则是把切面接到目标上的动作。切点是筛选条件，连接点是被筛出来的记录，一个切点可以匹配多个连接点。</p>
+
+<p>Spring AOP 不修改字节码，它靠运行期动态代理完成「织入」，因此有两条必须记住的边界。<b>JDK 动态代理基于接口</b>：只能为实现了接口的类生成代理，代理对象与目标对象是「兄弟」关系（实现同一接口），所以拿到代理后要用接口类型接收。<b>CGLIB 通过生成目标类的子类来增强</b>：不需要接口，但无法代理 final 类、final 方法和 private 方法，也增强不了构造器。目标类有接口时 Spring 默认用 JDK 代理，没有接口时自动改用 CGLIB；Spring Boot 把 <code>proxyTargetClass</code> 默认为 <code>true</code>，即优先使用 CGLIB。当所有通知都写对了、注入实现类类型却报错时，问题往往就出在这里。</p>
+
+<h2>二、动手写切面：五种通知与切入点表达式</h2>
+
+<p>依赖上引入 aspectjweaver 即可（Maven 一个坐标搞定，源文档里逐个列的 aspectjrt.jar、aspectjtools.jar、org.aspectj.matcher.jar 是早期手动导包的产物），再通过 <code>@EnableAspectJAutoProxy</code>（XML 中为 <code>&lt;aop:aspectj-autoproxy/&gt;</code>）开启支持，然后写切面类。注意区分 <code>@After</code> 与 <code>@AfterReturning</code>：前者相当于 finally，方法抛异常也会执行；后者只在方法正常返回后执行，并能通过 <code>returning</code> 取到返回值。源文档把 <code>@AfterReturning</code> 称作「后置通知」、把 <code>@After</code> 说成「方法执行后增强」，还写出不存在的注解 <code>@AfterRunning</code>，这些说法都是错的。</p>
+
+<pre><code class="language-java">package com.demo.aop;
+
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.*;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+
+@Order(1)        // 数值越小优先级越高；也可以用 &lt;aop:aspect order="1"/&gt;
+@Aspect         // 声明这是一个切面
+@Component      // 交给 IoC 容器管理
+public class LoggingAspect {
+
+    @Before("execution(* com.demo.service..*.*(..))")
+    public void before(JoinPoint jp) {
+        System.out.println("前置通知：" + jp.getSignature().getName());
+    }
+
+    @AfterReturning(pointcut = "execution(* com.demo.service..*.*(..))", returning = "result")
+    public void afterReturning(Object result) {
+        System.out.println("返回通知，返回值 = " + result);
+    }
+
+    @AfterThrowing(pointcut = "execution(* com.demo.service..*.*(..))", throwing = "ex")
+    public void afterThrowing(Exception ex) {
+        System.out.println("异常通知：" + ex.getMessage());
+    }
+
+    @After("execution(* com.demo.service..*.*(..))")
+    public void after() {
+        System.out.println("最终通知：无论是否抛异常都会执行");
+    }
+
+    @Around("execution(* com.demo.service..*.*(..))")
+    public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        long start = System.currentTimeMillis();
+        try {
+            return pjp.proceed();   // 必须调用，否则目标方法不会执行
+        } finally {
+            System.out.println("耗时 " + (System.currentTimeMillis() - start) + " ms");
+        }
+    }
+}</code></pre>
+
+<p>切入点表达式就是切面的「查询条件」，完整语法为 <code>execution([修饰符] 返回类型 声明类型?.方法名(参数) [throws 异常])</code>，其中<b>返回类型不能省</b>。源文档示例 <code>execution(public com.demo...AOPoperations.addC(String,String))</code> 就漏了返回类型，AspectJ 会把 <code>com.demo...AOPoperations</code> 当成返回类型；正确写法是 <code>execution(public * com.demo...AOPoperations.addC(String, String))</code>。它举的 <code>execution(* set(..))</code> 也只能匹配名字恰好叫 <code>set</code> 的方法，要匹配所有 set 开头的方法得写 <code>execution(* set*(..))</code>。记住两个通配符：<code>*</code> 匹配任意字符，<code>..</code> 在包路径中表示当前包及其子包、在参数列表中表示任意个任意类型参数——所以 <code>execution(* com.demo.service..*.*(..))</code> 表示 service 包及子包下所有类的所有方法。XML 形式的装配如下：</p>
+
+<pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.springframework.org/schema/aop
+           http://www.springframework.org/schema/aop/spring-aop.xsd"&gt;
+
+    &lt;!-- 开启 AspectJ 注解支持，容器会为匹配的 Bean 自动生成代理 --&gt;
+    &lt;aop:aspectj-autoproxy/&gt;
+
+    &lt;bean id="loggingAspect" class="com.demo.aop.LoggingAspect"/&gt;
+    &lt;bean id="userService" class="com.demo.service.impl.UserServiceImpl"/&gt;
+&lt;/beans&gt;</code></pre>
+
+<h2>三、声明式事务：@Transactional 背后还是那个代理</h2>
+
+<p>事务是逻辑上一组操作，要么全部成功、要么全部失败，具备原子性、一致性、隔离性、持久性（ACID）。Spring 把事务管理抽象成三个接口：<code>PlatformTransactionManager</code> 真正管理事务，JDBC/MyBatis 用 <code>DataSourceTransactionManager</code>、Hibernate 用 <code>HibernateTransactionManager</code>；<code>TransactionDefinition</code> 描述事务定义，即隔离级别、传播行为、是否只读、超时时间；<code>TransactionStatus</code> 保存事务运行中的状态，如是否存在保存点、是否已完成。<code>@Transactional</code> 做的事就是让 Spring 为标注它的 Bean 生成代理，在方法进入前开启事务、正常返回后提交、抛出异常时回滚。</p>
+
+<pre><code class="language-java">@Service
+public class AccountServiceImpl implements AccountService {
+
+    @Autowired
+    private AccountDao accountDao;
+
+    @Transactional(propagation = Propagation.REQUIRED,
+                   isolation = Isolation.READ_COMMITTED,
+                   rollbackFor = Exception.class,   // 受检异常也要回滚
+                   timeout = 5)
+    @Override
+    public void transfer(int fromId, int toId, double money) throws Exception {
+        if (money &lt;= 0) {
+            throw new IllegalArgumentException("金额必须为正");
+        }
+        accountDao.out(fromId, money);
+        accountDao.in(toId, money);            // 这里失败，上面的扣款一并回滚
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void writeLog(String msg) {          // 独立事务：主事务回滚也不影响日志
+        // ...
+    }
+}</code></pre>
+
+<p>默认回滚规则必须记牢：<b>只对 RuntimeException 和 Error 回滚，受检异常默认不回滚</b>。上面 <code>transfer</code> 声明了 <code>throws Exception</code>，所以必须写 <code>rollbackFor = Exception.class</code>；只在个别异常上例外，用 <code>noRollbackFor</code>。<code>readOnly = true</code> 只是给驱动的提示，并不会强制禁止写操作，用在查询方法上帮助优化。XML 方式在老项目里很常见，骨架如下——这里有个几乎人人踩过的细节：事务通知是 Advisor 而不是 Aspect，必须用 <code>&lt;aop:advisor&gt;</code> 织入；写成 <code>&lt;aop:aspect&gt;</code> 会要求 ref 指向普通对象并按方法名匹配，配错在启动阶段就会失败。</p>
+
+<pre><code class="language-xml">&lt;!-- 1. 事务管理器：DataSourceTransactionManager 必须注入数据源 --&gt;
+&lt;bean id="transactionManager"
+      class="org.springframework.jdbc.datasource.DataSourceTransactionManager"&gt;
+    &lt;property name="dataSource" ref="dataSource"/&gt;
+&lt;/bean&gt;
+
+&lt;!-- 2. 事务通知：声明哪些方法、用什么传播行为 --&gt;
+&lt;tx:advice id="txAdvice" transaction-manager="transactionManager"&gt;
+    &lt;tx:attributes&gt;
+        &lt;tx:method name="transfer" propagation="REQUIRED" rollback-for="java.lang.Exception"/&gt;
+        &lt;tx:method name="find*" propagation="SUPPORTS" read-only="true"/&gt;
+        &lt;tx:method name="*" propagation="REQUIRED"/&gt;
+    &lt;/tx:attributes&gt;
+&lt;/tx:advice&gt;
+
+&lt;!-- 3. 织入切入点：事务是 Advisor，必须用 aop:advisor --&gt;
+&lt;aop:config&gt;
+    &lt;aop:pointcut id="txPointcut" expression="execution(* com.demo.service..*.*(..))"/&gt;
+    &lt;aop:advisor advice-ref="txAdvice" pointcut-ref="txPointcut"/&gt;
+&lt;/aop:config&gt;
+
+&lt;!-- 4. 若改用注解方式：加这一行即可，等价于 @EnableTransactionManagement --&gt;
+&lt;tx:annotation-driven transaction-manager="transactionManager"/&gt;</code></pre>
+
+<h2>四、传播行为、隔离级别与事务失效场景</h2>
+
+<p>传播行为回答的是「当前方法被调用时，已有事务怎么办」。<code>REQUIRED</code>（默认）有则加入、无则新建；<code>REQUIRES_NEW</code> 挂起当前事务、另开独立事务，适合写日志这类「主事务回滚也不能丢」的操作；<code>SUPPORTS</code> 有则加入、无则以非事务方式运行；<code>NOT_SUPPORTED</code> 挂起当前事务、自己不使用事务；<code>MANDATORY</code> 要求必须已有事务，<code>NEVER</code> 要求必须没有事务，两者不满足都会抛异常；<code>NESTED</code> 在当前事务内开一个保存点，内层回滚不影响外层，但它依赖 JDBC 保存点，<code>DataSourceTransactionManager</code> 支持而 JPA 的 <code>JpaTransactionManager</code> 不支持。</p>
+
+<p>隔离级别用来解决并发读问题：<code>READ_UNCOMMITTED</code> 会脏读；<code>READ_COMMITTED</code> 能防脏读，但可能不可重复读；<code>REPEATABLE_READ</code> 能防不可重复读，MySQL 的默认级别还靠间隙锁挡住了大部分幻读；<code>SERIALIZABLE</code> 最安全也最慢。Spring 的 <code>Isolation.DEFAULT</code> 表示交给数据库默认值，多数业务不需要显式指定，但要知道自己正在用什么。</p>
+
+<p>最后是最实用的一节：事务为什么不生效。<b>①自调用</b>——同一个类里用 <code>this.methodB()</code> 调用标注了事务的 <code>methodB</code>，走的是原始对象而非代理对象，事务根本不会开启，这是头号原因；可注入自身、拆到另一个 Bean，或改用 AspectJ 织入解决。<b>②方法不是 public</b>——基于代理的 <code>@Transactional</code> 只对 public 方法生效，private、protected、包可见的方法即使加了注解也不会被增强（private/final 方法在 CGLIB 下同样无法覆写）。<b>③Bean 没交给容器</b>——自己 <code>new</code> 出来的对象不在容器里，代理无从生成。<b>④异常被吞</b>——方法内 try/catch 吃掉了异常，代理感知不到失败；确需捕获时用 <code>TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()</code> 手动标记回滚。<b>⑤抛的是受检异常却忘了 <code>rollbackFor</code></b>。<b>⑥事务跨线程</b>——事务信息存在 ThreadLocal 里，新起的线程不在同一事务中。<b>⑦数据库或表引擎不支持事务</b>，例如 MySQL 的 MyISAM 表，怎么配都不会回滚。</p>
+
+<h2>小结</h2>
+
+<p>AOP 用动态代理把横切逻辑织进业务方法：切点决定「在哪里织」，通知决定「什么时候做什么」；声明式事务是这套机制最重要的应用，<code>@Transactional</code> 是否生效，取决于「有没有走代理」和「异常有没有按规则抛出来」。动手时先确认代理类型与接收类型是否匹配，再核对传播行为、隔离级别与回滚规则，最后用自调用、非 public、异常被吞这三项自查不生效问题，大部分故障都能当场定位。存疑项：不同 Spring / Spring Boot 版本对 <code>proxyTargetClass</code> 默认值、以及 <code>NESTED</code> 在各持久化技术下的支持范围存在差异，升级框架时请以对应版本文档为准。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
