@@ -128,27 +128,29 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>把 Java 应用交给运维部署时，最常听到的一句话是"在我机器上是好的"：同一份 jar 包，到测试机上却因为 JDK 版本、时区、系统库不同而报错。Docker 要解决的就是这件事——把应用和它依赖的运行时、配置一起打包成不可变镜像，在任何装了 Docker 的机器上以一致方式启动。本章面向会写 Java、但没系统用过 Docker 的读者，讲清镜像与容器的关系、常用命令、Dockerfile 怎么写，以及数据卷和网络这两个绕不开的问题。</p>
+<p>把 Java 应用交给运维部署时，最常听到的一句话是“在我机器上是好的”：同一份 jar 包，到测试机上却因为 JDK 版本、时区、系统库不同而报错。Docker 要解决的就是这件事：把应用和它依赖的运行时、配置一起打包成不可变镜像，在任何装了 Docker 的机器上以一致方式启动。本章面向会写 Java、但没系统用过 Docker 的读者，讲清镜像与容器的关系、常用命令、Dockerfile 怎么写，以及数据卷和网络这两个绕不开的问题。</p>
 
 <h2>一、镜像与容器：一次构建，到处运行</h2>
 
 <p>传统虚拟化在硬件层模拟出一台完整机器，每台虚拟机都装一个完整内核，启动动辄几十秒。容器在操作系统层隔离：共用宿主机内核，只隔离进程空间、文件系统和网络，启动常在 1 秒以内。代价是容器内的程序必须和宿主机内核兼容——Linux 容器跑不了 Windows 程序。</p>
 
-<p>理解 Docker 的关键是分清两个词。<strong>镜像是一堆只读层的叠加</strong>，通过联合文件系统（现在默认 overlay2 驱动）挂载成统一的文件系统视角，你只看到一个完整根目录，看不到底下的分层。<strong>容器则在镜像最上面再叠一个可写层</strong>：容器 = 镜像 + 读写层。这个定义没说容器一定要运行——<code>docker create</code> 后容器就存在，只是进程没启动；<code>docker start</code> 才为它创建独立进程空间并跑起进程。由此能解释几个易混命令：</p>
+<p>理解 Docker 的关键是分清两个词。<strong>镜像是一堆只读层的叠加</strong>，通过联合文件系统（现在默认 overlay2 驱动）挂载成统一的文件系统视角，你只看到一个完整根目录，看不到底下的分层。<strong>容器则在镜像最上面再叠一个可写层</strong>：容器 = 镜像 + 读写层。这个定义没说容器一定要运行——<code>docker create</code> 后容器就存在，只是进程没启动；<code>docker start</code> 才为它创建独立的进程空间并跑起进程。由此能解释几个易混命令：</p>
+
+<p>镜像和容器都存放在宿主机 <code>/var/lib/docker</code> 下。</p>
 
 <ul>
 <li><code>docker run</code> 相当于 <code>docker create</code> + <code>docker start</code>；</li>
 <li><code>docker ps</code> 只列运行中的，<code>docker ps -a</code> 才列全部（含已退出）；</li>
-<li><code>docker commit</code> 把容器可写层固化成只读层，即把容器"拍"成镜像，调试方便但正式交付该用 Dockerfile 重建；</li>
+<li><code>docker commit</code> 把容器可写层固化成只读层，即把容器“拍”成镜像，调试方便但正式交付该用 Dockerfile 重建；</li>
 <li><code>docker rm</code> 删容器连同可写层（仅非运行态可删），<code>docker rmi</code> 删镜像只读层。</li>
 </ul>
 
-<p>镜像和容器都存在宿主机 <code>/var/lib/docker</code> 下，容器写入的文件落在可写层，容器一删数据就没了——这正是后面要讲数据卷的原因。</p>
+<p>镜像和容器都存在宿主机 <code>/var/lib/docker</code> 下，容器写入的文件落在可写层，容器一删数据就没了，这正是后面要讲数据卷的原因。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-6/01-image-layers.svg" alt="镜像由只读层叠加，容器在镜像之上再加一层可写层"><figcaption>图 1：镜像是一堆只读层的叠加，容器则在镜像最上面再叠一层可写层；删容器会连可写层一起删掉，docker commit 则把可写层固化成新的只读层</figcaption></figure>
 <h2>二、上手：安装、加速与常用命令</h2>
 
-<p>官方建议在 Ubuntu 上安装，生产上 CentOS 7 及以上也很常见。装完第一件事是配镜像加速，否则从 Docker Hub 拉镜像极慢：</p>
+<p>官方文档以 Ubuntu 为例，生产环境上 CentOS 7 及以上也很常见。装完第一件事是配镜像加速，否则从 Docker Hub 拉镜像极慢：</p>
 
 <pre><code class="language-bash"># 安装依赖与 Docker CE
 sudo yum install -y yum-utils device-mapper-persistent-data lvm2
@@ -175,11 +177,11 @@ docker logs -f app           # 跟踪日志
 docker exec -it app /bin/bash   # 进入运行中的容器
 docker stop app &amp;&amp; docker rm app</code></pre>
 
-<p>两个参数必须记牢：<code>-e</code> 传环境变量，如 MySQL 的 <code>MYSQL_ROOT_PASSWORD</code>；<code>docker exec</code> 往运行中的容器再起一个进程，退出它不影响容器，而 <code>docker attach</code> 接到主进程上，退出可能把容器一起带走，排查问题优先用 <code>exec</code>。另外 <code>-p</code> 是<strong>宿主机端口:容器端口</strong>，写反是新手最高频的失误。</p>
+<p>两个参数必须记牢：<code>-e</code> 传环境变量，如 MySQL 的 <code>MYSQL_ROOT_PASSWORD</code>；<code>docker exec</code> 往运行中的容器再起一个进程，退出它不影响容器；而 <code>docker attach</code> 接到主进程上，退出可能把容器一起带走。排查问题优先用 <code>exec</code>。另外 <code>-p</code> 是<strong>宿主机端口:容器端口</strong>，写反是新手最高频的失误。</p>
 
 <h2>三、Dockerfile：把构建过程写成代码</h2>
 
-<p>Dockerfile 描述"如何从基础镜像构建新镜像"，每条指令生成一层，指令越少层越薄，镜像越小。常用指令：<code>FROM</code> 指定基础镜像且必须是第一条；<code>RUN</code> 在构建时执行命令；<code>COPY</code>/<code>ADD</code> 把宿主机文件复制进镜像，优先用 <code>COPY</code>，<code>ADD</code> 额外支持解压本地压缩包和从 URL 下载，除非确实要解压否则别用；<code>WORKDIR</code> 设工作目录并对其后的 <code>RUN</code>、<code>CMD</code>、<code>COPY</code> 生效；<code>ENV</code> 设环境变量，构建期与运行期都可见，<code>ARG</code> 只在构建期有效；<code>EXPOSE</code> 只是声明端口，对外映射仍靠 <code>-p</code>；<code>CMD</code> 与 <code>ENTRYPOINT</code> 都只取最后一条，区别是前者会被 <code>docker run</code> 后跟的命令覆盖而后者不会，常见组合是 <code>ENTRYPOINT</code> 写可执行程序、<code>CMD</code> 写默认参数。</p>
+<p>Dockerfile 描述「如何从基础镜像构建新镜像」，每条指令生成一层，指令越少层越薄，镜像就越小。常用指令如下。<code>FROM</code> 指定基础镜像，且必须是第一条；<code>RUN</code> 在构建时执行命令；<code>COPY</code>/<code>ADD</code> 把宿主机文件复制进镜像，优先用 <code>COPY</code>。<code>ADD</code> 额外支持解压本地压缩包和从 URL 下载，除非确实要解压，否则别用。<code>WORKDIR</code> 设工作目录，并对其后的 <code>RUN</code>、<code>CMD</code>、<code>COPY</code> 生效；<code>ENV</code> 设环境变量，构建期与运行期都可见，<code>ARG</code> 只在构建期有效。<code>EXPOSE</code> 只是声明端口，对外映射仍靠 <code>-p</code>；<code>CMD</code> 与 <code>ENTRYPOINT</code> 都只取最后一条，区别是前者会被 <code>docker run</code> 后跟的命令覆盖，后者不会。常见组合是 <code>ENTRYPOINT</code> 写可执行程序、<code>CMD</code> 写默认参数。</p>
 
 <p>下面是 Java 应用的典型 Dockerfile，用多阶段构建分开编译与运行环境，最终镜像不含 Maven 和源码：</p>
 
@@ -204,7 +206,7 @@ ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]</code></pre>
 docker run -d --name app -p 8080:8080 -e JAVA_OPTS="-Xmx1g" myapp:1.0</code></pre>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-6/02-multistage-build.svg" alt="多阶段构建的构建阶段与运行阶段"><figcaption>图 2：多阶段构建把「编译」与「运行」拆成两个阶段，只有构建产物 jar 被复制进运行阶段，最终镜像不含 Maven 与源码，体积因此大幅下降</figcaption></figure>
-<p>末尾那个点表示"以当前目录为构建上下文"，省略或写错都会报错。上下文里别放 <code>target/</code>、<code>.git/</code> 这类大目录，用 <code>.dockerignore</code> 排除，否则每次构建都要打包上传给守护进程。</p>
+<p>末尾那个点表示“以当前目录为构建上下文”，省略或写错都会报错。上下文里别放 <code>target/</code>、<code>.git/</code> 这类大目录，用 <code>.dockerignore</code> 排除，否则每次构建都要打包上传给守护进程。</p>
 
 <h2>四、数据卷与网络：让数据活下来，让容器能互通</h2>
 
@@ -220,9 +222,9 @@ docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 \
 # 匿名卷：只声明容器内路径，名字随机，不方便复用
 docker run -d --name redis -v /data redis</code></pre>
 
-<p>用 <code>-v</code> 有两点要当心。一是 CentOS 7 的 SELinux 会让挂载目录权限不足，可加 <code>--privileged=true</code>，更规范的是给宿主机目录加 <code>:z</code>/<code>:Z</code> 标签。二是把宿主机目录挂到镜像里本有内容的路径（如 nginx 的 html 目录），宿主机内容会<strong>整体遮住</strong>容器内该目录，镜像里的默认文件看不到，这是正常行为不是 bug。</p>
+<p>用 <code>-v</code> 有两点要当心。一是 CentOS 7 的 SELinux 会让挂载目录权限不足，可加 <code>--privileged=true</code>，更规范的是给宿主机目录加 <code>:z</code>/<code>:Z</code> 标签。二是把宿主机目录挂到镜像里本有内容的路径（如 nginx 的 html 目录），宿主机内容会<strong>整体遮住</strong>容器内该目录，镜像里的默认文件看不到，这是正常行为，不是 bug。</p>
 
-<p>网络上，Docker 默认给容器分配 bridge 网络的独立 IP，容器间可用 IP 通信但 IP 会变。推荐自建 bridge 网络，同网络容器可直接用<strong>容器名</strong>互访，这也是 docker-compose 与服务发现的基础：</p>
+<p>网络上，Docker 默认给容器分配 bridge 网络的独立 IP，容器间可用 IP 通信但 IP 会变。推荐自建 bridge 网络，同网络容器可直接用<strong>容器名</strong>互访，这也是 docker compose 与服务发现的基础：</p>
 
 <pre><code class="language-bash">docker network create app-net
 docker run -d --name mysql --network app-net -e MYSQL_ROOT_PASSWORD=123456 mysql:8.0
@@ -233,8 +235,8 @@ docker network inspect app-net   # 查看网络内的容器与 IP</code></pre>
 <h2>五、常见坑与最佳实践</h2>
 
 <ul>
-<li><strong>容器一退出就没了</strong>：容器生命周期绑定在主进程（PID 1）上，主进程结束容器就停。用 <code>-d</code> 让主进程常驻，别让它是个执行完就退出的脚本。</li>
-<li><strong>信号传不到 Java 进程</strong>：<code>CMD java -jar app.jar</code> 这种 shell 写法会让 <code>/bin/sh</code> 成为 PID 1，<code>docker stop</code> 发来的 SIGTERM 不会转发给 Java，只能等超时被强杀。改用 exec 形式 <code>CMD ["java","-jar","app.jar"]</code>，并确保 Java 侧真的处理了 SIGTERM。</li>
+<li><strong>容器一退出就没了</strong>：容器生命周期绑定在主进程（PID 1）上，主进程结束容器就停。用 <code>-d</code> 让主进程常驻，别让主进程是个执行完就退出的脚本。</li>
+<li><strong>信号传不到 Java 进程</strong>：<code>CMD java -jar app.jar</code> 这种 shell 写法会让 <code>/bin/sh</code> 成为 PID 1，<code>docker stop</code> 发来的 SIGTERM 不会转发给 Java，只能等超时被强杀。改用 exec 形式 <code>CMD ["java","-jar","app.jar"]</code>，并确保 Java 进程真的处理了 SIGTERM。</li>
 <li><strong>镜像越滚越大</strong>：合并 <code>RUN</code> 并清理包管理缓存；多阶段构建只留运行期文件；基础镜像选 <code>-jre</code>、<code>-slim</code> 甚至 <code>alpine</code>（alpine 用 musl libc，个别依赖 glibc 的组件不兼容）。</li>
 <li><strong>用 latest 标签</strong>：<code>latest</code> 随上游漂移，同一份 Dockerfile 今天明天构建结果可能不同，生产一律锁明确版本。</li>
 <li><strong>构建缓存蒙人</strong>：改了代码却没变化，先怀疑缓存；依赖安装与源码复制分两步 <code>COPY</code>，必要时加 <code>--no-cache</code>。</li>
@@ -244,12 +246,7 @@ docker network inspect app-net   # 查看网络内的容器与 IP</code></pre>
 
 <h2>六、小结</h2>
 
-<p>Docker 用"只读层叠加 + 一层可写层"的模型把应用与依赖打包成可移植镜像，从而消除环境差异。记住三条主线：镜像是模板、容器是它的运行实例，删容器连带删掉可写层数据；<code>docker run = create + start</code>，<code>-p</code> 宿主机端口在前、<code>-e</code> 传环境变量；持久化用命名卷或 <code>-v</code>，容器互通自建 bridge 网络并用容器名寻址。构建侧回到 Dockerfile：指令即分层，多阶段构建能显著瘦身，<code>CMD</code> 用 exec 形式才能正确接收停机信号。理顺这些后，下一章接着看私有仓库与持续集成，把"构建—推送—部署"串成自动流水线。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-7-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">Nginx 配置与反向代理</span></a>
-      <a class="next-post" href="/java-tutorial-7-7/"><span class="pn-label">下一篇 →</span><span class="pn-title">Docker Compose 与编排</span></a>
-      </nav>
+<p>Docker 用“只读层叠加 + 一层可写层”的模型把应用与依赖打包成可移植镜像，从而消除环境差异。记住三条主线：镜像是模板、容器是它的运行实例，删容器连带删掉可写层数据；<code>docker run = create + start</code>，<code>-p</code> 宿主机端口在前、<code>-e</code> 传环境变量；持久化用命名卷或 <code>-v</code>，容器互通自建 bridge 网络并用容器名寻址。构建侧回到 Dockerfile：指令即分层，多阶段构建能显著瘦身，<code>CMD</code> 用 exec 形式才能正确接收停机信号。理顺这些后，下一章接着看私有仓库与持续集成，把"构建—推送—部署"串成自动流水线。</p>
           </article>
   <!-- Footer -->
   <footer>
