@@ -165,7 +165,7 @@
 <p>源笔记用“锁对象标志位由 1 变 0”解释原理，那只是便于理解的比喻。JVM 真实实现是对象头 Mark Word 配合 monitor，字节码层面表现为 <code>monitorenter</code> / <code>monitorexit</code>，可重入性由锁计数器保证，异常路径上 JVM 会自动释放锁。另外，“JDK 1.2 之前的集合都线程安全、之后都不安全”也不准确：<code>Vector</code>、<code>Hashtable</code> 确实同步，而 1.2 引入的 <code>ArrayList</code>、<code>HashMap</code> 不是；必须用旧集合时可用 <code>Collections.synchronizedList()</code> 包装，但遍历时仍需自行加锁。</p>
 
 <h2>四、volatile：给可见性，不给原子性</h2>
-<p>Java 内存模型关注三件事：<strong>原子性</strong>（操作不可分割）、<strong>可见性</strong>（一个线程的修改何时对别的线程可见）、<strong>有序性</strong>（指令会不会被重排序）。<code>volatile</code> 保证可见性与有序性，准确表述来自 JMM 的 <strong>happens-before</strong> 规则：对同一个 <code>volatile</code> 字段的写，happens-before 后续对它的读；再借助传递性，线程 A 在写该字段之前的普通写，对读到该值的线程 B 也一定可见。底层实现是写操作插入内存屏障、配合缓存一致性协议把改动传播开，而不是“读写都打到主内存、绕过本地缓存”那种字面理解——结论一致，但面试时按 happens-before 讲更严谨。</p>
+<p>Java 内存模型关注三件事：<strong>原子性</strong>（操作不可分割）、<strong>可见性</strong>（一个线程的修改何时对别的线程可见）、<strong>有序性</strong>（指令会不会被重排序）。<code>volatile</code> 保证可见性与有序性，准确表述来自 JMM 的 <strong>happens-before</strong> 规则。对同一个 <code>volatile</code> 字段的写，happens-before 后续对它的读。再借助传递性，线程 A 在写该字段之前的普通写，对读到该值的线程 B 也一定可见。底层实现是写操作插入内存屏障、配合缓存一致性协议把改动传播开，而不是“读写都打到主内存、绕过本地缓存”那种字面理解——结论一致，但面试时按 happens-before 讲更严谨。</p>
 <pre><code class="language-java">public class NoVisibility {
     private static volatile boolean ready;   // 去掉 volatile，读线程可能永远看不到 true
     private static int number;
@@ -191,7 +191,7 @@ for (int i = 1; i &lt;= 8; i++) {
             Thread.currentThread().getName() + " 执行任务 " + id));
 }
 pool.shutdown();   // 不再接收新任务，已提交的任务继续执行完</code></pre>
-<p>入门先记住两点：<code>execute()</code> 提交无返回值任务，<code>submit()</code> 返回 <code>Future</code> 可取结果；<code>shutdown()</code> 之后不再接新任务，但会把手上的活干完。还要留意 <code>Executors</code> 的工厂方法多用无界队列或超大线程数，队列积压就可能 OOM，真实项目更推荐直接 <code>new ThreadPoolExecutor(...)</code>，把核心线程数、最大线程数、队列容量、拒绝策略显式写清楚。最后一个提醒：如果每个线程需要的是“自己的副本”而非共享数据，可用 <code>ThreadLocal</code> 隔离状态（Java 8 起推荐 <code>ThreadLocal.withInitial(...)</code>）。数据实际挂在线程自带的 <code>ThreadLocalMap</code> 上，生命周期与线程一样长：Entry 的 key 是弱引用、value 是强引用，key 被回收后 value 仍被该线程持有，于是留下“key 为 null、值还在”的条目——在线程池里就是既串数据、又泄漏内存。<code>ThreadLocal</code> 因此必须用完 <code>remove()</code>（放在 <code>finally</code> 里），既避免串数据，也避免 <code>ThreadLocalMap</code> 长期持有对象。</p>
+<p>入门先记住两点：<code>execute()</code> 提交无返回值任务，<code>submit()</code> 返回 <code>Future</code> 可取结果；<code>shutdown()</code> 之后不再接新任务，但会把手上的活干完。还要留意 <code>Executors</code> 的工厂方法多用无界队列或超大线程数，队列积压就可能 OOM，真实项目更推荐直接 <code>new ThreadPoolExecutor(...)</code>，把核心线程数、最大线程数、队列容量、拒绝策略显式写清楚。最后一个提醒：如果每个线程需要的是“自己的副本”而非共享数据，可用 <code>ThreadLocal</code> 隔离状态（Java 8 起推荐 <code>ThreadLocal.withInitial(...)</code>）。数据实际挂在线程自带的 <code>ThreadLocalMap</code> 上，生命周期与线程一样长。Entry 的 key 是弱引用、value 是强引用，key 被回收后 value 仍被该线程持有，于是留下“key 为 null、值还在”的条目。在线程池里，这既串数据、又泄漏内存。<code>ThreadLocal</code> 因此必须用完 <code>remove()</code>（放在 <code>finally</code> 里），既避免串数据，也避免 <code>ThreadLocalMap</code> 长期持有对象。</p>
 
 <p>小结：并发问题的本质是“共享可变状态 + 无同步的读改写”。本章介绍了线程的两种创建方式与 <code>start()</code>/<code>run()</code> 的区别，理清了 <code>Thread.State</code> 的六种状态及 <code>sleep</code>、<code>wait</code>、<code>join</code>、<code>interrupt</code> 的语义，学会用同步代码块、同步方法、静态同步方法保护临界区，也明白了 <code>volatile</code> 只管可见性与有序性、不管原子性。把规则背下来意义不大，把上面的卖票程序跑一遍——先去掉 <code>synchronized</code> 看错误结果，再加回来——比读十篇文章都有效。</p>
           
