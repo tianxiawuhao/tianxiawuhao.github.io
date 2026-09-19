@@ -221,11 +221,30 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 
 <p>注意 <code>"size": 0</code>：只取聚合结果时要显式关掉 hits，否则集群会白白搬运一万条文档。容量方面，分片不是越多越好——分片过多会放大集群状态与查询合并的开销，分片过大则恢复慢；常见经验是单个分片控制在 10–50GB 之间，并让分片数对齐数据节点数。堆内存设置 <code>-Xms</code> 与 <code>-Xmx</code> 相等以避免运行时伸缩，且不要超过物理内存的一半，同时尽量控制在 31GB 以内以保住 JVM 的压缩指针；其余内存留给文件系统缓存，Lucene 的段文件非常依赖它。文件句柄方面，Linux 下要为 ES 用户把 <code>ulimit -n</code> 提到 65536，并写进 <code>/etc/security/limits.conf</code>（形如 <code>elasticsearch - nofile 65536</code>），才能持久生效。源文档里的 <code>su limit -n</code> 是笔误，临时 <code>ulimit</code> 也只在当前会话有效。</p>
 
-<p>写入侧的常用手段包括：用 <code>_bulk</code> 批量提交（单批几 MB 到十几 MB 为宜）、导入期把 <code>refresh_interval</code> 调大甚至设为 -1、副本数先设 0、写完再恢复；查询侧则优先用 filter、只取需要的 <code>_source</code> 字段、限制聚合的 <code>size</code>、避免 <code>*</code> 通配符开头的查询。生产集群至少要三个专有 master 节点（<code>node.roles: [master]</code>）以避免脑裂，数据节点不兼 master 是更稳妥的部署方式。</p>
+<p>写入与查询两侧都有成熟的优化手段，常用做法如下：</p>
+<ul>
+  <li>写入侧用 <code>_bulk</code> 批量提交，单批几 MB 到十几 MB 为宜；</li>
+  <li>写入侧在导入期把 <code>refresh_interval</code> 调大甚至设为 -1；</li>
+  <li>写入侧把副本数先设 0，写完再恢复；</li>
+  <li>查询侧优先用 filter 过滤；</li>
+  <li>查询侧只取需要的 <code>_source</code> 字段；</li>
+  <li>查询侧限制聚合的 <code>size</code>；</li>
+  <li>查询侧避免 <code>*</code> 通配符开头的查询。</li>
+</ul>
+<p>生产集群至少要三个专有 master 节点（<code>node.roles: [master]</code>）以避免脑裂，数据节点不兼 master 是更稳妥的部署方式。</p>
 
 <h2>五、小结</h2>
 
-<p>ES 的能力边界由倒排索引决定：分词决定能不能搜到，映射决定能不能过滤和聚合，DSL 决定搜得准不准，分片与堆内存决定能不能扛住量。实践顺序建议是：先用 <code>_analyze</code> 确认分词结果，再按查询方式（全文检索用 text，精确匹配与聚合用 keyword）设计映射，然后用 <code>bool</code> 查询把打分条件放进 must、把过滤条件放进 filter，最后才是加副本、调堆内存、批量写入这些运维手段。把这几步按顺序做对，绝大多数「搜不到、搜不准、搜得慢」的问题都能在源头定位。</p>
+<p>ES 的能力边界由倒排索引决定：分词决定能不能搜到，映射决定能不能过滤和聚合，DSL 决定搜得准不准，分片与堆内存决定能不能扛住量。</p>
+
+<p>实践顺序建议如下：</p>
+<ul>
+  <li>先用 <code>_analyze</code> 确认分词结果；</li>
+  <li>再按查询方式设计映射，全文检索用 text，精确匹配与聚合用 keyword；</li>
+  <li>然后用 <code>bool</code> 查询把打分条件放进 must、把过滤条件放进 filter；</li>
+  <li>最后才是加副本、调堆内存、批量写入这些运维手段。</li>
+</ul>
+<p>把这几步按顺序做对，绝大多数「搜不到、搜不准、搜得慢」的问题都能在源头定位。</p>
           </article>
   <!-- Footer -->
   <footer>

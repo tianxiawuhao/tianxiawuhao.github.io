@@ -213,16 +213,16 @@ java -XX:+UseG1GC -Xms2g -Xmx2g \
 
 <p><strong>坑二，<code>System.gc()</code> 与显式引用。</strong>显式调用 <code>System.gc()</code> 可能触发 Full GC，生产代码里应避免；<code>-XX:+DisableExplicitGC</code> 可将其屏蔽，但要注意 NIO 直接内存依赖它回收 <code>DirectByteBuffer</code>，屏蔽后堆外内存可能迟迟不释放。此外，把对象放进静态集合、ThreadLocal 未 <code>remove()</code>、监听器未注销，都会制造长生命周期的强引用，让对象看起来没用了却回收不掉。</p>
 
-<p><strong>坑三，永久代与元空间的版本差异。</strong>JDK 7 及以前方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC；<strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束，且类卸载条件严格（该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用）。所以看到旧文章里“永久代被写满导致 Full GC”的说法时，要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
+<p><strong>坑三，永久代与元空间的版本差异。</strong>两者的版本差异可以对照着记：</p>
+<ul>
+<li>JDK 7 及以前，方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC；</li>
+<li><strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束，且类卸载条件严格：该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用。</li>
+</ul>
+<p>所以所以看到旧文章里“永久代被写满导致 Full GC”的说法时，要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
 
 <h2>五、小结</h2>
 
-<p>这一章的主线是：GC 先解决“谁是垃圾”，再解决“怎么清、什么时候清”。判活用可达性分析而非引用计数；回收用标记-清除、复制、标记-整理三种基础算法，靠分代假设把新生代交给复制、老年代交给标记-整理或标记-清除；收集器层面，Parallel 换吞吐量、CMS 换低停顿但有碎片、G1 用 Region + RSet + 停顿预测模型兼顾两者，ZGC 面向超大堆的极低延迟。落到实践，先开日志并用 jstat 观测，再调整 <code>-Xms/-Xmx</code>、新生代比例与停顿目标这些参数。最后要牢记：所有分代收集器都有 STW，而显式 <code>System.gc()</code> 调用与长生命周期引用是最常见的两类人为故障。下一章进入具体的线上排查工具与方法。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-6-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">JVM 内存结构与对象</span></a>
-      <a class="next-post" href="/java-tutorial-6-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">类加载机制</span></a>
-      </nav>
+<p>这一章的主线是：GC 先解决“谁是垃圾”，再解决“怎么清、什么时候清”。判活用可达性分析，而非引用计数。回收用标记-清除、复制、标记-整理三种基础算法，并靠分代假设把新生代交给复制、老年代交给标记-整理或标记-清除。到了收集器层面：Parallel 换吞吐量；CMS 换低停顿但有碎片；G1 用 Region + RSet + 停顿预测模型兼顾两者；ZGC 面向超大堆的极低延迟。落到实践，先开日志并用 jstat 观测，再调整 <code>-Xms/-Xmx</code>、新生代比例与停顿目标这些参数。最后要牢记：所有分代收集器都有 STW，而显式 <code>System.gc()</code> 调用与长生命周期引用是最常见的两类人为故障。下一章进入具体的线上排查工具与方法。</p>
           </article>
   <!-- Footer -->
   <footer>

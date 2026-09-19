@@ -131,7 +131,13 @@
 <p>本章是「运维与部署」阶段的实战章节。前面你已经把 Java 应用打包、在 Linux 上跑起来，也见过 Docker 与 K8s 的基本用法。真正上线时，用户不会直接访问你的 Tomcat，中间那层负责转发、负载、缓存和 HTTPS 的角色，通常由 Nginx 担任。本节面向后端开发者和刚开始接触部署的读者，目标是把 nginx.conf 的写法讲清楚。内容包括配置结构怎么分层、location 到底谁优先、反向代理与负载均衡怎么配、缓存与 HTTPS 怎么落地，以及哪些参数值得调。学完之后，你应该能独立写出一份可上线的七层代理配置，并看懂线上配置里的每一行。</p>
 
 <h2>为什么要在应用前放一层 Nginx</h2>
-<p>直接把 Tomcat 暴露到公网会遇到几个现实问题：单个实例的并发能力有限，一旦挂掉服务就整体不可用；静态资源也交给 Java 线程去读磁盘，白白占用工作线程；再加上 TLS 握手、压缩、限流这些和业务无关的事，全压在应用里会让代码越来越臃肿。Nginx 的价值正是把这些“通用且重复”的活儿抽出来。它用 master + worker 的多进程模型配合 epoll 事件驱动，单个 worker 用极少的线程就能照看大量连接；静态文件走零拷贝（sendfile）直接发出，业务请求再反向代理给后端集群。</p>
+<p>直接把 Tomcat 暴露到公网，会遇到三个现实问题：
+<ul>
+<li><strong>可用性没有冗余</strong>：单个实例的并发能力有限，一旦挂掉服务就整体不可用；</li>
+<li><strong>静态资源占用工作线程</strong>：静态资源也交给 Java 线程去读磁盘，白白占用工作线程；</li>
+<li><strong>通用职责混进业务</strong>：TLS 握手、压缩、限流这些和业务无关的事全压在应用里，会让代码越来越臃肿。</li>
+</ul>
+Nginx 的价值正是把这些“通用且重复”的活儿抽出来。它用 master + worker 的多进程模型配合 epoll 事件驱动，单个 worker 用极少的线程就能照看大量连接；静态文件走零拷贝（sendfile）直接发出，业务请求再反向代理给后端集群。</p>
 <p>理解这套模型对配置很关键。master 进程只做管理：解析配置、拉起 worker、接收 <code>nginx -s reload</code> 这类信号；真正处理请求的是 worker，一个连接自始至终只由一个 worker 负责。所以 <code>worker_processes</code> 一般设为 CPU 核心数，多余的 worker 只会互相抢 CPU；而 <code>worker_connections</code> 是“每个 worker”的上限，整机理论连接数约为它乘以 worker 数量。作为反向代理时，每个请求还要占用一条到后端的连接，因此能承载的并发请求数大致是连接总数的一半。</p>
 
 <h2>配置文件的结构：main、events、http、server、location</h2>
@@ -268,7 +274,7 @@ server {
 <p>上线前可以按下面几条自查。其一，<code>worker_processes auto</code>、<code>worker_connections</code> 与 <code>worker_rlimit_nofile</code> 是否和机器规格匹配；<code>proxy_connect_timeout</code>、<code>proxy_read_timeout</code> 是否覆盖了后端最慢接口的耗时，过大则故障时连接堆积，过小则正常慢请求被切断。<code>client_max_body_size</code> 是否大于业务允许的最大上传。其二，limit_req、limit_conn 是否已为易被打的接口加上；访问日志里是否记录了 <code>$upstream_response_time</code>，它和 <code>$request_time</code> 的差值正是定位"慢在前端还是慢在后端"的依据。改完配置执行 <code>nginx -t</code> 校验，再用 <code>nginx -s reload</code> 平滑生效，不要直接重启进程。</p>
 
 <h2>小结</h2>
-<p>这一节围绕“一次讲透配置”的目标，把 Nginx 拆成了几块可以独立消化的内容：配置文件是 main → events → http → server → location 的嵌套上下文，指令只能待在自己允许的层级里。location 的匹配顺序是精确 → 最长前缀 → 首个命中的正则 → 回退最长前缀，正则里务必转义点号。反向代理的另一核心是 <code>proxy_pass</code> 的斜杠语义与 X-Forwarded-For 等头部的透传；负载均衡优先使用内置的 <code>least_conn</code>、权重和一致性哈希，别再抄第三方 fair；<code>proxy_cache</code> 才是真正的服务端缓存，<code>expires</code> 只管浏览器；HTTPS 与调优参数则决定了它能不能稳定扛住线上流量。建议你把自己项目里的一份旧配置对照本章重写一遍，用 <code>nginx -t</code> 验证并观察 <code>$upstream_cache_status</code> 的变化，这比记住任何参数都更有效。</p>
+<p>这一节围绕“一次讲透配置”的目标，把 Nginx 拆成了几块可以独立消化的内容：配置文件是 main → events → http → server → location 的嵌套上下文，指令只能待在自己允许的层级里。location 的匹配顺序是精确 → 最长前缀 → 首个命中的正则 → 回退最长前缀，正则里务必转义点号。反向代理的另一核心是 <code>proxy_pass</code> 的斜杠语义与 X-Forwarded-For 等头部的透传。负载均衡优先使用内置的 <code>least_conn</code>、权重和一致性哈希，别再抄第三方 fair。缓存分工要分清：<code>proxy_cache</code> 才是真正的服务端缓存，<code>expires</code> 只管浏览器。而 HTTPS 与调优参数，则决定了它能不能稳定扛住线上流量。建议你把自己项目里的一份旧配置对照本章重写一遍，用 <code>nginx -t</code> 验证并观察 <code>$upstream_cache_status</code> 的变化，这比记住任何参数都更有效。</p>
           </article>
   <!-- Footer -->
   <footer>
