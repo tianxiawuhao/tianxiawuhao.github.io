@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章把类、对象、封装和继承串了起来。Java 的类型系统还有三块拼图没讲。<strong>接口</strong>把“能做什么”从“怎么做”里剥出来，是面向接口编程的起点；<strong>内部类</strong>让一个类可以藏在另一个类里，写回调和事件监听时几乎绕不开；<strong>枚举</strong>用类型安全的方式取代满天飞的 <code>static final int</code> 常量。本章面向已经会写类与对象的读者，把这三块一次讲透，并给出可以照抄的代码模板。</p>
+<p>上一章把类、对象、封装和继承串了起来。Java 的类型系统还有三块拼图没有讲到。<strong>接口</strong>把“能做什么”从“怎么做”里剥出来，是面向接口编程的起点；<strong>内部类</strong>让一个类可以藏在另一个类里，写回调和事件监听时几乎绕不开；<strong>枚举</strong>用类型安全的方式取代满天飞的 <code>static final int</code> 常量。本章面向已经会写类与对象的读者，把这三块一次讲透，并给出可以照抄的代码模板。</p>
 
 <h2>一、接口：一份对外承诺的契约</h2>
 
@@ -181,7 +181,7 @@ class Order implements Payable {
 
 <h3>默认方法的冲突怎么解</h3>
 
-<p>既然接口能带方法体，就必然遇到“两个接口给了同名的默认方法”这种菱形问题。Java 定的规则很清楚，按优先级从高到低只有三条：</p>
+<p>既然接口能带方法体，就必然遇到“两个接口给出了同名默认方法”这种菱形问题。Java 定的规则很清楚，按优先级从高到低只有三条：</p>
 
 <ol>
   <li><strong>类自己重写的方法最优先</strong>。只要实现类里写了自己的方法，接口的默认版本一律被覆盖。</li>
@@ -281,7 +281,7 @@ public class Demo {
     }
 }</code></pre>
 
-<p>几个必须记住的限制：匿名内部类<strong>没有类名</strong>，因此不能定义构造方法，也无法复用；它只能继承一个类或实现一个接口；方法内访问局部变量时，该变量必须是 <code>final</code> 或“事实上的 final”（effectively final）。Java 8 起不再强制写 <code>final</code> 关键字，但值不能改。如果接口是函数式接口（只有一个抽象方法），Java 8 起可以改写成 Lambda：<code>Greeting g = name -&gt; System.out.println("Hello, " + name);</code>，比匿名内部类更短。但需要多个方法，或需要让 <code>this</code> 指向内部类自身时，匿名内部类仍然不可替代。</p>
+<p>使用匿名内部类有几个必须记住的限制。第一，它<strong>没有类名</strong>，因此不能定义构造方法，也无法复用。第二，它只能继承一个类或实现一个接口。第三，在方法内访问局部变量时，该变量必须是 <code>final</code> 或“事实上的 final”（effectively final）；Java 8 起不再强制写 <code>final</code> 关键字，但值不能改。如果接口是函数式接口（只有一个抽象方法），Java 8 起可以改写成 Lambda：<code>Greeting g = name -&gt; System.out.println("Hello, " + name);</code>，比匿名内部类更短。但需要多个方法，或需要让 <code>this</code> 指向内部类自身时，匿名内部类仍然不可替代。</p>
 
 <h2>三、枚举：把常量收进类型里</h2>
 
@@ -338,11 +338,11 @@ public class Demo {
 <h3>常用方法与惯用法</h3>
 
 <ul>
-  <li><code>values()</code>：返回所有常量组成的数组，常用于 <code>for</code> 遍历。注意每次调用都会<strong>克隆</strong>一份数组，放在循环条件里反复调用是性能坑。</li>
+  <li><code>values()</code>：返回所有常量组成的数组，常用于 <code>for</code> 遍历。注意每次调用都会<strong>克隆</strong>一份数组，放进循环条件里反复调用会成为性能坑。</li>
   <li><code>valueOf(String)</code>：按常量名取实例，名字不存在时抛 <code>IllegalArgumentException</code>；名字写错属于编码错误，不要用它做用户输入的容错解析。</li>
   <li><code>name()</code> 与 <code>ordinal()</code>：分别返回声明名和声明顺序（从 0 开始）。<code>ordinal()</code> 依赖书写顺序，<strong>不要把它持久化到数据库</strong>，也不要用它做业务判断，用自定义的 <code>code</code> 字段更稳。</li>
-  <li><code>switch</code> 支持枚举：<code>case</code> 后直接写常量名，不用加类名前缀（JDK 1.6 起支持）。</li>
-  <li>比较用 <code>==</code> 而不是 <code>equals</code>：每个常量在 JVM 中只有一个实例，<code>==</code> 既安全又更快，还能避免空指针。</li>
+  <li><code>switch</code> 支持枚举：<code>case</code> 后直接写常量名，不用加类名前缀。</li>
+  <li>比较用 <code>==</code> 而不是 <code>equals()</code>：每个常量在 JVM 中只有一个实例，<code>==</code> 既安全又更快，还能避免空指针。</li>
   <li>枚举实现了 <code>Comparable</code> 与 <code>Serializable</code>，并且<strong>天然是单例</strong>，因此用单元素枚举写单例（《Effective Java》推荐做法）可以天然防住反射和序列化破坏。</li>
 </ul>
 
@@ -355,13 +355,13 @@ public class Demo {
   <li><strong>以为默认方法能覆盖 Object 的方法</strong>：接口不能提供 <code>equals</code>、<code>hashCode</code>、<code>toString</code> 的默认实现，写了也编译不过，这些方法只能由类提供。</li>
   <li><strong>在静态方法里 new 非静态内部类</strong>：非静态内部类需要外部实例，静态上下文里没有 <code>this</code>，必须先 <code>new Outer()</code> 再 <code>outer.new Inner()</code>。</li>
   <li><strong>匿名内部类里改局部变量</strong>：被匿名内部类捕获的局部变量必须是事实上的 final，想“改”就用只有一个元素的数组或 <code>AtomicInteger</code> 之类的持有对象。</li>
-  <li><strong>用 ordinal 存库或比对</strong>：调整常量声明顺序就会让历史数据错位，一律用自己定义的业务编码。</li>
-  <li><strong>在循环条件里调 values()</strong>：每次都克隆数组，改成先取出一次再遍历。</li>
+  <li><strong>用 <code>ordinal()</code> 存库或比对</strong>：调整常量声明顺序就会让历史数据错位，一律用自己定义的业务编码。</li>
+  <li><strong>在循环条件里调用 <code>values()</code></strong>：每次都克隆数组，改成先取出一次再遍历。</li>
 </ul>
 
 <h2>五、小结</h2>
 
-<p>接口定义“能做什么”，从 Java 8 起还允许用默认方法平滑演进，冲突时按“本类优先、子接口次之、否则显式指定”处理。内部类适合表达强依赖关系：非静态内部类持有外部实例，并由此获得访问私有成员的便利，代价是必须先有外部对象；静态嵌套类更轻，更适合工具型嵌套。匿名内部类是一次性的子类或实现类写法，函数式接口场景下可以让位给 Lambda。枚举把有限取值升级为一个类型，配合私有构造、字段和自定义方法，能同时解决类型安全、可遍历和可携带行为三个问题，但要注意 <code>ordinal()</code> 与 <code>values()</code> 的使用边界。下一章进入异常处理与常用 API，把这些类型真正用起来。</p>
+<p>接口定义“能做什么”，从 Java 8 起还允许用默认方法平滑演进，冲突时按“本类优先、子接口次之、否则显式指定”处理。内部类适合表达强依赖关系：非静态内部类持有外部实例，并由此获得访问私有成员的便利，代价是必须先有外部对象；静态嵌套类更轻，更适合工具型嵌套。匿名内部类是一次性的子类或实现类写法，函数式接口场景下可以让位给 Lambda。枚举把有限取值升级为一个类型，配合私有构造、字段和自定义方法，能同时解决类型安全、可遍历和可携带行为三个问题，但要注意 <code>ordinal()</code> 与 <code>values()</code> 的使用边界。下一章进入常用类库，看看 String、包装类与日期时间这些出场率最高的 API。</p>
           </article>
   <!-- Footer -->
   <footer>

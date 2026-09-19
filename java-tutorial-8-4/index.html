@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>8.4 Flink 流处理 | tianxia</title>
+<title>Flink 流处理 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>8.4 Flink 流处理</h1>
+              <h1>Flink 流处理</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，8 min read</span>
@@ -128,11 +128,17 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面的章节里，数据大多是「一次算完」的批处理：输入固定、跑一遍出结果。但真实业务里更多的是无界数据流——用户点击、订单支付、设备心跳、日志埋点，它们不会结束，而且会因为网络与上游系统而乱序到达。本章面向已经会写 Java、也用过 MapReduce 或 Spark 批处理的读者，讲清楚 Flink 的 DataStream API 如何用「时间 + 窗口 + 状态」这套抽象处理无界流，以及 Checkpoint 与反压这两个决定作业能否长期稳定运行的机制。读完你应该能写出一个带事件时间窗口、可容错重启的 Flink 作业，并知道出问题时先看哪里。</p>
+<p>上一章的 Spark 用内存缓存与 DAG 把批处理做得更快，但它的流处理方案仍要靠微批近似。真实业务里更多的是无界数据流——用户点击、订单支付、设备心跳、日志埋点。它们不会结束，而且会因为网络与上游系统而乱序到达。本章面向已经会写 Java、也用过 MapReduce 或 Spark 批处理的读者。要讲清楚的是 Flink 的 DataStream API 如何用“时间 + 窗口 + 状态”这套抽象处理无界流，以及 Checkpoint 与反压这两个决定作业能否长期稳定运行的机制。读完你应该能写出一个带事件时间窗口、可容错重启的 Flink 作业，并知道出问题时先看哪里。</p>
 
 <h2>为什么流处理需要一整套新抽象</h2>
 
-<p>批处理的世界里，"什么时候的数据"不需要讨论：一次运行只处理一个确定的数据集，结果稳定可重放。流处理则必须回答两个批处理不会遇到的问题。第一是<strong>时间归属</strong>：一条消息的"发生时间"（事件时间）和它被 Flink 处理的时间（处理时间）可能相差几秒到几小时，如果按处理时间统计"每分钟成交额"，那么上游一次积压就会把两个不同时刻的数据算进同一个窗口，结果无法复现，重跑作业还会得到不同答案。第二是<strong>跨事件的记忆</strong>：无界流上无法"等全部数据到齐再算"，所以必须把中间结果保存下来，这就是状态；而作业一旦失败重启，状态必须能从某个一致点恢复，否则计数会重复或丢失。窗口解决的问题是"把无界切成有界来聚合"，状态解决的问题是"在无界中记住东西"，Checkpoint 解决的则是"记住的东西如何不丢"。这三者构成了流处理的核心。</p>
+<p>批处理的世界里，“什么时候的数据”不需要讨论：一次运行只处理一个确定的数据集，结果稳定可重放。流处理则必须回答两个批处理不会遇到的问题。</p>
+
+<p>第一是<strong>时间归属</strong>。一条消息的“发生时间”（事件时间）和它被 Flink 处理的时间（处理时间）可能相差几秒到几小时。如果按处理时间统计“每分钟成交额”，上游一次积压就会把两个不同时刻的数据算进同一个窗口，结果无法复现，重跑作业还会得到不同答案。</p>
+
+<p>第二是<strong>跨事件的记忆</strong>。无界流上无法“等全部数据到齐再算”，所以必须把中间结果保存下来，这就是状态；作业一旦失败重启，状态必须能从某个一致点恢复，否则计数会重复或丢失。</p>
+
+<p>窗口解决的问题是“把无界切成有界来聚合”，状态解决的问题是“在无界中记住东西”，Checkpoint 解决的则是“记住的东西如何不丢”。这三者构成了流处理的核心。</p>
 
 <h2>DataStream 程序的骨架与时间语义</h2>
 
@@ -142,6 +148,7 @@
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
@@ -170,10 +177,12 @@ public class BrowseJob {
                     .withTimestampAssigner((json, ts) -&gt; parseEventTime(json)),
                 "kafka-source");
 
-        raw.keyBy(BrowseJob::parseUserId)
+        // 把 JSON 解析成 Browse 对象，再按 userId 分组
+        DataStream&lt;Browse&gt; events = raw.map(BrowseJob::parse);
+        events.keyBy(Browse::getUserId)
            .window(org.apache.flink.streaming.api.windowing.assigners
                    .TumblingEventTimeWindows.of(java.time.Duration.ofMinutes(1)))
-           .reduce((a, b) -&gt; a.price &gt;= b.price ? a : b)
+           .reduce((a, b) -&gt; a.getPrice() &gt;= b.getPrice() ? a : b)
            .print();
 
         env.execute("user-browse-top-per-minute");
@@ -182,19 +191,20 @@ public class BrowseJob {
 
 <h3>三种时间与水位线的作用</h3>
 
-<p>Flink 支持三种时间语义：<strong>事件时间</strong>（数据自身携带的发生时间）、<strong>处理时间</strong>（算子所在机器的系统时间）和<strong>摄入时间</strong>（进入 Flink 的时间）。只有事件时间能保证结果可复现，因此生产作业几乎都选它。需要注意的是，<code>TimeCharacteristic</code> 与 <code>env.setStreamTimeCharacteristic(...)</code> 这套全局设置从 Flink 1.12 起已被废弃并在 1.14 移除：现在时间语义由你用哪种 <code>WindowAssigner</code>（或用 <code>KeyedProcessFunction</code> 处理时间戳）直接决定，使用 <code>TumblingEventTimeWindows</code> 即事件时间，不需要也不应该再去设置全局语义。</p>
+<p>Flink 支持三种时间语义：<strong>事件时间</strong>（数据自身携带的发生时间）、<strong>处理时间</strong>（算子所在机器的系统时间）和<strong>摄入时间</strong>（进入 Flink 的时间）。只有事件时间能保证结果可复现，因此生产作业几乎都选它。需要注意的是，<code>TimeCharacteristic</code> 与 <code>env.setStreamTimeCharacteristic(...)</code> 这套全局设置从 Flink 1.12 起已被废弃，并在 1.14 移除。现在时间语义由你用哪种 <code>WindowAssigner</code> 直接决定——使用 <code>KeyedProcessFunction</code> 时则由代码自行处理时间戳。使用 <code>TumblingEventTimeWindows</code> 就是事件时间，不需要也不应该再去设置全局语义。</p>
 
-<p>水位线是一个随时间单调递增的特殊标记，含义是"事件时间小于该值的记录应该都到齐了"。分配器收到一条记录时取 <code>max(已见最大时间戳 - 乱序容忍时长, 当前水位线)</code> 得到新水位线；默认每 200ms 向下游发送一次。理解一句话就够了：<strong>窗口由水位线推进触发，而不是由记录到达触发</strong>。
+<p>水位线是一个随时间单调递增的特殊标记，含义是“事件时间小于该值的记录应该都到齐了”。分配器收到一条记录时，取 <code>max(已见最大时间戳 - 乱序容忍时长, 当前水位线)</code> 得到新水位线，默认每 200ms 向下游发送一次。理解一句话就够了：<strong>窗口由水位线推进触发，而不是由记录到达触发</strong>。</p>
 
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/01-stream-pipeline.svg" alt="Flink 作业骨架与水位线推进示意图"><figcaption>图 1：Flink 作业骨架（Source → Transformation → Sink）与事件时间线上的乱序记录、水位线推进</figcaption></figure>这也解释了两个经典现象：乱序容忍时长设得越大，结果越准但延迟越高；如果某个分区长时间没有数据，水位线会卡住，导致所有窗口都不输出——这正是 <code>withIdleness</code> 要解决的场景。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/01-stream-pipeline.svg" alt="Flink 作业骨架与水位线推进示意图"><figcaption>图 1：Flink 作业骨架（Source → Transformation → Sink）与事件时间线上的乱序记录、水位线推进</figcaption></figure>
+<p>这也解释了两个经典现象：乱序容忍时长设得越大，结果越准但延迟越高；如果某个分区长时间没有数据，水位线会卡住，导致所有窗口都不输出——这正是 <code>withIdleness</code> 要解决的场景。</p>
 
 <h3>窗口类型与选择</h3>
 
-<p>窗口把无界流切成有限集合再聚合，常用的有四类。滚动窗口（Tumbling）按固定长度、首尾相接、互不重叠，适合"每 5 分钟统计一次"；滑动窗口（Sliding）长度与步长分开配置，窗口之间会重叠，适合"每 1 分钟看过去 5 分钟"的平滑指标；会话窗口（Session）按活动间隙切分，一段时间没有数据就关闭，适合用户行为分析；全局窗口（Global）把所有数据放进一个窗口，必须自定义触发器，否则永不触发（很多初学者写出"作业不输出"的代码，根因就在这里）。与批处理按分区聚合类似，<code>keyBy</code> 之后的窗口是<strong>每个 key 一份</strong>窗口实例，不同用户互不干扰，这也是窗口能与状态配合的前提。</p>
+<p>窗口把无界流切成有限集合再聚合，常用的有四类。滚动窗口（Tumbling）按固定长度首尾相接、互不重叠，适合“每 5 分钟统计一次”。滑动窗口（Sliding）长度与步长分开配置，窗口之间会重叠，适合“每 1 分钟看过去 5 分钟”的平滑指标。会话窗口（Session）按活动间隙切分，一段时间没有数据就关闭，适合用户行为分析。全局窗口（Global）把所有数据放进一个窗口，必须自定义触发器，否则永不触发。很多初学者写出“作业不输出”的代码，根因就在这里。与批处理按分区聚合类似，<code>keyBy</code> 之后的窗口是<strong>每个 key 一份</strong>窗口实例，不同用户互不干扰，这也是窗口能与状态配合的前提。</p>
 
 <h2>窗口函数与状态：增量聚合 vs 全量聚合</h2>
 
-<p>窗口函数决定窗口内的元素怎么算，分为两类。增量聚合函数每来一条记录就更新一次中间结果，不保存原始数据，内存开销与记录数无关，代表是 <code>ReduceFunction</code> 和 <code>AggregateFunction</code>；全量聚合函数在窗口触发时拿到该窗口全部元素再计算，代表是 <code>ProcessWindowFunction</code>，它的优势是能访问窗口元数据（起止时间、状态）并任意输出，代价是需要缓存整个窗口的数据。工程上的最优解是两者结合：<code>window(...).aggregate(aggFunction, processWindowFunction)</code>，先用增量聚合把数据量压下来，再用 <code>ProcessWindowFunction</code> 补上 Key 与窗口时间等上下文。</p>
+<p>窗口函数决定窗口内的元素怎么算，分为两类。增量聚合函数每来一条记录就更新一次中间结果，不保存原始数据，内存开销与记录数无关，代表是 <code>ReduceFunction</code> 和 <code>AggregateFunction</code>。全量聚合函数在窗口触发时拿到该窗口全部元素再计算，代表是 <code>ProcessWindowFunction</code>。它的优势是能访问窗口元数据（起止时间、状态）并任意输出，代价是需要缓存整个窗口的数据。工程上的最优解是两者结合：<code>window(...).aggregate(aggFunction, processWindowFunction)</code>。先用增量聚合把数据量压下来，再用 <code>ProcessWindowFunction</code> 补上 Key 与窗口时间等上下文。</p>
 
 <pre><code class="language-java">// 增量聚合：求每个用户窗口内的平均单价，只维护 (条数, 总额) 两个 long
 public class AvgPriceFunction
@@ -241,26 +251,22 @@ raw.keyBy(Browse::getUserId)
               })
    .print();</code></pre>
 
-<p>这里有两个必须避开的坑。一是<strong>累加器的复用语义</strong>：Flink 会把累加器对象保存在状态里，<code>add</code> 方法可能被连续调用并复用同一个对象，因此要更新后返回该对象（上面的写法），千万不要每次都 <code>new</code> 一个新累加器并在其中 <code>+=</code> 后返回，那会导致中间结果丢失。二是<strong>不要修改输入元素</strong>：<code>ReduceFunction</code> 里若直接改 <code>value1</code> 的字段并返回，在重试或重放时会出现难以复现的错误，应当返回原对象引用而非就地修改。</p>
+<p>这里有两个必须避开的坑。一是<strong>累加器的复用语义</strong>。Flink 会把累加器对象保存在状态里，<code>add</code> 方法可能被连续调用并复用同一个对象，因此要更新后返回该对象（上面的写法）。千万不要每次都 <code>new</code> 一个新累加器并在其中 <code>+=</code> 后返回，那会导致中间结果丢失。二是<strong>不要修改输入元素</strong>：<code>ReduceFunction</code> 里若直接改 <code>value1</code> 的字段并返回，在重试或重放时会出现难以复现的错误，应当返回原对象引用而非就地修改。</p>
 
-<p>窗口能算出结果，靠的是状态在背后兜底。状态分两类：<code>Keyed State</code>（<code>ValueState</code>、<code>ListState</code>、<code>MapState</code> 等，只能用在 <code>keyBy</code> 后的算子里，天然按 key 隔离）和 <code>Operator State</code>（如 Kafka Source 的分区偏移量，按算子并行子任务分配）。
+<p>窗口能算出结果，靠的是状态在背后兜底。状态分两类。<code>Keyed State</code>（<code>ValueState</code>、<code>ListState</code>、<code>MapState</code> 等）只能用在 <code>keyBy</code> 后的算子里，天然按 key 隔离。<code>Operator State</code>（如 Kafka Source 的分区偏移量）则按算子的并行子任务分配。</p>
 
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/02-window-state-checkpoint.svg" alt="四类窗口、状态分类与 Checkpoint 屏障示意图"><figcaption>图 2：四类窗口的时间线对照，以及 Keyed State / Operator State 与 Checkpoint 的分工</figcaption></figure>状态必须有<strong>状态后端</strong>承载：旧版本的 <code>MemoryStateBackend</code>、<code>FsStateBackend</code>、<code>RocksDBStateBackend</code> 三选一，从 Flink 1.13 起统一为 <code>HashMapStateBackend</code> 与 <code>EmbeddedRocksDBStateBackend</code> 两种，<code>env.setStateBackend(...)</code> 的配置方式也随之改变。数据量超过内存、或需要增量 Checkpoint 时选 RocksDB，其余情况 HashMap 更简单也更快。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/02-window-state-checkpoint.svg" alt="四类窗口、状态分类与 Checkpoint 屏障示意图"><figcaption>图 2：四类窗口的时间线对照，以及 Keyed State / Operator State 与 Checkpoint 的分工</figcaption></figure>
+<p>状态必须有<strong>状态后端</strong>承载。旧版本有 <code>MemoryStateBackend</code>、<code>FsStateBackend</code>、<code>RocksDBStateBackend</code> 三选一。从 Flink 1.13 起统一为 <code>HashMapStateBackend</code> 与 <code>EmbeddedRocksDBStateBackend</code> 两种，<code>env.setStateBackend(...)</code> 的配置方式也随之改变。数据量超过内存、或需要增量 Checkpoint 时选 RocksDB；其余情况 HashMap 更简单，也更快。</p>
 
 <h2>Checkpoint、重启策略与反压</h2>
 
-<p>Checkpoint 是 Flink 容错的核心：JobManager 定期向所有算子注入屏障（Barrier），屏障随数据流一起流动，算子收到屏障时把自身状态快照上传到分布式存储。所有算子都完成快照后，这次 Checkpoint 才算成功，作业失败重启时会从最近一次成功的快照恢复。这带来两个直接结论：<strong>Checkpoint 间隔决定了故障时的重算量</strong>（间隔 10 分钟就最多重算 10 分钟的数据），而<strong>状态大小决定了 Checkpoint 耗时</strong>（这也是大状态作业要开 RocksDB 增量 Checkpoint 的原因）。生产环境还应配置重启策略与外部化 Checkpoint，前者让作业自动拉起，后者在作业被取消后仍保留快照用于恢复。语义方面，<code>EXACTLY_ONCE</code> 保证状态不重不漏，但端到端精确一次还需要 Sink 支持事务或幂等写入，Sink 不支持时只能退化为 <code>AT_LEAST_ONCE</code>。</p>
+<p>Checkpoint 是 Flink 容错的核心：JobManager 定期向所有算子注入屏障（Barrier），屏障随数据流一起流动。算子收到屏障时把自身状态快照上传到分布式存储。所有算子都完成快照后，这次 Checkpoint 才算成功；作业失败重启时会从最近一次成功的快照恢复。这带来两个直接结论：<strong>Checkpoint 间隔决定了故障时的重算量</strong>（间隔 10 分钟就最多重算 10 分钟的数据），而<strong>状态大小决定了 Checkpoint 耗时</strong>——这也是大状态作业要开 RocksDB 增量 Checkpoint 的原因。生产环境还应配置重启策略与外部化 Checkpoint：前者让作业自动拉起，后者在作业被取消后仍保留快照用于恢复。语义方面，<code>EXACTLY_ONCE</code> 保证状态不重不漏，但端到端精确一次还需要 Sink 支持事务或幂等写入，Sink 不支持时只能退化为 <code>AT_LEAST_ONCE</code>。</p>
 
-<p>反压（Backpressure）是流处理中最常见的"看起来卡住了"。Flink 基于信用机制做流控：下游算子的输入缓冲区写满后，会停止向上游发送信用，上游随之减速，压力最终传导到 Source——这正是期望行为，说明系统在自我保护，而不是 bug。真正要排查的是反压的<strong>根源算子</strong>：在 Flink UI 的作业图中，反压会显示在首个高反压算子上，通常是它下游有同步阻塞操作（比如在算子内调用外部 HTTP 或 JDBC）。常见治理手段包括提高瓶颈算子的并行度、把同步 IO 换成 Async I/O、为热点 key 做两阶段聚合（先加随机前缀打散再二次聚合）、以及给状态配好 RocksDB 与本地磁盘。另外，数据倾斜是窗口作业的隐形杀手：个别 key 的数据量远超其他 key，会让单个并行子任务独自背下整个作业的压力，此时应先看各子任务的 <code>records</code> 与 <code>bytes</code> 指标是否严重不均，再决定加盐还是拆分逻辑。</p>
+<p>反压（Backpressure）是流处理中最常见的“看起来卡住了”的现象。Flink 基于信用机制做流控：下游算子的输入缓冲区写满后，会停止向上游发送信用，上游随之减速，压力最终传导到 Source。这正是期望行为，说明系统在自我保护，而不是 bug。真正要排查的是反压的<strong>根源算子</strong>：在 Flink UI 的作业图中，从出现高反压的算子开始查，它通常就是瓶颈所在——往往因为算子内有同步阻塞操作（比如调用外部 HTTP 或 JDBC）。常见治理手段包括提高瓶颈算子的并行度、把同步 IO 换成 Async I/O、为热点 key 做两阶段聚合（先加随机前缀打散再二次聚合），以及给状态配好 RocksDB 与本地磁盘。另外，数据倾斜是窗口作业的隐形杀手：个别 key 的数据量远超其他 key，会让单个并行子任务独自背下整个作业的压力。此时应先看各子任务的 <code>records</code> 与 <code>bytes</code> 指标是否严重不均，再决定加盐还是拆分逻辑。</p>
 
 <h2>小结</h2>
 
-<p>本章的脉络可以压缩成一条链：无界流无法等数据到齐，所以用<strong>窗口</strong>把流切成有界；窗口要算得准，必须有<strong>事件时间</strong>与<strong>水位线</strong>来界定"数据到齐"；窗口之间要记住中间结果，就用到<strong>状态</strong>，状态又分增量聚合与全量聚合两种取舍；状态要能故障恢复，靠的是<strong>Checkpoint</strong> 与重启策略；而作业长期运行时的性能问题，多半通过<strong>反压</strong>现象暴露出来，治理思路是找到瓶颈算子而不是盲目加资源。动手时建议按这个顺序验证：先用 <code>print()</code> 确认水位线在推进、窗口在触发，再逐步换成生产级 Sink，最后才去调并行度与状态后端。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-8-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spark 核心</span></a>
-      <a class="next-post" href="/java-tutorial-8-5/"><span class="pn-label">下一篇 →</span><span class="pn-title">8.5 Storm 与实时计算</span></a>
-      </nav>
+<p>本章的脉络可以压缩成一条链。无界流无法等数据到齐，所以用<strong>窗口</strong>把流切成有界；窗口要算得准，必须有<strong>事件时间</strong>与<strong>水位线</strong>来界定“数据到齐”。窗口之间要记住中间结果，就要用到<strong>状态</strong>，而状态分增量聚合与全量聚合两种取舍。状态要能故障恢复，靠的是<strong>Checkpoint</strong> 与重启策略。作业长期运行时的性能问题，多半通过<strong>反压</strong>现象暴露出来，治理思路是找到瓶颈算子，而不是盲目加资源。动手时建议按这个顺序验证：先用 <code>print()</code> 确认水位线在推进、窗口在触发，再逐步换成生产级 Sink，最后才去调并行度与状态后端。</p>
           </article>
   <!-- Footer -->
   <footer>

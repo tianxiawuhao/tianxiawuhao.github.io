@@ -128,22 +128,22 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>用 Hadoop MapReduce 写过一个 WordCount，就能体会它的两个硬伤：几乎每一步都要落盘，迭代算法只能反复启动作业。Spark 把中间结果尽量留在内存里，并提供了更接近函数式编程的 API，让「分布式计算」写起来像操作本地集合。本章只讲 Spark 的核心：<strong>RDD 抽象、Transformation 与 Action 的区别、DAG 与宽窄依赖、Shuffle 的代价，以及 Spark SQL 与常用调优手段</strong>。适合已经会 Java、了解 HDFS 与 MapReduce 基本概念的读者；示例基于 Spark 3.5.x，本地用 <code>local[*]</code> 就能跑通。</p>
+<p>上一章的 Hive 把 SQL 翻译成 MapReduce 作业，而 MapReduce 的执行模型有两个硬伤：几乎每一步都要落盘，迭代算法只能反复启动作业。Spark 把中间结果尽量留在内存里，并提供了更接近函数式编程的 API，让“分布式计算”写起来像操作本地集合。本章只讲 Spark 的核心：<strong>RDD 抽象、Transformation 与 Action 的区别、DAG 与宽窄依赖、Shuffle 的代价，以及 Spark SQL 与常用调优手段</strong>。本章适合已经会写 Java、了解 HDFS 与 MapReduce 基本概念的读者；示例基于 Spark 3.5.x，本地用 <code>local[*]</code> 就能跑通。</p>
 
 <h2>一、RDD：Spark 的核心抽象</h2>
 
-<p>RDD 是 Resilient Distributed Dataset（弹性分布式数据集）的缩写，注意「弹性」不是「伸缩」。一个 RDD 由五部分描述：一组分区（partition）、作用在每个分区上的计算函数、对其他 RDD 的依赖列表、可选的分区器（Partitioner，决定某个 key 落到哪个分区）以及数据的优先位置（用于数据本地性调度）。</p>
+<p>RDD 是 Resilient Distributed Dataset（弹性分布式数据集）的缩写，注意“弹性”不等于“伸缩”。一个 RDD 由五部分描述。第一是分区（partition）集合。第二是作用在每个分区上的计算函数。第三是对其他 RDD 的依赖列表。第四是可选的分区器（Partitioner），它决定某个 key 落到哪个分区。第五是数据的优先位置，用于数据本地性调度。</p>
 
-<p>源资料里常说「RDD 是只读集合」，更准确的说法是<strong>不可变（immutable）</strong>：RDD 本身不能原地修改，所有「修改」都是算子生成的新 RDD，新旧 RDD 之间靠<strong>血缘（lineage）</strong>相连。某个分区因节点故障丢失时，Spark 顺着血缘重算这一个分区即可恢复，这才是「弹性」和容错的真正含义，而不是把数据存了三份。</p>
+<p>RDD 常被描述成“只读集合”，更准确的说法是<strong>不可变（immutable）</strong>：RDD 本身不能原地修改，所有“修改”都会生成新的 RDD，新旧 RDD 之间靠<strong>血缘（lineage）</strong>相连。某个分区因节点故障丢失时，Spark 只需顺着血缘重算这一个分区即可恢复。这才是“弹性”与容错的真正含义，而不是把数据存了三份。</p>
 
-<p>一个 Spark 应用由一个 Driver 进程发起：Driver 里的 <code>SparkContext</code> 向集群管理器（YARN、Kubernetes 或 Standalone）申请资源，在每台 Worker 上启动 Executor，Executor 内以 Task 为单位并行计算各个分区。这里有两条约定的纪律：传给算子的闭包函数以及它引用的外部对象<strong>必须可序列化</strong>；同一个 JVM 中同时只能有一个活跃的 SparkContext，因此 Spark 2.0 之后统一用 <code>SparkSession</code> 作为入口，内部再去管理那个唯一的 context。</p>
+<p>一个 Spark 应用由一个 Driver 进程发起。Driver 里的 <code>SparkContext</code> 向集群管理器（YARN、Kubernetes 或 Standalone）申请资源，在每台 Worker 上启动 Executor。Executor 内以 Task 为单位并行计算各个分区。这里有两条约定：传给算子的闭包函数以及它引用的外部对象<strong>必须可序列化</strong>。同一个 JVM 中同时只能有一个活跃的 SparkContext，因此 Spark 2.0 之后统一用 <code>SparkSession</code> 作为入口，由它管理那个唯一的 context。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-3/01-rdd-lazy-dag.svg" alt="Spark 惰性求值：Transformation 只记录血缘，遇到 Action 才提交作业并按宽依赖切 Stage"><figcaption>图 1：惰性求值与 Stage 切分——Transformation 只记血缘，Action 触发 Job，遇到宽依赖切一刀并产生 Shuffle</figcaption></figure>
-<p>还有一条贯穿全章的规则：<strong>惰性求值</strong>。Transformation 只记录「要做什么」，并不会立刻执行；只有遇到 Action，Spark 才把这条计算链提交成作业。</p>
+<p>还有一条贯穿全章的规则：<strong>惰性求值</strong>。Transformation 只记录“要做什么”，并不会立刻执行；只有遇到 Action，Spark 才把这条计算链提交成作业。</p>
 
 <h2>二、算子：Transformation 与 Action</h2>
 
-<p>算子分两类。<strong>Transformation</strong> 从已有 RDD 生成新 RDD，是惰性的，例如 <code>map</code>、<code>filter</code>、<code>flatMap</code>、<code>mapPartitions</code>、<code>distinct</code>、<code>union</code>、<code>join</code>、<code>reduceByKey</code>；<strong>Action</strong> 把结果返回 Driver 或写入外部存储，会触发真正的计算，例如 <code>count</code>、<code>collect</code>、<code>take</code>、<code>reduce</code>、<code>foreach</code>、<code>saveAsTextFile</code>。源资料把 <code>reduceByKey</code> 和 <code>saveAsTextFile</code> 一起称作「动作」，这是错的：<code>reduceByKey</code> 是 Transformation，而且是会产生 Shuffle 的宽依赖，只有 <code>saveAsTextFile</code> 这类才是 Action。</p>
+<p>算子分两类。<strong>Transformation</strong> 从已有 RDD 生成新 RDD，是惰性的，例如 <code>map</code>、<code>filter</code>、<code>flatMap</code>、<code>mapPartitions</code>、<code>distinct</code>、<code>union</code>、<code>join</code>、<code>reduceByKey</code>。<strong>Action</strong> 则把结果返回 Driver 或写入外部存储，会触发真正的计算，例如 <code>count</code>、<code>collect</code>、<code>take</code>、<code>reduce</code>、<code>foreach</code>、<code>saveAsTextFile</code>。这里要纠正一个常见的混淆：<code>reduceByKey</code> 属于 Transformation，而且是会产生 Shuffle 的宽依赖。只有 <code>saveAsTextFile</code> 这类才是 Action。</p>
 
 <pre><code class="language-java">import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -173,10 +173,10 @@ public class WordCount {
 }
 </code></pre>
 
-<p>同样能完成分组统计，<code>reduceByKey</code> 和 <code>groupByKey</code> 的代价却差很多：<code>reduceByKey</code> 会先在 map 端做一次局部聚合（相当于 MapReduce 的 Combiner），只有聚合后的结果进入 Shuffle；<code>groupByKey</code> 则把所有 value 原样拉到 reduce 端再自己遍历，键对应的数据量一大就容易 OOM。所以能用 <code>reduceByKey</code>、<code>aggregateByKey</code>、<code>combineByKey</code> 的场景，就不要用 <code>groupByKey</code> 再 <code>mapValues</code>。</p>
+<p>同样能完成分组统计，<code>reduceByKey</code> 和 <code>groupByKey</code> 的代价却差很多。<code>reduceByKey</code> 会先在 map 端做一次局部聚合（相当于 MapReduce 的 Combiner），只有聚合后的结果进入 Shuffle。<code>groupByKey</code> 则把所有 value 原样拉到 reduce 端再自行遍历，某个键对应的数据量一大就容易 OOM。所以能用 <code>reduceByKey</code>、<code>aggregateByKey</code>、<code>combineByKey</code> 的场景，就不要用 <code>groupByKey</code> 再加 <code>mapValues</code>。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-3/02-shuffle-cost.svg" alt="reduceByKey 与 groupByKey 的 Shuffle 代价对比"><figcaption>图 2：同样是分组统计——reduceByKey 先在 map 端局部聚合，groupByKey 则把全部 value 原样拉过网络，后者更容易 OOM</figcaption></figure>
-<p>调试时可以先用 <code>toDebugString()</code> 把血缘和分区数打印出来，它比反复猜测「这一行到底触发几个作业」直观得多；也可以对照 Spark UI 的 Stages 页面，看看每个 Stage 的 Task 数是否等于分区数。另一个新手常犯的错误是：同一个 RDD 被多个 Action 重复使用时忘了 <code>cache()</code>，于是 Spark 每次都从头重算整条血缘，表现就是「同一段代码第二次跑依然那么慢」。</p>
+<p>调试时先用 <code>toDebugString()</code> 把血缘和分区数打印出来，比反复猜测“这一行到底触发几个作业”要直观。也可以对照 Spark UI 的 Stages 页面，看每个 Stage 的 Task 数是否等于分区数。另一个常见错误是同一个 RDD 被多个 Action 复用时忘了 <code>cache()</code>，Spark 因此每次都从头重算整条血缘，结果是同一段代码第二次运行依然很慢。</p>
 
 <h2>三、DAG、宽窄依赖与 Shuffle</h2>
 
@@ -187,13 +187,13 @@ public class WordCount {
 <li><strong>宽依赖（wide dependency，也叫 Shuffle Dependency）</strong>：一个子分区依赖全部父分区，如 <code>reduceByKey</code>、<code>groupByKey</code>、<code>sortByKey</code>、<code>repartition</code>、<code>distinct</code>，以及未做协同分区的 <code>join</code>。数据必须按 key 重新分发，这就是 <strong>Shuffle</strong>。</li>
 </ul>
 
-<p>Spark 切 Stage 的规则很简单：<strong>遇到宽依赖就切一刀</strong>，一段连续的窄依赖会被合并进同一个 Stage。Stage 内部按分区数量拆成一堆 Task 并行执行，所以「一个 Job 由若干 Stage 组成，一个 Stage 由若干 Task 组成」。Shuffle 之所以昂贵，是因为它同时做了三件重活：map 端把数据按分区排序后<strong>写到本地磁盘</strong>（先生成索引文件，再生成数据文件），reduce 端通过网络<strong>拉取（fetch）</strong>属于自己分区的数据，全程还要反复<strong>序列化与反序列化</strong>。MapReduce 被诟病「不擅长 DAG 计算」，正是因为它的每个依赖都要落盘并重新起作业，而 Spark 用内存缓存加上 DAG 调度，把窄依赖的中间结果留在了内存和流水线里。</p>
+<p>Spark 切 Stage 的规则很简单：<strong>遇到宽依赖就切一刀</strong>，一段连续的窄依赖会被合并进同一个 Stage。Stage 内部按分区数量拆成一堆 Task 并行执行，所以“一个 Job 由若干 Stage 组成，一个 Stage 由若干 Task 组成”。Shuffle 之所以昂贵，是因为它同时做了三件重活：map 端把数据按分区排序后<strong>写到本地磁盘</strong>，先生成索引文件再生成数据文件。reduce 端通过网络<strong>拉取（fetch）</strong>属于自己分区的数据。全程还要反复<strong>序列化与反序列化</strong>。MapReduce 被诟病“不擅长 DAG 计算”，正是因为它的每个依赖都要落盘并重新起作业。Spark 用内存缓存加上 DAG 调度，把窄依赖的中间结果留在了内存与流水线里。</p>
 
-<p>理解了这一点，调优就有了方向：减少不必要的 Shuffle、让 Shuffle 的数据量更小、让每个分区的数据量更均匀。例如 <code>spark.sql.shuffle.partitions</code> 默认 200，数据量小的时候会产生大量几百 KB 的小分区，白白增加调度开销；数据量很大而分区数没跟上，单个 Task 又会因为内存装不下而溢写甚至 OOM。</p>
+<p>理解了这一点，调优就有了方向：减少不必要的 Shuffle、让 Shuffle 的数据量更小、让每个分区的数据量更均匀。例如 <code>spark.sql.shuffle.partitions</code> 默认 200，数据量小的时候会产生大量几百 KB 的小分区，白白增加调度开销。数据量很大而分区数没跟上，单个 Task 又会因为内存装不下而溢写甚至 OOM。</p>
 
-<h2>四、Spark SQL：从 RDD 到 DataFrame 与 DataSet</h2>
+<h2>四、Spark SQL：从 RDD 到 DataFrame 与 Dataset</h2>
 
-<p>源资料说「每个数据库表被当做 RDD，Spark SQL 查询被转换为 Spark 操作」，这个描述在本章要纠正：Spark SQL 的核心抽象是 <strong>DataFrame（即 <code>Dataset[Row]</code>）</strong>与强类型的 <strong>DataSet</strong>，它们带有 schema（列名与类型），SQL 语句和 DSL 会先被 Catalyst 优化器转成逻辑计划，经过谓词下推、列裁剪、常量折叠等规则优化，再由 Tungsten 生成字节码，最终才落到 RDD 上执行。这正是结构化 API 通常比手写 RDD 更快的原因：RDD 里的 lambda 对 Spark 而言是黑盒，优化器无从下手，而 DataFrame 上的过滤、投影、聚合都是可知的。</p>
+<p>Spark SQL 的核心抽象是 <strong>DataFrame（即 <code>Dataset[Row]</code>）</strong>与强类型的 <strong>Dataset</strong>，它们带有 schema（列名与类型）。常见的旧说法“每个数据库表被当作 RDD，Spark SQL 查询被转换为 Spark 操作”并不准确。SQL 语句和 DSL 会先被 Catalyst 优化器转成逻辑计划，经过谓词下推、列裁剪、常量折叠等规则优化，再由 Tungsten 生成字节码，最终才落到 RDD 上执行。这正是结构化 API 通常比手写 RDD 更快的原因：RDD 里的 lambda 对 Spark 而言是黑盒，优化器无从下手。DataFrame 上的过滤、投影和聚合则都是可知的。</p>
 
 <pre><code class="language-java">import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -221,11 +221,11 @@ public class SalesByCity {
 }
 </code></pre>
 
-<p>注意 <code>SparkSession</code> 已经是 Spark 2.0 之后唯一入口，旧的 <code>SQLContext</code>、<code>HiveContext</code> 都已被取代；用 Java 写 Spark SQL 时需要 <code>spark-sql_2.13</code> 依赖，只有 <code>spark-core</code> 是不够的。</p>
+<p>注意 <code>SparkSession</code> 已经是 Spark 2.0 之后唯一入口，旧的 <code>SQLContext</code>、<code>HiveContext</code> 都已被取代。用 Java 写 Spark SQL 时需要 <code>spark-sql_2.13</code> 依赖，只有 <code>spark-core</code> 是不够的。</p>
 
 <h2>五、常见坑与调优清单</h2>
 
-<p>第一类坑来自闭包。在 <code>foreach</code> 里给 Driver 的计数器变量 <code>count++</code> 是无效的：闭包被序列化后发到 Executor，改的是各自副本，Driver 上永远看不到累加结果。跨节点的共享变量只有两种正确姿势——只读的<strong>广播变量</strong>（Broadcast，适合把小字典、小表发给每个 Executor）和只支持累加的<strong>累加器</strong>（Accumulator，适合统计脏数据条数）。</p>
+<p>第一类坑来自闭包。在 <code>foreach</code> 里给 Driver 的计数器变量 <code>count++</code> 是无效的：闭包被序列化后发到 Executor，改的是各自副本，Driver 上永远看不到累加结果。跨节点的共享变量只有两种正确用法。一是只读的<strong>广播变量</strong>（Broadcast，适合把小字典、小表发给每个 Executor）；二是只支持累加的<strong>累加器</strong>（Accumulator，适合统计脏数据条数）。</p>
 
 <pre><code class="language-java">import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
@@ -260,18 +260,13 @@ sc.textFile("hdfs:///log/*.log")
 System.out.println("脏数据行数 = " + badLines.value());
 </code></pre>
 
-<p>第二类坑来自数据规模。Driver 内存远小于集群，<code>collect()</code> 会把整个 RDD 拉到 Driver，动辄 OOM，想看样本请用 <code>take(n)</code> 或 DataFrame 的 <code>show()</code>。所有 key 分布极度不均（数据倾斜）时，少数 Task 拖慢整个 Stage，常见解法是给热 key 加随机前缀打散后两阶段聚合；Spark 3.x 的自适应查询执行（AQE，<code>spark.sql.adaptive.enabled</code> 默认开启）也能自动合并小分区并处理部分倾斜。此外，<code>cache()</code>/<code>persist(MEMORY_AND_DISK)</code> 只在该 RDD 会被多次复用时才值得，用完记得 <code>unpersist()</code>；<code>saveAsTextFile</code> 的目标目录必须<strong>不存在</strong>，否则直接抛 <code>FileAlreadyExistsException</code>。</p>
+<p>第二类坑来自数据规模。Driver 内存远小于集群，<code>collect()</code> 会把整个 RDD 拉到 Driver，动辄 OOM。想看样本请用 <code>take(n)</code> 或 DataFrame 的 <code>show()</code>。当 key 分布极度不均（数据倾斜）时，少数 Task 会拖慢整个 Stage，常见解法是给热 key 加随机前缀打散后再两阶段聚合。Spark 3.x 的自适应查询执行（AQE，<code>spark.sql.adaptive.enabled</code> 默认开启）也能自动合并小分区并处理部分倾斜。此外，<code>cache()</code>/<code>persist(MEMORY_AND_DISK)</code> 只在该 RDD 会被多次复用时才值得，用完记得 <code>unpersist()</code>。<code>saveAsTextFile</code> 的目标目录必须<strong>不存在</strong>，否则直接抛 <code>FileAlreadyExistsException</code>。</p>
 
-<p>提交方式也容易踩坑：代码里硬编码了 <code>setMaster("local[*]")</code>，再用 <code>spark-submit --master yarn</code> 提交，最终以代码里的 master 为准，作业其实跑在本地；正确做法是代码里不写 master，交给提交命令决定。写出结果时每个分区对应一个 part 文件，分区数过多会产生大量小文件，必要时在写出前用 <code>coalesce()</code> 收敛分区，它只做分区合并、不产生 Shuffle。</p>
+<p>提交方式也容易踩坑：代码里硬编码了 <code>setMaster("local[*]")</code>，再用 <code>spark-submit --master yarn</code> 提交，最终以代码里的 master 为准，作业其实跑在本地。正确做法是代码里不写 master，交给提交命令决定。写出结果时每个分区对应一个 part 文件，分区数过多会产生大量小文件，必要时在写出前用 <code>coalesce()</code> 收敛分区。它只做分区合并，不产生 Shuffle。</p>
 
-<p>第三类坑来自版本与环境。本地调试时日志满屏 INFO，Spark 3.x 要改的是 <code>$SPARK_HOME/conf/log4j2.properties</code>（源资料里的 <code>log4j.properties</code> 是 Spark 1.x 的写法，log4j 1.x 早已停止维护）；Windows 上跑本地模式需要 <code>winutils.exe</code>、<code>hadoop.dll</code> 并配置 <code>HADOOP_HOME</code>。依赖版本也要对齐：源资料给出的 <code>spark-core_2.10</code> + Spark 1.6.0 + JDK 1.7 是十年前的老组合，Scala 2.10 已不再维护；新项目应当选用 Spark 3.5.x（需 JDK 8/11/17），Scala 侧用 2.13 或 2.12，即 <code>spark-core_2.13</code>、<code>spark-sql_2.13</code>，Java 8 以上的 lambda 语法才能正常编译。</p>
+<p>第三类坑来自版本与环境。本地调试时日志满屏 INFO，Spark 3.x 要改的是 <code>$SPARK_HOME/conf/log4j2.properties</code>。旧写法 <code>log4j.properties</code> 是 Spark 1.x 时代的产物，而 log4j 1.x 早已停止维护。Windows 上跑本地模式需要 <code>winutils.exe</code>、<code>hadoop.dll</code> 并配置 <code>HADOOP_HOME</code>。依赖版本也要对齐：十年前的老教程常用 <code>spark-core_2.10</code> + Spark 1.6.0 + JDK 1.7，而 Scala 2.10 已不再维护。新项目应当选用 Spark 3.5.x（需 JDK 8/11/17），Scala 侧用 2.13 或 2.12，即 <code>spark-core_2.13</code>、<code>spark-sql_2.13</code>。这样 Java 8 以上的 lambda 语法才能正常编译。</p>
 
-<p>本章把 Spark 的骨架串了一遍：RDD 是不可变、可分区、靠血缘容错的数据集；算子分惰性的 Transformation 和触发计算的 Action；DAG 在宽依赖处切 Stage，Shuffle 的磁盘与网络开销是性能的主要矛盾；DataFrame/DataSet 与 Spark SQL 让优化器有了发挥空间；调优则围绕减少 Shuffle、均衡分区、广播小表和正确使用共享变量展开。把这几点记住，再去看 Spark 的监控页面和任务日志，就不会只见参数不见原理了。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-8-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">Hive 数据仓库</span></a>
-      <a class="next-post" href="/java-tutorial-8-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">8.4 Flink 流处理</span></a>
-      </nav>
+<p>本章把 Spark 的骨架串了一遍。RDD 是不可变、可分区、靠血缘容错的数据集；算子分惰性的 Transformation 与触发计算的 Action。DAG 在宽依赖处切 Stage，Shuffle 的磁盘与网络开销是性能的主要矛盾。DataFrame/Dataset 与 Spark SQL 让优化器有了发挥空间，调优则围绕减少 Shuffle、均衡分区、广播小表和正确使用共享变量展开。把这几点记住，再去看 Spark 的监控页面与任务日志，就不会只见参数不见原理。</p>
           </article>
   <!-- Footer -->
   <footer>
