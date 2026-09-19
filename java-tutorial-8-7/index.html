@@ -128,19 +128,19 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章的 Kafka 擅长吞吐，但它并不是所有场景的最优解：业务系统里大量消息只有几 KB、要求毫秒级投递、还要能按业务字段灵活路由，这时候 RabbitMQ 和 RocketMQ 往往更顺手。本章解决两个问题：一是把 RabbitMQ 的交换机路由模型和端到端可靠投递讲清楚，二是讲清 RocketMQ 的存储与消费模型，最后给出选型判断。适合已经会写 Java、正在为项目挑一款 MQ 或准备面试的读者。</p>
+<p>上一章的 Kafka 擅长吞吐，但它并不是所有场景的最优解：业务系统里大量消息只有几 KB、要求毫秒级投递、还要能按业务字段灵活路由，这时候 RabbitMQ 和 RocketMQ 往往更顺手。本章解决两个问题：一是把 RabbitMQ 的交换机路由模型和端到端可靠投递讲清楚。二是讲清 RocketMQ 的存储与消费模型，最后给出选型判断。适合已经会写 Java、正在为项目挑一款 MQ 或准备面试的读者。</p>
 
 <h2>一、MQ 到底解决什么问题</h2>
 
 <p>先用一句话定位：消息队列是介于生产者和消费者之间的异步通信中间件，核心价值是三件事——<strong>异步</strong>、<strong>解耦</strong>、<strong>削峰</strong>。典型例子是下单：写库只用 3&nbsp;ms，但发短信、加积分、更新搜索索引各要几百毫秒，串行执行用户就要等近 1 秒；改成写库后发一条消息，接口总耗时降到十几毫秒，下游各自慢慢消费。</p>
 
-<p>代价也必须清楚：引入 MQ 后系统可用性下降（MQ 挂了整条链路就断）、一致性变复杂（消息可能重复或丢失）、运维成本上升。因此下面讨论的所有机制，本质上都是在为这三个代价买单。</p>
+<p>代价也必须清楚：引入 MQ 后系统可用性下降（MQ 挂了整条链路就断），一致性变复杂（消息可能重复或丢失），运维成本也会上升。因此下面讨论的所有机制，本质上都是在为这三个代价买单。</p>
 
 <h2>二、RabbitMQ：以 Broker 为中心的路由模型</h2>
 
 <h3>2.1 Exchange 才是路由的核心</h3>
 
-<p>RabbitMQ 用 Erlang 编写，实现 AMQP 0-9-1 协议。它和 Kafka 最大的架构差异是：生产者<strong>不直接把消息写进队列</strong>，而是发给 Exchange（交换机），由 Exchange 按 Binding（绑定）和 Routing Key 决定投递到哪些 Queue。生产者对队列是无感知的，这正是它能做灵活路由的原因。</p>
+<p>RabbitMQ 用 Erlang 编写，实现 AMQP 0-9-1 协议。它和 Kafka 最大的架构差异是：生产者<strong>不直接把消息写进队列</strong>，而是发给 Exchange（交换机）。Exchange 按 Binding（绑定）和 Routing Key 决定投递到哪些 Queue。生产者对队列是无感知的，这正是它能做灵活路由的原因。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-7/01-rabbitmq-routing.svg" alt="RabbitMQ 交换机路由模型示意图"><figcaption>图 1：生产者只发 Exchange，消息进哪些队列由交换机类型、绑定与路由键共同决定</figcaption></figure>
 
 
@@ -151,7 +151,7 @@
 <li><strong>headers</strong>：按消息头键值匹配，性能不如前三种，实际项目用得很少。</li>
 </ul>
 
-<p>另外要区分两套“模型”的说法：AMQP 协议层面是 Exchange/Queue/Binding 这套模型，而教学资料里常说的“5 种消息模型”（简单、work、订阅、路由、主题）其实是同一套组件的不同用法组合，第 6 种 RPC 已经不属于消息队列范畴。</p>
+<p>另外要区分两套“模型”的说法：AMQP 协议层面是 Exchange/Queue/Binding 这套模型。教学资料里常说的“5 种消息模型”（简单、work、订阅、路由、主题）其实是同一套组件的不同用法组合，第 6 种 RPC 已经不属于消息队列范畴。</p>
 
 <h3>2.2 写一个最小可运行的生产者与消费者</h3>
 
@@ -243,9 +243,9 @@ System.out.println(result.getSendStatus() + " " + result.getMsgId());</code></pr
 
 <h3>3.3 事务消息与定时消息</h3>
 
-<p>RocketMQ 的事务消息采用两阶段思路：先发送半消息（对消费者不可见），执行本地事务，再根据结果提交或回滚；若 Broker 长时间未收到二次确认，会回查生产者的本地事务状态。它的实现绕开了按 Key 查消息，而是复用第一条消息的 Offset 定位状态，因此半消息数量大时会产生较多脏页，需要关注。定时消息方面，RocketMQ 只支持固定的延迟级别而非任意时间精度（4.x 为 18 个级别，5.x 扩展为 24 个级别、最长 2 小时，具体以所部署版本的 <code>messageDelayLevel</code> 配置为准）。</p>
+<p>RocketMQ 的事务消息采用两阶段思路：先发送半消息（对消费者不可见），执行本地事务，再根据结果提交或回滚；若 Broker 长时间未收到二次确认，会回查生产者的本地事务状态。它的实现绕开了按 Key 查消息，而是复用第一条消息的 Offset 定位状态，因此半消息数量大时会产生较多脏页，需要关注。定时消息方面，RocketMQ 只支持固定的延迟级别，而非任意时间精度（4.x 为 18 个级别，5.x 扩展为 24 个级别、最长 2 小时，以 <code>messageDelayLevel</code> 为准）。</p>
 
-<p>至于投递语义，RocketMQ 与 RabbitMQ 一样，默认只保证 At Least Once（至少一次），Exactly Once 在分布式环境下开销极大，工程上的做法是业务侧做幂等去重，例如把消息 ID 或业务唯一键写入数据库唯一索引。</p>
+<p>至于投递语义，RocketMQ 与 RabbitMQ 一样默认只保证 At Least Once（至少一次）。Exactly Once 在分布式环境下开销极大，工程上的做法是业务侧做幂等去重，例如把消息 ID 或业务唯一键写入数据库唯一索引。</p>
 
 <h2>四、怎么选：一张对照表</h2>
 

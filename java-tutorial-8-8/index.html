@@ -168,7 +168,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 # ik_smart   -> 中华人民共和国 / 人民大会堂
 # ik_max_word -> 中华人民共和国 / 中华人民 / 中华 / 华人 / 人民共和国 / 人民 / 共和国 / 大会堂 / 大会 / 会堂</code></pre>
 
-<p>这里有几个源文档中过时或写错的点必须更正。第一，映射类型（type）在 ES 6.0 被弱化、<strong>在 7.0 已被彻底移除，而不是 9.0</strong>；早在 6.x 就推荐的 _doc 占位写法，在 7.x 之后连位置都不再需要。第二，<code>_all</code> 全字段检索字段同样在 7.0 被移除，需要用 <code>multi_match</code> 显式列出字段，或用 <code>copy_to</code> 自建汇总字段；因此老教程里 <code>?q=guide</code> 这类依赖 <code>_all</code> 的写法在新版本上语义已变。第三，节点角色配置也换了：<code>node.master</code>/<code>node.data</code> 改为 <code>node.roles: [master, data]</code>，<code>discovery.zen.minimum_master_nodes</code> 这一套 Zen1 参数被 <code>cluster.initial_master_nodes</code> 取代（7.0 起）。第四，只有 <code>index</code> 参数不存在「搜索时单独关闭索引」的说法：字段一旦不索引，任何查询（包括 term）都搜不到它；但要注意 <code>index: false</code> 的字段仍可用 <code>docvalue</code> 做聚合（需开启），这点常被误解。</p>
+<p>这里有几个源文档中过时或写错的点必须更正。第一，映射类型（type）在 ES 6.0 被弱化、<strong>在 7.0 已被彻底移除，而不是 9.0</strong>；早在 6.x 就推荐的 _doc 占位写法，在 7.x 之后连位置都不再需要。第二，<code>_all</code> 全字段检索字段同样在 7.0 被移除，需要用 <code>multi_match</code> 显式列出字段，或用 <code>copy_to</code> 自建汇总字段；因此老教程里 <code>?q=guide</code> 这类依赖 <code>_all</code> 的写法在新版本上语义已变。第三，节点角色配置也换了：<code>node.master</code>/<code>node.data</code> 改为 <code>node.roles: [master, data]</code>。Zen1 时代的 <code>discovery.zen.minimum_master_nodes</code> 则被 <code>cluster.initial_master_nodes</code> 取代（7.0 起）。第四，只有 <code>index</code> 参数不存在「搜索时单独关闭索引」的说法：字段一旦不索引，任何查询（包括 term）都搜不到它；但要注意 <code>index: false</code> 的字段仍可用 <code>docvalue</code> 做聚合（需开启），这点常被误解。</p>
 
 <h2>三、查询 DSL：match、term 与 bool 组合</h2>
 
@@ -202,7 +202,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 
 <h2>四、聚合与集群调优</h2>
 
-<p>聚合（aggregation）是 ES 的另一半价值：它能在检索结果之上做分组统计，把「先查出来再在内存里 group by」的工作交给搜索引擎。聚合只对不分词的字段有意义，所以对 <code>text</code> 字段做 <code>terms</code> 聚合会报 fielddata 相关错误。正确做法是给它加一个 <code>keyword</code> 子字段（<code>"fields": { "keyword": { "type": "keyword" } }</code>），或者干脆在建映射时就规划好。</p>
+<p>聚合（aggregation）是 ES 的另一半价值：它能在检索结果之上做分组统计，把「先查出来再在内存里 group by」的工作交给搜索引擎。聚合只对不分词的字段有意义，对 <code>text</code> 字段做 <code>terms</code> 聚合会报 fielddata 相关错误。正确做法是给它加一个 <code>keyword</code> 子字段（<code>"fields": { "keyword": { "type": "keyword" } }</code>），或者干脆在建映射时就规划好。</p>
 
 <pre><code class="language-json">POST /course/_search
 {
@@ -219,7 +219,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
   }
 }</code></pre>
 
-<p>注意 <code>"size": 0</code>：只取聚合结果时要显式关掉 hits，否则集群会白白搬运一万条文档。容量方面，分片不是越多越好——分片过多会放大集群状态与查询合并的开销，分片过大则恢复慢；常见经验是单个分片控制在 10–50GB 之间，并让分片数对齐数据节点数。堆内存设置 <code>-Xms</code> 与 <code>-Xmx</code> 相等以避免运行时伸缩，且不要超过物理内存的一半，同时尽量控制在 31GB 以内以保住 JVM 的压缩指针；其余内存留给文件系统缓存，Lucene 的段文件非常依赖它。文件句柄方面，Linux 下要为 ES 用户把 <code>ulimit -n</code> 提到 65536，并写进 <code>/etc/security/limits.conf</code>（形如 <code>elasticsearch - nofile 65536</code>）才能持久生效——源文档里 <code>su limit -n</code> 是笔误，临时 <code>ulimit</code> 也只在当前会话有效。</p>
+<p>注意 <code>"size": 0</code>：只取聚合结果时要显式关掉 hits，否则集群会白白搬运一万条文档。容量方面，分片不是越多越好——分片过多会放大集群状态与查询合并的开销，分片过大则恢复慢；常见经验是单个分片控制在 10–50GB 之间，并让分片数对齐数据节点数。堆内存设置 <code>-Xms</code> 与 <code>-Xmx</code> 相等以避免运行时伸缩，且不要超过物理内存的一半，同时尽量控制在 31GB 以内以保住 JVM 的压缩指针；其余内存留给文件系统缓存，Lucene 的段文件非常依赖它。文件句柄方面，Linux 下要为 ES 用户把 <code>ulimit -n</code> 提到 65536，并写进 <code>/etc/security/limits.conf</code>（形如 <code>elasticsearch - nofile 65536</code>），才能持久生效。源文档里的 <code>su limit -n</code> 是笔误，临时 <code>ulimit</code> 也只在当前会话有效。</p>
 
 <p>写入侧的常用手段包括：用 <code>_bulk</code> 批量提交（单批几 MB 到十几 MB 为宜）、导入期把 <code>refresh_interval</code> 调大甚至设为 -1、副本数先设 0、写完再恢复；查询侧则优先用 filter、只取需要的 <code>_source</code> 字段、限制聚合的 <code>size</code>、避免 <code>*</code> 通配符开头的查询。生产集群至少要三个专有 master 节点（<code>node.roles: [master]</code>）以避免脑裂，数据节点不兼 master 是更稳妥的部署方式。</p>
 
