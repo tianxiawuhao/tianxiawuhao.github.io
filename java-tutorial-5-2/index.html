@@ -242,9 +242,174 @@ public class PasswordDemo {
 
 <p>校验密码只能调用 <code>matches(原文, 密文)</code>，绝不能用「把用户输入重新加密后与数据库字符串做 equals」的方式比对——随机盐会让这种比较永远失败。BCrypt 密文本身含盐与强度信息，长度约 60 字符，建库时字段宽度要给足。</p>
 
-<h2>五、小结</h2>
+<h2>五、ID 生成与集合处理：两个最常被手写的工具</h2>
 
-<p>工具类的价值在于把容易写错的细节封装起来：<code>StringUtils.isBlank</code> 区分了「空串」与「空白串」，<code>CollectionUtils</code> 省掉判空与手写循环，<code>BeanUtils.copyProperties</code> 消灭成片的 get/set，<code>Objects</code> 与 <code>java.time</code> 让你不必依赖第三方库就能写好判空和日期。优先用 JDK 自带 API，其次用社区活跃、维护正常的库，已废弃的类按官方指引迁移；工具类放在 <code>util</code> 包下并命名为 <code>XxxUtils</code>。</p>
+<p>业务代码里有两类逻辑几乎每个项目都会手写一遍：生成唯一 ID、按批切分集合。前者写错会在分布式环境下产生重复主键，后者写错会出现边界越界或漏数据。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-2/03-id-generation.svg" alt="UUID、数据库自增、号段模式、雪花算法四种分布式 ID 方案的对比，以及雪花算法的 64 位结构与时钟回拨处理"><figcaption>图 3：四种分布式 ID 方案对比与雪花算法的位结构</figcaption></figure>
+
+<h3>分布式 ID：四种方案怎么选</h3>
+<p>单机项目用数据库自增主键就够了，但一旦分库分表或需要提前生成 ID，就必须换方案。四种常见方案的能力边界如下：</p>
+<ul>
+<li><strong>UUID</strong>：本地生成、无依赖、性能好，但它是 36 字符的随机字符串，<strong>无序</strong>会导致 B+ 树索引频繁页分裂，且占用空间是 long 的四倍多，只适合做日志追踪号、临时文件名这类不需要当主键的场景。</li>
+<li><strong>数据库自增</strong>：严格有序、实现简单，但并发写入会成为瓶颈，分库分表后需要额外设置步长，而且 ID 连续可被遍历（竞对可以通过下单号推算业务量）。</li>
+<li><strong>号段模式</strong>：一次从数据库取一批 ID（如 1000 个）缓存在内存里慢慢发，把数据库写入频率降低千倍；代价是 ID 不连续，服务重启会浪费一段。</li>
+<li><strong>雪花算法（Snowflake）</strong>：纯内存生成、趋势递增、每秒可产出数百万个，是业务主键最常用的方案，唯一要处理的是时钟回拨。</li>
+</ul>
+<p>雪花算法的结构并不复杂：一个 long 的 64 位被切成四段——1 位符号位固定为 0，41 位时间戳（相对自定义起始时间，够用约 69 年），10 位机器标识（5 位数据中心 + 5 位机器，最多 1024 个节点），12 位序列号（同一毫秒内自增，每毫秒最多 4096 个）。之所以这样切，是为了让 ID <strong>整体趋势递增</strong>——同一毫秒内的 ID 连续，跨毫秒按时间递增，而 MySQL 的 B+ 树索引正好喜欢这种「始终在右侧追加」的写入模式。</p>
+<pre><code class="language-java">public class SnowflakeIdWorker {
+
+    /** 起始时间戳（2024-01-01），一旦上线就不能再改，否则可能生成重复 ID */
+    private static final long START_TIMESTAMP = 1704038400000L;
+
+    private static final long WORKER_ID_BITS = 5L;
+    private static final long DATACENTER_ID_BITS = 5L;
+    private static final long SEQUENCE_BITS = 12L;
+
+    private static final long MAX_WORKER_ID = ~(-1L &lt;&lt; WORKER_ID_BITS);              // 31
+    private static final long MAX_DATACENTER_ID = ~(-1L &lt;&lt; DATACENTER_ID_BITS);      // 31
+    private static final long SEQUENCE_MASK = ~(-1L &lt;&lt; SEQUENCE_BITS);              // 4095
+
+    private static final long WORKER_ID_SHIFT = SEQUENCE_BITS;                       // 12
+    private static final long DATACENTER_ID_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS;  // 17
+    private static final long TIMESTAMP_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS + DATACENTER_ID_BITS; // 22
+
+    private final long workerId;
+    private final long datacenterId;
+    private long sequence = 0L;
+    private long lastTimestamp = -1L;
+
+    public SnowflakeIdWorker(long workerId, long datacenterId) {
+        if (workerId &lt; 0 || workerId &gt; MAX_WORKER_ID) {
+            throw new IllegalArgumentException("workerId 必须在 0~" + MAX_WORKER_ID + " 之间");
+        }
+        if (datacenterId &lt; 0 || datacenterId &gt; MAX_DATACENTER_ID) {
+            throw new IllegalArgumentException("datacenterId 必须在 0~" + MAX_DATACENTER_ID + " 之间");
+        }
+        this.workerId = workerId;
+        this.datacenterId = datacenterId;
+    }
+
+    public synchronized long nextId() {
+        long timestamp = System.currentTimeMillis();
+        // 时钟回拨：NTP 校时、虚拟机迁移都会导致时间倒退
+        if (timestamp &lt; lastTimestamp) {
+            long offset = lastTimestamp - timestamp;
+            if (offset &lt;= 5) {
+                // 回拨很小（5ms 内）：自旋等待，追上上次的时间戳即可
+                while (timestamp &lt; lastTimestamp) {
+                    timestamp = System.currentTimeMillis();
+                }
+            } else {
+                // 回拨较大：宁可抛异常让上层重试，也不能生成重复 ID
+                throw new IllegalStateException("检测到时钟回拨 " + offset + "ms，拒绝生成 ID");
+            }
+        }
+        if (timestamp == lastTimestamp) {
+            // 同一毫秒：序列号自增；用位与保证溢出后回到 0（同一毫秒最多 4096 个）
+            sequence = (sequence + 1) &amp; SEQUENCE_MASK;
+            if (sequence == 0) {
+                // 本毫秒的 4096 个已用完，等到下一毫秒
+                while (timestamp &lt;= lastTimestamp) {
+                    timestamp = System.currentTimeMillis();
+                }
+            }
+        } else {
+            sequence = 0L;   // 新的毫秒，序列号归零
+        }
+        lastTimestamp = timestamp;
+        return ((timestamp - START_TIMESTAMP) &lt;&lt; TIMESTAMP_SHIFT)
+                | (datacenterId &lt;&lt; DATACENTER_ID_SHIFT)
+                | (workerId &lt;&lt; WORKER_ID_SHIFT)
+                | sequence;
+    }
+}</code></pre>
+<p>使用上有三个必须注意的点。<strong>第一，方法必须加锁</strong>（上面的 <code>synchronized</code>），因为 <code>lastTimestamp</code> 与 <code>sequence</code> 的组合更新不是原子的。<strong>第二，时钟回拨一定要处理</strong>：小回拨自旋等待，大回拨直接抛异常并告警——绝不能「容忍」它，否则会生成重复 ID，而重复主键的排查成本极高。<strong>第三，机器标识的分配要唯一</strong>：可以用 IP 末段、K8s 的 StatefulSet 序号，或启动时向 Redis/Zookeeper 注册领号；同一集群里两台机器用同一个 workerId 是雪花算法最常见的事故原因。如果不想自己实现，可以直接用 MyBatis-Plus 的 <code>IdWorker</code> 或美团的 Leaf、百度的 UidGenerator。</p>
+
+<h3>集合处理：切批、判空与树形组装</h3>
+<p>批量入库、批量调用接口时都需要把大集合切成固定大小的批次。这段代码看着简单，但边界条件容易写错（最后一批不足 batchSize、空集合、batchSize 为 0 导致死循环）。</p>
+<pre><code class="language-java">import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class BatchUtils {
+
+    /** 把列表按 batchSize 切分成多批，保证：空集合返回空列表、最后一批可取到剩余元素 */
+    public static &lt;T&gt; List&lt;List&lt;T&gt;&gt; partition(List&lt;T&gt; source, int batchSize) {
+        if (source == null || source.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (batchSize &lt;= 0) {
+            throw new IllegalArgumentException("batchSize 必须大于 0");
+        }
+        List&lt;List&lt;T&gt;&gt; result = new ArrayList&lt;&gt;();
+        for (int start = 0; start &lt; source.size(); start += batchSize) {
+            // 关键：用 min 兜住最后一批，否则 subList 会抛 IndexOutOfBoundsException
+            int end = Math.min(start + batchSize, source.size());
+            result.add(new ArrayList&lt;&gt;(source.subList(start, end)));
+        }
+        return result;
+    }
+}</code></pre>
+<p>几个细节值得留意：<code>subList</code> 返回的是<strong>原列表的视图</strong>而不是副本，所以这里套了一层 <code>new ArrayList&lt;&gt;()</code>——否则对原列表的结构性修改会让子列表失效，抛 <code>ConcurrentModificationException</code>；Guava 有现成的 <code>Lists.partition()</code>，Apache Commons 有 <code>ListUtils.partition()</code>，能用库就不要手写。判空则统一用 <code>CollectionUtils.isEmpty()</code>（Spring）或 <code>list == null || list.isEmpty()</code>，不要用 <code>list.size() == 0</code>。</p>
+<p>另一个高频场景是<strong>把扁平列表组装成树</strong>（菜单、部门、商品分类）。推荐的写法是「一次分组 + 一次递归」：先把所有节点按 <code>parentId</code> 分组成 <code>Map&lt;Long, List&lt;Node&gt;&gt;</code>，再从根节点出发递归挂载子节点。</p>
+<pre><code class="language-java">import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+public class TreeUtils {
+
+    public static class Node {
+        private final Long id;
+        private final Long parentId;
+        private final String name;
+        private final List&lt;Node&gt; children = new ArrayList&lt;&gt;();
+
+        public Node(Long id, Long parentId, String name) {
+            this.id = id;
+            this.parentId = parentId;
+            this.name = name;
+        }
+
+        public Long getId() {
+            return id;
+        }
+
+        public Long getParentId() {
+            return parentId;
+        }
+
+        public List&lt;Node&gt; getChildren() {
+            return children;
+        }
+
+        @Override
+        public String toString() {
+            return name + children;
+        }
+    }
+
+    /** 一次分组 + 一次递归，避免每个节点都去遍历全表（那会退化成 O(n²)） */
+    public static List&lt;Node&gt; buildTree(List&lt;Node&gt; all, Long rootParentId) {
+        Map&lt;Long, List&lt;Node&gt;&gt; byParent = all.stream()
+                .collect(Collectors.groupingBy(Node::getParentId));
+        List&lt;Node&gt; roots = byParent.getOrDefault(rootParentId, new ArrayList&lt;&gt;());
+        roots.forEach(node -&gt; attach(node, byParent));
+        return roots;
+    }
+
+    private static void attach(Node parent, Map&lt;Long, List&lt;Node&gt;&gt; byParent) {
+        List&lt;Node&gt; children = byParent.getOrDefault(parent.getId(), new ArrayList&lt;&gt;());
+        parent.getChildren().addAll(children);
+        children.forEach(child -&gt; attach(child, byParent));
+    }
+}</code></pre>
+<p>这段实现把复杂度从「每个节点都扫一遍全表」的 O(n²) 降到 O(n)。生产上还要补两件事：<strong>防环</strong>——如果数据里出现 A 的父节点是 B、B 的父节点又是 A 的脏数据，递归会栈溢出，稳妥做法是用 <code>Set</code> 记录访问路径、发现重复就跳过并告警；<strong>限制层级</strong>——菜单类数据通常不超过 5 层，超过就说明数据有问题，直接截断比无限递归安全。</p>
+
+<h2>六、小结</h2>
+
+<p>工具类的价值在于把容易写错的细节封装起来：<code>StringUtils.isBlank</code> 区分了「空串」与「空白串」，<code>CollectionUtils</code> 省掉判空与手写循环，<code>BeanUtils.copyProperties</code> 消灭成片的 get/set，<code>Objects</code> 与 <code>java.time</code> 让你不必依赖第三方库就能写好判空和日期。优先用 JDK 自带 API，其次用社区活跃、维护正常的库，已废弃的类按官方指引迁移；工具类放在 <code>util</code> 包下并命名为 <code>XxxUtils</code>。此外，分布式 ID 与集合切批/建树这两类「人人都会写、人人容易写错」的逻辑也应当收敛到工具类里，把时钟回拨处理、边界条件与防环判断一次写对、处处复用。</p>
 
 <p>最后两点：工具类都是静态方法，天然无状态，不要在其中保存可变成员，否则会引入并发问题；使用第三方库时务必声明依赖并统一版本（<code>commons-lang3</code>、<code>commons-collections4</code>、<code>commons-beanutils</code>），避免同一库多版本导致 <code>NoSuchMethodError</code>。</p>
           
