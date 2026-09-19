@@ -295,6 +295,306 @@ Promise.all(tasks).then(() =&gt; fetch("/upload/merge", {
 <p>断点续传的本质就是「记录已成功的分片，下次只传没传过的」。记录可放 localStorage（简单，清缓存即失效），也可放服务端（可靠、可跨设备，多一个查询接口）。服务端一般把分片先落到 <code>context</code> 目录，收到 <code>merge</code> 后按序号拼接并清理分片。别忘了给分片设有效期：客户端一直不调合并接口时，这些碎片必须被定时清理，否则磁盘会被垃圾分片吃满。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-9/02-chunk-resume.svg" alt="大文件切片上传与断点续传流程"><figcaption>图 2：切片上传的五个环节——断点记录决定重传范围，merge 必须按分片序号排序后再追加</figcaption></figure>
 
+<h3>前端：并发控制、文件指纹与秒传</h3>
+<p>上面的写法能跑，但把几百个分片一次性丢给 <code>Promise.all</code> 会瞬间占满浏览器连接数（HTTP/1.1 下同域通常只有 6 个并发），排在后面的请求还没发出去就可能超时，因此现行做法是<strong>固定并发数的工作池</strong>：开 N 个 worker，各自从队列里取分片。另外，只靠「文件名 + 大小 + 修改时间」当标识并不够：同名同大小的两个不同文件会互相覆盖，也无法实现秒传，至少要引入内容指纹。</p>
+<p>指纹的算力是瓶颈：对 2GB 文件做全量 MD5 会让主线程卡几十秒。折中方案是<strong>抽样哈希</strong>——头、中、尾各取固定长度拼起来算，再把 <code>file.size</code> 一起混入，几十毫秒即可完成，足够支撑断点续传的上下文标识和秒传的粗筛；但它<strong>不是全量校验</strong>，理论上存在碰撞，所以秒传判定必须同时比对文件大小，更严格的做法是在 Web Worker 里分块做全量 SHA-256。另有一个常见笔误：文件对象只有 <code>file.size</code>，没有 <code>file.length</code>，写成 <code>file.length</code> 只会得到 <code>undefined</code>，总分片数随之算成 <code>NaN</code>。</p>
+
+<pre><code class="language-js">// 依赖 spark-md5 3.x（npm i spark-md5；浏览器直接引 spark-md5.min.js 得到全局 SparkMD5）
+const CHUNK = 5 * 1024 * 1024;   // 单片 5MB，必须不大于服务端 multipart 的单文件上限
+const CONCURRENCY = 3;           // 并发数，别超过同域连接上限
+const SAMPLE = 2 * 1024 * 1024;  // 抽样长度：头、中、尾各 2MB
+
+// 抽样指纹：够小的文件直接全量算，大文件只取头、中、尾
+async function fingerprint(file) {
+  const md5 = new SparkMD5.ArrayBuffer();
+  if (file.size &lt;= SAMPLE * 3) {
+    md5.append(await file.arrayBuffer());
+  } else {
+    for (const start of [0, Math.floor(file.size / 2), file.size - SAMPLE]) {
+      md5.append(await file.slice(start, start + SAMPLE).arrayBuffer());
+    }
+  }
+  md5.append(String(file.size));   // 大小也入哈希，避免不同长度的文件撞车
+  return md5.end();
+}
+
+// check / merge 用表单编码，服务端 getParameter 直接可取，省掉一个 JSON 解析依赖
+async function postForm(url, data) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: new URLSearchParams(data)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function upload(file, { signal, onProgress } = {}) {
+  const hash = await fingerprint(file);
+  const total = Math.ceil(file.size / CHUNK);      // 一律用 file.size
+  const key = `upload:${hash}`;
+  const local = new Set(JSON.parse(localStorage.getItem(key) || "[]"));
+
+  // 第一步 check：秒传判定 + 拿回服务端已落盘的分片序号
+  const info = await postForm("/upload/check",
+    { hash, name: file.name, size: file.size, total, chunkSize: CHUNK });
+  if (info.uploaded) return info.url;              // 秒传：服务端已有同哈希文件，一个字节都不用传
+
+  const done = new Set([...(info.indexes || []), ...local]);   // 服务端记录与本地记录取并集
+  const queue = [];
+  for (let i = 0; i &lt; total; i++) if (!done.has(i)) queue.push(i);   // 只补传缺失分片
+
+  async function worker() {
+    while (queue.length) {
+      if (signal?.aborted) return;                 // 暂停：controller.abort()
+      const index = queue.shift();
+      const blob = file.slice(index * CHUNK, Math.min(file.size, (index + 1) * CHUNK));
+      const fd = new FormData();
+      fd.append("hash", hash);                     // 文件指纹，也是服务端目录名
+      fd.append("index", index);                   // 分片序号，合并时按它定位
+      fd.append("total", total);
+      fd.append("size", file.size);
+      fd.append("chunkSize", CHUNK);
+      fd.append("chunkHash", SparkMD5.ArrayBuffer.hash(await blob.arrayBuffer())); // 单片校验值
+      fd.append("chunk", blob, `${hash}-${index}`); // 第三个参数是文件名，便于服务端查日志
+      try {
+        const res = await fetch("/upload/chunk", { method: "POST", body: fd, signal });
+        if (!res.ok) throw new Error(`分片 ${index} 上传失败：HTTP ${res.status}`);
+      } catch (e) {
+        queue.unshift(index);                      // 失败或被中断的分片放回队列，下一轮续传
+        if (signal?.aborted) return;               // 暂停引起的中断不算失败
+        throw e;
+      }
+      done.add(index);
+      localStorage.setItem(key, JSON.stringify([...done]));   // 本地也记一份，断网刷新后仍可续
+      onProgress?.(done.size, total);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
+  if (signal?.aborted) return null;                // 已暂停：分片留在服务端，下次从 check 接着传
+
+  // 第三步 merge：全部到位后才拼接
+  const result = await postForm("/upload/merge",
+    { hash, name: file.name, size: file.size, total, chunkSize: CHUNK });
+  localStorage.removeItem(key);                    // 合并成功才清本地进度
+  return result.url;
+}
+
+// 用法：const controller = new AbortController();
+// upload(file, { signal: controller.signal, onProgress: (n, t) => console.log(`${n}/${t}`) });
+// 暂停：controller.abort()；续传：重新调用 upload(file)，check 会返回已完成分片并被跳过
+</code></pre>
+
+<p>三个细节容易被忽略：<strong>暂停不是取消</strong>，中断后分片仍在服务端，下次续传只补缺失的那些；<strong>进度按「已完成片数 / 总片数」算</strong>，不要按上传字节数估算，最后一片通常更小；<strong>本地记录与服务端记录要取并集</strong>，只信 localStorage 会在换设备或清缓存后重传，只信服务端则多一次请求——两者都记、取并集最稳。</p>
+
+<h3>服务端：分片落盘、校验、合并与清理</h3>
+<p>服务端要做四件事：把分片落到以指纹命名的目录、校验大小与哈希、按序号拼接成成品、合并成功后清理分片。下面用 Spring Boot 3.x（3.0 至 3.5 均可，<code>javax</code> 到 <code>jakarta</code> 的迁移见本章第二节）演示，落盘用「先写临时名再原子改名的 <code>MultipartFile.transferTo</code>」，拼接用 <code>RandomAccessFile</code> 按序号定位写入——定位写入不依赖分片到达顺序，重复的分片重传也会被覆盖成同一结果。</p>
+
+<pre><code class="language-java">import org.springframework.http.HttpStatus;
+import org.springframework.util.DigestUtils;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
+
+@RestController
+@RequestMapping("/upload")
+public class ChunkUploadController {
+
+    /** 单片上限，必须小于等于 multipart 的单文件上限，留一点协议开销余量 */
+    private static final long CHUNK_MAX = 8L * 1024 * 1024;
+    /** 分片与成品的根目录，务必放在 Web 容器可直接访问的路径之外 */
+    private final Path root = Paths.get("/data/upload");
+    /** 每个文件指纹一把锁：并发 merge 同一个文件时只允许一个线程拼接 */
+    private final ConcurrentHashMap&lt;String, ReentrantLock&gt; mergeLocks = new ConcurrentHashMap&lt;&gt;();
+
+    /** 第一步 check：秒传判定 + 已落盘分片列表。只读，必须幂等且便宜 */
+    @PostMapping("/check")
+    public Map&lt;String, Object&gt; check(@RequestParam String hash,
+                                     @RequestParam long size) throws Exception {
+        Path target = finalFile(hash);
+        if (Files.exists(target) &amp;&amp; Files.size(target) == size) {   // 秒传：哈希 + 大小双重比对
+            return Map.of("uploaded", true, "url", publicUrl(hash));
+        }
+        List&lt;Integer&gt; indexes = new ArrayList&lt;&gt;();
+        Path dir = chunkDir(hash);
+        if (Files.isDirectory(dir)) {
+            try (Stream&lt;Path&gt; s = Files.list(dir)) {
+                s.forEach(p -&gt; indexes.add(Integer.valueOf(p.getFileName().toString())));
+            }
+            Collections.sort(indexes);
+        }
+        return Map.of("uploaded", false, "indexes", indexes);
+    }
+
+    /** 第二步 upload：单片落盘，幂等——同一分片重传直接覆盖，不报错 */
+    @PostMapping("/chunk")
+    public Map&lt;String, Object&gt; chunk(@RequestParam String hash,
+                                     @RequestParam int index,
+                                     @RequestParam int total,
+                                     @RequestParam long size,
+                                     @RequestParam long chunkSize,
+                                     @RequestParam String chunkHash,
+                                     @RequestParam("chunk") MultipartFile chunk) throws Exception {
+        if (index &lt; 0 || index &gt;= total) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分片序号越界");
+        }
+        if (chunk.getSize() &gt; CHUNK_MAX) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分片超过单文件上限");
+        }
+        // 大小校验：除最后一片外都必须是 chunkSize，最后一片是余数
+        long expected = (index == total - 1) ? size - (long) index * chunkSize : chunkSize;
+        if (expected &lt;= 0 || chunk.getSize() != expected) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "分片 " + index + " 大小异常，期望 " + expected + " 实际 " + chunk.getSize());
+        }
+        // 哈希校验：MD5 只用于发现传输损坏，不用于安全签名；分片较大时改用 DigestInputStream 流式算
+        String actual = DigestUtils.md5DigestAsHex(chunk.getBytes());
+        if (!actual.equalsIgnoreCase(chunkHash)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分片哈希不匹配，请重传");
+        }
+        Path dir = chunkDir(hash);
+        Files.createDirectories(dir);
+        Path part = dir.resolve(String.valueOf(index));
+        Path tmp = dir.resolve(index + ".tmp");
+        chunk.transferTo(tmp);                        // 先写临时名
+        Files.move(tmp, part, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        return Map.of("index", index, "received", true, "size", chunk.getSize());
+    }
+
+    /** 第三步 merge：按序号定位拼接，成功后清理分片目录 */
+    @PostMapping("/merge")
+    public Map&lt;String, Object&gt; merge(@RequestParam String hash,
+                                     @RequestParam String name,
+                                     @RequestParam long size,
+                                     @RequestParam int total,
+                                     @RequestParam long chunkSize) throws Exception {
+        ReentrantLock lock = mergeLocks.computeIfAbsent(hash, k -&gt; new ReentrantLock());
+        lock.lock();
+        try {
+            Path target = finalFile(hash);
+            if (Files.exists(target) &amp;&amp; Files.size(target) == size) {   // 幂等：重复 merge 返回同一结果
+                return Map.of("url", publicUrl(hash), "size", size, "skipped", true);
+            }
+            Path dir = chunkDir(hash);
+            List&lt;Integer&gt; missing = new ArrayList&lt;&gt;();
+            for (int i = 0; i &lt; total; i++) {
+                if (!Files.exists(dir.resolve(String.valueOf(i)))) missing.add(i);
+            }
+            if (!missing.isEmpty()) {
+                // 缺片不是错误，而是让前端回到 check 补传；409 语义比 500 清晰
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "缺少分片 " + missing);
+            }
+            Files.createDirectories(target.getParent());
+            Path tmpFile = target.resolveSibling(target.getFileName() + ".part");
+            byte[] buf = new byte[64 * 1024];
+            try (RandomAccessFile raf = new RandomAccessFile(tmpFile.toFile(), "rw")) {
+                for (int i = 0; i &lt; total; i++) {
+                    Path part = dir.resolve(String.valueOf(i));
+                    raf.seek((long) i * chunkSize);            // 定位写入，与到达顺序无关
+                    try (InputStream in = Files.newInputStream(part)) {
+                        int n;
+                        while ((n = in.read(buf)) &gt; 0) {
+                            raf.write(buf, 0, n);
+                        }
+                    }
+                }
+                raf.setLength(size);                           // 截掉多余字节，保证成品长度精确
+            }
+            Files.move(tmpFile, target, StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);           // 原子改名，避免下载到半个文件
+            deleteRecursively(dir);                            // 合并完成必须清理分片，否则磁盘被碎片吃满
+            return Map.of("url", publicUrl(hash), "size", size, "name", name);
+        } finally {
+            lock.unlock();
+            // 没有线程持有、也没有排队者时移除锁对象，避免 map 无界增长
+            mergeLocks.compute(hash, (k, v) -&gt;
+                    v != null &amp;&amp; !v.isLocked() &amp;&amp; !v.hasQueuedThreads() ? null : v);
+        }
+    }
+
+    private Path chunkDir(String hash) {
+        return root.resolve("chunks").resolve(hash);
+    }
+
+    private Path finalFile(String hash) {
+        // 用哈希前两位打散子目录，单目录文件上千后列目录会明显变慢
+        return root.resolve("files").resolve(hash.substring(0, 2)).resolve(hash);
+    }
+
+    private String publicUrl(String hash) {
+        return "/files/" + hash.substring(0, 2) + "/" + hash;   // 库里只存 key，URL 由网关或接口拼
+    }
+
+    private void deleteRecursively(Path dir) throws Exception {
+        if (!Files.isDirectory(dir)) return;
+        try (Stream&lt;Path&gt; s = Files.walk(dir)) {
+            for (Path p : s.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(p);
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>几点工程约定值得写进规范：分片先落临时名再原子改名，这样 merge 永远读不到写了一半的文件；merge 全程持锁，而 <code>check</code> 与 <code>chunk</code> 不加锁，因此锁的粒度只包住拼接这一小段；成品与分片目录都在 Web 根之外，下载统一走鉴权接口。<code>ReentrantLock</code> 只在单个 JVM 内有效，一旦多实例部署，要么把 merge 请求按指纹路由到同一实例，要么换成 Redis 分布式锁，更省事的做法是直接使用对象存储自带的分片上传接口，把并发与清理交给服务端。最后别忘了给分片目录设 TTL（例如 24 小时）定时清理，用户中途放弃上传是常态。</p>
+
+<p>配置这一层要和切片大小对齐。传统写法（<code>commons-fileupload</code> 的 <code>setFileSizeMax</code>）与 Servlet 3.0+ 原生 <code>@MultipartConfig</code> 的演进、以及两者代码上的差别，本章第二节已经讲过，这里只做交叉引用、不再重复。切片场景下它们的语义只差一点但很关键：<code>maxFileSize</code>（<code>@MultipartConfig</code>）限制的是<strong>每个 part</strong>，也就是单片，而不是整个文件，所以 5MB 分片把上限设到 8MB 左右即可。Spring Boot 的等价配置是 <code>spring.servlet.multipart.max-file-size: 8MB</code>（单个 part）与 <code>max-request-size: 10MB</code>（整个请求），两者都必须大于单片大小，否则请求在进入 Controller 之前就被拒掉并抛 <code>MaxUploadSizeExceededException</code>。要留意 <code>max-request-size</code> 管的是「单次请求」而非「文件总量」——这正是切片顺带解决的第二个问题：总量再大，单请求也始终只有一片。</p>
+
+<h3>断点续传的接口设计：check → upload → merge</h3>
+<p>把上面的逻辑固化成三个接口，前后端的分工就清楚了。<code>check</code> 负责「我还需要传什么」，<code>upload</code> 负责「收一片」，<code>merge</code> 负责「拼起来并交付地址」。三者都幂等，因此网络重试、用户刷新、切换设备都不会产生脏数据。</p>
+
+<p><strong>第一步 <code>POST /upload/check</code></strong>：请求为表单编码（<code>hash</code>、<code>name</code>、<code>size</code>、<code>total</code>、<code>chunkSize</code>），只读不写。命中秒传时直接返回成品地址：</p>
+<pre><code class="language-json">{
+  "uploaded": true,
+  "url": "/files/9f/9f86d081884c7d659a2feaa0c55ad015"
+}
+</code></pre>
+<p>未命中时返回服务端已落盘的分片序号，前端只需补传缺失的那些：</p>
+<pre><code class="language-json">{
+  "uploaded": false,
+  "indexes": [0, 1, 2, 5, 7]
+}
+</code></pre>
+
+<p><strong>第二步 <code>POST /upload/chunk</code></strong>：请求为 <code>multipart/form-data</code>，字段为 <code>hash</code>、<code>index</code>、<code>total</code>、<code>size</code>、<code>chunkSize</code>、<code>chunkHash</code> 与文件字段 <code>chunk</code>（顺序无关，也可用 <code>/upload/chunk/{hash}/{index}</code> 这样的路径参数）。成功返回：</p>
+<pre><code class="language-json">{
+  "index": 3,
+  "received": true,
+  "size": 5242880
+}
+</code></pre>
+<p>校验失败返回 400，前端只重传这一片：</p>
+<pre><code class="language-json">{
+  "code": "CHUNK_HASH_MISMATCH",
+  "message": "分片哈希不匹配，请重传",
+  "index": 3
+}
+</code></pre>
+
+<p><strong>第三步 <code>POST /upload/merge</code></strong>：请求为表单编码（<code>hash</code>、<code>name</code>、<code>size</code>、<code>total</code>、<code>chunkSize</code>）。成功返回成品地址：</p>
+<pre><code class="language-json">{
+  "url": "/files/9f/9f86d081884c7d659a2feaa0c55ad015",
+  "size": 104857600,
+  "name": "demo.mp4"
+}
+</code></pre>
+<p>若有分片缺失返回 409 与缺失列表，前端据此回到 check 补传，而不是从头再来：</p>
+<pre><code class="language-json">{
+  "code": "CHUNK_MISSING",
+  "missing": [4, 7]
+}
+</code></pre>
+
+<p>落到代码里还有五条约定：<code>check</code> 必须便宜，前端每次刷新、每次续传都会先调它，只读文件系统或读 Redis 缓存，不要在里面落盘；<code>upload</code> 必须幂等，同一 <code>index</code> 重复提交直接覆盖并返回成功，客户端的自动重试才不会造出重复分片；<code>merge</code> 必须幂等且被锁保护，重复调用返回同一个 URL，缺片时明确返回缺失列表而不是 500；三步里的指纹语义要一致，抽样指纹只能做粗筛，秒传判定必须再比对 <code>size</code>（或改用 Web Worker 全量 SHA-256）；分片目录要有 TTL 定时清理，否则被放弃的上传会长期占着磁盘。</p>
+
 <h2>四、文件最终放哪里：本地目录还是对象存储</h2>
 <p>单机部署写本地目录可行，但要做到三点：</p>
 <ul>
