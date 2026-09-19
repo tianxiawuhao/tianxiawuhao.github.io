@@ -179,7 +179,14 @@ SHOW PARTITIONS dwd_order_detail;</code></pre>
 <h2>四、HQL 与标准 SQL 的差异</h2>
 <p>HQL 的语法看着像 SQL，但它是为“一批一批处理文件”设计的，以下几处差异最容易踩坑。</p>
 <ul>
-<li><strong>写法很像但语义完全不同</strong>：<code>ORDER BY</code> 是全局排序，会把所有数据塞进一个 Reducer，大表上几乎必然 OOM 或长时间卡住；<code>SORT BY</code> 只保证每个 Reducer 内部有序；<code>DISTRIBUTE BY</code> 控制按哪列分发到 Reducer；<code>CLUSTER BY</code> 等于 <code>DISTRIBUTE BY</code> 加 <code>SORT BY</code>（升序，不能指定 DESC）。要“分组内取 Top N”，标准写法是 <code>DISTRIBUTE BY</code> + <code>SORT BY</code> 配合窗口函数。</li>
+<li><strong>写法很像但语义完全不同</strong>。区别如下：
+<ul>
+<li><code>ORDER BY</code> 是全局排序，会把所有数据塞进一个 Reducer，大表上几乎必然 OOM 或长时间卡住；</li>
+<li><code>SORT BY</code> 只保证每个 Reducer 内部有序；</li>
+<li><code>DISTRIBUTE BY</code> 控制按哪列分发到 Reducer；</li>
+<li><code>CLUSTER BY</code> 等于 <code>DISTRIBUTE BY</code> 加 <code>SORT BY</code>（升序，不能指定 DESC）。</li>
+</ul>
+要“分组内取 Top N”，标准写法是 <code>DISTRIBUTE BY</code> + <code>SORT BY</code> 配合窗口函数。</li>
 <li><strong>子查询与 join 受限</strong>：老版本只支持等值 join，非等值条件要靠 <code>CROSS JOIN</code> 加 <code>WHERE</code> 改写；<code>IN</code>/<code>NOT IN</code> 子查询在早期版本支持很差，惯用写法是 <code>LEFT SEMI JOIN</code>（只保留左表命中的行，且右表列不可 SELECT）。</li>
 <li><strong>类型转换过于宽松</strong>：<code>'100' = 100</code> 会隐式转换后成立，字符串列和数字比较时可能出现预料之外的结果，也让分区裁剪失效，最好显式 <code>CAST</code>。</li>
 <li><strong>特有语法糖</strong>：<code>LATERAL VIEW explode()</code> 把数组或 Map 炸成多行，<code>COLLECT_SET/COLLECT_LIST</code> 反向聚合成集合，<code>get_json_object</code> 直接解析 JSON 字段。这些是标准 SQL 没有而日常必备的。</li>
