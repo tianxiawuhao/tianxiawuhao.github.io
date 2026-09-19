@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="410" viewBox="0 0 900 410"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Shuffle 的代价：reduceByKey 先局部聚合，groupByKey 全量拉取</title>
+  <rect width="900" height="410" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">两种分组算子的 Shuffle 代价对比</text>
+
+  <!-- reduceByKey -->
+  <rect x="40" y="55" width="820" height="160" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="60" y="82" font-size="13" font-weight="700" fill="#1f2b38">reduceByKey / aggregateByKey / combineByKey</text>
+  <text x="60" y="102" font-size="11" fill="#5b6b7c">map 端先局部聚合，相当于 MapReduce 的 Combiner，进入 Shuffle 的只有聚合后的结果</text>
+
+  <rect x="60" y="118" width="130" height="34" rx="6" fill="#ffffff" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="125" y="140" font-size="11" fill="#1f2b38" text-anchor="middle">(a,1) (a,1) (b,1)</text>
+  <line x1="190" y1="135" x2="224" y2="135" stroke="#2e9e5b" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="230" y="118" width="130" height="34" rx="6" fill="#ffffff" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="295" y="140" font-size="11" fill="#1f2b38" text-anchor="middle">map 端局部聚合</text>
+  <line x1="360" y1="135" x2="394" y2="135" stroke="#2e9e5b" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="400" y="118" width="150" height="34" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="475" y="140" font-size="11" fill="#1f2b38" text-anchor="middle">Shuffle：(a,12) (b,7)</text>
+  <line x1="550" y1="135" x2="584" y2="135" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="590" y="118" width="140" height="34" rx="6" fill="#ffffff" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="660" y="140" font-size="11" fill="#1f2b38" text-anchor="middle">reduce 端汇总</text>
+  <text x="60" y="182" font-size="11" fill="#2e9e5b">结论：网络与磁盘传输量小，键对应数据量再大也不容易压垮单个 Task</text>
+  <text x="60" y="202" font-size="11" fill="#5b6b7c">能用聚合类算子就不要先 groupByKey 再 mapValues</text>
+
+  <!-- groupByKey -->
+  <rect x="40" y="230" width="820" height="160" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="60" y="257" font-size="13" font-weight="700" fill="#1f2b38">groupByKey</text>
+  <text x="60" y="277" font-size="11" fill="#5b6b7c">所有 value 原样拉过网络，reduce 端还要把整个集合装进内存再自己遍历</text>
+
+  <rect x="60" y="293" width="130" height="34" rx="6" fill="#ffffff" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="125" y="315" font-size="11" fill="#1f2b38" text-anchor="middle">(a,1) (a,1) (b,1)</text>
+  <line x1="190" y1="310" x2="224" y2="310" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="230" y="293" width="130" height="34" rx="6" fill="#ffffff" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="295" y="315" font-size="11" fill="#1f2b38" text-anchor="middle">不聚合，直接分发</text>
+  <line x1="360" y1="310" x2="394" y2="310" stroke="#e08a1e" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="400" y="293" width="150" height="34" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="475" y="315" font-size="11" fill="#1f2b38" text-anchor="middle">Shuffle：全量 value</text>
+  <line x1="550" y1="310" x2="584" y2="310" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <rect x="590" y="293" width="140" height="34" rx="6" fill="#ffffff" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="660" y="315" font-size="11" fill="#1f2b38" text-anchor="middle">内存中构建集合</text>
+  <text x="60" y="357" font-size="11" fill="#e08a1e">风险：单个 key 的 value 过多时，reduce 端 Task 直接 OOM</text>
+  <text x="60" y="377" font-size="11" fill="#5b6b7c">数据倾斜时尤其明显：少数热 key 拖慢整个 Stage</text>
+</svg>

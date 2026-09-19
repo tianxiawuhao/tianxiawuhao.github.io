@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Storm 拓扑的常驻数据流与运行时层级</title>
+  <rect width="900" height="470" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">Storm 拓扑：常驻的流式 DAG 与运行时层级</text>
+
+  <rect x="30" y="60" width="160" height="50" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="110" y="91" text-anchor="middle" font-size="12.5" fill="#1f2b38">数据源 Kafka / MQ</text>
+
+  <rect x="30" y="130" width="160" height="100" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="110" y="158" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2f6fd0">Spout</text>
+  <text x="110" y="182" text-anchor="middle" font-size="11" fill="#1f2b38">open() 初始化</text>
+  <text x="110" y="200" text-anchor="middle" font-size="11" fill="#1f2b38">nextTuple() 发射</text>
+  <text x="110" y="218" text-anchor="middle" font-size="11" fill="#1f2b38">ack() / fail() 回调</text>
+
+  <rect x="280" y="130" width="160" height="100" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="360" y="158" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2f6fd0">SplitBolt</text>
+  <text x="360" y="182" text-anchor="middle" font-size="11" fill="#1f2b38">execute(Tuple) 处理</text>
+  <text x="360" y="200" text-anchor="middle" font-size="11" fill="#1f2b38">锚定发射 + ack</text>
+  <text x="360" y="218" text-anchor="middle" font-size="11" fill="#5b6b7c">字段：word, count</text>
+
+  <rect x="530" y="130" width="160" height="100" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="610" y="158" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2f6fd0">CountBolt</text>
+  <text x="610" y="182" text-anchor="middle" font-size="11" fill="#1f2b38">累加计数并输出</text>
+  <text x="610" y="200" text-anchor="middle" font-size="11" fill="#5b6b7c">state 需自己维护</text>
+
+  <rect x="760" y="150" width="110" height="60" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="815" y="186" text-anchor="middle" font-size="12.5" fill="#1f2b38">存储 / 展示</text>
+
+  <line x1="110" y1="112" x2="110" y2="128" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="190" y1="180" x2="278" y2="180" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="440" y1="180" x2="528" y2="180" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="690" y1="180" x2="758" y2="180" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="234" y="168" text-anchor="middle" font-size="11" fill="#7a5bd0">shuffle</text>
+  <text x="484" y="168" text-anchor="middle" font-size="11" fill="#7a5bd0">fields(word)</text>
+  <text x="724" y="168" text-anchor="middle" font-size="11" fill="#5b6b7c">输出</text>
+
+  <rect x="30" y="255" width="840" height="110" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="55" y="282" font-size="13" font-weight="700" fill="#1f2b38">集群与运行时：拓扑一旦提交就常驻，除非显式 kill</text>
+  <rect x="55" y="298" width="230" height="50" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="170" y="320" text-anchor="middle" font-size="12" fill="#1f2b38">Nimbus 主节点</text>
+  <text x="170" y="339" text-anchor="middle" font-size="11" fill="#5b6b7c">分配与调度，非单点瓶颈</text>
+  <rect x="335" y="298" width="230" height="50" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="450" y="320" text-anchor="middle" font-size="12" fill="#1f2b38">Supervisor 工作节点</text>
+  <text x="450" y="339" text-anchor="middle" font-size="11" fill="#5b6b7c">起停 Worker（JVM 进程）</text>
+  <rect x="615" y="298" width="230" height="50" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="730" y="320" text-anchor="middle" font-size="12" fill="#1f2b38">ZooKeeper</text>
+  <text x="730" y="339" text-anchor="middle" font-size="11" fill="#5b6b7c">保存状态与心跳</text>
+
+  <text x="450" y="398" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">Worker（JVM）内默认三条线程：Spout 线程、Bolt 线程、Acker 线程</text>
+  <text x="450" y="426" text-anchor="middle" font-size="11.5" fill="#5b6b7c">并行度 = Task 实例数，由 setSpout/setBolt 决定；setNumWorkers 是 JVM 进程数，两者不要混淆</text>
+  <text x="450" y="452" text-anchor="middle" font-size="11.5" fill="#5b6b7c">nextTuple() 里一旦阻塞（同步 RPC、take()），整个 Worker 的吞吐都会塌掉</text>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="430" viewBox="0 0 900 430"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>Storm 元组树与 ack 校验机制</title>
+  <rect width="900" height="430" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">元组树 + acker 校验：Storm 的可靠性机制</text>
+
+  <rect x="85" y="55" width="180" height="50" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="175" y="77" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2f6fd0">Spout 根 Tuple</text>
+  <text x="175" y="96" text-anchor="middle" font-size="11" fill="#1f2b38">emit(values, msgId)</text>
+
+  <rect x="40" y="150" width="160" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="120" y="175" text-anchor="middle" font-size="12" fill="#1f2b38">SplitBolt</text>
+  <text x="120" y="195" text-anchor="middle" font-size="11" fill="#5b6b7c">锚定发射 + ack</text>
+  <rect x="220" y="150" width="160" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="300" y="175" text-anchor="middle" font-size="12" fill="#1f2b38">filter 分支</text>
+  <text x="300" y="195" text-anchor="middle" font-size="11" fill="#5b6b7c">branch</text>
+  <rect x="400" y="150" width="160" height="60" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="480" y="175" text-anchor="middle" font-size="12" fill="#e08a1e">漏 ack 的分支</text>
+  <text x="480" y="195" text-anchor="middle" font-size="11" fill="#5b6b7c">或未锚定发射</text>
+
+  <line x1="175" y1="105" x2="120" y2="148" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="175" y1="105" x2="300" y2="148" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="175" y1="105" x2="480" y2="148" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <line x1="175" y1="52" x2="560" y2="196" stroke="#c8d3e0" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="600" y="180" text-anchor="middle" font-size="11" fill="#5b6b7c">每条锚定发射都携带父 Tuple 的 id</text>
+  <text x="600" y="200" text-anchor="middle" font-size="11" fill="#5b6b7c">于是从根到叶子构成一棵元组树</text>
+
+  <rect x="30" y="245" width="390" height="120" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="225" y="272" text-anchor="middle" font-size="13" font-weight="700" fill="#2e9e5b">所有分支都 ack 了</text>
+  <text x="225" y="296" text-anchor="middle" font-size="11.5" fill="#1f2b38">64 位校验值 XOR 归零</text>
+  <line x1="225" y1="308" x2="225" y2="330" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="225" y="348" text-anchor="middle" font-size="11.5" fill="#1f2b38">acker 回调 spout.ack()，提交 Kafka 位点</text>
+
+  <rect x="460" y="245" width="410" height="120" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="665" y="272" text-anchor="middle" font-size="13" font-weight="700" fill="#e08a1e">有分支始终没 ack</text>
+  <text x="665" y="296" text-anchor="middle" font-size="11.5" fill="#1f2b38">校验值不归零，超时触发</text>
+  <line x1="665" y1="308" x2="665" y2="330" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="665" y="348" text-anchor="middle" font-size="11.5" fill="#1f2b38">回调 spout.fail() 重放，结果可能翻倍</text>
+
+  <text x="450" y="396" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">默认语义是 at-least-once：不丢但可能重复；精确一次要用 Trident 或写入端幂等</text>
+  <text x="450" y="420" text-anchor="middle" font-size="11.5" fill="#5b6b7c">超时由 TOPOLOGY_MESSAGE_TIMEOUT_SECS 控制（默认 30 秒），关闭 ack 可省 10%~20% 开销</text>
+</svg>

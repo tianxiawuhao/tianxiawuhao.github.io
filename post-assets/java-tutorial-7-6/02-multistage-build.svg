@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="480" viewBox="0 0 900 480" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+<title>多阶段构建的两个阶段</title>
+<rect width="900" height="480" fill="#ffffff"/>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+<text x="450" y="30" text-anchor="middle" font-size="17" fill="#1f2b38" font-weight="700">多阶段构建：编译环境与运行环境分开，最终镜像不含 Maven 和源码</text>
+<rect x="60" y="52" width="780" height="176" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+<text x="82" y="78" text-anchor="start" font-size="13.5" fill="#2f6fd0" font-weight="700">① 构建阶段 builder（FROM maven:3.9-eclipse-temurin-17 AS builder）</text>
+<rect x="82" y="92" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="112" text-anchor="start" font-size="12.5" fill="#1f2b38">COPY pom.xml .</text>
+<rect x="82" y="126" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="146" text-anchor="start" font-size="12.5" fill="#1f2b38">RUN mvn -B dependency:go-offline</text>
+<text x="800" y="146" text-anchor="end" font-size="11.5" fill="#e08a1e">依赖单独成层：改代码不重下依赖</text>
+<rect x="82" y="160" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="180" text-anchor="start" font-size="12.5" fill="#1f2b38">COPY src ./src</text>
+<rect x="82" y="194" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="214" text-anchor="start" font-size="12.5" fill="#1f2b38">RUN mvn -B clean package -DskipTests</text>
+<line x1="450" y1="228" x2="450" y2="266" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+<text x="470" y="254" text-anchor="start" font-size="12" fill="#5b6b7c">只复制构建产物 jar：源码与 Maven 不进最终镜像</text>
+<rect x="60" y="272" width="780" height="150" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+<text x="82" y="298" text-anchor="start" font-size="13.5" fill="#2e9e5b" font-weight="700">② 运行阶段 runtime（FROM eclipse-temurin:17-jre）</text>
+<rect x="82" y="312" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="332" text-anchor="start" font-size="12.5" fill="#1f2b38">WORKDIR /app　ENV TZ=Asia/Shanghai</text>
+<rect x="82" y="346" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="366" text-anchor="start" font-size="12.5" fill="#1f2b38">COPY --from=builder /build/target/app.jar /app/app.jar</text>
+<rect x="82" y="380" width="736" height="30" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.2"/>
+<text x="96" y="400" text-anchor="start" font-size="12.5" fill="#1f2b38">EXPOSE 8080　ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]</text>
+<text x="450" y="450" text-anchor="middle" font-size="12.5" fill="#5b6b7c">最终镜像 ≈ JRE + app.jar，体积从 600MB+ 降到 200MB 量级；docker build 末尾的点表示构建上下文</text>
+</svg>
