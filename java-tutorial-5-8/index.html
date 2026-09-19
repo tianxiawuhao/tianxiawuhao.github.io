@@ -138,6 +138,8 @@
 
 <p>版本用错还有一组典型异常：拿 HSSF 去读 <code>.xlsx</code> 会抛 <code>org.apache.poi.poifs.filesystem.OfficeXmlFileException</code>，反向操作会抛 <code>org.apache.poi.openxml4j.exceptions.InvalidOperationException</code>。判断版本不要自己写 if-else，交给 <code>WorkbookFactory.create(inputStream)</code> 自动识别；如果明确要 SXSSF，就用 <code>new SXSSFWorkbook(xssfWorkbook, 1000)</code> 把已有的 XSSF 包一层，这样还能复用现有代码里的样式与模板。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-8/01-workbook-memory.svg" alt="HSSF、XSSF、SXSSF 的格式上限与内存模型"><figcaption>图 1：三种 Workbook 的上限与内存模型，以及导入侧的事件模式流程</figcaption></figure>
+
 <h2>百万行导出：SXSSF 的滑动窗口怎么用</h2>
 
 <p>SXSSF 的原理很朴素：构造时指定一个行访问窗口 <code>rowAccessWindowSize</code>，默认 100。内存里最多只保留最近的这 N 行对象，一旦超窗，最早的行就被序列化成临时 XML 文件写到磁盘，对应的 Java 对象随即被回收；如此循环，直到整个表写完。所以内存占用与总行数无关，只与窗口大小和当前行宽度有关。窗口不是越大越好：调大能减少磁盘 IO，但会线性增加内存，一万行左右通常就是上限了。</p>

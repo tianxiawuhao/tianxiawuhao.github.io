@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>access_token 的集中缓存、提前刷新与分布式锁</title>
+  <rect width="900" height="400" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">access_token：集中缓存 + 提前刷新</text>
+  <g fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4">
+    <rect x="26" y="90" width="152" height="104" rx="8"/>
+    <rect x="200" y="90" width="152" height="104" rx="8"/>
+    <rect x="374" y="90" width="152" height="104" rx="8"/>
+    <rect x="548" y="90" width="152" height="104" rx="8"/>
+  </g>
+  <rect x="722" y="90" width="152" height="104" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <g fill="#1f2b38" font-size="12.5" font-weight="700" text-anchor="middle">
+    <text x="102" y="120">① 需要调接口</text>
+    <text x="276" y="120">② 先查缓存</text>
+    <text x="450" y="120">③ 未命中抢锁</text>
+    <text x="624" y="120">④ 调 token 接口</text>
+    <text x="798" y="120">⑤ 写缓存</text>
+  </g>
+  <g fill="#1f2b38" font-size="11" text-anchor="middle">
+    <text x="102" y="148">业务请求带凭证</text><text x="102" y="168">不要每请求现取</text>
+    <text x="276" y="148">wx:access_token</text><text x="276" y="168">命中就直接返回</text>
+    <text x="450" y="148">setIfAbsent 加锁</text><text x="450" y="168">锁 TTL 10 秒</text>
+    <text x="624" y="148">cgi-bin/token</text><text x="624" y="168">grant_type=</text><text x="624" y="184">client_credential</text>
+    <text x="798" y="148">TTL = expires_in</text><text x="798" y="168">- 300，释放锁</text>
+  </g>
+  <g stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)">
+    <line x1="182" y1="142" x2="196" y2="142"/>
+    <line x1="356" y1="142" x2="370" y2="142"/>
+    <line x1="530" y1="142" x2="544" y2="142"/>
+    <line x1="704" y1="142" x2="718" y2="142"/>
+  </g>
+  <rect x="26" y="240" width="410" height="92" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="231" y="270" font-size="12.5" font-weight="700" fill="#2e9e5b" text-anchor="middle">缓存命中就直接返回</text>
+  <text x="231" y="298" font-size="11.5" fill="#1f2b38" text-anchor="middle">抢锁失败说明别的实例正在刷新，</text>
+  <text x="231" y="320" font-size="11.5" fill="#1f2b38" text-anchor="middle">抛「正在刷新，请稍后重试」即可。</text>
+  <rect x="464" y="240" width="410" height="92" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="669" y="270" font-size="12.5" font-weight="700" fill="#e08a1e" text-anchor="middle">40001 / 42001 = 缓存脏了</text>
+  <text x="669" y="298" font-size="11.5" fill="#1f2b38" text-anchor="middle">先删缓存、再取一次、失败即向上抛，</text>
+  <text x="669" y="320" font-size="11.5" fill="#1f2b38" text-anchor="middle">不要盲目重试把刷新风暴放大。</text>
+  <text x="450" y="368" font-size="12" fill="#5b6b7c" text-anchor="middle">access_token 全局唯一、expires_in 通常 7200 秒 —— 必须集中缓存并提前刷新</text>
+</svg>

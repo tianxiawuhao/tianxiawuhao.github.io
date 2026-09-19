@@ -134,6 +134,8 @@
 
 <p>手工验证的成本是线性的：每加一个功能，回归一次要点过的路径就多一条；而单元测试把验证固化成可重复执行的代码，改完敲一次 <code>mvn test</code>，几分钟内就知道有没有踩坏旧逻辑。这就是回归安全网——它的价值不在于「证明现在是对的」，而在于「以后改错时能立刻知道」。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-7/01-test-pyramid.svg" alt="测试金字塔：单元、集成与端到端测试的比例"><figcaption>图 1：测试金字塔——大量单元测试打底，端到端只留极少量</figcaption></figure>
+
 <p>测试要分层。业内常说的测试金字塔是：大量快速、无外部依赖的单元测试打底，少量集成测试（真连数据库、消息队列）验证组件拼装，最上层是极少量端到端测试。反过来的「冰淇淋筒」结构跑得慢、失败难定位，最终会被团队抛弃。单元测试的判定标准很实在：一个测试只测一个类的一个行为，不碰网络、数据库、文件系统、当前时间和随机数；凡是碰这些的依赖，都用依赖注入交进来，测试时换成假对象。</p>
 
 <p>代码质量也不只是「有没有测试」。命名是否表意、一个方法是否只做一件事、圈复杂度是否失控、是否遵守团队规范（Google Java Style、阿里巴巴 Java 开发手册都是常见参照），这些决定了半年后别人能不能读懂你的代码。测试与规范是两件事，缺了哪一件，项目都会朝同一个方向烂下去。</p>
@@ -278,6 +280,8 @@ class UserServiceTest {
 <p>执行 <code>mvn test</code> 后，覆盖率报告生成在 <code>target/site/jacoco/index.html</code>。看报告时优先盯<strong>分支覆盖</strong>而不是行覆盖：一个 <code>if</code> 只走了 true 分支，行覆盖可能已经是 100%，分支覆盖却只有 50%，而缺陷常常就藏在没走的那条路上。JaCoCo 版本要和 JDK 对齐，否则会报不支持的 class 文件版本——Java 17 需要 0.8.7 以上，Java 21 需要 0.8.11 以上。覆盖率阈值可以做门禁（JaCoCo 的 <code>check</code> 目标、Sonar 的质量门），但别把它当 KPI：一旦按覆盖率考核，团队就会用 <code>assertNotNull</code> 凑数，指标涨了，缺陷一个没少。务实做法是给核心模块定一个不高的基线（例如分支覆盖 60%），只许涨不许跌。</p>
 
 <p>静态检查负责测试覆盖不到的另一半——那些「跑起来没问题、迟早出事」的代码。常见组合是：<strong>Checkstyle</strong> 管格式与命名（可直接套用 Google Java Style 或阿里巴巴 Java 开发手册的规则集），<strong>SpotBugs</strong> 直接扫字节码，能发现空指针隐患、<code>equals</code>/<code>hashCode</code> 不配对、资源未关闭等问题，<strong>PMD</strong> 偏向重复代码与复杂度过高，<strong>SonarQube</strong> 则把上述结果连同覆盖率聚合成一个可跟踪的看板。接入时有个务实建议：先只把 error 级别的规则设为构建失败，warning 先收集不拦人；否则存量项目第一次接入会爆出几千条告警，团队的第一反应是关掉插件，而不是修代码。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-7/02-test-quality-pipeline.svg" alt="从 JUnit 5 到静态检查的质量流水线"><figcaption>图 2：从写用例到守规范的流水线，最终由 CI 门禁只拦 error 级规则</figcaption></figure>
 
 <h2>小结</h2>
 
