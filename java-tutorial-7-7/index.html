@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Docker Compose 与编排 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Docker Compose 与编排</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，7 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>上一章我们把一个 Java 应用装进镜像跑了起来。但真实项目很少只有一个容器：Spring Boot 后端要连 MySQL、用 Redis 做缓存，前面还得有 Nginx 做反向代理和静态资源。如果继续手工敲 <code>docker run</code>，很快会撞上三件事——命令参数越来越长、散落在聊天记录里；容器之间的网络要手动建、手动连；换一台机器部署时所有命令得重拼一遍，还容易漏掉某个环境变量。Compose 正是为解决这件事而生：用一份 YAML 声明"我要哪些服务、它们怎么组网、数据放哪、谁先启动"，再用一条命令把整套环境拉起来。本章面向已经会写 Dockerfile、会用 <code>docker run</code> 的读者，讲清 Compose 的定位、文件怎么写、常用命令、四个最容易踩的坑，以及它和 Kubernetes 的边界；末尾顺带把镜像分发到私有仓库这条链路补完。</p>
+
+<h2>一、Compose 的定位：单机多容器编排</h2>
+
+<p>所谓"编排"（orchestration），指的不是"把容器跑起来"，而是描述一组容器之间的<strong>关系</strong>：谁依赖谁、怎么互相发现、副本要几个、挂了要不要重启、发布时怎么替换。这个概念在容器生态里出现得很早——最早叫 Fig 的项目就允许在配置文件里定义各容器的副本数等编排参数，被 Docker 公司收购后改名为 Compose，并在很长时间里是 Docker 生态中最受欢迎的项目之一。</p>
+
+<p>但必须先把 Compose 的<strong>范围</strong>讲清楚：它管理的是<strong>一个 Docker 环境</strong>，通常就是一台宿主机（也可以是 <code>docker context</code> 指向的远端 Docker）。它不负责跨主机调度、节点故障自愈和滚动升级——那些是 Swarm、Kubernetes 这类集群编排系统的事。判断标准很简单：单机放得下、不需要零停机发布，Compose 就是性价比最高的选择；一旦需要多机容灾或自动扩缩容，就该换 Kubernetes，而不是硬把 Compose 用到集群上。</p>
+
+<p>还有一处版本差异必须分清：早期的 <code>docker-compose</code>（V1，Python 写的独立可执行文件）已停止维护，现在的 <strong>Compose V2 是 docker CLI 的插件</strong>，命令是 <code>docker compose</code>——中间是<strong>空格</strong>，不是连字符。两者配置文件基本兼容，但如果你照着老教程敲 <code>docker-compose</code> 提示找不到命令，原因就在这里。文件名推荐 <code>compose.yaml</code>，旧的 <code>docker-compose.yml</code> 仍被识别。</p>
+
+<h2>二、一份 compose.yaml 是怎么写的</h2>
+
+<p>Compose 文件是声明式的：你描述"最终要什么状态"，而不是"依次执行哪些命令"。下面这份配置是 Java 后端 + MySQL + Redis + Nginx 的最小可用编排，建议先整体读一遍，再逐段看说明。</p>
+
+<pre><code class="language-yaml"># compose.yaml
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}   # 从同目录 .env 读取
+      MYSQL_DATABASE: appdb
+    volumes:
+      - mysql-data:/var/lib/mysql                   # 命名卷，容器删了数据还在
+    healthcheck:
+      # $$ 表示把 $ 原样传给容器，避免被 Compose 提前插值
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks: [backend]
+
+  app:
+    build: .                                      # 用当前目录的 Dockerfile 构建
+    image: 192.168.184.141:5000/app:1.0.0         # 同时打上私仓标签，便于 push
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/appdb   # 主机名就是服务名
+      SPRING_REDIS_HOST: redis
+    depends_on:
+      mysql:
+        condition: service_healthy                # 等健康检查通过，而非只等启动
+      redis:
+        condition: service_started
+    networks: [backend, frontend]
+
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"                                   # 只有它对外暴露端口
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [app]
+    networks: [frontend]
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  backend:
+  frontend:</code></pre>
+
+<p>几个关键点：<code>services</code> 下的每个键（<code>mysql</code>、<code>app</code>…）既是服务名，也<strong>自动成为该容器在网络里的 DNS 名</strong>。Compose 会为项目创建一张默认网络，同网络内直接用服务名互访，所以 <code>jdbc:mysql://mysql:3306/appdb</code> 里的 <code>mysql</code> 不需要你去查容器 IP——手工 <code>docker run</code> 时代靠 <code>docker inspect</code> 找 IP 的做法在这里彻底不需要了。Nginx 转发同理：</p>
+
+<pre><code class="language-nginx"># nginx/default.conf
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://app:8080;              # app 是 compose.yaml 里的服务名
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}</code></pre>
+
+<p><code>ports</code> 是"宿主机端口:容器端口"，只给需要被外部访问的服务写；容器之间的互访不需要 <code>ports</code>。数据持久化用<strong>命名卷</strong>（<code>mysql-data</code> 写在顶层 <code>volumes</code> 里声明），比绑定宿主机目录更可移植，也避免了挂载多级目录时的权限问题。</p>
+<p>另外两个容易混的字段是 <code>build</code> 与 <code>image</code>。<code>build: .</code> 表示用当前目录的 Dockerfile 现场构建；再写一个 <code>image</code> 相当于给构建结果命名，<code>docker compose push</code> 才知道该推到哪个地址。只写 <code>image</code> 则直接拉取现成镜像。配置项多的服务不必把变量全塞进 <code>environment</code>，可以用 <code>env_file: [app.env]</code> 从文件读取，让 YAML 保持清爽。</p>
+
+<h2>三、日常命令：从 up 到 down</h2>
+
+<p>记住五条命令就能覆盖九成场景。<code>up</code> 负责构建、创建、启动，<code>down</code> 负责按相反顺序清理。</p>
+
+<pre><code class="language-bash">docker compose up -d                  # 构建/拉取镜像并后台启动全部服务
+docker compose up -d --build app      # 代码改了，只重建并重启 app
+docker compose ps                     # 只看本项目（而非全机）的容器
+docker compose logs -f --tail=100 app # 跟踪某个服务的日志
+docker compose exec app sh            # 进入运行中的容器（bash 不一定装了）
+
+docker compose config                 # 校验语法，并打印插值后的最终配置
+docker compose restart nginx          # 只重启一个服务
+docker compose stop                   # 停容器，不删
+docker compose down                   # 停并删容器与网络，命名卷保留
+docker compose down -v                # 连命名卷一起删，数据库数据不可恢复
+docker compose -p myapp up -d         # 指定项目名，隔离容器名与网络</code></pre>
+
+<p>项目名默认取 <code>compose.yaml</code> 所在目录名，它决定容器名前缀（<code>目录名-app-1</code>）和网络名（<code>目录名_default</code>）。同一台机器上要跑两套互不干扰的环境时，用 <code>-p</code> 显式指定，而不是去改端口。</p>
+<p>排障则优先靠日志和配置展开：<code>docker compose logs</code> 会把多个服务的日志按时间混排并加上服务名前缀，比逐个 <code>docker logs</code> 方便得多，配合 <code>-f</code> 跟踪、<code>--tail=N</code> 限制行数即可。如果改完配置行为仍不符合预期，先跑一遍 <code>docker compose config</code> 看插值后的最终结果，再判断是配置写错还是应用自身的问题。</p>
+
+<h2>四、四个最常见的坑</h2>
+
+<p><strong>1. depends_on 不等于"就绪"。</strong>默认的 <code>depends_on: [mysql]</code> 只保证<strong>启动顺序</strong>：MySQL 进程拉起来了，但数据库初始化可能还要几十秒，此时 app 连过去照样报连接失败。正确做法是给依赖方加 <code>healthcheck</code>，然后用 <code>condition: service_healthy</code>。注意 <code>restart: unless-stopped</code> 只能让崩掉的容器反复重启，不能替代就绪等待。</p>
+
+<p><strong>2. 数据没落盘，或 down 时误删。</strong>不写 <code>volumes</code> 的数据库，数据只存在容器可写层，<code>docker compose down</code> 后全部消失。反过来，<code>down -v</code> 会删除命名卷，调试时很方便，生产上等同于删库，务必确认后再敲。</p>
+
+<p><strong>3. 变量插值的两层含义。</strong>Compose 会先把文件里的 <code>${VAR}</code> 用宿主机环境变量或同目录 <code>.env</code> 文件替换，<strong>然后</strong>才把结果交给容器；而容器内的 shell 变量则需要 <code>$$</code> 转义后原样传入（上面 healthcheck 就是这么写的）。把密码放在 <code>.env</code> 里并加进 <code>.gitignore</code>，不要把明文提交到仓库。</p>
+
+<p><strong>4. 私有仓库的镜像拉不到。</strong>上一章我们把镜像推到了私有仓库，Compose 里要用它，必须在 <code>image</code> 字段写完整地址<code>仓库地址/镜像名:标签</code>。若私仓走 HTTP 而非 HTTPS，宿主机得先在 <code>/etc/docker/daemon.json</code> 里声明 <code>insecure-registries</code>——<strong>每一个要拉取该镜像的节点都要配</strong>，否则报 "http: server gave HTTP response to HTTPS client"。</p>
+
+<pre><code class="language-bash"># /etc/docker/daemon.json —— 信任 HTTP 私有仓库（改完必须重启 docker）
+# { "insecure-registries": ["192.168.184.141:5000"] }
+sudo systemctl restart docker
+
+docker login 192.168.184.141:5000     # 有认证的私仓需要先登录
+docker compose build app
+docker compose push app               # 推送到 image 字段里写的私仓地址
+# 不用 compose 也可以：
+# docker tag app:1.0.0 192.168.184.141:5000/app:1.0.0
+# docker push 192.168.184.141:5000/app:1.0.0
+
+# 目标机器上：先改好 daemon.json，再拉取启动
+docker compose pull &amp;&amp; docker compose up -d</code></pre>
+
+<p>顺带纠正一个常见混淆：<code>registry-mirrors</code> 是加速<strong>拉取</strong>公共镜像的镜像站，<code>insecure-registries</code> 是信任<strong>你自己的</strong> HTTP 私仓，两者用途不同，可以同时存在于同一个 <code>daemon.json</code> 里。</p>
+
+<h2>五、什么时候该上 Kubernetes</h2>
+
+<p>Compose 的边界很清晰：它的世界是单机。而 Kubernetes 提供的是另一层能力——把若干节点组成集群，用 Pod/Deployment 管理副本数与滚动升级，用 Service 做稳定的服务发现与负载均衡，用探针在实例不健康时自动剔除重建。Kubernetes 之所以成为容器编排的事实标准，正是因为它把"编排"从"定义一组容器的关系"提升到了"定义整个集群期望状态"的层次；Compose+Swarm 的组合则止步于更轻量的场景。</p>
+
+<p>落地建议：个人项目、测试环境、单机部署的小型服务，用 Compose 就够了，一份 YAML 交给运维即可；当出现"要部署到三台以上机器""发布时不能停服""流量涨了要自动扩容"这类需求时，才值得引入 Kubernetes 的复杂度。不要为了用而用。</p>
+
+<p>小结：Compose 用一份声明式 YAML 解决了单机多容器的组网、依赖顺序、数据持久化和一键启停，核心机制是<strong>服务名即 DNS 名</strong>与<strong>项目级隔离的默认网络</strong>；日常用 <code>docker compose up -d</code> / <code>ps</code> / <code>logs</code> / <code>exec</code> / <code>down</code> 五条命令即可，注意 V2 的命令是 <code>docker compose</code>。最容易踩的坑是 <code>depends_on</code> 只保证启动顺序，要靠 <code>healthcheck</code> 加 <code>condition: service_healthy</code> 才能真正等待就绪；<code>down -v</code> 会删数据卷；私仓镜像必须带完整仓库前缀并让每个节点信任它。把它当"单机编排"用，它就是最省心的一环；需要多机调度与自愈时，再交给 Kubernetes。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
