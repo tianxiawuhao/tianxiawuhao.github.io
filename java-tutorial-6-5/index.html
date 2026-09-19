@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>服务上线之后，最让人头疼的不是「报错」，而是「没报错但不对劲」：接口越来越慢、CPU 莫名其妙飙到 100%、日志停住不再输出、程序最后抛出一个 <code>java.lang.OutOfMemoryError</code> 就再也没起来。这些问题的共同点是——从业务日志里几乎看不出线索，必须钻到 JVM 内部去看。这一章我们就来把 JDK 自带的几件诊断工具串成一条排查链路：先用 <code>jps</code> 找到进程，用 <code>jstat</code> 看运行态势，用 <code>jmap</code> 把堆导出成 dump 文件交给 MAT 分析，最后用 <code>jstack</code> 把线程快照打出来定位死锁和热点线程。适合已经会写 Java、但对线上问题束手无策的读者。</p>
+<p>服务上线之后，最让人头疼的不是“报错”，而是“没报错但不对劲”：接口越来越慢、CPU 突然飙到 100%、日志停住不再输出、程序最后抛出一个 <code>java.lang.OutOfMemoryError</code> 就再也没起来。这些问题的共同点是——从业务日志里几乎看不出线索，必须钻到 JVM 内部去看。本章把 JDK 自带的几件诊断工具串成一条排查链路：先用 <code>jps</code> 找到进程，用 <code>jstat</code> 看运行态势，用 <code>jmap</code> 把堆导出成 dump 文件交给 MAT 分析。最后用 <code>jstack</code> 打出线程快照，定位死锁和热点线程。本章适合已经会写 Java、但对线上问题束手无策的读者。</p>
 
 <h2>一、先建立排查思路：先看态势，再看细节</h2>
 
-<p>诊断工具虽多，用法其实只有两类视角：<strong>流程视角</strong>和<strong>快照视角</strong>。流程视角是「隔一段时间看一眼」，观察指标随时间的变化趋势，回答「到底哪里在涨」；快照视角是「把某一瞬间的状态冻住」，回答「到底是什么对象、哪一行代码占着资源」。</p>
+<p>诊断工具虽多，用法其实只有两类视角：<strong>流程视角</strong>和<strong>快照视角</strong>。流程视角是“隔一段时间看一眼”，观察指标随时间的变化趋势，回答“到底哪里在涨”。快照视角是“把某一瞬间的状态冻住”，回答“到底是什么对象、哪一行代码占着资源”。</p>
 
 <p>对应的工具分工如下：</p>
 
@@ -140,15 +140,15 @@
   <li><code>jps</code>：列出当前机器上所有 Java 进程和它们的 PID，是后面所有命令的入口。</li>
   <li><code>jstat</code>：轻量级的实时统计，看堆各区使用量、类加载数、GC 次数和耗时，属于流程视角。</li>
   <li><code>jmap</code>：查看堆内存汇总、对象直方图，或者把整个堆导出成二进制 dump 文件，属于快照视角。</li>
-  <li>MAT（Memory Analyzer Tool）：分析 dump 文件的图形化工具，用来找内存泄漏的「支配对象」。</li>
+  <li>MAT（Memory Analyzer Tool）：分析 dump 文件的图形化工具，用来找内存泄漏的“支配对象”。</li>
   <li><code>jstack</code>：打印所有线程的调用栈，用来诊断死锁、线程阻塞和 CPU 飙高。</li>
 </ul>
 
-<p>这些工具都随 JDK 一起安装，位于 <code>$JAVA_HOME/bin</code> 下，不需要额外下载。有一个前提必须记住：<strong>必须用与目标进程相同（或兼容）的 JDK 版本去执行这些命令</strong>，否则可能连不上进程。另外，<code>jmap</code> 导堆和 <code>jstack</code> 打快照都可能让目标进程短暂停顿（STW），生产环境不要在流量高峰随便执行。</p>
+<p>这些工具都随 JDK 一起安装，位于 <code>$JAVA_HOME/bin</code> 下，不需要额外下载。有一个前提必须记住：<strong>必须用与目标进程相同（或兼容）的 JDK 版本去执行这些命令</strong>，否则可能连不上进程。另外，<code>jmap</code> 导堆和 <code>jstack</code> 打快照都可能让目标进程短暂停顿（STW），生产环境不要在流量高峰执行。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-5/01-diagnosis-chain.svg" alt="线上排查链路与两种视角"><figcaption>图 1：排查链路 —— jps 找进程、jstat 看趋势、jmap/MAT 抓内存、jstack 抓线程，前两步是流程视角，后两步是快照视角</figcaption></figure>
 
-<h2>二、jps 与 jstat：快速判断「是不是 GC 的锅」</h2>
+<h2>二、jps 与 jstat：快速判断 GC 是否正常</h2>
 
 <p>第一步永远是找到进程号。很多人习惯用 <code>ps -ef | grep java</code>，但输出太长，容易看错。用 <code>jps -l</code> 可以只列出 Java 进程，并显示主类或 jar 的全名：</p>
 
@@ -166,17 +166,19 @@ $ jstat -gc 6219 1000 5
  S0C    S1C    S0U    S1U      EC       EU        OC         OU       MC     MU    CCSC   CCSU   YGC     YGCT    FGC    FGCT     GCT
 9216.0 8704.0  0.0   2560.0 62976.0  6127.3   33792.0    20434.9  23808.0 23196.1 2560.0 2361.6   3560   1.078     7    0.244    1.323</code></pre>
 
-<p>这里最需要注意的是 <code>jstat</code> 的时间单位是<strong>秒</strong>，不是毫秒；容量单位默认是 KB。<code>-gc</code> 输出里 <code>S0C/S1C</code> 是两个 Survivor 区的<strong>容量</strong>（Capacity），<code>S0U/S1U</code> 是对应区的<strong>已使用量</strong>（Used），<code>EC/EU</code> 是 Eden 区容量和使用量，<code>OC/OU</code> 是老年代，<code>MC/MU</code> 是元空间，<code>CCSC/CCSU</code> 是压缩类空间。<code>YGC/YGCT</code> 是新生代 GC 的次数与累计耗时，<code>FGC/FGCT</code> 是 Full GC 的次数与累计耗时，<code>GCT</code> 是两者之和。</p>
+<p>这里最需要注意的是 <code>jstat</code> 的时间单位是<strong>秒</strong>，不是毫秒；容量单位默认是 KB。</p>
+
+<p><code>-gc</code> 输出里 <code>S0C/S1C</code> 是两个 Survivor 区的<strong>容量</strong>（Capacity），<code>S0U/S1U</code> 是对应区的<strong>已使用量</strong>（Used），<code>EC/EU</code> 是 Eden 区的容量和使用量，<code>OC/OU</code> 是老年代，<code>MC/MU</code> 是元空间，<code>CCSC/CCSU</code> 是压缩类空间。<code>YGC/YGCT</code> 是新生代 GC 的次数与累计耗时，<code>FGC/FGCT</code> 是 Full GC 的次数与累计耗时，<code>GCT</code> 是两者之和。</p>
 
 <p>如果想把每次 GC 的细节留下来做趋势分析，可以在启动参数里加上 <code>-Xloggc:/tmp/gc.log</code>（JDK 9 及以上推荐用统一的日志框架 <code>-Xlog:gc*:file=/tmp/gc.log</code>），它会把带时间戳的 GC 记录写入文件。典型的一行 GC 日志长这样：</p>
 
 <pre><code class="language-bash">[GC (Allocation Failure) [ParNew: 4416K-&gt;512K(4928K), 0.0032106 secs] 4416K-&gt;1988K(15872K), 0.0032697 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]</code></pre>
 
-<p>解读方式是：方括号里的 <code>ParNew</code> 是收集器名字（这里是新生代并行收集器），<code>4416K-&gt;512K(4928K)</code> 是新生代回收前后的使用量和总容量，括号外的 <code>4416K-&gt;1988K(15872K)</code> 是整个堆回收前后的使用量和总容量，后面是本次停顿耗时。<code>Full GC</code> 则表示整堆回收。把这行日志和 <code>jstat</code> 的输出对照着看，基本就能判断到底是新生代回收太频繁，还是对象真的晋升到了老年代。</p>
+<p>解读方式是：方括号里的 <code>ParNew</code> 是收集器名字（这里是新生代并行收集器），<code>4416K-&gt;512K(4928K)</code> 是新生代回收前后的使用量和总容量。括号外的 <code>4416K-&gt;1988K(15872K)</code> 是整个堆回收前后的使用量和总容量，后面是本次停顿耗时；<code>Full GC</code> 则表示整堆回收。把这行日志和 <code>jstat</code> 的输出对照着看，基本就能判断到底是新生代回收太频繁，还是对象真的晋升到了老年代。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-5/02-gc-log-anatomy.svg" alt="一行 GC 日志的四个信息点"><figcaption>图 2：一行 GC 日志的四个信息点 —— 触发原因、新生代回收、整堆变化、停顿耗时</figcaption></figure>
 
-<p>怎么读这些数字？经验判断有三条：一是 <code>FGC</code> 持续快速增长而 <code>OU</code> 每次都回不到低位，说明老年代真的被占满了，多半有内存泄漏；二是 <code>YGCT</code> 占 <code>GCT</code> 的比例很高、单次 YGC 耗时越来越长，说明对象晋升得太快或者新生代偏小；三是 <code>GCT</code> 占程序运行时间的比例明显偏高，吞吐量就上不去了。判断「频繁 GC」靠的是间隔采样，而不是单次输出的绝对值。</p>
+<p>怎么读这些数字？经验判断有三条。一是 <code>FGC</code> 持续快速增长，而 <code>OU</code> 每次都回不到低位，说明老年代真的被占满了，多半存在内存泄漏。二是 <code>YGCT</code> 占 <code>GCT</code> 的比例很高、单次 YGC 耗时越来越长，说明对象晋升得太快，或者新生代偏小。三是 <code>GCT</code> 占程序运行时间的比例明显偏高，吞吐量就上不去了。判断 GC 是否频繁靠的是间隔采样，而不是单次输出的绝对值。</p>
 
 <h2>三、jmap 与 MAT：定位内存泄漏的元凶</h2>
 
@@ -198,17 +200,17 @@ $ jmap -dump:format=b,file=/tmp/dump.dat 6219
 Dumping heap to /tmp/dump.dat ...
 Heap dump file created [254673664 bytes in 0.032 secs]</code></pre>
 
-<p>直方图中 <code>[C</code> 代表 <code>char[]</code>，<code>[I</code> 代表 <code>int[]</code>，<code>[L+类名</code> 代表对象数组，<code>[B</code> 代表 <code>byte[]</code>。上面这组数据里 <code>[C</code> 占了 2.4 亿字节，基本可以判定是大量字符串没被释放。</p>
+<p>直方图中 <code>[C</code> 代表 <code>char[]</code>，<code>[I</code> 代表 <code>int[]</code>，<code>[L+类名</code> 代表对象数组，<code>[B</code> 代表 <code>byte[]</code>。上面这组数据里 <code>[C</code> 占了约 2.5 亿字节，基本可以判定是大量字符串没被释放。</p>
 
-<p><code>-histo:live</code> 会先触发一次 Full GC 再统计，因此统计到的都是真正存活的对象；<code>-dump</code> 加 <code>:live</code> 同理。这个细节很重要：不加 <code>:live</code> 的 dump 会把「已经死掉但还没回收」的对象也算进来，容易误导分析。注意导堆是重量级操作，文件可能和堆一样大（几个 GB 很常见），要确认磁盘空间，并尽量先做一次 Full GC 再导。</p>
+<p><code>-histo:live</code> 会先触发一次 Full GC 再统计，因此统计到的都是真正存活的对象；<code>-dump</code> 加 <code>:live</code> 同理。不加 <code>:live</code> 的 dump 会把“已经死掉但还没回收”的对象也算进来，容易误导分析。还要注意导堆是重量级操作，文件可能和堆一样大（几个 GB 很常见），要确认磁盘空间，并尽量先做一次 Full GC 再导。</p>
 
-<p>二进制 dump 用图形化工具 MAT 打开最直观：它会直接给出 Leak Suspects 报告和支配树（Dominator Tree），把「谁持有了最多内存、谁被谁引用着不放」按占比列出来。实战中常见的结论是某个 <code>Object[]</code> 或某个 <code>HashMap</code> 占了 90% 以上内存，展开引用链就能定位到具体代码里那个只加不减的集合。</p>
+<p>二进制 dump 用图形化工具 MAT 打开最直观：它会直接给出 Leak Suspects 报告和支配树（Dominator Tree），把“谁持有了最多内存、谁被谁引用着不放”按占比列出来。实战中常见的结论是某个 <code>Object[]</code> 或某个 <code>HashMap</code> 占了 90% 以上内存，展开引用链就能定位到具体代码里那个只加不减的集合。</p>
 
 <p>更省事的做法是让 JVM 在内存溢出时自动导堆，在启动参数里加上：</p>
 
 <pre><code class="language-bash">-Xms8m -Xmx8m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp</code></pre>
 
-<p>这样下次 OOM 时会自动生成 <code>java_pid&lt;pid&gt;.hprof</code>，事故现场不会丢。顺带说明一点版本差异：<code>jhat</code> 这个老牌的 dump 查看工具在 JDK 9 之后已被移除，JDK 8 上还能用，但官方推荐改用 MAT 或 <code>jvisualvm</code>；<code>jvisualvm</code> 也已从 JDK 9 起不再随 JDK 分发，需要单独下载。</p>
+<p>这样下次 OOM 时会自动生成 <code>java_pid&lt;pid&gt;.hprof</code>，事故现场不会丢。顺带说明一点版本差异：<code>jhat</code> 这个老牌的 dump 查看工具在 JDK 9 已被移除，JDK 8 上还能用，但官方推荐改用 MAT 或 <code>jvisualvm</code>；<code>jvisualvm</code> 也已从 JDK 9 起不再随 JDK 分发，需要单独下载。</p>
 
 <h2>四、jstack：死锁与 CPU 飙高的第一现场</h2>
 
@@ -240,20 +242,17 @@ Heap dump file created [254673664 bytes in 0.032 secs]</code></pre>
     }
 }</code></pre>
 
-<p>运行时在另一个终端执行 <code>jstack &lt;pid&gt;</code>，输出的结尾会自动附带一段 <code>Found one Java-level deadlock</code> 的说明，直接点名哪两个线程、分别等在哪把锁上，以及锁的持有者。这就是排查死锁最快的方式，不需要任何额外工具。</p>
+<p>运行时在另一个终端执行 <code>jstack &lt;pid&gt;</code>，输出的结尾会自动附带一段 <code>Found one Java-level deadlock</code> 的说明，直接点名哪两个线程、分别等在哪把锁上，以及锁的持有者。这是排查死锁最快的方式，不需要任何额外工具。</p>
 
-<p>再看 CPU 飙高。思路是「找出最耗 CPU 的线程，再回到 jstack 快照里找它」。先用 <code>top -Hp &lt;pid&gt;</code> 找到占用最高的线程号，把它转成十六进制（<code>printf "%x\n" &lt;tid&gt;</code>），然后在 <code>jstack</code> 输出里搜索 <code>nid=0x</code> 加上这个十六进制值，就能看到这个线程正在执行的代码行。连续多打几次快照，如果同一个方法反复出现在栈顶，它就是热点。对同一个进程可以重复执行 <code>jstack</code>，说明诊断本身对进程影响很小。</p>
+<p>再看 CPU 飙高。思路是“找出最耗 CPU 的线程，再回到 jstack 快照里找它”。先用 <code>top -Hp &lt;pid&gt;</code> 找到占用最高的线程号，把它转成十六进制（<code>printf "%x\n" &lt;tid&gt;</code>）。然后在 <code>jstack</code> 输出里搜索 <code>nid=0x</code> 加上这个十六进制值，就能看到这个线程正在执行的代码行。连续多打几次快照，如果同一个方法反复出现在栈顶，它就是热点。对同一个进程可以重复执行 <code>jstack</code>，说明诊断本身对进程影响很小。</p>
 
-<h3>小结与常见坑</h3>
+<h2>五、小结与常见坑</h2>
 
-<p>把工具用对，比记住参数更重要，几个高频坑值得单独提醒：第一，<code>jps</code>、<code>jstat</code> 看不到进程，通常是权限不一致（命令用的用户和目标进程不同）或 JDK 版本不匹配，而不是进程真的不存在；第二，<code>jstat</code> 的时间列是秒，别当成毫秒去算；第三，<code>jmap -histo</code> 与 <code>-dump</code> 不加 <code>:live</code> 会包含未回收对象，分析前最好先强制 GC 一次；第四，导堆和线程快照都可能造成短暂停顿，生产环境要挑时机，并提前确认磁盘空间；第五，Full GC 并不是「只回收老年代」，它会回收整个堆并顺带处理元空间，所以看到 Full GC 频繁，不要只盯着老年代参数调。</p>
+<p>把工具用对，比记住参数更重要，几个高频坑值得单独提醒。</p>
 
-<p>最后记住这条排查链路：<strong>jps 找进程 → jstat 看趋势 → jmap/MAT 抓内存 → jstack 抓线程</strong>。线上出问题时先别急着改参数，先用工具把「是 GC 太频繁、是内存泄漏、还是线程卡死」这三件事区分清楚，方向对了，改一个参数就能解决；方向错了，调再多参数也只是把问题往后推。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-6-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">并发与内存模型</span></a>
-      <a class="next-post" href="/java-tutorial-6-6/"><span class="pn-label">下一篇 →</span><span class="pn-title">6.6 线上问题排查实战</span></a>
-      </nav>
+<p>第一，<code>jps</code>、<code>jstat</code> 看不到进程，通常是权限不一致（命令用的用户和目标进程不同）或 JDK 版本不匹配，而不是进程真的不存在。第二，<code>jstat</code> 的时间列是秒，不要按毫秒计算。第三，<code>jmap -histo</code> 与 <code>-dump</code> 不加 <code>:live</code> 会包含未回收对象，分析前最好先强制 GC 一次。第四，导堆和线程快照都可能造成短暂停顿，生产环境要挑时机，并提前确认磁盘空间。第五，Full GC 并不是“只回收老年代”，它会回收整个堆并顺带处理元空间，所以看到 Full GC 频繁，不要只盯着老年代参数调。</p>
+
+<p>最后记住这条排查链路：<strong>jps 找进程 → jstat 看趋势 → jmap/MAT 抓内存 → jstack 抓线程</strong>。线上出问题时先不要急着改参数，先用工具把“是 GC 太频繁、是内存泄漏，还是线程卡死”这三件事区分清楚。方向对了，改一个参数就能解决；方向错了，调再多参数也只是把问题往后推。</p>
           </article>
   <!-- Footer -->
   <footer>

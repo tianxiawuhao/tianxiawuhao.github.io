@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>6.6 线上问题排查实战 | tianxia</title>
+<title>线上问题排查实战 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>6.6 线上问题排查实战</h1>
+              <h1>线上问题排查实战</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，8 min read</span>
@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>线上应用出问题，往往不是「代码写错了」这么简单：服务突然没响应、CPU 被打满、日志刷出 <code>OutOfMemoryError</code>、接口 P99 从 80ms 涨到 3s，而你手上只有一台能 SSH 的机器和一个进程号。本章要解决的就是这件事——<strong>在没有 Arthas、没有监控大盘的兜底场景下，仅靠 JDK 自带命令行工具，把「症状」一步步收敛到「某一行代码」</strong>。JDK 自带工具（jps/jstat/jmap/jstack）几乎是排查现场唯一一定存在的武器，即使你日常用 Arthas 或 JProfiler，理解它们输出的字段也仍然是基本功。阅读本章你只需要会写 Java 多线程代码、能在 Linux 上敲命令。</p>
+<p>线上应用出问题，往往不是“代码写错了”这么简单：服务突然没响应、CPU 被打满、日志刷出 <code>OutOfMemoryError</code>、接口 P99 从 80ms 涨到 3s，而手上只有一台能 SSH 的机器和一个进程号。上一章把 JDK 自带的诊断工具逐个过了一遍，本章把它们放进真实的排查流程：<strong>在没有 Arthas、没有监控大盘的兜底场景下，仅靠 JDK 自带命令行工具，把“症状”一步步收敛到“某一行代码”</strong>。JDK 自带工具（jps/jstat/jmap/jstack）几乎是排查现场唯一一定存在的武器，即使日常使用 Arthas 或 JProfiler，理解它们输出的字段也仍然是基本功。阅读本章只需要会写 Java 多线程代码、能在 Linux 上敲命令。</p>
 
 <h2>一、先分诊：把症状映射到工具</h2>
 
@@ -142,8 +142,8 @@
   <li><strong>接口变慢但 CPU 不高</strong>：多半是锁竞争或下游阻塞，用 <code>jstack</code> 连打三次，看同一批线程是否停在同一个方法上。</li>
 </ul>
 
-
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-6/01-symptom-triage.svg" alt="线上问题分诊表：五种症状分别对应首选工具与判据"><figcaption>图 1：线上问题分诊——先按症状选工具，再动手定位</figcaption></figure>
+
 <p>第一步永远是先拿进程号。用 JDK 自带的 <code>jps</code> 比 <code>ps -ef | grep java</code> 更省事，它只列 JVM 进程，还能顺便看到主类名或 jar 名：</p>
 
 <pre><code class="language-bash">[root@node01 ~]# jps -l
@@ -152,22 +152,22 @@
 # 6219 就是目标进程，下面统一用这个 pid
 </code></pre>
 
-<p>同时看一眼 GC 的总体趋势，判断问题出在内存还是别处。<code>jstat</code> 的用法是 <code>jstat [-命令选项] [vmid] [间隔时间/毫秒] [查询次数]</code>：</p>
+<p>同时查看 GC 的总体趋势，判断问题出在内存还是别处。<code>jstat</code> 的用法是 <code>jstat [-命令选项] [vmid] [间隔时间/毫秒] [查询次数]</code>：</p>
 
 <pre><code class="language-bash">[root@node01 ~]# jstat -gc 6219 1000 5
  S0C    S1C    S0U    S1U      EC       EU        OC         OU        MC       MU     YGC  YGCT   FGC  FGCT    GCT
 9216.0 8704.0  0.0   2560.0 62976.0  2361.6   33792.0    20434.9   23808.0 23196.1   7  0.244    1  1.078    1.323
 </code></pre>
 
-<p>字段含义要记牢：<code>S0C/S1C/EC/OC/MC</code> 是各区域的<strong>容量</strong>（Capacity，单位 KB），<code>S0U/S1U/EU/OU/MU</code> 是<strong>使用量</strong>（Used），<code>YGC/YGCT</code> 分别是新生代 GC 次数和累计耗时（秒），<code>FGC/FGCT</code> 对应 Full GC，<code>GCT</code> 是总 GC 时间。判断标准很简单：<strong>连续观察 OU（老年代使用量）是否在每次 Full GC 后都降不下去</strong>——降不下去才叫泄漏，能降下去只是分配速率高，那就去调大堆或优化对象创建。这一条能帮你挡掉一半的误判。</p>
+<p>字段含义要记牢：<code>S0C/S1C/EC/OC/MC</code> 是各区域的<strong>容量</strong>（Capacity，单位 KB），<code>S0U/S1U/EU/OU/MU</code> 是<strong>使用量</strong>（Used），<code>YGC/YGCT</code> 分别是新生代 GC 次数和累计耗时（秒），<code>FGC/FGCT</code> 对应 Full GC，<code>GCT</code> 是总 GC 时间。判断标准很简单：<strong>连续观察 OU（老年代使用量）是否在每次 Full GC 后都降不下去</strong>——降不下去才叫泄漏，能降下去只是分配速率高，应该去调大堆或优化对象创建。这一条能挡掉一半的误判。</p>
 
 <h2>二、CPU 飙高：从线程号到代码行</h2>
 
 <p>CPU 高是最常见的线上告警，排查路径固定三步：找进程、找线程、翻译线程号。</p>
+
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-6/02-cpu-three-steps.svg" alt="CPU 飙高定位三步：top -Hp 找线程、printf 转十六进制、jstack 搜 nid"><figcaption>图 2：CPU 飙高定位三步——从十进制线程号到业务代码行</figcaption></figure>
 
-
-<p>先让 <code>top</code> 以线程粒度显示，找出吃 CPU 的线程 ID（注意是线程 ID，不是进程 ID）：</p>
+<p>先让 <code>top</code> 以线程粒度显示，找出占用 CPU 最高的线程 ID（注意是线程 ID，不是进程 ID）：</p>
 
 <pre><code class="language-bash"># -H 显示线程，-p 只看目标进程
 [root@node01 ~]# top -Hp 6219
@@ -188,17 +188,17 @@
         at java.lang.Thread.run(Thread.java:748)
 </code></pre>
 
-<p>栈顶那行 <code>PriceService.java:88</code> 就是嫌疑点。这里有个常被忽略的关键点：<strong><code>RUNNABLE</code> 不等于「在算 CPU」</strong>，socket 读、文件读也是 RUNNABLE。所以单次快照只能给出线索，正确做法是<strong>间隔几秒连打 3 次 jstack</strong>，如果同一个方法始终出现在最耗 CPU 那个线程的栈顶，才能确认它就是热点。确认之后也不要急着改代码，先想清楚它是哪种情况：</p>
+<p>栈顶那行 <code>PriceService.java:88</code> 就是嫌疑点。这里有个常被忽略的关键点：<strong><code>RUNNABLE</code> 不等于“在算 CPU”</strong>，socket 读、文件读同样是 <code>RUNNABLE</code>。所以单次快照只能给出线索，正确做法是<strong>间隔几秒连打 3 次 <code>jstack</code></strong>：如果同一个方法始终出现在最耗 CPU 那个线程的栈顶，才能确认它就是热点。确认之后也不要急着改代码，先想清楚它属于哪种情况：</p>
 
 <ul>
   <li><strong>死循环或正则回溯</strong>：栈顶停在同一个方法不动，通常伴随 CPU 100% 且无内存增长。</li>
   <li><strong>锁自旋 / 反复重试</strong>：栈顶可能是 <code>synchronized</code> 或 CAS 相关的 JDK 内部方法，要往下看业务帧。</li>
-  <li><strong>序列化 / 加解密/ 大循环</strong>：栈顶是 JDK 方法（如 <code>java.util.Arrays.copyOf</code>），要结合 <code>jstack</code> 里的业务帧找调用方。</li>
+  <li><strong>序列化 / 加解密 / 大循环</strong>：栈顶是 JDK 方法（如 <code>java.util.Arrays.copyOf</code>），要结合 <code>jstack</code> 里的业务帧找调用方。</li>
 </ul>
 
-<h2>三、死锁：让 jstack 替你画出环形等待</h2>
+<h2>三、死锁：用 jstack 画出环形等待</h2>
 
-<p>死锁的现场特征非常好认：应用「没挂但也不干活」，日志停止输出，线程数稳定，CPU 反而不高。先看一段必然死锁的代码——两个线程以相反顺序获取同一对锁：</p>
+<p>死锁的现场特征非常好认：应用“没挂但也不干活”，日志停止输出，线程数稳定，CPU 反而不高。先看一段必然死锁的代码——两个线程以相反顺序获取同一对锁：</p>
 
 <pre><code class="language-java">public class TestDeadLock {
     private static final Object obj1 = new Object();
@@ -238,7 +238,7 @@
 }
 </code></pre>
 
-<p>跑起来后只会打印两行「拿到第一把锁」，然后永远卡住。此时 <code>jstack &lt;pid&gt;</code>，重点看输出末尾的自动分析结论：</p>
+<p>跑起来后只会打印两行“拿到第一把锁”，然后永远卡住。此时执行 <code>jstack &lt;pid&gt;</code>，重点看输出末尾的自动分析结论：</p>
 
 <pre><code class="language-bash">Found one Java-level deadlock:
 =============================
@@ -262,15 +262,15 @@ Java stack information for the threads listed above:
 Found 1 deadlock.
 </code></pre>
 
-<p>读法就三行：每个线程下面 <code>waiting to lock</code> 是它想要的锁，<code>locked</code> 是它已经持有的锁；两个线程互相锁住对方的下一步，环就闭合了。<strong>如果 jstack 没有自动给出 <code>Found ... deadlock</code> 段，不代表没有死锁</strong>——它只能识别 <code>synchronized</code> 监视器构成的环，<code>ReentrantLock</code> 之间的循环等待不会出现在这里，需要你自己按「持有 / 等待」两列在输出里手动连线，或者用 <code>jcmd &lt;pid&gt; Thread.print -l</code> 打出更全的锁信息。</p>
+<p>读法就三行：每个线程下面 <code>waiting to lock</code> 是它想要的锁，<code>locked</code> 是它已经持有的锁；两个线程各自锁住对方下一步要用的锁，环就闭合了。<strong>如果 <code>jstack</code> 没有自动给出死锁结论（<code>Found one Java-level deadlock</code>），不代表没有死锁</strong>——它只能识别 <code>synchronized</code> 监视器构成的环，<code>ReentrantLock</code> 之间的循环等待不会出现在这里。这种情况需要按“持有 / 等待”两列在输出里手动连线，或者用 <code>jcmd &lt;pid&gt; Thread.print -l</code> 打出更全的锁信息。</p>
 
-<p>修法永远是<strong>统一加锁顺序</strong>（在本例中让两个线程都先锁 <code>obj1</code>），或者改用带超时的 <code>tryLock(timeout)</code> 让等待方主动放弃。<strong>千万不要</strong>靠调大线程池或重启来「解决」死锁，重启只是把环清掉，代码里的顺序问题还在，下次流量一上来照样复现。</p>
+<p>修法永远是<strong>统一加锁顺序</strong>（在本例中让两个线程都先锁 <code>obj1</code>），或者改用带超时的 <code>tryLock(timeout)</code>，让等待方主动放弃。<strong>千万不要</strong>靠调大线程池或重启来“解决”死锁：重启只是把环清掉，代码里的顺序问题还在，下次流量一上来照样复现。</p>
 
 <h2>四、内存溢出与泄漏：dump 下来看支配树</h2>
 
-<p>先说一个必须改掉的旧习惯：网上很多老资料推荐用 <code>jhat</code> 分析堆 dump，但 <strong><code>jhat</code> 早在 JDK 9 就已被移除</strong>，JDK 8 上它也已过时，正确选择是 Eclipse MAT 或 JDK 自带的 <code>jvisualvm</code>。定位泄漏的标准流程分四步。</p>
+<p>先纠正一个旧习惯：网上很多老资料推荐用 <code>jhat</code> 分析堆 dump，但 <strong><code>jhat</code> 早在 JDK 9 就已被移除</strong>，JDK 8 上它也早已过时，正确选择是 Eclipse MAT 或 VisualVM（JDK 9 起需要单独下载）。定位泄漏的标准流程分四步。</p>
 
-<p><strong>第一步，确认是溢出还是泄漏。</strong>溢出（OOM）是「确实装不下了」，泄漏是「该回收的没回收」。前者看错误类型，后者靠 <code>jstat -gc</code> 观察 OU 是否逐轮抬高。</p>
+<p><strong>第一步，确认是溢出还是泄漏。</strong>溢出（OOM）是“确实装不下了”，泄漏是“该回收的没回收”。前者看错误类型，后者靠 <code>jstat -gc</code> 观察 OU 是否逐轮抬高。</p>
 
 <p><strong>第二步，把堆 dump 出来。</strong>两种方式，线上优先第二种：</p>
 
@@ -287,32 +287,27 @@ java -Xms512m -Xmx512m \
 jmap -histo:live 6219 | head -20
 </code></pre>
 
-<p><code>jmap -histo</code> 输出里，<code>[C</code> 是 <code>char[]</code>、<code>[B</code> 是 <code>byte[]</code>、<code>[I</code> 是 <code>int[]</code>，<code>[Ljava.lang.Object;</code> 是对象数组。<strong>如果你看到 <code>[C</code> 或 <code>byte[]</code> 的 instances 与 bytes 异常庞大，基本可以直接怀疑「大字符串 / 大文件内容被长期持有」</strong>，这是最常见的一类泄漏。</p>
+<p><code>jmap -histo</code> 输出里，<code>[C</code> 是 <code>char[]</code>、<code>[B</code> 是 <code>byte[]</code>、<code>[I</code> 是 <code>int[]</code>，<code>[Ljava.lang.Object;</code> 是对象数组。<strong>如果看到 <code>[C</code> 或 <code>byte[]</code> 的 instances 与 bytes 异常庞大，基本可以直接怀疑“大字符串 / 大文件内容被长期持有”</strong>，这是最常见的一类泄漏。</p>
 
-<p><strong>第三步，用 MAT 打开 hprof。</strong>不要一上来就逐个类翻实例，先看它生成的 Leak Suspects 报告和 Dominator Tree（支配树）：支配树按「谁占住的内存最多」排序，并且只保留真正的持有者，比单纯的引用列表直观得多。顺着支配树从 <code>Thread</code> → <code>ThreadLocal</code> / <code>HashMap</code> → 你的业务对象一路展开，通常三五层就能找到那个本该被释放却被静态集合或缓存扣住的容器。</p>
+<p><strong>第三步，用 MAT 打开 hprof。</strong>不要一上来就逐个类翻实例，先看它生成的 Leak Suspects 报告和 Dominator Tree（支配树）。支配树按“谁占住的内存最多”排序，并且只保留真正的持有者，比单纯的引用列表直观得多。顺着支配树从 <code>Thread</code> → <code>ThreadLocal</code> / <code>HashMap</code> → 业务对象一路展开，通常三五层就能找到那个本该被释放、却被静态集合或缓存扣住的容器。</p>
 
-<p><strong>第四步，区分正常与异常。</strong>如果确认是业务需要（比如合理的本地缓存），就调大 <code>-Xmx</code> 并把缓存换成有容量上限的实现（Caffeine / LRU）；如果是 bug，就修持有逻辑。<strong>把 <code>-Xmx</code> 调大只是买时间，泄漏的斜率不变，早晚还会 OOM。</strong></p>
+<p><strong>第四步，区分正常与异常。</strong>如果确认是业务需要（比如合理的本地缓存），就调大 <code>-Xmx</code>，并把缓存换成有容量上限的实现（Caffeine / LRU）；如果是 bug，就修持有逻辑。<strong>把 <code>-Xmx</code> 调大只是买时间，泄漏的斜率不变，早晚还会 OOM。</strong></p>
 
-<p>另外提醒两类容易被忽略的 OOM：<code>java.lang.OutOfMemoryError: Metaspace</code> 通常来自动态生成类（CGLIB 代理、Groovy 脚本反复编译），要限制缓存并设置 <code>-XX:MaxMetaspaceSize</code>；<code>OutOfMemoryError: Direct buffer memory</code> 来自 NIO 的 <code>ByteBuffer.allocateDirect</code>，堆 dump 里看不到，得靠 <code>-XX:MaxDirectMemorySize</code> 和 Native Memory Tracking（<code>-XX:NativeMemoryTracking=summary</code> 配合 <code>jcmd &lt;pid&gt; VM.native_memory</code>）来查。</p>
+<p>另外提醒两类容易被忽略的 OOM。<code>java.lang.OutOfMemoryError: Metaspace</code> 通常来自动态生成类（CGLIB 代理、Groovy 脚本反复编译），需要限制缓存并设置 <code>-XX:MaxMetaspaceSize</code>。<code>OutOfMemoryError: Direct buffer memory</code> 来自 NIO 的 <code>ByteBuffer.allocateDirect</code>，堆 dump 里看不到，只能靠 <code>-XX:MaxDirectMemorySize</code> 和 Native Memory Tracking（<code>-XX:NativeMemoryTracking=summary</code> 配合 <code>jcmd &lt;pid&gt; VM.native_memory</code>）来查。</p>
 
 <h2>五、常见坑与小结</h2>
 
 <p>最后把容易翻车的地方集中列一下：</p>
 
 <ul>
-  <li><strong>生产环境执行 <code>jmap -dump</code> 会 STW</strong>（<code>:live</code> 还会额外触发 Full GC），大堆上可能停顿数秒甚至更久。上线前就应该给 JVM 配好 <code>+HeapDumpOnOutOfMemoryError</code>，别等出事再手动 dump。</li>
-  <li><strong>dump 文件可能和堆一样大</strong>（几个 G 很常见），先确认磁盘空间，传输时记得压缩，别把服务器磁盘写满引发二次故障。</li>
-  <li><strong>只抓一次线程快照就下结论</strong>。单次 jstack 只是瞬间切片，必须多次采样、纵向对比，才能区分「一直卡住」和「碰巧路过」。</li>
+  <li><strong>生产环境执行 <code>jmap -dump</code> 会 STW</strong>（<code>:live</code> 还会额外触发 Full GC），大堆上可能停顿数秒甚至更久。上线前就应该给 JVM 配好 <code>+HeapDumpOnOutOfMemoryError</code>，不要等出事再手动 dump。</li>
+  <li><strong>dump 文件可能和堆一样大</strong>（几个 G 很常见），先确认磁盘空间，传输时记得压缩，不要把服务器磁盘写满引发二次故障。</li>
+  <li><strong>只抓一次线程快照就下结论</strong>。单次 jstack 只是瞬间切片，必须多次采样、纵向对比，才能区分“一直卡住”和“碰巧路过”。</li>
   <li><strong>jstack 看不到 <code>ReentrantLock</code> 死锁</strong>，需要 <code>jcmd &lt;pid&gt; Thread.print -l</code> 或自己分析锁依赖。</li>
-  <li><strong>错把「GC 频繁」当成「内存泄漏」</strong>。判断标准只有一个：Full GC 后老年代能不能降下来。</li>
+  <li><strong>错把“GC 频繁”当成“内存泄漏”</strong>。判断标准只有一个：Full GC 后老年代能不能降下来。</li>
 </ul>
 
-<p>小结一下本章的排查骨架：<strong>先分诊（症状 → 工具），再采样（多次而非一次），后定位（栈顶方法 / 支配树对象），最后回到代码修根因</strong>。CPU 高就用 <code>top -Hp</code> 加 <code>jstack</code> 翻译线程号；卡死就 <code>jstack</code> 找环形等待，修法是统一加锁顺序；内存问题先用 <code>jstat</code> 分清溢出与泄漏，再用 <code>jmap</code> dump、MAT 看支配树。把这套流程走熟，你就有了不依赖任何外部监控也能救火的能力——而工具输出的每一个字段，都对应着 JVM 运行时的一块真实内存或一条真实线程，理解它们比记住命令更重要。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-6-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">性能诊断工具</span></a>
-      <a class="next-post" href="/java-tutorial-7-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">7.1 Linux 基础与文件操作</span></a>
-      </nav>
+<p>小结一下本章的排查骨架：<strong>先分诊（症状 → 工具），再采样（多次而非一次），后定位（栈顶方法 / 支配树对象），最后回到代码修根因</strong>。CPU 高就用 <code>top -Hp</code> 加 <code>jstack</code> 翻译线程号；卡死就用 <code>jstack</code> 找环形等待，修法是统一加锁顺序；内存问题先用 <code>jstat</code> 分清溢出与泄漏，再用 <code>jmap</code> dump、MAT 看支配树。把这套流程走熟，就有了不依赖任何外部监控也能救火的能力。工具输出的每一个字段，都对应着 JVM 运行时的一块真实内存或一条真实线程，理解它们比记住命令更重要。</p>
           </article>
   <!-- Footer -->
   <footer>
