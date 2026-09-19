@@ -234,12 +234,12 @@ public class DemoApplication {
 <p>单体应用膨胀后会出现代码结构混乱、多人开发频繁冲突、改一处就要整体重新编译上线等问题，微服务按业务拆成独立部署的服务，代价则是网络延迟、服务发现、冗余与部署复杂度。Spring Cloud <b>不是重写的框架，而是把成熟组件按 Spring Boot 风格再封装的集合</b>。Boot 专注单个微服务，Cloud 专注全局治理，Boot 可独立使用而 Cloud 离不开 Boot。核心组件按职责记：</p>
 
 <ul>
-  <li><b>注册与发现</b>：服务启动时注册地址，调用方按服务名查询，无需硬编码 IP。<b>旧答案</b>是 Eureka，Consul、Zookeeper 也可；<b>现状</b>是 Eureka 2.x 已停止开发、1.x 处于维护状态，Spring Cloud Netflix 多数组件进入维护模式，且 Eureka 服务端要自建，新项目更常用 Nacos 或 Consul。</li>
+  <li><b>注册与发现</b>：服务启动时注册地址，调用方按服务名查询，无需硬编码 IP。<b>旧答案</b>是 Eureka，Consul、Zookeeper 也可。<b>现状</b>是 Eureka 2.x 已停止开发、1.x 处于维护状态，Spring Cloud Netflix 多数组件进入维护模式。此外，Eureka 服务端要自建，新项目更常用 Nacos 或 Consul。</li>
   <li><b>负载均衡</b>：把请求分发到多个实例，<b>旧答案</b>用 Ribbon，但它已停止维护并随 Spring Cloud 2020.0 的 Netflix 组件一起移除；<b>现状</b>由 <code>spring-cloud-loadbalancer</code> 承担，配合 OpenFeign 使用。</li>
   <li><b>声明式调用</b>：OpenFeign 用接口加 Spring MVC 注解描述远程调用，Spring Cloud 2.0 起已取代原 Feign 成为一等公民。</li>
-  <li><b>容错断路器</b>：Hystrix 用断路器模式提供熔断、降级、隔离，但自 2018 年起停止新特性维护、并已在 Spring Cloud 2020.0 中移除；<b>现状</b>是 Spring Cloud Circuit Breaker 官方实现 Resilience4j（也支持 Sentinel），国内项目常直接用 Sentinel。</li>
+  <li><b>容错断路器</b>：Hystrix 用断路器模式提供熔断、降级、隔离，但自 2018 年起停止新特性维护，并已在 Spring Cloud 2020.0 中移除。<b>现状</b>是 Spring Cloud Circuit Breaker 官方实现 Resilience4j（也支持 Sentinel），国内项目常直接用 Sentinel。</li>
   <li><b>网关</b>：Spring Cloud Gateway 基于 WebFlux 提供路由与过滤，取代阻塞式的 Zuul 1.x。</li>
-  <li><b>配置中心与总线</b>：Config／Nacos 做集中配置，Bus 广播刷新事件；链路追踪的<b>旧答案</b>是 Sleuth + Zipkin，<b>现状</b>是 Spring Cloud 2022.0（对应 Boot 3.x）起由 Micrometer Tracing 取代 Sleuth，再对接 Zipkin／OTLP 等后端。</li>
+  <li><b>配置中心与总线</b>：Config／Nacos 做集中配置，Bus 广播刷新事件。链路追踪的<b>旧答案</b>是 Sleuth + Zipkin。<b>现状</b>是 Spring Cloud 2022.0（对应 Boot 3.x）起由 Micrometer Tracing 取代 Sleuth，再对接 Zipkin／OTLP 等后端。</li>
 </ul>
 
 <pre><code class="language-yaml"># 服务提供方：注册到注册中心并暴露端口
@@ -258,7 +258,15 @@ server:
 
 <h2>小结</h2>
 
-<p>压成一条链：IoC 用工厂加反射把对象交给容器，三级缓存解决字段注入的循环依赖；AOP 用 JDK 或 CGLIB 代理织入横切逻辑，Boot 2.x 起默认 CGLIB。声明式事务就是 AOP 环绕通知，答传播行为先记 REQUIRED 是默认、NESTED 靠保存点，答失效先想自调用与方法非 public。Boot 的核心是 <code>@SpringBootApplication</code> 三合一，自动配置靠条件注解筛选，还要注意 2.7／3.0 的清单文件变更、<code>javax</code>→<code>jakarta</code> 的命名空间迁移，以及 Security 6 起用 <code>SecurityFilterChain</code> 取代 <code>WebSecurityConfigurerAdapter</code>。Cloud 是组件集合：注册发现解决“找得到”，负载均衡解决“分得匀”，断路器解决“坏得住”，网关解决“进得来”。被替换掉的组件还要能接着说“换成了谁、为什么”：Ribbon → Spring Cloud LoadBalancer，Hystrix → Resilience4j／Sentinel，Sleuth → Micrometer Tracing，Eureka → Nacos／Consul。先讲清机制，再补一句版本差异，比背结论更有说服力。</p>
+<p>压成一条链：IoC 用工厂加反射把对象交给容器，三级缓存解决字段注入的循环依赖；AOP 用 JDK 或 CGLIB 代理织入横切逻辑，Boot 2.x 起默认 CGLIB。声明式事务就是 AOP 环绕通知，答传播行为先记 REQUIRED 是默认、NESTED 靠保存点，答失效先想自调用与方法非 public。Boot 的核心是 <code>@SpringBootApplication</code> 三合一，自动配置靠条件注解筛选，还要注意 2.7／3.0 的清单文件变更、<code>javax</code>→<code>jakarta</code> 的命名空间迁移，以及 Security 6 起用 <code>SecurityFilterChain</code> 取代 <code>WebSecurityConfigurerAdapter</code>。Cloud 是组件集合：注册发现解决“找得到”，负载均衡解决“分得匀”，断路器解决“坏得住”，网关解决“进得来”。</p>
+<p>被替换掉的组件还要能接着说“换成了谁、为什么”：</p>
+<ul>
+<li>Ribbon → Spring Cloud LoadBalancer；</li>
+<li>Hystrix → Resilience4j／Sentinel；</li>
+<li>Sleuth → Micrometer Tracing；</li>
+<li>Eureka → Nacos／Consul。</li>
+</ul>
+<p>先讲清机制，再补一句版本差异，比背结论更有说服力。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-9-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">JVM 面试题</span></a>
