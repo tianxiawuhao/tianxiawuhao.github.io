@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Nginx 配置与反向代理 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Nginx 配置与反向代理</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，8 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>《Nginx 配置与反向代理》是"运维与部署"阶段的实战章节。前面你已经把 Java 应用打包、在 Linux 上跑起来，也见过 Docker 与 K8s 的基本用法；但真正上线时，用户不会直接访问你的 Tomcat——中间那层负责转发、负载、缓存和 HTTPS 的角色，通常由 Nginx 担任。本节面向后端开发者和刚开始接触部署的同学，目标是把 nginx.conf 的写法讲清楚：配置结构怎么分层、location 到底谁优先、反向代理与负载均衡怎么配、缓存与 HTTPS 怎么落地、以及哪些参数值得调。学完之后，你应该能独立写出一份可上线的七层代理配置，并看懂线上配置里的每一行。</p>
+
+<h2>为什么要在应用前放一层 Nginx</h2>
+<p>直接把 Tomcat 暴露到公网会遇到几个现实问题：单个实例的并发能力有限，一旦挂掉服务就整体不可用；静态资源也交给 Java 线程去读磁盘，白白占用工作线程；再加上 TLS 握手、压缩、限流这些和业务无关的事，全压在应用里会让代码越来越臃肿。Nginx 的价值正是把这些"通用且重复"的活儿抽出来：它用 master + worker 的多进程模型配合 epoll 事件驱动，单个 worker 用极少的线程就能照看大量连接，静态文件走零拷贝（sendfile）直接发出，业务请求再反向代理给后端集群。</p>
+<p>理解这套模型对配置很关键。master 进程只做管理：解析配置、拉起 worker、接收 <code>nginx -s reload</code> 这类信号；真正处理请求的是 worker，一个连接自始至终只由一个 worker 负责。所以 <code>worker_processes</code> 一般设为 CPU 核心数，多余的 worker 只会互相抢 CPU；而 <code>worker_connections</code> 是"每个 worker"的上限，整机理论连接数约为它乘以 worker 数量，作为反向代理时每个请求还要占用一条到后端的连接，能承载的并发请求数大致是连接总数的一半。</p>
+
+<h2>配置文件的结构：main、events、http、server、location</h2>
+<p>nginx.conf 是"指令 + 上下文"的层层嵌套结构：每层作用域只允许出现特定的指令，写错位置轻则报 <code>unknown directive</code>、重则配置不生效。最外层是 main（进程数、运行身份、日志），往下是 events（事件模型与连接数）和 http（所有 HTTP 能力），http 里可以放多个 server（虚拟主机），server 里再放多个 location（按 URL 分派）。简单指令以分号结尾，带大括号的复合指令结尾不加分号——这一点在复制网上配置时经常出错。</p>
+<pre><code class="language-nginx">user  www-data;                 # 运行身份，Debian/Ubuntu 上是 www-data
+worker_processes  auto;         # 与 CPU 核心数一致，auto 由 Nginx 自动判断
+worker_rlimit_nofile 65535;     # 单个 worker 可打开的描述符上限
+error_log  /var/log/nginx/error.log warn;
+pid        /run/nginx.pid;
+
+events {
+    use epoll;                  # Linux 2.6+ 的高性能事件模型
+    worker_connections 10240;   # 每个 worker 的连接数上限
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;           # 零拷贝发送静态文件
+    tcp_nopush    on;           # 与 sendfile 搭配，攒满一个包再发
+    tcp_nodelay   on;           # 长连接上禁用 Nagle，降低小包延迟
+    keepalive_timeout 65;
+    client_max_body_size 8m;    # 上传体积上限，太小会直接 413
+    gzip on;
+    gzip_min_length 1k;
+    gzip_comp_level 5;
+    gzip_types text/plain text/css application/json application/javascript;
+
+    server {
+        listen      80;
+        server_name www.example.com;
+        root  /data/www/example;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ /index.html;   # 单页应用回退到入口文件
+        }
+    }
+}</code></pre>
+<p>有两处细节值得单独提醒。<code>worker_connections</code> 常被误解为"整机最大连接数"，它其实只约束单个 worker；<code>worker_rlimit_nofile</code> 也不能随手写大，它必须不超过操作系统给该进程的 <code>ulimit -n</code>，否则 worker 在连接数上来后拿不到描述符，会直接返回 502。调优时先确认系统上限，再设 Nginx 的上限，顺序不要颠倒。</p>
+
+<h2>location 匹配优先级，是配置里最容易踩的坑</h2>
+<p>location 决定一个请求最终交给谁处理，规则可以概括为一句话：先看精确匹配，再看前缀匹配并记住最长的那条，然后按配置文件中的书写顺序试正则，第一个命中的正则立即生效，若一个正则都没命中，才回退到之前记住的最长前缀。因此 <code>~</code>（区分大小写正则）和 <code>~*</code>（不区分大小写）的先后顺序会直接改变结果；<code>^~</code> 表示前缀命中后就不再尝试正则；<code>=</code> 用于首页、健康检查这类高频路径，命中即可跳过全部匹配，性能最好。写正则时别忘了转义点号，<code>~ .*.(php|php5)?$</code> 这类写法会把 <code>aXphp</code> 也匹配进来，正确写法是 <code>~ \.(php|php5)$</code>。</p>
+<p>下面这份配置把静态资源、接口和兜底规则分开处理，是典型的动静分离结构。</p>
+<pre><code class="language-nginx">server {
+    listen 80;
+    server_name api.example.com;
+
+    location = /health { return 200 "ok\n"; }        # 精确匹配，最高优先
+    location ^~ /static/ {                            # 前缀命中后不再看正则
+        root /data/www;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+    location ~* \.(js|css|png|jpg|jpeg|gif|svg|woff2)$ {
+        root /data/www;
+        expires 30d;
+    }
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080/;            # 注意结尾的斜杠
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout    60s;
+    }
+    location / { return 404; }                        # 兜底，避免意外暴露
+}</code></pre>
+<p>反向代理还要记住两件事：一是 <code>proxy_pass</code> 结尾有无斜杠会改变 URI 的拼接方式，<code>http://127.0.0.1:8080/</code> 会替换掉 <code>/api/</code> 前缀，而 <code>http://127.0.0.1:8080</code> 会把原始路径整体带过去；二是必须转发 <code>X-Forwarded-For</code> 等头部，否则后端日志里看到的客户端 IP 永远是 Nginx 自己，排障时会非常被动。</p>
+
+<h2>负载均衡与缓存：从单机到多实例</h2>
+<p>后端有两个以上实例时，用 upstream 定义一组服务器，再让 <code>proxy_pass</code> 指向这个组名。默认策略是轮询，<code>weight</code> 按权重分配，<code>ip_hash</code> 让同一客户端固定落到同一台（适合还没做会话共享的应用），<code>least_conn</code> 把新请求交给当前连接最少的实例，<code>hash $request_uri consistent</code> 则常用于让同一个 URL 稳定命中同一份缓存。要注意的是，<code>fair</code> 属于第三方模块，<code>url_hash</code> 也早已废弃，网上大量旧配置直接抄会启动失败，用内置的 <code>least_conn</code> 和 <code>hash ... consistent</code> 替代即可。</p>
+<pre><code class="language-nginx"># http 上下文：缓存路径必须写在 http 里
+proxy_cache_path /var/cache/nginx/api levels=1:2
+                 keys_zone=api_cache:10m max_size=2g
+                 inactive=30m use_temp_path=off;
+
+upstream app_cluster {
+    least_conn;
+    server 192.168.80.121:8080 weight=3 max_fails=2 fail_timeout=10s;
+    server 192.168.80.122:8080 weight=2;
+    server 192.168.80.123:8080 backup;      # 其余实例都不可用时才启用
+    keepalive 32;                           # 与后端保持长连接，减少握手
+}
+
+server {
+    listen 80;
+    server_name api.example.com;
+
+    location /api/ {
+        proxy_pass http://app_cluster/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_cache api_cache;
+        proxy_cache_key  $scheme$request_method$host$request_uri;
+        proxy_cache_valid 200 302 10m;
+        proxy_cache_valid 404 1m;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503;
+        add_header X-Cache-Status $upstream_cache_status;   # HIT/MISS 便于验证
+    }
+}</code></pre>
+<p>两个容易混淆的概念要分清：<code>expires</code> 是发给浏览器的缓存指令，<code>proxy_cache</code> 才是缓存在 Nginx 本机、能直接挡掉回源请求的缓存。另外，Nginx 的"自动剔除"是被动健康检查，它只对连接失败、超时这类情况生效，后端返回 500 时默认仍算一次成功响应；要覆盖这一点，需要配合 <code>proxy_next_upstream</code> 与 <code>proxy_cache_use_stale</code>，或由应用提供健康检查接口。</p>
+
+<h2>HTTPS、调优与上线自查</h2>
+<p>启用 HTTPS 只需一对证书和一段 server 配置，生产环境建议顺便把 HTTP 全量跳转过去，并关闭老旧协议版本。第一次部署最容易忽略的是证书链要完整、私钥权限要收紧（600 且属主为运行用户）。</p>
+<pre><code class="language-nginx">server {
+    listen 80;
+    server_name www.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;                                   # 1.25.1 之前写作 listen 443 ssl http2;
+    server_name www.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/example.com.fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/example.com.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    location / {
+        proxy_pass http://app_cluster;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}</code></pre>
+<p>上线前可以按下面几条自查。<code>worker_processes auto</code>、<code>worker_connections</code> 与 <code>worker_rlimit_nofile</code> 是否和机器规格匹配；<code>proxy_connect_timeout</code>、<code>proxy_read_timeout</code> 是否覆盖了后端最慢接口的耗时，过大则故障时连接堆积、过小则正常慢请求被切断；<code>client_max_body_size</code> 是否大于业务允许的最大上传；limit_req、limit_conn 是否已为易被打的接口加上；访问日志里是否记录了 <code>$upstream_response_time</code>，它和 <code>$request_time</code> 的差值正是定位"慢在前端还是慢在后端"的依据。改完配置执行 <code>nginx -t</code> 校验，再用 <code>nginx -s reload</code> 平滑生效，不要直接重启进程。</p>
+
+<h2>小结</h2>
+<p>这一节围绕"一次讲透配置"的目标，把 Nginx 拆成了几块可以独立消化的内容：配置文件是 main → events → http → server → location 的嵌套上下文，指令只能待在自己允许的层级里；location 的匹配顺序是精确 → 最长前缀 → 首个命中的正则 → 回退最长前缀，正则里务必转义点号；反向代理的核心是 <code>proxy_pass</code> 的斜杠语义与 X-Forwarded-For 等头部的透传；负载均衡优先使用内置的 <code>least_conn</code>、权重和一致性哈希，别再抄第三方 fair；<code>proxy_cache</code> 才是真正的服务端缓存，<code>expires</code> 只管浏览器；HTTPS 与调优参数则决定了它能不能稳定扛住线上流量。建议你把自己项目里的一份旧配置对照本文重写一遍，用 <code>nginx -t</code> 验证并观察 <code>$upstream_cache_status</code> 的变化，这比记住任何参数都更有效。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
