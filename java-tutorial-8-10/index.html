@@ -152,7 +152,7 @@
 
 <h2>第二步：选对调度器，管好队列</h2>
 
-<p>Hadoop 提供三种调度器：FIFO、容量调度器（Capacity Scheduler）和公平调度器（Fair Scheduler）。FIFO 是单队列先来先服务，一个跑得久的大作业会把后面所有小作业挡死，只适合学习和单用户环境。</p>
+<p>Hadoop 提供三种调度器：FIFO、容量调度器（Capacity Scheduler）和公平调度器（Fair Scheduler）。FIFO 是单队列先来先服务，一个跑得久的大作业会把后面所有小作业挡死，只适合学习和单用户环境；<strong>Hadoop 3.x 已将 FIFO 标记为过时（deprecated）</strong>，新集群按基线配置直接选容量调度器（3.x 的默认值），需要更细的队列内公平性时再选公平调度器。</p>
 
 <p>容量调度器的思路是“按队列切蛋糕”：管理员为每个队列设置资源最低保证（capacity）和使用上限（maximum-capacity），队列内部默认按 FIFO 调度。它的关键特性是<strong>资源弹性</strong>——空闲队列的资源可以临时借给繁忙队列，一旦原队列有新应用提交，借出去的资源会归还。为了防止某个用户的作业霸占整个队列，容量调度器还支持用户级资源上限。</p>
 
@@ -208,14 +208,17 @@ yarn queue -status default</code></pre>
 
 <p>加机器（服役）不只是装好服务启动那么简单：新节点如果不在白名单里，即使 DataNode 进程正常，NameNode 也会拒绝让它存储数据。所以标准流程是：先把主机名写进白名单文件，在 <code>hdfs-site.xml</code> 里用 <code>dfs.hosts</code> 指向它，分发配置后刷新 NameNode；再启动新节点的进程，并跑一次数据均衡，把老节点的数据挪过去。</p>
 
-<pre><code class="language-xml">&lt;!-- hdfs-site.xml：白名单与黑名单 --&gt;
+<pre><code class="language-xml">&lt;!-- hdfs-site.xml：允许接入列表（include）与退役列表（exclude）
+     属性名 dfs.hosts / dfs.hosts.exclude 自 1.x 沿用至今未变；
+     新版文档已把“白名单/黑名单”的称呼改为 include/exclude 文件。
+     目录名随小版本变化（3.3.x / 3.4.x），按实际安装路径填写。 --&gt;
 &lt;property&gt;
   &lt;name&gt;dfs.hosts&lt;/name&gt;
-  &lt;value&gt;/opt/module/hadoop-3.1.3/etc/hadoop/whitelist&lt;/value&gt;
+  &lt;value&gt;/opt/module/hadoop-3.3.x/etc/hadoop/include&lt;/value&gt;
 &lt;/property&gt;
 &lt;property&gt;
   &lt;name&gt;dfs.hosts.exclude&lt;/name&gt;
-  &lt;value&gt;/opt/module/hadoop-3.1.3/etc/hadoop/blacklist&lt;/value&gt;
+  &lt;value&gt;/opt/module/hadoop-3.3.x/etc/hadoop/exclude&lt;/value&gt;
 &lt;/property&gt;</code></pre>
 
 <pre><code class="language-bash"># 修改白名单/黑名单后刷新 NameNode，无需重启整个集群
@@ -230,14 +233,14 @@ hdfs dfsadmin -refreshNodes
 
 <h2>第四步：监控与故障定位</h2>
 
-<p>运维靠三个入口：ResourceManager 的 <code>8088</code> 端口看应用与队列；NameNode 的 <code>9870</code> 端口看 HDFS 健康与 DataNode 状态；JobHistory 的 <code>19888</code> 端口看历史作业。注意 <code>50070</code> 是 Hadoop 2.x 的 NameNode UI 端口，3.x 已经换成 <code>9870</code>，网上很多老教程混用，照抄会连不上。</p>
+<p>运维靠三个入口：ResourceManager 的 <code>8088</code> 端口看应用与队列（2.x/3.x 未变）；NameNode 的 <code>9870</code> 端口看 HDFS 健康与 DataNode 状态；JobHistory 的 <code>19888</code> 端口看历史作业。注意 <code>50070</code> 是 Hadoop 2.x 的 NameNode UI 端口，3.x 已经换成 <code>9870</code>，对应属性名也从 <code>dfs.http.address</code> 改为 <code>dfs.namenode.http-address</code>；网上很多老教程混用，照抄会连不上。HA 集群还有一个细节：<code>9870</code> 是 Active NameNode 的页面，Standby 走 <code>9871</code>（<code>dfs.namenode.https-address</code> 与 <code>dfs.namenode.secondary.http-address</code> 是另外两个容易按错的入口）。</p>
 
 <p>还建议开启日志聚集：把 <code>yarn.log-aggregation-enable</code> 置为 <code>true</code>，并配置 <code>yarn.log.server.url</code> 与保留时间，让容器日志在应用结束后自动上传到 HDFS。否则任务失败后容器一销毁，日志就跟着没了，只能靠猜。开启后必须重启 NodeManager、ResourceManager 与 HistoryServer 才生效。</p>
 
 <p>两类典型故障的判断方法如下：</p>
 <ul>
 <li><strong>任务一直处于 ACCEPTED 不分配容器</strong>：先看是不是队列容量被占满、容器最大内存设得比任务需求小，或 NodeManager 上报的资源总量不够；</li>
-<li><strong>某台节点越跑越慢</strong>：先查 DataNode 与 NameNode 的心跳，正常间隔 3 秒，持续超时即说明有异常；再用 <code>fio</code> 这类工具单独测这块盘的读写带宽。</li>
+<li><strong>某台节点越跑越慢</strong>：先查 DataNode 与 NameNode 的心跳。完整的心跳体系是三个时间量——<strong>心跳 3 秒一次</strong>（<code>dfs.heartbeat.interval</code>）、<strong>全量块汇报默认 6 小时一次</strong>（<code>dfs.blockreport.intervalMsec</code>=21600000 毫秒，1.x 是 1 小时），而<strong>判死要等 10 分 30 秒</strong>（<code>2 × dfs.namenode.heartbeat.recheck-interval 5 分钟 + 10 × 3 秒 = 630 秒</code>）。所以“节点看着还在列表里但已经不干活”“退役卡住”这类现象，先对照这三个量判断是心跳停顿、块汇报积压还是单纯慢盘；再用 <code>fio</code> 这类工具单独测这块盘的读写带宽。</li>
 </ul>
 <p>慢盘往往表现为“偶尔创建目录要一分钟以上”这类偶发现象，而不是直接报错。</p>
 
