@@ -235,7 +235,7 @@ for (let k = 0; k &lt; 3; k++) {
 }
 console.log(fns.map((f) =&gt; f()));   // [0, 1, 2]
 </code></pre>
-<p>最后把作用域链与闭包的关系串起来：作用域链是上下文创建时写下的<strong>静态查找路径</strong>，函数嵌套定义得越深，链就越长；<strong>闭包则是这条链在函数返回后依然可达所产生的效果</strong>——内层函数持有对外层活动对象的引用，于是外层函数的变量不会被回收。所以“闭包”不是语言额外提供的机制，而是“词法作用域 + 一等函数”的必然结果。用 <code>var</code> 还是 <code>let</code> 决定的是“有几个绑定”，用函数表达式还是函数声明决定的是“提升到什么程度”，两件事都发生在上下文创建阶段，只是影响的侧面不同。</p>
+<p>最后把作用域链与闭包的关系串起来。作用域链是上下文创建时写下的<strong>静态查找路径</strong>，函数嵌套定义得越深，链就越长；<strong>闭包则是这条链在函数返回后依然可达所产生的效果</strong>——内层函数持有对外层活动对象的引用，于是外层函数的变量不会被回收。所以“闭包”不是语言额外提供的机制，而是“词法作用域 + 一等函数”的必然结果。用 <code>var</code> 还是 <code>let</code> 决定的是“有几个绑定”，用函数表达式还是函数声明决定的是“提升到什么程度”。两件事都发生在上下文创建阶段，只是影响的侧面不同。</p>
 
 <h3><code>this</code> 的四种绑定规则与优先级</h3>
 <p>第二节给出了结论，这里补上可操作的判定顺序。<code>this</code> 与作用域链无关，它只由<strong>调用位置</strong>（call site）决定，判断时按下面的优先级由高到低依次匹配，命中一条即可停止：</p>
@@ -283,7 +283,13 @@ obj.get();                                  // 42
 obj.get.call({ value: 7 });                 // 7，箭头函数跟着外层走
 // new (() =&gt; {})();                        // TypeError: not a constructor
 </code></pre>
-<p>理解了规则，就能定位最常见的“<strong>this 丢失</strong>”：本质都是调用方式从 <code>obj.fn()</code> 退化成了 <code>fn()</code>，于是从隐式绑定跌到默认绑定。三个高频场景：其一，把方法赋给变量或当参数传给回调，<code>const g = obj.fn; g()</code> 与 <code>setTimeout(obj.fn, 0)</code>、<code>arr.map(obj.fn)</code> 都属于此类；其二，<strong>解构赋值</strong>把方法从对象上摘下来，<code>const { fn } = obj; fn()</code> 同样丢失；其三，把方法传给第三方库或挂在 <code>addEventListener</code> 上，函数虽然会执行，但调用点是浏览器决定的，<code>this</code> 变成触发事件的 DOM 元素。<code>this</code> 一旦丢失就取不到实例字段，读写会得到 <code>undefined</code>，在严格模式下还可能直接抛错，因此不要指望“运行时再看”。</p>
+<p>理解了规则，就能定位最常见的“<strong>this 丢失</strong>”：本质都是调用方式从 <code>obj.fn()</code> 退化成了 <code>fn()</code>，于是从隐式绑定跌到默认绑定。三个高频场景如下：</p>
+<ul>
+<li>把方法赋给变量或当参数传给回调，<code>const g = obj.fn; g()</code> 与 <code>setTimeout(obj.fn, 0)</code>、<code>arr.map(obj.fn)</code> 都属于此类。</li>
+<li><strong>解构赋值</strong>把方法从对象上摘下来，<code>const { fn } = obj; fn()</code> 同样丢失。</li>
+<li>把方法传给第三方库或挂在 <code>addEventListener</code> 上，函数虽然会执行，但调用点是浏览器决定的，<code>this</code> 变成触发事件的 DOM 元素。</li>
+</ul>
+<p><code>this</code> 一旦丢失就取不到实例字段，读写会得到 <code>undefined</code>，在严格模式下还可能直接抛错，因此不要指望“运行时再看”。</p>
 <pre><code class="language-js">const user = {
   name: 'Tom',
   greet() { return `Hi, ${this.name}`; },
@@ -387,7 +393,13 @@ myMap(nums, n =&gt; n + 1);               // [2, 3, 4, 5]
 </table>
 
 <h3><code>for...in</code> 遍历数组的三个坑</h3>
-<p><code>for...in</code> 枚举的是<b>可枚举属性名</b>，不是元素值。用在数组上会连踩三个坑：第一，拿到的是字符串下标 <code>'0'</code>、<code>'1'</code>，参与算术前得先转换；第二，遍历顺序在规范里并不保证，只是现代引擎恰好多按升序输出；第三，只要有人给 <code>Array.prototype</code> 或 <code>Object.prototype</code> 挂过可枚举属性（早期 polyfill 里很常见），循环就会凭空多出几项，这也是它最危险的地方。按值遍历数组请用 ES6 的 <code>for...of</code>（走迭代器，支持 <code>break</code>/<code>continue</code>），只要元素时用 <code>forEach</code>/<code>map</code>。要枚举对象的键，<code>Object.keys()</code>/<code>Object.entries()</code> 更省心；确需 <code>for...in</code> 时用 <code>Object.hasOwn(obj, k)</code>（ES2022，旧环境可退回 <code>Object.prototype.hasOwnProperty.call(obj, k)</code>）过滤掉继承来的键。</p>
+<p><code>for...in</code> 枚举的是<b>可枚举属性名</b>，不是元素值。用在数组上会连踩三个坑：</p>
+<ul>
+<li>拿到的是字符串下标 <code>'0'</code>、<code>'1'</code>，参与算术前得先转换。</li>
+<li>遍历顺序在规范里并不保证，只是现代引擎恰好多按升序输出。</li>
+<li>只要有人给 <code>Array.prototype</code> 或 <code>Object.prototype</code> 挂过可枚举属性（早期 polyfill 里很常见），循环就会凭空多出几项，这也是它最危险的地方。</li>
+</ul>
+<p>按值遍历数组请用 ES6 的 <code>for...of</code>（走迭代器，支持 <code>break</code>/<code>continue</code>），只要元素时用 <code>forEach</code>/<code>map</code>。要枚举对象的键，<code>Object.keys()</code>/<code>Object.entries()</code> 更省心；确需 <code>for...in</code> 时用 <code>Object.hasOwn(obj, k)</code>（ES2022，旧环境可退回 <code>Object.prototype.hasOwnProperty.call(obj, k)</code>）过滤掉继承来的键。</p>
 <pre><code class="language-js">const arr = [10, 20, 30];
 
 for (const v of arr) console.log(v);        // 10 20 30：拿的是值
@@ -419,7 +431,13 @@ list.appendChild(li);
 // document.write('&lt;li&gt;' + userInput + '&lt;/li&gt;');</code></pre>
 
 <h3>回调 → Promise → <code>async</code>/<code>await</code>：以 <code>fetch</code> 为例</h3>
-<p>发请求的现代写法是 <code>fetch()</code>：它返回 Promise，天然适配 <code>async</code>/<code>await</code>。三个必须记住的细节：<code>fetch</code> 只在网络层出错时才 reject，HTTP 404、500 依然算“成功”，所以要自己判断 <code>response.ok</code>；响应体是一次性流，<code>response.json()</code> 与 <code>response.text()</code> 只能选一个、且只能调用一次；默认不携带跨域 Cookie，需要时显式写 <code>credentials: 'include'</code>，并让服务端配置好 CORS。旧教程里的 <code>XMLHttpRequest</code> 或 jQuery <code>$.ajax</code> 仍能运行，但嵌套回调、错误处理分散、取消请求麻烦，正是 Promise 与 <code>async</code>/<code>await</code> 要解决的问题。另外，彼此独立的请求不要用 <code>await</code> 逐个串起来，那样等待时间是累加的，应当交给 <code>Promise.all()</code> 并发。</p>
+<p>发请求的现代写法是 <code>fetch()</code>：它返回 Promise，天然适配 <code>async</code>/<code>await</code>。三个必须记住的细节：</p>
+<ul>
+<li><code>fetch</code> 只在网络层出错时才 reject，HTTP 404、500 依然算“成功”，所以要自己判断 <code>response.ok</code>。</li>
+<li>响应体是一次性流，<code>response.json()</code> 与 <code>response.text()</code> 只能选一个、且只能调用一次。</li>
+<li>默认不携带跨域 Cookie，需要时显式写 <code>credentials: 'include'</code>，并让服务端配置好 CORS。</li>
+</ul>
+<p>旧教程里的 <code>XMLHttpRequest</code> 或 jQuery <code>$.ajax</code> 仍能运行，但嵌套回调、错误处理分散、取消请求麻烦，正是 Promise 与 <code>async</code>/<code>await</code> 要解决的问题。另外，彼此独立的请求不要用 <code>await</code> 逐个串起来，那样等待时间是累加的，应当交给 <code>Promise.all()</code> 并发。</p>
 <pre><code class="language-js">async function loadUser(id) {
   try {
     const res = await fetch(`/api/users/${id}`);

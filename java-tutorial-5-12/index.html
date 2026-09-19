@@ -128,7 +128,14 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>代码能跑只是最低标准。真正决定成本的是三个月后你还能不能读懂它、敢不敢改它。如果一段业务逻辑隔了一个季度再回来看，需要花半小时才能弄明白，这份“隐形账单”在写下它的那天就已经记上了。本章讲的是一整套让代码保持可改的习惯。第一步说清重构的定义与动手时机，第二步落到命名和分层这类每天都要做的动作，第三步给出识别坏味道与最常用重构手法的路径，第四步交代现代 Java 写法（Optional / Stream / <code>var</code> / 字符串格式化）的适用边界，最后补齐两件最容易被忽视、一旦出事却最贵的事——日志规范与异常规范。适合已经能独立写业务、开始接手别人代码，或需要给团队定规矩的读者。</p>
+<p>代码能跑只是最低标准。真正决定成本的是三个月后你还能不能读懂它、敢不敢改它。如果一段业务逻辑隔了一个季度再回来看，需要花半小时才能弄明白，这份“隐形账单”在写下它的那天就已经记上了。本章讲的是一整套让代码保持可改的习惯，内容安排如下：</p>
+<ul>
+<li>第一步，说清重构的定义与动手时机。</li>
+<li>第二步，落到命名和分层这类每天都要做的动作。</li>
+<li>第三步，给出识别坏味道与最常用重构手法的路径。</li>
+<li>第四步，交代现代 Java 写法（Optional / Stream / <code>var</code> / 字符串格式化）的适用边界。</li>
+</ul>
+<p>最后补齐两件最容易被忽视、一旦出事却最贵的事——日志规范与异常规范。适合已经能独立写业务、开始接手别人代码，或需要给团队定规矩的读者。</p>
 
 <h2>一、重构：不改变可观察行为，只改结构</h2>
 
@@ -195,7 +202,7 @@ double price() {
 
 <p><strong>第三，分类与分级。</strong>扩展日志按 <code>appName_logType_logName.log</code> 命名，<code>logType</code> 可取 stats、desc、monitor、visit 等，<code>logName</code> 写日志描述，好处是看文件名就知道它属于哪个应用、什么类型、什么目的。错误日志与业务日志分开存放，便于查看和监控。</p>
 
-<p>日志文件建议至少保存 15 天，因为有些异常以“周”为频次发生。生产环境禁止输出 debug 日志，有选择地输出 info；用户输入参数错误适合用 warn 记录；error 只记录系统逻辑出错、异常这类重要信息。日志重复打印的根因是 appender 的叠加，在 Logback 里等价于把 logger 的 <code>additivity</code> 设为 <code>false</code>（<code>&lt;logger name="..." additivity="false"&gt;</code>），log4j2 同理；Log4j 1.x 时代的 <code>log4j.xml</code> 配置方式已随实现一起过时，Spring Boot 3.x 项目的配置文件是 <code>logback-spring.xml</code>。</p>
+<p>日志文件建议至少保存 15 天，因为有些异常以“周”为频次发生。生产环境禁止输出 debug 日志，有选择地输出 info；用户输入参数错误适合用 warn 记录；error 只记录系统逻辑出错、异常这类重要信息。日志重复打印的根因是 appender 的叠加，在 Logback 里等价于把 logger 的 <code>additivity</code> 设为 <code>false</code>（<code>&lt;logger name="..." additivity="false"&gt;</code>），log4j2 同理。Log4j 1.x 时代的 <code>log4j.xml</code> 配置方式已随实现一起过时，Spring Boot 3.x 项目的配置文件是 <code>logback-spring.xml</code>。</p>
 
 <pre><code class="language-java">private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
@@ -261,9 +268,15 @@ public Optional&lt;User&gt; findById(Long id) {
 User user = userService.findById(id)
         .orElseGet(() -&gt; User.guest());</code></pre>
 
-<p><strong><code>var</code> 的适用范围很窄：只用于局部变量，且右边必须自解释。</strong>Java 10 引入局部变量类型推断，<code>var</code> 不是动态类型，编译期类型就已固定。它可以用在局部变量声明、for / for-each 的循环变量、try-with-resources 的资源和 lambda 参数（需显式标注类型时写 <code>(var a, var b)</code>）；<strong>不能</strong>用于字段、方法参数、返回值类型，也不能写 <code>var x = null</code> 或先声明后赋值。用与不用只有一条标准：读代码的人能否一眼看出类型——<code>var orders = new HashMap&lt;String, List&lt;Order&gt;&gt;();</code> 右边已写全，用 <code>var</code> 只是省掉重复；而 <code>var result = service.handle(request);</code> 抹掉了关键信息，应当写出类型。团队若没有统一约定，把 <code>var</code> 限制在“右侧构造函数或静态工厂显式给出类型”的场景最安全。</p>
+<p><strong><code>var</code> 的适用范围很窄：只用于局部变量，且右边必须自解释。</strong>Java 10 引入局部变量类型推断，<code>var</code> 不是动态类型，编译期类型就已固定。它可以用在局部变量声明、for / for-each 的循环变量、try-with-resources 的资源和 lambda 参数（需显式标注类型时写 <code>(var a, var b)</code>）。<strong>不能</strong>用于字段、方法参数、返回值类型，也不能写 <code>var x = null</code> 或先声明后赋值。用与不用只有一条标准：读代码的人能否一眼看出类型——<code>var orders = new HashMap&lt;String, List&lt;Order&gt;&gt;();</code> 右边已写全，用 <code>var</code> 只是省掉重复；而 <code>var result = service.handle(request);</code> 抹掉了关键信息，应当写出类型。团队若没有统一约定，把 <code>var</code> 限制在“右侧构造函数或静态工厂显式给出类型”的场景最安全。</p>
 
-<p><strong><code>String.format</code> 还是字符串拼接？</strong>按场景选：一两段拼接直接用 <code>+</code> 更易读（Java 9 起 <code>+</code> 由 <code>invokedynamic</code> / <code>StringConcatFactory</code> 实现，不必再担心早期版本循环拼接的性能问题）；需要统一格式（补零、金额、日期模板）或文案要抽到常量与配置文件时用 <code>String.format</code>，代价是每次调用都要解析格式串，所以别放进热点循环；循环里累积文本用 <code>StringBuilder</code>，拼接集合元素用 <code>String.join</code>。日志输出永远优先占位符 <code>log.info("id={}, name={}", id, name)</code>，而不是先格式化再传字符串——级别关闭时占位符不产生格式化开销。</p>
+<p><strong><code>String.format</code> 还是字符串拼接？</strong>按场景选：</p>
+<ul>
+<li>一两段拼接直接用 <code>+</code> 更易读（Java 9 起 <code>+</code> 由 <code>invokedynamic</code> / <code>StringConcatFactory</code> 实现，不必再担心早期版本循环拼接的性能问题）。</li>
+<li>需要统一格式（补零、金额、日期模板）或文案要抽到常量与配置文件时用 <code>String.format</code>，代价是每次调用都要解析格式串，所以别放进热点循环。</li>
+<li>循环里累积文本用 <code>StringBuilder</code>，拼接集合元素用 <code>String.join</code>。</li>
+</ul>
+<p>日志输出永远优先占位符 <code>log.info("id={}, name={}", id, name)</code>，而不是先格式化再传字符串——级别关闭时占位符不产生格式化开销。</p>
 
 <pre><code class="language-java">// 好：简单拼接 + 日志占位符
 String key = "order:" + orderId;
