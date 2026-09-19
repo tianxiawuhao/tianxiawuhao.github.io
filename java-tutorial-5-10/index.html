@@ -261,9 +261,9 @@ Claims claims = Jwts.parser()          // 旧版是 parserBuilder()
         .getPayload();                 // 旧版是 getBody
 System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></pre>
 
-<p>密钥本身也要按现代标准准备：HS256 的密钥必须是 <strong>至少 32 字节的随机值</strong>，用库的生成器 <code>Jwts.SIG.HS256.key().build()</code> 产出，或从配置中心读一段 Base64 随机串；绝不要用示例里 <code>"a-32-bytes-long-secret-key-for-hs256"</code> 这种可读字符串——它一眼可猜，还会被硬编码进 Git 历史，属于典型的密钥强度不足。</p>
+<p>密钥本身也要按现代标准准备。HS256 的密钥必须是 <strong>至少 32 字节的随机值</strong>，用库的生成器 <code>Jwts.SIG.HS256.key().build()</code> 产出，或从配置中心读一段 Base64 随机串。绝不要用示例里 <code>"a-32-bytes-long-secret-key-for-hs256"</code> 这种可读字符串——它一眼可猜，还会被硬编码进 Git 历史，属于典型的密钥强度不足。</p>
 
-<p>如果认证服务与资源服务是不同团队、不同部署，建议改用非对称算法 RS256 / ES256：认证服务持有私钥签发，资源服务只保存公钥验签，这样公钥泄露也不会导致令牌被伪造。RSA 密钥同样从 2048 位起（1024 位已不安全）；JDK 自带的 <code>keytool</code> 可以生成密钥库并导出公钥，也可以把公钥按 JWK Set 发布到 <code>/.well-known/jwks.json</code>，Spring Security 6（Spring Boot 3.x 配套）用 <code>NimbusJwtDecoder.withJwkSetUri(...)</code> 即可接入，并记得在解码器上<em>显式限定</em>允许的算法。</p>
+<p>如果认证服务与资源服务是不同团队、不同部署，建议改用非对称算法 RS256 / ES256：认证服务持有私钥签发，资源服务只保存公钥验签，这样公钥泄露也不会导致令牌被伪造。RSA 密钥同样从 2048 位起（1024 位已不安全）。JDK 自带的 <code>keytool</code> 可以生成密钥库并导出公钥；也可以把公钥按 JWK Set 发布到 <code>/.well-known/jwks.json</code>。Spring Security 6（Spring Boot 3.x 配套）用 <code>NimbusJwtDecoder.withJwkSetUri(...)</code> 即可接入，并记得在解码器上<em>显式限定</em>允许的算法。</p>
 
 <h3>常见坑与上线前检查清单</h3>
 
@@ -271,7 +271,7 @@ System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></p
 
 <p><strong>2）JWT 无法主动失效。</strong>令牌一旦签发，在 <code>exp</code> 之前一直有效，服务端删不掉它。所以过期时间要短（分钟级），并配合 Redis 维护黑名单或改用可撤销的 refresh token 机制。</p>
 
-<p><strong>3）哈希算法选错。</strong>MD5、SHA-1 已被证明可以构造碰撞（前者 2004 年、后者 2017 年均已实际构造出碰撞样本），所以签名一律用 SHA256withRSA、SHA384withECDSA，摘要用 SHA-256 及以上；口令存储请用 bcrypt、scrypt 或 Argon2（自带盐值与计算代价），而不是“MD5 加盐”——盐只防彩虹表，挡不住高速爆破。Spring Security 6 已内置 <code>BCryptPasswordEncoder</code> 与 <code>Argon2PasswordEncoder</code>，直接注入使用即可。</p>
+<p><strong>3）哈希算法选错。</strong>MD5、SHA-1 已被证明可以构造碰撞（前者 2004 年、后者 2017 年均已实际构造出碰撞样本）。所以签名一律用 SHA256withRSA、SHA384withECDSA，摘要用 SHA-256 及以上。口令存储请用 bcrypt、scrypt 或 Argon2（自带盐值与计算代价），而不是“MD5 加盐”——盐只防彩虹表，挡不住高速爆破。Spring Security 6 已内置 <code>BCryptPasswordEncoder</code> 与 <code>Argon2PasswordEncoder</code>，直接注入使用即可。</p>
 
 <p><strong>4）随机数用错。</strong>密钥、IV、盐值都必须来自 <code>SecureRandom</code>；用 <code>new Random()</code> 或 <code>Math.random()</code> 生成安全参数是可以被预测的。</p>
 
