@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>垃圾回收与调优 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>垃圾回收与调优</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，6 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>上一章讲了堆里的对象怎么来，这一章接着回答另一半问题：对象什么时候被回收，以及回收时程序为什么会卡一下。GC 不是"配好参数就完事"的黑盒——搞不清对象存活判定、分代假设和收集器差异，就只能对着日志猜。本章从"哪些内存要回收"讲到 G1 与低延迟收集器，再落到日志解读和调优参数，适合已能读懂 JVM 内存结构、想让线上应用少 Full GC、少长停顿的读者。</p>
+
+<h2>一、先判断死活：引用计数与可达性分析</h2>
+
+<p>程序计数器、虚拟机栈、本地方法栈的生命周期与线程一致，线程结束内存自然归还，不需要 GC 操心；真正需要动态管理的只有<strong>堆和方法区</strong>。判断对象是否存活有两套思路。</p>
+
+<p><strong>引用计数</strong>给每个对象维护一个计数器，被引用加一、引用失效减一，为零即可回收。它实现简单、回收及时，但有一个致命缺陷：<strong>无法处理循环引用</strong>。下面这段代码里两个对象互相持有对方，即使外部引用全部置空，计数依然不为零，谁也不会被回收。</p>
+
+<pre><code class="language-java">class Node {
+    Node next; // 互相引用形成环
+}
+
+public class RefCountTest {
+    public static void main(String[] args) {
+        Node a = new Node();
+        Node b = new Node();
+        a.next = b;
+        b.next = a;   // a、b 互相引用，引用计数都为 1
+        a = null;
+        b = null;     // 已不可达，但计数器不为 0
+        System.gc();  // 引用计数法回收不了这两个对象
+    }
+}</code></pre>
+
+<p>主流 JVM 采用的是<strong>可达性分析</strong>：从一组称为 <strong>GC Roots</strong> 的根对象出发遍历引用链，走不到的对象判为可回收。可作为 GC Roots 的包括虚拟机栈（栈帧局部变量表）中引用的对象、方法区中类静态属性引用的对象、方法区中常量引用的对象、本地方法栈中 JNI 引用的对象，此外还有被同步锁持有的对象等。</p>
+
+<p>需要补充的是 Java 的四种引用强度：<strong>强引用</strong>（<code>Object o = new Object()</code>）只要存在就绝不回收；<strong>软引用</strong>（<code>SoftReference</code>）在将要发生内存溢出前才被列入回收范围；<strong>弱引用</strong>（<code>WeakReference</code>）只能活到下一次 GC；<strong>虚引用</strong>（<code>PhantomReference</code>）无法取得对象实例，只用于回收时收到通知。可达性分析基于的正是强引用。对象即使被判不可达，也不是立刻死亡：还会经历一次筛选，若 <code>finalize()</code> 中重新与引用链建立关联，就能逃过本次回收。</p>
+
+<h2>二、三种基础算法与分代收集</h2>
+
+<p>收集算法只有三类，区别在"标记之后怎么清"。</p>
+
+<ul>
+<li><strong>标记-清除</strong>：标记存活对象后直接回收未标记部分。实现简单、不需要移动对象，但清除后<strong>内存碎片严重</strong>，且标记与清除都要遍历对象，效率受限。</li>
+<li><strong>复制算法</strong>：把空间一分为二，只使用其中一块；回收时把存活对象整体复制到另一块，再清空原空间并交换角色。没有碎片、分配靠指针碰撞极快，代价是可用内存减半，且存活对象多时复制开销大。</li>
+<li><strong>标记-整理</strong>：标记后把存活对象向一端移动，再清理边界外的空间。解决了碎片问题，但移动对象并更新引用同样昂贵。</li>
+</ul>
+
+<p>没有哪种算法通吃，于是有了<strong>分代收集</strong>：依据"绝大多数对象朝生夕灭、熬过越多次 GC 的对象越难死"这一经验规律，把堆分成新生代与老年代分别施策。HotSpot 中新生代默认按 <code>Eden : Survivor0 : Survivor1 = 8 : 1 : 1</code> 划分，新对象优先在 Eden 分配；Minor GC 时 Eden 与 From Survivor 中的存活对象被<strong>复制</strong>到 To Survivor，然后清空前两者并交换两个 Survivor 的角色。对象每熬过一次 GC 年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）或 Survivor 空间不足时晋升老年代。老年代存活率高适合标记-整理或标记-清除，空间不足时触发 Full GC。大对象（如 <code>new byte[4 * 1024 * 1024]</code>）通常直接进入老年代，避免在 Eden 与 Survivor 间反复复制。</p>
+
+<h2>三、收集器的演进：从 Serial 到 G1 与低延迟收集器</h2>
+
+<p>算法要有落地实现，HotSpot 的收集器可以按"是否并行、是否并发、作用于哪一代"来区分。并行（Parallel）指多条 GC 线程同时工作，但用户线程仍然暂停；并发（Concurrent）指 GC 线程与用户线程同时运行，能显著缩短单次停顿，代价是占用 CPU 并产生浮动垃圾。</p>
+
+<ul>
+<li><strong>Serial / Serial Old</strong>：单线程收集，收集时必须暂停所有用户线程，即 <strong>STW（Stop-The-World）</strong>。简单高效，适合客户端或小堆场景。</li>
+<li><strong>ParNew</strong>：Serial 的多线程版本，仍作用于新生代，常与 CMS 搭配。</li>
+<li><strong>Parallel Scavenge / Parallel Old</strong>：新生代复制、老年代标记-整理的多线程组合，目标不是最短停顿而是<strong>可控吞吐量</strong>，可用 <code>-XX:MaxGCPauseMillis</code> 与 <code>-XX:GCTimeRatio</code> 调节。它同样会 STW，只是并行缩短了停顿，并非"不暂停用户线程"。</li>
+<li><strong>CMS</strong>：以最短停顿为目标的并发收集器，作用于老年代，采用标记-清除算法，流程为初始标记（STW）→ 并发标记 → 并发预清理 → 重新标记（STW）→ 并发清除 → 并发重置。缺点是产生内存碎片、无法处理浮动垃圾，且并发阶段会与应用争抢 CPU，JDK 9 起已废弃、JDK 14 移除。</li>
+<li><strong>G1</strong>：把堆划分为大小相等的 <strong>Region</strong>，新生代与老年代只是 Region 的逻辑集合，不再要求连续。它维护每个 Region 的回收价值（垃圾占比与回收耗时）列表，在 <code>-XX:MaxGCPauseMillis</code> 的停顿目标下优先回收收益最高的 Region，因此能建立<strong>可预测的停顿模型</strong>。跨 Region 引用靠每个 Region 的 <strong>Remembered Set</strong> 记录，避免全堆扫描；超过 Region 容量 50% 的巨型对象放入 <strong>Humongous</strong> 区，连续 H 区不足时可能被迫 Full GC。G1 的回收模式有 Young GC（Eden 耗尽触发）、Mixed GC（老年代占比达到 <code>-XX:InitiatingHeapOccupancyPercent</code>，默认 45% 时触发，回收全部年轻代加部分老年代）和 Full GC。注意 Mixed GC 不等于 Full GC，它只回收<strong>部分</strong>老年代 Region。G1 在 JDK 7 引入，<strong>JDK 9 起成为默认收集器</strong>。</li>
+<li><strong>ZGC / Shenandoah</strong>：面向超大堆与极低延迟，借染色指针与读屏障把停顿压到毫秒级且与堆大小基本无关，ZGC 的目标停顿在 10ms 以内，适合堆上百 GB 的在线服务。其实现细节已超出本章范围，此处不展开。</li>
+</ul>
+
+<h2>四、打开 GC 日志：从看懂到会调</h2>
+
+<p>调优的第一步永远是先观测。启动时打开日志，再压测复现，然后才谈参数。</p>
+
+<pre><code class="language-bash"># JDK 8：打印 GC 详情、时间戳与日期
+java -XX:+UseG1GC -Xms2g -Xmx2g \
+     -XX:MaxGCPauseMillis=200 \
+     -XX:+PrintGCDetails -XX:+PrintGCDateStamps \
+     -Xloggc:/var/log/app/gc.log -jar app.jar
+
+# JDK 9+：统一日志框架，-Xlog:gc* 等价于旧参数
+java -XX:+UseG1GC -Xms2g -Xmx2g \
+     -Xlog:gc*,gc+heap=info:file=/var/log/app/gc.log:time,uptime,level,tags \
+     -jar app.jar</code></pre>
+
+<p>日志读起来并不难，抓住三段信息即可：<strong>回收类型</strong>（<code>GC</code> 为 Minor/Young，<code>Full GC</code> 为全堆）、<strong>前后容量</strong>（<code>4416K-&gt;512K(4928K)</code> 表示该区域回收前占用、回收后占用与总容量）、<strong>耗时</strong>（如 <code>0.0046102 secs</code>，也可用 <code>[Times: user=... sys=... real=...]</code> 对照用户态、内核态与墙钟时间）。下面是一段串行收集器的真实输出：</p>
+
+<pre><code class="language-text">[GC (Allocation Failure) [DefNew: 4416K-&gt;512K(4928K), 0.0046102 secs]
+ 4416K-&gt;1973K(15872K), 0.0046533 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]
+[Full GC (Allocation Failure) [Tenured: 10944K-&gt;3107K(10944K), 0.0085637 secs]
+ 15871K-&gt;3107K(15872K), [Metaspace: 3496K-&gt;3496K(1056768K)], 0.0085974 secs]</code></pre>
+
+<p>在此基础上做取舍：追求吞吐量选 Parallel，追平均停顿选 G1，追极致低延迟且堆巨大再看 ZGC。常用的观察与调节手段包括 <code>jstat -gcutil &lt;pid&gt; 1000</code> 实时看各代占用与 GC 次数、<code>jmap -histo:live &lt;pid&gt;</code> 看对象分布、以及把日志交给 GCeasy 之类工具可视化。参数方面，<code>-Xms</code> 与 <code>-Xmx</code> 设成相等可避免堆反复伸缩；<code>-Xmn</code> 或 <code>-XX:NewRatio</code> 控制新生代比例；<code>-XX:SurvivorRatio</code> 调整 Eden 与 Survivor 比例；<code>-XX:+HeapDumpOnOutOfMemoryError</code> 保证 OOM 现场可查。注意 <code>-XX:MaxGCPauseMillis</code> 只是<strong>期望值</strong>，JVM 会尽力而为但不保证达到；把堆设得过小反而会让 GC 更频繁。</p>
+
+<h3>三类常见坑</h3>
+
+<p><strong>坑一，把 STW 说成"不影响用户线程"。</strong>所有分代收集器的 Minor GC 与 Full GC 都会停顿用户线程，并行只是缩短停顿，并发才有部分阶段与应用同时运行，但仍需初始标记与重新标记两次 STW。用"某收集器完全不暂停"来判断选型一定会踩坑。</p>
+
+<p><strong>坑二，<code>System.gc()</code> 与显式引用。</strong>显式调用 <code>System.gc()</code> 可能触发 Full GC，生产代码里应避免；<code>-XX:+DisableExplicitGC</code> 可将其屏蔽，但要注意 NIO 直接内存依赖它回收 <code>DirectByteBuffer</code>，屏蔽后堆外内存可能迟迟不释放。此外，把对象放进静态集合、ThreadLocal 未 <code>remove()</code>、监听器未注销，都会制造长生命周期的强引用，让对象"看起来没用了却回收不掉"。</p>
+
+<p><strong>坑三，永久代与元空间的版本差异。</strong>JDK 7 及以前方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC；<strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束，且类卸载条件严格（该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用）。所以看到旧文章里"持久代被写满导致 Full GC"的说法时要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
+
+<h2>五、小结</h2>
+
+<p>这一章的主线是：GC 先解决"谁是垃圾"，再解决"怎么清、什么时候清"。判活用可达性分析而非引用计数；回收用标记-清除、复制、标记-整理三种基础算法，靠分代假设把新生代交给复制、老年代交给标记-整理或标记-清除；收集器层面，Parallel 换吞吐量、CMS 换低停顿但有碎片、G1 用 Region + RSet + 停顿预测模型兼顾两者，ZGC 面向超大堆的极低延迟。落到实践，先开日志与 jstat 观测，再动 <code>-Xms/-Xmx</code>、新生代比例与停顿目标这些参数，并牢记所有分代收集器都有 STW、<code>System.gc()</code> 与长生命周期引用是最常见的两类人为故障。下一章我们进入具体的线上排查工具与方法。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
