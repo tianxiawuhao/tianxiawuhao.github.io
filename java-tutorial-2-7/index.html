@@ -128,23 +128,23 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>本章面向已经会写 SQL、日常用 MySQL 的 Java 开发者，回答三个具体问题：什么时候该把数据放进 NoSQL、Redis 怎么用才不会出线上事故、MongoDB 的复制集与分片集群到底解决了什么问题。读完之后，你应该能根据业务的读写特征与一致性要求完成选型，并写出可以落地的 Spring Boot 集成代码。</p>
+<p>本章面向已经会写 SQL、日常使用 MySQL 的 Java 开发者，回答三个问题：什么时候该把数据放进 NoSQL，Redis 怎么用才不会出线上事故，MongoDB 的复制集与分片集群解决了什么问题。读完本章，读者应能根据业务的读写特征与一致性要求完成选型，并写出可落地的 Spring Boot 集成代码。</p>
 
 <h2>为什么需要 NoSQL：关系型之外的四种选择</h2>
 
-<p>关系型数据库的强项是事务与复杂的关联查询，但它在三类场景下会明显吃力：一是数据量增长到单机容量上限，只能靠分库分表，而分库分表一旦落到应用层，就会带来跨库 JOIN、分布式事务、全局唯一 ID 等一连串问题；二是数据本身是半结构化的，比如商品的不同品类有完全不同的属性、日志和埋点字段经常变化，硬塞进表里就要不停改表结构；三是访问模式极其简单但并发极高，例如按 key 读取用户会话，这类请求用 SQL 和二级索引去支撑属于杀鸡用牛刀。</p>
+<p>关系型数据库的强项是事务与复杂的关联查询，但在三类场景下会明显吃力。一是数据量增长到单机容量上限，只能靠分库分表；而分库分表一旦落到应用层，就会带来跨库 JOIN、分布式事务、全局唯一 ID 等一连串问题。二是数据本身是半结构化的，例如商品的不同品类有完全不同的属性，日志和埋点字段又经常变化，硬塞进表里就要不停改表结构。三是访问模式极其简单但并发极高，例如按 key 读取用户会话，这类请求用 SQL 和二级索引去支撑并不划算。</p>
 
-<p>对应这些场景，NoSQL 大致分成四类。键值型以 Redis、Memcached 为代表，模型就是 key 到 value 的映射，读写恒定复杂度，适合缓存、会话、计数与排行榜；文档型以 MongoDB 为代表，一条记录是一个类似 JSON 的文档，同一个集合里允许字段不同，适合内容管理、商品、日志等结构易变的场景；列族型以 HBase、Cassandra 为代表，按列族存储、天然分布式，适合十亿行级别的稀疏宽表；图数据库以 Neo4j 为代表，专门处理多跳关系，例如社交推荐和反欺诈路径分析。选型的顺序应该是先看数据模型，再看读写比例，最后看一致性要求，而不是先挑产品再想办法套业务。</p>
+<p>对应这些场景，NoSQL 大致分成四类。键值型以 Redis、Memcached 为代表，模型是 key 到 value 的映射，读写复杂度恒定，适合缓存、会话、计数与排行榜；文档型以 MongoDB 为代表，一条记录是一个类似 JSON 的文档，同一集合里允许字段不同，适合内容管理、商品、日志等结构易变的场景；列族型以 HBase、Cassandra 为代表，按列族存储、天然分布式，适合十亿行级别的稀疏宽表；图数据库以 Neo4j 为代表，专门处理多跳关系，例如社交推荐与反欺诈路径分析。选型的顺序是先看数据模型，再看读写比例，最后看一致性要求，而不是先挑产品再设法套业务。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-7/01-nosql-categories.svg" alt="NoSQL 四类存储的数据模型、代表产品与典型场景对比表"><figcaption>图 1：NoSQL 四类存储对比——键值型、文档型、列族型与图数据库各自的数据模型与适用场景，选型顺序为先看数据模型、再看读写比例、最后看一致性要求</figcaption></figure>
 
-<p>这里有一个必须纠正的常见误解：NoSQL 不等于"不能用事务"。MongoDB 4.0 起在复制集上支持多文档事务，4.2 起在分片集群上支持多文档事务，但跨文档事务的代价远高于单文档操作，所以数据建模时仍应尽量把一次业务变更收敛到单个文档内，用文档内嵌代替跨表关联。另外，NoSQL 普遍遵循 BASE 思路，Redis 的主从复制默认是异步的，主库宕机时可能丢掉尚未同步的写入；MongoDB 若使用 <code>{w: 1}</code> 写入，主库故障后也可能发生回滚。对数据安全要求高的写操作，应显式使用 <code>{w: "majority"}</code> 并配合 <code>readConcern: "majority"</code>。</p>
+<p>这里有一个必须纠正的常见误解：NoSQL 不等于“不能用事务”。MongoDB 4.0 起在复制集上支持多文档事务，4.2 起在分片集群上也支持多文档事务。但跨文档事务的代价远高于单文档操作，所以数据建模时仍应尽量把一次业务变更收敛到单个文档内，用文档内嵌代替跨表关联。另外，NoSQL 普遍遵循 BASE 思路：Redis 的主从复制默认异步，主库宕机时可能丢掉尚未同步的写入；MongoDB 若使用 <code>{w: 1}</code> 写入，主库故障后也可能发生回滚。对数据安全要求高的写操作，应显式使用 <code>{w: "majority"}</code> 并配合 <code>readConcern: "majority"</code>。</p>
 
 <h2>Redis：数据结构、持久化与高可用</h2>
 
 <h3>五种数据结构与常用命令</h3>
 
-<p>Redis 的价值不只是"快"，更在于它用五种数据结构把常见的数据形态直接做到了服务端。String 是最基础的键值，可存字符串、整数和二进制，支持自增自减，常用于计数器、分布式锁和缓存对象；List 是双向链表，支持两端推入弹出，适合消息队列和最新列表；Set 是无序去重集合，支持交并差运算，适合标签、共同好友和抽奖去重；Hash 是字段到值的映射，适合存储对象的多个属性，可以只更新其中某个字段；ZSet 是带分值的有序集合，按 score 排序，是排行榜的标准解法。</p>
+<p>Redis 的价值不只是“快”，更在于它用五种数据结构把常见的数据形态直接做到了服务端。String 是最基础的键值，可存字符串、整数和二进制，支持自增自减，常用于计数器、分布式锁和缓存对象；List 是双向链表，支持两端推入弹出，适合消息队列和最新列表；Set 是无序去重集合，支持交并差运算，适合标签、共同好友和抽奖去重；Hash 是字段到值的映射，适合存储对象的多个属性，可以只更新其中某个字段；ZSet 是带分值的有序集合，按 score 排序，是排行榜的标准解法。</p>
 
 <pre><code class="language-bash">SET user:1:name "张三"
 EXPIRE user:1:name 1800          # 缓存一定要设过期时间
@@ -160,7 +160,7 @@ ZREVRANGE rank:2024 0 9 WITHSCORES
 
 <h3>持久化：RDB 与 AOF</h3>
 
-<p>Redis 是内存数据库，持久化决定了它能承受多大的数据丢失。RDB 在指定条件下 fork 子进程生成数据集的快照，文件紧凑、恢复快，适合做备份和灾难恢复，缺点是两次快照之间宕机会丢数据，且数据集很大时 fork 会造成毫秒级甚至秒级的阻塞。AOF 追加记录每一条写命令，配合 <code>appendfsync everysec</code> 最多丢 1 秒数据，缺点是文件更大、恢复更慢。两者不是二选一：Redis 4.0 起支持混合持久化，把重写后的 AOF 文件头部写成 RDB 格式，同时获得快速加载和低丢失率，这也是 5.0 之后的默认形态。需要特别注意，重启时若同时开启两种持久化，Redis 会优先加载 AOF。</p>
+<p>Redis 是内存数据库，持久化决定了它能承受多大的数据丢失。RDB 在指定条件下 fork 子进程生成数据集的快照，文件紧凑、恢复快，适合备份与灾难恢复；缺点是两次快照之间宕机会丢数据，且数据集很大时 fork 会造成毫秒级甚至秒级的阻塞。AOF 追加记录每一条写命令，配合 <code>appendfsync everysec</code> 最多丢 1 秒数据，缺点是文件更大、恢复更慢。两者不是二选一：Redis 4.0 起支持混合持久化，把重写后的 AOF 文件头部写成 RDB 格式，同时获得快速加载和低丢失率，这也是 5.0 之后的默认形态。需要特别注意，重启时若同时开启两种持久化，Redis 会优先加载 AOF。</p>
 
 <pre><code class="language-bash">daemonize yes
 port 6379
@@ -181,13 +181,15 @@ cluster-node-timeout 15000
 
 <h3>主从、Sentinel 与 Cluster</h3>
 
-<p>单机 Redis 只能解决性能问题，解决不了可用性。最基础的一层是主从复制：从节点执行 <code>replicaof</code> 后与主节点建立连接，首次同步走全量（RDB 传输），之后走增量命令传播；断线重连时，若主节点的复制积压缓冲区还保留着从节点的偏移量，就通过 PSYNC 做部分重同步，否则再次全量。主从本身不提供故障转移，需要 Sentinel 出场：Sentinel 以奇数个节点（至少 3 个）组成集群，持续监控主从健康状态，在主观下线加客观下线判定后，由多数 Sentinel 选举出 Leader 执行故障转移，把某个从节点提升为新主，并通知客户端新的主节点地址。Sentinel 适合数据量不大、希望部署简单的场景。</p>
+<p>单机 Redis 只能解决性能问题，解决不了可用性。最基础的一层是主从复制：从节点执行 <code>replicaof</code> 后与主节点建立连接，首次同步走全量（RDB 传输），之后走增量命令传播。断线重连时，若主节点的复制积压缓冲区还保留着从节点的偏移量，就通过 PSYNC 做部分重同步，否则再次全量。主从本身不提供故障转移，需要 Sentinel 出场：Sentinel 以奇数个节点（至少 3 个）组成集群，持续监控主从健康状态。在主观下线与客观下线判定完成后，多数 Sentinel 会选举出 Leader 执行故障转移，把某个从节点提升为新主，并通知客户端新的主节点地址。Sentinel 适合数据量不大、希望部署简单的场景。</p>
 
-<p>当单机内存放不下整个数据集时，需要 Cluster。Redis Cluster 把整个键空间划分为 16384 个槽，槽按节点分配，键归属哪个槽由 <code>CRC16(key) mod 16384</code> 决定。客户端访问到不负责该槽的节点时，会收到 MOVED 重定向；槽正在迁移期间则收到 ASK 重定向。集群至少需要 3 个主节点，通常部署 3 主 3 从，主节点故障时由其从节点接管槽位。实践中最容易踩的坑是跨槽操作：<code>MGET</code>、事务、Lua 脚本涉及的所有 key 必须落在同一个槽，否则报 CROSSSLOT 错误，解决办法是使用 hash tag，例如 <code>user:{1001}:name</code> 与 <code>user:{1001}:age</code> 会因为 <code>{}</code> 内的内容相同而落在同一槽。</p>
+<p>当单机内存放不下整个数据集时，就需要 Cluster。Redis Cluster 把整个键空间划分为 16384 个槽，槽按节点分配，键归属哪个槽由 <code>CRC16(key) mod 16384</code> 决定。客户端访问到不负责该槽的节点时，会收到 MOVED 重定向；槽正在迁移期间则收到 ASK 重定向。集群至少需要 3 个主节点，通常部署 3 主 3 从，主节点故障时由其从节点接管槽位。</p>
+
+<p>实践中最容易踩的坑是跨槽操作：<code>MGET</code>、事务、Lua 脚本涉及的所有 key 必须落在同一个槽，否则报 CROSSSLOT 错误。解决办法是使用 hash tag：<code>user:{1001}:name</code> 与 <code>user:{1001}:age</code> 会因为 <code>{}</code> 内的内容相同而落在同一槽。</p>
 
 <h2>在 Spring Boot 中使用 Redis</h2>
 
-<p>引入 <code>spring-boot-starter-data-redis</code> 后，Spring Boot 会自动装配 <code>RedisTemplate</code> 与 <code>StringRedisTemplate</code>。这里有两个高频错误。第一是序列化：<code>RedisTemplate</code> 默认使用 JDK 序列化，写进 Redis 的 key 会带上一串不可读的二进制前缀，用 redis-cli 查询时几乎无法排查问题，因此工程里应当显式把 key 的序列化器设为 StringRedisSerializer。第二个错误来自源笔记中"StringRedisTemplate 与 RedisTemplate 的数据不共通"的说法，这个表述容易让人误解成两者连的是不同数据库。事实是它们共用同一个连接工厂和同一个 Redis 库，区别只在序列化策略：StringRedisTemplate 对 key 和 value 都用 String 序列化，RedisTemplate 默认用 JDK 序列化。混用时会看到"键确实存在，但按另一套序列化器取不到值"的现象，本质是字节层面不一致。若确实需要两套模板并存，务必保证同一类数据始终由同一个模板读写。</p>
+<p>引入 <code>spring-boot-starter-data-redis</code> 后，Spring Boot 会自动装配 <code>RedisTemplate</code> 与 <code>StringRedisTemplate</code>。这里有两个高频错误。第一是序列化：<code>RedisTemplate</code> 默认使用 JDK 序列化，写进 Redis 的 key 会带上一串不可读的二进制前缀，用 redis-cli 查询时几乎无法排查问题。因此工程里应当显式把 key 的序列化器设为 StringRedisSerializer。第二个错误来自一个流传很广的说法：StringRedisTemplate 与 RedisTemplate 的数据不共通。这个表述容易让人误解成两者连的是不同数据库。事实是两者共用同一个连接工厂、同一个 Redis 库，区别只在序列化策略：StringRedisTemplate 的 key 与 value 都用 String 序列化，RedisTemplate 则默认使用 JDK 序列化。混用时会出现“键确实存在，但按另一套序列化器取不到值”的现象，本质是字节层面不一致。若确实需要两套模板并存，务必保证同一类数据始终由同一个模板读写。</p>
 
 <pre><code class="language-java">@Configuration
 public class RedisConfig {
@@ -223,13 +225,13 @@ if (Boolean.TRUE.equals(locked)) {
 }
 </code></pre>
 
-<p>需要说明的是，Lettuce 是当前 Spring Boot 的默认客户端，基于 Netty 支持多线程共享连接，只有在使用连接池时才需要额外引入 commons-pool2；源文档中基于 JedisConnectionFactory 和 JedisPoolConfig 的配置属于 Spring Boot 1.x/2.0 时代的写法，在新项目中不必照搬。生产环境更推荐直接用 Redisson 实现分布式锁，它把锁续期（看门狗）和 Lua 原子释放都封装好了。</p>
+<p>需要说明的是，Lettuce 是当前 Spring Boot 的默认客户端，基于 Netty 支持多线程共享连接，只有在使用连接池时才需要额外引入 commons-pool2。基于 JedisConnectionFactory 与 JedisPoolConfig 的配置属于 Spring Boot 1.x/2.0 时代的写法，在新项目中不必照搬。生产环境更推荐直接用 Redisson 实现分布式锁，它把锁续期（看门狗）与 Lua 原子释放都封装好了。</p>
 
 <h2>MongoDB：复制集与分片集群</h2>
 
-<p>复制集解决可用性与数据冗余：一组 mongod 进程维护同一份数据，其中一个通过选举成为 Primary 承接写入，其余 Secondary 从 Primary 的 oplog 拉取并重放操作来同步。多数派定义为可用投票成员数 N 的 ⌊N/2⌋+1（源文档写作 N/2+1，应按整数除法理解），所以 3 节点与 4 节点都只能容忍 1 个节点失效，成员数建议取奇数。另有几种特殊角色：Arbiter 只投票不存数据，用于补齐偶数成员；Priority 0 成员不会被选为 Primary；Hidden 成员对驱动不可见，适合离线备份；Delayed 成员落后 Primary 一段可配置时间，可用于回滚误写入的脏数据。复制集最多 50 个成员，参与投票的最多 7 个。</p>
+<p>复制集解决可用性与数据冗余：一组 mongod 进程维护同一份数据。其中一个通过选举成为 Primary 承接写入，其余 Secondary 从 Primary 的 oplog 拉取并重放操作来同步。多数派定义为可用投票成员数 N 的 ⌊N/2⌋+1 个（旧教程常写作 N/2+1，应按整数除法理解），因此 3 节点与 4 节点都只能容忍 1 个节点失效，成员数建议取奇数。另有几种特殊角色：Arbiter 只投票不存数据，用于补齐偶数成员；Priority 0 成员不会被选为 Primary；Hidden 成员对驱动不可见，适合离线备份；Delayed 成员落后 Primary 一段可配置时间，可用于回滚误写入的脏数据。复制集最多 50 个成员，参与投票的最多 7 个。</p>
 
-<p>分片集群解决单机容量与写入吞吐瓶颈，由三类角色组成：mongos 是无状态路由进程，不保存数据，启动时从 config server 加载元数据，把请求路由到正确的 shard 并聚合结果；config server 保存 chunk 分布等全部元数据，从 3.4 起自身也必须部署为复制集；shard 才真正存数据，通常每个 shard 也是一个复制集。数据以 chunk 为单位组织，超过设定大小就分裂，balancer 再把 chunk 从多的 shard 迁到少的 shard。chunk 大小在 MongoDB 6.0 之前默认 64MB，6.0 起默认 128MB，源文档只写 64MB 已过时；调小分布更均匀但分裂迁移更频繁，调大则相反，还可能出现无法分裂的 jumbo chunk。</p>
+<p>分片集群解决单机容量与写入吞吐瓶颈，由三类角色组成。mongos 是无状态路由进程，不保存数据，启动时从 config server 加载元数据，把请求路由到正确的 shard 并聚合结果；config server 保存 chunk 分布等全部元数据，从 3.4 起自身也必须部署为复制集；shard 才真正存数据，通常每个 shard 也是一个复制集。数据以 chunk 为单位组织，超过设定大小就分裂，balancer 再把 chunk 从多的 shard 迁到少的 shard。chunk 大小在 MongoDB 6.0 之前默认为 64MB，6.0 起改为 128MB，只写 64MB 的教程已经过时；调小后分布更均匀，但分裂与迁移更频繁，调大则相反，还可能出现无法分裂的 jumbo chunk。</p>
 
 <pre><code class="language-javascript">// 1. 初始化复制集（在其中一个节点上执行）
 rs.initiate({
@@ -251,18 +253,13 @@ db.orders.getShardDistribution()
 
 <p>分片键的选择几乎决定了集群的长期健康度。理想的分片键基数高、取值分布均匀，并且能覆盖大多数查询条件，这样查询才能被定向到单个 shard，避免广播到所有分片。最典型的反面案例是用单调递增的值（自增 ID、ObjectId、写入时间）做范围分片键，新写入会永远落在最后一个 chunk 上，形成热点。若查询条件无法覆盖分片键，可考虑哈希分片换取均匀写入，再用冗余字段或聚合层解决定向查询问题。</p>
 
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-7/01-mongodb-cluster.svg" alt="MongoDB 分片集群请求路径与各层角色示意图"><figcaption>图 1：MongoDB 分片集群——应用经 mongos 路由，元数据从 config server 加载，shard 真正存数据且每个 shard 本身就是一个复制集</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-7/01-mongodb-cluster.svg" alt="MongoDB 分片集群请求路径与各层角色示意图"><figcaption>图 2：MongoDB 分片集群——应用经 mongos 路由，元数据从 config server 加载，shard 真正存数据且每个 shard 本身就是一个复制集</figcaption></figure>
 
 <h2>常见坑与小结</h2>
 
 <p>最后集中列出几个高频事故：Redis 上执行 <code>KEYS *</code> 会阻塞整个实例，线上排查应改用 <code>SCAN</code> 游标遍历；大 key（几十万成员的 Hash、超大 List）在删除和迁移时同样会阻塞，拆分和异步删除要提前规划；缓存穿透用空值缓存加参数校验挡住，缓存击穿用互斥锁或逻辑过期挡住，缓存雪崩则给过期时间加随机偏移并做多级缓存。MongoDB 侧，未加索引的查询在分片集群上会广播到所有 shard，代价被放大数倍，上线前要用 explain 确认索引命中情况。</p>
 
-<p>回到选型本身：Redis 适合做缓存、会话、计数、排行榜与分布式协调，不要把它当唯一的数据源存放不可再生的核心数据；MongoDB 适合文档结构灵活、读多写多且能接受最终一致性的业务，核心账务类强事务场景仍应交给关系型数据库。掌握"先看数据模型、再看读写比例、最后看一致性要求"这个顺序，就不容易在 NoSQL 选型上走弯路。下一章会进入 ORM 与数据访问层，看看这些存储如何被 Java 代码统一地访问。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-2-6/"><span class="pn-label">← 上一篇</span><span class="pn-title">Oracle 要点</span></a>
-      <a class="next-post" href="/java-tutorial-2-8/"><span class="pn-label">下一篇 →</span><span class="pn-title">JPA 与 ORM 入门</span></a>
-      </nav>
+<p>回到选型本身：Redis 适合做缓存、会话、计数、排行榜与分布式协调，不要把它当唯一的数据源存放不可再生的核心数据；MongoDB 适合文档结构灵活、读多写多且能接受最终一致性的业务，核心账务类强事务场景仍应交给关系型数据库。掌握“先看数据模型、再看读写比例、最后看一致性要求”这个顺序，就不容易在 NoSQL 选型上走弯路。下一章会进入 ORM 与数据访问层，看看这些存储如何被 Java 代码统一访问。</p>
           </article>
   <!-- Footer -->
   <footer>

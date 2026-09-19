@@ -128,30 +128,30 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>很多教程讲 MySQL 停在"会写 CRUD"，但线上事故往往不是语法错误，而是慢查询拖垮连接池、机器掉电后主从数据对不上。本章先讲清 InnoDB 与三种日志"为什么快、为什么不容易丢"，再落到慢查询定位与执行计划分析，最后给出索引改写套路和分库分表的分寸。适合已能写基本 SQL、准备把数据库用进生产的读者。</p>
+<p>很多教程讲 MySQL 停在“会写 CRUD”，但线上事故往往不是语法错误，而是慢查询拖垮连接池、机器掉电后主从数据对不上。本章先讲清 InnoDB 与三种日志“为什么快、为什么不容易丢”，再落到慢查询定位与执行计划分析，最后给出索引改写套路和分库分表的分寸。本章适合已能写基本 SQL、准备把数据库用进生产的读者。</p>
 
 <h2>一、存储引擎：默认为什么是 InnoDB</h2>
 
 <p>MySQL 是插件式的：同一个服务器可以挂载不同存储引擎，建表时用 <code>ENGINE=</code> 指定，<code>SHOW ENGINES;</code> 可以查看支持列表。老教材常提 MyISAM，今天真正要掂量的是两者的取舍。</p>
 
 <ul>
-<li><strong>InnoDB</strong>：支持事务（ACID）、行级锁、MVCC、外键和崩溃恢复；索引即数据，主键索引的叶子节点直接存整行，因此叫<strong>聚簇索引</strong>；辅助索引的叶子只存主键值，查非索引列就要"回表"。</li>
+<li><strong>InnoDB</strong>：支持事务（ACID）、行级锁、MVCC、外键和崩溃恢复；索引即数据，主键索引的叶子节点直接存整行，因此叫<strong>聚簇索引</strong>；辅助索引的叶子只存主键值，查非索引列就要“回表”。</li>
 <li><strong>MyISAM</strong>：不支持事务，也没有行锁（只有表锁）；索引与数据分开存放，辅助索引直接指向数据地址；崩溃后表可能损坏，需要 <code>REPAIR TABLE</code> 修复。它只在只读、少并发的场景里略微省资源，MySQL 8.0 连系统表都已换成 InnoDB。</li>
 </ul>
 
-<p>所以今天"选引擎"基本等价于"要不要事务和并发写"：要，就用 InnoDB。聚簇索引带来一个直接结论——主键要<strong>短且递增</strong>（例如自增 <code>BIGINT</code>）。随机主键会让插入落在索引中间，引发页分裂和额外的 IO；业务上唯一的字段（手机号、订单号）加唯一索引即可，不必硬做主键。</p>
+<p>所以今天的引擎选型基本等价于回答一个问题：要不要事务和并发写。要，就用 InnoDB。聚簇索引还能推出一个直接结论——主键要<strong>短且递增</strong>（例如自增 <code>BIGINT</code>）。随机主键会让插入落在索引中间，引发页分裂和额外的 IO；业务上唯一的字段（手机号、订单号）加唯一索引即可，不必硬做主键。</p>
 
 <h2>二、redo、undo 与 binlog：一次提交到底写了什么</h2>
 
-<p>很多人背过 WAL，却说不清三种日志各管什么。按所在层次划分：redo log 与 undo log 属于 InnoDB 引擎层，binlog 属于 MySQL Server 层。</p>
+<p>不少人背过 WAL，却说不清三种日志各管什么。按所在层次划分：redo log 与 undo log 属于 InnoDB 引擎层，binlog 属于 MySQL Server 层。</p>
 
 <ul>
-<li><strong>redo log（重做日志）</strong>：记录"某个数据页被改成了什么样"，属于物理逻辑日志，以<strong>循环写</strong>的方式写在固定大小的文件组里。事务修改先写 redo 并落盘，脏页可以慢慢刷回表空间——这就是 WAL（先写日志，再写数据）。它解决的是<strong>崩溃恢复</strong>：断电重启后，把已提交但还没刷进表空间的数据补回来。</li>
+<li><strong>redo log（重做日志）</strong>：记录“某个数据页被改成了什么样”，属于物理逻辑日志，以<strong>循环写</strong>的方式写在固定大小的文件组里。事务修改先写 redo 并落盘，脏页可以慢慢刷回表空间——这就是 WAL（先写日志，再写数据）。它解决的是<strong>崩溃恢复</strong>：断电重启后，把已提交但还没刷进表空间的数据补回来。</li>
 <li><strong>undo log（回滚日志）</strong>：记录数据的旧版本，支撑两件事——事务回滚，以及 MVCC 的快照读。快照读沿版本链找到对当前事务可见的版本，所以普通 <code>SELECT</code> 不用加锁。长事务会一直拖住旧版本，导致 undo 膨胀、历史版本读变慢。</li>
 <li><strong>binlog（归档日志）</strong>：Server 层的逻辑日志，记录执行过什么语句或行发生了哪些变化，用于主从复制和按时间点恢复。格式有 STATEMENT、ROW、MIXED，生产环境推荐 ROW，能避免函数、随机值带来的主从不一致。</li>
 </ul>
 
-<p>一次提交并不是"写完一个文件就结束"，而是<strong>两阶段提交</strong>：先把 redo 写成 prepare 状态，再写 binlog，最后把 redo 改成 commit。这样崩溃恢复时能对照两本账，不会出现"主库有、从库没有"或反过来的情况。</p>
+<p>一次提交并不是“写完一个文件就结束”，而是<strong>两阶段提交</strong>：先把 redo 写成 prepare 状态，再写 binlog，最后把 redo 改成 commit。这样崩溃恢复时能对照两本账，不会出现“主库有、从库没有”或反过来的情况。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-4/01-two-phase-commit.svg" alt="一次提交的日志写入示意图：redo 与 undo 属 InnoDB 引擎层、binlog 属 Server 层，提交按 redo prepare、写 binlog、redo commit 两阶段进行，脏页再慢慢刷回表空间"><figcaption>图 1：三层日志的分工与两阶段提交顺序</figcaption></figure>
 
@@ -172,7 +172,7 @@ ORDER BY trx_started;</code></pre>
 
 <p>优化的第一步是测量，不是凭感觉改 SQL。慢查询日志会把执行时间超过 <code>long_query_time</code>（单位是秒，可以写小数）的语句记下来，它默认是关闭的。</p>
 
-<p>这里有两个容易踩的坑。其一，<code>long_query_time</code> 是全局动态变量，<code>SET GLOBAL</code> 只对之后建立的连接生效，当前连接要么重连，要么再补一句 <code>SET SESSION long_query_time = 0.5;</code>。其二，<code>log_queries_not_using_indexes</code> 只负责"额外记录没走索引的语句"，它<strong>不能</strong>代替 <code>slow_query_log = ON</code> 去开启慢日志；把它误当开关，是排查时最常见的空转。</p>
+<p>这里有两个容易踩的坑。其一，<code>long_query_time</code> 是全局动态变量，<code>SET GLOBAL</code> 只对之后建立的连接生效，当前连接要么重连，要么再补一句 <code>SET SESSION long_query_time = 0.5;</code>。其二，<code>log_queries_not_using_indexes</code> 只负责“额外记录没走索引的语句”，它<strong>不能</strong>代替 <code>slow_query_log = ON</code> 去开启慢日志；把它误当开关，是排查时最常见的空转。</p>
 
 <pre><code class="language-sql">SET GLOBAL slow_query_log = ON;
 SET GLOBAL slow_query_log_file = '/var/log/mysql/mysql-slow.log';
@@ -183,7 +183,7 @@ SET GLOBAL log_queries_not_using_indexes = ON;
 -- mysqldumpslow -s t -t 10 /var/log/mysql/mysql-slow.log
 -- pt-query-digest /var/log/mysql/mysql-slow.log</code></pre>
 
-<p>拿到可疑 SQL 后，在它前面加 <code>EXPLAIN</code> 查看执行计划。字段虽多，日常只需盯四列：<code>type</code> 是访问类型，效率大致为 <code>const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>，出现 <code>ALL</code>（全表扫描）或 <code>index</code>（扫整棵索引树）就要警惕；<code>key</code> 是真正用上的索引，如果 <code>possible_keys</code> 有值而 <code>key</code> 为 NULL，说明索引没被采纳，多半与列类型、函数包裹或数据分布有关；<code>rows</code> 是优化器<strong>估算</strong>的扫描行数，统计信息过期时会严重失真，MySQL 8.0.18 起可用 <code>EXPLAIN ANALYZE</code> 看真实值；<code>Extra</code> 信息量最大，<code>Using filesort</code> 表示排序没走索引，<code>Using temporary</code> 表示用了临时表，<code>Using index</code> 表示覆盖索引无需回表，<code>Using index condition</code> 表示索引条件下推（ICP）生效。</p>
+<p>拿到可疑 SQL 后，在它前面加 <code>EXPLAIN</code> 查看执行计划，字段虽多，日常只需盯四列。<code>type</code> 是访问类型，效率大致为 <code>const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>，出现 <code>ALL</code>（全表扫描）或 <code>index</code>（扫整棵索引树）就要警惕。<code>key</code> 是真正用上的索引；如果 <code>possible_keys</code> 有值而 <code>key</code> 为 NULL，说明索引没被采纳，多半与列类型、函数包裹或数据分布有关。<code>rows</code> 是优化器<strong>估算</strong>的扫描行数，统计信息过期时会严重失真，MySQL 8.0.18 起可用 <code>EXPLAIN ANALYZE</code> 看真实值。<code>Extra</code> 信息量最大：<code>Using filesort</code> 表示排序没走索引，<code>Using temporary</code> 表示用了临时表，<code>Using index</code> 表示覆盖索引无需回表，<code>Using index condition</code> 表示索引条件下推（ICP）生效。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-4/02-slow-query-flow.svg" alt="慢查询优化流程图：慢查询日志开启后按总耗时聚合，再用 EXPLAIN 看 type、key、rows、Extra 四列，最后改写 SQL 与索引；下方列出函数包索引列、前导模糊、深分页等常见改写套路"><figcaption>图 2：先定位再动手——慢查询链路、EXPLAIN 四列与常见改写套路</figcaption></figure>
 
@@ -195,21 +195,16 @@ SET GLOBAL log_queries_not_using_indexes = ON;
 <li><strong>函数包住索引列</strong>：<code>WHERE DATE(create_time) = '2024-01-01'</code> 会让索引失效，改成范围条件 <code>create_time &gt;= '2024-01-01' AND create_time &lt; '2024-01-02'</code>。</li>
 <li><strong>前导模糊匹配</strong>：<code>LIKE '%abc'</code> 用不上 B+ 树的有序性，只能全扫；<code>LIKE 'abc%'</code> 才可以走索引。</li>
 <li><strong>组合索引的最左前缀</strong>：索引 <code>(a, b, c)</code> 能服务 <code>a</code>、<code>a+b</code>、<code>a+b+c</code>，跳过 <code>a</code> 直接用 <code>b</code> 用不上。把等值条件放前面、范围条件放最后，能多用到一列。</li>
-<li><strong>深分页</strong>：<code>LIMIT 1000000, 20</code> 要先扫掉前一百万行。改用"记住上次位置"的游标写法 <code>WHERE id &gt; ? ORDER BY id LIMIT 20</code>，或先只查主键再回表关联。</li>
+<li><strong>深分页</strong>：<code>LIMIT 1000000, 20</code> 要先扫掉前一百万行。改用“记住上次位置”的游标写法 <code>WHERE id &gt; ? ORDER BY id LIMIT 20</code>，或先只查主键再回表关联。</li>
 <li><strong>子查询改连接</strong>：不少 <code>IN (子查询)</code> 可以改写成 <code>JOIN</code>，但要先确认关联键是不是一对多，否则结果会被放大，必要时用 <code>DISTINCT</code> 或 <code>EXISTS</code>。</li>
 <li><strong>计数别混用</strong>：<code>COUNT(*)</code> 统计所有行，<code>COUNT(col)</code> 跳过该列为 NULL 的行。想一次算出多个条件下的行数，用 <code>SUM(col = 值)</code> 或 <code>COUNT(IF(条件, 1, NULL))</code>，而不是把条件塞进 <code>COUNT()</code> 里硬凑。</li>
 </ul>
 
-<p>当索引、SQL、缓存、读写分离都做过仍然撑不住，才轮到分库分表。垂直拆分按业务把宽表、大库切小；水平拆分按分片键（如用户 ID 取模或按时间范围）把行分散到多个库表。代价很实在：跨分片 JOIN 和聚合要在应用层拼装，全局唯一 ID 得另想办法（号段模式、雪花算法），跨分片分页和事务都变复杂，扩容还要迁移数据。因此分片键一旦定下就很难改，务必选"查询必带、分布均匀"的列。</p>
+<p>当索引、SQL、缓存、读写分离都做过仍然撑不住，才轮到分库分表。垂直拆分按业务把宽表、大库切小；水平拆分按分片键（如用户 ID 取模或按时间范围）把行分散到多个库表。代价也很实在：跨分片 JOIN 和聚合要在应用层拼装，全局唯一 ID 得另想办法（号段模式、雪花算法），跨分片分页和事务都变复杂，扩容还要迁移数据。因此分片键一旦定下就很难改，务必选“查询必带、分布均匀”的列。</p>
 
 <h2>小结</h2>
 
-<p>本章的两个关键词是<strong>层次</strong>和<strong>证据</strong>：存储引擎决定能力边界，InnoDB 用 redo 保证崩溃不丢、用 undo 支撑回滚与 MVCC、用 binlog 负责复制与恢复，两阶段提交让两本账对得上；性能问题则靠慢查询日志定位、靠 EXPLAIN 取证据，再对症改写 SQL 与索引组合。先把单机单表做到位，分库分表永远是最后一张牌。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-2-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">索引、事务与锁</span></a>
-      <a class="next-post" href="/java-tutorial-2-5/"><span class="pn-label">下一篇 →</span><span class="pn-title">JDBC 与连接池</span></a>
-      </nav>
+<p>本章的两个关键词是<strong>层次</strong>和<strong>证据</strong>。存储引擎决定能力边界：InnoDB 用 redo 保证崩溃不丢，用 undo 支撑回滚与 MVCC，用 binlog 负责复制与恢复，两阶段提交让两本账对得上。性能问题则靠慢查询日志定位、靠 EXPLAIN 取证据，再对症改写 SQL 与索引组合。先把单机单表做到位，分库分表永远是最后一张牌。</p>
           </article>
   <!-- Footer -->
   <footer>

@@ -128,19 +128,19 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>MySQL 学完以后，很多人第一次接手 Oracle 项目会立刻卡住：同样是「数据库」，Oracle 里却多出了实例、表空间、模式、序列这一整套概念，取第二页数据还要套一层子查询，甚至连自增主键都得自己造。本章不铺开讲 Oracle 的安装与运维，只聚焦四件在后端开发里天天要写的事：<strong>序列（Sequence）、ROWNUM 分页、常用单行函数与查询执行顺序、PL/SQL 与存储过程</strong>，顺带把「实例 / 表空间 / 用户」这组基础概念摆正。适合已经会写 SQL、正要上手 Oracle 项目或准备面试的读者。</p>
+<p>MySQL 学完以后，不少人第一次接手 Oracle 项目会立刻卡住：同样叫“数据库”，Oracle 里却多出了实例、表空间、模式、序列这一整套概念，取第二页数据还要套一层子查询，甚至连自增主键都得自己造。本章不铺开讲 Oracle 的安装与运维，只聚焦四件在后端开发里天天要写的事：<strong>序列（Sequence）、ROWNUM 分页、常用单行函数与查询执行顺序、PL/SQL 与存储过程</strong>，顺带把“实例 / 表空间 / 用户”这组基础概念摆正。本章适合已经会写 SQL、正要上手 Oracle 项目或准备面试的读者。</p>
 
 <h2>一、先把概念摆正：实例、表空间、用户与模式</h2>
 
-<p>Oracle 的「数据库」和 MySQL 的「数据库」不是一回事。MySQL 里一个实例下可以挂很多个 database，database 基本等于一个命名空间；Oracle 则是一个实例（Instance）对应一个数据库（Database），业务上的隔离靠的是「用户 / 模式（Schema）」。</p>
+<p>Oracle 的“数据库”和 MySQL 的“数据库”不是一回事。MySQL 里一个实例下可以挂很多个 database，database 基本等于一个命名空间；Oracle 则是一个实例（Instance）对应一个数据库（Database），业务上的隔离靠的是“用户 / 模式（Schema）”。</p>
 
 <ul>
 <li><strong>实例</strong>是运行时的东西：一块共享内存（SGA，含共享池、数据缓冲区、日志缓冲区等）加上一组后台进程（DBWn、LGWR、CKPT、SMON、PMON 等）。<strong>数据库</strong>是磁盘上的文件集合：数据文件、控制文件、重做日志文件、参数文件。</li>
-<li><strong>逻辑结构</strong>自上而下是「表空间 → 段 → 区 → 数据块」。建表时不写表空间，表就落到该用户的默认表空间里；这也是为什么 Oracle 里「磁盘满了」往往要具体到某个表空间去看。</li>
+<li><strong>逻辑结构</strong>自上而下是“表空间 → 段 → 区 → 数据块”。建表时不写表空间，表就落到该用户的默认表空间里；这也是为什么 Oracle 里“磁盘满了”往往要具体到某个表空间去看。</li>
 <li><strong>用户与模式一一对应且同名</strong>。表实际属于某个模式，跨模式访问要写 <code>模式名.表名</code>，或者建同义词（synonym）把长名字藏起来，例如 <code>create synonym owners for t_owners;</code> 之后就能直接 <code>select * from owners;</code>。</li>
 </ul>
 
-<p>还有一个容易说错的地方：源笔记写「数据表中存储的数据是区分大小写的，其它都不区分」。更准确的说法是——<strong>SQL 关键字、函数名和未加双引号的标识符不区分大小写；字符串字面量的比较区分大小写；用双引号创建的标识符也区分大小写</strong>。<code>'ABC' = 'abc'</code> 在 Oracle 里是 false，需要统一大小写时用 <code>upper()</code>/<code>lower()</code>，或建函数索引。</p>
+<p>还有一处容易说错：常见说法是“数据表中存储的数据区分大小写，其他都不区分”。更准确的说法是——<strong>SQL 关键字、函数名和未加双引号的标识符不区分大小写；字符串字面量的比较区分大小写；用双引号创建的标识符也区分大小写</strong>。<code>'ABC' = 'abc'</code> 在 Oracle 里是 false，需要忽略大小写时用 <code>upper()</code>/<code>lower()</code>，或建函数索引。</p>
 
 <h2>二、序列：Oracle 的自增方案</h2>
 
@@ -164,9 +164,9 @@ drop sequence seq_ownersid;
 
 <ul>
 <li><code>currval</code> 必须先在本会话执行过一次 <code>nextval</code> 才能用，否则报 <code>ORA-08002: sequence xxx.CURRVAL is not yet defined in this session</code>；而且它返回的是<strong>本会话</strong>的当前值，别的会话取到哪儿了它并不知道。</li>
-<li>只执行 <code>select seq.nextval from dual</code> 而不插入，序列照样往前走，所以<strong>序列值天然不连续</strong>：事务回滚、实例重启丢缓存都会造成跳号。主键只需要唯一，不要用「有没有断号」来校验业务。</li>
+<li>只执行 <code>select seq.nextval from dual</code> 而不插入，序列照样往前走，所以<strong>序列值天然不连续</strong>：事务回滚、实例重启丢缓存都会造成跳号。主键只需要唯一，不要用“有没有断号”来校验业务。</li>
 <li><code>cycle</code>（循环）配合 <code>maxvalue/minvalue</code> 时要留神缓存：一轮可取的值是 <code>maxvalue - minvalue</code>，<code>cache × increment</code> 不能超过一轮的容量，否则创建时就会报错（具体错误号随版本不同，此处存疑，以实际报错为准）。生产上更建议用 <code>nocycle</code> + 足够大的 <code>maxvalue</code>。</li>
-<li>如果业务要求「编号必须连续」，序列做不到，只能在事务里 <code>select ... for update</code> 锁住一张单行编号表自己维护，代价是并发能力急剧下降。</li>
+<li>如果业务要求“编号必须连续”，序列做不到，只能在事务里 <code>select ... for update</code> 锁住一张单行编号表自己维护，代价是并发能力急剧下降。</li>
 </ul>
 
 <h2>三、ROWNUM 与分页：本章最大的坑</h2>
@@ -190,11 +190,11 @@ select * from (
 ) where rn &gt; 10;
 </code></pre>
 
-<p>原因是：第一行取出来时 ROWNUM 是 1，不满足 <code>&gt; 10</code> 被丢掉；第二行取出来时 ROWNUM 仍然是 1（编号是在过滤时按「当前候选行」给的），依旧被丢掉……如此往复，一行都留不下。凡是「ROWNUM &gt; n」的写法都必然为空，只有 <code>&lt;=</code>、<code>&lt;</code> 才能用。正确套路就是<strong>用子查询把 ROWNUM 变成普通列（取别名 rn）再过滤</strong>。</p>
+<p>原因是：第一行取出来时 ROWNUM 是 1，不满足 <code>&gt; 10</code> 被丢掉；第二行取出来时 ROWNUM 仍然是 1（编号是在过滤时按“当前候选行”给的），依旧被丢掉……如此往复，一行都留不下。凡是“ROWNUM &gt; n”的写法都必然为空，只有 <code>&lt;=</code>、<code>&lt;</code> 才能用。正确套路是<strong>用子查询把 ROWNUM 变成普通列（取别名 rn）再过滤</strong>。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-6/01-rownum-paging.svg" alt="ROWNUM 分页的错误写法与正确写法对比图"><figcaption>图 1：ROWNUM 分页——在 WHERE 里比较 ROWNUM 结果恒为空，正确写法是子查询先取上界并取别名 rn，外层再过滤下界，排序要放在最内层</figcaption></figure>
 
-<p>排序场景更要注意：<strong>ORDER BY 在 ROWNUM 分配之后才执行</strong>，所以「先排序再编号」必须让排序发生在内层子查询里（上面第三段代码），否则拿到的是「先取 20 行、再把这 20 行排序」，结果完全错乱。另外两点补充：外层 <code>select *</code> 会把辅助列 <code>rn</code> 一起返回，正式代码里应显式列出需要的字段；Oracle 12c 之后可以直接写 <code>order by usenum desc offset 10 rows fetch next 10 rows only</code>，语义更清晰，也是现在推荐的分页写法。至于用 <code>minus</code> 做差集分页的写法，能出结果但代价高，不建议在业务代码里使用。</p>
+<p>排序场景更要注意：<strong>ORDER BY 在 ROWNUM 分配之后才执行</strong>，所以“先排序再编号”必须让排序发生在内层子查询里（上面第三段代码）。否则拿到的是“先取 20 行、再把这 20 行排序”，结果完全错乱。另外两点补充：外层 <code>select *</code> 会把辅助列 <code>rn</code> 一起返回，正式代码里应显式列出需要的字段；Oracle 12c 之后可以直接写 <code>order by usenum desc offset 10 rows fetch next 10 rows only</code>，语义更清晰，也是现在推荐的分页写法。至于用 <code>minus</code> 做差集分页的写法，能出结果但代价高，不建议在业务代码里使用。</p>
 
 <h2>四、常用单行函数与查询执行顺序</h2>
 
@@ -212,15 +212,15 @@ select to_char(123456789, '999,999,999') from dual;     -- ' 123,456,789'，注�
 select nvl(null, 0) from dual;                          -- 0，空值处理
 </code></pre>
 
-<p>要注意的细节：<code>substr</code> 的<strong>下标从 1 开始，没有下标 0 的概念</strong>（源笔记写成「没有索引 0」，容易和索引混淆），第二、三个参数传小数会被四舍五入，起始位置传负数表示从右往左数。<code>replace</code> 是按整串匹配且<strong>区分大小写</strong>，所以 <code>replace('ADBCD', 'Db', 'db')</code> 什么也不会替换——源笔记把它当作「替换成功」的例子，是错的；<code>translate</code> 才是字符级映射，且源串与目标串按位置一一对应。<code>round</code> 四舍五入而 <code>trunc</code> 直接截断，做金额计算时要明确用哪个。<code>to_char</code> 的数字格式串位数不够会返回一串 <code>#</code>，位数够则按格式补前导空格，做报表时通常再套一层 <code>trim()</code>。</p>
+<p>细节上有几处容易出错。<code>substr</code> 的<strong>下标从 1 开始，没有下标 0 的概念</strong>（常说成“没有索引 0”，容易和索引混淆），第二、三个参数传小数会被四舍五入，起始位置传负数表示从右往左数。<code>replace</code> 按整串匹配且<strong>区分大小写</strong>，所以 <code>replace('ADBCD', 'Db', 'db')</code> 什么也不会替换——把它当成“替换成功”的例子是错的；<code>translate</code> 才是字符级映射，且源串与目标串按位置一一对应。<code>round</code> 四舍五入而 <code>trunc</code> 直接截断，做金额计算时要明确用哪个。<code>to_char</code> 的数字格式串位数不够会返回一串 <code>#</code>，位数够则按格式补前导空格，做报表时通常再套一层 <code>trim()</code>。</p>
 
 <p>查询的书写顺序和执行顺序并不一致，实际执行顺序是：<code>from → where → group by → having → select → order by</code>。这解释了两条常见规则：<code>where</code> 里不能使用 <code>select</code> 中定义的列别名（那时还没算出来），而 <code>order by</code> 可以使用列别名甚至列序号。</p>
 
-<p>关于「优化」，源笔记给出的「把数据量最少的表放在 from 最后、过滤性最强的条件放在 where 最后」是 Oracle 8i 之前基于规则优化器（RBO）时代的口诀。<strong>现代 Oracle 用基于代价的优化器（CBO），连接顺序和访问路径由统计信息决定，与书写顺序无关</strong>。真正该做的是：保证表和索引有较新的统计信息、从执行计划确认走没走索引、避免在索引列上套函数或做隐式类型转换（例如列是 <code>varchar2</code> 却写 <code>where year = 2012</code>，Oracle 会把列转成数字，索引直接失效；应写成 <code>where year = '2012'</code>），以及能连表就别写相关子查询。</p>
+<p>关于“优化”，有一句流传很广的口诀：把数据量最少的表放在 <code>from</code> 最后，把过滤性最强的条件放在 <code>where</code> 最后。它属于 Oracle 8i 之前基于规则优化器（RBO）时代的产物。<strong>现代 Oracle 用基于代价的优化器（CBO），连接顺序和访问路径由统计信息决定，与书写顺序无关</strong>。真正该做的是：保证表和索引有较新的统计信息；从执行计划确认走没走索引；避免在索引列上套函数或做隐式类型转换（例如列是 <code>varchar2</code> 却写 <code>where year = 2012</code>，Oracle 会把列转成数字，索引直接失效，应写成 <code>where year = '2012'</code>）；能连表就别写相关子查询。</p>
 
 <h2>五、PL/SQL 与存储过程</h2>
 
-<p>PL/SQL 是 Oracle 在 SQL 之上加的过程化扩展，把分支、循环、异常处理带进了 SQL。它的最小单位是块，结构固定为「声明部分 → 可执行部分 → 异常处理部分」：</p>
+<p>PL/SQL 是 Oracle 在 SQL 之上加的过程化扩展，把分支、循环、异常处理带进了 SQL。它的最小单位是块，结构固定为“声明部分 → 可执行部分 → 异常处理部分”：</p>
 
 <ul>
 <li>变量在 <code>declare</code> 里声明，赋值用 <code>:=</code>，也可以用 <code>select 列 into 变量 from ...</code>；后者要求结果<strong>恰好一行</strong>，零行报 <code>NO_DATA_FOUND</code>，多行报 <code>TOO_MANY_ROWS</code>。</li>
@@ -256,16 +256,11 @@ end;
 /
 </code></pre>
 
-<p>在 SQL*Plus 或 PL/SQL Developer 里看 <code>dbms_output</code> 的输出，要先执行 <code>set serveroutput on</code>；用 <code>call pro_owners_add2(...)</code> 调用时无法直接接收 OUT 参数，所以带传出参数的过程一般用匿名块调用。Java 侧则用 <code>CallableStatement</code>：<code>conn.prepareCall("{call pro_owners_add2(?,?,?,?,?,?)}")</code>，前五个参数用 <code>setXxx</code> 传入，第六个先 <code>registerOutParameter(6, OracleTypes.NUMBER)</code>，执行后用 <code>getLong(6)</code> 取出。</p>
+<p>在 SQL*Plus 或 PL/SQL Developer 里查看 <code>dbms_output</code> 的输出，要先执行 <code>set serveroutput on</code>。用 <code>call pro_owners_add2(...)</code> 调用时无法直接接收 OUT 参数，所以带传出参数的过程一般用匿名块调用。Java 侧则用 <code>CallableStatement</code>：<code>conn.prepareCall("{call pro_owners_add2(?,?,?,?,?,?)}")</code>，前五个参数用 <code>setXxx</code> 传入，第六个先 <code>registerOutParameter(6, OracleTypes.NUMBER)</code>，执行后用 <code>getLong(6)</code> 取出。</p>
 
 <h2>小结</h2>
 
-<p>Oracle 的日常开发可以浓缩成四句话：<strong>表空间管存储、用户即模式；自增靠序列，序列不保证连续；分页靠 ROWNUM，必须子查询套一层，排序要先进内层；能连表就不写子查询，把函数和类型转换从索引列上挪开</strong>。需要复用业务逻辑时再上 PL/SQL——简单查询封装成函数，带事务的写操作封装成过程，并记住 DML 之后手动 <code>commit</code>、过程参数不写长度这两个高频失误点。把这几件事写熟，从 MySQL 迁到 Oracle 的主要不适感基本就消失了。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-2-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">JDBC 与连接池</span></a>
-      <a class="next-post" href="/java-tutorial-2-7/"><span class="pn-label">下一篇 →</span><span class="pn-title">NoSQL 数据库</span></a>
-      </nav>
+<p>Oracle 的日常开发可以浓缩成四句话：<strong>表空间管存储、用户即模式；自增靠序列，序列不保证连续；分页靠 ROWNUM，必须子查询套一层，排序要先进内层；能连表就不写子查询，把函数和类型转换从索引列上挪开</strong>。需要复用业务逻辑时再上 PL/SQL：简单查询封装成函数，带事务的写操作封装成过程。同时记住两个高频失误点——DML 之后手动 <code>commit</code>，过程参数不写长度。把这几件事写熟，从 MySQL 迁到 Oracle 的主要不适感基本就消失了。</p>
           </article>
   <!-- Footer -->
   <footer>
