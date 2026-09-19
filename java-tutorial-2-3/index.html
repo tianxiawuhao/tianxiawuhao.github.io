@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>索引、事务与锁 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>索引、事务与锁</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，9 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>上一章我们把 SQL 和表设计过了一遍，但"能查出结果"和"查得又快、并发还不出错"是两件事：一条没走索引的查询可能老老实实扫过千万行；一次没包在事务里的转账，可能在扣款成功后、入账前被打断。本章把 InnoDB 的三块核心机制串成一条线——索引与执行计划决定"读得快不快"，事务与隔离级别决定"并发读得对不对"，锁与死锁则是隔离级别必须付出的代价。适合已经会写基本 SQL、准备把数据库用进真实项目的读者。</p>
+
+<h2>索引：把全表扫描换成按图索骥</h2>
+
+<p><strong>索引</strong>是数据库为某一列（或几列）额外维护的、排好序的数据结构。没有索引时，<code>WHERE name = 'tom'</code> 只能从第一行读到最后一行的逐行比对，这叫<strong>全表扫描</strong>；有了索引，数据库可以先在这份有序结构里定位到目标，再直接取出那一行。代价是索引本身占磁盘、并且每次写入都要同步维护它，所以索引不是越多越好。</p>
+
+<h3>B+ 树与聚簇索引</h3>
+
+<p>InnoDB 的索引实现是 <strong>B+ 树</strong>：非叶子节点只存键值，用来做导航；所有真实数据都放在叶子节点，并且叶子之间用链表串起来。这个设计带来两个直接好处——树的层数很少（千万级数据通常 3～4 层就能覆盖），因此一次查找只需要几次磁盘读；同时叶子有序且相连，<code>BETWEEN</code>、<code>&gt;</code>、<code>ORDER BY</code> 这类范围需求可以顺着叶子链表扫过去，不必回根节点重来。</p>
+
+<p>InnoDB 的表本身就是一棵 B+ 树，称为<strong>聚簇索引</strong>（clustered index）：它的叶子节点存放的是<strong>整行数据</strong>，而键就是主键。所以"按主键查一行"是最快的路径，一次树查找就拿到整行。如果建表时没有主键，InnoDB 会退而选择第一个非空唯一索引，再没有就自己生成一个隐藏的 6 字节 row_id 当键。这也是"每张表都该显式定义主键"的真正原因：主键不只是约束，它决定了数据在磁盘上怎么排。</p>
+
+<h3>回表与覆盖索引</h3>
+
+<p>在聚簇索引之上另外建的索引（比如给 <code>name</code> 建的）叫<strong>二级索引</strong>或辅助索引。它的叶子节点不可能再存一整行，只存<strong>索引列 + 主键值</strong>。于是 <code>SELECT * FROM t_user WHERE name = 'tom'</code> 要查两次：先在 <code>idx_name</code> 里找到 <code>tom</code> 对应的主键，再拿这个主键回聚簇索引取整行，这一步就叫<strong>回表</strong>。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-3/01-index-lookup.svg" alt="二级索引叶子节点只存索引列和主键值，取其他列需要拿主键回聚簇索引再查一次，即回表"><figcaption>图 1：二级索引查非索引列要回表，覆盖索引则免去第二次查找</figcaption></figure>
+
+<p>如果查询需要的列<strong>全都已经在索引里</strong>，就不必回表了，这种索引叫<strong>覆盖索引</strong>。例如 <code>SELECT id, name FROM t_user WHERE name = 'tom'</code>，<code>id</code> 和 <code>name</code> 都在 <code>idx_name</code> 里，一次查找即可返回，执行计划的 <code>Extra</code> 会显示 <code>Using index</code>。这是最划算的优化之一：不用新建任何东西，只把 <code>SELECT *</code> 改成需要的列就能生效。</p>
+
+<h3>组合索引、最左前缀与索引失效</h3>
+
+<p>在 <code>(a, b, c)</code> 上建一个组合索引，等价于同时拥有 <code>(a)</code>、<code>(a, b)</code>、<code>(a, b, c)</code> 三个索引，这就是<strong>最左前缀原则</strong>。所以 <code>WHERE b = ?</code> 用不上它，<code>WHERE a = ? AND c = ?</code> 只能用上 <code>a</code> 这一段；而且一旦遇到范围查询，它右边的列就断了——<code>WHERE a = 1 AND b &gt; 2 AND c = 3</code> 中 <code>c</code> 用不到索引。建索引时把区分度最高的列放最左边，也是这个道理。</p>
+
+<pre><code class="language-sql">-- 为 name 建索引后，下面两条语句的差别就是回表
+CREATE INDEX idx_name ON t_user (name);
+
+-- 覆盖索引：id、name 都在 idx_name 里，Extra 显示 Using index
+EXPLAIN SELECT id, name FROM t_user WHERE name = 'tom';
+
+-- 取 * 需要回表，Extra 里不会出现 Using index
+EXPLAIN SELECT * FROM t_user WHERE name = 'tom';</code></pre>
+
+<div class="tut-tip"><strong>常见坑：索引明明建了却用不上。</strong>典型写法有四类：在列上做函数或运算（<code>WHERE DATE(create_time) = '2024-01-01'</code>、<code>WHERE id + 1 = 10</code>）；隐式类型转换（字符串列用数字去比，<code>WHERE phone = 13800000000</code>）；以 <code>%</code> 开头的模糊查询（<code>LIKE '%tom'</code>）；用 <code>OR</code> 连接了一个没有索引的列。正确写法是把运算挪到常量侧，例如 <code>WHERE create_time &gt;= '2024-01-01' AND create_time &lt; '2024-01-02'</code>。</div>
+
+<h2>用 EXPLAIN 看真实执行计划</h2>
+
+<p>索引有没有生效，不能靠猜，要在语句前加 <code>EXPLAIN</code> 让优化器把计划打印出来。MySQL 8.0 还支持 <code>EXPLAIN ANALYZE</code>（8.0.18 起），它会真正执行语句并给出各步骤的实际耗时，比估算值更可信。日常最该看的是四列：</p>
+
+<ul>
+  <li><code>type</code>：访问类型，性能由好到差大致是 <code>system</code> → <code>const</code> → <code>eq_ref</code> → <code>ref</code> → <code>range</code> → <code>index</code> → <code>ALL</code>。看到 <code>ALL</code> 就意味着全表扫描，这是首要消灭的目标。</li>
+  <li><code>key</code>：优化器实际选用的索引；为 <code>NULL</code> 说明一个索引都没用上。</li>
+  <li><code>rows</code>：预估需要扫描的行数，是<strong>估算值</strong>，用于判断量级而非精确计数。</li>
+  <li><code>Extra</code>：最重要的补充信息。<code>Using index</code> 表示覆盖索引；<code>Using filesort</code> 表示额外的排序（<code>ORDER BY</code> 没走上索引）；<code>Using temporary</code> 表示用了临时表（常见于 <code>GROUP BY</code>）；<code>Using where</code> 表示在存储引擎取回数据后还要再过滤一遍。</li>
+</ul>
+
+<p>优化的目标很朴素：把 <code>type=ALL</code> 变成 <code>ref</code> 或 <code>range</code>，把 <code>Using filesort</code> 和 <code>Using temporary</code> 尽量消掉。如果 <code>rows</code> 依然很大，就要回头看索引设计，而不是先怀疑机器性能。</p>
+
+<h2>事务与 ACID：一组操作要么全成、要么全败</h2>
+
+<p><strong>事务</strong>是逻辑上的一组操作，它们要么全部生效，要么全部撤销，不允许只做一半。最经典的例子是转账：从 A 账户扣 100 和向 B 账户加 100 必须同生共死，否则钱就凭空消失或多出来了。</p>
+
+<pre><code class="language-sql">START TRANSACTION;                                    -- 也可以写 BEGIN
+UPDATE account SET money = money - 100 WHERE id = 1;
+UPDATE account SET money = money + 100 WHERE id = 2;
+COMMIT;                                               -- 两条更新一起生效
+-- 中途出错则执行 ROLLBACK，回到 START TRANSACTION 之前的状态</code></pre>
+
+<p>MySQL 默认 <code>autocommit = 1</code>，也就是说每条 SQL 自成一个事务、执行完立刻提交，所以不加 <code>START TRANSACTION</code> 时你看不到"撤销"的效果。Oracle 则相反，默认不自动提交，必须显式 <code>COMMIT</code>——但要注意 Oracle 的 DDL（如 <code>CREATE</code>、<code>TRUNCATE</code>）会隐式提交，不要把它当成事务的一部分。在 Java 里，事务由 <code>Connection</code> 控制：<code>setAutoCommit(false)</code> 开启事务，<code>commit()</code> 提交，<code>rollback()</code> 回滚。</p>
+
+<pre><code class="language-java">import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import javax.sql.DataSource;
+
+public class AccountService {
+
+    private final DataSource dataSource;              // 例如 HikariDataSource
+
+    public AccountService(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public void transfer(long fromId, long toId, BigDecimal amount) throws SQLException {
+        Connection conn = null;
+        try {
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false);                // 开启事务
+            try (PreparedStatement out = conn.prepareStatement(
+                         "UPDATE account SET money = money - ? WHERE id = ?");
+                 PreparedStatement in = conn.prepareStatement(
+                         "UPDATE account SET money = money + ? WHERE id = ?")) {
+                out.setBigDecimal(1, amount);
+                out.setLong(2, fromId);
+                out.executeUpdate();
+
+                in.setBigDecimal(1, amount);
+                in.setLong(2, toId);
+                in.executeUpdate();
+            }
+            conn.commit();                            // 两条更新一起生效
+        } catch (SQLException e) {
+            if (conn != null) {
+                conn.rollback();                      // 任一步失败，整体撤销
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);             // 归还连接池前恢复默认
+                conn.close();
+            }
+        }
+    }
+}</code></pre>
+
+<p>事务必须具备四个特性，合称 <strong>ACID</strong>：</p>
+
+<ul>
+  <li><strong>原子性（Atomicity）</strong>：事务是不可分割的工作单位，里面的操作要么都发生，要么都不发生。</li>
+  <li><strong>一致性（Consistency）</strong>：事务执行前后数据库都必须处于一致状态。转账前后两个账户金额之和不变，就是一致性的直观体现。</li>
+  <li><strong>隔离性（Isolation）</strong>：并发事务之间互不干扰，各自看到自己该看到的数据。它由<strong>隔离级别</strong>和<strong>锁</strong>共同实现，也正是本章后半部分的主题。</li>
+  <li><strong>持久性（Durability）</strong>：一旦提交，变更就永久保存，即使随后断电、宕机，重启后数据依然能恢复到提交后的状态（InnoDB 靠 redo log 保证）。</li>
+</ul>
+
+<p>写代码时有个高频坑：<code>rollback()</code> 和 <code>commit()</code> 都必须在同一个 <code>Connection</code> 上。如果 Service 开了事务，而 DAO 从连接池里各自取了一条新连接去执行 SQL，那么这些语句根本不在同一个事务里，回滚也不会生效。正确做法是把连接从 Service 传到 DAO，或者用 <code>ThreadLocal</code> 把当前线程的连接缓存起来统一取用——这也是 Spring 的 <code>@Transactional</code> 背后做的事。</p>
+
+<h2>隔离级别：并发问题的四档取舍</h2>
+
+<p>完全隔离的最高效手段是让事务排队执行，但那等于放弃并发。SQL 标准因此定义了四种隔离级别，让使用者在"正确性"和"并发性能"之间选一档。要理解这四档，先看并发不加约束时会出现什么：</p>
+
+<ul>
+  <li><strong>脏读</strong>：读到了另一个事务<strong>还未提交</strong>的数据。对方一旦回滚，你读到的东西从未存在过，属于最严重的问题。</li>
+  <li><strong>不可重复读</strong>：同一个事务内两次执行相同的查询，结果不一样，因为期间另一个事务<strong>提交了修改</strong>（典型是 <code>UPDATE</code>）。</li>
+  <li><strong>幻读</strong>：同一个事务内两次执行相同的范围查询，第二次多出或少了几行，因为期间另一个事务<strong>提交了插入或删除</strong>。</li>
+</ul>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-3/02-isolation-levels.svg" alt="读未提交、读已提交、可重复读、串行化四种隔离级别分别能避免脏读、不可重复读和幻读中的哪些问题"><figcaption>图 2：四种隔离级别对三类并发读问题的规避情况</figcaption></figure>
+
+<p>级别越低，能挡住的问题越少，但并发性能越好。实践中厂商只选了两档：MySQL 默认 <strong>REPEATABLE READ</strong>（可重复读），Oracle 默认 <strong>READ COMMITTED</strong>（读已提交）。查看和修改当前会话的隔离级别：</p>
+
+<pre><code class="language-sql">-- MySQL 8.0：变量名是 transaction_isolation
+SELECT @@transaction_isolation;        -- 默认 REPEATABLE-READ
+-- MySQL 5.7 及更早版本写 @@tx_isolation，8.0 已移除该名字
+
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+-- 可选值：READ UNCOMMITTED / READ COMMITTED / REPEATABLE READ / SERIALIZABLE</code></pre>
+
+<div class="tut-tip"><strong>纠正一个常见说法：</strong>标准 SQL 里 REPEATABLE READ 只承诺挡住脏读和不可重复读，不承诺挡住幻读。但 InnoDB 在可重复读下用<strong>间隙锁（next-key lock）</strong>把范围内的间隙也锁住了，因此幻读在 MySQL 里基本也复现不出来——这不是"MySQL 偷偷优化掉了幻读"，而是它加了锁。代价是锁的范围变大，更容易发生死锁，这也是下面一节要讲的内容。</div>
+
+<h2>锁与死锁：隔离级别的实现代价</h2>
+
+<p>隔离级别不是口号，落地靠的是锁。InnoDB 支持行级锁，但有一个容易被忽略的前提：<strong>行锁是加在索引上的</strong>。如果 <code>UPDATE</code> 的 <code>WHERE</code> 条件没有走索引，InnoDB 只能锁住它扫描过的所有行，效果接近锁表，并发度直接掉下来。所以"更新语句尽量基于主键或唯一索引"不是风格建议，而是性能要求。</p>
+
+<p>从粒度看，InnoDB 有共享锁（S 锁，读锁）和排他锁（X 锁，写锁）：普通的 <code>SELECT</code> 走 MVCC 快照读，不加锁；而 <code>SELECT ... FOR UPDATE</code> 是当前读，会加 X 锁，<code>UPDATE</code>、<code>DELETE</code> 则自动加 X 锁。这些锁都持有到事务结束才释放，所以事务越长，锁被占的时间越久，冲突概率越高。</p>
+
+<pre><code class="language-sql">-- 排他锁：一直持有到 COMMIT 或 ROLLBACK
+START TRANSACTION;
+SELECT * FROM account WHERE id = 1 FOR UPDATE;
+COMMIT;
+
+-- 死锁复现：两个会话按相反顺序更新同样的两行
+-- 会话 A                                     -- 会话 B
+START TRANSACTION;                            START TRANSACTION;
+UPDATE account SET money = money - 1 WHERE id = 1;
+                                              UPDATE account SET money = money - 1 WHERE id = 2;
+UPDATE account SET money = money + 1 WHERE id = 2;   -- 等待 B 释放 id = 2
+                                              UPDATE account SET money = money + 1 WHERE id = 1;  -- 等待 A，形成环路
+-- InnoDB 检测到环路，回滚其中一方，另一方报错：
+-- ERROR 1213 (40001): Deadlock found when trying to get lock; try restarting transaction</code></pre>
+
+<p><strong>死锁</strong>的本质是多个事务互相持有对方需要的锁，形成等待环路。InnoDB 不回避死锁，而是开启了死锁检测：一旦发现环路，就选择"代价较小"的那个事务回滚，把 <code>1213</code> 错误返回给客户端，让另一个事务继续。因此应用层捕获到这个异常后<b>重试整个事务</b>才是正确姿势，而不是报错给用户。</p>
+
+<div class="tut-tip"><strong>减少死锁的几条硬规则：</strong>多个事务访问多张表时约定<strong>相同的加锁顺序</strong>；尽量在事务一开始就把需要的资源一次锁定，避免"边走边锁"；缩短事务，绝对不要在事务里做远程调用、发消息或等待用户输入；更新条件尽量落在主键或唯一索引上；读多写少、能接受不可重复读的业务可以把隔离级别降到 READ COMMITTED，InnoDB 在 RC 下不使用间隙锁，死锁概率明显降低。排查时可执行 <code>SHOW ENGINE INNODB STATUS</code> 查看最近一次死锁详情，MySQL 8.0 还能查 <code>performance_schema.data_lock_waits</code>。</div>
+
+<h2>小结</h2>
+
+<p>索引与执行计划解决"读得快不快"：B+ 树让查找从全表扫描降到几次磁盘读，聚簇索引的叶子存整行，二级索引查非索引列要回表，覆盖索引则免掉第二次查找；<code>EXPLAIN</code> 的 <code>type</code>、<code>key</code>、<code>rows</code>、<code>Extra</code> 是判断索引是否生效的依据。事务与隔离级别解决"并发读得对不对"：ACID 保证一组操作全成或全败，四种隔离级别则是正确性与并发性能之间的取舍，MySQL 默认可重复读，Oracle 默认读已提交。锁与死锁是隔离的实现代价：InnoDB 的行锁加在索引上，走不到索引就退化成近似锁表，间隙锁挡住幻读的同时也让死锁更容易发生。实务上的顺序也很清晰——先用 <code>EXPLAIN</code> 把慢查询推进到 <code>ref</code>/<code>range</code> 并争取覆盖索引，再把事务写短、按固定顺序、基于主键更新，最后为死锁准备一次重试。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
