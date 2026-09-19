@@ -186,6 +186,128 @@ function debounce(fn, delay) {
 }
 // window.onresize = debounce(() =&gt; console.log('resize end'), 300);</code></pre>
 
+<h3>执行上下文：变量对象、活动对象与声明提升</h3>
+<p>前面说的“作用域”需要一个更底层的解释：<strong>执行上下文</strong>（Execution Context）是代码被求值时所在环境的抽象描述，可以理解成一张“记录表”，上面登记着变量、函数、<code>this</code> 和对外层环境的引用。每次调用一个函数，引擎就为这次调用创建一个新的函数执行上下文并压入执行上下文栈；此外还有全局执行上下文（整个程序只有一个）以及用 <code>eval()</code> 产生的执行上下文（现代代码里应当避免）。因此，<strong>函数每被调用一次就有全新的一份上下文，而作用域在定义时就固定了</strong>——这正是 <code>this</code> 与作用域容易混淆的根源。</p>
+<p>函数上下文在创建阶段会依次做三件事：先建立<strong>变量对象</strong>（Variable Object，VO），再建立<strong>作用域链</strong>，最后确定 <code>this</code>。进入函数代码执行后，变量对象就被激活成<strong>活动对象</strong>（Activation Object，AO），二者的内容其实是同一份记录，只是“激活”意味着属性可以被访问了。变量对象的填充顺序如下：</p>
+<ol>
+  <li>先登记形参与实参的映射，缺省的实参值为 <code>undefined</code>；</li>
+  <li>再登记函数体内的<strong>函数声明</strong>，键是函数名，值是函数对象；</li>
+  <li>最后登记<strong>变量声明</strong>，键是变量名，值为 <code>undefined</code>，如果这个名字已经存在则不覆盖。</li>
+</ol>
+<p><strong>声明提升</strong>（Hoisting）就是这套创建流程的副产品：声明在“创建阶段”就写进了记录表，而赋值发生在“执行阶段”，所以在代码里看起来声明被提到了最前面。函数声明与 <code>var</code> 的提升并不等价，有三点要害：其一，函数声明提升的是<strong>整个函数定义</strong>，所以定义之前就能调用；<code>var</code> 只提升声明、值为 <code>undefined</code>，提前访问得到的是 <code>undefined</code> 而不是报错。其二，函数声明优先于变量声明，同一名字下变量不会覆盖已登记的函数。其三，赋值语句本身从不参与提升。看下面这段经典代码，顺序刻意写成“调用、声明、赋值”：</p>
+<pre><code class="language-js">// 函数声明：整个函数体被提升，定义之前就能调用
+greet();                                     // 'Hi'
+function greet() { return 'Hi'; }
+
+// var：只提升声明，值为 undefined，提前读取不报错
+console.log(typeof count);                   // 'undefined'
+var count = 1;
+console.log(count);                          // 1
+
+// 函数声明优先于变量声明：同名时变量不覆盖函数
+function pick() { return 'function'; }
+var pick2 = 1;                               // 换名字演示，避免同一作用域重复声明
+console.log(typeof pick, typeof pick2);      // 'function' 'number'
+
+// 提升只搬声明、不搬赋值：表达式形式的“函数”也是变量
+console.log(typeof task);                    // 'undefined'，而不是 'function'
+var task = function () { return 'later'; };
+console.log(task());                         // 'later'
+
+// 循环体内用 var 声明函数表达式，只有变量提升，函数体没有
+for (var i = 0; i &lt; 3; i++) {
+  setTimeout(function () { console.log('var 版', i); }, 0);   // 3 3 3
+}
+</code></pre>
+<p><code>let</code> 与 <code>const</code> 的声明同样会“提前登记”，但它们的处理方式与 <code>var</code> 不同：从进入块级作用域到初始化完成之前，这个绑定存在却<strong>不可访问</strong>，这段区间叫<strong>暂时性死区</strong>（Temporal Dead Zone，TDZ），访问会抛 <code>ReferenceError</code>。换句话说，<code>var</code> 的提前访问得到 <code>undefined</code>，<code>let</code>/<code>const</code> 的提前访问直接报错——报错比静默的 <code>undefined</code> 更安全，这也是新代码一律优先 <code>const</code>、其次 <code>let</code> 的原因之一。<code>class</code> 声明同理，处在 TDZ 中，必须先定义后使用。另一个容易忽略的点是：在 <code>var</code> 声明的函数体内写 <code>let</code> 有语法限制（同一作用域内重复声明会直接抛 <code>SyntaxError</code>），而 <code>var</code> 允许重复声明。</p>
+<pre><code class="language-js">// TDZ：绑定已登记，但初始化之前访问即报错
+try {
+  console.log(typeof value);   // ReferenceError，而不是 'undefined'
+} catch (err) {
+  console.log(err.name);       // 'ReferenceError'
+}
+let value = 1;
+
+// 每轮迭代都是一块新的块级作用域，闭包各记一份
+const fns = [];
+for (let k = 0; k &lt; 3; k++) {
+  fns.push(() =&gt; k);           // 闭包捕获的是当轮那个 k
+}
+console.log(fns.map((f) =&gt; f()));   // [0, 1, 2]
+</code></pre>
+<p>最后把作用域链与闭包的关系串起来：作用域链是上下文创建时写下的<strong>静态查找路径</strong>，函数嵌套定义得越深，链就越长；<strong>闭包则是这条链在函数返回后依然可达所产生的效果</strong>——内层函数持有对外层活动对象的引用，于是外层函数的变量不会被回收。所以“闭包”不是语言额外提供的机制，而是“词法作用域 + 一等函数”的必然结果。用 <code>var</code> 还是 <code>let</code> 决定的是“有几个绑定”，用函数表达式还是函数声明决定的是“提升到什么程度”，两件事都发生在上下文创建阶段，只是影响的侧面不同。</p>
+
+<h3><code>this</code> 的四种绑定规则与优先级</h3>
+<p>第二节给出了结论，这里补上可操作的判定顺序。<code>this</code> 与作用域链无关，它只由<strong>调用位置</strong>（call site）决定，判断时按下面的优先级由高到低依次匹配，命中一条即可停止：</p>
+<ol>
+  <li><strong>new 绑定（最高）</strong>：用 <code>new fn()</code> 调用时，<code>this</code> 是新建的实例对象。构造函数的显式返回值若是对象，则替换掉这个实例，否则忽略。</li>
+  <li><strong>显式绑定</strong>：<code>fn.call(obj, ...args)</code> 与 <code>fn.apply(obj, argsArray)</code> 立即执行并把 <code>this</code> 指定为 <code>obj</code>；<code>fn.bind(obj, ...args)</code> 不执行，返回一个 <code>this</code> 被永久固定的新函数，可用于偏函数。</li>
+  <li><strong>隐式绑定</strong>：<code>obj.fn()</code> 的形式，<code>this</code> 指向调用点前面的那个对象；多层调用只看<strong>最后一级</strong>，即 <code>a.b.fn()</code> 里 <code>this</code> 是 <code>b</code>。</li>
+  <li><strong>默认绑定（最低）</strong>：光杆调用 <code>fn()</code>。非严格模式下 <code>this</code> 是全局对象（浏览器里是 <code>window</code>），严格模式和 ES Module 顶层是 <code>undefined</code>。</li>
+</ol>
+<p>需要留意的边界有两个：<code>call</code>/<code>apply</code>/<code>bind</code> 传入 <code>null</code> 或 <code>undefined</code> 会被忽略，退回默认绑定（严格模式下则保持 <code>null</code>/<code>undefined</code>）；<code>bind</code> 的 <code>this</code> 是永久的，之后再 <code>call</code> 也改不掉，但 <code>new</code> 的优先级更高，用 <code>new</code> 调用一个 bind 过的函数时，<code>this</code> 仍然是新实例。<strong>箭头函数是另一套规则</strong>：它没有自己的 <code>this</code>、<code>arguments</code> 和 <code>prototype</code>，函数体里的 <code>this</code> 直接取自定义时外层作用域（词法继承），<code>call</code>/<code>apply</code>/<code>bind</code> 无法改变，也<strong>不能用 <code>new</code> 调用</strong>（会抛 <code>TypeError: fn is not a constructor</code>）。所以箭头函数适合写“不需要自己的 <code>this</code>”的回调，而不适合当对象方法或构造函数。</p>
+<pre><code class="language-js">'use strict';
+
+const counter = { count: 0, add(n) { this.count += n; return this.count; } };
+
+// 1 默认绑定：光杆调用，严格模式下 this 是 undefined
+function whoAmI() { return this; }
+whoAmI();                                   // undefined
+
+// 2 隐式绑定：this 是调用点前面的对象，只看最后一级
+counter.add(1);                             // 1
+const holder = { counter };
+holder.counter.add(1);                      // 2，this 仍是 counter
+
+// 3 显式绑定：call/apply 立即执行，bind 返回固定 this 的新函数
+counter.add.call({ count: 10 }, 1);         // 11
+counter.add.apply({ count: 20 }, [2]);      // 22
+const addToCounter = counter.add.bind(counter);
+addToCounter(3);                            // 3，this 被永久固定为 counter
+
+// 4 new 绑定优先级最高：bind 也拦不住 new
+function Point(x, y) { this.x = x; this.y = y; }
+const BoundPoint = Point.bind({ x: -1, y: -1 });
+const p = new BoundPoint(1, 2);
+p.x;                                        // 1，this 是新实例而非 bind 的目标
+
+// 箭头函数：词法继承外层 this，且不能 new
+const obj = {
+  value: 42,
+  get() {
+    const arrow = () =&gt; this.value;         // this 是 get 调用时的 this
+    return arrow();
+  },
+};
+obj.get();                                  // 42
+obj.get.call({ value: 7 });                 // 7，箭头函数跟着外层走
+// new (() =&gt; {})();                        // TypeError: not a constructor
+</code></pre>
+<p>理解了规则，就能定位最常见的“<strong>this 丢失</strong>”：本质都是调用方式从 <code>obj.fn()</code> 退化成了 <code>fn()</code>，于是从隐式绑定跌到默认绑定。三个高频场景：其一，把方法赋给变量或当参数传给回调，<code>const g = obj.fn; g()</code> 与 <code>setTimeout(obj.fn, 0)</code>、<code>arr.map(obj.fn)</code> 都属于此类；其二，<strong>解构赋值</strong>把方法从对象上摘下来，<code>const { fn } = obj; fn()</code> 同样丢失；其三，把方法传给第三方库或挂在 <code>addEventListener</code> 上，函数虽然会执行，但调用点是浏览器决定的，<code>this</code> 变成触发事件的 DOM 元素。<code>this</code> 一旦丢失就取不到实例字段，读写会得到 <code>undefined</code>，在严格模式下还可能直接抛错，因此不要指望“运行时再看”。</p>
+<pre><code class="language-js">const user = {
+  name: 'Tom',
+  greet() { return `Hi, ${this.name}`; },
+};
+
+// 场景一：方法被单独取出，this 变成 undefined（严格模式）
+const detached = user.greet;
+// detached();                              // TypeError: 读不到 name
+
+// 场景二：解构赋值也会摘掉 this
+const { greet } = user;
+// greet();                                 // 同样丢失
+
+// 三种修法：bind、包装函数、改写成箭头函数属性
+const bound = user.greet.bind(user);
+const wrapped = () =&gt; user.greet();
+const safeUser = { name: 'Tom', greet: () =&gt; `Hi, ${safeUser.name}` };
+console.log(bound(), wrapped(), safeUser.greet());
+
+// 定时器与数组回调：需要 this 时用包装函数或 bind，不要直接传方法
+setTimeout(wrapped, 0);
+[1, 2].map(user.greet.bind(user));
+</code></pre>
+
 <h2>三、对象、原型与 class</h2>
 <p>JS 的对象本质是“键值对集合”，键只能是字符串或 <code>symbol</code>，读取时 <code>obj.a</code> 与 <code>obj['a']</code> 等价（键名含特殊字符或来自变量时必须用后者）。对象字面量 <code>{}</code> 比 <code>new Object()</code> 更简洁常用，同理数组应写 <code>[1, 2]</code> 而不是 <code>new Array(1, 2)</code>——后者的参数语义还很坑：<code>new Array(3)</code> 得到的是长度为 3 的空数组，而不是 <code>[3]</code>。</p>
 <p>属性查找靠原型链：每个对象都有一个内部引用 <code>[[Prototype]]</code>（通过 <code>Object.getPrototypeOf()</code> 读取），访问属性时先查自身，找不到就沿着原型链往上找，直到值为 <code>null</code> 为止。要区分两个容易混淆的东西：函数的 <code>prototype</code> 属性是给 <code>new</code> 出来的实例当原型用的，而对象的原型要用 <code>[[Prototype]]</code>/<code>__proto__</code> 访问，二者不是一回事。常见说法是“JS 是基于对象的语言”，更准确的表述是：JS 是<strong>基于原型</strong>的面向对象语言，没有 Java 那样的类继承。ES6 的 <code>class</code> 只是原型继承的语法糖，底层依旧是构造函数加原型对象。<code>instanceof</code> 判断的也不是“由谁创建”，而是“构造函数的 <code>prototype</code> 是否出现在对象的原型链上”，所以判断数组更可靠的是 <code>Array.isArray()</code>。</p>
@@ -322,7 +444,7 @@ function greet({ name }, greeting = 'Hi') {
 }
 greet(user);                             // 'Hi, Tom!'</code></pre>
 
-<p><strong>小结：</strong>本章围绕六个基础点做了梳理。旧写法向现代写法的替换关系同样要记牢：<code>for...in</code> 只用于枚举对象键、遍历数组请用 <code>for...of</code>，<code>document.write</code> 应彻底避免，发请求交给 <code>fetch</code> 配 <code>async</code>/<code>await</code>，取值与拼串用解构和模板字符串。变量声明以 <code>const</code> 优先、<code>let</code> 次之，比较用 <code>===</code>，类型判断要绕开 <code>typeof null</code> 这个历史坑；函数的 <code>this</code> 看调用方式，箭头函数按词法绑定。闭包既能做私有状态，也会延长变量生命周期，循环配 <code>let</code> 才不会全体指向同一个值。对象靠原型链查找属性，<code>class</code> 只是语法糖，判数组用 <code>Array.isArray</code>；数组高阶函数不改原数组，注意 <code>every</code> 对空数组返回 <code>true</code>、<code>reduce</code> 记得给初始值。模块化统一用 ES Module，异步优先 <code>async</code>/<code>await</code>，并用 <code>Promise.all</code> 并发。把这些规则变成肌肉记忆后，再学 Vue、webpack 或 Node，就不会被语言层面的意外绊住。</p>
+<p><strong>小结：</strong>本章围绕六个基础点做了梳理。旧写法向现代写法的替换关系同样要记牢：<code>for...in</code> 只用于枚举对象键、遍历数组请用 <code>for...of</code>，<code>document.write</code> 应彻底避免，发请求交给 <code>fetch</code> 配 <code>async</code>/<code>await</code>，取值与拼串用解构和模板字符串。变量声明以 <code>const</code> 优先、<code>let</code> 次之，比较用 <code>===</code>，类型判断要绕开 <code>typeof null</code> 这个历史坑；函数的 <code>this</code> 看调用方式，箭头函数按词法绑定。闭包既能做私有状态，也会延长变量生命周期，循环配 <code>let</code> 才不会全体指向同一个值。对象靠原型链查找属性，<code>class</code> 只是语法糖，判数组用 <code>Array.isArray</code>；数组高阶函数不改原数组，注意 <code>every</code> 对空数组返回 <code>true</code>、<code>reduce</code> 记得给初始值。模块化统一用 ES Module，异步优先 <code>async</code>/<code>await</code>，并用 <code>Promise.all</code> 并发。执行上下文解释了提升与闭包：函数每调用一次生成一份新上下文，创建阶段先登记形参、函数声明、变量声明（函数声明整个提升，<code>var</code> 只提升声明，<code>let</code>/<code>const</code> 处于暂时性死区），作用域链因此静态固定，闭包是这条链在函数返回后仍可达的结果。<code>this</code> 则只由调用位置决定，按 new 绑定、显式绑定、隐式绑定、默认绑定的优先级判定，箭头函数例外——它词法继承外层 <code>this</code>，无法被 <code>call</code>/<code>apply</code>/<code>bind</code> 改写，也不能 <code>new</code>；方法被取出或解构时用 <code>bind</code>、包装函数或箭头函数保住 <code>this</code>。把这些规则变成肌肉记忆后，再学 Vue、webpack 或 Node，就不会被语言层面的意外绊住。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-3-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">CSS 基础与布局</span></a>

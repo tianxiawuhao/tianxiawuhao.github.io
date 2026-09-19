@@ -133,7 +133,7 @@
 <li>同一条 SQL 在一个事务里被反复执行，白白压数据库；</li>
 <li>列表页一次性查出十万行，内存和网络都吃不消；</li>
 <li><code>SqlSessionFactory</code> 到处 new，事务边界散落在 Service 里没法统一管理。</li>
-</ul>本章就解决这三件事——一级/二级缓存、分页插件 PageHelper，以及用 Spring 把 MyBatis 收编成 SSM 骨架。内容适合已经能独立手写 Mapper 接口与 XML 映射的读者。</p>
+</ul>本章就解决这三件事——一级/二级缓存、分页插件 PageHelper，以及用 Spring 把 MyBatis 收编成 SSM 骨架；最后再看 MyBatis-Plus 这类增强工具，如何把单表 CRUD 压缩到几行。内容适合已经能独立手写 Mapper 接口与 XML 映射的读者。</p>
 
 <h2>一、先看清结构：两级缓存与装饰器</h2>
 
@@ -276,7 +276,156 @@ public class BlogServiceImpl implements BlogService {
 
 <p>事务由 Spring 的 <code>DataSourceTransactionManager</code> 配合 <code>@Transactional</code> 统一管理，通常配在 Service 方法上。这里有个连锁效果值得注意：只有在一个事务内，多次 Mapper 调用才共用同一个 <code>SqlSession</code>，前面讲的一级缓存才真正发挥作用；脱离事务时每次调用都是新会话，缓存形同虚设。</p>
 
-<p><strong>小结</strong>：一级缓存默认开启、随 <code>SqlSession</code> 生灭，命中由 <code>CacheKey</code> 决定，增删改执行即清空，且不能跨会话共享；二级缓存要显式加 <code>&lt;cache/&gt;</code> 才生效，由 <code>CachingExecutor</code> 管理、提交后才写入，适合查询为主且按单表划分 namespace 的场景。分页交给 PageHelper，注意 5.x 用 <code>PageInterceptor</code> 且 <code>startPage</code> 必须紧邻查询。最后用 Spring 把数据源、<code>SqlSessionFactoryBean</code>、Mapper 扫描和事务串起来，一个可用的 SSM 骨架就搭好了。</p>
+<h2>六、MyBatis-Plus：单表 CRUD 的加速器</h2>
+
+<p>SSM 骨架搭好之后，很快又会撞上另一类重复劳动：一张表明明只是最普通的增删改查，却仍要写 Mapper 接口 + XML + Service 三层。MyBatis-Plus（简称 MP）就是冲这件事来的。它的定位可以用官方那句话概括——<strong>只做增强，不做改变</strong>：底层仍是 MyBatis，原有的 Mapper XML、<code>SqlSession</code> 用法、插件机制都照常可用，接入后不迁移、不替换，只是额外送你一批通用能力。</p>
+
+<p>所以它和前面几节是叠加关系，不是替代关系。与 SSM 整合时，唯一必须替换的是工厂类：把 <code>SqlSessionFactoryBean</code> 换成 MP 的 <code>MybatisSqlSessionFactoryBean</code>；而用 Spring Boot 时，只要引入 starter 并让自动配置生效，连这一步都省了。真正的开关在 Mapper 接口上——让它继承 <code>BaseMapper</code>，通用 CRUD 立刻到手。</p>
+
+<h3>6.1 依赖坐标与 Spring Boot 3 的适配</h3>
+
+<p>Boot 2 时代的坐标是 <code>mybatis-plus-boot-starter</code>，3.5.x 各小版本都可直接用。Spring Boot 3 把底层换成了 Jakarta EE 与 <code>mybatis-spring</code> 3.x，老坐标不再兼容，需要换成官方提供的 Boot 3 适配 starter：</p>
+
+<pre><code class="language-xml">&lt;!-- Spring Boot 2.x --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.baomidou&lt;/groupId&gt;
+    &lt;artifactId&gt;mybatis-plus-boot-starter&lt;/artifactId&gt;
+    &lt;version&gt;3.5.x&lt;/version&gt;
+&lt;/dependency&gt;
+
+&lt;!-- Spring Boot 3.x：换用 Boot 3 适配 starter --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.baomidou&lt;/groupId&gt;
+    &lt;artifactId&gt;mybatis-plus-spring-boot3-starter&lt;/artifactId&gt;
+    &lt;version&gt;3.5.x&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+
+<p>具体的版本对应关系（哪个 MP 版本配哪个 Boot 版本）<strong>以官方适配说明为准</strong>，不要照抄别处的版本号。另一个高频事故是坐标冲突：MP 的 starter 已经带了 <code>mybatis</code> 与 <code>mybatis-spring</code>，如果同时再引入 <code>mybatis-spring-boot-starter</code>，两个自动配置会互相顶掉，症状五花八门（Mapper 扫不到、插件不生效等）。二选一即可，别都留着。</p>
+
+<h3>6.2 BaseMapper 与 IService：两层通用 CRUD</h3>
+
+<p>MP 把通用能力放在两个层次。Mapper 层是最薄的 <code>BaseMapper&lt;T&gt;</code>——继承它，就白得一批单表方法，一条 SQL 都不用写：</p>
+
+<pre><code class="language-java">public interface BlogMapper extends BaseMapper&lt;Blog&gt; {
+    // insert / deleteById / updateById / selectById / selectList / selectPage ...
+    // 自定义 SQL 照旧写在这里，与通用方法并存
+}</code></pre>
+
+<p>Service 层再包一层 <code>IService&lt;T&gt;</code> 与 <code>ServiceImpl&lt;M, T&gt;</code>，把「按 id 查、存或更新、批量存」这类编排逻辑也一并给出。这一层是可选的，但推荐用，因为批量操作与事务边界都在这层收口：</p>
+
+<pre><code class="language-java">public interface BlogService extends IService&lt;Blog&gt; {
+}
+
+@Service
+public class BlogServiceImpl extends ServiceImpl&lt;BlogMapper, Blog&gt; implements BlogService {
+}
+
+// 调用方直接使用 IService 的默认实现
+blogService.save(blog);                    // 主键生成后回填到实体
+blogService.getById(blog.getId());         // 等价于 mapper.selectById
+blogService.updateById(blog);              // 只更新非 null 字段
+blogService.removeById(blog.getId());      // 逻辑删除时是 UPDATE，不是 DELETE
+blogService.saveBatch(list);               // 批量插入，默认 1000 条一批
+blogService.list(Wrappers.&lt;Blog&gt;lambdaQuery().like(Blog::getTitle, "MyBatis"));</code></pre>
+
+<p>这里要记住 <code>updateById</code> 的语义：它按主键更新，且<strong>只把实体里非 null 的字段拼进 SET</strong>。想把某个字段改回 null，得用 <code>UpdateWrapper</code> 显式 <code>set</code>，否则那句赋值会被静默忽略——这是新手最常见的「改了没生效」。</p>
+
+<h3>6.3 LambdaQueryWrapper：类型安全的条件构造</h3>
+
+<p>条件构造器 <code>Wrapper</code> 用 Java 代码拼 where 条件，避免在 Service 里手写 SQL 字符串。<code>QueryWrapper</code> 用字符串列名，写错只能等运行时报错；<code>LambdaQueryWrapper</code> 用方法引用，重构字段名时 IDE 会一起改，也不会把列名敲错，是新代码的默认选择：</p>
+
+<pre><code class="language-java">// 条件按需拼接：第一个参数为 false 时，该条件整段不参与 SQL
+LambdaQueryWrapper&lt;Blog&gt; wrapper = Wrappers.lambdaQuery(Blog.class)
+        .like(StringUtils.hasText(title), Blog::getTitle, title)
+        .ge(startTime != null, Blog::getCreateTime, startTime)
+        .orderByDesc(Blog::getCreateTime);
+
+List&lt;Blog&gt; list = blogMapper.selectList(wrapper);</code></pre>
+
+<h3>6.4 分页：MybatisPlusInterceptor 与 PaginationInnerInterceptor</h3>
+
+<p>MP 的分页不是「配了就能用」，而是必须注册插件，且 3.4 前后写法完全不同。旧写法直接注册 <code>PaginationInterceptor</code>；<strong>3.4 起改为责任链式的 <code>MybatisPlusInterceptor</code>，分页只是挂在它上面的一个内层拦截器 <code>PaginationInnerInterceptor</code></strong>。网上旧教程十有八九还是前者，直接照抄会不生效甚至编译不过。3.5.x 的现行写法是：</p>
+
+<pre><code class="language-java">import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+
+@Configuration
+@MapperScan("com.example.mapper")
+public class MybatisPlusConfig {
+
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        // 不指定 DbType 时按 JDBC URL 自动识别，多数据源建议显式指定
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor());
+        return interceptor;
+    }
+}</code></pre>
+
+<p>用起来就是给查询传一个 <code>Page</code> 对象，返回的仍是同一个对象，总数、总页数都在里面：</p>
+
+<pre><code class="language-java">Page&lt;Blog&gt; page = blogMapper.selectPage(new Page&lt;&gt;(1, 10), wrapper);
+long total = page.getTotal();
+List&lt;Blog&gt; records = page.getRecords();</code></pre>
+
+<p>在 SSM 的 XML 配置里也同理，只是注册位置不同：<code>MybatisSqlSessionFactoryBean</code> 的 <code>plugins</code> 属性里放的是 <code>MybatisPlusInterceptor</code> 这个 bean，而不是以前的 <code>PaginationInterceptor</code>。另外，第 4 节的 PageHelper 与它二选一即可，两个分页插件同时生效会互相改写 SQL。</p>
+
+<h3>6.5 逻辑删除、自动填充与主键策略</h3>
+
+<p>这三件事都靠注解或全局配置声明，写一次全表受益。逻辑删除给字段加 <code>@TableLogic</code>，之后 MP 自动生成的 SQL 会全部带上「未删除」条件，<code>deleteById</code> 也自动变成 UPDATE：</p>
+
+<pre><code class="language-java">@Data
+@TableName("blog")
+public class Blog {
+
+    @TableId(type = IdType.ASSIGN_ID)   // 雪花算法生成 Long 型主键
+    private Long id;
+    // @TableId(type = IdType.AUTO)     // 交给数据库自增，表字段需为 AUTO_INCREMENT
+
+    private String title;
+
+    @TableLogic                          // 删除标记：查询自动过滤，删除变成 UPDATE
+    private Integer deleted;
+
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+}</code></pre>
+
+<p>自动填充要配套一个 <code>MetaObjectHandler</code> 实现并注册成 bean，否则 <code>fill</code> 只是个标记，时间字段照样是 null：</p>
+
+<pre><code class="language-java">@Component
+public class MyMetaObjectHandler implements MetaObjectHandler {
+
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+    }
+
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+    }
+}</code></pre>
+
+<p>主键策略的取舍很简单：<code>IdType.AUTO</code> 依赖数据库自增，单库单表最省事；<code>IdType.ASSIGN_ID</code> 由 MP 生成雪花 ID，插入前就知道主键、便于分库分表，代价是 ID 变长且可被外部推断出时间与机器信息。默认值是 <code>ASSIGN_ID</code>，所以表里若是自增主键，务必显式写 <code>AUTO</code>。</p>
+
+<h3>6.6 常见坑</h3>
+
+<ul>
+<li><strong>分页插件没注册</strong>：<code>selectPage</code> 不报错，但 SQL 里没有 limit，查出来是全部数据、<code>getTotal()</code> 为 0。先确认拦截器 bean 真的被 Spring 管理（包扫描到了吗、是不是被别的 starter 顶掉了）。</li>
+<li><strong><code>selectById</code> 与逻辑删除</strong>：被逻辑删除的记录，<code>selectById</code>、<code>getById</code> 一律查不到，因为 MP 追加了 <code>deleted = 0</code>；想连已删除的一起查，得走自定义 SQL。反过来，如果 <code>deleted</code> 交给数据库默认值而插入时是 null，条件同样匹配不上，表现为「刚存进去就查不到」。</li>
+<li><strong>自定义 SQL 不受自动逻辑删除与自动填充保护</strong>：<code>@TableLogic</code> 只作用在 MP 自动生成的 SQL 上，写在 XML 里的手写语句不会自动补条件，也不会触发 <code>MetaObjectHandler</code>，需要自己带上 <code>deleted = 0</code>。</li>
+<li><strong>批量操作</strong>：<code>saveBatch</code> / <code>updateBatchById</code> 默认 1000 条一批，且<strong>必须在事务内调用</strong>才有意义；MySQL 还要在连接串上加 <code>rewriteBatchedStatements=true</code>，否则 JDBC 仍会逐条发送。数据量极大时，优先考虑手写 <code>foreach</code> 的批量 XML。</li>
+<li><strong>Wrapper 与 XML 混用</strong>：两者可以共存，但把 wrapper 传进自定义方法，必须在 XML 里用 <code>${ew.customSqlSegment}</code> 拼接，方法签名写成 <code>@Param(Constants.WRAPPER) Wrapper&lt;T&gt; wrapper</code>；<code>customSqlSegment</code> 自带 where，不要再手写一个 WHERE，否则直接语法错误。</li>
+</ul>
+
+<p>一句话收束：MP 加速的是<strong>单表 CRUD</strong>。多表关联、复杂统计这些强 SQL 场景，仍然回到 XML 手写，用 <code>BaseMapper</code> 只是省掉了最简单的那一半工作。</p>
+
+<p><strong>小结</strong>：一级缓存默认开启、随 <code>SqlSession</code> 生灭，命中由 <code>CacheKey</code> 决定，增删改执行即清空，且不能跨会话共享；二级缓存要显式加 <code>&lt;cache/&gt;</code> 才生效，由 <code>CachingExecutor</code> 管理、提交后才写入，适合查询为主且按单表划分 namespace 的场景。分页交给 PageHelper，注意 5.x 用 <code>PageInterceptor</code> 且 <code>startPage</code> 必须紧邻查询。最后用 Spring 把数据源、<code>SqlSessionFactoryBean</code>、Mapper 扫描和事务串起来，一个可用的 SSM 骨架就搭好了。MyBatis-Plus 建立在这套基础上：只做增强不做改变，<code>BaseMapper</code> 与 <code>IService</code> 干掉单表 CRUD 的模板代码，<code>LambdaQueryWrapper</code> 提供类型安全条件，分页记得用 3.4 起的 <code>MybatisPlusInterceptor</code> + <code>PaginationInnerInterceptor</code>，逻辑删除、自动填充、主键策略各由注解声明；但它只加速单表，复杂 SQL 仍回 XML。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-4-7/"><span class="pn-label">← 上一篇</span><span class="pn-title">MyBatis 基础</span></a>

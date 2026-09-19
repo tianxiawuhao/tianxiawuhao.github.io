@@ -200,6 +200,41 @@ list.addEventListener('click', (event) =&gt; {
 });
 </code></pre>
 
+<h3>事件回调里的 <code>this</code>：丢失原因与三种修法</h3>
+<p>事件监听是 <code>this</code> 丢失最集中的地方。浏览器调用监听器时的调用点由它自己决定：用普通函数注册监听器，回调里的 <code>this</code> 就是<strong>绑定监听器的那个元素</strong>（即 <code>event.currentTarget</code>），而不是外层的对象；一旦把某个实例方法直接传给 <code>addEventListener</code>，调用方式退化成光杆调用，实例方法的 <code>this</code> 就丢了，访问 <code>this.someField</code> 会得到 <code>undefined</code>，严格模式下还会直接抛错。</p>
+<p>三种写法可以保住实例的 <code>this</code>：在构造函数里用 <code>this.handleClick = this.handleClick.bind(this)</code> 预先固定；注册时现写一个箭头函数包装（<code>() =&gt; this.handleClick(event)</code>），由箭头函数做词法转接；或者干脆把处理器定义成<strong>箭头函数类字段</strong>，让它天然不带自己的 <code>this</code>。需要注意箭头函数回调拿不到“触发的元素”这份 <code>this</code>，但完全不影响 <code>event.target</code>/<code>event.currentTarget</code>，这也是现代代码更推荐通过 <code>event</code> 参数而非 <code>this</code> 取元素的原因。删除监听器时必须传入同一个函数引用，所以第二种写法要先把包装函数存成变量，否则解绑会失效。</p>
+<pre><code class="language-js">class Counter {
+  #count = 0;
+  constructor(button) {
+    this.button = button;
+    // 修法一：在构造函数里 bind 一次，之后可以正常解绑
+    this.handleClick = this.handleClick.bind(this);
+    button.addEventListener('click', this.handleClick);
+  }
+  handleClick(event) {
+    this.#count += 1;                        // this 是 Counter 实例
+    this.button.textContent = `点击 ${this.#count} 次`;
+    console.log(event.currentTarget === this.button);   // true
+  }
+  destroy() {
+    this.button.removeEventListener('click', this.handleClick);   // 引用一致才解绑成功
+  }
+}
+
+class Toggler {
+  #open = false;
+  constructor(el) {
+    this.el = el;
+    // 修法二：箭头函数类字段，词法继承实例 this，无需 bind
+    el.addEventListener('click', (event) =&gt; this.toggle(event));
+  }
+  toggle() {
+    this.#open = !this.#open;
+    this.el.classList.toggle('open', this.#open);
+  }
+}
+</code></pre>
+
 <h2>定时器、闭包与 this：三个经典坑</h2>
 
 <p>定时器看着简单，却是 <code>this</code> 与闭包最容易翻车的地方。<code>setTimeout(fn, delay)</code> 把回调推迟到至少 <code>delay</code> 毫秒之后执行，返回一个数字句柄，用 <code>clearTimeout(handle)</code> 取消；<code>setInterval</code> 同理，用 <code>clearInterval</code> 取消。注意“至少”这个词：定时器回调进入的是宏任务队列，必须等当前同步代码和已排队的微任务都执行完，所以它的实际延迟总是大于等于你写的值，不要用它做精确计时。</p>
