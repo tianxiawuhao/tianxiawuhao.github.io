@@ -193,7 +193,14 @@ boolean ok = verifier.verify(Base64.getDecoder().decode(sign));</code></pre>
 
 <p>实际业务里有一类高频场景：前端登录时不想把密码明文发给后端。做法是公钥由后端接口下发，前端用 <code>jsencrypt</code> 库（<code>new JSEncrypt()</code> 后 <code>setPublicKey()</code>、再 <code>encrypt()</code>）加密密码，后端用私钥解密。</p>
 
-<p>但要注意：<strong>RSA 加密密码并不能替代 HTTPS</strong>。JSEncrypt 默认使用 PKCS#1 v1.5 填充，且 RSA 单块能加密的明文长度有限（2048 位密钥约 245 字节），密文本身也可能被攻击者原样重放。正确的组合是用 HTTPS 保证链路安全，RSA 只作为“密码不明文落地日志”的补充手段。</p>
+<p>但要注意：<strong>RSA 加密密码并不能替代 HTTPS</strong>。JSEncrypt 默认使用 PKCS#1 v1.5 填充（这个老库只实现了这种填充，属于历史写法），且 RSA 单块能加密的明文长度有限（2048 位密钥约 245 字节），密文本身也可能被攻击者原样重放。现行基线是全程 HTTPS 加服务端 bcrypt 存储；前端 RSA 只作为“密码不明文落地日志”的补充手段，若确实要用，应改用 OAEP。</p>
+
+<p>JDK 另有一个经典坑：<code>RSA/ECB/OAEPWithSHA-256AndMGF1Padding</code> 这个写法里主摘要确实是 SHA-256，但 MGF1 的摘要默认仍是 SHA-1，等于安全性被悄悄降级。要彻底对齐，就显式传入 <code>OAEPParameterSpec</code>：</p>
+
+<pre><code class="language-java">OAEPParameterSpec oaep = new OAEPParameterSpec(
+        "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
+Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+cipher.init(Cipher.ENCRYPT_MODE, publicKey, oaep);   // 解密端必须传同一份参数</code></pre>
 
 <h3>摘要、签名与 JWT：一次登录怎么被记住</h3>
 
@@ -213,7 +220,7 @@ boolean ok = verifier.verify(Base64.getDecoder().decode(sign));</code></pre>
 <p>必须强调：<strong>Header 与 Payload 只是 Base64Url 编码，不是加密</strong>，任何人都能还原出里面的内容。因此 JWT 里绝不能放密码、手机号、身份证号等敏感信息。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-10/02-jwt-structure.svg" alt="JWT 的三段结构与服务端校验流程"><figcaption>图 2：JWT 的三段与校验——Header 与 Payload 只是 Base64Url 编码，只有签名防篡改</figcaption></figure>
 
-<p>用 <code>jjwt</code> 生成与解析令牌的最小示例如下（注意 jjwt 0.10 起 <code>signWith</code> 要求密钥长度满足算法要求，HS256 至少 256 位即 32 字节）：</p>
+<p><code>jjwt</code> 是 Java 里最常用的 JWT 库，依赖拆成 <code>jjwt-api</code>、<code>jjwt-impl</code>、<code>jjwt-jackson</code> 三个坐标，现行版本为 0.12.x / 0.13.x。0.10 起 <code>signWith</code> 就要求密钥长度满足算法要求，HS256 至少 256 位即 32 字节。下面这段是 0.10 / 0.11 的旧式 API，老项目里最常见：</p>
 
 <pre><code class="language-java">// 生成
 String secret = "a-32-bytes-long-secret-key-for-hs256";
@@ -234,7 +241,29 @@ Claims claims = Jwts.parserBuilder()
         .getBody();
 System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></pre>
 
-<p>如果认证服务与资源服务是不同团队、不同部署，建议用 RS256：认证服务持有私钥签发，资源服务只保存公钥验签，这样公钥泄露也不会导致令牌被伪造。JDK 自带的 <code>keytool</code> 可以生成密钥库并导出公钥，交给资源服务配置即可。</p>
+<p>0.12 起 API 做过一次清理：<code>SignatureAlgorithm</code> 枚举与 <code>parserBuilder()</code> 都已过时（枚举在 0.12 标记为 deprecated，0.13 仍可用但不推荐），方法名去掉了 <code>set</code> 前缀，签名算法改为按密钥类型推断。同一段逻辑的现行写法是：</p>
+
+<pre><code class="language-java">// 现行 API（jjwt 0.12 / 0.13）
+SecretKey key = Keys.hmacShaKeyFor(secretBytes);   // 少于 32 字节会直接抛 WeakKeyException
+String token = Jwts.builder()
+        .id("888")
+        .subject("mrt")
+        .issuedAt(new Date())
+        .expiration(new Date(System.currentTimeMillis() + 30 * 60 * 1000L)) // 30 分钟
+        .claim("roles", "admin")
+        .signWith(key)                 // 算法由密钥类型推断，也可显式写 Jwts.SIG.HS256
+        .compact();
+
+Claims claims = Jwts.parser()          // 旧版是 parserBuilder()
+        .verifyWith(key)               // 旧版是 setSigningKey
+        .build()
+        .parseSignedClaims(token)      // 旧版是 parseClaimsJws
+        .getPayload();                 // 旧版是 getBody
+System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></pre>
+
+<p>密钥本身也要按现代标准准备：HS256 的密钥必须是 <strong>至少 32 字节的随机值</strong>，用库的生成器 <code>Jwts.SIG.HS256.key().build()</code> 产出，或从配置中心读一段 Base64 随机串；绝不要用示例里 <code>"a-32-bytes-long-secret-key-for-hs256"</code> 这种可读字符串——它一眼可猜，还会被硬编码进 Git 历史，属于典型的密钥强度不足。</p>
+
+<p>如果认证服务与资源服务是不同团队、不同部署，建议改用非对称算法 RS256 / ES256：认证服务持有私钥签发，资源服务只保存公钥验签，这样公钥泄露也不会导致令牌被伪造。RSA 密钥同样从 2048 位起（1024 位已不安全）；JDK 自带的 <code>keytool</code> 可以生成密钥库并导出公钥，也可以把公钥按 JWK Set 发布到 <code>/.well-known/jwks.json</code>，Spring Security 6（Spring Boot 3.x 配套）用 <code>NimbusJwtDecoder.withJwkSetUri(...)</code> 即可接入，并记得在解码器上<em>显式限定</em>允许的算法。</p>
 
 <h3>常见坑与上线前检查清单</h3>
 
@@ -242,7 +271,7 @@ System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></p
 
 <p><strong>2）JWT 无法主动失效。</strong>令牌一旦签发，在 <code>exp</code> 之前一直有效，服务端删不掉它。所以过期时间要短（分钟级），并配合 Redis 维护黑名单或改用可撤销的 refresh token 机制。</p>
 
-<p><strong>3）哈希算法选错。</strong>MD5、SHA-1 已被证明可构造碰撞，签名请用 SHA256withRSA、SHA384withECDSA；口令存储请用 bcrypt、scrypt 或 Argon2（自带盐值与计算代价），而不是“MD5 加盐”。</p>
+<p><strong>3）哈希算法选错。</strong>MD5、SHA-1 已被证明可以构造碰撞（前者 2004 年、后者 2017 年均已实际构造出碰撞样本），所以签名一律用 SHA256withRSA、SHA384withECDSA，摘要用 SHA-256 及以上；口令存储请用 bcrypt、scrypt 或 Argon2（自带盐值与计算代价），而不是“MD5 加盐”——盐只防彩虹表，挡不住高速爆破。Spring Security 6 已内置 <code>BCryptPasswordEncoder</code> 与 <code>Argon2PasswordEncoder</code>，直接注入使用即可。</p>
 
 <p><strong>4）随机数用错。</strong>密钥、IV、盐值都必须来自 <code>SecureRandom</code>；用 <code>new Random()</code> 或 <code>Math.random()</code> 生成安全参数是可以被预测的。</p>
 
@@ -250,19 +279,29 @@ System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></p
 
 <p><strong>6）把令牌或密钥写进日志与前端存储。</strong>JWT 放 localStorage 容易受 XSS 窃取，放 Cookie 则要设置 <code>HttpOnly</code> 与 <code>Secure</code>，并按需选择是否加 <code>SameSite</code>。日志脱敏同样重要。</p>
 
+<p><strong>7）还在用被弃用的传输协议。</strong>TLS 1.0 与 TLS 1.1 已于 2021 年被 RFC 8996 正式弃用，现行基线是 TLS 1.2 起、优先 TLS 1.3。Spring Boot 3.x 里可以显式收敛，别依赖默认值：</p>
+
+<pre><code class="language-yaml">server:
+  ssl:
+    enabled-protocols: TLSv1.3,TLSv1.2   # 不写的话，Tomcat 默认可能连 TLSv1/TLSv1.1 一起放开
+</code></pre>
+
+<p>再按需收敛加密套件（TLS 1.3 的套件另有配置项，与旧的 <code>ciphers</code> 列表不共用），开启 HSTS，并确认客户端与服务端都没有关掉证书校验——<code>TrustAllCerts</code> 那类代码等于自毁 HTTPS。</p>
+
 <p>上线前不妨过一遍下面这份清单：</p>
 <ul>
-  <li>传输是否强制 HTTPS 且禁用弱协议；</li>
-  <li>密钥是否外置且可轮换；</li>
+  <li>传输是否强制 HTTPS，且只开 TLS 1.2 / 1.3；</li>
+  <li>密钥是否外置且可轮换，RSA 是否 2048 位起、HS256 密钥是否至少 32 字节随机值；</li>
   <li>签名算法是否固定、是否用 SHA-256 及以上；</li>
   <li>令牌有效期是否够短、是否有吊销手段；</li>
-  <li>密码是否用 bcrypt 存储；</li>
+  <li>密码是否用 bcrypt / Argon2 存储，而不是 MD5 加盐；</li>
+  <li>对称加密是否用了带认证的模式（AES-GCM）且 IV 每次随机；</li>
   <li>错误信息是否泄露堆栈与内部路径。</li>
 </ul>
 
 <h2>小结</h2>
 
-<p>安全与加密的核心是“对症下药”。保密性用对称加密（AES-GCM，注意随机 IV）加密数据，用非对称加密（RSA-2048，注意 OAEP 填充）交换密钥。完整性用 SHA-256 摘要与数字签名，签名用私钥、验签用公钥。身份认证用 JWT 这样的自包含令牌，让资源服务不必每次回源认证服务。</p>
+<p>安全与加密的核心是“对症下药”。保密性用对称加密（AES-GCM，注意随机 IV）加密数据，用非对称加密（RSA 2048 位起、OAEP 填充）交换密钥。完整性用 SHA-256 摘要与数字签名，签名算法用 SHA256withRSA / SHA384withECDSA，私钥签、公钥验。身份认证用 JWT 这样的自包含令牌，让资源服务不必每次回源认证服务；传输层则守住 HTTPS 与 TLS 1.2 / 1.3 这条底线。</p>
 
 <p>三条落地纪律贯穿全篇——密钥不进代码库、算法与参数用标准且现代的配置、永远不信任客户端传来的任何字段。把这几条守住，前面绝大多数“经典漏洞”自然与你无关。</p>
           
