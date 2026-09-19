@@ -128,13 +128,13 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>只要系统走出局域网、连上公网，"安全"就不再是可选项：登录密码明文提交会被抓包看到，接口不签名可以被人随意伪造，令牌里的用户身份可以随手改成管理员。本章要解决的就是这些问题：Java 里怎么做对称与非对称加密、怎么做摘要与数字签名、JWT 令牌为什么能既不查库又防篡改、以及日常开发最常踩的几个安全坑。适合已经会写 Spring Boot 接口、准备上线的读者。</p>
+<p>只要系统走出局域网、连上公网，“安全”就不再是可选项：登录密码明文提交会被抓包看到，接口不签名可以被人随意伪造，令牌里的用户身份可以随手改成管理员。本章要解决的就是这些问题：Java 里怎么做对称与非对称加密、怎么做摘要与数字签名、JWT 令牌为什么能既不查库又防篡改、以及日常开发最常踩的几个安全坑。适合已经会写 Spring Boot 接口、准备上线的读者。</p>
 
 <h2>为什么需要加密：先把三件事分清</h2>
 
-<p>很多初学者把"安全"等同于"调一个加密 API"，结果做出"用 AES 加密密码后存数据库"这类看似安全、实则错误的设计。先分清三类需求，选型才不会错。</p>
+<p>很多初学者把“安全”等同于“调一个加密 API”，做出“用 AES 加密密码后存数据库”这类看似安全、实则错误的设计。先分清三类需求，选型才不会错。</p>
 
-<p><strong>保密性</strong>：数据不能被无关的人看懂。这靠<em>加密</em>，分对称与非对称两种。<strong>完整性</strong>：数据不能被人偷偷改动。这靠<em>摘要</em>（哈希）与<em>数字签名</em>。<strong>身份认证</strong>：证明"你是谁"。这靠签名、证书、令牌（如 JWT）组合实现。三者互不替代：加密后的报文仍可能被整段替换，摘要也无法隐藏原文。</p>
+<p><strong>保密性</strong>：数据不能被无关的人看懂。这靠<em>加密</em>，分对称与非对称两种。<strong>完整性</strong>：数据不能被人偷偷改动。这靠<em>摘要</em>（哈希）与<em>数字签名</em>。<strong>身份认证</strong>：证明“你是谁”。这靠签名、证书与令牌（如 JWT）组合实现。三者互不替代：加密后的报文仍可能被整段替换，摘要也无法隐藏原文。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-10/01-crypto-map.svg" alt="三类安全需求与对应技术手段对照图"><figcaption>图 1：三类需求与对应手段——保密性靠加密、完整性靠摘要与签名、身份认证靠令牌</figcaption></figure>
 
 <p>另一个前置原则是<strong>不要把密钥写进代码</strong>。硬编码在 <code>.java</code> 或 <code>application.yml</code> 里的密钥，会随 Git 历史、反编译的 jar 一起泄露。生产环境应放在环境变量、配置中心或 KMS 中，并做到可轮换。</p>
@@ -156,15 +156,15 @@
     return buffer.put(iv).put(cipherText).array();
 }</code></pre>
 
-<p>这段代码里有三个"写错就等于没加密"的点。<strong>第一，模式不要选 ECB</strong>：ECB 对相同明文块产生相同密文块，会泄露数据规律（经典的"ECB 企鹅图"），现在应优先用 GCM，退而求其次用 CBC 并配合 HMAC。<strong>第二，IV 必须随机且不可复用</strong>：GCM 下重复使用同一密钥 + 同一 IV 会直接导致密钥流复用、可被恢复明文，这是严重漏洞。<strong>第三，密钥长度要够</strong>：AES-128 是底线，AES-256 更常见；从口令派生密钥请用 PBKDF2、bcrypt 或 scrypt，不要直接 <code>password.getBytes()</code> 当密钥。</p>
+<p>这段代码里有三个“写错就等于没加密”的点。<strong>第一，模式不要选 ECB</strong>：ECB 对相同明文块产生相同密文块，会泄露数据规律（经典的“ECB 企鹅图”），现在应优先用 GCM，退而求其次用 CBC 并配合 HMAC。<strong>第二，IV 必须随机且不可复用</strong>：GCM 下重复使用同一密钥 + 同一 IV 会直接导致密钥流复用、可被恢复明文，这是严重漏洞。<strong>第三，密钥长度要够</strong>：AES-128 是底线，AES-256 更常见；从口令派生密钥请用 PBKDF2、bcrypt 或 scrypt，不要直接 <code>password.getBytes()</code> 当密钥。</p>
 
 <h2>非对称加密：RSA 加密与数字签名</h2>
 
-<p>非对称加密有一对密钥：公钥可以公开，私钥必须自己保管。它解决的是对称加密"密钥怎么安全地给对方"这个死结，代价是慢——RSA 大约比 AES 慢几个数量级，所以工程上常见的组合是"RSA 传密钥、AES 传数据"（即数字信封）。</p>
+<p>非对称加密有一对密钥：公钥可以公开，私钥必须自己保管。它解决的是对称加密“密钥怎么安全地交给对方”这个死结，代价是慢：RSA 大约比 AES 慢几个数量级。所以工程上常见的组合是“RSA 传密钥、AES 传数据”，也就是数字信封。</p>
 
 <p>只用 JDK 就能完成 RSA 的密钥生成、公钥加密、私钥解密：</p>
 
-<pre><code class="language-java">// 1. 生成密钥对，2048 位是当前最低推荐值（源笔记中的 1024 位已不安全）
+<pre><code class="language-java">// 1. 生成密钥对，2048 位是当前最低推荐值（1024 位已不安全）
 KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
 generator.initialize(2048);
 KeyPair keyPair = generator.generateKeyPair();
@@ -189,15 +189,15 @@ verifier.initVerify(keyPair.getPublic());
 verifier.update(plain);
 boolean ok = verifier.verify(Base64.getDecoder().decode(sign));</code></pre>
 
-<p><strong>数字签名是反向使用密钥</strong>：发送方用自己的<em>私钥</em>签名，接收方用发送方的<em>公钥</em>验证（见上面示例的第 4 步）。它不为了保密（签名的原文通常是公开的），而是证明"内容确实来自私钥持有者，且没被改过"。JDK 的 <code>Signature</code> 类已经把"先对内容做摘要、再对摘要做非对称运算"封装好了，你只需要选对算法名。</p>
+<p><strong>数字签名是反向使用密钥</strong>：发送方用自己的<em>私钥</em>签名，接收方用发送方的<em>公钥</em>验证（见上面示例的第 4 步）。它不是为了保密（签名的原文通常是公开的），而是证明“内容确实来自私钥持有者，且没被改过”。JDK 的 <code>Signature</code> 类已经把“先对内容做摘要、再对摘要做非对称运算”封装好了，调用方只需要选对算法名。</p>
 
 <p>实际业务里有一类高频场景：前端登录时不想把密码明文发给后端。做法是公钥由后端接口下发，前端用 <code>jsencrypt</code> 库（<code>new JSEncrypt()</code> 后 <code>setPublicKey()</code>、再 <code>encrypt()</code>）加密密码，后端用私钥解密。</p>
 
-<p>但要注意：<strong>RSA 加密密码并不能替代 HTTPS</strong>。JSEncrypt 默认使用 PKCS#1 v1.5 填充，且 RSA 单块能加密的明文长度有限（2048 位密钥约 245 字节），密文本身也可能被攻击者原样重放。正确组合是 HTTPS 保证链路安全，RSA 只作为密码不明文落地日志的补充手段。</p>
+<p>但要注意：<strong>RSA 加密密码并不能替代 HTTPS</strong>。JSEncrypt 默认使用 PKCS#1 v1.5 填充，且 RSA 单块能加密的明文长度有限（2048 位密钥约 245 字节），密文本身也可能被攻击者原样重放。正确的组合是用 HTTPS 保证链路安全，RSA 只作为“密码不明文落地日志”的补充手段。</p>
 
 <h3>摘要、签名与 JWT：一次登录怎么被记住</h3>
 
-<p>前两节解决"数据怎么不被看懂"，本节解决"请求怎么被信任"。传统做法是：客户端带上令牌，资源服务每次都去认证服务校验令牌、换取用户信息，认证服务成为性能瓶颈和单点。</p>
+<p>前两节解决“数据怎么不被看懂”，本节解决“请求怎么被信任”。传统做法是：客户端带上令牌，资源服务每次都去认证服务校验令牌、换取用户信息，认证服务于是成为性能瓶颈与单点。</p>
 
 <p><strong>JWT（JSON Web Token，RFC 7519）</strong>换了个思路：把用户信息直接放进令牌里，再由资源服务用事先约定的密钥或公钥自行校验，不必每次回源认证服务。JWT 是一个自包含的字符串，由 <code>.</code> 分隔成三部分：</p>
 
@@ -207,7 +207,7 @@ boolean ok = verifier.verify(Base64.getDecoder().decode(sign));</code></pre>
 // Payload：标准声明（iss 签发者、exp 过期时间、sub 面向用户、iat 签发时间）加自定义字段
 { "sub": "1234567890", "name": "mrt", "roles": "r01,r02" }
 
-// Signature：对"前两部分的 Base64Url 串"用密钥签名，防止内容被篡改
+// Signature：对“前两部分的 Base64Url 串”用密钥签名，防止内容被篡改
 // HS256 用同一个密钥，RS256 用私钥签名、公钥验签</code></pre>
 
 <p>必须强调：<strong>Header 与 Payload 只是 Base64Url 编码，不是加密</strong>，任何人都能还原出里面的内容。因此 JWT 里绝不能放密码、手机号、身份证号等敏感信息。</p>
@@ -242,11 +242,11 @@ System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></p
 
 <p><strong>2）JWT 无法主动失效。</strong>令牌一旦签发，在 <code>exp</code> 之前一直有效，服务端删不掉它。所以过期时间要短（分钟级），并配合 Redis 维护黑名单或改用可撤销的 refresh token 机制。</p>
 
-<p><strong>3）哈希算法选错。</strong>MD5、SHA-1 已被证明可构造碰撞，签名请用 SHA256withRSA / SHA384withECDSA；口令存储请用 bcrypt、scrypt 或 Argon2（自带盐值与计算代价），而不是"MD5 加盐"。</p>
+<p><strong>3）哈希算法选错。</strong>MD5、SHA-1 已被证明可构造碰撞，签名请用 SHA256withRSA、SHA384withECDSA；口令存储请用 bcrypt、scrypt 或 Argon2（自带盐值与计算代价），而不是“MD5 加盐”。</p>
 
 <p><strong>4）随机数用错。</strong>密钥、IV、盐值都必须来自 <code>SecureRandom</code>；用 <code>new Random()</code> 或 <code>Math.random()</code> 生成安全参数是可以被预测的。</p>
 
-<p><strong>5）自造加密算法与自造协议。</strong>"把字符串按位异或再倒序"不是加密。用标准算法、标准模式、成熟库，是自己写安全代码最划算的一条原则。</p>
+<p><strong>5）自造加密算法与自造协议。</strong>“把字符串按位异或再倒序”不是加密。用标准算法、标准模式、成熟库，是自己写安全代码最划算的一条原则。</p>
 
 <p><strong>6）把令牌或密钥写进日志与前端存储。</strong>JWT 放 localStorage 容易受 XSS 窃取，放 Cookie 则要设置 <code>HttpOnly</code> 与 <code>Secure</code>，并按需选择是否加 <code>SameSite</code>。日志脱敏同样重要。</p>
 
@@ -254,7 +254,7 @@ System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></p
 
 <h2>小结</h2>
 
-<p>安全与加密的核心是"对症下药"：保密性用对称加密（AES-GCM，注意随机 IV）加密数据、用非对称加密（RSA-2048，注意 OAEP 填充）交换密钥；完整性用 SHA-256 摘要与数字签名，签名用私钥、验签用公钥；身份认证用 JWT 这样的自包含令牌，让资源服务不必每次回源认证服务。三条落地纪律贯穿全篇——密钥不进代码库、算法与参数用标准且现代的配置、永远不信任客户端传来的任何字段。把这几条守住，前面绝大多数"经典漏洞"自然与你无关。</p>
+<p>安全与加密的核心是“对症下药”：保密性用对称加密（AES-GCM，注意随机 IV）加密数据、用非对称加密（RSA-2048，注意 OAEP 填充）交换密钥；完整性用 SHA-256 摘要与数字签名，签名用私钥、验签用公钥；身份认证用 JWT 这样的自包含令牌，让资源服务不必每次回源认证服务。三条落地纪律贯穿全篇——密钥不进代码库、算法与参数用标准且现代的配置、永远不信任客户端传来的任何字段。把这几条守住，前面绝大多数“经典漏洞”自然与你无关。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-5-9/"><span class="pn-label">← 上一篇</span><span class="pn-title">文件上传下载</span></a>

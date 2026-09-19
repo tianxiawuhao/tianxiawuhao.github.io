@@ -151,19 +151,19 @@ echo "$JAVA_HOME"</code></pre>
 
 <h3>2. 编码统一 UTF-8，并顺手关掉两个「坑」</h3>
 
-<p>在 <em>Settings → Editor → File Encodings</em> 里把 <strong>Global Encoding</strong>、<strong>Project Encoding</strong> 都设为 UTF-8，再把 <strong>Properties Files</strong> 的默认编码也设为 UTF-8，并勾选 <strong>Transparent native-to-ascii conversion</strong>。最后一项是 .properties 文件不乱码的关键：它让 IDE 里显示中文，而文件在磁盘上仍以 <code>\uXXXX</code> 转义形式保存，符合 <code>java.util.Properties</code> 按 ISO-8859-1 读取的历史约定。</p>
+<p>在 <em>Settings → Editor → File Encodings</em> 里把 <strong>Global Encoding</strong>、<strong>Project Encoding</strong> 都设为 UTF-8，再把 <strong>Properties Files</strong> 的默认编码也设为 UTF-8，并勾选 <strong>Transparent native-to-ascii conversion</strong>。最后一项是 .properties 文件不乱码的关键。它让文件在 IDE 里显示中文；而在磁盘上，文件仍以 <code>\uXXXX</code> 转义形式保存，符合 <code>java.util.Properties</code> 按 ISO-8859-1 读取的历史约定。</p>
 
 <p>再花两分钟做几处「减负」设置，它们能明显降低日常干扰：</p>
 
 <ul>
-<li><em>Settings → Editor → General → Auto Import</em>：勾选 <strong>Optimize imports on the fly</strong> 与 <strong>Add unambiguous imports on the fly</strong>，写完类名自动补 import、删掉没用的 import。</li>
+<li><em>Settings → Editor → General → Auto Import</em>：勾选 <strong>Optimize imports on the fly</strong> 与 <strong>Add unambiguous imports on the fly</strong>。写完类名自动补 import，没用的 import 也会被删掉。</li>
 <li><em>Settings → Editor → General → Code Completion</em>：把 <strong>Match case</strong> 设为 <em>None</em>，输入小写也能提示大写类名。</li>
-<li><em>Settings → Editor → General → Appearance</em>：勾选 <strong>Show line numbers</strong>；<em>Editor → General → Editor Tabs</em> 勾选 <strong>Mark modified tabs with asterisk</strong>，因为 IDEA 默认自动保存，没有星号你就分不清哪些文件改过。</li>
+<li><em>Settings → Editor → General → Appearance</em>：勾选 <strong>Show line numbers</strong>。<em>Editor → General → Editor Tabs</em> 再勾选 <strong>Mark modified tabs with asterisk</strong>。IDEA 默认自动保存，没有星号就分不清哪些文件改过。</li>
 <li><em>Settings → Editor → File Types</em>：在 <em>Ignore files and folders</em> 中加入 <code>*.iml;.idea;</code>，项目视图立刻清爽。</li>
 <li><em>Settings → Keymap</em>：如果代码补全的 <code>Ctrl+Space</code> 与输入法切换冲突，在 <em>Main menu → Code → Completion</em> 里把 Basic / SmartType 改成自己顺手的键。</li>
 </ul>
 
-<p>插件不要贪多。<em>Settings → Plugins</em> 里只留当前项目真正用到的（如 Maven、Git、Database、Lombok 等）；不认识的插件尽量禁用，让 IDE 启动更快、占用更少。配置调好后用 <em>File → Manage IDE Settings → Export Settings</em> 导出一份 zip 备份，换机器时 <em>Import Settings</em> 一步还原。</p>
+<p>插件不要贪多。<em>Settings → Plugins</em> 里只留当前项目真正用到的插件（如 Maven、Git、Database、Lombok 等）。不认识的插件尽量禁用，让 IDE 启动更快、占用更少。配置调好后用 <em>File → Manage IDE Settings → Export Settings</em> 导出一份 zip 备份，换机器时用 <em>Import Settings</em> 一步还原。</p>
 
 <h2>二、Maven：把「仓库」和「依赖」两件事配好</h2>
 
@@ -184,7 +184,7 @@ echo "$JAVA_HOME"</code></pre>
 
 <h3>依赖范围（scope）决定「打进包里还是不打」</h3>
 
-<p>在 <code>pom.xml</code> 里写依赖时，<code>scope</code> 是最常被忽略却最容易出事的一项。<code>compile</code> 是默认值，参与编译、测试、运行并被打包；<code>provided</code>（典型是 Servlet API）编译期可见、运行期由容器提供，不打进包；<code>runtime</code> 编译时不需要、运行时需要（如 JDBC 驱动）；<code>test</code> 只在测试代码中可见（如 JUnit），不会污染主程序。多模块项目里，版本号应统一由父 POM 的 <code>&lt;dependencyManagement&gt;</code> 管理，子模块只写 <code>groupId</code> 和 <code>artifactId</code>，避免同一依赖出现多个版本。</p>
+<p>在 <code>pom.xml</code> 里写依赖时，<code>scope</code> 是最常被忽略却最容易出事的一项。<code>compile</code> 是默认值，参与编译、测试、运行并被打包。<code>provided</code>（典型是 Servlet API）编译期可见、运行期由容器提供，不打进包；<code>runtime</code> 编译时不需要、运行时需要（如 JDBC 驱动）；<code>test</code> 只在测试代码中可见（如 JUnit），不会污染主程序。多模块项目里，版本号应统一由父 POM 的 <code>&lt;dependencyManagement&gt;</code> 管理，子模块只写 <code>groupId</code> 和 <code>artifactId</code>，避免同一依赖出现多个版本。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-3/02-maven-scope.svg" alt="Maven 四种依赖 scope 在编译期、测试期、运行期与打包环节的可见性对照"><figcaption>图 2：Maven 依赖 scope 分别参与哪些阶段、是否打进包</figcaption></figure>
 
@@ -212,7 +212,7 @@ echo "$JAVA_HOME"</code></pre>
 
 <p>接下来的日常流程是「提交 → 推送」：<em>VCS → Commit…</em>（<code>Ctrl+K</code>）勾选要提交的文件、填写提交信息；想一步到位就点 <strong>Commit and Push</strong>。首次推送需要指定远程地址：<em>VCS → Git → Push…</em>，在 <em>Define remote</em> 里填入仓库 URL，认证后完成推送。把别人的修改拉回来用 <em>Git → Repository → Pull…</em>。这里必须分清两个动作：<strong>clone 是「无中生有」</strong>，本地还没有项目，从远程完整复制一份（<em>File → New → Project from Version Control</em> 或 <em>Get from VCS</em>）；<strong>pull 是「锦上添花」</strong>，本地已有项目，只把远程的新提交合并进来。另外，push 之前必须先 commit，否则会提示 <code>no commits selected</code>。</p>
 
-<p>还有两条纪律，能避免绝大多数「仓库被搞脏」的事故：一是提交前先写好 <code>.gitignore</code>，把 <code>target/</code>、<code>*.iml</code>、<code>.idea/</code> 排除掉——它们是 IDE 与构建产物，不该进版本库；二是要意识到 IDEA 默认自动保存文件，只要改过就会出现在提交列表里，所以提交前务必逐项确认。若仓库托管在 GitHub，也可以在 <em>VCS → Import into Version Control → Share Project on GitHub</em> 里直接创建并关联仓库；但现在的 GitHub 已不支持账号密码推送，认证请用 <strong>Personal Access Token</strong> 或 SSH 密钥，而不是老教程里的登录密码。</p>
+<p>还有两条纪律，能避免绝大多数「仓库被搞脏」的事故。一是提交前先写好 <code>.gitignore</code>，把 <code>target/</code>、<code>*.iml</code>、<code>.idea/</code> 排除掉——它们是 IDE 与构建产物，不该进版本库；二是要意识到 IDEA 默认自动保存文件，只要改过就会出现在提交列表里，所以提交前务必逐项确认。若仓库托管在 GitHub，也可以在 <em>VCS → Import into Version Control → Share Project on GitHub</em> 里直接创建并关联仓库；但现在的 GitHub 已不支持账号密码推送，认证请用 <strong>Personal Access Token</strong>（个人访问令牌）或 SSH 密钥，而不是老教程里的登录密码。</p>
 
 <pre><code class="language-bash"># 命令行等价操作（IDEA 里的菜单只是这些命令的封装）
 git init                       # 对应 Enable Version Control Integration
@@ -223,24 +223,24 @@ git pull                       # 对应 Pull，拉取并合并远程更新</code
 
 <h2>四、效率：真正值得记住的那几个快捷键</h2>
 
-<p>快捷键不用背全，先掌握下面这十几个，覆盖了写代码时 90% 的高频动作。</p>
+<p>快捷键不用背全，先掌握下面这十几个，它们覆盖了写代码时 90% 的高频动作。</p>
 
 <ul>
-<li><strong>查找定位</strong>：<code>Shift+Shift</code> 全局搜索一切；<code>Ctrl+N</code> 找类、<code>Ctrl+Shift+N</code> 找文件、<code>Ctrl+Alt+Shift+N</code> 找符号；<code>Ctrl+Shift+F</code> 全项目按内容搜索；<code>Alt+F7</code> 查找某个方法/变量的<strong>所有引用</strong>，重构前必用；<code>Ctrl+E</code> 打开最近文件。</li>
+<li><strong>查找定位</strong>：<code>Shift+Shift</code> 全局搜索一切；<code>Ctrl+N</code> 找类、<code>Ctrl+Shift+N</code> 找文件、<code>Ctrl+Alt+Shift+N</code> 找符号。<code>Ctrl+Shift+F</code> 全项目按内容搜索；<code>Alt+F7</code> 查找某个方法/变量的<strong>所有引用</strong>，重构前必用；<code>Ctrl+E</code> 打开最近文件。</li>
 <li><strong>编辑与重构</strong>：<code>Alt+Enter</code> 是「万能修复」，红色报错、黄色警告、未实现接口、缺 import 都能在这里一键解决；<code>Ctrl+Alt+L</code> 格式化代码；<code>Ctrl+Alt+O</code> 清理无用 import；<code>Shift+F6</code> 安全重命名（类、方法、变量乃至注释一起改）；<code>Ctrl+Alt+M</code> 抽方法、<code>Ctrl+Alt+V</code> 抽变量；<code>Alt+Insert</code> 生成构造器与 getter/setter。</li>
-<li><strong>代码模板</strong>：IDEA 内置的 Live Template 已覆盖 <code>psvm</code>（<code>public static void main</code>）、<code>sout</code>（<code>System.out.println</code>）、<code>iter</code> 等；在 <em>Settings → Editor → Live Templates</em> 里可以新建自己的模板组与缩写，把团队统一的类注释、日志语句做成模板，比复制粘贴可靠得多。</li>
+<li><strong>代码模板</strong>：IDEA 内置的 Live Template 已覆盖 <code>psvm</code>（<code>public static void main</code>）、<code>sout</code>（<code>System.out.println</code>）、<code>iter</code> 等。在 <em>Settings → Editor → Live Templates</em> 里可以新建自己的模板组与缩写，把团队统一的类注释、日志语句做成模板，比复制粘贴可靠得多。</li>
 <li><strong>调试与运行</strong>：<code>F8</code> 单步跳过、<code>F7</code> 单步进入、<code>Shift+F8</code> 跳出；<code>Alt+F8</code> 在断点处求值任意表达式；<code>F9</code> 继续执行到下一个断点；<code>Ctrl+F8</code> 设置/取消断点。</li>
-<li><strong>剪贴板与比较</strong>：<code>Ctrl+Shift+V</code> 调出复制历史（数量可在 <em>Settings → Editor → General</em> 的 <em>Maximum number of contents to keep in clipboard</em> 调整）；选中两个文件后 <code>Ctrl+D</code> 可比较差异，右键还有「与编辑器比较」「与剪贴板比较」。</li>
+<li><strong>剪贴板与比较</strong>：<code>Ctrl+Shift+V</code> 调出复制历史，数量可在 <em>Settings → Editor → General</em> 的 <em>Maximum number of contents to keep in clipboard</em> 调整。选中两个文件后 <code>Ctrl+D</code> 可比较差异，右键还有「与编辑器比较」「与剪贴板比较」。</li>
 </ul>
 
-<p>顺带提醒两个容易记错的键位：在 IntelliJ IDEA 的默认键位中，<strong>格式化代码是 <code>Ctrl+Alt+L</code></strong>，某些 Eclipse 键位方案里才是 <code>Ctrl+Shift+F</code>；<strong><code>Ctrl+D</code> 是「复制当前行」，默认并没有「删除一行」的快捷键</strong>，需要自己在 Keymap 里为 <em>Delete Line</em> 绑定。</p>
+<p>顺带提醒两个容易记错的键位。在 IntelliJ IDEA 的默认键位中，<strong>格式化代码是 <code>Ctrl+Alt+L</code></strong>，某些 Eclipse 键位方案里才是 <code>Ctrl+Shift+F</code>。<strong><code>Ctrl+D</code> 是「复制当前行」，默认并没有「删除一行」的快捷键</strong>，需要自己在 Keymap 里为 <em>Delete Line</em> 绑定。</p>
 
 <h2>五、几个必须提前知道的坑</h2>
 
 <ul>
 <li><strong>IDEA 面板里改了配置但不起作用</strong>：先确认改的是 IDE 级还是项目级设置——Project SDK、编译级别、编码这类都可能在项目级被单独覆盖。</li>
 <li><strong>Maven 依赖下载慢或失败</strong>：优先检查镜像与本地仓库路径，而不是反复点刷新；代理环境下还需要在 <code>settings.xml</code> 里配置 <code>&lt;proxies&gt;</code>。</li>
-<li><strong>中文乱码</strong>：.properties 文件记得开 <em>Transparent native-to-ascii conversion</em>；源码与资源文件统一 UTF-8；编译时如仍报错，可在 Maven 中显式设置 <code>project.build.sourceEncoding</code> 为 UTF-8。</li>
+<li><strong>中文乱码</strong>：.properties 文件记得开 <em>Transparent native-to-ascii conversion</em>；源码与资源文件统一 UTF-8。编译时如仍报错，可在 Maven 中显式设置 <code>project.build.sourceEncoding</code> 为 UTF-8。</li>
 <li><strong>IDEA 越用越卡</strong>：先在 <em>Settings → Appearance &amp; Behavior → Memory Settings</em> 里适当调大编译器堆内存，并禁用不用的插件；旧教程里用 <code>-XX:PermSize</code>、<code>-XX:MaxPermSize</code> 调优的方法只适用于 JDK 8 之前，JDK 8 起永久代已被元空间取代，这两个参数在现代 JDK 上无效甚至会导致 JVM 启动失败。</li>
 <li><strong>热部署不是万能的</strong>：JRebel 之类的工具能省去重启，但它需要付费授权，并且修改方法签名、注解、Spring 配置等结构性变化时仍需重启，不要把它当成「改完就一定生效」的保证。</li>
 </ul>
@@ -248,11 +248,6 @@ git pull                       # 对应 Pull，拉取并合并远程更新</code
 <h2>六、小结</h2>
 
 <p>环境配置的目标不是把 IDE 的每个开关都研究一遍，而是让「写代码 → 构建 → 提交」这条链路不出现意外。落到实处只有四件事：把 JDK 与编码在项目级定死，避免版本与乱码问题；把 Maven 的 <code>settings.xml</code> 和本地仓库配好，让依赖可以被稳定解析；用 Git 完成 enable → commit → push 的闭环，并守住 <code>.gitignore</code> 的底线；再记住 <code>Alt+Enter</code>、<code>Alt+F7</code>、<code>Ctrl+Shift+V</code> 这几个高频键。做完这些，就可以把精力真正放回代码本身了。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-5-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">常用工具类</span></a>
-      <a class="next-post" href="/java-tutorial-5-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">设计模式：创建型</span></a>
-      </nav>
           </article>
   <!-- Footer -->
   <footer>

@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们把 Maven、工具类和日志配置过了一遍，但真实项目里总有一个绕不开的需求：把数据库里的几十万行记录导出成 Excel 交给业务同学，或者把别人发来的 Excel 导进系统。这件事写错 API 的代价很直接——一个导出请求就能把 JVM 打挂，一次导入就能让服务连续重启。本章从 POI 的三个 Workbook 讲起，说清大数据量导出、逐行解析导入、模板与 PDF 的边界，适合已经会用 Spring MVC 写接口、准备处理真实报表的读者。</p>
+<p>上一章讲了单元测试与构建规范，再往前几章还讲过 Maven、工具类与日志。工具齐全之后，真实项目里总有一个绕不开的需求：把数据库里的几十万行记录导出成 Excel 交给业务人员，或者把别人发来的 Excel 导进系统。这件事一旦写错 API，代价很直接：一个导出请求就能把 JVM 打挂，一次导入就能让服务反复重启。本章从 POI 的三个 Workbook 讲起，说清大数据量导出、逐行解析导入，以及模板与 PDF 的边界，适合已经会用 Spring MVC 写接口、准备处理真实报表的读者。</p>
 
 <h2>先分清三种 Workbook：HSSF、XSSF 与 SXSSF</h2>
 
-<p>POI 里操作 Excel 的入口是 <code>Workbook</code>，它的三个实现对应三种完全不同的内存模型。<code>HSSFWorkbook</code> 处理的是 Excel 2003 及更早的 <code>.xls</code>（BIFF8 格式），它受格式本身限制：单表最多 65536 行、256 列。<code>XSSFWorkbook</code> 处理 Excel 2007 之后的 <code>.xlsx</code>（OOXML，本质是一个 zip 包加若干 XML），行上限提高到 1048576，但它是「全量用户模型」——打开文件时把整棵 DOM 树都建成 Java 对象，你创建的每一个 <code>Row</code>、<code>Cell</code> 都常驻堆内存，几十万行就足以吃掉几个 GB。<code>SXSSFWorkbook</code> 从 POI 3.8 起提供，它不是新格式，而是 XSSF 之上的一层「滑动窗口」封装，专治大数据量导出。</p>
+<p>POI 里操作 Excel 的入口是 <code>Workbook</code>，它的三个实现对应三种完全不同的内存模型。<code>HSSFWorkbook</code> 处理的是 Excel 2003 及更早的 <code>.xls</code>（BIFF8 格式），它受格式本身限制：单表最多 65536 行、256 列。<code>XSSFWorkbook</code> 处理 Excel 2007 之后的 <code>.xlsx</code>（OOXML，本质是一个 zip 包加若干 XML），行上限提高到 1048576。但它是「全量用户模型」：打开文件时把整棵 DOM 树都建成 Java 对象，每一个 <code>Row</code>、<code>Cell</code> 都常驻堆内存，几十万行就足以吃掉几个 GB。<code>SXSSFWorkbook</code> 从 POI 3.8 起提供，它不是新格式，而是 XSSF 之上的一层「滑动窗口」封装，专治大数据量导出。</p>
 
 <p>这里要纠正一个流传很广的说法：<strong>「数据量超过 65536 条后用 HSSF 或 XSSF 就会 OOM」并不准确</strong>。65536 是 <code>.xls</code> 的硬性行上限，超过应该直接报 <code>IllegalArgumentException</code>（行号越界），而不是 OOM；<code>.xlsx</code> 的上限是 1048576 行，与 65536 无关。真正导致 <code>OutOfMemoryError: Java heap space</code> 的是前面说的全量对象模型，跟行数上限是两回事——百万行导出用 XSSF 会 OOM，用 SXSSF 则不会。</p>
 
@@ -144,7 +144,7 @@
 
 <p>SXSSF 的原理很朴素：构造时指定一个行访问窗口 <code>rowAccessWindowSize</code>，默认 100。内存里最多只保留最近的这 N 行对象，一旦超窗，最早的行就被序列化成临时 XML 文件写到磁盘，对应的 Java 对象随即被回收；如此循环，直到整个表写完。所以内存占用与总行数无关，只与窗口大小和当前行宽度有关。窗口不是越大越好：调大能减少磁盘 IO，但会线性增加内存，一万行左右通常就是上限了。</p>
 
-<p>用 SXSSF 必须接受它的三条约束：只能向后追加，<strong>已经刷盘的行不能再改</strong>，所以表头、列宽、样式都要在写数据之前定好；不支持 <code>Sheet.clone()</code>；不支持公式求值（公式会作为字符串写进去，Excel 打开时才计算）。</p>
+<p>用 SXSSF 必须接受三条约束。<strong>一是只能向后追加</strong>，已经刷盘的行不能再改，因此表头、列宽与样式都要在写数据之前定好。<strong>二是不支持</strong> <code>Sheet.clone()</code>。<strong>三是不做公式求值</strong>，公式会作为字符串写入，等到用 Excel 打开时才计算。</p>
 
 <pre><code class="language-java">SXSSFWorkbook workbook = new SXSSFWorkbook(100); // 内存中最多保留 100 行，其余刷盘
 workbook.setCompressTempFiles(true);             // 临时 XML 压缩，省磁盘
@@ -153,7 +153,7 @@ try {
     String[] titles = {"编号", "姓名", "手机", "最高学历", "国家地区", "护照号",
                        "籍贯", "生日", "属相", "入职时间", "离职类型", "离职原因", "离职时间"};
 
-    // 表头必须最先写：SXSSF 刷盘后无法回头修改
+    // 表头必须最先写：SXSSF 一旦刷盘就无法回头修改，样式与列宽也要在此前定好
     Row header = sheet.createRow(0);
     for (int i = 0; i &lt; titles.length; i++) {
         header.createCell(i).setCellValue(titles[i]);
@@ -178,7 +178,7 @@ try {
 }
 </code></pre>
 
-<p>这段代码里有三个容易漏掉的点。第一是 <code>dispose()</code>：SXSSF 会在 <code>java.io.tmpdir</code>（Linux 上通常是 <code>/tmp</code>）下生成形如 <code>poi-sxssf-sheet4654655121378979321.xml</code> 的临时文件，只管写不管删，几天就能把磁盘写满；<code>dispose()</code> 负责清理，所以它必须在 <code>finally</code> 里。第二是响应头：<code>.xlsx</code> 建议用上面那个完整的 MIME 类型，而 <code>URLEncoder.encode</code> 会把空格编成 <code>+</code>，浏览器下载时会变成乱码文件名，所以要 <code>replace("+", "%20")</code>。第三是数据源：导出慢通常是慢在把整表查进内存，用 JDBC 游标或 MyBatis 的 <code>ResultHandler</code> 流式取数，配合 SXSSF 才是完整的低内存方案。顺带一提，源笔记里那个「外层再循环一百次」的写法只是为了造出大数据量做压测，不是任何意义上的技巧。</p>
+<p>这段代码里有三个容易漏掉的点。第一是 <code>dispose()</code>：SXSSF 会在 <code>java.io.tmpdir</code>（Linux 上通常是 <code>/tmp</code>）下生成形如 <code>poi-sxssf-sheet4654655121378979321.xml</code> 的临时文件，只管写不管删，几天就能把磁盘写满；<code>dispose()</code> 负责清理，所以它必须在 <code>finally</code> 里。第二是响应头：<code>.xlsx</code> 建议用上面那个完整的 MIME 类型，而 <code>URLEncoder.encode</code> 会把空格编成 <code>+</code>，浏览器下载时会变成乱码文件名，所以要 <code>replace("+", "%20")</code>。第三是数据源。导出慢，通常是慢在把整张表查进内存；用 JDBC 游标或 MyBatis 的 <code>ResultHandler</code> 流式取数，再配合 SXSSF，才是完整的低内存方案。另外，代码里若出现「外层再循环一百次」，那只是为造出大数据量做压测，并不是技巧。</p>
 
 <h2>大数据量导入：换用事件模式逐行解析</h2>
 
@@ -210,7 +210,7 @@ try {
 
 <p>构造 <code>XSSFSheetXMLHandler</code> 时最后那个 <code>boolean</code> 是 <code>formulasNotResults</code>，传 <code>false</code> 表示取公式的计算结果而不是公式文本；不同 POI 版本的构造参数略有出入（4.x/5.x 增加了 <code>DataFormatter</code> 参数，<code>SharedStringsTable</code> 也可换成只读的 <code>ReadOnlySharedStringsTable</code>），升级时留意一下。</p>
 
-<p>真正写业务逻辑的是处理器。这里必须纠正源笔记的一个硬伤：它用 <code>cellReference.substring(0, 1)</code> 取列，只能识别 A 到 Z，一遇到第 27 列（AA）就会把列号当成 "A" 并覆盖第一列的数据。正确做法是交给 <code>CellReference</code> 解析出列下标。另外 SAX 只回调<strong>存在</strong>的单元格，空单元格会被跳过，所以不能靠「第几次回调」来数第几列。</p>
+<p>真正写业务逻辑的是处理器。这里必须纠正一种常见写法：用 <code>cellReference.substring(0, 1)</code> 取列只能识别 A 到 Z，一遇到第 27 列（AA）就会把列号当成 <code>A</code>，并覆盖第一列的数据。正确做法是交给 <code>CellReference</code> 解析出列下标。另外 SAX 只回调<strong>存在</strong>的单元格，空单元格会被跳过，所以不能靠「第几次回调」来数第几列。</p>
 
 <pre><code class="language-java">public class SheetHandler implements XSSFSheetXMLHandler.SheetContentsHandler {
     private PoiEntity entity;
@@ -252,7 +252,7 @@ try {
 
 <p>如果不想被裸 POI 的样板代码淹没，可以考虑 EasyExcel（该项目已更名为 FastExcel，新坐标为 <code>cn.idev.excel</code>，老坐标 <code>com.alibaba.excel</code> 仍被大量项目使用）：它用注解声明表头映射，底层仍是 POI 的 SAX 解析，写法短得多。<code>EasyExcel.write(outputStream, EmployeeRow.class).sheet("人员信息").doWrite(list)</code> 完成导出，<code>EasyExcel.read(file, EmployeeRow.class, new PageReadListener&lt;&gt;(rows -&gt; save(rows))).sheet().doRead()</code> 分批读入。它的价值在于省去手写处理器，但不会替你解决「一次性把数据查进内存」的问题——读进来的批次该落库还是要落库。</p>
 
-<p>最后说说标题里的 PDF。这一点必须明确：<strong>POI 只处理 OOXML 和 BIFF，不生成 PDF</strong>。生成 PDF 常用的库是 Apache PDFBox（Apache 2.0，商用友好）和 OpenPDF／iText（iText 5 为 AGPL，闭源商用需要商业授权，选型前务必确认许可证）。解析方向更麻烦：PDF 里没有「行」和「列」的概念，只有带坐标的文字块，PDFBox 的 <code>PDFTextStripper</code> 只能取出文本流，表格结构要靠坐标自己还原，扫描件还得先 OCR。本节主题的两个源文档完全没有涉及 PDF，上面的选型建议属于通用经验，具体版本与授权条款请以官方文档为准（存疑）。</p>
+<p>最后说说标题里的 PDF。这一点必须明确：<strong>POI 只处理 OOXML 和 BIFF，不生成 PDF</strong>。生成 PDF 常用的库是 Apache PDFBox（Apache 2.0，商用友好）和 OpenPDF／iText（iText 5 为 AGPL，闭源商用需要商业授权，选型前务必确认许可证）。解析方向更麻烦：PDF 里没有「行」和「列」的概念，只有带坐标的文字块，PDFBox 的 <code>PDFTextStripper</code> 只能取出文本流，表格结构要靠坐标自己还原，扫描件还得先 OCR。两个原始文档都没有涉及 PDF，上面的选型建议属于通用经验，具体版本与授权条款请以官方文档为准（存疑）。</p>
 
 <h2>常见坑与小结</h2>
 
