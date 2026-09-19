@@ -129,6 +129,7 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>jQuery 是老一代前端工程师的必修课，也是今天读懂大量遗留项目、后台管理页面和 Bootstrap 3 站点的钥匙。本章解决三个问题：怎样用选择器精准而简短地选中元素，怎样用链式调用把“选、改、取”串成一条流水线，怎样用 Ajax 和现成的 UI 框架把页面拼出来。内容适合已经会写原生 JavaScript、做过 DOM 操作、准备接手 Web 项目的 Java 后端读者。</p>
+<p class="tut-tip"><strong>先给结论：</strong>jQuery 是<strong>维护老系统的技能</strong>，不是新项目的起点。新项目请优先使用原生 DOM（<code>querySelector</code>、<code>fetch</code>、<code>addEventListener</code>）或 Vue 3、React 等框架；jQuery 的主线版本为 <strong>3.x</strong>，1.x / 2.x 只应出现在必须兼容 IE8 的遗留工程里。今天它主要出现在老后台管理页面、Bootstrap 3/4 站点与大量历史代码中，本章完整讲清它的写法，是为了让你能读懂并安全改造这些代码。</p>
 
 <h2>一、jQuery 到底解决了什么问题</h2>
 <p>原生 DOM 的痛点是“啰嗦”加“兼容”：按 id 取一个元素要写 <code>document.getElementById</code>，遍历一批节点要自己写循环，改样式要记住 <code>style</code> 与 <code>classList</code> 的差别，绑定事件还要考虑 IE 的 <code>attachEvent</code>。jQuery 用两招把这些问题一起抹平。一是 <code>$()</code> 工厂函数接收 CSS 选择器字符串，返回一个类数组的 jQuery 对象。二是这些对象自带一整套跨浏览器的 DOM、样式、事件和 Ajax 方法。</p>
@@ -169,10 +170,23 @@
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-6/01-jquery-chain.svg" alt="jQuery 链式调用中集合的变化、破坏性操作与 end 回退"><figcaption>图 1：一条链上 jQuery 集合的流转——find 等破坏性操作会改变集合，用 .end() 可回退一层</figcaption></figure>
 
-<p>事件绑定同样支持链式与委托。老写法 <code>$("button").click(fn)</code> 在 jQuery 3.0 中已被 <code>$("button").on("click", fn)</code> 取代；如果按钮是 Ajax 动态渲染出来的，应把监听绑在静态父元素上做事件委托：<code>$("#list").on("click", ".del", fn)</code>，这样新增的行自动生效，不必反复重新绑定。</p>
+<p>事件绑定同样支持链式与委托，这一块也是旧代码里废弃写法最集中的地方：<code>.click(fn)</code>、<code>.bind("click", fn)</code>、<code>.delegate()</code>（以及更早的 <code>.live()</code>）<strong>在 jQuery 3.0 起都已废弃</strong>，统一改用 <code>.on()</code>。<code>$("button").on("click", fn)</code> 等价于旧的 <code>$("button").bind("click", fn)</code>；委托写法 <code>.on(events, selector, handler)</code> 则取代了 <code>.delegate(selector, events, handler)</code>。如果按钮是 Ajax 动态渲染出来的，就应该用这种委托形式把监听绑在静态父元素上：<code>$("#list").on("click", ".del", fn)</code>，这样新增的行自动生效，不必反复重新绑定。</p>
 
 <h2>四、Ajax：不刷新页面拿数据</h2>
-<p>jQuery 的 Ajax 是对原生 <code>XMLHttpRequest</code> 的封装，顺带解决了 JSONP 跨域和浏览器差异。jQuery 3.0 之后，<code>success</code>、<code>error</code>、<code>complete</code> 三个回调已被标记为废弃，推荐使用 Promise 风格的 <code>done</code>、<code>fail</code>、<code>always</code>。</p>
+<p>jQuery 的 Ajax 是对原生 <code>XMLHttpRequest</code> 的封装，顺带解决了 JSONP 跨域和浏览器差异。<strong>jQuery 3.0 起</strong>，<code>$.ajax()</code> 配置对象里的 <code>success:</code>、<code>error:</code>、<code>complete:</code> 回调已被废弃（挂在 jqXHR 上的 <code>.success()</code> / <code>.error()</code> / <code>.complete()</code> 方法在 3.0 中直接被移除），应改用 Promise 风格的 <code>done</code>、<code>fail</code>、<code>always</code>。新旧写法的对应关系如下——老代码照原样保留可读，但新写或改造时请用右边那一版。</p>
+
+<pre><code class="language-js">// 旧写法：jQuery 1.x 时代的 success/error 回调，3.0 起废弃
+$.ajax({
+  url: "/api/user",
+  success: function (res) { render(res); },
+  error: function (xhr) { console.error("HTTP " + xhr.status); }
+});
+
+// 现行写法：三个回调挂到返回的 jqXHR（Promise 兼容对象）上
+$.ajax({ url: "/api/user" })
+  .done(function (res) { render(res); })              // 对应 success
+  .fail(function (xhr) { console.error("HTTP " + xhr.status); }) // 对应 error
+  .always(function () { $("#loading").hide(); });      // 对应 complete</code></pre>
 
 <pre><code class="language-js">$(function () {
   $("#submit").on("click", function () {
@@ -229,15 +243,17 @@
 <p>版本差异必须分清，关键区别如下：</p>
 
 <ul>
-  <li>Bootstrap 3 的 JS 组件（模态框、下拉菜单、折叠面板等）依赖 jQuery，所以引入 <code>bootstrap.js</code> 前必须先引入 jQuery；</li>
-  <li>Bootstrap 5 已经移除 jQuery 依赖，改用原生 JavaScript；</li>
-  <li>Bootstrap 5 同时把 <code>col-xs-*</code> 改成 <code>col-*</code>、<code>.panel</code> 改成 <code>.card</code>、<code>.well</code> 改成 <code>.card</code> 或 <code>.alert</code>。</li>
+  <li><strong>Bootstrap 3</strong> 的 JS 组件（模态框、下拉菜单、折叠面板等）依赖 jQuery，所以引入 <code>bootstrap.js</code> 前必须先引入 jQuery；栅格用 <code>col-xs-*</code> / <code>col-sm-*</code> / <code>col-md-*</code> / <code>col-lg-*</code>，面板是 <code>.panel</code>；</li>
+  <li><strong>Bootstrap 4</strong> 仍依赖 jQuery，栅格改为不带前缀的 <code>col-*</code>（超小屏）加断点后缀，<code>.panel</code> / <code>.well</code> 被 <code>.card</code> 取代，脚本引入也从 jquery + bootstrap 两件套变成 <code>bootstrap.bundle.min.js</code>（内含 Popper）；</li>
+  <li><strong>Bootstrap 5</strong> 已经移除 jQuery 依赖，改用原生 JavaScript；同时把 <code>col-xs-*</code> 改成 <code>col-*</code>、<code>.panel</code> 改成 <code>.card</code>、<code>.well</code> 改成 <code>.card</code> 或 <code>.alert</code>；</li>
+  <li>Bootstrap 5 还改了一批工具类与 data 属性：<code>ml-*</code> / <code>mr-*</code> → <code>ms-*</code> / <code>me-*</code>，<code>text-left</code> / <code>text-right</code> → <code>text-start</code> / <code>text-end</code>，<code>data-toggle</code> / <code>data-target</code> → <code>data-bs-toggle</code> / <code>data-bs-target</code>。</li>
 </ul>
 
-<p>照抄旧教程的 class 名，是样式失效最常见的原因。</p>
-<p>Element UI 是饿了么团队为 Vue 2 打造的组件库，思路与 Bootstrap 相似，但组件粒度更重：表格、分页、表单校验、弹窗、日期选择器都可以拿来即用。在 vue-cli 创建的项目里安装后，用 <code>Vue.use(ElementUI)</code> 全局注册即可，也可以按需引入以减小打包体积。</p>
+<p>照抄旧教程的 class 名和数据属性，是样式与交互双双失效最常见的原因。维护老站点就用它原本的版本，别半途混版；新项目直接上 Bootstrap 5，或干脆改用 Vue 3 组件库。</p>
+<p><strong>Element UI</strong> 是饿了么团队为 Vue 2 打造的组件库，思路与 Bootstrap 相似，但组件粒度更重：表格、分页、表单校验、弹窗、日期选择器都可以拿来即用。在 vue-cli 创建的项目里安装后，用 <code>Vue.use(ElementUI)</code> 全局注册即可，也可以按需引入以减小打包体积。<strong>Element Plus</strong> 是它面向 Vue 3 的对应版本（包名 <code>element-plus</code>），组件名与大部分 props 保持一致，是今天的现行写法。</p>
 
-<pre><code class="language-html">&lt;template&gt;
+<pre><code class="language-html">&lt;!-- 旧写法：Element UI（Vue 2），slot-scope 已不推荐 --&gt;
+&lt;template&gt;
   &lt;el-table :data="rows" stripe&gt;
     &lt;el-table-column prop="id" label="编号" width="80"&gt;&lt;/el-table-column&gt;
     &lt;el-table-column prop="name" label="姓名"&gt;&lt;/el-table-column&gt;
@@ -254,10 +270,30 @@ import Vue from "vue";
 import ElementUI from "element-ui";
 import "element-ui/lib/theme-chalk/index.css";
 
-Vue.use(ElementUI);   // 全局注册后，所有 el- 开头的组件均可直接使用
+Vue.use(ElementUI);   // Vue 2：全局注册后，所有 el- 开头的组件均可直接使用
 &lt;/script&gt;</code></pre>
 
-<p>官网地址已从 <code>element-cn.eleme.io</code> 迁移到 <code>element.eleme.cn</code>，旧地址会跳转或失效。Vue 3 项目应改用 Element Plus（包名 <code>element-plus</code>），两者 API 大体相近，但不能混用。选型建议很直接：jQuery 与 Bootstrap 3 的老项目继续沿用栅格和 panel，Vue 2 后台系统优先 Element UI，Vue 3 用 Element Plus。</p>
+<pre><code class="language-html">&lt;!-- 现行写法：Element Plus（Vue 3），按需引入 + 新插槽语法 --&gt;
+&lt;template&gt;
+  &lt;el-table :data="rows" stripe&gt;
+    &lt;el-table-column prop="id" label="编号" width="80" /&gt;
+    &lt;el-table-column prop="name" label="姓名" /&gt;
+    &lt;el-table-column label="操作"&gt;
+      &lt;template #default="scope"&gt;
+        &lt;el-button size="small" @click="edit(scope.row)"&gt;编辑&lt;/el-button&gt;
+      &lt;/template&gt;
+    &lt;/el-table-column&gt;
+  &lt;/el-table&gt;
+&lt;/template&gt;
+
+&lt;script setup&gt;
+import { ElTable, ElTableColumn, ElButton } from "element-plus";
+import "element-plus/dist/index.css";   // 全量样式；也可用 unplugin-vue-components 做按需自动引入
+&lt;/script&gt;</code></pre>
+
+<p>官网地址已从 <code>element-cn.eleme.io</code> 迁移到 <code>element.eleme.cn</code>，旧地址会跳转或失效；Element Plus 的文档则在 <code>element-plus.org</code>。从 Element UI 迁移到 Element Plus 的主要改动是：注册由 <code>Vue.use(ElementUI)</code> 变为 <code>app.use(ElementPlus)</code>（按需引入时在单文件组件里 <code>import</code>）；作用域插槽 <code>slot-scope="scope"</code> → <code>#default="scope"</code>；按钮尺寸 <code>size="mini"</code> → <code>size="small"</code>；图标由 class（<code>el-icon-edit</code>）改为组件（需安装 <code>@element-plus/icons-vue</code>）；样式路径 <code>element-ui/lib/theme-chalk/index.css</code> → <code>element-plus/dist/index.css</code>。两者 API 大体相近但不能混用，混装会出现同名组件冲突。</p>
+
+<p>选型建议很直接：jQuery 与 Bootstrap 3/4 的老项目继续沿用栅格、panel 与原有 data 属性，只做必要修复；Vue 2 后台系统继续用 Element UI；新写的 Vue 3 项目用 Vite + Element Plus。</p>
 
 <p><strong>小结：</strong>把本章的四步串起来，就是一套完整的旧时代前端工作流——用 <code>$()</code> 加选择器定位元素，用链式调用连续加工，用 Ajax 从后端取数据，用 UI 框架拼出界面。掌握它们，就能读懂并维护绝大多数 jQuery + Bootstrap 时代的页面。当项目迁移到 Vue 或 React 时，直接操作 DOM 的选择器思维会退场。但“组件复用”和“数据变化驱动视图”，正是这些框架的升级方向。</p>
           

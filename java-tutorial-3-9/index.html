@@ -130,6 +130,7 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>前面几章都按“一个 HTML 文件、几个 script 标签”的方式写页面。这种写法在小 demo 里没问题。可一旦页面分成十几个 JS 文件，就会同时冒出三个麻烦。一是文件之间靠全局变量通信、互相污染；二是 <code>script</code> 的引入顺序写错就报 undefined；三是想用 Less、TypeScript 或浏览器还不支持的新语法，浏览器直接不认。</p>
 <p>要解决这些工程化问题，需要三样东西——一个能跑构建脚本的运行时（Node.js），一个能下载并锁定第三方库的包管理器（npm），以及一个构建工具（webpack / Vite）。构建工具负责把源代码翻译、合并成浏览器可运行的产物。本章把这条链路讲清：从安装 Node、认识 <code>package.json</code>，到模块规范、打包器和脚手架的分工。适合已经会写 HTML/CSS/JS、但还没自己初始化过一个前端工程的读者。</p>
+<p class="tut-tip"><strong>版本基线：</strong>本章以 <strong>Node 18 及以上</strong>（当前 LTS 主线）、<strong>Vite</strong> 为主（webpack 5 次之）、<strong>Vue 3</strong> 为前提。文中作为演进对照出现的 webpack 3 + webpack-dev-server 2、Node 16 及以下等组合已属历史栈，它们的 CLI 参数（如 <code>--inline</code>）多已移除，照抄会直接报错。</p>
 
 <h2>一、为什么前端需要 Node.js 和 npm</h2>
 <p>先纠正一个常见误解：Node.js 不是“后端的 JavaScript 框架”，而是一个<strong>让 JavaScript 脱离浏览器运行的运行时</strong>。它把 Chrome 的 V8 引擎抽出来，补上了文件读写、网络、进程等系统能力。这件事对前端的意义在于：webpack、Vite、ESLint 这些工具本身就是 JavaScript 程序。它们需要读写磁盘、遍历依赖、开本地服务器，浏览器里做不到，所以必须跑在 Node 上。换句话说，<strong>你可以不写一行后端代码，但机器上必须有 Node 才能做现代前端开发</strong>。</p>
@@ -140,7 +141,7 @@
 <li><code>npm run &lt;脚本名&gt;</code>：执行 <code>scripts</code> 中定义的命令，例如 <code>npm run dev</code>。局部安装的命令行工具（如 webpack）只有通过 <code>npm run</code> 或 <code>npx</code> 才能被找到，直接敲 <code>webpack</code> 会提示找不到命令。</li>
 </ul>
 <p>国内下载慢是因为默认仓库在国外，可以换成淘宝镜像。需要提醒的是：旧资料里常见的 <code>https://registry.npm.taobao.org</code> <strong>已于 2022 年停止服务</strong>，现在应使用 <code>https://registry.npmmirror.com</code>。<code>cnpm</code> 是镜像提供的替代客户端，能在不改全局配置的情况下加速，但它生成的目录结构与官方 npm 并不完全一致。遇到“本地能跑、别人装不上”的怪问题时，优先换回 npm 或 pnpm 复现。</p>
-<pre><code class="language-bash"># 1. 安装 Node.js（推荐 LTS 版本），安装后 node 与 npm 一起可用
+<pre><code class="language-bash"># 1. 安装 Node.js 18 或更高版本（当前 LTS 主线），安装后 node 与 npm 一起可用
 node -v
 npm -v
 
