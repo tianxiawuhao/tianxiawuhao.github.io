@@ -189,6 +189,28 @@ public class BrowseJob {
     }
 }</code></pre>
 
+<h3>版本演进：从 assignTimestampsAndWatermarks 到 WatermarkStrategy</h3>
+
+<p>上面用的是现行写法：水位线通过 <code>WatermarkStrategy</code> 声明，并且尽量紧贴 Source 写。这套接口不是一开始就有的——旧笔记里常见的是“先设全局时间语义，再给流挂一个时间戳提取器”，也就是 <code>TimeCharacteristic</code> 加 <code>assignTimestampsAndWatermarks(AssignerWithPeriodicWatermarks)</code> 的组合：</p>
+
+<pre><code class="language-java">// 旧写法（Flink ≤1.11）：1.11 起弃用，这套 Watermark 分配接口在 1.12 被移除，2.0 已彻底删除
+env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+DataStream&lt;Browse&gt; withTs = raw.assignTimestampsAndWatermarks(
+        new BoundedOutOfOrdernessTimestampExtractor&lt;Browse&gt;(Time.seconds(5)) {
+            @Override
+            public long extractTimestamp(Browse e) {
+                return e.getEventTime();
+            }
+        });</code></pre>
+
+<pre><code class="language-java">// 现行写法（1.12+，1.18/1.20 与 2.x 通用）
+DataStream&lt;Browse&gt; withTs = raw.assignTimestampsAndWatermarks(
+        WatermarkStrategy.&lt;Browse&gt;forBoundedOutOfOrderness(Duration.ofSeconds(5))
+                .withTimestampAssigner((e, ts) -&gt; e.getEventTime())
+                .withIdleness(Duration.ofMinutes(1)));   // 空闲分区不再卡住水位线</code></pre>
+
+<p>两点要记住。第一，<code>assignTimestampsAndWatermarks</code> 这个方法名至今仍在，换掉的是参数：<code>AssignerWithPeriodicWatermarks</code>/<code>AssignerWithPunctuatedWatermarks</code> 与 <code>BoundedOutOfOrdernessTimestampExtractor</code> 都已被 <code>WatermarkStrategy</code> 取代，新代码不要再引入这些类。第二，水位线越靠近 Source 声明越好，引入得越晚，下游算子看到的时间进度就越滞后。如果计划升级到 Flink 2.x，这些旧接口与 <code>SourceFunction</code>/<code>SinkFunction</code>、<code>TimeCharacteristic</code>、<code>env.setStateBackend(...)</code>、<code>DataSet</code> API 等一起被移除，升级前请对照<a href="https://flink.apache.org/2024/10/23/preview-release-of-apache-flink-2.0/">官方 2.0 breaking changes 清单</a>逐项替换（以官方迁移文档为准）。</p>
+
 <h3>三种时间与水位线的作用</h3>
 
 <p>Flink 支持三种时间语义：<strong>事件时间</strong>（数据自身携带的发生时间）、<strong>处理时间</strong>（算子所在机器的系统时间）和<strong>摄入时间</strong>（进入 Flink 的时间）。只有事件时间能保证结果可复现，因此生产作业几乎都选它。需要注意的是，<code>TimeCharacteristic</code> 与 <code>env.setStreamTimeCharacteristic(...)</code> 这套全局设置从 Flink 1.12 起已被废弃，并在 1.14 移除。现在时间语义由你用哪种 <code>WindowAssigner</code> 直接决定——使用 <code>KeyedProcessFunction</code> 时则由代码自行处理时间戳。使用 <code>TumblingEventTimeWindows</code> 就是事件时间，不需要也不应该再去设置全局语义。</p>
@@ -201,6 +223,17 @@ public class BrowseJob {
 <h3>窗口类型与选择</h3>
 
 <p>窗口把无界流切成有限集合再聚合，常用的有四类。滚动窗口（Tumbling）按固定长度首尾相接、互不重叠，适合“每 5 分钟统计一次”。滑动窗口（Sliding）长度与步长分开配置，窗口之间会重叠，适合“每 1 分钟看过去 5 分钟”的平滑指标。会话窗口（Session）按活动间隙切分，一段时间没有数据就关闭，适合用户行为分析。全局窗口（Global）把所有数据放进一个窗口，必须自定义触发器，否则永不触发。很多初学者写出“作业不输出”的代码，根因就在这里。与批处理按分区聚合类似，<code>keyBy</code> 之后的窗口是<strong>每个 key 一份</strong>窗口实例，不同用户互不干扰，这也是窗口能与状态配合的前提。</p>
+
+
+<h3>双栈：DataStream API 与 Table/SQL 怎么写同一件事</h3>
+
+<p>本章围绕 <code>DataStream</code> API 展开（更准确的叫法是 <strong>DataStream API</strong>，2.x 起还并存一套仍在演进的 DataStream API V2，包名 <code>org.apache.flink.datastream.api</code>），因为它能把时间、窗口、状态讲到底层。但工程里同一件事往往还有第二种更省事的写法：Flink Table API / SQL。窗口聚合在 SQL 里对应窗口表值函数（Windowing TVF，1.13 引入，1.18+ 推荐；旧的 <code>GROUP BY TUMBLE(...)</code> 组窗口语法已弃用）。上面那段“每分钟取最高价”用 SQL 写出来是：</p>
+
+<pre><code class="language-sql">SELECT userId, MAX(price) AS max_price, window_end
+FROM TABLE(TUMBLE(TABLE browse, DESCRIPTOR(event_time), INTERVAL '1' MINUTE))
+GROUP BY userId, window_start, window_end;</code></pre>
+
+<p>选型经验：能用 SQL 表达的聚合、连接、去重优先用 SQL，省掉一整套序列化与状态管理的样板代码，而且流批同一套语义；需要精细控制状态、定时器、Async I/O 或自定义触发器时回到 DataStream API。两者能在同一个作业里互相转换（<code>toDataStream</code>/<code>fromDataStream</code>）。跨大版本时还要留意 API 边界：2.x 移除了 <code>DataSet</code> API、<code>SourceFunction</code>/<code>SinkFunction</code>、<code>TimeCharacteristic</code>、<code>StreamingFileSink</code> 等一长串 1.x 遗留接口，新代码应使用 FLIP-27 Source、Sink V2 与 <code>WatermarkStrategy</code>，具体清单以官方 2.x 迁移文档为准。</p>
 
 <h2>窗口函数与状态：增量聚合 vs 全量聚合</h2>
 
@@ -256,7 +289,7 @@ raw.keyBy(Browse::getUserId)
 <p>窗口能算出结果，靠的是状态在背后兜底。状态分两类。<code>Keyed State</code>（<code>ValueState</code>、<code>ListState</code>、<code>MapState</code> 等）只能用在 <code>keyBy</code> 后的算子里，天然按 key 隔离。<code>Operator State</code>（如 Kafka Source 的分区偏移量）则按算子的并行子任务分配。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/02-window-state-checkpoint.svg" alt="四类窗口、状态分类与 Checkpoint 屏障示意图"><figcaption>图 2：四类窗口的时间线对照，以及 Keyed State / Operator State 与 Checkpoint 的分工</figcaption></figure>
-<p>状态必须有<strong>状态后端</strong>承载。旧版本有 <code>MemoryStateBackend</code>、<code>FsStateBackend</code>、<code>RocksDBStateBackend</code> 三选一。从 Flink 1.13 起统一为 <code>HashMapStateBackend</code> 与 <code>EmbeddedRocksDBStateBackend</code> 两种，<code>env.setStateBackend(...)</code> 的配置方式也随之改变。数据量超过内存、或需要增量 Checkpoint 时选 RocksDB；其余情况 HashMap 更简单，也更快。</p>
+<p>状态必须有<strong>状态后端</strong>承载。旧版本有 <code>MemoryStateBackend</code>、<code>FsStateBackend</code>、<code>RocksDBStateBackend</code> 三选一。从 Flink 1.13 起做了改名与归并：<code>FsStateBackend</code> → <code>HashMapStateBackend</code>，<code>RocksDBStateBackend</code> → <code>EmbeddedRocksDBStateBackend</code>，<code>MemoryStateBackend</code> 被 <code>HashMapStateBackend</code> 吸收，<code>env.setStateBackend(...)</code> 要传的也换成了这两个新类。到 Flink 2.x，<code>setStateBackend</code> 与旧的 <code>FsStateBackend</code>/<code>MemoryStateBackend</code> 已从 API 中移除，改为用配置项（如 <code>state.backend</code>）声明；2.x 的磁盘状态后端由 ForSt 承接原 RocksDB 实现，而 1.18/1.20 上仍是 <code>EmbeddedRocksDBStateBackend</code> 最常用——升级前以官方 2.x 迁移文档为准。数据量超过内存、或需要增量 Checkpoint 时选 RocksDB；其余情况 HashMap 更简单，也更快。</p>
 
 <h2>Checkpoint、重启策略与反压</h2>
 
