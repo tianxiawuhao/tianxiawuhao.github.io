@@ -130,6 +130,8 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>前面几章处理的数据，要么来自本地文件，要么来自数据库。但在真实系统里，日志、埋点、订单变更这些数据是持续不断产生的，而且往往有好几个下游同时要用：实时风控要、离线数仓要、搜索索引也要。如果让每个业务都直接连业务库，数据库会被拖垮，上下游也被死死耦合在一起。Kafka 就是为这类问题而生的分布式消息中间件。本章面向已经会写 Java、但还没在生产环境用过消息队列的读者，目标是讲清 Kafka 的核心模型（分区、副本、消费组、offset、事务），并能写出可运行的生产者与消费者代码。</p>
 
+<div class="tut-tip"><strong>版本基线（3.x）：</strong>本章以 Kafka 3.x 为准，客户端与 broker 尽量保持同大版本。3.x 同时支持 ZooKeeper 与 KRaft 两种部署模式，其中 KRaft 自 3.3（3.3.1）起可用于生产；ZooKeeper 模式在 4.0 中已被移除，新集群直接用 KRaft 即可。4.0 起 broker / Connect / 命令行工具要求 JDK 17，客户端与 Kafka Streams 要求 JDK 11。文中保留的旧写法（0.9 之前的 offset 存储、2.8 之前的 <code>--zookeeper</code>）只作演进对照，不要再照抄。</div>
+
 <h2>一、Kafka 是什么：一个分布式提交日志</h2>
 
 <p>Kafka 由 LinkedIn 开发并于 2010 年捐献给 Apache 基金会，用 Scala 和 Java 编写。它最容易被误解的一点是：Kafka 本质不是一个“消息队列”，而是一个<strong>分布式、可分区的、多副本的提交日志（commit log）</strong>。消息不是被消费掉就删除，而是按配置的保留时间（如 7 天）或保留大小统一清理，因此同一个 topic 可以被多个业务反复读取，互不影响。</p>
@@ -171,7 +173,7 @@
 
 <h2>三、上手：创建主题并读写消息</h2>
 
-<p>先创建主题。这里要注意版本差异：<strong>Kafka 2.8 起 <code>kafka-topics.sh</code> 的 <code>--zookeeper</code> 参数已被废弃，应改用 <code>--bootstrap-server</code></strong>（4.0 中已彻底移除）。</p>
+<p>先创建主题。这里要注意版本差异：<strong>Kafka 2.8 起 <code>kafka-topics.sh</code> 的 <code>--zookeeper</code> 参数已被废弃，应改用 <code>--bootstrap-server</code></strong>（4.0 中已彻底移除）。原因在于所有管理类命令都改从 broker 获取元数据：broker 无论跑在 ZooKeeper 模式还是 KRaft 模式下，都能通过 bootstrap 地址应答；而 <code>--zookeeper</code> 是绕过 broker 直连 ZooKeeper 读元数据的老路子，在 KRaft 模式下根本不存在 ZooKeeper 可连。消费者组、位移等命令同理，见 <code>kafka-consumer-groups.sh --bootstrap-server</code>。</p>
 
 <pre><code class="language-bash"># 创建 3 个分区、2 个副本的主题（副本数不能超过 broker 数）
 kafka-topics.sh --bootstrap-server localhost:9092 \
