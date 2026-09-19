@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>Storm 与实时计算 | tianxia</title>
+<title>8.5 Storm 与实时计算 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>Storm 与实时计算</h1>
+              <h1>8.5 Storm 与实时计算</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，10 min read</span>
@@ -137,6 +137,8 @@
 <p>数据在拓扑里以 <strong>Tuple</strong> 为单位流动。Tuple 是一组有序的值，配合字段名（<code>Fields</code>）使用，取字段时可以按位置下标也可以按名字；一条条 Tuple 组成无界的 <strong>Stream</strong>。整张计算图由两类组件构成：<strong>Spout</strong> 是数据的入口，负责从 Kafka、MQ、Socket 或自定义数据源读取并向下游发射；<strong>Bolt</strong> 是处理单元，做过滤、解析、聚合、join、写库等任意逻辑，也可以继续向下游发射。Spout 和 Bolt 统称 component。</p>
 
 <p>运行时的层级也要分清：一个 component 的 <strong>并行度</strong>决定它有多少个 Task 实例，Task 被分配到 <strong>Executor</strong>（线程）里执行，若干 Executor 又跑在同一个 <strong>Worker</strong>（JVM 进程）中。每个 Worker 内默认跑三条线程：Spout 线程、Bolt 线程和 Acker 线程，这一点直接决定了后面要讲的坑：<code>nextTuple()</code> 里一旦发生阻塞，受影响的不只是这一个 Spout。集群侧则由 Nimbus（主节点，负责分配与调度）、Supervisor（工作节点，负责起停 Worker）和 ZooKeeper（保存状态与心跳）组成，Nimbus 并不是单点瓶颈，它挂掉后已运行的拓扑照常工作，只是不能提交新拓扑。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-5/01-topology-model.svg" alt="Storm 拓扑数据流与运行时层级示意图"><figcaption>图 1：Storm 拓扑的常驻数据流（Spout → SplitBolt → CountBolt）与 Nimbus / Supervisor / ZooKeeper 层级</figcaption></figure>
 
 <h2>二、Spout 与 Bolt：怎么写一个组件</h2>
 
@@ -272,6 +274,8 @@ public class WordCountTopology {
 
 <p>Storm 的可靠性不是靠重发整个批次，而是靠<strong>元组树 + acker 校验</strong>。Spout 发射时给 Tuple 分配一个 64 位根 id；下游每次锚定发射，都会把父 Tuple 的 id 一起带上，于是从根到叶子构成一棵树。acker 任务为每棵树维护一个 64 位校验值：收到新 Tuple 就把它的 id 异或进去，收到 ack 再异或一次——同一个 id 异或两次会相互抵消。当整棵树的校验值归零，说明所有分支都处理完了，acker 才回调 <code>spout.ack()</code>；只要有分支没 ack，超过 <code>TOPOLOGY_MESSAGE_TIMEOUT_SECS</code>（默认 30 秒）就判定超时，回调 <code>spout.fail()</code> 让 Spout 重放这条消息。因此 Storm 默认提供的是 <strong>at-least-once</strong>（至少一次）语义：不丢，但可能重复。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-5/02-ack-tuple-tree.svg" alt="Storm 元组树与 acker 校验机制示意图"><figcaption>图 2：元组树与 acker 异或校验：全部分支 ack 才提交，漏 ack 则超时重放</figcaption></figure>
+
 <p>代价与开关都要清楚：acker 会带来额外网络与 CPU 开销（经验值 10%~20% 吞吐），如果数据源本身可重放、或业务允许丢少量数据，把 <code>Config.setNumAckers(0)</code> 关掉 ack 就能白赚一部分吞吐；反过来，想拿到 exactly-once（精确一次），要用 <strong>Trident</strong> 这层更高阶的 API，它把流切成小批并管理状态与事务，或者干脆在写入端做幂等/去重。另外要注意：可靠性是「全链路」的，Spout 开了 ack、中间某个 Bolt 却忘了 <code>ack</code> 或用了不带 input 的 emit，结果就是该 Tuple 一直等到超时被无条件重放，表现为计数偏大、下游重复写。Storm 2.x 还引入了 <code>ICommitterBolt</code> 与 <code>CheckpointSpout</code> 等机制配合 Trident，但常用场景下 ack 三元组（emit 带 msgId、锚定发射、显式 ack）已经够用。</p>
 
 <p>运行与运维命令如下。<code>storm jar</code> 提交时把 <code>main</code> 类写在拓扑 jar 之后，附加参数会传给 <code>main</code>。</p>
@@ -292,6 +296,8 @@ storm kill word-count -w 30</code></pre>
 <h2>四、Storm、Spark Streaming、Flink 怎么选</h2>
 
 <p>三者的本质差别在计算模型。<strong>Storm</strong> 是逐条处理的真流系统，延迟可低到毫秒级，API 也最底层：状态要自己维护（比如用一个 <code>Map</code> 存计数），容错只有 at-least-once，需要额外用 Trident 才能做到精确一次；它的强项是延迟极低、模型简单、易于理解。<strong>Spark Streaming</strong> 是微批（micro-batch）：按 <code>batch interval</code>（通常秒级）把流切成 RDD 序列（DStream），因此延迟下限就是批间隔，换来的是复用 Spark 生态与 SQL 能力；Spark 2.0 之后官方主推 Structured Streaming，DStream API 已进入维护状态。<strong>Flink</strong> 则是真流 + 事件时间 + 水位线 + Checkpoint 状态，原生提供 exactly-once，同时把批与流统一到一套 API 上，今天新项目的默认选择基本是它。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-5/03-framework-compare.svg" alt="Storm、Spark Streaming、Flink 对比与选型示意图"><figcaption>图 3：Storm、Spark Streaming、Flink 在计算模型、延迟、事件时间、容错语义与选型上的对比</figcaption></figure>
 
 <p>落到选型上：新项目做实时计算，优先 Flink；如果只是从 Kafka 到 Kafka 的轻量转换、过滤、路由，Kafka Streams 或 Flink 的 SQL 更省运维；只有在维护存量系统、或者对延迟极度敏感且业务逻辑很简单的管道上，Storm 才仍是合理选项。要提醒的是，网上不少「Storm 是流处理唯一答案」的结论来自 2013—2016 年的资料，那时 Flink 尚未成熟，这个前提今天已经不存在了。</p>
 

@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>Flink 流处理 | tianxia</title>
+<title>8.4 Flink 流处理 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>Flink 流处理</h1>
+              <h1>8.4 Flink 流处理</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，8 min read</span>
@@ -134,7 +134,7 @@
 
 <p>批处理的世界里，"什么时候的数据"不需要讨论：一次运行只处理一个确定的数据集，结果稳定可重放。流处理则必须回答两个批处理不会遇到的问题。第一是<strong>时间归属</strong>：一条消息的"发生时间"（事件时间）和它被 Flink 处理的时间（处理时间）可能相差几秒到几小时，如果按处理时间统计"每分钟成交额"，那么上游一次积压就会把两个不同时刻的数据算进同一个窗口，结果无法复现，重跑作业还会得到不同答案。第二是<strong>跨事件的记忆</strong>：无界流上无法"等全部数据到齐再算"，所以必须把中间结果保存下来，这就是状态；而作业一旦失败重启，状态必须能从某个一致点恢复，否则计数会重复或丢失。窗口解决的问题是"把无界切成有界来聚合"，状态解决的问题是"在无界中记住东西"，Checkpoint 解决的则是"记住的东西如何不丢"。这三者构成了流处理的核心。</p>
 
-<h2>DataStream 程序的骨架</h2>
+<h2>DataStream 程序的骨架与时间语义</h2>
 
 <p>一个 Flink 作业的代码结构始终是 <code>Source → Transformation → Sink</code>：从数据源读取，经过若干算子转换，最后写出到外部系统。与批处理最大的差别是算子默认是<strong>有状态且长期运行</strong>的，算子之间通过数据流传递记录，而不是靠返回值串联。下面这段代码搭出一个最小可运行的骨架，并注册了事件时间与水位线（Watermark），后续小节都在它上面展开。</p>
 
@@ -180,13 +180,13 @@ public class BrowseJob {
     }
 }</code></pre>
 
-<h2>时间语义、水位线与窗口</h2>
-
 <h3>三种时间与水位线的作用</h3>
 
 <p>Flink 支持三种时间语义：<strong>事件时间</strong>（数据自身携带的发生时间）、<strong>处理时间</strong>（算子所在机器的系统时间）和<strong>摄入时间</strong>（进入 Flink 的时间）。只有事件时间能保证结果可复现，因此生产作业几乎都选它。需要注意的是，<code>TimeCharacteristic</code> 与 <code>env.setStreamTimeCharacteristic(...)</code> 这套全局设置从 Flink 1.12 起已被废弃并在 1.14 移除：现在时间语义由你用哪种 <code>WindowAssigner</code>（或用 <code>KeyedProcessFunction</code> 处理时间戳）直接决定，使用 <code>TumblingEventTimeWindows</code> 即事件时间，不需要也不应该再去设置全局语义。</p>
 
-<p>水位线是一个随时间单调递增的特殊标记，含义是"事件时间小于该值的记录应该都到齐了"。分配器收到一条记录时取 <code>max(已见最大时间戳 - 乱序容忍时长, 当前水位线)</code> 得到新水位线；默认每 200ms 向下游发送一次。理解一句话就够了：<strong>窗口由水位线推进触发，而不是由记录到达触发</strong>。这也解释了两个经典现象：乱序容忍时长设得越大，结果越准但延迟越高；如果某个分区长时间没有数据，水位线会卡住，导致所有窗口都不输出——这正是 <code>withIdleness</code> 要解决的场景。</p>
+<p>水位线是一个随时间单调递增的特殊标记，含义是"事件时间小于该值的记录应该都到齐了"。分配器收到一条记录时取 <code>max(已见最大时间戳 - 乱序容忍时长, 当前水位线)</code> 得到新水位线；默认每 200ms 向下游发送一次。理解一句话就够了：<strong>窗口由水位线推进触发，而不是由记录到达触发</strong>。
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/01-stream-pipeline.svg" alt="Flink 作业骨架与水位线推进示意图"><figcaption>图 1：Flink 作业骨架（Source → Transformation → Sink）与事件时间线上的乱序记录、水位线推进</figcaption></figure>这也解释了两个经典现象：乱序容忍时长设得越大，结果越准但延迟越高；如果某个分区长时间没有数据，水位线会卡住，导致所有窗口都不输出——这正是 <code>withIdleness</code> 要解决的场景。</p>
 
 <h3>窗口类型与选择</h3>
 
@@ -243,7 +243,9 @@ raw.keyBy(Browse::getUserId)
 
 <p>这里有两个必须避开的坑。一是<strong>累加器的复用语义</strong>：Flink 会把累加器对象保存在状态里，<code>add</code> 方法可能被连续调用并复用同一个对象，因此要更新后返回该对象（上面的写法），千万不要每次都 <code>new</code> 一个新累加器并在其中 <code>+=</code> 后返回，那会导致中间结果丢失。二是<strong>不要修改输入元素</strong>：<code>ReduceFunction</code> 里若直接改 <code>value1</code> 的字段并返回，在重试或重放时会出现难以复现的错误，应当返回原对象引用而非就地修改。</p>
 
-<p>窗口能算出结果，靠的是状态在背后兜底。状态分两类：<code>Keyed State</code>（<code>ValueState</code>、<code>ListState</code>、<code>MapState</code> 等，只能用在 <code>keyBy</code> 后的算子里，天然按 key 隔离）和 <code>Operator State</code>（如 Kafka Source 的分区偏移量，按算子并行子任务分配）。状态必须有<strong>状态后端</strong>承载：旧版本的 <code>MemoryStateBackend</code>、<code>FsStateBackend</code>、<code>RocksDBStateBackend</code> 三选一，从 Flink 1.13 起统一为 <code>HashMapStateBackend</code> 与 <code>EmbeddedRocksDBStateBackend</code> 两种，<code>env.setStateBackend(...)</code> 的配置方式也随之改变。数据量超过内存、或需要增量 Checkpoint 时选 RocksDB，其余情况 HashMap 更简单也更快。</p>
+<p>窗口能算出结果，靠的是状态在背后兜底。状态分两类：<code>Keyed State</code>（<code>ValueState</code>、<code>ListState</code>、<code>MapState</code> 等，只能用在 <code>keyBy</code> 后的算子里，天然按 key 隔离）和 <code>Operator State</code>（如 Kafka Source 的分区偏移量，按算子并行子任务分配）。
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-4/02-window-state-checkpoint.svg" alt="四类窗口、状态分类与 Checkpoint 屏障示意图"><figcaption>图 2：四类窗口的时间线对照，以及 Keyed State / Operator State 与 Checkpoint 的分工</figcaption></figure>状态必须有<strong>状态后端</strong>承载：旧版本的 <code>MemoryStateBackend</code>、<code>FsStateBackend</code>、<code>RocksDBStateBackend</code> 三选一，从 Flink 1.13 起统一为 <code>HashMapStateBackend</code> 与 <code>EmbeddedRocksDBStateBackend</code> 两种，<code>env.setStateBackend(...)</code> 的配置方式也随之改变。数据量超过内存、或需要增量 Checkpoint 时选 RocksDB，其余情况 HashMap 更简单也更快。</p>
 
 <h2>Checkpoint、重启策略与反压</h2>
 

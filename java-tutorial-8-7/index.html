@@ -141,6 +141,8 @@
 <h3>2.1 Exchange 才是路由的核心</h3>
 
 <p>RabbitMQ 用 Erlang 编写，实现 AMQP 0-9-1 协议。它和 Kafka 最大的架构差异是：生产者<strong>不直接把消息写进队列</strong>，而是发给 Exchange（交换机），由 Exchange 按 Binding（绑定）和 Routing Key 决定投递到哪些 Queue。生产者对队列是无感知的，这正是它能做灵活路由的原因。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-7/01-rabbitmq-routing.svg" alt="RabbitMQ 交换机路由模型示意图"><figcaption>图 1：生产者只发 Exchange，消息进哪些队列由交换机类型、绑定与路由键共同决定</figcaption></figure>
+
 
 <ul>
 <li><strong>direct</strong>：Routing Key 完全匹配，用于点对点精确投递。</li>
@@ -214,6 +216,8 @@ channel.basicConsume("order.pay.queue", false, (tag, delivery) -&gt; {
 <li><strong>ConsumeQueue</strong>：每个 Topic 的每个队列一个轻量索引，只记录消息在 CommitLog 中的物理偏移、消息大小和 Tag 的哈希值，定长 20 字节。所以队列本身几乎不占空间。</li>
 <li><strong>IndexFile</strong>：按 Message Key 建立的哈希索引，供控制台按业务键查询，结构类似 HashMap。</li>
 </ul>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-7/02-rocketmq-storage.svg" alt="RocketMQ 分层存储结构示意图"><figcaption>图 2：CommitLog 顺序写全量消息，ConsumeQueue 只存 20 字节索引指向它</figcaption></figure>
+
 
 <p>这个设计的取舍很鲜明：写是纯顺序写，读却变成随机读。RocketMQ 依赖 page cache 预读、把 IO 调度算法调成 deadline 或 NOOP，来把随机读尽量变成"顺序跳跃"，官方称这类读性能可提升 5 倍以上；同时因为 CommitLog 里保存了全部元信息，ConsumeQueue 即使损坏也能重建。</p>
 

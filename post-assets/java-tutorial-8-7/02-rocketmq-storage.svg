@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>RocketMQ 分层存储：CommitLog 顺序写，ConsumeQueue 轻量索引，IndexFile 哈希索引</title>
+  <rect width="900" height="420" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">RocketMQ：CommitLog 顺序写 + ConsumeQueue 轻量索引</text>
+
+  <rect x="30" y="170" width="100" height="52" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="80" y="192" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2b38">生产者</text>
+  <text x="80" y="209" text-anchor="middle" font-size="11" fill="#5b6b7c">Producer</text>
+  <line x1="130" y1="196" x2="172" y2="196" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="176" y="64" width="694" height="300" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4" stroke-dasharray="7 5"/>
+  <text x="196" y="90" font-size="12.5" font-weight="700" fill="#1f2b38">Broker 节点</text>
+
+  <rect x="196" y="98" width="654" height="80" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="210" y="118" font-size="12" fill="#1f2b38">CommitLog：全部消息按到达顺序追加写，单文件默认 1 GB</text>
+  <rect x="210" y="128" width="118" height="40" rx="4" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="269" y="153" text-anchor="middle" font-size="11" fill="#1f2b38">msg1</text>
+  <rect x="334" y="128" width="118" height="40" rx="4" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="393" y="153" text-anchor="middle" font-size="11" fill="#1f2b38">msg2</text>
+  <rect x="458" y="128" width="118" height="40" rx="4" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="517" y="153" text-anchor="middle" font-size="11" fill="#1f2b38">msg3</text>
+  <rect x="582" y="128" width="118" height="40" rx="4" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="641" y="153" text-anchor="middle" font-size="11" fill="#1f2b38">msg4</text>
+  <rect x="706" y="128" width="118" height="40" rx="4" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="765" y="153" text-anchor="middle" font-size="11" fill="#1f2b38">msg5 …</text>
+
+  <line x1="300" y1="214" x2="300" y2="182" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="695" y1="214" x2="695" y2="182" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="312" y="204" font-size="11" fill="#5b6b7c">按 offset 定位</text>
+
+  <rect x="196" y="216" width="310" height="58" rx="8" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="214" y="238" font-size="12" font-weight="700" fill="#1f2b38">ConsumeQueue：TopicA - Q0</text>
+  <text x="214" y="258" font-size="11" fill="#5b6b7c">20 字节：物理偏移 + 消息大小 + tag hash</text>
+  <rect x="540" y="216" width="310" height="58" rx="8" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="558" y="238" font-size="12" font-weight="700" fill="#1f2b38">ConsumeQueue：TopicA - Q1</text>
+  <text x="558" y="258" font-size="11" fill="#5b6b7c">只存指针，队列本身几乎不占空间</text>
+
+  <rect x="196" y="292" width="654" height="54" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="210" y="314" font-size="12" fill="#1f2b38">IndexFile：按 Message Key 建哈希索引，供控制台按业务键查询</text>
+  <text x="210" y="334" font-size="11" fill="#5b6b7c">结构类似 HashMap，不参与消费主链路；ConsumeQueue 损坏时可由 CommitLog 重建</text>
+
+  <text x="40" y="398" font-size="11.5" fill="#1f2b38">写是纯顺序写、读是随机读：靠 page cache 预读与 IO 调度（deadline／NOOP）把随机读变成顺序跳跃。</text>
+</svg>

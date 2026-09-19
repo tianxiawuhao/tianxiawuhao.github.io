@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>Kafka 消息中间件 | tianxia</title>
+<title>8.6 Kafka 消息中间件 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,10 +111,10 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>Kafka 消息中间件</h1>
+              <h1>8.6 Kafka 消息中间件</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，8 min read</span>
+                2026-09-19，9 min read</span>
             </div>
           
         
@@ -146,6 +146,8 @@
 </ul>
 
 <p>Kafka 的高吞吐来自几处设计：分区带来的水平扩展、批量发送与批量拉取、利用操作系统的 page cache 而不自己维护缓存、以及用 <code>sendfile</code> 零拷贝把日志文件直接送到网卡。日志追加写也保证了每个分区的读写都是 O(1) 的常数时间操作，性能基本与数据总量无关。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-6/01-commit-log.svg" alt="Kafka 提交日志、分区与消费组示意图"><figcaption>图 1：Kafka 的分区提交日志、offset 追加写与消费组 A/B 的单播与广播关系</figcaption></figure>
 
 <h2>二、分区与副本：并行度和可靠性的来源</h2>
 
@@ -268,9 +270,13 @@ try (KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(pr
 
 <p>只设置 <code>acks=all</code> 还不够，它必须与 broker 端的 <code>min.insync.replicas</code> 联合判断：当 ISR 中的副本数少于该值时，broker 会直接拒绝写入并抛错，而不是"假装成功"。典型配置是 <code>replication.factor=3</code>、<code>min.insync.replicas=2</code>、<code>acks=all</code>：允许一个副本故障，同时保证每条被确认的消息至少存在于两个副本上。此外，还要配合足够大的 <code>delivery.timeout.ms</code> 和重试次数，否则重试还没成功，超时就已经把消息判死了。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-6/02-isr-acks.svg" alt="Kafka 副本、ISR 与 acks 可靠性配置示意图"><figcaption>图 2：分区副本与 ISR 集合，以及 acks=all / 1 / 0 在可靠性与吞吐之间的取舍</figcaption></figure>
+
 <h3>4.2 消费组的再平衡</h3>
 
 <p>以下情况会触发 <strong>Rebalance</strong>：消费者加入或离开、订阅的 topic 分区数变化、以及消费者长时间未发送心跳被判定为失联。Rebalance 期间整个组会短暂停止消费，所以频繁 Rebalance 是线上最常见的故障之一。两个实用的规避手段：把 <code>max.poll.interval.ms</code>（两次 poll 之间允许的最大处理时间）调大，避免单批处理过慢被踢出组；给消费者设置稳定的 <code>group.instance.id</code> 使用静态成员，让短暂的进程重启不触发全组重平衡。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-6/03-rebalance-transaction.svg" alt="Kafka 再平衡触发条件与事务流程示意图"><figcaption>图 3：Rebalance 的触发条件与规避手段，以及把消费、处理、生产打包成原子事务的流程</figcaption></figure>
 
 <h3>4.3 事务与恰好一次</h3>
 

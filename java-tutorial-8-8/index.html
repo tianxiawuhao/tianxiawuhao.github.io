@@ -135,6 +135,8 @@
 <p>关系数据库的索引是「文档 → 词」的正排结构：给定一行记录，能快速找到它的字段值。全文检索的需求方向恰好相反，是「词 → 文档列表」：给定一个查询词，要立刻拿到所有包含它的文档。如果只有正排索引，就只能把每篇文档读出来逐字比对，这正是 <code>LIKE '%x%'</code> 慢的根源。</p>
 
 <p>倒排索引把方向倒过来。写入文档时先分词，把所有不重复的词组成一张词表（term dictionary），每个词后面挂着出现过它的文档编号列表（posting list），列表里通常还附带词频、位置等信息。搜索时不再扫描文档，而是先查词表定位词条，再取出对应的文档列表求交集或并集，最后按相关性打分排序返回。所以倒排索引有两个直接推论：一是「搜得准不准」取决于分词，二是「搜得快不快」取决于词表与 posting list 的组织方式。ES 用的打分模型是 BM25，一个词在文档中出现次数越多、在整个索引中越罕见，该文档的得分越高；这也解释了为什么用简单「命中词条数量」打分是不够的——稀有词应当更有分量。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-8/01-inverted-index.svg" alt="正排索引与倒排索引对比示意图"><figcaption>图 1：倒排索引把「文档 → 词」翻转成「词 → 文档列表」，这是 ES 检索快、打分准的根</figcaption></figure>
+
 
 <p>第三个推论是写入与检索之间的时间差。ES 写入的文档先进入内存缓冲，默认每秒做一次 refresh 形成新的可搜索段，所以它是「近实时」（NRT）而非实时：写入后大约 1 秒内可被搜到，对账类场景要留意这一点。</p>
 
@@ -193,6 +195,8 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
   "size": 10,
   "sort": [ { "created_at": { "order": "desc" } } ]
 }</code></pre>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-8/02-bool-query.svg" alt="bool 查询子句结构示意图"><figcaption>图 2：bool 的四类子句与返回结果，打分条件进 must、过滤条件进 filter</figcaption></figure>
+
 
 <p>关于 bool 查询有三个要点。其一是 <code>filter</code> 与 <code>must</code> 的区别：<code>must</code> 参与打分，<code>filter</code> 只判断「是/否」、不打分，因此能被缓存并跳过打分计算，能用 filter 的精确条件就不要放进 must。其二是打分与排序的关系：一旦显式指定 <code>sort</code>，<code>_score</code> 通常为 null，相关性顺序被排序字段覆盖，这一点在「按时间倒序却还指望最相关的排最前」时会造成困惑。其三是分页：<code>from + size</code> 的窗口不能超过 <code>index.max_result_window</code>（默认 10000），深分页要用 <code>search_after</code> + 稳定排序键；此外 7.x 起 <code>hits.total</code> 是形如 <code>{"value": 42, "relation": "eq"}</code> 的对象，而不是一个数字，解析响应时按数字取值会直接报错。要拿到「全部命中数」应显式使用 <code>track_total_hits: true</code>。</p>
 
