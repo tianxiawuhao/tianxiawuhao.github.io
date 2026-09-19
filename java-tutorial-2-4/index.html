@@ -193,7 +193,17 @@ SET GLOBAL log_queries_not_using_indexes = ON;
 
 <ul>
 <li><code>id</code>：查询块的编号。<code>id</code> 相同表示同层、按从上到下的顺序执行；<code>id</code> 不同则<strong>数值越大越先执行</strong>（先算子查询，再喂给外层）；<code>id</code> 为 <code>NULL</code> 说明这一行是 <code>UNION RESULT</code> 之类的合并结果，没有对应的真实表。</li>
-<li><code>select_type</code>：这一行属于哪种查询块。<code>SIMPLE</code> 表示不含子查询和 UNION；<code>PRIMARY</code> 是最外层；<code>SUBQUERY</code> 是 SELECT 列表或 WHERE 里的非相关子查询；<code>DEPENDENT SUBQUERY</code> 是相关子查询，会随外层每一行重算，最需要警惕；<code>DERIVED</code> 是 FROM 里的派生表（通常被物化）；<code>UNION</code>／<code>UNION RESULT</code> 对应集合运算；<code>MATERIALIZED</code> 表示子查询被物化成临时表。</li>
+<li><code>select_type</code>：这一行属于哪种查询块，常见取值如下：
+<ul>
+<li><code>SIMPLE</code>：不含子查询和 UNION。</li>
+<li><code>PRIMARY</code>：最外层。</li>
+<li><code>SUBQUERY</code>：SELECT 列表或 WHERE 里的非相关子查询。</li>
+<li><code>DEPENDENT SUBQUERY</code>：相关子查询，会随外层每一行重算，最需要警惕。</li>
+<li><code>DERIVED</code>：FROM 里的派生表（通常被物化）。</li>
+<li><code>UNION</code>／<code>UNION RESULT</code>：对应集合运算。</li>
+<li><code>MATERIALIZED</code>：子查询被物化成临时表。</li>
+</ul>
+</li>
 <li><code>table</code>：这一行访问的表名。<code>&lt;derived2&gt;</code> 表示引用 <code>id=2</code> 的派生表，<code>&lt;subquery3&gt;</code> 是物化子查询，它们都是临时结果，不是真实表。</li>
 <li><code>partitions</code>：分区裁剪后真正命中的分区；未分区表恒为 <code>NULL</code>。这里的 <code>NULL</code> 与“有没有走索引”无关，别误读。</li>
 <li><code>type</code>：访问类型，判断效率最直接的列，取值阶梯见下一小节。</li>
@@ -255,7 +265,12 @@ LIMIT 100;
 --             -&gt; Table scan on o  (actual time=0.02..0.20 rows=5000 loops=1)
 --         -&gt; Index lookup on u using PRIMARY (id=o.user_id)  (actual time=0.001..0.001 rows=1 loops=100)</code></pre>
 
-<p>读 <code>EXPLAIN ANALYZE</code> 有两种基本判断。<strong>估算显著小于实测</strong>（例如预估 100 行、实测 10 万行），说明统计信息不准或条件相关性被低估，优化器很可能因此选错索引、选错连接顺序；<strong>实测行数正常但耗时很高</strong>，就要看 <code>loops</code> 被放大的那一步——嵌套循环里某层的 <code>loops</code> 很大，它单次的开销会被乘成大数目。要注意 <code>EXPLAIN ANALYZE</code> 会真的执行语句（含多表写语句也会执行），8.0.18 最初只支持 <code>SELECT</code>，后续版本才逐步扩展到多表 <code>UPDATE</code>／<code>DELETE</code>，可用范围以官方为准；分析慢语句时也应避开业务高峰。</p>
+<p>读 <code>EXPLAIN ANALYZE</code> 有两种基本判断：</p>
+<ul>
+<li><strong>估算显著小于实测</strong>（例如预估 100 行、实测 10 万行）：说明统计信息不准或条件相关性被低估，优化器很可能因此选错索引、选错连接顺序。</li>
+<li><strong>实测行数正常但耗时很高</strong>：就要看 <code>loops</code> 被放大的那一步。嵌套循环里某层的 <code>loops</code> 很大，它单次的开销会被乘成大数目。</li>
+</ul>
+<p>要注意 <code>EXPLAIN ANALYZE</code> 会真的执行语句（含多表写语句也会执行），8.0.18 最初只支持 <code>SELECT</code>，后续版本才逐步扩展到多表 <code>UPDATE</code>／<code>DELETE</code>，可用范围以官方为准；分析慢语句时也应避开业务高峰。</p>
 
 <p><code>EXPLAIN ANALYZE</code> 目前只输出 TREE 格式。要机器可读、信息更全的结果，用 <code>FORMAT=JSON</code>：</p>
 
@@ -385,7 +400,7 @@ DROP TRIGGER trg_user_after_insert;   -- 删除触发器</code></pre>
 <li><strong>难排查</strong>：触发器里出错，报错信息指向触发它的那条语句，堆栈里没有业务上下文；日志、监控、链路追踪通常也覆盖不到数据库内部这一层。</li>
 <li><strong>难测试、难版本管理</strong>：触发器不在应用代码仓库的主流程里，容易被漏进发布脚本；单元测试也绕不开它，只能连真库跑。</li>
 <li><strong>放大事务与锁</strong>：触发器在<strong>同一个事务</strong>内执行，额外写的表会把事务拉长、把锁范围扩大，死锁概率随之上升，而主语句看起来只是一次简单写入。</li>
-<li><strong>复制风险</strong>：基于语句的复制（STATEMENT）会把原语句发到从库、让触发器在从库再执行一次，一旦其中用到 <code>NOW()</code>、<code>RAND()</code>、<code>UUID()</code> 这类非确定性函数，主从数据就可能不一致（生产推荐 ROW 格式正有这层原因）；触发器还带 <code>DEFINER</code>，主从账号权限不一致时也可能执行失败。具体行为随 binlog 格式与版本而异，以官方文档为准。</li>
+<li><strong>复制风险</strong>：基于语句的复制（STATEMENT）会把原语句发到从库，让触发器在从库再执行一次。一旦其中用到 <code>NOW()</code>、<code>RAND()</code>、<code>UUID()</code> 这类非确定性函数，主从数据就可能不一致（生产推荐 ROW 格式正有这层原因）。触发器还带 <code>DEFINER</code>，主从账号权限不一致时也可能执行失败。具体行为随 binlog 格式与版本而异，以官方文档为准。</li>
 <li><strong>能力受限</strong>：不能改触发自己的表，难以单步调试，也无法像应用代码那样方便地做灰度、回滚与单元测试。</li>
 </ul>
 
