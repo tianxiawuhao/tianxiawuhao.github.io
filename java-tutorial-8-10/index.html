@@ -130,7 +130,14 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>集群装好只是起点，真正折磨人的是上线之后的日子：任务排队几小时不动、某个节点磁盘越写越慢、业务量翻倍要加机器、老服务器要退役又不能停服。本章把大数据集群的日常运维串成一条线，共四步：资源规划、调度器与队列、扩容与缩容、监控与故障定位。本章适合已经搭过 Hadoop、YARN 集群，能跑通一个 MapReduce 或 Spark 作业，但一遇到“任务卡住”就只会重启集群的读者。</p>
 
-<p>先建立一个总印象：YARN 把集群抽象成“资源池 + 调度器 + 容器”。ResourceManager（RM）是整个集群资源的管理者；NodeManager（NM）管单台机器的资源；ApplicationMaster（AM）为每个应用向 RM 申请资源并监控任务；Container 则是被封装起来的多维资源（内存、CPU、磁盘、网络）。记住这个分工，后面所有调参和排障都能对上号。</p>
+<p>先建立一个总印象：YARN 把集群抽象成“资源池 + 调度器 + 容器”。四个角色分工如下：</p>
+<ul>
+<li>ResourceManager（RM）是整个集群资源的管理者；</li>
+<li>NodeManager（NM）管单台机器的资源；</li>
+<li>ApplicationMaster（AM）为每个应用向 RM 申请资源并监控任务；</li>
+<li>Container 则是被封装起来的多维资源（内存、CPU、磁盘、网络）。</li>
+</ul>
+<p>记住这个分工，后面所有调参和排障都能对上号。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-10/01-yarn-roles.svg" alt="YARN 角色分层图：ResourceManager 统管集群资源并内置调度器与队列，向下管理多个 NodeManager，每个 NodeManager 上用 Container 承载内存与 vCore，ApplicationMaster 与任务都跑在容器里"><figcaption>图 1：YARN 的角色分层——RM 管全局与队列，NM 管单机，Container 承载 AM 与任务</figcaption></figure>
 
@@ -227,11 +234,25 @@ hdfs dfsadmin -refreshNodes
 
 <p>还建议开启日志聚集：把 <code>yarn.log-aggregation-enable</code> 置为 <code>true</code>，并配置 <code>yarn.log.server.url</code> 与保留时间，让容器日志在应用结束后自动上传到 HDFS。否则任务失败后容器一销毁，日志就跟着没了，只能靠猜。开启后必须重启 NodeManager、ResourceManager 与 HistoryServer 才生效。</p>
 
-<p>两类典型故障的判断方法：<strong>任务一直处于 ACCEPTED 不分配容器</strong>，先看是不是队列容量被占满、容器最大内存设得比任务需求小，或 NodeManager 上报的资源总量不够；<strong>某台节点越跑越慢</strong>，先查 DataNode 与 NameNode 的心跳，正常间隔 3 秒，持续超时即说明有异常；再用 <code>fio</code> 这类工具单独测这块盘的读写带宽。慢盘往往表现为“偶尔创建目录要一分钟以上”这类偶发现象，而不是直接报错。</p>
+<p>两类典型故障的判断方法如下：</p>
+<ul>
+<li><strong>任务一直处于 ACCEPTED 不分配容器</strong>：先看是不是队列容量被占满、容器最大内存设得比任务需求小，或 NodeManager 上报的资源总量不够；</li>
+<li><strong>某台节点越跑越慢</strong>：先查 DataNode 与 NameNode 的心跳，正常间隔 3 秒，持续超时即说明有异常；再用 <code>fio</code> 这类工具单独测这块盘的读写带宽。</li>
+</ul>
+<p>慢盘往往表现为“偶尔创建目录要一分钟以上”这类偶发现象，而不是直接报错。</p>
 
 <h2>常见坑与小结</h2>
 
-<p>把踩坑经验收成几条清单：内存单位是 MB，别把 4096 当 4G 写错位数；虚拟核数不能超过物理核数太多，超售换来的是任务互相拖慢；容器最大内存小于任务申请值时任务直接失败，而不是“降级运行”；队列参数可以热加载，但调度器实现类和 NM 资源总量改完要重启；白名单和黑名单文件缺一不可，退役前先确认副本数与节点数；NameNode 与 ResourceManager 都很吃内存，不要和同类重进程挤在同一台机器上。最后别忘了集群时间同步：内网如果没有配置 NTP 同步，时间漂移会直接搞乱调度与日志排查。</p>
+<p>把踩坑经验收成几条清单：</p>
+<ul>
+<li>内存单位是 MB：别把 4096 当 4G 写错位数；</li>
+<li>虚拟核数不能超过物理核数太多：超售换来的是任务互相拖慢；</li>
+<li>容器最大内存小于任务申请值时任务直接失败，而不是“降级运行”；</li>
+<li>队列参数可以热加载，但调度器实现类和 NM 资源总量改完要重启；</li>
+<li>白名单和黑名单文件缺一不可：退役前先确认副本数与节点数；</li>
+<li>NameNode 与 ResourceManager 都很吃内存：不要和同类重进程挤在同一台机器上。</li>
+</ul>
+<p>最后别忘了集群时间同步：内网如果没有配置 NTP 同步，时间漂移会直接搞乱调度与日志排查。</p>
 
 <p>小结一下：集群运维的顺序是“先规划资源，再选调度器，然后才是扩缩容和监控”。资源规划决定了集群的上限，调度器决定了资源在多个团队之间的分配规则，扩缩容决定了集群能否随业务伸缩，而监控与日志决定了出故障时你能不能在几分钟内定位，而不是靠重启碰运气。把这四件事做成有文档、可重复的流程，集群才算真正“可运维”。</p>
           </article>

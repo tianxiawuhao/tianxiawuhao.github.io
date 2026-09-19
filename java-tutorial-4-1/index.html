@@ -220,7 +220,13 @@ return;</code></pre>
 
 <p>两条规则决定了选哪个：<strong>需要保留 <code>request</code> 域里的数据、想让地址栏停在当前 URL，就用转发；想让地址栏变成新地址、避免用户刷新导致表单重复提交，就用重定向。</strong>业界常说的 PRG（Post-Redirect-Get）模式，就是在表单提交成功后重定向到结果页，刷新时浏览器只会重新 GET 结果页，不会把订单再提交一遍。</p>
 
-<p>还有几个容易记混的细节：转发只能回到<em>同一个 Web 应用</em>内的资源，重定向可以跳到别的应用甚至别的站点（绝对 URL）；转发是容器内部调用，重定向多一次网络往返，性能略差但语义更干净；转发不能修改响应状态码之后再转，一旦响应已经提交（<code>response.isCommitted()</code> 为真）两者都会抛 <code>IllegalStateException</code>。</p>
+<p>还有几个容易记混的细节，逐条对照如下：</p>
+<ul>
+<li>范围：转发只能回到<em>同一个 Web 应用</em>内的资源，重定向可以跳到别的应用甚至别的站点（绝对 URL）。</li>
+<li>性能：转发是容器内部调用，重定向多一次网络往返，性能略差但语义更干净。</li>
+<li>限制：转发不能修改响应状态码之后再转，一旦响应已经提交（<code>response.isCommitted()</code> 为真）两者都会抛 <code>IllegalStateException</code>。</li>
+</ul>
+<p></p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-1/02-forward-vs-redirect.svg" alt="对比图：请求转发是服务器内部调用、地址栏不变、request 域可共享；请求重定向返回 302，浏览器发起第二次请求，地址栏改变"><figcaption>图 2：转发（一次请求）与重定向（两次请求）的流程与差异</figcaption></figure>
 
@@ -309,11 +315,11 @@ public class BookServlet extends HttpServlet {
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-1/03-mvc-dispatch.svg" alt="Spring MVC 请求处理流程图：请求进入 DispatcherServlet，依次经过 HandlerMapping、Controller、Service 与 DAO，返回 ModelAndView 后由 ViewResolver 渲染视图"><figcaption>图 3：MVC 分层与 DispatcherServlet 的调度流程</figcaption></figure>
 
-<p>理解了这一层，就理解了两件事：为什么 Spring Boot 3 / Jakarta EE 9 之后包名从 <code>javax.servlet</code> 变成了 <code>jakarta.servlet</code>——因为 Servlet 接口被捐给 Eclipse 基金会并改名，写代码时用错包名会直接编译失败；以及为什么 <code>/WEB-INF</code> 下的 JSP 必须转发才能访问——那是容器的安全约定，不是框架的限制。</p>
+<p>理解了这一层，就理解了两件事。第一，Spring Boot 3 / Jakarta EE 9 之后包名从 <code>javax.servlet</code> 变成了 <code>jakarta.servlet</code>，因为 Servlet 接口被捐给 Eclipse 基金会并改名，写代码时用错包名会直接编译失败。第二，<code>/WEB-INF</code> 下的 JSP 必须转发才能访问，那是容器的安全约定，不是框架的限制。</p>
 
 <h2>小结</h2>
 
-<p>本章的主线只有一条：<strong>请求从容器进入 Servlet，就近放在合适的域里，再由视图读取渲染</strong>。Servlet 由容器调度，一生只有一次 <code>init</code> 和一次 <code>destroy</code>，但 <code>service</code> 会被多线程并发调用，因此实例不能存请求数据；转发是服务器内部的一次请求（<code>request</code> 域有效、地址栏不变），重定向是让浏览器再发一次请求（地址栏改变、可跨应用，适合 PRG 防重复提交）；跨越重定向的数据要放 Session，四个作用域按「够用就好」的原则从 <code>page</code> 往 <code>application</code> 选；JSP 用 EL 与 JSTL 取值、避免脚本片段，<code>${x}</code> 会按四个域顺序查找且取不到时返回空串。最后，MVC 把这些零散的规则固化成「模型 / 视图 / 控制器」的分工，而 Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程标准化了。下一章进入 Spring 的 IoC 与 AOP，看它如何接管对象的创建与装配。</p>
+<p>本章的主线只有一条：<strong>请求从容器进入 Servlet，就近放在合适的域里，再由视图读取渲染</strong>。Servlet 由容器调度，一生只有一次 <code>init</code> 和一次 <code>destroy</code>，但 <code>service</code> 会被多线程并发调用，因此实例不能存请求数据。转发是服务器内部的一次请求（<code>request</code> 域有效、地址栏不变），重定向是让浏览器再发一次请求（地址栏改变、可跨应用，适合 PRG 防重复提交）。跨越重定向的数据要放 Session，四个作用域按「够用就好」的原则从 <code>page</code> 往 <code>application</code> 选。JSP 用 EL 与 JSTL 取值、避免脚本片段，<code>${x}</code> 会按四个域顺序查找，取不到时返回空串。最后，MVC 把这些零散的规则固化成「模型 / 视图 / 控制器」的分工，而 Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程标准化了。下一章进入 Spring 的 IoC 与 AOP，看它如何接管对象的创建与装配。</p>
           </article>
   <!-- Footer -->
   <footer>
