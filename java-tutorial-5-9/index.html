@@ -233,8 +233,14 @@ Promise.all(tasks).then(() =&gt; fetch("/upload/merge", {
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-9/02-chunk-resume.svg" alt="大文件切片上传与断点续传流程"><figcaption>图 2：切片上传的五个环节——断点记录决定重传范围，merge 必须按分片序号排序后再追加</figcaption></figure>
 
 <h2>四、文件最终放哪里：本地目录还是对象存储</h2>
-<p>单机部署写本地目录可行，但要做到三点：存储目录不能位于 Web 容器可直接访问的路径下（否则能绕过鉴权直接下载）、文件名必须唯一（UUID 或哈希）、按日期或哈希打散到多级子目录（单目录文件上千后查找和列目录性能明显下降）。一旦有多台应用服务器，本地目录立刻失效：A 机上传、请求被负载均衡打到 B 机就会 404。这时要把文件抽成独立存储层。</p>
-<p>选型上，FastDFS 是轻量级专用分布式文件系统，对文件不分块（因此没有分片合并开销），适合图片等小文件；HDFS 相反，靠牺牲延迟换吞吐，适合批量大文件；MinIO 兼容 S3 协议，通用性好、部署简单，大文件用 <code>putObject</code> 会自动分片。需要精细控制时，可用 <code>createMultipartUpload</code>、<code>uploadPart</code>、<code>completeMultipartUpload</code> 手动完成，本质与前端切片是同一套模型。云服务（阿里 OSS、七牛云、腾讯云）接口风格类似，都提供 SDK、断点续传和直传凭证，业务侧只保存 object key，因此建议从第一天起就按「库里只存 key、访问时拼 URL」设计，换存储实现时改动最小。</p>
+<p>单机部署写本地目录可行，但要做到三点：</p>
+<ul>
+<li>存储目录不能位于 Web 容器可直接访问的路径下，否则能绕过鉴权直接下载；</li>
+<li>文件名必须唯一，用 UUID 或哈希生成；</li>
+<li>按日期或哈希打散到多级子目录，因为单目录文件上千后查找和列目录性能会明显下降。</li>
+</ul>
+<p>一旦有多台应用服务器，本地目录立刻失效：A 机上传、请求被负载均衡打到 B 机就会 404。这时要把文件抽成独立存储层。</p>
+<p>选型上，FastDFS 是轻量级专用分布式文件系统，对文件不分块（因此没有分片合并开销），适合图片等小文件。HDFS 则相反，靠牺牲延迟换吞吐，适合批量大文件。MinIO 兼容 S3 协议，通用性好、部署简单，大文件用 <code>putObject</code> 会自动分片。需要精细控制时，可用 <code>createMultipartUpload</code>、<code>uploadPart</code>、<code>completeMultipartUpload</code> 手动完成，本质与前端切片是同一套模型。云服务（阿里 OSS、七牛云、腾讯云）接口风格类似，都提供 SDK、断点续传和直传凭证，业务侧只保存 object key，因此建议从第一天起就按「库里只存 key、访问时拼 URL」设计，换存储实现时改动最小。</p>
 
 <pre><code class="language-java">// MinIO：accessKey / secretKey 必须来自配置或环境变量，绝不能硬编码进代码库
 MinioClient client = MinioClient.builder()
@@ -257,7 +263,16 @@ try (InputStream in = new FileInputStream("/data/a.png")) {
 </code></pre>
 
 <h2>五、常见坑与小结</h2>
-<p>最常踩的几处：中文文件名乱码要靠 <code>setHeaderEncoding("UTF-8")</code> 或 <code>request.setCharacterEncoding</code> 解决；临时文件必须调 <code>FileItem.delete()</code> 清理，且要在流关闭之后，否则文件被占用删不掉；只校验前端传的扩展名不可靠，服务端要限制大小并做类型与后缀白名单；上传前先判 <code>isMultipartContent</code>；AK/SK 与 uploadToken 属于密钥，写死在源码里等同泄露，必须外置配置；合并要按序号排序，成功后清理分片目录。另外，Commons FileUpload、FastDFS 属于较早期的技术栈，新项目优先选云对象存储或 MinIO + S3 SDK，前端拿服务端签发的临时凭证直传，还能省掉一次中转带宽。</p>
+<p>最常踩的几处如下：</p>
+<ul>
+<li>中文文件名乱码要靠 <code>setHeaderEncoding("UTF-8")</code> 或 <code>request.setCharacterEncoding</code> 解决；</li>
+<li>临时文件必须调 <code>FileItem.delete()</code> 清理，且要在流关闭之后，否则文件被占用删不掉；</li>
+<li>只校验前端传的扩展名不可靠，服务端要限制大小并做类型与后缀白名单；</li>
+<li>上传前先判 <code>isMultipartContent</code>；</li>
+<li>AK/SK 与 uploadToken 属于密钥，写死在源码里等同泄露，必须外置配置；</li>
+<li>合并要按序号排序，成功后清理分片目录。</li>
+</ul>
+<p>另外，Commons FileUpload、FastDFS 属于较早期的技术栈，新项目优先选云对象存储或 MinIO + S3 SDK，前端拿服务端签发的临时凭证直传，还能省掉一次中转带宽。</p>
 <p>小结：文件上传的复杂度不在「写文件」，而在请求格式、体积和存储位置这三件事。小文件用 <code>multipart/form-data</code> 加 <code>MultipartFile</code> 直传；大文件必须切片，用文件标识加分片序号保证可还原，用已传分片记录实现断点续传，并给分片设过期清理；文件量一大就交给对象存储，数据库只留 key。把这三层分清楚，上传功能基本就不会再出线上问题了。</p>
           
           <nav class="post-pn">

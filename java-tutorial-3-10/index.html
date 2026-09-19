@@ -210,7 +210,14 @@ response.setDateHeader("Expires", 0);</code></pre>
 
 <h2>四、Cookie 与 Session：把状态找回来</h2>
 
-<p>Cookie 是服务端通过 <code>Set-Cookie</code> 响应头发给浏览器的一小段键值文本。浏览器保存后，在后续对同一站点的请求里通过 <code>Cookie</code> 请求头自动带回。除了 name 与 value，常用属性有：<code>maxAge</code>（正数为持久 Cookie，负数或默认 ‑1 为会话 Cookie，0 表示删除）、<code>path</code> 与 <code>domain</code>（决定这颗 Cookie 能被哪些请求带上，路径需以 <code>/</code> 结尾，domain 需以 <code>.</code> 开头）、<code>secure</code>（仅 HTTPS 传输）、<code>HttpOnly</code>（禁止 JavaScript 读取，防 XSS 盗取）、<code>SameSite</code>（限制跨站携带，防 CSRF）。</p>
+<p>Cookie 是服务端通过 <code>Set-Cookie</code> 响应头发给浏览器的一小段键值文本。浏览器保存后，在后续对同一站点的请求里通过 <code>Cookie</code> 请求头自动带回。除了 name 与 value，常用属性如下：</p>
+<ul>
+<li><code>maxAge</code>：正数为持久 Cookie，负数或默认 ‑1 为会话 Cookie，0 表示删除。</li>
+<li><code>path</code> 与 <code>domain</code>：决定这颗 Cookie 能被哪些请求带上，路径需以 <code>/</code> 结尾，domain 需以 <code>.</code> 开头。</li>
+<li><code>secure</code>：仅 HTTPS 传输。</li>
+<li><code>HttpOnly</code>：禁止 JavaScript 读取，防 XSS 盗取。</li>
+<li><code>SameSite</code>：限制跨站携带，防 CSRF。</li>
+</ul>
 
 <p>Cookie 的唯一标识是 <code>domain + path + name</code>，三者任一不同就是两颗不同的 Cookie。同名同域同路径再次 <code>addCookie()</code> 会覆盖旧值，所以“修改”与“删除”都靠覆盖实现，且 path、domain 必须与原 Cookie 完全一致，否则删不掉。</p>
 
@@ -240,7 +247,13 @@ session.invalidate();</code></pre>
 
 <h2>五、浏览器拿到响应后做了什么</h2>
 
-<p>响应字节流到达浏览器后，先按 <code>Content-Type</code> 里的 charset 解码成字符，然后进入渲染管线。渲染管线分为几步：先解析 HTML 生成 DOM 树，解析 CSS 生成 CSSOM 树，两者合并成渲染树（不可见元素如 <code>display:none</code> 不会进入）；接着计算每个盒子的位置与大小，这一步叫布局或回流；再填充颜色与文字，即绘制；最后按层合成并显示。</p>
+<p>响应字节流到达浏览器后，先按 <code>Content-Type</code> 里的 charset 解码成字符，然后进入渲染管线。渲染管线分为如下几步：</p>
+<ul>
+<li>解析 HTML 生成 DOM 树，解析 CSS 生成 CSSOM 树，两者合并成渲染树（不可见元素如 <code>display:none</code> 不会进入）。</li>
+<li>计算每个盒子的位置与大小，这一步叫布局或回流。</li>
+<li>填充颜色与文字，即绘制。</li>
+<li>按层合成并显示。</li>
+</ul>
 
 <p>理解这条链路就能解释日常现象。<code>&lt;link rel="stylesheet"&gt;</code> 会阻塞渲染，因为浏览器不想先画一版没有样式的页面。普通 <code>&lt;script&gt;</code> 会阻塞 HTML 解析，因为它可能用 <code>document.write</code> 改写文档；加 <code>defer</code> 表示解析完再按顺序执行，加 <code>async</code> 表示下载完就执行且顺序不确定。频繁触发回流与重绘的样式属性（如 <code>width</code>、<code>top</code>）代价远高于只触发合成的属性（如 <code>transform</code>、<code>opacity</code>），这也是动画优先用 <code>transform</code> 的原因。</p>
 
