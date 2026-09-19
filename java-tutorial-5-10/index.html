@@ -135,10 +135,11 @@
 <p>很多初学者把"安全"等同于"调一个加密 API"，结果做出"用 AES 加密密码后存数据库"这类看似安全、实则错误的设计。先分清三类需求，选型才不会错。</p>
 
 <p><strong>保密性</strong>：数据不能被无关的人看懂。这靠<em>加密</em>，分对称与非对称两种。<strong>完整性</strong>：数据不能被人偷偷改动。这靠<em>摘要</em>（哈希）与<em>数字签名</em>。<strong>身份认证</strong>：证明"你是谁"。这靠签名、证书、令牌（如 JWT）组合实现。三者互不替代：加密后的报文仍可能被整段替换，摘要也无法隐藏原文。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-10/01-crypto-map.svg" alt="三类安全需求与对应技术手段对照图"><figcaption>图 1：三类需求与对应手段——保密性靠加密、完整性靠摘要与签名、身份认证靠令牌</figcaption></figure>
 
 <p>另一个前置原则是<strong>不要把密钥写进代码</strong>。硬编码在 <code>.java</code> 或 <code>application.yml</code> 里的密钥，会随 Git 历史、反编译的 jar 一起泄露。生产环境应放在环境变量、配置中心或 KMS 中，并做到可轮换。</p>
 
-<h2>对称加密：AES 与它必须写对的参数</h2>
+<h3>对称加密：AES 与它必须写对的参数</h3>
 
 <p>对称加密只用一个密钥，加解密双方持有同一个它。优点是快，适合加密大块数据（文件、报文、数据库字段）。Java 标准库自带 AES 实现，不需要额外依赖。</p>
 
@@ -175,36 +176,26 @@ byte[] cipherText = cipher.doFinal("hello rsa".getBytes(StandardCharsets.UTF_8))
 
 // 3. 私钥解密
 cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-byte[] plain = cipher.doFinal(cipherText);</code></pre>
+byte[] plain = cipher.doFinal(cipherText);
 
-<p><strong>数字签名是反向使用密钥</strong>：发送方用自己的<em>私钥</em>签名，接收方用发送方的<em>公钥</em>验证。它不为了保密（签名的原文通常是公开的），而是证明"内容确实来自私钥持有者，且没被改过"。JDK 的 <code>Signature</code> 类把"先对内容做摘要、再对摘要做非对称运算"封装好了：</p>
+// 4. 数字签名：发方用私钥签，收方用公钥验（算法必须写全，别用 MD5withRSA）
+Signature signer = Signature.getInstance("SHA256withRSA");
+signer.initSign(keyPair.getPrivate());
+signer.update(plain);
+String sign = Base64.getEncoder().encodeToString(signer.sign());
 
-<pre><code class="language-java">public static String sign(byte[] data, PrivateKey priKey) throws Exception {
-    Signature signature = Signature.getInstance("SHA256withRSA"); // 别再使用 MD5withRSA
-    signature.initSign(priKey);
-    signature.update(data);
-    return Base64.getEncoder().encodeToString(signature.sign());
-}
+Signature verifier = Signature.getInstance("SHA256withRSA");
+verifier.initVerify(keyPair.getPublic());
+verifier.update(plain);
+boolean ok = verifier.verify(Base64.getDecoder().decode(sign));</code></pre>
 
-public static boolean verify(byte[] data, PublicKey pubKey, String sign)
-        throws Exception {
-    Signature signature = Signature.getInstance("SHA256withRSA");
-    signature.initVerify(pubKey);
-    signature.update(data);
-    return signature.verify(Base64.getDecoder().decode(sign));
-}</code></pre>
+<p><strong>数字签名是反向使用密钥</strong>：发送方用自己的<em>私钥</em>签名，接收方用发送方的<em>公钥</em>验证（见上面示例的第 4 步）。它不为了保密（签名的原文通常是公开的），而是证明"内容确实来自私钥持有者，且没被改过"。JDK 的 <code>Signature</code> 类已经把"先对内容做摘要、再对摘要做非对称运算"封装好了，你只需要选对算法名。</p>
 
-<p>实际业务里有一类高频场景：前端登录时不想把密码明文发给后端。做法是前端用公钥加密密码、后端用私钥解密，浏览器端可用 JSEncrypt 完成加密，公钥由后端接口下发：</p>
-
-<pre><code class="language-js">// 前端：npm i jsencrypt
-import JSEncrypt from 'jsencrypt';
-const encryptor = new JSEncrypt();
-encryptor.setPublicKey(publicKeyFromServer);   // 形如 -----BEGIN PUBLIC KEY-----
-const encrypted = encryptor.encrypt(password); // 得到 Base64 密文，随登录请求提交</code></pre>
+<p>实际业务里有一类高频场景：前端登录时不想把密码明文发给后端。做法是公钥由后端接口下发，前端用 <code>jsencrypt</code> 库（<code>new JSEncrypt()</code> 后 <code>setPublicKey()</code>、再 <code>encrypt()</code>）加密密码，后端用私钥解密。</p>
 
 <p>但要注意：<strong>RSA 加密密码并不能替代 HTTPS</strong>。JSEncrypt 默认使用 PKCS#1 v1.5 填充，且 RSA 单块能加密的明文长度有限（2048 位密钥约 245 字节），密文本身也可能被攻击者原样重放。正确组合是 HTTPS 保证链路安全，RSA 只作为密码不明文落地日志的补充手段。</p>
 
-<h2>摘要、签名与 JWT：一次登录怎么被记住</h2>
+<h3>摘要、签名与 JWT：一次登录怎么被记住</h3>
 
 <p>前两节解决"数据怎么不被看懂"，本节解决"请求怎么被信任"。传统做法是：客户端带上令牌，资源服务每次都去认证服务校验令牌、换取用户信息，认证服务成为性能瓶颈和单点。</p>
 
@@ -220,6 +211,7 @@ const encrypted = encryptor.encrypt(password); // 得到 Base64 密文，随登�
 // HS256 用同一个密钥，RS256 用私钥签名、公钥验签</code></pre>
 
 <p>必须强调：<strong>Header 与 Payload 只是 Base64Url 编码，不是加密</strong>，任何人都能还原出里面的内容。因此 JWT 里绝不能放密码、手机号、身份证号等敏感信息。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-10/02-jwt-structure.svg" alt="JWT 的三段结构与服务端校验流程"><figcaption>图 2：JWT 的三段与校验——Header 与 Payload 只是 Base64Url 编码，只有签名防篡改</figcaption></figure>
 
 <p>用 <code>jjwt</code> 生成与解析令牌的最小示例如下（注意 jjwt 0.10 起 <code>signWith</code> 要求密钥长度满足算法要求，HS256 至少 256 位即 32 字节）：</p>
 
@@ -244,7 +236,7 @@ System.out.println(claims.getSubject() + " / " + claims.get("roles"));</code></p
 
 <p>如果认证服务与资源服务是不同团队、不同部署，建议用 RS256：认证服务持有私钥签发，资源服务只保存公钥验签，这样公钥泄露也不会导致令牌被伪造。JDK 自带的 <code>keytool</code> 可以生成密钥库并导出公钥，交给资源服务配置即可。</p>
 
-<h2>常见坑与上线前检查清单</h2>
+<h3>常见坑与上线前检查清单</h3>
 
 <p><strong>1）算法混淆攻击。</strong>最著名的 JWT 漏洞是：攻击者把 Header 里的 <code>alg</code> 改成 <code>none</code> 或把 RS256 改成 HS256，诱使服务端用公钥当 HMAC 密钥验签。防御方式是服务端<em>固定</em>期望的算法，绝不信任 Header 里的 <code>alg</code>。</p>
 

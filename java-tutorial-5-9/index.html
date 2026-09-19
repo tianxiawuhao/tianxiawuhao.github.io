@@ -129,6 +129,7 @@
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>文件上传看着只是「把文件从浏览器送到服务器」，落到工程里却会牵出三条不同的技术路线：小文件用表单直传，大文件必须切片加断点续传，海量文件则要交给对象存储。本章按这三条路线展开：先讲清 multipart 请求长什么样、Servlet 端怎么解析；再讲大文件为什么必须切片、切片如何还原、断点记录存在哪里；最后对比 MinIO、OSS、七牛云这类对象存储的接入与选型。适合会写 Servlet / Spring Boot 接口、但还没系统处理过上传需求的读者。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-9/01-upload-routes.svg" alt="文件上传的三条技术路线对比图"><figcaption>图 1：文件上传的三条技术路线——按体积与部署形态选择表单直传、切片续传或对象存储</figcaption></figure>
 
 <h2>一、上传请求为什么不能当普通表单处理</h2>
 <p>普通表单把字段拼成 <code>a=1&amp;b=2</code> 的键值对，服务端用 <code>request.getParameter()</code> 就能取值。文件是二进制数据，塞不进这种文本编码，于是改用 <code>multipart/form-data</code>：浏览器把请求体切成若干段，段间用 <code>--boundary</code> 分隔，每段先写 <code>Content-Disposition</code> 头说明属于哪个字段、文件名是什么，空行之后才是数据。所以一个上传请求里同时装着普通字段和文件字节流。</p>
@@ -229,6 +230,7 @@ Promise.all(tasks).then(() =&gt; fetch("/upload/merge", {
 </code></pre>
 
 <p>断点续传的本质就是「记录已成功的分片，下次只传没传过的」。记录可放 localStorage（简单，清缓存即失效），也可放服务端（可靠、可跨设备，多一个查询接口）。服务端一般把分片先落到 <code>context</code> 目录，收到 <code>merge</code> 后按序号拼接并清理分片。别忘了给分片设有效期：客户端一直不调合并接口时，这些碎片必须被定时清理，否则磁盘会被垃圾分片吃满。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-9/02-chunk-resume.svg" alt="大文件切片上传与断点续传流程"><figcaption>图 2：切片上传的五个环节——断点记录决定重传范围，merge 必须按分片序号排序后再追加</figcaption></figure>
 
 <h2>四、文件最终放哪里：本地目录还是对象存储</h2>
 <p>单机部署写本地目录可行，但要做到三点：存储目录不能位于 Web 容器可直接访问的路径下（否则能绕过鉴权直接下载）、文件名必须唯一（UUID 或哈希）、按日期或哈希打散到多级子目录（单目录文件上千后查找和列目录性能明显下降）。一旦有多台应用服务器，本地目录立刻失效——A 机上传、请求被负载均衡打到 B 机就 404，于是要把文件抽成独立存储层。</p>

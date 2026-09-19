@@ -146,6 +146,7 @@
 <h2>二、登录授权：用 code 换 openid 与 session_key</h2>
 
 <p>小程序登录链路只有三步：前端调用 <code>wx.login()</code> 拿到临时 <code>code</code>；把 code 通过 HTTPS 发给自己的后端；后端调用 <code>sns/jscode2session</code> 换取 <code>openid</code>、<code>session_key</code>（若绑定开放平台还会有 <code>unionid</code>）。核心实现如下：</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-11/01-wx-login.svg" alt="小程序登录授权链路图"><figcaption>图 1：登录授权链路——用一次性 code 换 openid 与 session_key，session_key 只留服务端</figcaption></figure>
 
 <pre><code class="language-java">@Component
 public class WxaUserApi {
@@ -226,6 +227,7 @@ public String saveSession(String openid, String sessionKey) {
 <h2>三、服务端凭证 access_token 与两种“消息推送”</h2>
 
 <p>调用模板消息、客服消息、订阅消息、二维码等接口，都要带上 access_token。它通过 <code>cgi-bin/token</code> 获取，<code>expires_in</code> 通常为 7200 秒，而且全局唯一：新取一次，旧的就可能失效。因此正确做法是“集中缓存 + 提前刷新 + 分布式锁”，绝不能在每个业务请求里现取：</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-11/02-access-token.svg" alt="access_token 集中缓存与刷新流程图"><figcaption>图 2：access_token 获取流程——先查缓存、抢到锁才回源、写缓存时提前 300 秒过期</figcaption></figure>
 
 <pre><code class="language-java">@Component
 public class WxAccessTokenService {
