@@ -136,6 +136,8 @@
 
 <p>Spring AOP 不修改字节码，它靠运行期动态代理完成「织入」，因此有两条必须记住的边界。<b>JDK 动态代理基于接口</b>：只能为实现了接口的类生成代理，代理对象与目标对象是「兄弟」关系（实现同一接口），所以拿到代理后要用接口类型接收。<b>CGLIB 通过生成目标类的子类来增强</b>：不需要接口，但无法代理 final 类、final 方法和 private 方法，也增强不了构造器。目标类有接口时 Spring 默认用 JDK 代理，没有接口时自动改用 CGLIB；Spring Boot 把 <code>proxyTargetClass</code> 默认为 <code>true</code>，即优先使用 CGLIB。当所有通知都写对了、注入实现类类型却报错时，问题往往就出在这里。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-5/01-aop-proxy.svg" alt="AOP 织入示意图：调用方先进入代理对象的通知链，@Before、@AfterReturning、@AfterThrowing、@After 与 @Around 依次包裹，再由 proceed() 调用目标对象的纯业务方法；底部对比 JDK 动态代理基于接口与 CGLIB 生成子类两条路径"><figcaption>图 1：AOP 靠代理织入横切逻辑——切点决定织在哪，通知决定织什么</figcaption></figure>
+
 <h2>二、动手写切面：五种通知与切入点表达式</h2>
 
 <p>依赖上引入 aspectjweaver 即可（Maven 一个坐标搞定，源文档里逐个列的 aspectjrt.jar、aspectjtools.jar、org.aspectj.matcher.jar 是早期手动导包的产物），再通过 <code>@EnableAspectJAutoProxy</code>（XML 中为 <code>&lt;aop:aspectj-autoproxy/&gt;</code>）开启支持，然后写切面类。注意区分 <code>@After</code> 与 <code>@AfterReturning</code>：前者相当于 finally，方法抛异常也会执行；后者只在方法正常返回后执行，并能通过 <code>returning</code> 取到返回值。源文档把 <code>@AfterReturning</code> 称作「后置通知」、把 <code>@After</code> 说成「方法执行后增强」，还写出不存在的注解 <code>@AfterRunning</code>，这些说法都是错的。</p>
@@ -260,6 +262,8 @@ public class AccountServiceImpl implements AccountService {
 <h2>四、传播行为、隔离级别与事务失效场景</h2>
 
 <p>传播行为回答的是「当前方法被调用时，已有事务怎么办」。<code>REQUIRED</code>（默认）有则加入、无则新建；<code>REQUIRES_NEW</code> 挂起当前事务、另开独立事务，适合写日志这类「主事务回滚也不能丢」的操作；<code>SUPPORTS</code> 有则加入、无则以非事务方式运行；<code>NOT_SUPPORTED</code> 挂起当前事务、自己不使用事务；<code>MANDATORY</code> 要求必须已有事务，<code>NEVER</code> 要求必须没有事务，两者不满足都会抛异常；<code>NESTED</code> 在当前事务内开一个保存点，内层回滚不影响外层，但它依赖 JDBC 保存点，<code>DataSourceTransactionManager</code> 支持而 JPA 的 <code>JpaTransactionManager</code> 不支持。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-5/02-tx-propagation.svg" alt="事务传播行为对比图：REQUIRED 让方法加入当前事务并与外层一起提交回滚；REQUIRES_NEW 挂起外层事务另开独立事务并立即提交；NESTED 在当前事务内设置保存点，内层回滚只回到保存点"><figcaption>图 2：REQUIRED、REQUIRES_NEW 与 NESTED 的事务边界差别</figcaption></figure>
 
 <p>隔离级别用来解决并发读问题：<code>READ_UNCOMMITTED</code> 会脏读；<code>READ_COMMITTED</code> 能防脏读，但可能不可重复读；<code>REPEATABLE_READ</code> 能防不可重复读，MySQL 的默认级别还靠间隙锁挡住了大部分幻读；<code>SERIALIZABLE</code> 最安全也最慢。Spring 的 <code>Isolation.DEFAULT</code> 表示交给数据库默认值，多数业务不需要显式指定，但要知道自己正在用什么。</p>
 

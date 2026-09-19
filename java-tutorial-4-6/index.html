@@ -149,6 +149,8 @@
 
 <p>一句话总结：<code>DispatcherServlet</code> 是调度者，<code>HandlerMapping</code> 负责「找」，<code>HandlerAdapter</code> 负责「调」，<code>ViewResolver</code> 负责「渲染」，拦截器负责在「调」的前后插逻辑。理解了这五个角色的分工，后面所有配置项都能对上号。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-6/01-dispatcher-flow.svg" alt="Spring MVC 请求处理六步链路图：DispatcherServlet 接收请求，HandlerMapping 按 URL 查找并返回携带拦截器的 HandlerExecutionChain，拦截器 preHandle 放行后由 HandlerAdapter 调用 Handler，方法返回 ModelAndView 后经 ViewResolver 解析，渲染响应并逆序执行 postHandle 与 afterCompletion"><figcaption>图 1：一个请求的六步旅程——DispatcherServlet、HandlerMapping、Interceptor、HandlerAdapter、ViewResolver 各司其职</figcaption></figure>
+
 <h2>二、参数绑定：请求数据怎么落到方法形参上</h2>
 
 <p>Spring MVC 最省心的地方是参数绑定：方法形参的顺序无所谓，只要名字和类型对得上，前端传来的数据就会被自动填进去。常见有五种场景。</p>
@@ -196,6 +198,8 @@ public class UserController {
 <p>拦截器实现 <code>HandlerInterceptor</code> 接口，三个方法对应三个时机：<code>preHandle</code> 在 Handler 执行前调用，返回值决定是否放行；<code>postHandle</code> 在 Handler 执行后、视图渲染前调用；<code>afterCompletion</code> 在视图渲染完成后调用，相当于清理现场，而且它的形参里有 <code>Exception ex</code>，非常合适合计耗时、记日志。</p>
 
 <p>执行顺序必须记牢：<strong>多个拦截器的 <code>preHandle</code> 按配置顺序依次执行，而 <code>postHandle</code> 与 <code>afterCompletion</code> 按相反顺序执行</strong>——像一层层进出门，先进后出。另外要区分两种情况：某个 <code>preHandle</code> 返回 <code>false</code> 时，它自己以及排在它后面的拦截器和 Handler 都不会执行，但之前已经放行（返回过 <code>true</code>）的拦截器，其 <code>afterCompletion</code> 仍会逆序执行，而 <code>postHandle</code> 不会执行。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-6/02-interceptor-order.svg" alt="拦截器执行顺序图：正常放行时多个拦截器的 preHandle 正序执行、postHandle 与 afterCompletion 逆序返回；某个 preHandle 返回 false 时，它自己及后面的拦截器和 Handler 都不执行，已放行的拦截器仍执行 afterCompletion"><figcaption>图 2：拦截器链先进后出，以及 preHandle 返回 false 时的终止范围</figcaption></figure>
 
 <pre><code class="language-java">public class LoginInterceptor implements HandlerInterceptor {
 

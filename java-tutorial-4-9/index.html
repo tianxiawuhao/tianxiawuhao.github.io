@@ -114,7 +114,7 @@
               <h1>Spring Boot 核心</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，8 min read</span>
+                2026-09-19，9 min read</span>
             </div>
           
         
@@ -150,6 +150,9 @@
 &lt;/dependencies&gt;</code></pre>
 
 <p>这里有个容易搞混的层次：<code>spring-boot-starter-parent</code> 自己的父 POM 才是 <code>spring-boot-dependencies</code>，真正把上百个库的版本写进 <code>properties</code>、并放进 <code>dependencyManagement</code> 与 <code>pluginManagement</code> 的是它。所以子模块引入 starter 时不必写 <code>&lt;version&gt;</code>；而 <code>spring-boot-starter-web</code> 本身几乎没有代码，它只是把 <code>spring-web</code>、<code>spring-webmvc</code>、<code>spring-boot-starter-tomcat</code>（内嵌 Tomcat）、Jackson 等坐标声明为自己的依赖，靠 Maven 的依赖传递「打包」给你。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-9/01-starter-tree.svg" alt="起步依赖与依赖传递结构示意图"><figcaption>图 1：父 POM 统一锁定版本，starter 靠依赖传递带出对齐的一组 jar</figcaption></figure>
+
 
 <p>实践要点：不要给已被父 POM 管理的依赖手动写版本，那会覆盖版本管理；确实要换版本，应改父 POM 暴露的 <code>xxx.version</code> 属性。<strong>版本提醒</strong>：上面的 3.3.5 只是示例，Boot 3.x 要求 Java 17 及以上，且坐标由 <code>javax.*</code> 迁到 <code>jakarta.*</code>；老资料里的 2.0.1.RELEASE 属 2018 年的版本，配置键名（如 <code>server.context-path</code> 已变为 <code>server.servlet.context-path</code>）与依赖坐标都不宜照抄。</p>
 
@@ -188,6 +191,8 @@ public class ServletWebServerFactoryAutoConfiguration {
 <li><strong>条件注解决定「要不要生效」。</strong><code>@ConditionalOnClass</code> / <code>@ConditionalOnMissingClass</code> 看类路径，<code>@ConditionalOnBean</code> / <code>@ConditionalOnMissingBean</code> 看容器里有没有同类型组件，<code>@ConditionalOnProperty</code> 看某个开关配置，<code>@ConditionalOnWebApplication</code> 看应用类型。任何一个条件不成立，整个配置类都不会注册。</li>
 <li><strong>结论：</strong>「<code>spring.factories</code> 里的类都会被加载进容器」是常见误传。它们只是候选，必须同时满足条件才注册，且用户自己定义的 Bean 会优先。</li>
 </ul>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-9/02-autoconfig-chain.svg" alt="自动配置装配链路示意图"><figcaption>图 2：从 @SpringBootApplication 到候选清单与条件筛选的装配链路，条件不成立整类不注册</figcaption></figure>
 
 <p>排查自动配置是否生效，最快的手段是加 <code>--debug</code> 启动参数（或在配置里设 <code>debug=true</code>），控制台会打印自动配置报告，Positive matches / Negative matches 会直接告诉你哪个类生效、被哪个条件挡掉。至于某个键该怎么写，最可靠的依据是对应的 <code>XxxProperties</code> 类——例如 <code>server.port</code> 就封装在 <code>ServerProperties</code> 中。</p>
 

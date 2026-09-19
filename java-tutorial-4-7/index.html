@@ -140,6 +140,8 @@
 
 <p>配置只有两份：<strong>全局配置文件</strong>（习惯叫 <code>mybatis-config.xml</code>）管数据源、事务与设置项，并登记映射文件；<strong>映射文件</strong>（如 <code>UserMapper.xml</code>）写 SQL、参数类型和结果封装类型，一条 SQL 对应一个 statement。启动时用 <code>SqlSessionFactoryBuilder</code> 读全局配置构建 <code>SqlSessionFactory</code>，每次操作再从工厂开一个 <code>SqlSession</code>——可类比 <code>DataSource</code> 与 <code>Connection</code>：工厂长期存活，会话用完必须关闭。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-7/01-config-session.svg" alt="MyBatis 启动与调用链示意图：mybatis-config.xml 与 UserMapper.xml 由 SqlSessionFactoryBuilder 读取后构建长期存活的 SqlSessionFactory，每次操作从工厂开出 SqlSession，再用 getMapper 得到 Mapper 接口的动态代理去访问数据库"><figcaption>图 1：两份配置文件、一个工厂、每次操作一个 SqlSession 的调用链</figcaption></figure>
+
 <pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8" ?&gt;
 &lt;!DOCTYPE configuration
   PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
@@ -187,6 +189,8 @@
 <p>调用时只需 <code>UserMapper mapper = sqlSession.getMapper(UserMapper.class);</code>，随后像调普通接口一样使用。自增主键可用 <code>useGeneratedKeys="true"</code> 加 <code>keyProperty="id"</code> 回写到入参对象，插入后直接 <code>user.getId()</code> 就能拿到。</p>
 
 <p><code>#{}</code> 与 <code>${}</code> 的区别是重点：<code>#{}</code> 生成 JDBC 的 <code>?</code> 占位符并预编译，参数不会被当成 SQL 语法，能防注入，应作为默认选择；<code>${}</code> 是纯字符串替换，只适合拼表名、列名、排序字段，接用户输入等于开注入口子。参数个数决定写法：单参数时 <code>#{}</code> 里的名字可以随便写；多参数会被放进 Map，默认键是 <code>arg0/arg1</code> 和 <code>param1/param2</code>，必须用 <code>@Param("userName")</code> 显式命名，否则报「Parameter 'userName' not found」。稳妥做法是都给参数加 <code>@Param</code>。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-7/02-placeholder.svg" alt="对比图：#{} 生成 JDBC 的 ? 占位符并预编译，参数不参与 SQL 语法解析，能防注入；${} 是纯字符串替换，会拼进 SQL 文本，只适合表名、列名与排序字段；底部说明多参数需用 @Param 显式命名"><figcaption>图 2：#{} 与 ${} 的取舍——默认只该用能预编译的那个</figcaption></figure>
 
 <h2>四、结果映射与动态 SQL</h2>
 

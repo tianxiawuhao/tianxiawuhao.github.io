@@ -136,6 +136,9 @@
 
 <p>缓存按作用范围分两级。一级缓存也叫本地缓存，挂在 <code>SqlSession</code> 层面，同一个会话内共享，会话一关就没了；二级缓存挂在 namespace 层面，被同一个 Mapper 的多个 <code>SqlSession</code> 共享，生命周期与应用同步。因此一次查询的取数顺序是：<strong>二级缓存 → 一级缓存 → 数据库</strong>。搞清这个顺序，后面所有配置和坑都能自己推出来。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-8/01-cache-two-levels.svg" alt="MyBatis 两级缓存取数顺序与 Cache 装饰器链示意图"><figcaption>图 1：一次查询的取数顺序是二级缓存 → 一级缓存 → 数据库，Cache 装饰器最里层始终是 PerpetualCache</figcaption></figure>
+
+
 <h2>二、一级缓存：SqlSession 内的本地缓存</h2>
 
 <p>一级缓存默认开启，不需要任何配置。它并不放在 <code>SqlSession</code> 对象本身——<code>DefaultSqlSession</code> 只持有全局的 <code>Configuration</code> 和一个 <code>Executor</code>——而是由 <code>BaseExecutor</code>（<code>SimpleExecutor</code>、<code>ReuseExecutor</code>、<code>BatchExecutor</code> 的父类）在构造时持有一个 <code>PerpetualCache</code>。</p>
@@ -213,6 +216,9 @@ session2.close();</code></pre>
 <h2>五、与 Spring 整合：SSM 骨架</h2>
 
 <p>SSM 就是 Spring + SpringMVC + MyBatis 的组合：SpringMVC 负责 web 层，Spring 负责 Service 与事务，MyBatis 只管 SQL 映射，中间由 <code>mybatis-spring</code> 桥接。工程上通常按用途拆成 <code>applicationContext-dao.xml</code>、<code>applicationContext-service.xml</code> 和 springmvc.xml，其中 SpringMVC 必须扫描独立的子容器，否则很容易把 Service 重复扫进 web 容器导致事务失效。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-8/02-ssm-layers.svg" alt="SSM 分层职责与 dao 层配置三件套示意图"><figcaption>图 2：SpringMVC、Spring、MyBatis 的分层职责，以及 dataSource → SqlSessionFactoryBean → MapperScannerConfigurer 三件套</figcaption></figure>
+
 
 <p>dao 层的配置是标准三件套：数据源、<code>SqlSessionFactoryBean</code>、<code>MapperScannerConfigurer</code>。后者会扫描指定包下的 Mapper 接口，自动生成代理实现并注册成 bean，从此 Service 里只需 <code>@Autowired</code> 一个接口，不必再手工 <code>getMapper()</code>。</p>
 
