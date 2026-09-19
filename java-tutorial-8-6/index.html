@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Kafka 消息中间件 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Kafka 消息中间件</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，8 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>前面几章我们处理的数据，要么来自本地文件，要么来自数据库。但在真实系统里，日志、埋点、订单变更这些数据是持续不断产生的，而且往往有好几个下游同时要用：实时风控要、离线数仓要、搜索索引也要。如果让每个业务都直接连业务库，数据库会被拖垮，上下游也被死死耦合在一起。Kafka 就是为这类问题而生的分布式消息中间件。本章面向已经会写 Java、但还没在生产环境用过消息队列的读者，目标是讲清 Kafka 的核心模型（分区、副本、消费组、offset、事务），并能写出可运行的生产者与消费者代码。</p>
+
+<h2>一、Kafka 是什么：一个分布式提交日志</h2>
+
+<p>Kafka 由 LinkedIn 开发并于 2010 年捐献给 Apache 基金会，用 Scala 和 Java 编写。它最容易被误解的一点是：Kafka 本质不是一个"消息队列"，而是一个<strong>分布式、可分区的、多副本的提交日志（commit log）</strong>。消息不是被消费掉就删除，而是按配置的保留时间（如 7 天）或保留大小统一清理，因此同一个 topic 可以被多个业务反复读取，互不影响。</p>
+
+<p>几个必须记住的术语：</p>
+
+<ul>
+<li><strong>Broker</strong>：一个 Kafka 服务节点。多台 broker 组成集群，每台 broker 上可以承载多个 topic 的分区。</li>
+<li><strong>Topic</strong>：消息的逻辑类别，类似数据库里的表。</li>
+<li><strong>Partition</strong>：topic 的物理分片，是并行与有序的基本单位。分区内部消息严格有序，分区之间不保证顺序。</li>
+<li><strong>Offset</strong>：消息在分区内的唯一递增编号，消费者用它记录自己读到哪儿了。</li>
+<li><strong>Replica</strong>：分区的副本。每个分区有一个 leader 副本和若干 follower 副本，读写只走 leader，follower 负责同步以备故障切换。</li>
+<li><strong>Consumer Group</strong>：消费者组。同一条消息，在同一个组内只会被一个消费者处理；不同组之间各自独立消费全量消息（组内是单播，组间是广播）。</li>
+</ul>
+
+<p>Kafka 的高吞吐来自几处设计：分区带来的水平扩展、批量发送与批量拉取、利用操作系统的 page cache 而不自己维护缓存、以及用 <code>sendfile</code> 零拷贝把日志文件直接送到网卡。日志追加写也保证了每个分区的读写都是 O(1) 的常数时间操作，性能基本与数据总量无关。</p>
+
+<h2>二、分区与副本：并行度和可靠性的来源</h2>
+
+<h3>2.1 分区决定了并行度上限</h3>
+
+<p>请记住一条约束：<strong>同一个消费组内，一个分区同一时刻只能被一个消费者线程消费</strong>。这条约束是 Kafka 不需要给消息加锁、从而获得高吞吐的根本原因，但它也直接推出了实践中的容量规划规则：</p>
+
+<ul>
+<li>消费者数 &lt; 分区数：部分消费者要承担多个分区，负载不均；</li>
+<li>消费者数 = 分区数：最理想，每个消费者正好对应一个分区；</li>
+<li>消费者数 &gt; 分区数：多出来的消费者线程会一直空闲，纯属浪费。</li>
+</ul>
+
+<p>所以真正的扩容手段是<strong>先加分区，再加消费者</strong>，而且两者要一起加。分区数可以作为 topic 参数在线增加，但只能增加不能减少，并且增加分区会导致分区内消息的哈希落点变化，因此分区数最好在创建时就把未来一两年的量估足。</p>
+
+<h3>2.2 副本与 ISR</h3>
+
+<p>每个分区可以配置多个副本（replication factor）。副本中只有一个 leader 对外提供读写，其余 follower 持续向 leader 拉取数据。为了让"同步"有一个明确的判定标准，Kafka 引入了 <strong>ISR（In-Sync Replicas，同步副本集合）</strong>：只有跟得上 leader 进度的副本才在 ISR 里。落后太多的副本会被踢出 ISR，追上后再加回来。当 leader 所在 broker 宕机时，controller 会从 ISR 中选一个新 leader；如果 ISR 空了，说明没有副本能保证数据完整，此时只能等待 ISR 成员恢复。</p>
+
+<p>需要特别纠正一个常见说法——"备份数为 n 就允许 n-1 个节点失败"：这句话只描述了<strong>数据不丢</strong>的容灾能力。如果同时宕机的副本数超过容忍范围，虽然集群还能读，但已经写入却未同步的消息会丢失。要保证不丢，必须让 acks 和 ISR 判定配合起来，下一节会讲。</p>
+
+<h2>三、上手：创建主题并读写消息</h2>
+
+<p>先创建主题。这里要注意版本差异：<strong>Kafka 2.8 起 <code>kafka-topics.sh</code> 的 <code>--zookeeper</code> 参数已被废弃，应改用 <code>--bootstrap-server</code></strong>（4.0 中已彻底移除）。</p>
+
+<pre><code class="language-bash"># 创建 3 个分区、2 个副本的主题（副本数不能超过 broker 数）
+kafka-topics.sh --bootstrap-server localhost:9092 \
+  --create --topic order-events \
+  --partitions 3 --replication-factor 2
+
+# 查看主题详情，确认 Leader 与 Isr 分布
+kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic order-events
+
+# 命令行消费，--from-beginning 表示从最早的消息开始读
+kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic order-events --from-beginning</code></pre>
+
+<p>Java 侧的依赖（Maven）。Kafka 客户端版本应与 broker 大版本尽量接近，且序列化器必须与消息类型匹配：</p>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+  &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+  &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+  &lt;version&gt;3.6.1&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+
+<p>下面是生产者示例。三种发送方式都演示了：发完不管、同步等待、异步回调。注意 <code>acks=all</code> 表示 leader 要等 ISR 中所有副本确认，是可靠性最高的设置；若追求吞吐可降到 <code>1</code>，但 leader 刚写入就宕机时可能丢消息。</p>
+
+<pre><code class="language-java">public class OrderProducer implements Closeable {
+
+    private final KafkaProducer&lt;String, String&gt; producer;
+
+    public OrderProducer(String bootstrapServers) {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                StringSerializer.class.getName());
+        // 可靠性优先：等所有 ISR 副本确认
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        // 幂等：重试不会造成重复写入（要求 acks=all、未开启重试无限次）
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        this.producer = new KafkaProducer&lt;&gt;(props);
+    }
+
+    /** key 相同的消息一定进入同一分区，从而保证同一订单的事件有序 */
+    public void send(String orderId, String payload) {
+        ProducerRecord&lt;String, String&gt; record =
+                new ProducerRecord&lt;&gt;("order-events", orderId, payload);
+        producer.send(record, (metadata, exception) -&gt; {
+            if (exception != null) {
+                // 生产中应记录日志并进入重试/死信逻辑，切勿只打印
+                System.err.println("send failed: " + exception.getMessage());
+            } else {
+                System.out.printf("topic=%s partition=%d offset=%d%n",
+                        metadata.topic(), metadata.partition(), metadata.offset());
+            }
+        });
+    }
+
+    @Override
+    public void close() {
+        producer.close(Duration.ofSeconds(10));
+    }
+}</code></pre>
+
+<p>消费者的基本形态是一个"拉取循环"。Kafka 消费者采用 poll 模式，没有数据时会阻塞等待，因此必须在循环里正确处理唤醒与提交。</p>
+
+<pre><code class="language-java">Properties props = new Properties();
+props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+props.put(ConsumerConfig.GROUP_ID_CONFIG, "order-analytics");
+props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+        StringDeserializer.class.getName());
+props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+        StringDeserializer.class.getName());
+// 自动提交会"先提交后处理"，处理失败就丢消息；生产环境建议手动提交
+props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+try (KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props)) {
+    consumer.subscribe(List.of("order-events"));
+    while (true) {
+        ConsumerRecords&lt;String, String&gt; records =
+                consumer.poll(Duration.ofMillis(500));
+        for (ConsumerRecord&lt;String, String&gt; record : records) {
+            handle(record);          // 先业务处理
+        }
+        consumer.commitSync();       // 处理成功后再提交位移
+    }
+}</code></pre>
+
+<h3>3.1 offset 存到哪里</h3>
+
+<p>消费者的位移（offset）表示"下一条要读的消息编号"。早期版本把位移写在 ZooKeeper 上，而 ZooKeeper 的频繁写入是低效的；<strong>Kafka 0.9 起默认改为提交到内部主题 <code>__consumer_offsets</code></strong>，该主题是 compact 类型的日志，以「消费组 + topic + 分区」为 key 只保留每个 key 的最新值，既好扩展又能快速恢复。如果查资料时看到"offset 存在 ZooKeeper"，那基本是 0.9 之前的老内容。</p>
+
+<p>提交方式的选择直接决定消息语义：自动提交可能丢消息（提交后处理失败），先处理后提交则是"至少一次"（处理成功但提交失败会重复）。想要"恰好一次"，要么让业务处理本身幂等，要么使用下一节的事务。</p>
+
+<h2>四、可靠性：从 acks 到事务</h2>
+
+<h3>4.1 生产者不丢消息的三个条件</h3>
+
+<p>只设置 <code>acks=all</code> 还不够，它必须与 broker 端的 <code>min.insync.replicas</code> 联合判断：当 ISR 中的副本数少于该值时，broker 会直接拒绝写入并抛错，而不是"假装成功"。典型配置是 <code>replication.factor=3</code>、<code>min.insync.replicas=2</code>、<code>acks=all</code>：允许一个副本故障，同时保证每条被确认的消息至少存在于两个副本上。此外，还要配合足够大的 <code>delivery.timeout.ms</code> 和重试次数，否则重试还没成功，超时就已经把消息判死了。</p>
+
+<h3>4.2 消费组的再平衡</h3>
+
+<p>以下情况会触发 <strong>Rebalance</strong>：消费者加入或离开、订阅的 topic 分区数变化、以及消费者长时间未发送心跳被判定为失联。Rebalance 期间整个组会短暂停止消费，所以频繁 Rebalance 是线上最常见的故障之一。两个实用的规避手段：把 <code>max.poll.interval.ms</code>（两次 poll 之间允许的最大处理时间）调大，避免单批处理过慢被踢出组；给消费者设置稳定的 <code>group.instance.id</code> 使用静态成员，让短暂的进程重启不触发全组重平衡。</p>
+
+<h3>4.3 事务与恰好一次</h3>
+
+<p>在 0.11 版本之前，Kafka 只能做到"至少一次"。0.11 引入了幂等生产者与事务 API：用同一个 <code>transactional.id</code> 跨会话标识一个生产者实例，broker 会对该实例的写入做去重，并把多次发送与位移提交打包成一个原子事务。</p>
+
+<pre><code class="language-java">// 事务要求：acks=all、enable.idempotence=true、且设置唯一的 transactional.id
+props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "order-tx-1");
+// 注意：只读未提交事务时用 read_committed，默认的 read_uncommitted 会看到未提交数据
+props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+
+producer.initTransactions();
+try {
+    producer.beginTransaction();
+    producer.send(new ProducerRecord&lt;&gt;("order-events", orderId, payload));
+    // 把消费位移也纳入同一事务，实现"消费-处理-生产"的精确一次
+    producer.sendOffsetsToTransaction(offsets, "order-analytics");
+    producer.commitTransaction();
+} catch (ProducerFencedException | OutOfOrderSequenceException e) {
+    producer.close();                 // 此类异常不可恢复，必须重建生产者
+} catch (KafkaException e) {
+    producer.abortTransaction();      // 其他异常回滚并重试
+}</code></pre>
+
+<p>需要强调：<strong>事务只保证 Kafka 内部的原子性</strong>，如果下游写的是 MySQL，跨系统的恰好一次要靠两阶段提交或本地事务表来兜底。另外 <code>transactional.id</code> 必须每个生产者实例唯一，重复会导致旧实例被"隔离"（fenced）而报错。</p>
+
+<h2>五、常见坑与小结</h2>
+
+<p>上线前请对照这几条：</p>
+
+<ol>
+<li><strong>key 为 null 导致乱序</strong>：不指定 key 时消息会轮询进各分区，同一实体的先后顺序就丢了。要顺序就按业务主键做 key。</li>
+<li><strong>消费堆积</strong>：先看是分区数不足还是单条处理太慢，前者加分区并同步加消费者（数量对齐分区数），后者优化处理逻辑或改为批量处理。</li>
+<li><strong>把提交位移当成"处理完成"</strong>：手动提交务必放在业务处理成功之后，并小心批内部分失败——此时应记录失败明细，而不是整批提交或整批重来。</li>
+<li><strong>副本数与 min.insync.replicas 配置矛盾</strong>：若 <code>min.insync.replicas</code> 大于实际可用副本数，写入会被全面拒绝，可用性骤降。</li>
+<li><strong>照抄老教程的参数</strong>：<code>--zookeeper</code> 已废弃，<code>partitioner.class</code> 自 2.4 起废弃，消费者位移也不再存 ZooKeeper。</li>
+</ol>
+
+<p>小结：Kafka 用"分区"解决吞吐与有序，用"ISR 副本 + acks + min.insync.replicas"解决不丢，用"消费组 + offset 提交"解决多下游并行消费，用"幂等生产者 + 事务"解决重复。把这四条记住，再结合自己的分区数、副本数和消费位点提交策略，就能搭出一个既跑得快、又不丢数据的消息链路。下一章我们看看流式处理框架如何消费这些数据做实时计算。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>

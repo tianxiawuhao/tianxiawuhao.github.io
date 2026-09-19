@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Storm 与实时计算 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Storm 与实时计算</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，10 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>前面几章的 Spark、Flink 都在回答「怎么把无界数据切成有界再算」，而 Storm 走的是更直接的一条路：数据来一条就立刻处理，没有批次的概念，也没有「等窗口攒满再触发」的等待。它由 Twitter 在 2011 年开源，2014 年成为 Apache 顶级项目，是流处理领域第一个被广泛使用的计算框架，也是后来 Flink、Structured Streaming 设计的参照物。本章面向已经会写 Java、了解 Kafka 与 HDFS 的读者，讲清 Storm 的核心模型——拓扑（Topology）、Spout、Bolt、流分组与 ack 可靠性机制，最后把 Storm、Spark Streaming、Flink 放在一起对比，帮助你在新项目里做出选择。示例基于 Storm 2.x（1.x 同样适用），包名统一为 <code>org.apache.storm.*</code>。</p>
+
+<h2>一、Storm 的定位：常驻运行的拓扑</h2>
+
+<p>理解 Storm 最快的方式是拿它和 MapReduce 对照。MapReduce 作业有明确的开始与结束：读一批输入、算完、退出。Storm 的作业叫 <strong>Topology</strong>，它一旦提交就常驻在集群里，除非显式 kill，否则一直在等数据。提交之后拓扑不结束，这正是「实时」的前提。</p>
+
+<p>数据在拓扑里以 <strong>Tuple</strong> 为单位流动。Tuple 是一组有序的值，配合字段名（<code>Fields</code>）使用，取字段时可以按位置下标也可以按名字；一条条 Tuple 组成无界的 <strong>Stream</strong>。整张计算图由两类组件构成：<strong>Spout</strong> 是数据的入口，负责从 Kafka、MQ、Socket 或自定义数据源读取并向下游发射；<strong>Bolt</strong> 是处理单元，做过滤、解析、聚合、join、写库等任意逻辑，也可以继续向下游发射。Spout 和 Bolt 统称 component。</p>
+
+<p>运行时的层级也要分清：一个 component 的 <strong>并行度</strong>决定它有多少个 Task 实例，Task 被分配到 <strong>Executor</strong>（线程）里执行，若干 Executor 又跑在同一个 <strong>Worker</strong>（JVM 进程）中。每个 Worker 内默认跑三条线程：Spout 线程、Bolt 线程和 Acker 线程，这一点直接决定了后面要讲的坑：<code>nextTuple()</code> 里一旦发生阻塞，受影响的不只是这一个 Spout。集群侧则由 Nimbus（主节点，负责分配与调度）、Supervisor（工作节点，负责起停 Worker）和 ZooKeeper（保存状态与心跳）组成，Nimbus 并不是单点瓶颈，它挂掉后已运行的拓扑照常工作，只是不能提交新拓扑。</p>
+
+<h2>二、Spout 与 Bolt：怎么写一个组件</h2>
+
+<p>Spout 通常继承 <code>BaseRichSpout</code>，要实现的钩子只有三个：<code>open()</code> 在启动时拿到 <code>SpoutOutputCollector</code> 并做初始化；<code>nextTuple()</code> 被框架在独立线程里不停调用，用来发射数据；<code>declareOutputFields()</code> 声明流的字段名。可靠的数据源还要实现 <code>ack()</code> 与 <code>fail()</code> 两个回调。下面的例子把「取数据」和「发数据」分开：后台线程负责往阻塞队列里放，<code>nextTuple()</code> 只做非阻塞的取出与发射。</p>
+
+<pre><code class="language-java">import org.apache.storm.spout.SpoutOutputCollector;
+import org.apache.storm.task.TopologyContext;
+import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.topology.base.BaseRichSpout;
+import org.apache.storm.tuple.Fields;
+import org.apache.storm.tuple.Values;
+
+import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+
+public class SentenceSpout extends BaseRichSpout {
+    private SpoutOutputCollector collector;
+    private final ArrayBlockingQueue&lt;String&gt; queue = new ArrayBlockingQueue&lt;&gt;(1024);
+
+    @Override
+    public void open(Map&lt;String, Object&gt; conf, TopologyContext context,
+                     SpoutOutputCollector collector) {
+        this.collector = collector;
+        // 真实项目在这里启动 Kafka 消费线程，把消息塞进 queue
+    }
+
+    @Override
+    public void nextTuple() {
+        String sentence = queue.poll();
+        if (sentence == null) {
+            try {
+                Thread.sleep(10);   // 空转必须让出 CPU，绝不在这里阻塞等待
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            return;
+        }
+        // 第二个参数是 msgId：它既是 ack 的根 id，也是 fail 重放时的标识
+        collector.emit(new Values(sentence), sentence);
+    }
+
+    @Override
+    public void ack(Object msgId) {
+        // 整棵元组树处理成功，此时才提交 Kafka 位点
+    }
+
+    @Override
+    public void fail(Object msgId) {
+        // 处理失败或超时，把这条消息重新入队
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare(new Fields("sentence"));
+    }
+}</code></pre>
+
+<p>Bolt 继承 <code>BaseRichBolt</code>，核心是 <code>execute(Tuple input)</code>：每来一条 Tuple 调用一次，处理完必须显式调用 <code>collector.ack(input)</code>（可靠模式下）或 <code>collector.fail(input)</code>。向下游发射时，要用 <code>collector.emit(input, new Values(...))</code> 这种带父 Tuple 的重载，把新 Tuple 挂到输入 Tuple 上——这一步叫 <strong>anchoring（锚定）</strong>，是可靠性机制的根基；用不带 input 的重载发射，新 Tuple 就成了孤儿，它失败不会导致上游重放。</p>
+
+<pre><code class="language-java">import org.apache.storm.task.OutputCollector;
+import org.apache.storm.task.TopologyContext;
+import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.topology.base.BaseRichBolt;
+import org.apache.storm.tuple.Fields;
+import org.apache.storm.tuple.Tuple;
+import org.apache.storm.tuple.Values;
+
+import java.util.Map;
+
+public class SplitBolt extends BaseRichBolt {
+    private OutputCollector collector;
+
+    @Override
+    public void prepare(Map&lt;String, Object&gt; conf, TopologyContext context,
+                        OutputCollector collector) {
+        this.collector = collector;
+    }
+
+    @Override
+    public void execute(Tuple input) {
+        String sentence = input.getStringByField("sentence");
+        for (String word : sentence.split(" ")) {
+            if (!word.isEmpty()) {
+                collector.emit(input, new Values(word, 1L));  // 锚定到输入 Tuple
+            }
+        }
+        collector.ack(input);
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare(new Fields("word", "count"));
+    }
+}</code></pre>
+
+<p>组件之间靠<strong>流分组（Stream Grouping）</strong>连接，它决定上游发射的 Tuple 发给下游的哪个 Task。常用的几种：<code>shuffleGrouping</code> 随机轮询，用于无状态处理、负载均衡；<code>fieldsGrouping</code> 按指定字段哈希，保证同一个 key 永远进同一个 Task，做计数、去重、会话聚合时<strong>必须</strong>用它；<code>allGrouping</code> 广播给所有 Task，适合下发配置或全局过滤；<code>globalGrouping</code> 全部发给编号最小的 Task；<code>localOrShuffleGrouping</code> 优先同 Worker 内转发，能省一次网络传输；<code>directGrouping</code> 由上游自己指定目标 Task，必须搭配 <code>emitDirect</code> 和直接流（direct stream）声明。</p>
+
+<p>把组件装配起来的是 <code>TopologyBuilder</code>，提交前用 <code>Config</code> 设定并行度与可靠性开关。<code>setSpout/setBolt</code> 的第二个参数是并行度（Task 数），<code>Config.setNumWorkers</code> 是 Worker 进程数，两者不要混淆：并行度 4、Worker 数 2 表示 4 个 Task 分摊到 2 个 JVM。</p>
+
+<pre><code class="language-java">import org.apache.storm.Config;
+import org.apache.storm.LocalCluster;
+import org.apache.storm.StormSubmitter;
+import org.apache.storm.topology.TopologyBuilder;
+import org.apache.storm.tuple.Fields;
+
+public class WordCountTopology {
+    public static void main(String[] args) throws Exception {
+        TopologyBuilder builder = new TopologyBuilder();
+        builder.setSpout("sentence-spout", new SentenceSpout(), 2);
+        builder.setBolt("split-bolt", new SplitBolt(), 4)
+               .shuffleGrouping("sentence-spout");
+        builder.setBolt("count-bolt", new WordCountBolt(), 4)
+               .fieldsGrouping("split-bolt", new Fields("word"));  // 同一个词进同一个 Task
+
+        Config conf = new Config();
+        conf.setNumWorkers(2);
+        conf.setNumAckers(1);                    // 每个 Worker 的 acker 线程数
+        conf.setMaxSpoutPending(1000);           // 未 ack 的在途 Tuple 上限，即背压阈值
+        conf.put(Config.TOPOLOGY_MESSAGE_TIMEOUT_SECS, 30);  // 元组树超时，默认 30 秒
+
+        if (args.length &gt; 0 &amp;&amp; "local".equals(args[0])) {
+            LocalCluster cluster = new LocalCluster();      // 本地模式，方便调试
+            cluster.submitTopology("word-count", conf, builder.createTopology());
+            Thread.sleep(60_000);
+            cluster.shutdown();
+        } else {
+            StormSubmitter.submitTopology("word-count", conf, builder.createTopology());
+        }
+    }
+}</code></pre>
+
+<h2>三、ack 与元组树：Storm 怎么做到不丢</h2>
+
+<p>Storm 的可靠性不是靠重发整个批次，而是靠<strong>元组树 + acker 校验</strong>。Spout 发射时给 Tuple 分配一个 64 位根 id；下游每次锚定发射，都会把父 Tuple 的 id 一起带上，于是从根到叶子构成一棵树。acker 任务为每棵树维护一个 64 位校验值：收到新 Tuple 就把它的 id 异或进去，收到 ack 再异或一次——同一个 id 异或两次会相互抵消。当整棵树的校验值归零，说明所有分支都处理完了，acker 才回调 <code>spout.ack()</code>；只要有分支没 ack，超过 <code>TOPOLOGY_MESSAGE_TIMEOUT_SECS</code>（默认 30 秒）就判定超时，回调 <code>spout.fail()</code> 让 Spout 重放这条消息。因此 Storm 默认提供的是 <strong>at-least-once</strong>（至少一次）语义：不丢，但可能重复。</p>
+
+<p>代价与开关都要清楚：acker 会带来额外网络与 CPU 开销（经验值 10%~20% 吞吐），如果数据源本身可重放、或业务允许丢少量数据，把 <code>Config.setNumAckers(0)</code> 关掉 ack 就能白赚一部分吞吐；反过来，想拿到 exactly-once（精确一次），要用 <strong>Trident</strong> 这层更高阶的 API，它把流切成小批并管理状态与事务，或者干脆在写入端做幂等/去重。另外要注意：可靠性是「全链路」的，Spout 开了 ack、中间某个 Bolt 却忘了 <code>ack</code> 或用了不带 input 的 emit，结果就是该 Tuple 一直等到超时被无条件重放，表现为计数偏大、下游重复写。Storm 2.x 还引入了 <code>ICommitterBolt</code> 与 <code>CheckpointSpout</code> 等机制配合 Trident，但常用场景下 ack 三元组（emit 带 msgId、锚定发射、显式 ack）已经够用。</p>
+
+<p>运行与运维命令如下。<code>storm jar</code> 提交时把 <code>main</code> 类写在拓扑 jar 之后，附加参数会传给 <code>main</code>。</p>
+
+<pre><code class="language-bash"># 提交拓扑（-c 可覆盖 Config 里的任意配置项）
+storm jar word-count.jar com.example.WordCountTopology -c topology.workers=4
+
+# 查看运行中的拓扑与各组件延迟、吞吐
+storm list
+storm ui
+
+# 调整已提交拓扑的并行度（改代码重发会中断，rebalance 不会）
+storm rebalance word-count -n 4 -e sentence-spout=4 -e count-bolt=8
+
+# 关闭拓扑并等待 30 秒让在途数据跑完
+storm kill word-count -w 30</code></pre>
+
+<h2>四、Storm、Spark Streaming、Flink 怎么选</h2>
+
+<p>三者的本质差别在计算模型。<strong>Storm</strong> 是逐条处理的真流系统，延迟可低到毫秒级，API 也最底层：状态要自己维护（比如用一个 <code>Map</code> 存计数），容错只有 at-least-once，需要额外用 Trident 才能做到精确一次；它的强项是延迟极低、模型简单、易于理解。<strong>Spark Streaming</strong> 是微批（micro-batch）：按 <code>batch interval</code>（通常秒级）把流切成 RDD 序列（DStream），因此延迟下限就是批间隔，换来的是复用 Spark 生态与 SQL 能力；Spark 2.0 之后官方主推 Structured Streaming，DStream API 已进入维护状态。<strong>Flink</strong> 则是真流 + 事件时间 + 水位线 + Checkpoint 状态，原生提供 exactly-once，同时把批与流统一到一套 API 上，今天新项目的默认选择基本是它。</p>
+
+<p>落到选型上：新项目做实时计算，优先 Flink；如果只是从 Kafka 到 Kafka 的轻量转换、过滤、路由，Kafka Streams 或 Flink 的 SQL 更省运维；只有在维护存量系统、或者对延迟极度敏感且业务逻辑很简单的管道上，Storm 才仍是合理选项。要提醒的是，网上不少「Storm 是流处理唯一答案」的结论来自 2013—2016 年的资料，那时 Flink 尚未成熟，这个前提今天已经不存在了。</p>
+
+<h2>五、常见坑</h2>
+
+<p>第一，<code>nextTuple()</code> 里阻塞。它和 Bolt 的 <code>execute()</code>、acker 线程共处一个 Worker 进程，一旦在 <code>nextTuple()</code> 里做同步 RPC 或 <code>take()</code> 阻塞读取，整个 Worker 的吞吐都会塌掉；正确做法是「后台线程取数据 + 队列 + 非阻塞 poll」。第二，分组选错。计数、去重类 Bolt 用 <code>shuffleGrouping</code> 会得到每个 Task 各自的局部结果，总量对不上，必须用 <code>fieldsGrouping</code> 按 key 分组。第三，漏 ack 或漏锚定，表现为超时重放与结果翻倍，排查方法是在 UI 上看某组件的 <code>failed</code> 与 <code>capacity</code> 指标。第四，<code>maxSpoutPending</code> 设置不当：太小压不满下游吞吐，太大则一超时就一大片重放（重放风暴）；它同时也是 Storm 的背压手段。第五，版本与包名：1.0 之前所有类都在 <code>backtype.storm</code> 包下，之后统一迁到 <code>org.apache.storm</code>，抄十年前的代码会直接编译不过。</p>
+
+<p>小结：Storm 用「Spout 进、Bolt 算、流分组连、Tuple 流」四个概念搭出常驻的流式 DAG，用元组树与 acker 换来 at-least-once 的可靠性，用 Trident 换来精确一次。它的价值在今天更多是理解流处理的原点：延迟、状态、容错、背压这几个问题，Storm 都给出了第一代答案，而 Flink 与 Structured Streaming 则在这些答案上补齐了事件时间与状态一致性。读到这里，你应该能写出并提交一个带可靠性与背压配置的 Storm 拓扑，也能说清它在什么场景下该被 Flink 取代。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
