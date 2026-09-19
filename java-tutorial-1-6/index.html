@@ -128,12 +128,12 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们学会了用类封装数据、用构造方法初始化对象，但真实项目里的类很少彼此孤立：<code>Programmer</code> 和 <code>Hr</code> 都是员工，<code>Dog</code> 和 <code>Cat</code> 都是动物。如果每个类都把姓名、编号、<code>work()</code> 从头写一遍，代码会重复到无法维护。本章要解决的就是这个问题：用 <code>extends</code> 复用父类成员，用方法重写改造父类行为，用 <code>super</code> 调用父类版本，用多态写出「一处编写、多处适配」的代码，最后用抽象类把「只有声明、没有实现」的方法固定成契约。阅读前请确保你已经掌握 <code>this</code>、构造方法和访问权限；文中示例都可在 JDK 8 及以上直接编译运行。</p>
+<p>前面几章学会了用类封装数据、用构造方法初始化对象，但真实项目里的类很少彼此孤立：<code>Programmer</code> 和 <code>Hr</code> 都是员工，<code>Dog</code> 和 <code>Cat</code> 都是动物。如果每个类都把姓名、编号、<code>work()</code> 从头写一遍，代码会重复到无法维护。本章要解决的就是这个问题：用 <code>extends</code> 复用父类成员，用方法重写改造父类行为，用 <code>super</code> 调用父类版本。再进一步，用多态写出“一处编写、多处适配”的代码，最后用抽象类把“只有声明、没有实现”的方法固定成契约。阅读前请确保已经掌握 <code>this</code>、构造方法和访问权限；文中示例都可在 JDK 8 及以上直接编译运行。</p>
 
 <h2>一、为什么需要继承：is-a 关系与 extends 格式</h2>
-<p>继承解决的是「多个类存在共同成员」的重复问题。做法是把共性抽取到一个父类（也叫超类、基类），再让子类（派生类）通过 <code>extends</code> 直接拥有这些成员。判断该不该用继承只有一条标准：子类「是一个」父类，即 is-a 关系。程序员是员工，所以 <code>Programmer extends Employee</code> 成立；员工配有电脑，但「员工不是一个电脑」，这种 has-a 关系应该写成成员变量，而不是继承。</p>
+<p>继承解决的是“多个类存在共同成员”的重复问题。做法是把共性抽取到一个父类（也叫超类、基类），再让子类（派生类）通过 <code>extends</code> 直接拥有这些成员。判断该不该用继承只有一条标准：子类“是一个”父类，即 is-a 关系。程序员是员工，所以 <code>Programmer extends Employee</code> 成立；员工配有电脑，但“员工不是一个电脑”，这种 has-a 关系应该写成成员变量，而不是继承。</p>
 <p>继承带来三点收益：复用父类代码；把共性缺陷集中到一处修复，提升可维护性；让父类引用可以指向子类对象，这正是下一节多态的前提。代价是耦合变强——父类一改，所有子类都会受影响，所以抽取父类要克制，不要为了省几行代码硬造继承关系。</p>
-<p>格式为 <code>class 子类名 extends 父类名 {}</code>。有两点必须记住：第一，Java 的类只支持单继承，一个类只能有一个直接父类，但支持多层继承（<code>A extends B</code>，<code>B extends C</code>）；第二，父类的私有成员和构造方法都不能被子类继承——私有成员依然会随对象一起分配空间，但子类无法直接访问，只能通过父类提供的 public/protected 方法间接使用；构造方法则只能用 <code>super</code> 调用。</p>
+<p>格式为 <code>class 子类名 extends 父类名 {}</code>。有两点必须记住。第一，Java 的类只支持单继承，一个类只能有一个直接父类，但支持多层继承（<code>A extends B</code>，<code>B extends C</code>）。第二，父类的私有成员和构造方法都不能被子类继承：私有成员依然会随对象一起分配空间，但子类无法直接访问，只能通过父类提供的 public/protected 方法间接使用；构造方法则只能用 <code>super</code> 调用。</p>
 <pre><code class="language-java">class Employee {
     protected String name;
     protected String id;
@@ -175,15 +175,15 @@ public class ExtendsDemo {
         p.debug();
     }
 }</code></pre>
-<p>再强调一次对象创建的顺序：<code>new</code> 时先在堆中为子类对象（连同父类成员变量）分配空间并赋默认值，然后子类构造方法进栈，第一件事就是调用父类构造方法，接着才是成员变量显式初始化、构造代码块、构造方法体。所以子类对象自始至终只有一个，父类成员只是被放在同一块空间里一起初始化。</p>
+<p>再强调一次对象创建的顺序：<code>new</code> 时先在堆中为子类对象（连同父类成员变量）分配空间并赋默认值，然后子类构造方法进栈，第一件事就是调用父类构造方法；接着依次执行成员变量显式初始化、构造代码块和构造方法体。所以子类对象自始至终只有一个，父类成员只是被放在同一块空间里一起初始化。</p>
 
 <h2>二、方法重写与 super：子类如何改造父类行为</h2>
-<p>当父类的方法实现满足不了子类需求时，就在子类中写一个「格式相同」的方法把父类版本覆盖掉，这就是方法重写（override），也叫覆盖、复写。要点可以概括为「签名相同、权限不降、返回类型兼容」：方法名和参数列表必须完全相同；返回类型必须相同，或者（Java 5 起）是父类返回类型的子类型，这叫协变返回；访问权限不能比父类更严格，父类是 public，子类就不能写成 protected。建议永远加上 <code>@Override</code> 注解，一旦签名写错，编译器会立刻报错，而不是默默变成一个新方法。</p>
-<p>要特别纠正一个常见误解：静态方法不能被重写。父类和子类出现同名同参的静态方法时，只是子类方法把父类方法「隐藏」了，运行期按引用的编译类型决定调用哪一个；在静态方法上加 <code>@Override</code> 会直接编译失败。重写针对的是实例方法，只有实例方法才有多态效果。</p>
-<p><code>super</code> 是父类成员的访问标识（注意它不是一个对象引用，而 <code>this</code> 是当前对象的引用），有三种用法：<code>super.成员变量</code> 访问被子类同名变量遮蔽的父类字段；<code>super.方法名(参数)</code> 调用父类被重写的方法；<code>super(参数)</code> 在子类构造方法第一行调用父类构造方法。当父类没有无参构造方法时，子类必须显式写 <code>super(参数)</code>，否则编译不通过；<code>this(...)</code> 和 <code>super(...)</code> 都要占据构造方法第一行，因此同一个构造方法里只能二选一——不过若用 <code>this(...)</code> 转调本类其他构造方法，隐式的父类构造调用会转移到那个被调用的构造方法中，父类数据依然会被初始化。</p>
+<p>当父类的方法实现满足不了子类需求时，就在子类中写一个“格式相同”的方法把父类版本覆盖掉，这就是方法重写（override），也叫覆盖、复写。要点可以概括为“签名相同、权限不降、返回类型兼容”：方法名和参数列表必须完全相同；返回类型必须相同，或者（Java 5 起）是父类返回类型的子类型，这叫协变返回；访问权限则不能比父类更严格——父类是 public，子类就不能写成 protected。建议永远加上 <code>@Override</code> 注解，一旦签名写错，编译器会立刻报错，而不是默默变成一个新方法。</p>
+<p>要特别纠正一个常见误解：静态方法不能被重写。父类和子类出现同名同参的静态方法时，只是子类方法把父类方法“隐藏”了，运行期按引用的编译类型决定调用哪一个；在静态方法上加 <code>@Override</code> 会直接编译失败。重写针对的是实例方法，只有实例方法才有多态效果。</p>
+<p><code>super</code> 是父类成员的访问标识，注意它不是一个对象引用，而 <code>this</code> 才是当前对象的引用。它有三种用法：<code>super.成员变量</code> 访问被子类同名变量遮蔽的父类字段；<code>super.方法名(参数)</code> 调用父类被重写的方法；<code>super(参数)</code> 在子类构造方法第一行调用父类构造方法。当父类没有无参构造方法时，子类必须显式写 <code>super(参数)</code>，否则编译不通过。<code>this(...)</code> 和 <code>super(...)</code> 都要占据构造方法第一行，因此同一个构造方法里只能二选一。若用 <code>this(...)</code> 转调本类其他构造方法，隐式的父类构造调用会转移到那个被调用的构造方法中，父类数据依然会被初始化。</p>
 
 <h2>三、多态：父类引用指向子类对象</h2>
-<p>多态指同一个对象在不同时刻表现出不同形态，在 Java 中的代码体现就是「父类型引用指向子类对象」（接口类型引用指向实现类对象）。它成立的三个前提是：存在继承或实现关系；子类重写了父类方法；用父类引用指向子类对象。多态最大的价值是解耦：方法参数写成父类型，就能接收任意子类对象，以后新增子类无需修改这段代码。</p>
+<p>多态指同一个对象在不同时刻表现出不同形态，在 Java 中的代码体现就是“父类型引用指向子类对象”（接口类型引用指向实现类对象）。它成立的三个前提是：存在继承或实现关系；子类重写了父类方法；用父类引用指向子类对象。多态最大的价值是解耦：方法参数写成父类型，就能接收任意子类对象，以后新增子类无需修改这段代码。</p>
 <p>多态的成员访问规则要分编译期和运行期：编译期一律看左边（父类型），父类里没有的成员直接报错；运行期则只有非静态方法看右边（真实子类对象），成员变量和静态方法都看左边。换句话说，字段没有多态，只有被重写的实例方法有。</p>
 <pre><code class="language-java">class Worker {
     public void work() {
@@ -228,13 +228,13 @@ public class PolyDemo {
         }
     }
 }</code></pre>
-<p>多态的弊端是父类型引用看不到子类特有功能，解决办法是向下转型。把子类引用赋给父类引用叫向上转型，可以自动完成；把父类引用赋给子类引用叫向下转型，必须强制写 <code>(子类名)</code>。如果被转型的对象本来就不是该类型，运行时会抛出 <code>ClassCastException</code>（类型转换异常），所以强转前应当用 <code>instanceof</code> 判断：<code>变量 instanceof 类名</code> 返回布尔值，表示左边对象是否是右边类型的实例。JDK 16 起还支持模式匹配写法 <code>if (w instanceof Coder c)</code>，判断通过时直接完成声明和赋值，代码更紧凑。</p>
+<p>多态的弊端是父类型引用看不到子类特有功能，解决办法是向下转型。把子类引用赋给父类引用叫向上转型，可以自动完成。把父类引用赋给子类引用叫向下转型，必须强制写 <code>(子类名)</code>；如果被转型的对象本来就不是该类型，运行时会抛出 <code>ClassCastException</code>（类型转换异常），所以强转前应当用 <code>instanceof</code> 判断。<code>变量 instanceof 类名</code> 返回布尔值，表示左边对象是否是右边类型的实例。JDK 16 起还支持模式匹配写法 <code>if (w instanceof Coder c)</code>，判断通过时直接完成声明和赋值，代码更紧凑。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-6/01-polymorphism-binding.svg" alt="多态示意图：Worker 父类与 Hr、Coder 子类，编译期看左边、运行期看右边，以及向上与向下转型"><figcaption>图 1：多态的三个前提与成员访问规则，以及向上转型（自动）与向下转型（须先 instanceof 判断）</figcaption></figure>
 
-<h2>四、抽象类与 final：把「不具体」的行为定成契约</h2>
-<p>有时我们知道某个类「有哪些行为」，却说不清「怎么实现」：动物都会吃和叫，但吃法、叫声各不相同。这种只有声明、没有方法体的方法就叫抽象方法，格式是 <code>访问修饰符 abstract 返回值类型 方法名(参数列表);</code>——注意它连大括号都不能有。一个类里只要存在抽象方法，这个类就必须声明为 <code>abstract class</code>，否则编译失败。抽象类不能实例化，必须由子类继承；子类若没有实现全部抽象方法，那它自己也只能是抽象类。</p>
-<p>抽象类可以拥有构造方法，而且必须有——它不给自己创建对象，而是供子类创建对象时初始化父类成员。抽象类中允许没有抽象方法，此时它的唯一作用就是禁止实例化。但抽象方法不能与 <code>final</code>、<code>private</code>、<code>static</code> 组合：final 方法不允许重写，private 方法子类根本访问不到，而 <code>abstract static</code> 是编译错误（源笔记写成「static 无意义」，实际上那是非法的修饰符组合）。</p>
+<h2>四、抽象类与 final：把“不具体”的行为定成契约</h2>
+<p>有时一个类“有哪些行为”是明确的，但“怎么实现”说不清：动物都会吃和叫，但吃法、叫声各不相同。这种只有声明、没有方法体的方法就叫抽象方法，格式是 <code>访问修饰符 abstract 返回值类型 方法名(参数列表);</code>——注意它连大括号都不能有。一个类里只要存在抽象方法，这个类就必须声明为 <code>abstract class</code>，否则编译失败。抽象类不能实例化，必须由子类继承；子类若没有实现全部抽象方法，那它自己也只能是抽象类。</p>
+<p>抽象类可以拥有构造方法，而且必须有——它不给自己创建对象，而是供子类创建对象时初始化父类成员。抽象类中允许没有抽象方法，此时它的唯一作用就是禁止实例化。但抽象方法不能与 <code>final</code>、<code>private</code>、<code>static</code> 组合：final 方法不允许重写，private 方法子类访问不到；而 <code>abstract static</code> 本身就是非法的修饰符组合，编译直接报错。</p>
 <pre><code class="language-java">abstract class Animal {
     protected String name;
 
@@ -280,10 +280,10 @@ public class AbstractDemo {
         a.sleep();
     }
 }</code></pre>
-<p><code>final</code> 是「最终」的意思，可以修饰类、方法和变量：修饰类表示不能被继承（如 <code>String</code>）；修饰方法表示不能被子类重写；修饰变量表示只能赋值一次，成为常量。final 修饰引用类型变量时，锁住的是地址值而不是对象内容——<code>final List&lt;String&gt; list</code> 仍然可以 <code>add</code>，只是不能再指向另一个集合。常量通常在定义时赋值，也可以在构造方法中赋值。</p>
+<p><code>final</code> 是“最终”的意思，可以修饰类、方法和变量：修饰类表示不能被继承（如 <code>String</code>）；修饰方法表示不能被子类重写；修饰变量表示只能赋值一次，成为常量。final 修饰引用类型变量时，锁住的是地址值而不是对象内容——<code>final List&lt;String&gt; list</code> 仍然可以 <code>add</code>，只是不能再指向另一个集合。常量通常在定义时赋值，也可以在构造方法中赋值。</p>
 
 <h2>五、常见坑与小结</h2>
-<p><strong>坑一：在构造方法中调用可被重写的方法。</strong>父类构造方法执行时，子类的成员变量还没有显式初始化，此时动态绑定到子类方法，读到的只会是默认值。下面代码会依次输出「父类构造方法」「Son.show(), a = 10, b = 0」「子类构造方法」「Son.show(), a = 10, b = 20」，<code>b = 0</code> 就是典型的「半成品对象」现象。构造方法里应只调用 private 或 final 的方法，或者干脆不要在构造期依赖子类状态。</p>
+<p><strong>坑一：在构造方法中调用可被重写的方法。</strong>父类构造方法执行时，子类的成员变量还没有显式初始化，此时动态绑定到子类方法，读到的只会是默认值。下面代码会依次输出“父类构造方法”“Son.show(), a = 10, b = 0”“子类构造方法”“Son.show(), a = 10, b = 20”，<code>b = 0</code> 就是典型的“半成品对象”现象。构造方法里应只调用 private 或 final 的方法，或者干脆不要在构造期依赖子类状态。</p>
 <pre><code class="language-java">class Father {
     protected int a = 10;
 
@@ -319,13 +319,8 @@ public class InitOrderDemo {
 <p><strong>坑二：把重载当成重写。</strong>重载（overload）是同一个类中方法名相同、参数列表不同，与返回值类型无关，也不能用返回值类型区分；重写发生在父子类之间，要求签名一致。二者英文分别是 overload 和 override，面试常考。</p>
 <p><strong>坑三：重写时缩小访问权限或返回类型不兼容。</strong>这都会直接编译报错；忘了写 <code>@Override</code> 时，签名差一个字母就会变成一个无关的新方法，父类旧逻辑仍在被调用。</p>
 <p><strong>坑四：不判断就向下转型。</strong>只要有可能不是目标类型，就先 <code>instanceof</code>，否则线上就是 <code>ClassCastException</code>。</p>
-<p><strong>坑五：为了复用硬造继承。</strong>is-a 不成立时应改用组合（把对象作为字段）；此外子类定义与父类同名的成员变量并不会「重写」父类字段，而是遮蔽，父类字段依然存在、依然占空间，这种写法极易出错，应尽量避免。</p>
-<p>小结：继承通过 <code>extends</code> 复用共性，前提是 is-a 关系，Java 类单继承但可多层继承，私有成员与构造方法不被继承；方法重写要求签名相同、权限不降、返回类型兼容，只有实例方法能重写。多态由「父类引用指向子类对象」产生，成员变量和静态方法看左边，被重写的实例方法看右边；访问子类特有功能要先 <code>instanceof</code> 再向下转型。抽象类用 <code>abstract</code> 声明，不能实例化，专门为子类提供契约，且不能与 final、private、static 组合；<code>final</code> 则用于关闭继承、重写和二次赋值。把这四件工具连起来，你就具备了设计类层次的基本能力，下一章我们会继续看接口如何补足单继承的短板。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">方法与面向对象基础</span></a>
-      <a class="next-post" href="/java-tutorial-1-7/"><span class="pn-label">下一篇 →</span><span class="pn-title">接口、内部类与枚举</span></a>
-      </nav>
+<p><strong>坑五：为了复用硬造继承。</strong>is-a 不成立时应改用组合（把对象作为字段）；此外子类定义与父类同名的成员变量并不会“重写”父类字段，而是遮蔽，父类字段依然存在、依然占空间，这种写法极易出错，应尽量避免。</p>
+<p>小结：继承通过 <code>extends</code> 复用共性，前提是 is-a 关系；Java 类只支持单继承，但可以多层继承，私有成员与构造方法都不被继承。方法重写要求签名相同、权限不降、返回类型兼容，只有实例方法能重写。多态由“父类引用指向子类对象”产生，成员变量和静态方法看左边，被重写的实例方法看右边；访问子类特有功能要先 <code>instanceof</code> 再向下转型。抽象类用 <code>abstract</code> 声明，不能实例化，专门为子类提供契约，且不能与 final、private、static 组合；<code>final</code> 则用于关闭继承、重写和二次赋值。把这四件工具连起来，就具备了设计类层次的基本能力，下一章将继续看接口如何补足单继承的短板。</p>
           </article>
   <!-- Footer -->
   <footer>

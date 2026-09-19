@@ -128,13 +128,13 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>程序出错并不可怕，可怕的是出错之后你不知道发生了什么。本章讲的是 Java 的异常机制与调试手段：如何用 try-catch-finally 捕获并处理错误，如何用 throw / throws 把问题交给上层，如何自定义异常表达业务规则，以及如何用断点调试找到异常的真正源头。适合已经会写基本 Java 类、方法，但一看到红色堆栈就发懵的读者。</p>
+<p>程序出错并不可怕，可怕的是出错之后不知道发生了什么。本章讲 Java 的异常机制与调试手段：用 try-catch-finally 捕获并处理错误，用 throw / throws 把问题交给上层，用自定义异常表达业务规则，用断点调试找到异常的真正源头。本章适合已经会写基本 Java 类和方法、但一看到红色堆栈就发懵的读者。</p>
 
-<p>假设要写一个"计算两个整数相除"的方法。如果不用异常，就得让方法返回一个特殊值表示失败，比如返回 <code>-1</code>；可调用方怎么区分"结果是 -1"和"出错了"？再比如数组越界，返回什么值都无法表达"下标超出范围"这件事。靠返回值传递错误，会让每个调用点都塞满 <code>if</code> 判断，正常逻辑反而被淹没。</p>
+<p>假设要写一个“计算两个整数相除”的方法。如果不用异常，就得让方法返回一个特殊值表示失败，比如返回 <code>-1</code>；可调用方怎么区分“结果是 -1”和“出错了”？再比如数组越界，返回什么值都无法表达“下标超出范围”这件事。靠返回值传递错误，会让每个调用点都塞满 <code>if</code> 判断，正常逻辑反而被淹没。</p>
 
-<p>异常机制解决的正是这个分离问题：把"错误"也描述成一个对象，里面装着错误类型、发生位置、调用链和补充信息，然后沿着调用栈一路向上抛，直到有人愿意处理它。它带来三个好处：正常流程与错误处理彻底分开；错误信息自带上下文；编译器还能对某些异常做强制检查，提醒你别忘了处理。</p>
+<p>异常机制解决的正是这个分离问题：把“错误”也描述成一个对象，里面装着错误类型、发生位置、调用链和补充信息，然后沿着调用栈一路向上抛，直到有人愿意处理它。它带来三个好处：正常流程与错误处理彻底分开；错误信息自带上下文；编译器还能对某些异常做强制检查，提醒别忘了处理。</p>
 
-<p>需要先明确一点：如果没有任何代码处理异常，JVM 的默认做法是把异常对象的堆栈轨迹（stack trace）打印到标准错误流，然后终止当前线程。你在控制台看到的那一长串 <code>at com.xxx.Main.main(Main.java:8)</code>，就是这条规则的结果——所以"程序突然挂了并打印一堆英文"，本质上不是 JVM 在报错，而是没人接住这个异常。</p>
+<p>需要先明确一点：如果没有任何代码处理异常，JVM 的默认做法是把异常对象的堆栈轨迹（stack trace）打印到标准错误流，然后终止当前线程。控制台上那一长串 <code>at com.xxx.Main.main(Main.java:8)</code>，就是这条规则的结果。所以“程序突然挂了并打印一堆英文”，本质上不是 JVM 在报错，而是没人接住这个异常。</p>
 
 <h2>异常体系与两类异常</h2>
 
@@ -142,14 +142,14 @@
 
 <p><strong>Error</strong>：表示 JVM 层面的严重问题，例如 <code>OutOfMemoryError</code>、<code>StackOverflowError</code>。这类问题通常超出了应用代码的处理能力，程序不应该去捕获它，捕获了也做不了什么。</p>
 
-<p><strong>Exception</strong>：表示程序运行中可以处理的问题，我们日常打交道的基本都在这一支。它的子类 <code>RuntimeException</code> 及其派生类被称为<strong>非受检异常</strong>（unchecked，也叫运行时异常），其余 Exception 子类被称为<strong>受检异常</strong>（checked，笔记里常叫"编译期异常"）。</p>
+<p><strong>Exception</strong>：表示程序运行中可以处理的问题，日常打交道的基本都在这一支。它的子类 <code>RuntimeException</code> 及其派生类被称为<strong>非受检异常</strong>（unchecked，也叫运行时异常），其余 Exception 子类被称为<strong>受检异常</strong>（checked，旧笔记常称作“编译期异常”）。</p>
 
-<p>这里有两个源笔记中常见的说法需要纠正。<strong>第一</strong>，"编译期异常"这个叫法容易让人误解为"异常发生在编译期"。事实上所有异常都发生在运行时，受检异常之所以名字里有"编译期"，只是因为编译器会检查你有没有写处理代码：要么用 try-catch 捕获，要么在方法签名上用 throws 声明出去，否则编译直接失败。<strong>第二</strong>，非受检的并不只有 RuntimeException 一族，<code>Error</code> 及其子类同样不受编译检查——因为 Java 语言规范里"受检"的定义是"Throwable 的子类中除 RuntimeException 和 Error 及其子类之外的部分"。很多笔记只写 Exception 分支，漏掉了 Error 这一支。</p>
+<p>这里有两个常见说法需要纠正。<strong>第一</strong>，“编译期异常”这个叫法容易让人误解为“异常发生在编译期”。事实上所有异常都发生在运行时。受检异常之所以和“编译期”挂上关系，只是因为编译器会检查有没有写处理代码：要么用 try-catch 捕获，要么在方法签名上用 throws 声明出去，否则编译直接失败。<strong>第二</strong>，非受检的并不只有 RuntimeException 一族。<code>Error</code> 及其子类同样不受编译检查。按 Java 语言规范，受检异常指的是 <code>Throwable</code> 的子类中，除 <code>RuntimeException</code> 和 <code>Error</code> 及其子类之外的部分。不少入门材料只写 Exception 分支，漏掉了 Error 这一支。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/01-throwable-hierarchy.svg" alt="Throwable 异常体系分支图"><figcaption>图 1：Throwable 的两个分支 —— Error 与 RuntimeException 一族不受编译检查，其余 Exception 子类是受检异常</figcaption></figure>
 
 <p>常见受检异常：<code>IOException</code>、<code>SQLException</code>、<code>ClassNotFoundException</code>、<code>InterruptedException</code>。常见非受检异常：<code>NullPointerException</code>、<code>ArrayIndexOutOfBoundsException</code>、<code>ClassCastException</code>、<code>IllegalArgumentException</code>，以及它的子类 <code>NumberFormatException</code>。</p>
 
-<p>选择继承哪一支，决定了错误的"强制程度"：如果某种问题调用方<em>必须</em>处理，就继承 <code>Exception</code>，交给编译器把关；如果是调用方的代码写错了（比如传了非法参数），就继承 <code>RuntimeException</code>，不要用受检异常去污染整条调用链的签名。</p>
+<p>选择继承哪一支，决定了错误的“强制程度”。如果某种问题调用方<em>必须</em>处理，就继承 <code>Exception</code>，交给编译器把关。如果是调用方的代码写错了（比如传了非法参数），就继承 <code>RuntimeException</code>，不要用受检异常去污染整条调用链的签名。</p>
 
 <h2>捕获异常：try-catch-finally</h2>
 
@@ -174,7 +174,7 @@
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/02-try-catch-flow.svg" alt="try-catch-finally 执行流程图：正常结束跳过全部 catch，异常按 catch 顺序匹配，finally 必然执行"><figcaption>图 2：try-catch-finally 的执行路径与 catch 匹配顺序</figcaption></figure>
 
-<p>关于捕获，有几条规则必须记牢。<strong>catch 的顺序不能颠倒</strong>：如果把 <code>catch (Exception e)</code> 写在 <code>catch (NumberFormatException e)</code> 前面，编译器会报错，因为后面的分支永远不可能被执行（unreachable）。<strong>多重捕获有前提</strong>：<code>catch (A | B e)</code> 中的多个类型之间<em>不能</em>存在继承关系，否则同样编译失败——源笔记只含糊地说"只能使用没有继承关系的异常类"，没有说清楚原因，实际上是重复捕获导致编译错误。</p>
+<p>关于捕获，有几条规则必须记牢。<strong>catch 的顺序不能颠倒</strong>：如果把 <code>catch (Exception e)</code> 写在 <code>catch (NumberFormatException e)</code> 前面，编译器会报错，因为后面的分支永远不可能被执行（unreachable）。<strong>多重捕获有前提</strong>：<code>catch (A | B e)</code> 中的多个类型之间<em>不能</em>存在继承关系。原因就是重复捕获：子类与父类能捕获同一批异常，编译器同样判定为错误。旧笔记只含糊地说“只能使用没有继承关系的异常类”，没有点明这层原因。</p>
 
 <p>处理资源时，Java 7 之前必须把 <code>close()</code> 写在 finally 里，还得再套一层 try，非常啰嗦。现在应优先使用 try-with-resources：只要资源实现了 <code>AutoCloseable</code>，就会在语句结束时自动关闭，关闭顺序与打开顺序相反；关闭时抛出的异常会作为 suppressed 异常附加到主异常上，不会丢失。</p>
 
@@ -184,13 +184,13 @@
     }   // 无论正常返回还是抛异常，reader 都会在这里自动 close()
 }</code></pre>
 
-<p>最后是 finally 的两个要点。它的语义是"离开 try 语句时必然执行"，但并非绝对：<code>System.exit()</code>、JVM 崩溃、线程被强制终止时不会执行。更要命的是陷阱——<strong>千万不要在 finally 里写 return 或 throw</strong>，它会覆盖 try 或 catch 中正在返回的值、甚至吞掉正在抛出的异常，让问题凭空消失，这也是源笔记中 <code>FinallyDemo</code> 例子值得警惕的地方。</p>
+<p>最后是 finally 的两个要点。它的语义是“离开 try 语句时必然执行”，但并非绝对：<code>System.exit()</code>、JVM 崩溃、线程被强制终止时不会执行。更要命的是陷阱——<strong>千万不要在 finally 里写 return 或 throw</strong>。它会覆盖 try 或 catch 中正在返回的值，甚至吞掉正在抛出的异常，让问题凭空消失。</p>
 
 <h2>抛出、声明与自定义异常</h2>
 
 <p>自己解决不了的问题，就交给调用者，这对应异常的声明。<code>throw</code> 用在方法体内，抛出一个异常对象；<code>throws</code> 写在方法参数列表之后、方法体大括号之前，声明本方法<em>可能</em>抛出的受检异常，多个用逗号分隔。注意二者分工：throw 是动作，throws 是承诺。</p>
 
-<p>自定义异常是表达业务规则的推荐方式，步骤只有三步：类名以 <code>Exception</code> 结尾；继承 <code>Exception</code>（受检）或 <code>RuntimeException</code>（非受检）；提供接收消息字符串的构造方法，并用 <code>super(message)</code> 把信息交给父类。建议再补一个 <code>(String message, Throwable cause)</code> 构造，用于保留原始异常形成异常链，以及一个无参构造供框架反射和序列化使用。</p>
+<p>自定义异常是表达业务规则的推荐方式，步骤只有三步：类名以 <code>Exception</code> 结尾；继承 <code>Exception</code>（受检）或 <code>RuntimeException</code>（非受检）；提供接收消息字符串的构造方法，并用 <code>super(message)</code> 把信息交给父类。建议再补一个 <code>(String message, Throwable cause)</code> 构造，用于保留原始异常形成异常链；也可以补一个无参构造，供框架反射和序列化使用。</p>
 
 <pre><code class="language-java">/** 年龄超出自定义范围时抛出；属于非受检异常，不强制调用方捕获 */
 public class WrongAgeException extends RuntimeException {
@@ -224,25 +224,20 @@ public class Person {
     // getter / setter / toString 省略
 }</code></pre>
 
-<p>在继承场景下，重写方法还有一个容易被面试追问的限制：<strong>子类重写方法不能声明比父类更多的受检异常</strong>。具体来说，父类方法没声明受检异常，子类就不能新增；父类声明了一个受检异常，子类只能声明这个异常本身或它的子类；父类声明了多个，子类只能取其中的子集。原因是多态——调用方是按父类签名来调用方法的，如果子类突然抛出父类没承诺的受检异常，调用方的既有代码就会被破坏。非受检异常不受这条限制。</p>
+<p>在继承场景下，重写方法还有一个容易忽略的限制：<strong>子类重写方法不能声明比父类更多的受检异常</strong>。具体来说，父类方法没声明受检异常，子类就不能新增；父类声明了一个受检异常，子类只能声明这个异常本身或它的子类；父类声明了多个，子类只能取其中的子集。原因是多态：调用方按父类签名来调用方法，如果子类突然抛出父类没承诺的受检异常，调用方的既有代码就会被破坏。非受检异常不受这条限制。</p>
 
 <h2>断点调试：找到异常的源头</h2>
 
-<p>堆栈轨迹只告诉你"异常在哪里抛出"，却常常回答不了"这个 null 是谁放进来的"。断点调试就是补上后半句的工具。以 IntelliJ IDEA 为例：在行号左侧单击打上断点（Ctrl+F8），以 Debug 方式启动（Shift+F9），程序停在断点后通过 Debug 窗口查看调用栈（Frames）、当前变量（Variables）和自定义表达式（Watches，或 Alt+F8 打开 Evaluate Expression 临时求值）。单步操作记住四个就够：Step Over（F8，不进入方法）、Step Into（F7，进入方法）、Step Out（Shift+F8，跳出当前方法）、Resume（F9，继续运行到下一个断点）。</p>
+<p>堆栈轨迹只告诉你“异常在哪里抛出”，却常常回答不了“这个 null 是谁放进来的”。断点调试就是补上后半句的工具。以 IntelliJ IDEA 为例：在行号左侧单击打上断点（Ctrl+F8），以 Debug 方式启动（Shift+F9），程序停在断点后通过 Debug 窗口查看调用栈（Frames）、当前变量（Variables）和自定义表达式（Watches，或按 Alt+F8 打开 Evaluate Expression 临时求值）。单步操作记住四个就够：Step Over（F8，不进入方法）、Step Into（F7，进入方法）、Step Out（Shift+F8，跳出当前方法）、Resume（F9，继续运行到下一个断点）。</p>
 
-<p>四类断点在排查异常时特别有用：<strong>行断点</strong>最常用，用于观察某个时刻的变量状态；<strong>条件断点</strong>可以右键断点填写 Condition，例如 <code>i == 500</code> 或 <code>name == null</code>，避免在循环里连续暂停几百次；<strong>异常断点</strong>在 Run → View Breakpoints（Ctrl+Shift+F8）中添加 Java Exception Breakpoint 并填入异常类名，程序会在异常被抛出的第一现场停下，这是定位空指针最有效的手段；<strong>字段断点</strong>（Watchpoint）则用于监视某个字段被谁修改。</p>
+<p>四类断点在排查异常时特别有用。<strong>行断点</strong>最常用，用于观察某个时刻的变量状态。<strong>条件断点</strong>可以右键断点填写 Condition，例如 <code>i == 500</code> 或 <code>name == null</code>，避免在循环里连续暂停几百次。<strong>异常断点</strong>在 Run → View Breakpoints（Ctrl+Shift+F8）中添加 Java Exception Breakpoint 并填入异常类名，程序会在异常被抛出的第一现场停下，这是定位空指针最有效的手段。<strong>字段断点</strong>（Watchpoint）则用于监视某个字段被谁修改。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/02-stack-breakpoint.svg" alt="用断点调试定位异常源头的流程图"><figcaption>图 3：从堆栈轨迹到异常第一现场 —— 用异常断点加调用栈回溯定位谁放进了 null</figcaption></figure>
 
-<p>最后是几个实战中反复出现的坑。<strong>不要写空的 catch 块</strong>，<code>catch (Exception e) {}</code> 是最典型的排查灾难，异常被静默吞掉后，你只能看到错误的结果却看不到原因，至少要用日志记录下来。<strong>不要用异常控制正常流程</strong>，创建异常对象时要填充栈轨迹，开销远高于一次普通判断。<strong>捕获后重新抛出要保留原因</strong>，写成 <code>throw new OrderException("下单失败", e)</code> 而不是丢掉 <code>e</code>，否则异常链断裂，排查又从零开始。<strong>区分环境使用手段</strong>：<code>e.printStackTrace()</code> 只适合本地调试，生产环境应当接入 SLF4J + Logback 之类的日志框架，输出上下文并做告警。</p>
+<p>最后是几个实战中反复出现的坑。<strong>不要写空的 catch 块</strong>，<code>catch (Exception e) {}</code> 是最典型的排查灾难：异常被静默吞掉后，只能看到错误的结果却看不到原因，至少要用日志记录下来。<strong>不要用异常控制正常流程</strong>，创建异常对象时要填充栈轨迹，开销远高于一次普通判断。<strong>捕获后重新抛出要保留原因</strong>，写成 <code>throw new OrderException("下单失败", e)</code> 而不是丢掉 <code>e</code>，否则异常链断裂，排查又从零开始。<strong>区分环境使用手段</strong>：<code>e.printStackTrace()</code> 只适合本地调试，生产环境应当接入 SLF4J + Logback 之类的日志框架，输出上下文并做告警。</p>
 
 <h2>小结</h2>
 
-<p>异常机制的核心是把错误从正常流程中分离出来：<code>Throwable</code> 是体系根，<code>Error</code> 与 <code>RuntimeException</code> 一族是非受检异常，其余 <code>Exception</code> 子类是受检异常，编译器只强制处理后者。能自己解决就用 try-catch-finally 或 try-with-resources 捕获，解决不了就用 throws 交给上层，业务规则用自定义异常表达得更清楚，而重写方法只能"收窄"不能"扩大"受检异常的声明范围。遇到难以定位的问题时，异常断点往往比读堆栈更快找到第一现场；写代码时则要守住底线——不吞异常、不丢原因、不在 finally 里 return。掌握这些，你的程序就从"出错就崩"进化为"出错可控、出错可查"。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-9/"><span class="pn-label">← 上一篇</span><span class="pn-title">集合框架</span></a>
-      <a class="next-post" href="/java-tutorial-1-11/"><span class="pn-label">下一篇 →</span><span class="pn-title">IO 流与文件操作</span></a>
-      </nav>
+<p>异常机制的核心是把错误从正常流程中分离出来。<code>Throwable</code> 是体系根，<code>Error</code> 与 <code>RuntimeException</code> 一族是非受检异常，其余 <code>Exception</code> 子类是受检异常，编译器只强制处理后者。能自己解决就用 try-catch-finally 或 try-with-resources 捕获；解决不了就用 throws 交给上层；业务规则用自定义异常表达得更清楚；重写方法只能“收窄”不能“扩大”受检异常的声明范围。遇到难以定位的问题时，异常断点往往比读堆栈更快找到第一现场；写代码时则要守住底线——不吞异常、不丢原因、不在 finally 里 return。掌握这些，程序就能从“出错就崩”进化为“出错可控、出错可查”。</p>
           </article>
   <!-- Footer -->
   <footer>

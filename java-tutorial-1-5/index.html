@@ -128,18 +128,18 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们把数据装进了数组，可代码的复用还停留在"复制粘贴"阶段。方法解决"同一段逻辑写很多遍"的问题，类和对象解决"一堆零散数据该不该绑在一起"的问题——这两件事合起来，才是 Java 面向对象的地基。本章从方法的定义与调用讲起，说清方法重载的判定规则、参数传递到底是值还是引用，再落到类与对象、<code>private</code> 封装、构造方法与 <code>this</code>，最后讲清 <code>static</code> 什么时候该用、什么时候是坑。适合已经会写 <code>for</code>、<code>if</code> 与数组的初学者。</p>
+<p>上一章把数据装进了数组，但代码的复用还停留在“复制粘贴”阶段。方法解决“同一段逻辑写很多遍”的问题，类和对象解决“一堆零散数据该不该绑在一起”的问题——这两件事合起来，才是 Java 面向对象的地基。本章从方法的定义与调用讲起，说清方法重载的判定规则、参数传递到底是值还是引用，再落到类与对象、<code>private</code> 封装、构造方法与 <code>this</code>，最后讲清 <code>static</code> 什么时候该用、什么时候是坑。适合已经会写 <code>for</code>、<code>if</code> 与数组的初学者。</p>
 
 <h2>方法：给一段逻辑起名字</h2>
 
-<p><strong>方法</strong>就是完成特定功能的代码块。假设一个游戏程序里"发射炮弹"需要 100 行代码，每次发射都重写一遍，程序会又臃肿又难改；把这 100 行提取出来放进一对 <code>{}</code> 里并起个名字，之后按名字调用即可。这正是方法存在的理由。</p>
+<p><strong>方法</strong>就是完成特定功能的代码块。假设一个游戏程序里“发射炮弹”需要 100 行代码，每次发射都重写一遍，程序会又臃肿又难改；把这 100 行提取出来放进一对 <code>{}</code> 里并起个名字，之后按名字调用即可。这正是方法存在的理由。</p>
 
 <pre><code class="language-java">修饰符 返回值类型 方法名(参数类型 参数名1, 参数类型 参数名2) {
     方法体;
     return 返回值;
 }</code></pre>
 
-<p>写一个方法之前，先做"两个明确"：<strong>返回值类型</strong>（结果是什么类型，没有结果就写 <code>void</code>）、<strong>参数列表</strong>（需要几个参数、分别是什么类型）。这两点定下来，方法体只是把逻辑填进去。下面求两个整数的和：</p>
+<p>写一个方法之前，先做“两个明确”：<strong>返回值类型</strong>（结果是什么类型，没有结果就写 <code>void</code>）、<strong>参数列表</strong>（需要几个参数、分别是什么类型）。这两点定下来，方法体只是把逻辑填进去。下面求两个整数的和：</p>
 
 <pre><code class="language-java">public class MethodDemo {
     // 两个明确：返回值类型 int，参数列表 (int a, int b)
@@ -161,13 +161,13 @@
     }
 }</code></pre>
 
-<p>有返回值的方法每次调用都会在栈上开辟一个<strong>栈帧</strong>，参数在栈帧里各有一份；执行到 <code>return</code> 时方法立刻结束、栈帧弹出，返回值交回调用处，程序接着执行下一行。方法里第一个 <code>return</code> 之后的语句永远不会执行——这是编译器就会报"unreachable statement"的错误。</p>
+<p>每次方法调用都会在栈上开辟一个<strong>栈帧</strong>，参数在栈帧里各有一份。执行到 <code>return</code> 时方法立刻结束、栈帧弹出，返回值交回调用处，程序接着执行下一行。方法里第一个 <code>return</code> 之后的语句永远不会执行——编译器会直接报“unreachable statement”错误。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-5/01-method-call-stack.svg" alt="方法调用时 main 与 add 的栈帧依次入栈，返回后栈帧出栈并带回返回值"><figcaption>图 1：方法调用是栈帧入栈、执行、出栈的过程</figcaption></figure>
 
-<p><code>void</code> 表示"没有返回值"，这类方法只能单独调用，写成 <code>int x = printHello();</code> 编译不通过。方法体里可以写 <code>return;</code> 提前结束，但后面不能跟值。要让方法影响外部世界，<code>void</code> 方法通常靠打印结果、修改传入对象的属性来产生效果。</p>
+<p><code>void</code> 表示“没有返回值”，这类方法只能单独调用，写成 <code>int x = printHello();</code> 编译不通过。方法体里可以写 <code>return;</code> 提前结束，但后面不能跟值。要让方法影响外部世界，<code>void</code> 方法通常靠打印结果、修改传入对象的属性来产生效果。</p>
 
-<div class="tut-tip"><strong>注意：</strong>方法不能嵌套定义，必须在类体中、其他方法之外；调用自己的这种"递归"可以，但要有终止条件，否则会抛 <code>StackOverflowError</code>。</div>
+<div class="tut-tip"><strong>注意：</strong>方法不能嵌套定义，必须在类体中、其他方法之外；调用自己的这种“递归”可以，但要有终止条件，否则会抛 <code>StackOverflowError</code>。</div>
 
 <h2>方法重载：同名不同参</h2>
 
@@ -200,17 +200,17 @@
     }
 }</code></pre>
 
-<p>虚拟机在调用时靠参数列表来区分同名方法，这个过程叫"重载决议"。它发生在<strong>编译期</strong>：编译器先按参数个数筛选，再按类型匹配；没有完全匹配时会尝试自动类型提升（<code>int</code> → <code>long</code> → <code>double</code>）。如果两个版本只能靠返回值区分，编译器会直接判定重复定义：</p>
+<p>虚拟机在调用时靠参数列表来区分同名方法，这个过程叫“重载决议”。它发生在<strong>编译期</strong>：编译器先按参数个数筛选，再按类型匹配；没有完全匹配时会尝试自动类型提升（<code>int</code> → <code>long</code> → <code>double</code>）。如果两个版本只能靠返回值区分，编译器会直接判定重复定义：</p>
 
 <pre><code class="language-java">// 编译错误：方法签名只看名字 + 参数列表，返回值不算
 public static int get() { return 1; }
 public static double get() { return 1.0; }   // 报错：已在类中定义 get()</code></pre>
 
-<p>所以"重载可以改变返回值类型"这句话的准确说法是：重载<strong>与返回值类型无关</strong>，你可以让重载方法的返回值不同，但前提是参数列表本身已经不同。</p>
+<p>所以“重载可以改变返回值类型”这句话的准确说法是：重载<strong>与返回值类型无关</strong>，你可以让重载方法的返回值不同，但前提是参数列表本身已经不同。</p>
 
 <h2>参数传递：Java 只有值传递</h2>
 
-<p>这是初学者最容易被绕晕的一点，先给结论：<strong>Java 中参数传递一律是值传递</strong>，实参的值被复制一份给形参。区别只在于"被复制的东西"是什么。</p>
+<p>这是初学者最容易被绕晕的一点，先给结论：<strong>Java 中参数传递一律是值传递</strong>，实参的值被复制一份给形参。区别只在于“被复制的东西”是什么。</p>
 
 <p>基本类型的实参，复制的是<strong>数值本身</strong>。方法里怎么改形参，都不影响外面的变量：</p>
 
@@ -230,7 +230,7 @@ public static double get() { return 1.0; }   // 报错：已在类中定义 get(
     }
 }</code></pre>
 
-<p>引用类型的实参，复制的是<strong>对象的地址</strong>。副本和实参指向堆上同一个对象，所以通过形参修改对象<strong>内容</strong>，实参能看到变化；但如果让形参重新指向一个新对象，实参的指向不受影响：</p>
+<p>引用类型的实参，复制的是<strong>对象的地址</strong>。副本和实参指向堆上同一个对象，所以通过形参修改对象<strong>内容</strong>，实参能看到变化。但如果让形参重新指向一个新对象，实参的指向不受影响：</p>
 
 <pre><code class="language-java">public class ArgsDemo2 {
     public static void main(String[] args) {
@@ -260,13 +260,13 @@ public static double get() { return 1.0; }   // 报错：已在类中定义 get(
     }
 }</code></pre>
 
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-5/02-param-passing.svg" alt="基本类型传递数值副本、引用类型传递地址副本的对比示意"><figcaption>图 2：区别不在"值还是引用"，而在副本里装的是数值还是地址</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-5/02-param-passing.svg" alt="基本类型传递数值副本、引用类型传递地址副本的对比示意"><figcaption>图 2：区别不在“值还是引用”，而在副本里装的是数值还是地址</figcaption></figure>
 
-<div class="tut-tip"><strong>常见坑：</strong>很多资料说"引用类型是引用传递"，这不准确。判断方法很简单——只要方法里出现 <code>形参 = new ...</code>，外面一定看不到效果，因为被改的只是副本里的地址。</div>
+<div class="tut-tip"><strong>常见坑：</strong>很多资料说“引用类型是引用传递”，这不准确。判断方法很简单——只要方法里出现 <code>形参 = new ...</code>，外面一定看不到效果，因为被改的只是副本里的地址。</div>
 
 <h2>类与对象：封装、构造方法、this</h2>
 
-<p><strong>类</strong>是对一类事物的描述（属性 + 行为），<strong>对象</strong>是它的具体个体。<code>Student s = new Student();</code> 背后发生了几件事：JVM 遇到 <code>new</code> 先在堆中开辟空间，为成员变量分配空间并赋默认值；然后调用构造方法进栈执行；构造方法里先隐式完成"调用父类构造 → 成员变量显式初始化 → 执行构造代码块"三步，再执行自己写的代码；构造方法出栈后，对象才算创建完成，堆中的地址赋给变量 <code>s</code>。</p>
+<p><strong>类</strong>是对一类事物的描述（属性 + 行为），<strong>对象</strong>是它的具体个体。<code>Student s = new Student();</code> 背后发生了几件事。JVM 遇到 <code>new</code> 先在堆中开辟空间，为成员变量分配空间并赋默认值；随后调用构造方法，构造方法进栈执行。构造方法里先隐式完成“调用父类构造 → 成员变量显式初始化 → 执行构造代码块”三步，再执行自己写的代码。构造方法出栈后，对象才算创建完成，堆中的地址赋给变量 <code>s</code>。</p>
 
 <pre><code class="language-java">public class Student {
     // 1. 封装：字段一律 private，外界不能直接改
@@ -308,7 +308,7 @@ public static double get() { return 1.0; }   // 报错：已在类中定义 get(
     }
 }</code></pre>
 
-<p><strong>封装</strong>就是"隐藏实现细节，只提供公共的访问方式"。字段用 <code>private</code> 修饰后，只有本类内部能访问，外部必须走公有的 <code>getXxx()</code>/<code>setXxx()</code>。好处有三点：可以在 <code>setAge</code> 里加校验，把非法数据挡在门外；内部结构以后改动（比如把 <code>age</code> 换成出生日期），只要方法签名不变，调用方无需修改；代码的复用性和安全性都更高。</p>
+<p><strong>封装</strong>就是“隐藏实现细节，只提供公共的访问方式”。字段用 <code>private</code> 修饰后，只有本类内部能访问，外部必须走公有的 <code>getXxx()</code>/<code>setXxx()</code>。好处有三点：一是可以在 <code>setAge</code> 里加校验，把非法数据挡在门外；二是内部结构以后改动（比如把 <code>age</code> 换成出生日期），只要方法签名不变，调用方无需修改；三是代码的复用性和安全性更高。</p>
 
 <p><code>this</code> 代表<strong>当前对象的引用</strong>——哪个对象调用方法，方法里的 <code>this</code> 就指向那个对象。它最常用来区分同名的成员变量和局部变量（<code>this.age = age</code>）；在构造方法里也可以写 <code>this(...)</code> 调用本类的其他构造方法，但必须是构造方法中的第一条语句。</p>
 
@@ -338,7 +338,7 @@ public static double get() { return 1.0; }   // 报错：已在类中定义 get(
 
 <h2>static：属于类，不属于对象</h2>
 
-<p>被 <code>static</code> 修饰的成员属于<strong>类</strong>，而不是某个对象。它随类的加载而加载，优先于对象存在，并且被该类的所有对象共享——这也是判断"该不该加 static"的依据：如果一个数据是全体对象共用的（比如创建过的学生总数），就用静态变量；如果每个对象各有一份（比如姓名、年龄），就用实例变量。</p>
+<p>被 <code>static</code> 修饰的成员属于<strong>类</strong>，而不是某个对象。它随类的加载而加载，优先于对象存在，并被该类的所有对象共享。这也是判断“该不该加 static”的依据：如果一个数据是全体对象共用的（比如创建过的学生总数），就用静态变量；如果每个对象各有一份（比如姓名、年龄），就用实例变量。</p>
 
 <pre><code class="language-java">public class Counter {
     private static int count = 0;   // 静态变量：所有对象共享一份
@@ -373,7 +373,7 @@ public static double get() { return 1.0; }   // 报错：已在类中定义 get(
 <tbody>
 <tr><td>所属</td><td>类</td><td>对象</td></tr>
 <tr><td>内存位置</td><td>方法区的静态区</td><td>堆中的对象里</td></tr>
-<tr><td>生命周期</td><td>随类的加载而存在，随类的消失而消失</td><td>随对象的创建而存在，随对象的消失而消失</td></tr>
+<tr><td>生命周期</td><td>随类的加载而存在，随类的卸载而消失</td><td>随对象的创建而存在，随对象的消失而消失</td></tr>
 <tr><td>调用方式</td><td>类名调用，也可用对象名（不推荐）</td><td>只能通过对象名调用</td></tr>
 <tr><td>共享性</td><td>被所有对象共享</td><td>每个对象各一份</td></tr>
 </tbody>
@@ -381,28 +381,23 @@ public static double get() { return 1.0; }   // 报错：已在类中定义 get(
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-5/03-class-object-memory.svg" alt="Student 类的静态成员存在方法区，多个对象的实例变量各自存在堆中"><figcaption>图 3：实例变量在堆中各存一份，static 成员在类里只有一份</figcaption></figure>
 
-<p>静态成员有两条硬性限制。第一，<strong>静态方法中没有 <code>this</code></strong>，因此不能直接访问实例变量和实例方法——它们必须先有对象才能存在；第二，<strong>静态只能直接访问静态</strong>，而实例方法可以随意访问静态成员。反过来，非静态成员访问静态成员是允许的。</p>
+<p>静态成员有两条硬性限制。第一，<strong>静态方法中没有 <code>this</code></strong>，因此不能直接访问实例变量和实例方法——它们必须先有对象才能存在。第二，<strong>静态方法只能直接访问静态成员</strong>；反过来，实例方法可以随意访问静态成员。</p>
 
-<p>顺带回答一个常见疑问：<code>main</code> 方法为什么是静态的？因为它要作为程序入口，由 JVM 直接调用，此时还不能保证有任何对象存在，所以只能用 <code>public static void main(String[] args)</code>。<code>String[] args</code> 用于接收命令行参数，比如 <code>java MainDemo hello world</code> 时 <code>args[0]</code> 就是 <code>"hello"</code>。</p>
+<p>顺带回答一个常见疑问：<code>main</code> 方法为什么是静态的？因为它要作为程序入口，由 JVM 直接调用，此时还不能保证有任何对象存在，所以只能写成 <code>public static void main(String[] args)</code>。<code>String[] args</code> 用于接收命令行参数，比如 <code>java MainDemo hello world</code> 时 <code>args[0]</code> 就是 <code>"hello"</code>。</p>
 
 <h2>常见坑与小结</h2>
 
 <p>把这一章最容易出错的地方集中列一下：</p>
 
 <ul>
-<li><strong>重载看参数列表，重写看继承关系。</strong>同一个类里方法名相同、参数列表不同是重载；子类里出现与父类"方法签名完全相同"的方法是重写。二者只差一个字，含义完全不同。重载与返回值类型无关，重写要求返回值兼容（协变返回类型）。</li>
+<li><strong>重载看参数列表，重写看继承关系。</strong>同一个类里方法名相同、参数列表不同是重载；子类里出现与父类“方法签名完全相同”的方法是重写。二者只差一个字，含义完全不同。重载与返回值类型无关，重写要求返回值兼容（协变返回类型）。</li>
 <li><strong>别用返回值区分重载。</strong>只改返回值类型而参数列表相同，编译直接报错。</li>
 <li><strong>引用类型参数不是引用传递。</strong>方法内 <code>形参 = new ...</code> 对外界无效。</li>
 <li><strong>构造方法没有返回值类型。</strong>写了 <code>void</code> 就不再是构造方法；手写了带参构造，记得补一个无参构造。</li>
 <li><strong>静态方法里不能用 <code>this</code>，也不能直接访问实例成员。</strong>编译器会在 <code>static</code> 上下文里直接拒绝。</li>
 </ul>
 
-<p>本章的主线其实只有一句话：方法负责复用逻辑，类负责把数据和行为绑在一起，而 <code>private</code>、构造方法、<code>this</code>、<code>static</code> 都是为这两件事服务的工具。弄懂"栈帧里有什么"和"堆里有什么"，参数传递与 static 的疑惑基本都会自动消失。下一章我们会在这个基础上继续往前走，看类与类之间如何通过继承复用代码。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">1.4 数组与常见算法</span></a>
-      <a class="next-post" href="/java-tutorial-1-6/"><span class="pn-label">下一篇 →</span><span class="pn-title">继承、多态与抽象类</span></a>
-      </nav>
+<p>本章的主线其实只有一句话：方法负责复用逻辑，类负责把数据和行为绑在一起，而 <code>private</code>、构造方法、<code>this</code>、<code>static</code> 都是为这两件事服务的工具。弄懂“栈帧里有什么”和“堆里有什么”，参数传递与 static 的疑惑基本都会自动消失。下一章将在这个基础上继续往前走，看类与类之间如何通过继承复用代码。</p>
           </article>
   <!-- Footer -->
   <footer>

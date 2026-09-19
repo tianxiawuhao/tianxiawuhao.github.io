@@ -128,13 +128,13 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>学了变量之后，你很快会遇到一个尴尬：要存 100 个学生成绩，难道写 100 个变量？数组就是为解决这类"同类型批量数据"而生的容器。但数组真正的价值不只是"能存很多"，而是它内存连续、可随机访问——正因为这个特性，它成了排序和查找算法的第一个练兵场。本章会把一维、二维数组的用法讲清楚，然后带你手写选择排序、冒泡排序和二分查找，最后落到日常工作真正会用的 <code>Arrays</code> 工具类。适合已经会写 <code>for</code> 循环和方法的读者。</p>
+<p>学了变量之后，你很快会遇到一个尴尬的问题：要存 100 个学生成绩，难道写 100 个变量？数组就是为解决这类“同类型批量数据”而生的容器。但数组真正的价值不只是“能存很多”，而是它内存连续、可随机访问——正因为这个特性，它成了排序和查找算法的第一个练兵场。本章会把一维、二维数组的用法讲清楚，然后手写选择排序、冒泡排序和二分查找，最后落到日常工作真正会用的 <code>Arrays</code> 工具类。适合已经会写 <code>for</code> 循环和方法的读者。</p>
 
 <h2>数组：一段连续的内存</h2>
 
 <p><strong>数组</strong>（array）是存放<strong>同一种数据类型</strong>、<strong>长度固定</strong>、<strong>内存连续</strong>的一组数据的容器。三个定语缺一不可：类型必须一致，长度在创建时确定且之后不可改变，元素在内存里一个挨着一个排列。</p>
 
-<p>使用数组分两步：声明变量、分配空间。声明只是告诉编译器"这个变量将来指向一个 int 数组"，<code>new</code> 才是真正向堆内存申请空间：</p>
+<p>使用数组分两步：声明变量、分配空间。声明只是告诉编译器“这个变量将来指向一个 int 数组”，真正向堆内存申请空间的是 <code>new</code>：</p>
 
 <pre><code class="language-java">// 声明 + 分配空间：元素自动初始化为 0
 int[] scores = new int[5];
@@ -146,13 +146,13 @@ int other[] = new int[5];
 int[] nums = {90, 85, 77, 60, 98};
 int[] nums2 = new int[]{90, 85, 77, 60, 98};   // 等价写法</code></pre>
 
-<p>三种初始化会得到不同的默认值，这是新手最容易踩的坑：<code>new int[5]</code> 的元素是 <code>0</code>；引用类型数组的元素是 <code>null</code>；<code>boolean</code> 是 <code>false</code>。数组本身作为对象，没有赋值时默认值也是 <code>null</code>，此时访问 <code>arr.length</code> 会抛空指针。</p>
+<p>不同类型元素的默认值不同，这是新手最容易踩的坑：<code>new int[5]</code> 的元素是 <code>0</code>，引用类型数组的元素是 <code>null</code>，<code>boolean</code> 是 <code>false</code>。数组本身也是对象，声明后没有赋值时默认值同样是 <code>null</code>，此时访问 <code>arr.length</code> 会抛空指针异常。</p>
 
-<p>数组有三个必须记住的规则。第一，<code>length</code> 是<strong>属性</strong>不是方法，写 <code>arr.length()</code> 编译不过（字符串的 <code>length()</code> 才是方法）。第二，下标从 <code>0</code> 开始，最后一个元素的下标是 <code>length - 1</code>；越界访问会抛 <code>ArrayIndexOutOfBoundsException</code>。第三，数组一旦创建，长度不可变，想"扩容"只能新建一个更长的数组再把数据复制过去——这正是后面 <code>ArrayList</code> 自动做的事。</p>
+<p>数组有三个必须记住的规则。第一，<code>length</code> 是<strong>属性</strong>不是方法，写 <code>arr.length()</code> 编译不过（字符串的 <code>length()</code> 才是方法）。第二，下标从 <code>0</code> 开始，最后一个元素的下标是 <code>length - 1</code>；越界访问会抛 <code>ArrayIndexOutOfBoundsException</code>。第三，数组一旦创建，长度不可变，想“扩容”只能新建一个更长的数组再把数据复制过去——这正是后面 <code>ArrayList</code> 自动做的事。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-4/01-array-memory.svg" alt="长度为 5 的 int 数组在内存中的连续布局，下标从 0 到 4，元素默认值为 0"><figcaption>图 1：长度为 5 的 int 数组，下标 0~4，元素在内存中连续排列</figcaption></figure>
 
-<p>因为元素等长且连续，定位第 <code>i</code> 个元素只需一步乘法：<code>首地址 + i × 元素大小</code>。这就是"随机访问"——不管取第一个还是第一万个，耗时都一样。代价是插入和删除中间元素必须整体搬动，这个取舍会一直贯穿数据结构的学习。</p>
+<p>因为元素等长且连续，定位第 <code>i</code> 个元素只需一步乘法：<code>首地址 + i × 元素大小</code>。这就是“随机访问”——不管取第一个还是第一万个，耗时都一样。代价是插入和删除中间元素必须整体搬动，这个取舍会一直贯穿数据结构的学习。</p>
 
 <p>遍历数组的标准写法有两种，按场景选：</p>
 
@@ -179,11 +179,11 @@ for (int i = 1; i &lt; nums.length; i++) {
 }
 System.out.println("最高分：" + max);</code></pre>
 
-<div class="tut-tip"><strong>注意：</strong>增强 for 遍历时变量 <code>n</code> 是<strong>元素的副本</strong>，循环体内给 <code>n</code> 赋值不会改到数组本身。要在遍历中修改元素，必须用普通 for 配合下标。</div>
+<div class="tut-tip"><strong>注意：</strong>增强 for 遍历时，变量 <code>n</code> 是<strong>元素值的副本</strong>，循环体内给 <code>n</code> 赋值不会改到数组本身。要在遍历中修改元素，必须用普通 for 配合下标。</div>
 
 <h2>二维数组</h2>
 
-<p>二维数组可以理解为"数组的数组"，适合表示表格、矩阵、棋盘这类有行有列的数据。<code>int[][] matrix = new int[3][4]</code> 表示 3 行 4 列。</p>
+<p>二维数组可以理解为“数组的数组”，适合表示表格、矩阵、棋盘这类有行有列的数据。<code>int[][] matrix = new int[3][4]</code> 表示 3 行 4 列。</p>
 
 <pre><code class="language-java">// 3 行 4 列，元素全部为 0
 int[][] grid = new int[3][4];
@@ -216,7 +216,7 @@ for (int[] row : scores) {
     System.out.println();
 }</code></pre>
 
-<p>有一个细节值得单独强调：Java 的二维数组<strong>不要求每行等长</strong>，因为它的本质是"一维数组，每个元素再指向一个一维数组"。所以下面这种"锯齿数组"完全合法：</p>
+<p>有一个细节值得单独强调：Java 的二维数组<strong>不要求每行等长</strong>，因为它的本质是“一维数组，每个元素再指向一个一维数组”。所以下面这种“锯齿数组”完全合法：</p>
 
 <pre><code class="language-java">int[][] jagged = new int[3][];   // 只确定行数
 jagged[0] = new int[]{1};
@@ -231,15 +231,15 @@ for (int i = 0; i &lt; jagged.length; i++) {
     System.out.println();
 }</code></pre>
 
-<p>正因为是"数组的数组"，<code>int[][] a = b;</code> 只是复制了外层引用，改 <code>a[0][0]</code> 会连带改到 <code>b[0][0]</code>。要真正复制二维数组，需要逐行 <code>clone()</code> 或用循环复制，不能指望一次赋值。</p>
+<p>正因为是“数组的数组”，<code>int[][] a = b;</code> 只是复制了外层引用，改 <code>a[0][0]</code> 会连带改到 <code>b[0][0]</code>。要真正复制二维数组，需要逐行 <code>clone()</code> 或用循环复制，不能指望一次赋值。</p>
 
 <h2>三种常见算法：从手写到理解 JDK</h2>
 
-<p>有了数组，最经典的练习就是排序和查找。这里不追求把八种排序都堆一遍，而是选三个最有代表性的手写实现，把"算法思想 → 代码 → 复杂度"这条线走通。</p>
+<p>有了数组，最经典的练习就是排序和查找。这里不追求把八种排序都堆一遍，而是选三个最有代表性的手写实现，把“算法思想 → 代码 → 复杂度”这条线走通。</p>
 
 <h3>选择排序：每轮选出一个最小值</h3>
 
-<p>选择排序（selection sort）的思路非常直白：把数组分成"已排序的前半段"和"未排序的后半段"，每一轮从未排序区找出最小元素，放到已排序区的末尾。第 <code>i</code> 轮只需在 <code>i</code> 与 <code>i+1 ~ n-1</code> 之间比较，因此需要的比较次数是 \((n-1)+(n-2)+\dots+1=\frac{n(n-1)}{2}\)，时间复杂度为 \(O(n^2)\)。</p>
+<p>选择排序（selection sort）的思路非常直白：把数组分成“已排序的前半段”和“未排序的后半段”，每一轮从未排序区找出最小元素，放到已排序区的末尾。第 <code>i</code> 轮需要在 <code>i</code> 与 <code>i+1 ~ n-1</code> 之间比较，共 <code>n-1-i</code> 次；累加起来比较次数为 \((n-1)+(n-2)+\dots+1=\frac{n(n-1)}{2}\)，时间复杂度为 \(O(n^2)\)。</p>
 
 <pre><code class="language-java">import java.util.Arrays;
 
@@ -269,11 +269,11 @@ public class SelectSortDemo {
     }
 }</code></pre>
 
-<p>请注意这里只用<strong>一个临时变量做交换</strong>，并且把交换放在内层循环之外。有些教材把交换写在内层循环里，一轮下来可能交换很多次，效率更差；还有教材用异或交换（<code>a ^= b; b ^= a; a ^= b;</code>）来省一个临时变量，这种写法在"两个下标指向同一元素"时会把它清零，属于炫技而危险的写法，一律不要用。</p>
+<p>请注意这里只用<strong>一个临时变量做交换</strong>，并且把交换放在内层循环之外。有些教材把交换写在内层循环里，一轮下来可能交换很多次，效率更差。还有教材用异或交换（<code>a ^= b; b ^= a; a ^= b;</code>）来省一个临时变量，但当两个下标指向同一元素时，异或会把它清零，属于炫技而危险的写法，一律不要用。</p>
 
 <h3>冒泡排序：相邻比较，大的往后漂</h3>
 
-<p>冒泡排序（bubble sort）每轮从头开始比较相邻的两个元素，顺序不对就交换，一轮结束后最大值必然"冒"到末尾。第 <code>i</code> 轮只需比较到 <code>n-1-i</code> 即可。它和选择排序时间复杂度同为 \(O(n^2)\)，但交换次数通常更多。</p>
+<p>冒泡排序（bubble sort）每轮从头开始比较相邻的两个元素，顺序不对就交换，一轮结束后最大值必然“冒”到末尾。第 <code>i</code> 轮只需比较到 <code>n-1-i</code> 即可。它和选择排序时间复杂度同为 \(O(n^2)\)，但交换次数通常更多。</p>
 
 <pre><code class="language-java">import java.util.Arrays;
 
@@ -305,13 +305,13 @@ public class BubbleSortDemo {
     }
 }</code></pre>
 
-<p><code>swapped</code> 这个标记很值钱：对已经有序或接近有序的数组，它能让冒泡排序最好情况降到 \(O(n)\)。这也是"算法实现"和"算法思想"之间的差距——同样的思路，加上一点判断就能大幅改善实际表现。</p>
+<p><code>swapped</code> 这个标记很有价值：对已经有序或接近有序的数组，它能让冒泡排序最好情况降到 \(O(n)\)。这也是“算法实现”和“算法思想”之间的差距——同样的思路，加上一点判断就能大幅改善实际表现。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-4/02-selection-sort.svg" alt="选择排序前三轮的过程：每轮从未排序区找出最小值并与未排序区首元素交换"><figcaption>图 2：选择排序前三轮，每轮把未排序区的最小值换到前面</figcaption></figure>
 
 <h3>二分查找：有序数组上的折半搜索</h3>
 
-<p>如果数组<strong>已经有序</strong>，就不必从头一个个找。<strong>二分查找</strong>（binary search）每次拿中间元素与目标值比较：相等就命中；目标更小，说明答案只可能在左半段；更大则只可能在右半段。每比较一次，搜索范围减半，最多比较 \(\log_2 n\) 次，时间复杂度 \(O(\log n)\)。</p>
+<p>如果数组<strong>已经有序</strong>，就不必从头一个个找。<strong>二分查找</strong>（binary search）每次拿中间元素与目标值比较：相等就命中；目标更小，说明答案只可能在左半段；更大则只可能在右半段。每比较一次，搜索范围减半，最多比较 \(\lceil\log_2 n\rceil\) 次，时间复杂度 \(O(\log n)\)。</p>
 
 <pre><code class="language-java">public class BinarySearchDemo {
 
@@ -342,7 +342,7 @@ public class BubbleSortDemo {
     }
 }</code></pre>
 
-<p>两个细节：一是循环条件必须是 <code>low &lt;= high</code>（相等时还要比一次），写成 <code>&lt;</code> 会漏掉只剩一个元素的情况；二是这里用无符号右移 <code>&gt;&gt;&gt; 1</code> 而不是 <code>/ 2</code>，这样即使 <code>low + high</code> 因溢出变成负数，右移结果依然是正确的非负数。当然，<code>low + (high - low) / 2</code> 也是同样安全且更易读的写法。</p>
+<p>有两个细节要记住。一是循环条件必须是 <code>low &lt;= high</code>（相等时还要比一次），写成 <code>&lt;</code> 会漏掉只剩一个元素的情况。二是这里用无符号右移 <code>&gt;&gt;&gt; 1</code> 而不是 <code>/ 2</code>，这样即使 <code>low + high</code> 因溢出变成负数，右移结果依然是正确的非负数。当然，<code>low + (high - low) / 2</code> 也是同样安全且更易读的写法。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-4/03-binary-search.svg" alt="在有序数组中二分查找 7 的三次折半过程，搜索范围逐步缩小到下标 3"><figcaption>图 3：二分查找 7——范围从 7 个元素折半到 1 个，共 3 次比较</figcaption></figure>
 
@@ -359,7 +359,7 @@ public class BubbleSortDemo {
   </tbody>
 </table>
 
-<p>这里的"稳定"指值相等的元素在排序后是否保持原有相对顺序。选择排序因为会把远处的元素直接换到前面，无法保证这一点；冒泡排序只在相邻元素逆序时才交换，所以稳定。</p>
+<p>这里的“稳定”指值相等的元素在排序后是否保持原有相对顺序。选择排序因为会把远处的元素直接换到前面，无法保证这一点；冒泡排序只在相邻元素逆序时才交换，所以稳定。</p>
 
 <h2>Arrays 工具类：生产代码真正用到的部分</h2>
 
@@ -402,7 +402,7 @@ public class ArraysDemo {
     }
 }</code></pre>
 
-<p><code>Arrays.sort</code> 内部并不是同一种算法：对 <code>int[]</code>、<code>long[]</code> 等<strong>基本类型数组</strong>使用双轴快速排序（Dual-Pivot Quicksort，Java 7 起），因为它不需要比较对象、速度最快；对 <code>Integer[]</code>、<code>String[]</code> 等<strong>对象数组</strong>使用 TimSort（一种归并排序的改进版），因为归并排序是<strong>稳定</strong>的，能保留相等元素的原有顺序。这也提醒一件事：这两种重载版本的稳定性不同，需要稳定性时应当使用对象数组。</p>
+<p><code>Arrays.sort</code> 内部并不是同一种算法。对 <code>int[]</code>、<code>long[]</code> 等<strong>基本类型数组</strong>，它使用双轴快速排序（Dual-Pivot Quicksort，Java 7 起），因为这类元素不需要比较对象，速度最快。对 <code>Integer[]</code>、<code>String[]</code> 等<strong>对象数组</strong>，它使用 TimSort（归并排序的改进版），因为归并排序是<strong>稳定</strong>的，能保留相等元素的原有顺序。这也提醒一件事：两种重载的稳定性不同，需要稳定性时应当使用对象数组。</p>
 
 <pre><code class="language-java">import java.util.Arrays;
 import java.util.Comparator;
@@ -417,24 +417,19 @@ String[] words = {"java", "c", "python", "go"};
 Arrays.sort(words, Comparator.comparingInt(String::length));
 System.out.println(Arrays.toString(words));   // [c, go, java, python]</code></pre>
 
-<p>另外 <code>Arrays.asList(...)</code> 可以把数组转成 <code>List</code>，方便调用集合的方法；但要特别注意它返回的是<strong>固定长度</strong>的视图，调用 <code>add</code> / <code>remove</code> 会抛 <code>UnsupportedOperationException</code>，需要可变列表时得再包一层 <code>new ArrayList&lt;&gt;(...)</code>。</p>
+<p>另外 <code>Arrays.asList(...)</code> 可以把数组转成 <code>List</code>，方便调用集合的方法。但要特别注意，它返回的是<strong>固定长度</strong>的视图，调用 <code>add</code> / <code>remove</code> 会抛 <code>UnsupportedOperationException</code>；需要可变列表时，得再包一层 <code>new ArrayList&lt;&gt;(...)</code>。</p>
 
 <h2>常见坑与小结</h2>
 
 <ul>
-  <li><strong>越界</strong>：<code>ArrayIndexOutOfBoundsException</code> 几乎都来自把 <code>&lt;= arr.length</code> 写成了循环上界，正确写法是 <code>&lt; arr.length</code>。</li>
+  <li><strong>越界</strong>：<code>ArrayIndexOutOfBoundsException</code> 几乎都来自把循环上界写成了 <code>&lt;= arr.length</code>，正确写法是 <code>&lt; arr.length</code>。</li>
   <li><strong>打印数组</strong>：<code>System.out.println(arr)</code> 输出的是对象哈希，请用 <code>Arrays.toString(arr)</code>；二维数组要用 <code>Arrays.deepToString(arr)</code>。</li>
   <li><strong>比较数组</strong>：<code>==</code> 比的是引用地址，元素内容相同也不会返回 <code>true</code>，要用 <code>Arrays.equals</code>。</li>
   <li><strong>对未排序数组做二分</strong>：<code>Arrays.binarySearch</code> 不校验有序性，结果会静默错误，不抛异常。</li>
-  <li><strong>把 <code>binarySearch</code> 的负值当"没找到"随便判断</strong>：它同时编码了插入位置，判断"是否找到"应当写 <code>index &gt;= 0</code>。</li>
+  <li><strong>把 <code>binarySearch</code> 的负值当“没找到”随便判断</strong>：它同时编码了插入位置，判断“是否找到”应当写 <code>index &gt;= 0</code>。</li>
 </ul>
 
-<p>本章从"内存连续"这一个特性出发，串起了数组的声明、遍历、二维结构、三种基础算法和 <code>Arrays</code> 工具类。你应当记住三件事：数组长度不可变、下标从 0 开始、越界即异常；手写排序是为了理解复杂度，工程里请直接用 <code>Arrays.sort</code>；二分查找的前提是有序，而它的返回值里藏着插入位置。下一步学集合框架时你会看到，<code>ArrayList</code> 本质上就是"会自动扩容的数组"，而 <code>HashMap</code> 用数组加链表解决散列冲突——数组是一切容器的地基。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">流程控制语句</span></a>
-      <a class="next-post" href="/java-tutorial-1-5/"><span class="pn-label">下一篇 →</span><span class="pn-title">方法与面向对象基础</span></a>
-      </nav>
+<p>本章从“内存连续”这一个特性出发，串起了数组的声明、遍历、二维结构、三种基础算法和 <code>Arrays</code> 工具类。你应当记住三件事：数组长度不可变、下标从 0 开始、越界即异常。手写排序是为了理解复杂度，工程里请直接用 <code>Arrays.sort</code>。二分查找的前提是有序，而它的返回值里藏着插入位置。下一步学集合框架时你会看到，<code>ArrayList</code> 本质上就是“会自动扩容的数组”，而 <code>HashMap</code> 用数组加链表解决散列冲突——数组是一切容器的地基。</p>
           </article>
   <!-- Footer -->
   <footer>
