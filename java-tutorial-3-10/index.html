@@ -247,7 +247,7 @@ session.invalidate();</code></pre>
 
 <h2>五、多实例部署后的会话共享：Spring Session</h2>
 
-<p>「四」里的 <code>HttpSession</code> 是 Servlet 容器提供的：数据默认存在当前 JVM 的堆内存里，只靠 Cookie 里的 <code>JSESSIONID</code> 关联。单机部署看不出问题，一旦把应用部署成多个实例，问题立刻出现——用户第一次请求落在实例 A，Session 建在 A 的内存里；下一次请求被负载均衡分到实例 B，B 找不到这个 <code>JSESSIONID</code>，于是把用户当成未登录，重新发一个会话 ID。表现就是“登录成功，刷新一下又要重新登录”，而且时好时坏。</p>
+<p>「四」里的 <code>HttpSession</code> 是 Servlet 容器提供的：数据默认存在当前 JVM 的堆内存里，只靠 Cookie 里的 <code>JSESSIONID</code> 关联。单机部署看不出问题，一旦把应用部署成多个实例，问题立刻出现。用户第一次请求落在实例 A，Session 就建在 A 的内存里；下一次请求被负载均衡分到实例 B，B 找不到这个 <code>JSESSIONID</code>，于是把用户当成未登录，重新发一个会话 ID。表现就是“登录成功，刷新一下又要重新登录”，而且时好时坏。</p>
 <p>常见的临时办法是把某个用户固定打到同一台机器上，也就是<strong>会话粘滞</strong>（sticky session）。它依赖网关或负载均衡器的 hash 规则，代价是：实例重启或缩容时，它承载的会话全部丢失；扩容后新实例分不到流量，热点实例依然热；做灰度发布、滚动更新时几乎必然掉登录态。所以粘滞只能算权宜之计，正解是把会话数据从单机内存搬到所有实例都能访问的共享存储里。</p>
 <p><strong>Spring Session</strong> 就是官方给出的方案：它用一层 Filter 包装原始的 <code>HttpServletRequest</code>，把 <code>getSession()</code> 的读写重定向到共享存储（Redis、JDBC 等），上层业务代码完全不用改。关键点是：引入依赖并配置后，它<strong>自动接管 <code>HttpSession</code></strong>——控制器里拿到的 <code>HttpSession</code> 已由 Spring Session 实现，<code>setAttribute</code>、<code>invalidate</code> 的语义与原来一致。</p>
 
@@ -302,7 +302,7 @@ server:
 
 <h3>过期时间与 Spring Security 的联动</h3>
 <p>过期时间有三处会影响结果，优先级从高到低是：<code>@EnableRedisHttpSession(maxInactiveIntervalInSeconds = ...)</code> 的显式值、<code>server.servlet.session.timeout</code> 配置、容器默认值。语义与原生 Session 一致，都是“无活动”而非“绝对时长”：每次请求都会刷新 Redis 键的 TTL。若配置值小于 60 秒，Spring Session 会直接报错，这是为了避免误配把会话瞬间清空。</p>
-<p>与 Spring Security 一起使用时，登录态并不以业务对象的形式存在，而是以 <code>SPRING_SECURITY_CONTEXT</code> 为键存进同一个会话。因此只要 Spring Session 生效，<code>SecurityContext</code> 就随之共享，多实例下不会出现“A 实例已登录、B 实例匿名”的问题。要注意两点：一是序列化配置必须能正确处理 <code>SecurityContextImpl</code> 这类对象，JDK 序列化天然支持，切到 JSON 时要确认 default typing 已开启；二是“按用户名强制下线”需要查找到某个用户的全部会话，<code>RedisIndexedSessionRepository</code> 会维护 principal 索引，但它依赖 Redis 的键空间通知，生产环境需要确认该能力可用（部分托管 Redis 会关闭或延迟通知），否则索引不会建立。常用做法是：给会话加 <code>FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME</code> 属性，再通过 <code>findByPrincipalName()</code> 定位并逐个 <code>deleteById()</code>。</p>
+<p>与 Spring Security 一起使用时，登录态并不以业务对象的形式存在，而是以 <code>SPRING_SECURITY_CONTEXT</code> 为键存进同一个会话。因此只要 Spring Session 生效，<code>SecurityContext</code> 就随之共享，多实例下不会出现“A 实例已登录、B 实例匿名”的问题。这里要注意两点：<ul><li>序列化配置必须能正确处理 <code>SecurityContextImpl</code> 这类对象。JDK 序列化天然支持，切到 JSON 时要确认 default typing 已开启。</li><li>“按用户名强制下线”需要查找到某个用户的全部会话。<code>RedisIndexedSessionRepository</code> 会维护 principal 索引；但它依赖 Redis 的键空间通知，生产环境需要确认该能力可用（部分托管 Redis 会关闭或延迟通知），否则索引不会建立。</li></ul>常用做法是：给会话加 <code>FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME</code> 属性，再通过 <code>findByPrincipalName()</code> 定位并逐个 <code>deleteById()</code>。</p>
 <p>最后提醒一句使用边界：Spring Session 解决的是“多实例共享会话”，它不会让会话变成永久存储，也不适合放大量业务数据——会话应当保持小而短命，真正的持久状态仍然放在数据库里。</p>
 
 <h2>六、浏览器拿到响应后做了什么</h2>
