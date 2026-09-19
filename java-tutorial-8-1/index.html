@@ -128,16 +128,16 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>单机时代，一个操作系统的磁盘容量和数据吞吐能力就是天花板。当数据量涨到几十 TB 甚至 PB 级别，唯一的出路是把数据分散到多台机器上——可一旦分散，问题立刻从「怎么存」变成「怎么管」：文件放在哪台机器？某台机器坏了数据怎么办？一百台机器怎么拼成一块磁盘？HDFS（Hadoop Distributed File System）就是为回答这些问题而生的分布式文件系统。本节从 HDFS 的定位讲起，说清 NameNode/DataNode 的分工、块的切分与副本放置、读写数据流程，再补充 YARN 与 MapReduce 在生态中的位置，最后给出可复制的 Shell 与 Java API 示例。适合有 Java 基础、准备第一次接触大数据存储与计算的读者。</p>
+<p>应用层面的构建与部署有了自动化链路之后，瓶颈往往转移到数据本身。单机时代，一个操作系统的磁盘容量与数据吞吐能力就是天花板。当数据量涨到几十 TB 甚至 PB 级别，唯一的出路是把数据分散到多台机器上——可一旦分散，问题立刻从“怎么存”变成“怎么管”：文件放在哪台机器？某台机器坏了数据怎么办？一百台机器怎么拼成一块磁盘？HDFS（Hadoop Distributed File System）就是为回答这些问题而生的分布式文件系统。本节从 HDFS 的定位讲起，说清 NameNode 与 DataNode 的分工、块的切分与副本放置，以及读写数据的流程；再补充 YARN 与 MapReduce 在生态中的位置。最后给出可直接运行的 Shell 与 Java API 示例。本节适合有 Java 基础、第一次接触大数据存储与计算的读者。</p>
 
 <h2>一、为什么需要分布式文件系统</h2>
-<p>把文件切碎散落到多台机器上，看似解决了容量问题，但随之而来三个硬需求：</p>
+<p>把文件切碎散落到多台机器上，看似解决了容量问题，但随之而来三个硬需求。</p>
 <ul>
-<li><strong>统一命名空间</strong>：用户看到的是<code>/user/atguigu/ss.avi</code>这样一棵目录树，而不是「第 37 台机器上的某个文件」。定位文件靠目录树，而不是靠记住机器编号。</li>
+<li><strong>统一命名空间</strong>：用户看到的是<code>/user/atguigu/ss.avi</code>这样一棵目录树，而不是“第 37 台机器上的某个文件”。定位文件靠目录树，而不是靠记住机器编号。</li>
 <li><strong>容错</strong>：机器故障在大规模集群里是常态而不是意外。数据必须自动保存多个副本，某个副本丢失后能自动恢复，且恢复过程不需要人工介入。</li>
 <li><strong>可扩展</strong>：扩容时只需加机器，而不是重新设计存储结构；同时要能跑在廉价商用机器上，靠软件层面的多副本机制保证可靠性。</li>
 </ul>
-<p>HDFS 的取舍非常鲜明：它<strong>适合一次写入、多次读出的场景</strong>，一个文件创建、写入、关闭之后基本不再改动。反过来，它不适合毫秒级低延迟访问，也不擅长存海量小文件——每个文件、每个块的元数据都要占用 NameNode 的内存，而 NameNode 内存是有限的；小文件的寻址时间甚至会超过真正的读取时间，违背设计目标。此外 HDFS 不支持并发写入，一个文件同一时刻只能有一个写者，修改方式仅限追加（append），不支持任意位置随机修改。</p>
+<p>HDFS 的取舍非常鲜明：它<strong>适合一次写入、多次读出的场景</strong>，一个文件创建、写入、关闭之后基本不再改动。反过来，它不适合毫秒级低延迟访问，也不擅长存海量小文件——每个文件、每个块的元数据都要占用 NameNode 的内存，而 NameNode 内存是有限的。小文件的寻址时间甚至会超过真正的读取时间，违背设计目标。此外 HDFS 不支持并发写入，一个文件同一时刻只能有一个写者，修改方式仅限追加（append），不支持任意位置随机修改。</p>
 
 <h2>二、HDFS 组成架构与文件块</h2>
 <p>HDFS 集群是一套主从（Master/Slave）结构，四个角色各司其职：</p>
@@ -152,15 +152,15 @@
 <p>文件在物理上是<strong>分块存储</strong>的，块大小由 <code>dfs.blocksize</code> 规定：Hadoop 2.x/3.x 默认 128MB，1.x 默认 64MB。块不能设得太小，否则程序会把大量时间花在反复寻找每个块的起始位置；也不能设得太大，否则单个块从磁盘传输的时间会远大于定位该块的时间，而一个块的处理只能等它传完。经验结论是：块大小主要取决于磁盘传输速率。</p>
 
 <h2>三、写数据、读数据与副本放置</h2>
-<p><strong>写数据流程</strong>：客户端向 NameNode 请求上传文件 → NameNode 校验权限与目录，响应「可以上传」→ 客户端请求上传第一个 Block（例如 0–128M），请 NameNode 返回可用的 DataNode → NameNode 返回一组 DataNode，客户端与它们建立 Pipeline 流水线，把 Block 以 packet 为单位传输 → 全部 Block 传完后通知 NameNode 关闭文件。过程中副本沿流水线逐级复制，因此写一份数据实际上在网络中会被放大数倍，这也是副本策略要尽量减少跨机架写入的原因。</p>
-<p><strong>读数据流程</strong>：客户端请求下载文件 → NameNode 返回目标文件的元数据（各 Block 所在的 DataNode 列表）→ 客户端<strong>就近</strong>选择 DataNode 建立连接并读取 Block → 读完后关闭连接。由于同一块可能有多个副本，读取时拥有最大的选择空间。</p>
+<p><strong>写数据流程</strong>分五步：客户端向 NameNode 请求上传文件；NameNode 校验权限与目录，响应“可以上传”； 客户端请求上传第一个 Block（例如 0–128M），并请 NameNode 返回可用的 DataNode；NameNode 返回一组 DataNode，客户端与它们建立 Pipeline 流水线，把 Block 以 packet 为单位传输；全部 Block 传完后通知 NameNode 关闭文件。过程中副本沿流水线逐级复制，因此写一份数据在网络中实际会被放大数倍，这也是副本策略要尽量减少跨机架写入的原因。</p>
+<p><strong>读数据流程</strong>分四步：客户端请求下载文件；NameNode 返回目标文件的元数据（各 Block 所在的 DataNode 列表）； 客户端<strong>就近</strong>选择 DataNode 建立连接并读取 Block；读完后关闭连接。由于同一块可能有多个副本，读取时拥有最大的选择空间。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-1/02-hdfs-write-pipeline.svg" alt="HDFS 写数据流程：NameNode 定位可用节点，DataNode 三副本流水线逐级复制"><figcaption>图 2：写数据流程与三副本流水线——副本沿 Pipeline 逐级复制，写一份数据的网络流量会被放大数倍</figcaption></figure>
-<p>「就近」不是凭感觉，而是按网络拓扑算出来的节点距离：两个节点到最近的共同祖先的距离之和。<code>Distance(/d1/r1/n0, /d1/r1/n0)=0</code>（同一节点）、<code>Distance(/d1/r1/n1, /d1/r1/n2)=2</code>（同机架不同节点）、<code>Distance(/d1/r2/n0, /d1/r3/n2)=4</code>（同数据中心不同机架）、<code>Distance(/d1/r2/n1, /d2/r4/n1)=6</code>（不同数据中心）。</p>
-<p>副本数默认为 3，其放置遵循机架感知策略：<strong>第一个副本放在客户端所在的节点上（若客户端在集群外则随机选一个节点）</strong>，第二个副本放在<strong>另一个</strong>机架上的随机节点，第三个副本放在第二个副本所在机架的另一个随机节点。这样跨机架的写入流量被压到最小，而机架级故障的概率远低于节点级故障，可靠性并未下降。</p>
+<p>“就近”不是凭感觉，而是按网络拓扑算出来的节点距离：两个节点到最近的共同祖先的距离之和。<code>Distance(/d1/r1/n0, /d1/r1/n0)=0</code>（同一节点）、<code>Distance(/d1/r1/n1, /d1/r1/n2)=2</code>（同机架不同节点）、<code>Distance(/d1/r2/n0, /d1/r3/n2)=4</code>（同数据中心不同机架）、<code>Distance(/d1/r2/n1, /d2/r4/n1)=6</code>（不同数据中心）。</p>
+<p>副本数默认为 3，放置遵循机架感知策略。<strong>第一个副本放在客户端所在的节点上（若客户端在集群外则随机选一个节点）</strong>，第二个副本放在<strong>另一个</strong>机架上的随机节点，第三个副本放在第二个副本所在机架的另一个随机节点。这样跨机架的写入流量被压到最小；机架级故障的概率远低于节点级故障，因此可靠性并未下降。</p>
 
 <h2>四、YARN 与 MapReduce：生态中的另外两块拼图</h2>
-<p>HDFS 只解决「存」，计算交给 MapReduce，而「哪台机器有多少资源、任务分给谁」交给 YARN（Yet Another Resource Negotiator）。YARN 的四个概念要记住：<strong>ResourceManager（RM）</strong>是整个集群资源（内存、CPU）的总管；<strong>NodeManager（NM）</strong>是单台节点服务器上的资源管理者；<strong>ApplicationMaster（AM）</strong>是单个任务运行的管理者，负责为作业申请资源、协调进度；<strong>Container</strong>是容器，相当于一台被分配出来的独立服务器，任务真正跑在里面。</p>
-<p>MapReduce 把计算过程分为两个阶段：Map 阶段并行处理输入数据，Reduce 阶段对 Map 的结果进行汇总。一个完整的 MapReduce 程序在分布式运行时有三类实例进程：MrAppMaster（负责整个程序的过程调度与状态协调）、MapTask（负责 Map 阶段的整个数据处理流程）、ReduceTask（负责 Reduce 阶段的整个数据处理流程）。编程时用户只需写三个部分：Mapper、Reducer 和 Driver。</p>
+<p>HDFS 只解决“存”，计算交给 MapReduce，而“哪台机器有多少资源、任务分给谁”交给 YARN（Yet Another Resource Negotiator）。YARN 有四个核心概念：<strong>ResourceManager（RM）</strong>是整个集群资源（内存、CPU）的总管；<strong>NodeManager（NM）</strong>是单台节点服务器上的资源管理者；<strong>ApplicationMaster（AM）</strong>是单个任务运行的管理者，负责为作业申请资源、协调进度；<strong>Container</strong>是容器，相当于一台被分配出来的独立服务器，任务真正跑在里面。四个角色分别对应全局、单机、单作业与运行单元。</p>
+<p>MapReduce 把计算过程分为两个阶段：Map 阶段并行处理输入数据，Reduce 阶段对 Map 的结果进行汇总。一个完整的 MapReduce 程序在分布式运行时有三类实例进程：MrAppMaster 负责整个程序的过程调度与状态协调；MapTask 负责 Map 阶段的整个数据处理流程；ReduceTask 负责 Reduce 阶段的整个数据处理流程。编程时用户只需写三个部分：Mapper、Reducer 和 Driver。</p>
 
 <h2>五、动手示例与常见坑</h2>
 <p>HDFS 提供两套等价的操作入口：命令行和 Java API。命令行里 <code>hadoop fs</code> 与 <code>hdfs dfs</code> 完全等价，前者更通用。</p>
@@ -174,14 +174,14 @@ hadoop fs -ls /sanguo
 hadoop fs -cat /sanguo/wuguo.txt
 hadoop fs -get /sanguo/wuguo.txt ./wuguo2.txt
 
-# -du 输出两列：第一列是文件大小，第二列是「大小 × 副本数」
+# -du 输出两列：第一列是文件大小，第二列是“大小 × 副本数”
 hadoop fs -du -s -h /sanguo
 # 27  81  /sanguo
 
 # 设置副本数：只是记录在 NameNode 元数据中，实际副本数受 DataNode 数量限制
 hadoop fs -setrep 10 /sanguo/wuguo.txt
 </code></pre>
-<p>Java 侧使用 <code>FileSystem</code> 这一抽象类，靠 URI 的 scheme 决定底层是 HDFS 还是本地文件系统。<code>hadoop-client</code> 依赖是必需项，另外一定要显式传入操作 HDFS 的用户名。</p>
+<p>Java 侧使用 <code>FileSystem</code> 这一抽象类，靠 URI 的 scheme 决定底层是 HDFS 还是本地文件系统。<code>hadoop-client</code> 依赖是必需项。另外需要显式传入操作 HDFS 的用户名。</p>
 <pre><code class="language-xml">&lt;dependency&gt;
   &lt;groupId&gt;org.apache.hadoop&lt;/groupId&gt;
   &lt;artifactId&gt;hadoop-client&lt;/artifactId&gt;
@@ -208,19 +208,14 @@ hadoop fs -setrep 10 /sanguo/wuguo.txt
 <h3>常见坑速查</h3>
 <p>把上面几节压缩成几条实战经验：</p>
 <ul>
-<li><strong>别把小文件当普通文件存</strong>。海量小文件会吃掉 NameNode 内存，并让寻址时间超过读取时间。</li>
-<li><strong>别指望并发写和随机改</strong>。HDFS 一个文件只能有一个写者，且只支持追加。</li>
+<li><strong>不要把小文件当普通文件存</strong>。海量小文件会吃掉 NameNode 内存，并让寻址时间超过读取时间。</li>
+<li><strong>不要指望并发写和随机改</strong>。HDFS 一个文件只能有一个写者，且只支持追加。</li>
 <li><strong><code>-setrep</code> 不等于立刻有那么多副本</strong>。它只改元数据，实际副本数受 DataNode 数量上限约束：3 台机器最多 3 个副本。</li>
 <li><strong>API 访问务必带上用户名</strong>，否则很容易掉进权限异常。</li>
-<li><strong>端口默认值随版本变化</strong>。本文示例使用 <code>hdfs://hadoop102:8020</code>，这是 Hadoop 3.x 的 NameNode RPC 默认端口；老资料里常见的 9000 是 2.x 的历史配置，请以自己集群 <code>core-site.xml</code> 中 <code>fs.defaultFS</code> 的实际值为准。</li>
+<li><strong>端口默认值随版本变化</strong>。本节示例使用 <code>hdfs://hadoop102:8020</code>，这是 Hadoop 2.x 之后 NameNode RPC 的常用端口；老资料里常见的 9000 是早期版本的写法，请以集群 <code>core-site.xml</code> 中 <code>fs.defaultFS</code> 的实际值为准。</li>
 <li><strong>Secondary NameNode 不是备份</strong>。它可以辅助合并元数据、辅助恢复集群，但不能在 NameNode 故障时立即接管服务；生产环境的真正高可用方案是 NameNode HA。</li>
 </ul>
-<p>小结：HDFS 用「NameNode 管元数据 + DataNode 存块 + 多副本 + 机架感知」这套组合，把多台廉价机器拼成了一块容量近乎无限、能容忍机器故障的大磁盘；它的能力边界同样清晰——一次写入多次读取、大文件、高吞吐、可以接受较高延迟。在此之上，YARN 负责把集群的内存与 CPU 切分给各个作业，MapReduce 负责把计算拆成并行的 Map 与汇总的 Reduce，三者与 Common 共同构成 Hadoop 生态的地基。下一节我们继续沿着这条线，看更上层的计算与查询框架如何复用这套存储。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-7-8/"><span class="pn-label">← 上一篇</span><span class="pn-title">持续集成与部署</span></a>
-      <a class="next-post" href="/java-tutorial-8-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">Hive 数据仓库</span></a>
-      </nav>
+<p>小结：HDFS 用“NameNode 管元数据 + DataNode 存块 + 多副本 + 机架感知”这套组合，把多台廉价机器拼成了一块容量近乎无限、能容忍机器故障的大磁盘。它的能力边界同样清晰——一次写入多次读取、大文件、高吞吐、可以接受较高延迟。在此之上，YARN 负责把集群的内存与 CPU 切分给各个作业。MapReduce 负责把计算拆成并行的 Map 与汇总的 Reduce。YARN、MapReduce 两者与 HDFS、Common 共同构成 Hadoop 生态的地基。下一节继续沿着这条线，看更上层的计算与查询框架如何复用这套存储。</p>
           </article>
   <!-- Footer -->
   <footer>
