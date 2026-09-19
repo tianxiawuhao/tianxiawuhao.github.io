@@ -134,6 +134,8 @@
 
 <p>IDEA 的配置分两层，理解这一点能省掉后面大量的「为什么改了没用」：<strong>IDE Settings</strong> 对所有项目生效，<strong>Project Settings</strong>（Project Structure，快捷键 <code>Ctrl+Alt+Shift+S</code>）只对当前项目生效。原则是：与个人习惯相关的（主题、快捷键、行号）改全局；与项目相关的（SDK、编码、编译级别）改项目，并且尽量让配置跟着项目走，这样换电脑、换同事都不用口头交接。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-3/01-env-pipeline.svg" alt="环境配置主线：IDE 级与项目级设置、JDK 基线、Maven 仓库与 Git 闭环"><figcaption>图 1：环境配置主线——先把基线定死，再配好仓库，最后守住提交</figcaption></figure>
+
 <h3>1. 指定 SDK，而不是「系统装了什么就用什么」</h3>
 
 <p>打开 <em>File → Project Structure → Project</em>，把 <strong>Project SDK</strong> 指向你要用的 JDK，<strong>Language level</strong> 与之匹配。IDE 设置里的 SDK 列表在 <em>File → Project Structure → SDKs</em> 维护，同一台机器可以并存 JDK 8/11/17，只要每个项目明确指定，就不会互相干扰。命令行里用下面两条命令确认「系统默认」到底是什么：</p>
@@ -183,6 +185,8 @@ echo "$JAVA_HOME"</code></pre>
 <h3>依赖范围（scope）决定「打进包里还是不打」</h3>
 
 <p>在 <code>pom.xml</code> 里写依赖时，<code>scope</code> 是最常被忽略却最容易出事的一项。<code>compile</code> 是默认值，参与编译、测试、运行并被打包；<code>provided</code>（典型是 Servlet API）编译期可见、运行期由容器提供，不打进包；<code>runtime</code> 编译时不需要、运行时需要（如 JDBC 驱动）；<code>test</code> 只在测试代码中可见（如 JUnit），不会污染主程序。多模块项目里，版本号应统一由父 POM 的 <code>&lt;dependencyManagement&gt;</code> 管理，子模块只写 <code>groupId</code> 和 <code>artifactId</code>，避免同一依赖出现多个版本。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-3/02-maven-scope.svg" alt="Maven 四种依赖 scope 在编译期、测试期、运行期与打包环节的可见性对照"><figcaption>图 2：Maven 依赖 scope 分别参与哪些阶段、是否打进包</figcaption></figure>
 
 <pre><code class="language-xml">&lt;dependencies&gt;
   &lt;dependency&gt;
