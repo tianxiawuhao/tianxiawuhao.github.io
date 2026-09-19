@@ -235,7 +235,7 @@
 
 <p>自己实现一个连接池有两个关键点：用容器（如 <code>LinkedList</code>）保存空闲连接；由于业务代码习惯调用 <code>conn.close()</code>，需要返回一个代理对象，用动态代理把 <code>close()</code> 改写成“归还连接”，而不是真的关闭物理连接。理解了这一点，就明白为什么用第三方池时 <code>close()</code> 依然可以放心调用。</p>
 
-<p>生产上基本不再手写，主流选择是 Druid 与 HikariCP。Druid 由阿里开源，当前主线是 1.2.x，参数丰富（<code>initialSize</code>、<code>minIdle</code>、<code>maxActive</code>、<code>maxWait</code>、<code>testWhileIdle</code>、<code>filters</code> 等）、自带监控页面，国内项目见得多；HikariCP 以轻量和低延迟著称，从 Spring Boot 2.x 起就是默认连接池（3.x 仍然如此），其中 4.x 支持 Java 8，5.x 及以后要求 Java 11 起，Java 17 项目直接用 5.x/6.x 系列即可。以 Druid 为例，用配置文件加载：</p>
+<p>生产上基本不再手写，主流选择是 Druid 与 HikariCP。Druid 由阿里开源，当前主线是 1.2.x，参数丰富（<code>initialSize</code>、<code>minIdle</code>、<code>maxActive</code>、<code>maxWait</code>、<code>testWhileIdle</code>、<code>filters</code> 等）、自带监控页面，国内项目见得多。HikariCP 以轻量和低延迟著称，从 Spring Boot 2.x 起就是默认连接池（3.x 仍然如此）。其中 4.x 支持 Java 8，5.x 及以后要求 Java 11 起，Java 17 项目直接用 5.x/6.x 系列即可。以 Druid 为例，用配置文件加载：</p>
 
 <pre><code class="language-java">// druid.properties
 // driverClassName=com.mysql.cj.jdbc.Driver
@@ -269,7 +269,7 @@ public class DruidUtils {
     }
 }</code></pre>
 
-<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>，与 Druid 的对应关系是 <code>url</code> ↔ <code>jdbcUrl</code>、<code>maxActive</code> ↔ <code>maximumPoolSize</code>、<code>minIdle</code> ↔ <code>minimumIdle</code>、<code>maxWait</code> ↔ <code>connectionTimeout</code>（默认 30 秒）；配置方式从 Properties 换成 <code>HikariConfig</code>，或直接 new 一个 <code>HikariDataSource</code>，驱动类名同样可以省（5.x/6.x 对应 8.x 的 <code>com.mysql.cj.jdbc.Driver</code>，由 SPI 注册）。HikariCP 官方给出的经验值是把 <code>maximumPoolSize</code> 取成与 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好：连接数超过数据库的处理能力后，多出来的连接只会带来线程上下文切换与锁竞争。另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的“死连接”，报出 <code>Communications link failure</code> 这类错误（具体配合策略见第六节）。</p>
+<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>，与 Druid 的对应关系是 <code>url</code> ↔ <code>jdbcUrl</code>、<code>maxActive</code> ↔ <code>maximumPoolSize</code>、<code>minIdle</code> ↔ <code>minimumIdle</code>、<code>maxWait</code> ↔ <code>connectionTimeout</code>（默认 30 秒）。配置方式从 Properties 换成 <code>HikariConfig</code>，或直接 new 一个 <code>HikariDataSource</code>；驱动类名同样可以省（5.x/6.x 对应 8.x 的 <code>com.mysql.cj.jdbc.Driver</code>，由 SPI 注册）。HikariCP 官方给出的经验值是把 <code>maximumPoolSize</code> 取成与 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好：连接数超过数据库的处理能力后，多出来的连接只会带来线程上下文切换与锁竞争。另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的“死连接”，报出 <code>Communications link failure</code> 这类错误（具体配合策略见第六节）。</p>
 
 <h2 id="how-pool-works">四、连接池是怎么实现的：手写一个最小池</h2>
 
@@ -477,7 +477,13 @@ public class DruidUtils {
 
 <p>队列 <code>idle</code> 装空闲连接，计数器 <code>total</code> 记录已创建的物理连接总数（含借出中的）。<code>getConnection()</code> 按顺序做三件事：先 <code>poll()</code> 捞一个空闲的；没有空闲且 <code>total</code> 未到上限就新建一条；已经到上限就在队列上 <code>poll(remain, NANOSECONDS)</code> 阻塞等待别人归还，累计等到 <code>borrowTimeoutMs</code> 仍未拿到就抛异常。这里刻意用 <code>AtomicInteger</code> 而不是 <code>idle.size()</code> 判断上限：正在创建的连接还没进队列，只按队列长度判断会让并发线程集体超额创建。</p>
 
-<p>几个实现细节值得记住：等待时间要从 deadline 算剩余量，而不是每轮重新等满一个超时，否则借不到连接时会一直等下去；<code>InterruptedException</code> 要先恢复中断标志再抛出，不要吞掉，否则线程池的取消信号会丢失；归还用非阻塞的 <code>offer()</code>，失败时直接物理关闭，避免归还线程被卡住，也顺手兜住了连接泄漏。这套“队列 + 超时”的模型也可以换成 <code>synchronized</code> 加 <code>wait()</code>/<code>notifyAll()</code> 手写，语义一样，但 <code>ArrayBlockingQueue</code> 已经把这些封装好，更不容易写错。</p>
+<p>几个实现细节值得记住：</p>
+<ul>
+<li>等待时间要从 deadline 算剩余量，而不是每轮重新等满一个超时，否则借不到连接时会一直等下去。</li>
+<li><code>InterruptedException</code> 要先恢复中断标志再抛出，不要吞掉，否则线程池的取消信号会丢失。</li>
+<li>归还用非阻塞的 <code>offer()</code>，失败时直接物理关闭，避免归还线程被卡住，也顺手兜住了连接泄漏。</li>
+</ul>
+<p>这套“队列 + 超时”的模型也可以换成 <code>synchronized</code> 加 <code>wait()</code>/<code>notifyAll()</code> 手写，语义一样，但 <code>ArrayBlockingQueue</code> 已经把这些封装好，更不容易写错。</p>
 
 <p>把参数名对上第三方池，读配置就不再陌生：示例里的 <code>maxSize</code> 对应 Druid 的 <code>maxActive</code>、HikariCP 的 <code>maximumPoolSize</code>；<code>borrowTimeoutMs</code> 对应 <code>maxWait</code> 与 <code>connectionTimeout</code>；<code>maxIdleMs</code> 对应 <code>minEvictableIdleTimeMillis</code> 与 <code>idleTimeout</code>。区别只在于真实池用更精细的数据结构（分段锁、连接状态机）扛住了高并发。</p>
 
@@ -487,7 +493,7 @@ public class DruidUtils {
 
 <h2 id="c3p0-dbutils">五、C3P0 与 DBUtils：老项目的常见组合</h2>
 
-<p class="tut-tip"><strong>先把现状说清楚：</strong>新项目不必采用这一节的技术。连接池用 HikariCP（Spring Boot 2.x 起是默认实现）或 Druid，数据访问层用 MyBatis、Spring 的 <code>JdbcTemplate</code> 或 JPA；Spring Boot 只要引入 <code>spring-boot-starter-jdbc</code>，HikariCP 与 <code>JdbcTemplate</code> 就已经就位。C3P0 与 <code>commons-dbutils</code> 的意义在于“接手老项目时一定会遇到”：2010 年代前后的 SSH 与早期 SSM 项目里，<code>ComboPooledDataSource</code> 加 <code>QueryRunner</code> 是极常见的组合。读懂它们是为了改得动老代码，而不是为了新项目选型。</p>
+<p class="tut-tip"><strong>先把现状说清楚：</strong>新项目不必采用这一节的技术。连接池用 HikariCP（Spring Boot 2.x 起是默认实现）或 Druid，数据访问层用 MyBatis、Spring 的 <code>JdbcTemplate</code> 或 JPA。Spring Boot 只要引入 <code>spring-boot-starter-jdbc</code>，HikariCP 与 <code>JdbcTemplate</code> 就已经就位。C3P0 与 <code>commons-dbutils</code> 的意义在于“接手老项目时一定会遇到”：2010 年代前后的 SSH 与早期 SSM 项目里，<code>ComboPooledDataSource</code> 加 <code>QueryRunner</code> 是极常见的组合。读懂它们是为了改得动老代码，而不是为了新项目选型。</p>
 
 <h3>5.1 C3P0：ComboPooledDataSource 的基本配置</h3>
 
@@ -592,7 +598,7 @@ int updated = runner.update("update account set money = money + ? where id = ?",
 </tbody>
 </table>
 
-<p>还有一个现实约束：C3P0 在高并发下的表现明显不如 HikariCP，等待队列与探活策略都更粗糙，所以“只换连接池实现”通常是老项目里性价比最高、风险最低的一步改造；而替换 DBUtils 会动到每个 DAO 方法，建议配合集成测试分批推进。注意两者的收益是独立的：只换池不换 DAO 层，也能立刻拿到更好的并发表现与更清晰的监控指标。</p>
+<p>还有一个现实约束：C3P0 在高并发下的表现明显不如 HikariCP，等待队列与探活策略都更粗糙。所以“只换连接池实现”通常是老项目里性价比最高、风险最低的一步改造。而替换 DBUtils 会动到每个 DAO 方法，建议配合集成测试分批推进。注意两者的收益是独立的：只换池不换 DAO 层，也能立刻拿到更好的并发表现与更清晰的监控指标。</p>
 
 <h2>六、常见坑与落地建议</h2>
 
@@ -604,7 +610,7 @@ int updated = runner.update("update account set money = money + ? where id = ?",
 
 <p>第四，<strong>批处理写法</strong>。循环逐条 <code>executeUpdate()</code> 意味着 N 次网络往返，改成 <code>addBatch()</code> 累积、<code>executeBatch()</code> 一次提交，并配合 <code>setAutoCommit(false)</code> 与 <code>rewriteBatchedStatements=true</code>（MySQL）可成倍提速。注意批处理量大时要分段提交，避免一次性撑爆内存。</p>
 
-<p>第五，<strong>池参数与数据库超时不对齐</strong>。<code>maxLifetime</code>（HikariCP 默认 30 分钟）要明显小于服务端的 <code>wait_timeout</code>：MySQL 8.0/8.4 默认是 <code>28800</code> 秒（8 小时），一般够用，但云数据库常把它调到 100～300 秒，这时必须同步调小 <code>maxLifetime</code>（例如取 <code>wait_timeout</code> 的 50%～80%），否则连接在池里“看起来还活着”，一借出去就报 <code>Communications link failure</code>。Druid 侧对应的是 <code>testWhileIdle</code> 加 <code>validationQuery=SELECT 1</code>，再配 <code>timeBetweenEvictionRunsMillis</code> 定期探活；HikariCP 侧可以打开 <code>keepaliveTime</code>，再用 <code>leakDetectionThreshold</code>（例如 10000 毫秒）把忘记归还连接的代码位置打印出来。</p>
+<p>第五，<strong>池参数与数据库超时不对齐</strong>。<code>maxLifetime</code>（HikariCP 默认 30 分钟）要明显小于服务端的 <code>wait_timeout</code>：MySQL 8.0/8.4 默认是 <code>28800</code> 秒（8 小时），一般够用。但云数据库常把它调到 100～300 秒，这时必须同步调小 <code>maxLifetime</code>（例如取 <code>wait_timeout</code> 的 50%～80%）。否则连接在池里“看起来还活着”，一借出去就报 <code>Communications link failure</code>。Druid 侧对应的是 <code>testWhileIdle</code> 加 <code>validationQuery=SELECT 1</code>，再配 <code>timeBetweenEvictionRunsMillis</code> 定期探活；HikariCP 侧可以打开 <code>keepaliveTime</code>，再用 <code>leakDetectionThreshold</code>（例如 10000 毫秒）把忘记归还连接的代码位置打印出来。</p>
 
 <h2>小结</h2>
 

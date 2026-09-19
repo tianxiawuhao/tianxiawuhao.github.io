@@ -123,7 +123,13 @@
 <p>有两类需求几乎每个业务系统都会遇到：一是「到点自动做一件事」，比如活动到期自动下架、订单超时自动关闭、每天凌晨跑对账；二是「服务端主动把消息告诉浏览器」，比如站内通知、客服消息、实时进度。前者靠定时任务，后者靠服务端推送。本章把这两块放在一起讲：定时任务从 JDK 自带的调度器讲到 Quartz 与集群防重，推送从轮询讲到 WebSocket 与集群广播。5-14 讲的 Git 属于交付链路，本章则是运行期的定时与实时能力。</p>
 
 <h2>定时任务：从 JDK 自带调度器开始</h2>
-<p>很多人第一反应是 <code>java.util.Timer</code>，但它在生产代码里几乎不该出现，原因有四条：它是<strong>单线程</strong>执行，一个任务卡住会拖住其它任务；任务抛出未捕获异常会<strong>直接终止整个 Timer</strong>，后续调度全部失效；它按绝对时间计算，系统时间被改动会影响调度；任务列表只在内存里，重启即丢。</p>
+<p>很多人第一反应是 <code>java.util.Timer</code>，但它在生产代码里几乎不该出现，原因有四条：</p>
+<ul>
+<li>它是<strong>单线程</strong>执行，一个任务卡住会拖住其它任务。</li>
+<li>任务抛出未捕获异常会<strong>直接终止整个 Timer</strong>，后续调度全部失效。</li>
+<li>它按绝对时间计算，系统时间被改动会影响调度。</li>
+<li>任务列表只在内存里，重启即丢。</li>
+</ul>
 <pre><code class="language-java">import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -197,7 +203,7 @@ public class QuartzDemo {
         scheduler.start();   // 启动后调度线程开始工作；standby() 暂停，shutdown() 关闭
     }
 }</code></pre>
-<p>几个容易踩的点。第一，<strong>Job 实例会被复用</strong>：Quartz 默认每次执行都新建实例，但如果 Job 类上标了 <code>@DisallowConcurrentExecution</code>，同一 JobDetail 的多次触发会串行执行，避免并发重入；如果 Job 类里有可变成员变量，务必加 <code>@PersistJobDataAfterExecution</code> 或干脆写成无状态类。第二，<strong>Job 里不要抛未捕获异常</strong>，否则该次执行失败并可能影响后续触发，正确做法是内部 try-catch 并记录日志。第三，cron 表达式以「秒」开头，共 6 或 7 位，与 Linux crontab 的 5 位不同。</p>
+<p>几个容易踩的点。第一，<strong>Job 实例会被复用</strong>：Quartz 默认每次执行都新建实例。但如果 Job 类上标了 <code>@DisallowConcurrentExecution</code>，同一 JobDetail 的多次触发会串行执行，避免并发重入。如果 Job 类里有可变成员变量，务必加 <code>@PersistJobDataAfterExecution</code> 或干脆写成无状态类。第二，<strong>Job 里不要抛未捕获异常</strong>，否则该次执行失败并可能影响后续触发，正确做法是内部 try-catch 并记录日志。第三，cron 表达式以「秒」开头，共 6 或 7 位，与 Linux crontab 的 5 位不同。</p>
 <pre><code class="language-text">Quartz cron 格式：秒 分 时 日 月 周 [年]
 
 0 0 2 * * ?          每天 02:00:00 执行
@@ -232,7 +238,13 @@ public class OrderTimeoutTask {
         System.out.println("每日对账");
     }
 }</code></pre>
-<p>三个必须知道的坑：<strong>@Scheduled 默认只有一个调度线程</strong>，多个任务会互相等待，任务多时要配置 <code>spring.task.scheduling.pool.size</code>；<strong>同一个任务在多实例部署时会重复执行</strong>，这是集群环境最典型的事故；<strong>任务方法不能有参数、不能是 private</strong>，否则不生效。此外它没有重试、没有执行历史、没有可视化界面，任务一多就该考虑专业调度平台。</p>
+<p>三个必须知道的坑：</p>
+<ul>
+<li><strong>@Scheduled 默认只有一个调度线程</strong>，多个任务会互相等待，任务多时要配置 <code>spring.task.scheduling.pool.size</code>。</li>
+<li><strong>同一个任务在多实例部署时会重复执行</strong>，这是集群环境最典型的事故。</li>
+<li><strong>任务方法不能有参数、不能是 private</strong>，否则不生效。</li>
+</ul>
+<p>此外它没有重试、没有执行历史、没有可视化界面，任务一多就该考虑专业调度平台。</p>
 
 <h3>集群下如何保证任务只执行一次</h3>
 <p>多节点部署时，每个节点的调度器都会触发同一个任务，活动会被下架多次、消息会重复发送。解决思路有三种，复杂度递增。</p>
@@ -272,15 +284,21 @@ public class DbLockScheduler {
         System.out.println("执行对账任务");
     }
 }</code></pre>
-<p><strong>第一种是数据库抢锁</strong>，要点是用数据库的原子性做互斥：靠唯一索引 + 条件更新保证只有一个节点改成功，不依赖任何中间件。另外两点容易被忽略——任务逻辑必须<strong>幂等</strong>（抢到锁的节点执行到一半宕机，重启后会重跑，重复扣款、重复发消息都出在这里），并且要留<strong>执行记录与重试入口</strong>（在 <code>sys_task_lock</code> 里补上开始时间、结束时间、执行结果三个字段，失败时可人工或定时补偿重跑，而不是只靠翻日志）。<strong>第二种是 Redis 分布式锁</strong>：<code>SET key value NX PX 30000</code> 抢锁，执行期间要续期，释放时要用 Lua 脚本校验持有者，避免误删他人的锁。第三种是<strong>直接用专业调度平台</strong>：XXL-JOB、ElasticJob 自带调度中心、失败重试、分片执行（把一个大任务拆到多台机器并行）、执行日志与可视化界面，是中大型项目的常规选择。技术选型的经验是：只有几个简单定时任务就用 <code>@Scheduled</code> + 数据库锁；任务数量上规模、需要运维可视化与分片，就直接上 XXL-JOB，不要自己造轮子。</p>
+<p><strong>第一种是数据库抢锁</strong>，要点是用数据库的原子性做互斥：靠唯一索引 + 条件更新保证只有一个节点改成功，不依赖任何中间件。另外两点容易被忽略。任务逻辑必须<strong>幂等</strong>（抢到锁的节点执行到一半宕机，重启后会重跑，重复扣款、重复发消息都出在这里）。同时要留<strong>执行记录与重试入口</strong>（在 <code>sys_task_lock</code> 里补上开始时间、结束时间、执行结果三个字段，失败时可人工或定时补偿重跑，而不是只靠翻日志）。<strong>第二种是 Redis 分布式锁</strong>：<code>SET key value NX PX 30000</code> 抢锁，执行期间要续期，释放时要用 Lua 脚本校验持有者，避免误删他人的锁。第三种是<strong>直接用专业调度平台</strong>：XXL-JOB、ElasticJob 自带调度中心、失败重试、分片执行（把一个大任务拆到多台机器并行）、执行日志与可视化界面，是中大型项目的常规选择。技术选型的经验是：只有几个简单定时任务就用 <code>@Scheduled</code> + 数据库锁；任务数量上规模、需要运维可视化与分片，就直接上 XXL-JOB，不要自己造轮子。</p>
 
 <h2>服务端推送：四种方案怎么选</h2>
 <p>「服务端主动通知浏览器」并不只有 WebSocket 一条路，四种方案各有适用区间。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-15/02-protocol.svg" alt="短轮询、长轮询、SSE、WebSocket 四种推送方案的通信方向、实时性、开销与适用场景对比"><figcaption>图 2：四种推送方案的对比与选型</figcaption></figure>
 
-<p>选型判断可以按三句话走：<strong>只推不收</strong>（进度条、日志流、AI 逐字输出）用 SSE，它基于普通 HTTP、自带断线重连、服务端实现最简单；<strong>要双向交互</strong>（IM、协同编辑、行情下单）用 WebSocket；<strong>兼容性优先或消息稀疏</strong>（扫码登录结果通知）用长轮询；<strong>消息极少变化且能容忍分钟级延迟</strong>（未读红点）用短轮询最省事。</p>
-<p>WebSocket 省在哪里？一次 HTTP 请求要带上几百字节到几 KB 的请求头与 Cookie，若每秒轮询一次、在线一万用户，就是每秒一万次请求和相应带宽；而 WebSocket 只在握手时用一次 HTTP，之后走极简的帧协议，头部开销只有 2～14 字节。握手的本质是一次「协议升级」：客户端发 GET 请求带 <code>Upgrade: websocket</code> 与 <code>Sec-WebSocket-Key</code>，服务端返回 <code>101 Switching Protocols</code> 与按固定算法算出的 <code>Sec-WebSocket-Accept</code>，连接从此升级为 TCP 长连接。</p>
+<p>选型判断可以按三句话走：</p>
+<ul>
+<li><strong>只推不收</strong>（进度条、日志流、AI 逐字输出）用 SSE，它基于普通 HTTP、自带断线重连、服务端实现最简单。</li>
+<li><strong>要双向交互</strong>（IM、协同编辑、行情下单）用 WebSocket。</li>
+<li><strong>兼容性优先或消息稀疏</strong>（扫码登录结果通知）用长轮询。</li>
+<li><strong>消息极少变化且能容忍分钟级延迟</strong>（未读红点）用短轮询最省事。</li>
+</ul>
+<p>WebSocket 省在哪里？一次 HTTP 请求要带上几百字节到几 KB 的请求头与 Cookie，若每秒轮询一次、在线一万用户，就是每秒一万次请求和相应带宽。而 WebSocket 只在握手时用一次 HTTP，之后走极简的帧协议，头部开销只有 2～14 字节。握手的本质是一次「协议升级」：客户端发 GET 请求带 <code>Upgrade: websocket</code> 与 <code>Sec-WebSocket-Key</code>，服务端返回 <code>101 Switching Protocols</code> 与按固定算法算出的 <code>Sec-WebSocket-Accept</code>，连接从此升级为 TCP 长连接。</p>
 
 <h2>Spring Boot 实现 WebSocket 推送</h2>
 <p>Spring 提供了两种写法：偏底层的 <code>WebSocketHandler</code>（完全控制消息格式）和基于 STOMP 的消息代理（自带订阅、广播语义）。做站内通知、简单 IM 时，前者已经足够。</p>

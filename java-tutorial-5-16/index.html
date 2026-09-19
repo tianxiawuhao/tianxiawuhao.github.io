@@ -148,7 +148,6 @@
 <p>另一件必须记牢的事是 <strong>Watch 是一次性的</strong>：客户端在 <code>getData</code>、<code>getChildren</code> 或 <code>exists</code> 时可以顺手注册监听，节点变化后服务端推送一次事件，然后这个监听就失效了，<strong>要持续监听必须重新注册</strong>。此外事件只告诉「什么变了」，不告诉「变成什么」，客户端收到通知后需要自己重新读取数据。这直接决定了写代码的方式：通知处理函数里必须重新 <code>getData</code> 并再次注册 Watch，否则只能收到第一次变更。</p>
 
 <h2>集群架构：一个 Leader、多个 Follower、半数可用</h2>
-<p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-16/02-cluster.svg" alt="Zookeeper 集群角色、半数机制、ZAB 选举规则与分布式锁流程"><figcaption>图 2：集群角色、半数机制、选举规则与分布式锁流程</figcaption></figure>
 
@@ -272,7 +271,7 @@ public class ConfigCenter {
 
 <h3>Master 选举与集群成员感知</h3>
 <p>Master 选举的写法与分布式锁几乎一致：所有候选节点在 <code>/election</code> 下创建临时顺序节点，<strong>序号最小的即为主</strong>，其余监听自己前一个节点。主节点挂掉后会话超时、节点自动删除，下一个节点被唤醒并成为新主。集群成员管理则更简单：每个服务实例启动时在 <code>/services/order</code> 下创建临时节点登记自身地址，其他服务用 <code>getChildren</code> 拿到全部实例列表并注册 Watch，实例上下线时就能及时感知。</p>
-<p><p>关于命名服务与全局 ID 补一句：利用持久顺序节点的自增序号可以生成全局有序编号，但<strong>性能很低</strong>，因为每个 ID 都要写一次 Zookeeper。生产环境生成分布式 ID 应该用雪花算法或号段模式，顺序节点只适合「需要严格有序且频率不高」的命名场景。</p>
+<p>关于命名服务与全局 ID 补一句：利用持久顺序节点的自增序号可以生成全局有序编号，但<strong>性能很低</strong>，因为每个 ID 都要写一次 Zookeeper。生产环境生成分布式 ID 应该用雪花算法或号段模式，顺序节点只适合「需要严格有序且频率不高」的命名场景。</p>
 
 <h2>注册中心之争：为什么现在不推荐用 Zookeeper</h2>
 <p>Dubbo 早期默认用 Zookeeper 做注册中心，所以很多人默认「注册中心就该用 ZK」。但从 CAP 角度分析，这个选择并不理想。</p>
