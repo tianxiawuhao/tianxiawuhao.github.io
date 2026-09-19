@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>在 Spring Boot 里写一个 <code>@RestController</code>，请求就自动落到方法上了；很多人用了几年也没想明白「请求到底是谁接的、放在哪儿、页面上的数据从哪来」。这一章就把这层魔法拆开：先讲 Servlet 这个最底层的 HTTP 入口，再讲转发与重定向的区别、会话与作用域、JSP 与 EL 的取值规则，最后用 MVC 把 Servlet + JSP 组装成一个像样的分层结构——你会发现 Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程做成了框架。适合已经会写 Java SE、能看懂 XML 与 HTTP 基础的读者。</p>
+<p>在 Spring Boot 里写一个 <code>@RestController</code>，请求就自动落到方法上了；很多人用了几年也没想明白「请求到底是谁接的、放在哪儿、页面上的数据从哪来」。本章把这层机制拆开：先讲 Servlet 这个最底层的 HTTP 入口，再讲转发与重定向的区别、会话与作用域、JSP 与 EL 的取值规则，最后用 MVC 把 Servlet 与 JSP 组装成分层结构。看完会发现，Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程做成了框架。适合已经会写 Java SE、能看懂 XML 与 HTTP 基础的读者。</p>
 
 <h2>Servlet：HTTP 请求的 Java 入口</h2>
 
-<p>浏览器只会说 HTTP，看不懂 Java 对象。<strong>Servlet</strong> 就是 Servlet 容器（Tomcat、Jetty 等）与你的 Java 代码之间的契约：容器负责解析 HTTP 报文、为每个请求开线程，然后把封装好的 <code>HttpServletRequest</code>、<code>HttpServletResponse</code> 交给你的代码，你只管写业务逻辑并决定输出什么。</p>
+<p>浏览器只会说 HTTP，看不懂 Java 对象。<strong>Servlet</strong> 是 Servlet 容器（Tomcat、Jetty 等）与 Java 代码之间的契约。容器负责解析 HTTP 报文、为每个请求开线程，再把封装好的 <code>HttpServletRequest</code> 与 <code>HttpServletResponse</code> 交给业务代码；开发者只需编写业务逻辑并决定输出内容。</p>
 
 <p>一个 Servlet 的完整生命周期只有三个阶段，全部由容器调度，你无法手工 <code>new</code> 出来用：</p>
 
@@ -226,7 +226,7 @@ return;</code></pre>
 
 <h2>会话与作用域：数据放在哪儿</h2>
 
-<p>转发能共享 <code>request</code> 域，但重定向之后就丢了——因为那是两个 <code>request</code> 对象。HTTP 本身无状态，要跨请求记住「这个人已登录」，必须靠 <strong>Session</strong>。</p>
+<p>转发能共享 <code>request</code> 域，重定向之后就丢了，因为那是两个 <code>request</code> 对象。HTTP 本身无状态，要跨请求记住「这个用户已登录」，必须靠 <strong>Session</strong>。</p>
 
 <p>机制很朴素：第一次调用 <code>req.getSession()</code> 时，容器创建一个 <code>HttpSession</code> 并生成唯一 ID，通过 <code>Set-Cookie: JSESSIONID=...</code> 写给浏览器；此后浏览器每次请求都带上这个 Cookie，容器据此找到对应的 Session 对象。</p>
 
@@ -244,7 +244,7 @@ if (user != null) {
 // 注销：销毁会话
 req.getSession().invalidate();</code></pre>
 
-<p>Java Web 里一共有四个数据作用域，从小到大是 <code>page</code>（仅当前 JSP）、<code>request</code>（一次请求，可跨转发）、<code>session</code>（一个用户会话）、<code>application</code>（整个 Web 应用，即 <code>ServletContext</code>）。四者的读写方法完全一样（<code>setAttribute</code> / <code>getAttribute</code> / <code>removeAttribute</code>），区别只在存活时间与可见范围。选作用域的原则是「范围尽可能小」：能放 <code>request</code> 就不要放 <code>session</code>，否则服务器内存会随在线用户数一起涨。</p>
+<p>Java Web 里一共有四个数据作用域，从小到大是 <code>page</code>（仅当前 JSP）、<code>request</code>（一次请求，可跨转发）、<code>session</code>（一个用户会话）、<code>application</code>（整个 Web 应用，即 <code>ServletContext</code>）。四者的读写方法完全一样，都是 <code>setAttribute</code> / <code>getAttribute</code> / <code>removeAttribute</code>，区别只在存活时间与可见范围。选作用域的原则是「范围尽可能小」：能放 <code>request</code> 就不要放 <code>session</code>，否则服务器内存会随在线用户数一起增长。</p>
 
 <h2>JSP 与 EL：视图层的取值方式</h2>
 
@@ -275,7 +275,7 @@ req.getSession().invalidate();</code></pre>
 &lt;/body&gt;
 &lt;/html&gt;</code></pre>
 
-<p>EL 有三个必须记住的行为。第一，<code>${x}</code> 的求值过程相当于 <code>pageContext.findAttribute("x")</code>，会依次在四个作用域中查找，命中即返回；找不到时返回空字符串而不是 <code>null</code>，所以页面上不会出现「null」字样，但也因此很难察觉变量名写错。第二，<code>${user.name}</code> 实际调用的是 <code>getName()</code>，所以实体类必须有符合 JavaBean 规范的 getter。第三，EL 的算术、比较、逻辑运算符和 <code>empty</code>、三元表达式都可用，但页面里只做展示与简单判断，真正的业务逻辑应该留在 Java 层。</p>
+<p>EL 有三个必须记住的行为。第一，<code>${x}</code> 的求值相当于 <code>pageContext.findAttribute("x")</code>，会依次在四个作用域中查找，命中即返回。找不到时返回空字符串而不是 <code>null</code>，页面上不会出现「null」字样，但也因此很难察觉变量名写错。第二，<code>${user.name}</code> 实际调用的是 <code>getName()</code>，所以实体类必须有符合 JavaBean 规范的 getter。第三，EL 的算术、比较、逻辑运算符和 <code>empty</code>、三元表达式都可用，但页面里只做展示与简单判断，真正的业务逻辑应该留在 Java 层。</p>
 
 <p>安全提醒：会话 ID 依赖 Cookie，一旦被窃取就等于账号被盗用。生产环境应给会话 Cookie 加 <code>HttpOnly</code>、<code>Secure</code>，登录成功后调用 <code>req.changeSessionId()</code> 更换会话 ID 以防会话固定攻击，并把 <code>web.xml</code> 的 <code>&lt;session-timeout&gt;</code> 设置为一个合理值。</p>
 
@@ -305,20 +305,15 @@ public class BookServlet extends HttpServlet {
     }
 }</code></pre>
 
-<p>这套结构一旦手写多了，就会发现每个 Servlet 都在重复同样的动作：解析 URL、找方法、准备数据、选视图。Spring MVC 做的事正是把这套流程抽象出来——它注册的唯一一个 Servlet（<code>DispatcherServlet</code>，映射到 <code>/</code>）充当<em>前端控制器</em>：请求先到它，它问 <code>HandlerMapping</code>「这个 URL 归谁管」，再通过 <code>HandlerAdapter</code> 调用你写的 <code>@Controller</code> 方法，拿到 <code>ModelAndView</code> 后交给 <code>ViewResolver</code> 解析成真正的视图并渲染。你写的 <code>@RequestMapping</code> 方法，本质上就是过去那些 <code>doGet</code> 里的分支。</p>
+<p>这套结构一旦手写多了，就会发现每个 Servlet 都在重复同样的动作：解析 URL、找方法、准备数据、选视图。Spring MVC 做的事正是把这套流程抽象出来——它注册的唯一 Servlet（<code>DispatcherServlet</code>，映射到 <code>/</code>）充当<em>前端控制器</em>。请求先到它，由它询问 <code>HandlerMapping</code>「这个 URL 归谁管」，再通过 <code>HandlerAdapter</code> 调用 <code>@Controller</code> 方法；拿到 <code>ModelAndView</code> 后交给 <code>ViewResolver</code> 解析成真正的视图并渲染。你写的 <code>@RequestMapping</code> 方法，本质上就是过去那些 <code>doGet</code> 里的分支。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-1/03-mvc-dispatch.svg" alt="Spring MVC 请求处理流程图：请求进入 DispatcherServlet，依次经过 HandlerMapping、Controller、Service 与 DAO，返回 ModelAndView 后由 ViewResolver 渲染视图"><figcaption>图 3：MVC 分层与 DispatcherServlet 的调度流程</figcaption></figure>
 
-<p>理解了这一层，就理解了两件事：为什么 Spring Boot 3 / Jakarta EE 9 之后包名从 <code>javax.servlet</code> 变成了 <code>jakarta.servlet</code>——因为 Servlet 这个接口被捐给了 Eclipse 基金会并改名，写代码时用错包名会直接编译失败；以及为什么 <code>/WEB-INF</code> 下的 JSP 必须转发才能访问——那是容器的安全约定，不是框架的限制。</p>
+<p>理解了这一层，就理解了两件事：为什么 Spring Boot 3 / Jakarta EE 9 之后包名从 <code>javax.servlet</code> 变成了 <code>jakarta.servlet</code>——因为 Servlet 接口被捐给 Eclipse 基金会并改名，写代码时用错包名会直接编译失败；以及为什么 <code>/WEB-INF</code> 下的 JSP 必须转发才能访问——那是容器的安全约定，不是框架的限制。</p>
 
 <h2>小结</h2>
 
-<p>本章的主线只有一条：<strong>请求从容器进入 Servlet，就近放在合适的域里，再由视图读取渲染</strong>。Servlet 由容器调度，一生只有一次 <code>init</code> 和一次 <code>destroy</code>，但 <code>service</code> 会被多线程并发调用，因此实例不能存请求数据；转发是服务器内部的一次请求（<code>request</code> 域有效、地址栏不变），重定向是让浏览器再发一次请求（地址栏改变、可跨应用，适合 PRG 防重复提交）；跨越重定向的数据要放 Session，四个作用域按「够用就好」的原则从 <code>page</code> 往 <code>application</code> 选；JSP 用 EL 与 JSTL 取值、避免脚本片段，<code>${x}</code> 会按四个域顺序查找且取不到时返回空串。最后，MVC 把这些零散的规则固化成「模型 / 视图 / 控制器」的分工，而 Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程标准化了。下一章我们进入 Spring 的 IoC 与 AOP，看它如何接管对象的创建与装配。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-3-10/"><span class="pn-label">← 上一篇</span><span class="pn-title">HTTP 协议与浏览器原理</span></a>
-      <a class="next-post" href="/java-tutorial-4-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">Struts2 与 OGNL</span></a>
-      </nav>
+<p>本章的主线只有一条：<strong>请求从容器进入 Servlet，就近放在合适的域里，再由视图读取渲染</strong>。Servlet 由容器调度，一生只有一次 <code>init</code> 和一次 <code>destroy</code>，但 <code>service</code> 会被多线程并发调用，因此实例不能存请求数据；转发是服务器内部的一次请求（<code>request</code> 域有效、地址栏不变），重定向是让浏览器再发一次请求（地址栏改变、可跨应用，适合 PRG 防重复提交）；跨越重定向的数据要放 Session，四个作用域按「够用就好」的原则从 <code>page</code> 往 <code>application</code> 选；JSP 用 EL 与 JSTL 取值、避免脚本片段，<code>${x}</code> 会按四个域顺序查找且取不到时返回空串。最后，MVC 把这些零散的规则固化成「模型 / 视图 / 控制器」的分工，而 Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程标准化了。下一章进入 Spring 的 IoC 与 AOP，看它如何接管对象的创建与装配。</p>
           </article>
   <!-- Footer -->
   <footer>
