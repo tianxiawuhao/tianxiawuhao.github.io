@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>并发编程面试题 | tianxia</title>
+<title>9.2 并发编程面试题 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>并发编程面试题</h1>
+              <h1>9.2 并发编程面试题</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，6 min read</span>
@@ -140,6 +140,9 @@
 <li>若队列已满，且线程数 &lt; <code>maximumPoolSize</code>，则新建非核心线程执行。</li>
 <li>若队列已满且线程数已达上限，触发 <code>RejectedExecutionHandler</code> 拒绝策略。</li>
 </ol>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-2/01-threadpool-decision.svg" alt="线程池任务提交决策链流程图：工作线程少于 corePoolSize 时新建核心线程且不入队，否则尝试入队，队列满且未达 maximumPoolSize 时新建非核心线程，再满则触发拒绝策略"><figcaption>图 1：线程池任务提交的四步决策链与四种拒绝策略</figcaption></figure>
+
 
 <p>记住这条链，才能理解两个经典现象：使用 <code>LinkedBlockingQueue</code>（默认容量 <code>Integer.MAX_VALUE</code>）时，队列几乎永远不会满，<code>maximumPoolSize</code> 形同虚设；而使用 <code>SynchronousQueue</code> 时任务不排队，必须立刻找到线程接手，否则就扩容或拒绝。</p>
 
@@ -200,6 +203,9 @@
 <h2>三、AQS 与锁：理解 state 和同步队列</h2>
 
 <p>AQS（<code>AbstractQueuedSynchronizer</code>）是 J.U.C 的地基，<code>ReentrantLock</code>、<code>Semaphore</code>、<code>CountDownLatch</code>、<code>ReentrantReadWriteLock</code> 都由它支撑。它的核心只有两件事：一个 volatile 的 <code>state</code> 字段表示同步状态，以及一个 CLH 变体的双向 FIFO 等待队列存放阻塞线程。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-2/02-aqs-state-queue.svg" alt="AQS 结构图：ReentrantLock、Semaphore、CountDownLatch 等由 AQS 支撑；AQS 内部是一个 volatile int state 状态字段和一条 CLH 双向 FIFO 等待队列，骨架固定、只暴露 tryAcquire 等钩子方法"><figcaption>图 2：AQS 的两个核心——state 状态与 CLH 等待队列，以及模板方法钩子</figcaption></figure>
+
 
 <p>AQS 采用模板方法模式：把获取与释放的骨架（入队、阻塞、唤醒、中断处理）固定下来，只暴露 <code>tryAcquire</code>、<code>tryRelease</code>、<code>tryAcquireShared</code>、<code>tryReleaseShared</code>、<code>isHeldExclusively</code> 这些钩子给子类实现。以 <code>ReentrantLock</code> 为例，<code>state</code> 为 0 表示未加锁，加锁时置为 1，重入则自增，因此重入次数上限是 <code>state</code> 的溢出边界，而非某个固定常数。</p>
 

@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>Java 基础面试题精讲 | tianxia</title>
+<title>9.1 Java 基础面试题精讲 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,10 +111,10 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>Java 基础面试题精讲</h1>
+              <h1>9.1 Java 基础面试题精讲</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，6 min read</span>
+                2026-09-19，7 min read</span>
             </div>
           
         
@@ -128,122 +128,119 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>面试里问「Java 基础」，考的从来不是背诵能力，而是你有没有被线上问题教育过。本章挑四个最高频、也最容易答错的考点——数据类型与自动装箱、<code>equals</code> 与 <code>hashCode</code>、异常体系、集合与语言细节陷阱——按「为什么错 → 正确的规则 → 可运行示例 → 怎么答」的顺序讲一遍。适合已经会写 Java、准备面试或带新人的开发者；读完后你应该能说出每一条结论背后的原因，而不是只记得结论。</p>
+<p>Java 基础面试题的特点是：题目看着简单，追问之下却层层见底。"<code>==</code> 和 <code>equals</code> 有什么区别"这种问题，答完区别只是及格，面试官接着会问为什么重写 <code>equals</code> 必须重写 <code>hashCode</code>、<code>Integer</code> 的缓存区间是多少、<code>HashMap</code> 为什么容量取 2 的幂。本章不堆题海，而是把面向对象、集合、异常、泛型与反射这几条主线上的高频考点串成一条逻辑链：先讲清"为什么这么设计"，再给出可以直接讲出来的准确说法，最后点出那些一答错就暴露功底的常见陷阱。适合已经学完 Java 语法、准备面试或做技术复盘的读者。</p>
 
-<h2>一、基本类型与自动装箱：<code>==</code> 什么时候骗你</h2>
+<h2>一、equals 与 hashCode：一条必须同时遵守的契约</h2>
 
-<p>Java 有 8 种基本类型：<code>byte</code>(8 位)、<code>short</code>(16)、<code>int</code>(32)、<code>long</code>(64)、<code>float</code>(32)、<code>double</code>(64)、<code>char</code>(16)、<code>boolean</code>。它们都有对应的包装类型，两者之间的赋值由编译器自动装箱、拆箱完成。</p>
+<p><code>equals</code> 默认比较引用地址，<code>hashCode</code> 默认返回由对象地址派生的整数，两者都来自 <code>Object</code>。一旦你按"业务值相等"重写 <code>equals</code>，就必须同时重写 <code>hashCode</code>，否则以哈希为基础的集合会立刻出错。<code>Effective Java</code> 把这条契约写得很明确：如果两个对象 <code>equals</code> 返回 <code>true</code>，它们的 <code>hashCode</code> 必须相等；反过来，<code>hashCode</code> 相等不要求 <code>equals</code> 为 <code>true</code>（这就是哈希冲突）。</p>
 
-<p>坑出在「引用比较」上。<code>==</code> 比较基本类型时比的是值，比较引用类型时比的是<strong>是不是同一个对象</strong>。而装箱并不是每次都创建新对象：包装类型有缓存池，<code>byte</code> 的全部取值、<code>short</code> 与 <code>int</code> 的 -128~127、<code>char</code> 的 <code>\u0000</code>~<code>\u007F</code> 都会复用缓存对象。所以下面这段代码打印出两个不一样的结果：</p>
+<p>违反契约的后果很具体。假设只重写了 <code>equals</code>，两个"相等"的对象会落入哈希表的不同桶，于是 <code>HashSet</code> 里出现两个看起来重复的元素，<code>HashMap</code> 的 <code>get</code> 找不到刚刚 <code>put</code> 进去的键——数据没丢，只是找不到了，这类 bug 排查起来非常耗时。</p>
 
-<pre><code class="language-java">Integer a = 127, b = 127;
-Integer c = 128, d = 128;
-System.out.println(a == b);              // true：都在缓存池内，是同一个对象
-System.out.println(c == d);              // false：超出缓存范围，各自 new 出来的
-System.out.println(c.equals(d));         // true：equals 比的是值
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-1/01-equals-hashcode.svg" alt="equals 与 hashCode 契约对比图：equals 为 true 则 hashCode 必须相等；同时重写 hashCode 时等价对象落进同一个桶，只重写 equals 时两个相等对象落进不同桶，导致 HashSet 出现重复元素、HashMap get 找不到刚 put 的键"><figcaption>图 1：equals 与 hashCode 的契约，以及“只重写 equals”导致的散列错位</figcaption></figure>
 
-Long e = 128L, f = 128L;
-System.out.println(e.equals(f));         // true
-// System.out.println(e == 128);         // 编译错误：Long 与 int 比较会拆箱</code></pre>
 
-<p>注意反过来的坑：<code>Long</code> 与 <code>int</code> 字面量做 <code>==</code> 时，包装类型会拆箱成基本类型再比较，结果是 <code>true</code>；但直接用 <code>==</code> 比较两个包装对象，比的却是地址。结论很简单：<strong>只要类型是包装类型，比较值一律用 <code>equals</code>，或者干脆先拆箱成基本类型</strong>。更稳妥的写法是让工具类兜住空值，例如 <code>Objects.equals(a, b)</code> 能正确处理 <code>null</code>；<code>Objects</code> 是 JDK 7 引入的。</p>
+<pre><code class="language-java">import java.util.Objects;
 
-<p>顺带纠正两个常见说法：其一，「基本类型都存栈上」不准确——局部变量确实在栈上，但对象的字段是跟着对象存在堆里的。其二，<code>new Integer(123)</code> 从 Java 9 起已被标记为废弃，构造器明确不推荐使用，写示例时直接写 <code>Integer.valueOf(123)</code> 或字面量赋值即可。</p>
-
-<h2>二、<code>equals</code> 与 <code>hashCode</code>：集合里最贵的一条契约</h2>
-
-<p>先记住契约：<code>equals</code> 必须满足自反、对称、传递、一致性，且 <code>x.equals(null)</code> 恒为 <code>false</code>；而 <code>hashCode</code> 的规则是——<strong>两个对象 <code>equals</code> 相等，<code>hashCode</code> 就必须相等</strong>（反过来不要求）。所以「重写 <code>equals</code> 就必须重写 <code>hashCode</code>」不是风格建议，而是硬性约束：只重写 <code>equals</code>，两个「相等」的对象会算出不同的哈希值，落进哈希表的不同桶里，<code>HashSet</code> 会出现重复元素，<code>HashMap</code> 会 <code>get</code> 不到刚放进去的键。</p>
-
-<pre><code class="language-java">import java.util.*;
-
-final class Student {
-    private final String no;
+public final class User {
     private final String name;
+    private final int age;
 
-    Student(String no, String name) { this.no = no; this.name = name; }
+    public User(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;                        // 同一引用直接返回，顺便挡住 null
-        if (!(o instanceof Student)) return false;         // 类型不对
-        Student other = (Student) o;
-        return Objects.equals(no, other.no)
-            &amp;&amp; Objects.equals(name, other.name);
+        if (this == o) {          // 1. 同一引用，直接返回 true
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {  // 2. 类型不同，直接 false
+            return false;
+        }
+        User other = (User) o;
+        return age == other.age &amp;&amp; Objects.equals(name, other.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(no, name);                     // 与 equals 用同一组字段
+        return Objects.hash(name, age);   // 3. 参与 equals 的字段必须参与 hashCode
+    }
+}</code></pre>
+
+<p>写这段代码时有四个必须遵守的细节：<code>equals</code> 的参数类型是 <code>Object</code>，写成 <code>User</code> 就变成了重载而不是覆盖，所以必须加 <code>@Override</code>，让编译器帮你发现这类错误；比较引用类型字段时用 <code>Objects.equals</code> 而不是直接 <code>a.equals(b)</code>，避免空指针；判断类型优先用 <code>getClass()</code> 而不是 <code>instanceof</code>，否则子类实例可能和父类实例"相等"，破坏对称性；比较 <code>float</code>、<code>double</code> 要用 <code>Float.compare</code>、<code>Double.compare</code>，不能直接写 <code>==</code>。</p>
+
+<h2>二、重载与覆盖：编译期和运行期的分岔口</h2>
+
+<p>追问最多的一句话是"重载和覆盖有什么区别"。准确的回答要落到两个不同的决策时机上：<strong>重载</strong>（overload）是同一个类中方法名相同、参数列表不同的多个方法，编译器在编译期就根据参数的<em>静态类型</em>选定调用哪一个；<strong>覆盖</strong>（override）是子类重新实现父类的方法，方法签名相同，JVM 在运行期根据对象的<em>实际类型</em>动态绑定，这就是多态的实现基础。</p>
+
+<p>由此可以解释两个经典现象。其一，私有方法、静态方法、构造方法都<strong>不能</strong>被覆盖：私有方法对子类不可见，静态方法属于类而不属于对象（只能被隐藏），构造方法根本不参与继承。其二，父类构造方法中调用一个被子类覆盖的方法时，会执行子类的版本，而此时子类字段尚未初始化，读到的是默认值 <code>0</code> 或 <code>null</code>——这正是"构造方法里不要调用可被覆盖的方法"这条规范的原因。</p>
+
+<p>顺便区分三组容易混的词：<code>final</code> 是修饰符（类不可继承、方法不可覆盖、变量不可重新赋值），<code>finally</code> 是异常处理的收尾代码块，<code>finalize</code> 是 <code>Object</code> 上一个已被废弃（Java 9 起标记 <code>@Deprecated</code>）的回收前回调，三者毫无关系。同理，<code>String</code> 是<strong>不可变</strong>类且被 <code>final</code> 修饰，<code>StringBuilder</code> 可变但线程不安全，<code>StringBuffer</code> 可变且方法加了同步。</p>
+
+<h2>三、集合：数据结构决定你怎么选</h2>
+
+<p>集合类的问题几乎都能回到数据结构上。<code>ArrayList</code> 底层是<strong>动态数组</strong>，按下标随机访问是 O(1)，中间插入删除要搬移元素，是 O(n)；<code>LinkedList</code> 底层是<strong>双向链表</strong>，头尾增删是 O(1)，但按下标访问需要遍历，是 O(n)。所以"ArrayList 查询快、LinkedList 增删快"这句话只在增删发生在两端、或已经持有节点位置时才成立，在中间频繁增删时 LinkedList 还要付出遍历定位的代价，实际项目中绝大多数场景直接用 <code>ArrayList</code> 就好。</p>
+
+<p><code>HashMap</code> 底层是<strong>数组 + 链表 + 红黑树</strong>：先用键的 <code>hashCode</code> 经过扰动函数算出桶下标，冲突的键以链表串在同一个桶里；当单个桶的链表长度达到 8 且数组长度达到 64 时，链表转为红黑树，把最坏查找从 O(n) 降到 O(log n)。扩容阈值是"容量 × 负载因子"，默认负载因子 <code>0.75</code>，每次扩容容量翻倍。容量之所以总是 2 的幂，是因为取模被优化成了位运算 <code>(n - 1) &amp; hash</code>——只有 n 是 2 的幂时，结果才等价于 <code>hash % n</code>。另外要记住：<code>HashMap</code> 允许一个 <code>null</code> 键和多个 <code>null</code> 值，线程不安全；需要并发时用 <code>ConcurrentHashMap</code>，而不是早已被淘汰的 <code>Hashtable</code>。需要保持迭代顺序时用 <code>LinkedHashMap</code>，它维护的是<strong>插入顺序</strong>（构造时传 <code>true</code> 才变成访问顺序），并不是"按哈希值排序"；要按键排序则用 <code>TreeMap</code>。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-1/02-hashmap-structure.svg" alt="HashMap 结构图：hashCode 经扰动后由 (n-1) &amp; hash 定位桶，桶内以链表串接节点，链表长度达到 8 且容量达到 64 时转红黑树；右侧列出负载因子 0.75、扩容翻倍、容量取 2 的幂等规则"><figcaption>图 2：HashMap 的数组 + 链表 + 红黑树结构与扩容规则</figcaption></figure>
+
+
+<pre><code class="language-java">import java.util.HashMap;
+import java.util.Map;
+
+Map&lt;String, Integer&gt; count = new HashMap&lt;&gt;();
+String[] words = {"java", "map", "java"};
+
+for (String w : words) {
+    // getOrDefault 避免手写 null 判断
+    count.put(w, count.getOrDefault(w, 0) + 1);
+}
+System.out.println(count);   // {java=2, map=1}
+
+// 遍历时用 entrySet，避免"先取 key 再 get"的二次查找
+for (Map.Entry&lt;String, Integer&gt; e : count.entrySet()) {
+    System.out.println(e.getKey() + " -&gt; " + e.getValue());
+}</code></pre>
+
+<p>这里还连着一个经典陷阱：<code>==</code> 比较基本类型比的是值，比较引用类型比的是地址，而包装类型之间的 <code>==</code> 是否相等取决于缓存。<code>Integer</code> 会把 -128 到 127 之间的值缓存复用，所以 <code>Integer a = 127; Integer b = 127;</code> 时 <code>a == b</code> 为 <code>true</code>，而写成 <code>new Integer(127)</code> 或超过 127 的值则为 <code>false</code>。结论很干脆：<strong>所有包装类型的值比较一律用 <code>equals</code></strong>。</p>
+
+<h2>四、异常：什么时候该抛，什么时候该接</h2>
+
+<p>异常体系的根是 <code>Throwable</code>，下面分两支。<code>Error</code> 表示 JVM 层面的严重问题，如 <code>OutOfMemoryError</code>、<code>StackOverflowError</code>，程序不该也无法处理；<code>Exception</code> 才是业务代码关心的部分，又分两类：<strong>受检异常</strong>（继承 <code>Exception</code> 但不继承 <code>RuntimeException</code>）必须显式 <code>try-catch</code> 或用 <code>throws</code> 声明；<strong>非受检异常</strong>（<code>RuntimeException</code> 及其子类，如 <code>NullPointerException</code>、<code>ClassCastException</code>、<code>ArithmeticException</code>）编译器不强制处理。</p>
+
+<p><code>try-catch-finally</code> 有三个高频追问。<code>catch</code> 和 <code>finally</code> 都可以省略，但两者不能同时省略；<code>catch</code> 中 <code>return</code> 时 <code>finally</code> 依然会执行，并且如果 <code>finally</code> 里也写了 <code>return</code>，它会<strong>覆盖</strong>前面的返回值，还会吞掉尚未处理的异常——所以规范里明确禁止在 <code>finally</code> 中写 <code>return</code>。资源释放不要再手写 <code>finally</code>，用 try-with-resources 更短也更安全：它按声明的逆序自动调用 <code>close()</code>，并且把 <code>close()</code> 抛出的异常记为"被抑制的异常"（可用 <code>getSuppressed()</code> 取到），不会覆盖主异常。</p>
+
+<pre><code class="language-java">import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+
+// 资源必须实现 AutoCloseable，退出 try 块时自动关闭
+public static String firstLine(String path) throws IOException {
+    try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+        return reader.readLine();
     }
 }
 
-public class EqualsDemo {
-    public static void main(String[] args) {
-        Set&lt;Student&gt; set = new HashSet&lt;&gt;();
-        set.add(new Student("1001", "张三"));
-        set.add(new Student("1001", "张三"));
-        System.out.println(set.size());                    // 1
-
-        Map&lt;Student, String&gt; map = new HashMap&lt;&gt;();
-        map.put(new Student("1001", "张三"), "优秀");
-        System.out.println(map.get(new Student("1001", "张三"))); // 优秀
+// 业务异常：继承 RuntimeException，把"哪一步失败"写进消息与 cause
+public class OrderNotFoundException extends RuntimeException {
+    public OrderNotFoundException(Long orderId, Throwable cause) {
+        super("订单不存在：" + orderId, cause);
     }
 }</code></pre>
 
-<p>两个补充要点。第一，参与 <code>equals</code> 比较的字段和参与 <code>hashCode</code> 计算的字段必须保持一致，不能一个多一个少。第二，别用可变对象当 <code>HashMap</code> 的键：对象放进桶里之后又改了参与哈希计算的字段，它的哈希值变了，再 <code>get</code> 就再也找不回来——上面的 <code>Student</code> 把字段声明为 <code>final</code>，正是为了从源头避免这类问题。</p>
+<p>使用异常还有两条经验：不要用异常做流程控制（能判空就不要靠捕获 <code>NullPointerException</code>），捕获后也不要只写一句 <code>e.printStackTrace()</code> 或干脆吞掉异常，至少记录日志并保留原始 cause，否则线上问题会彻底失去线索。自定义异常继承 <code>RuntimeException</code> 可以避免污染每一层的方法签名，让调用方只在真正能处理的地方处理。</p>
 
-<h2>三、异常体系：受检与非受检的分界线</h2>
+<h2>五、泛型与反射：类型擦除带来的陷阱</h2>
 
-<p>所有能被 <code>throw</code> 的东西都继承自 <code>Throwable</code>，它下面只有两个分支：</p>
+<p>泛型最大的考点是<strong>类型擦除</strong>：泛型信息只存在于编译期，编译后 <code>List&lt;String&gt;</code> 和 <code>List&lt;Integer&gt;</code> 在字节码里都是 <code>List</code>，类型参数被替换为上界（无界时是 <code>Object</code>），并在必要处插入强制类型转换。由此推出四个结论：不能写 <code>new T[10]</code> 或 <code>new ArrayList&lt;T&gt;()</code>；不能用 <code>instanceof List&lt;String&gt;</code>；静态成员不能使用类的类型参数；重载不能只靠泛型参数区分。同时，<code>List&lt;String&gt;</code> 不是 <code>List&lt;Object&gt;</code> 的子类型，想让方法接收任意类型的列表要用通配符 <code>List&lt;?&gt;</code>，需要写入时用 <code>List&lt;? super T&gt;</code>，只读取时用 <code>List&lt;? extends T&gt;</code>，即 PECS 原则：生产者用 <code>extends</code>，消费者用 <code>super</code>。</p>
 
-<ul>
-  <li><code>Error</code>：JVM 层面的严重故障，如 <code>OutOfMemoryError</code>、<code>StackOverflowError</code>，程序无力恢复，不应该捕获；</li>
-  <li><code>Exception</code>：程序可以处理的问题，又分成受检异常与非受检异常。</li>
-</ul>
+<p>反射则是运行期获取类信息的入口，<code>Class.forName</code>、<code>getDeclaredFields</code>、<code>setAccessible(true)</code> 这些 API 让框架得以在不知道具体类的情况下创建对象、注入依赖、解析注解。代价是绕过了编译期检查、性能低于直接调用、对模块化与安全性不友好，所以业务代码里应避免滥用，只在框架、序列化、通用工具等确有必要的地方使用。</p>
 
-<p>分界线是 <code>RuntimeException</code>：<code>NullPointerException</code>、<code>ArrayIndexOutOfBoundsException</code>、<code>ClassCastException</code>、<code>ArithmeticException</code>、<code>IllegalArgumentException</code> 都属于这一类，编译器不强制处理；其余继承 <code>Exception</code> 的（如 <code>IOException</code>、<code>SQLException</code>、<code>InterruptedException</code>）是受检异常，编译器强制你 <code>try-catch</code> 或 <code>throws</code> 声明。这不是折腾人：受检异常在提醒调用方「这里可能失败，你必须给出策略」。</p>
+<p>最后把这一章的高频陷阱收拢成一张"止损清单"：重写 <code>equals</code> 忘了 <code>hashCode</code>；用 <code>==</code> 比较包装类型；<code>String.split</code> 丢弃末尾空串导致下标越界（<code>"a,b,,".split(",")</code> 长度为 2，需要保留时应写 <code>split(",", -1)</code>）；<code>Arrays.asList</code> 返回的是固定长度视图，调用 <code>add</code> 会抛 <code>UnsupportedOperationException</code>；遍历集合时用集合自身的方法删除元素会抛 <code>ConcurrentModificationException</code>，应改用 <code>Iterator.remove()</code> 或 <code>removeIf</code>；<code>long</code> 字面量用小写 <code>l</code> 与数字 <code>1</code> 难分，要用大写 <code>L</code>。</p>
 
-<p>再区分三组容易混的关键字。<code>throw</code> 是抛出一个异常实例，<code>throws</code> 是写在方法签名上声明可能抛出哪些异常；<code>final</code> 修饰不可继承/不可重写的成员，<code>finally</code> 是必然执行的收尾代码块，<code>finalize</code> 是 <code>Object</code> 上的老方法，早已废弃、不要依赖。关于执行顺序有一条固定结论：<strong>无论是否发生异常、甚至 <code>catch</code> 里 <code>return</code> 了，<code>finally</code> 都会执行</strong>；而如果 <code>finally</code> 里也写了 <code>return</code>，它会覆盖 <code>catch</code> 的返回值——所以别把业务返回值写进 <code>finally</code>。</p>
-
-<p>释放资源推荐用 try-with-resources，而不是手写 <code>finally</code>：只要资源实现了 <code>AutoCloseable</code>，无论正常结束还是抛异常都会自动关闭，而且 <code>close()</code> 自身抛出的异常不会把原始异常吞掉（它被挂到 <code>getSuppressed()</code> 上）。</p>
-
-<pre><code class="language-java">import java.io.*;
-
-public class TryWithResourcesDemo {
-    public static String firstLine(String path) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
-            return reader.readLine();
-        }                       // 退出代码块时自动 reader.close()
-    }
-
-    public static void main(String[] args) {
-        try {
-            System.out.println(firstLine("no-such-file.txt"));
-        } catch (FileNotFoundException e) {        // 先捕具体异常
-            System.out.println("文件不存在：" + e.getMessage());
-        } catch (IOException e) {
-            throw new RuntimeException("读取失败", e); // 包装时带上原始异常
-        }
-    }
-}</code></pre>
-
-<h2>四、集合与语言细节里的常见陷阱</h2>
-
-<p>集合部分面试常问两件事：选型和返回值语义。<code>ArrayList</code> 底层是数组，随机访问快、中间插入删除要搬元素；<code>LinkedList</code> 底层是双向链表，头尾增删快、随机访问慢；<code>HashMap</code> 用数组加链表（桶内过长时转红黑树）实现，靠 <code>hashCode</code> 定位、靠 <code>equals</code> 判等。集合接口里几个返回值也经常被记反：<code>Collection.remove(Object)</code>、<code>removeAll</code>、<code>containsAll</code>、<code>retainAll</code> 返回的都是 <code>boolean</code>。其中 <code>retainAll</code> 的返回值表示<strong>「当前集合是否因此被修改」</strong>，不是「是否有交集」，两个集合元素完全相同时也可能返回 <code>false</code>；而 <code>List.remove(int index)</code> 返回的是被删掉的元素，<code>remove(Object o)</code> 返回的是是否删成功，重载时极易选错。</p>
-
-<p>语言细节上，这几条几乎每年都会被问到：</p>
-
-<ul>
-  <li>调用 <code>equals</code> 时把常量写在前面，用 <code>"test".equals(object)</code> 而不是 <code>object.equals("test")</code>，可以避免 <code>object</code> 为 <code>null</code> 时的空指针；项目规约通常要求直接使用 <code>Objects.equals</code>。</li>
-  <li><code>String</code> 被声明为 <code>final</code> 且内部不可变，所以字符串常量可以安全共享；但在循环里用 <code>+</code> 拼接会在每轮产生新对象，应改用 <code>StringBuilder</code>。</li>
-  <li><code>switch</code> 的 <code>case</code> 忘了写 <code>break</code> 会「贯穿」执行下一个分支；<code>String</code> 可以用来做 <code>switch</code> 的判断值。</li>
-  <li>重载（overload）在编译期按<strong>静态类型</strong>决定调用哪个方法，重写（override）在运行期按<strong>实际类型</strong>动态分派——父类引用指向子类对象时，重载结果可能出乎意料。</li>
-  <li>用一个很大的包装类型和一个小类型做运算，结果会被提升为更大的类型；<code>byte b = 1; b = b + 1;</code> 编译失败，因为 <code>b + 1</code> 已经是 <code>int</code>，必须强转或写成 <code>b += 1</code>。</li>
-</ul>
-
-<h2>五、小结</h2>
-
-<p>把这章的四条主线压缩成一张答题卡：包装类型比较值用 <code>equals</code>，<code>==</code> 只在基本类型上表示值相等；重写 <code>equals</code> 必须同时重写 <code>hashCode</code>，且两者使用同一组字段，别用可变对象当 Map 的键；<code>Throwable</code> 分 <code>Error</code> 与 <code>Exception</code>，<code>RuntimeException</code> 是受检与非受检的分界线，资源释放优先用 try-with-resources 并且不要在 <code>finally</code> 里写 <code>return</code>；集合的返回值语义要记准，<code>retainAll</code> 返回的是「是否被修改」。面试时可以按「规则 → 原因 → 反例 → 我会怎么写」四步展开，比只给结论更有说服力。</p>
+<p>小结：Java 基础面试题考的不是记忆量，而是你是否理解语言设计背后的取舍。面向对象部分抓住"契约"二字——<code>equals</code> 与 <code>hashCode</code> 是一份契约，覆盖与重载的时机划分也是一份契约；集合部分抓住"数据结构决定复杂度"，能顺手讲出哈希、扩容与 2 的幂之间的关系，就比背结论高一个层次；异常部分抓住"该谁处理就谁处理"，受检与非受检的划分、try-with-resources 的自动关闭都是这一原则的体现；泛型与反射部分抓住"编译期与运行期的分工"，类型擦除的每一条限制都能由此推出。把这几条线索讲顺，基础题就不会再是随机抽卡。</p>
           </article>
   <!-- Footer -->
   <footer>

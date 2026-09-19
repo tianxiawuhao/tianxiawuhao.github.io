@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>大数据集群运维 | tianxia</title>
+<title>8.10 大数据集群运维 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,10 +111,10 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>大数据集群运维</h1>
+              <h1>8.10 大数据集群运维</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，5 min read</span>
+                2026-09-19，6 min read</span>
             </div>
           
         
@@ -131,6 +131,9 @@
 <p>集群装好只是起点，真正折磨人的是上线之后的日子：任务排队几小时不动、某个节点磁盘越写越慢、业务量翻倍要加机器、老服务器要退役又不能停服。本章把大数据集群的日常运维串成一条线——资源规划、调度器选择、扩容与缩容、监控与故障定位。适合已经搭过 Hadoop/YARN 集群、能跑通一个 MapReduce 或 Spark 作业，但一遇到"任务卡住"就只会重启集群的读者。</p>
 
 <p>先建立一个总印象：YARN 把集群抽象成"资源池 + 调度器 + 容器"。ResourceManager（RM）是整个集群资源的管理者，NodeManager（NM）管单台机器的资源，ApplicationMaster（AM）为每个应用向 RM 申请资源并监控任务，Container 则是被封装起来的多维资源（内存、CPU、磁盘、网络）。记住这个分工，后面所有调参和排障都能对上号。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-10/01-yarn-roles.svg" alt="YARN 角色分层图：ResourceManager 统管集群资源并内置调度器与队列，向下管理多个 NodeManager，每个 NodeManager 上用 Container 承载内存与 vCore，ApplicationMaster 与任务都跑在容器里"><figcaption>图 1：YARN 的角色分层——RM 管全局与队列，NM 管单机，Container 承载 AM 与任务</figcaption></figure>
+
 
 <h2>第一步：规划资源，别让 YARN 和系统抢内存</h2>
 
@@ -214,6 +217,9 @@ hdfs dfsadmin -refreshNodes
 # 页面查看 DataNode 状态：http://hadoop102:9870/dfshealth.html#tab-datanode</code></pre>
 
 <p>缩容（退役）走黑名单：把要下线的节点写进 <code>blacklist</code> 并刷新，节点状态会先变成 <code>decommission in progress</code>（正在把块复制到其他节点），复制完成后变成 <code>decommissioned</code>，这时才可以停进程关机。这里有一个真实的坑：<strong>如果副本数是 3，而当前服役的 DataNode 数量小于等于 3，退役会一直卡在"退役中"</strong>——因为 blocks 无处可复制。必须先把副本数调小，或者先加节点，再退役。黑名单文件内容为空时也要保留文件本身，配置文件缺路径会导致集群启动异常。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-10/02-datanode-decommission.svg" alt="DataNode 退役流程图：写入黑名单、refreshNodes 刷新、副本迁移中、decommissioned 完成后停进程；下方橙色卡点提示副本数为 3 且服役节点不超过 3 时退役会一直卡在退役中"><figcaption>图 2：DataNode 退役的四步流程与“副本数 3、服役节点 ≤ 3 时卡在退役中”的卡点</figcaption></figure>
+
 
 <h2>第五步：监控与故障定位</h2>
 
