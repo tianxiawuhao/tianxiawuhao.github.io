@@ -286,9 +286,17 @@ server:
 
 <h2>五、起步流程与常见坑</h2>
 
-<p>回头看 <code>SpringApplication.run(DemoApplication.class, args)</code> 这一行，它依次做了几件事：推断应用类型（SERVLET / REACTIVE / NONE）；加载 <code>ApplicationContextInitializer</code> 与 <code>ApplicationListener</code>；准备 <code>Environment</code>，此时读取配置文件与命令行参数；创建并刷新 <code>ApplicationContext</code>，自动配置候选类的条件筛选与注册就发生在这里；启动内嵌 Web 容器；最后发布 <code>ApplicationReadyEvent</code>。这也解释了为什么日志里 <code>Tomcat started on port(s): 8080</code> 总是出现在最后。</p>
+<p>回头看 <code>SpringApplication.run(DemoApplication.class, args)</code> 这一行，它依次做了几件事：推断应用类型（SERVLET / REACTIVE / NONE）；加载 <code>ApplicationContextInitializer</code> 与 <code>ApplicationListener</code>；准备 <code>Environment</code>，此时读取配置文件与命令行参数；创建并刷新 <code>ApplicationContext</code>，自动配置候选类的条件筛选与注册就发生在这里；启动内嵌 Web 容器；最后发布 <code>ApplicationReadyEvent</code>。</p>
 
-<p>几个反复踩到的坑：启动类要放在所有业务包的父包下，否则 <code>@ComponentScan</code> 默认扫不到别的包；引入 starter 后已经有默认配置，别再手写 XML 或手动 new 对象，要改先查 <code>XxxProperties</code>；Bean 找不到时先看自动配置报告，而不是急着加 <code>@ComponentScan</code>；IDEA 里 devtools 热部署不生效，多半是因为没有打开自动编译（Build project automatically），而不是依赖配错。</p>
+<p>这也解释了为什么日志里 <code>Tomcat started on port(s): 8080</code> 总是出现在最后：容器启动发生在自动配置完成之后。</p>
+
+<p>几个反复踩到的坑如下：</p>
+<ul>
+  <li>启动类要放在所有业务包的父包下，否则 <code>@ComponentScan</code> 默认扫不到别的包；</li>
+  <li>引入 starter 后已经有默认配置，别再手写 XML 或手动 new 对象，要改先查 <code>XxxProperties</code>；</li>
+  <li>Bean 找不到时先看自动配置报告，而不是急着加 <code>@ComponentScan</code>；</li>
+  <li>IDEA 里 devtools 热部署不生效，多半是因为没有打开自动编译（Build project automatically），而不是依赖配错。</li>
+</ul>
 
 <p>小结：起步依赖解决「需要哪些 jar、版本怎么对齐」；自动配置解决「这些 jar 里的组件何时、按什么条件注册」；配置绑定解决「运行时参数如何变成对象属性」；Profile 解决「同一份代码在不同环境下用不同参数」。四者串起来就是 Spring Boot 的起步流程：约定先给出默认值，配置只在需要偏离约定时出现，条件注解保证默认值不会覆盖自定义的 Bean。下一章把 Spring Boot 与 MyBatis 接起来，看这套机制在持久层上的具体表现。</p>
           </article>
