@@ -277,7 +277,7 @@ public class WxAccessTokenService {
     }
 }</code></pre>
 
-<p>注意 <code>40001</code>（凭证失效）和 <code>42001</code>（凭证过期）都说明缓存脏了。正确的处理不是立刻重取后盲目重试，而是先删缓存、再取一次、失败即向上抛，避免把刷新风暴放大。另外，<code>access_token</code> 的并发风险只靠一段本地代码兜不住：多实例部署时锁必须落在 Redis 这类共享存储上（单机 <code>synchronized</code> 无效），锁的 TTL 要略大于一次刷新的最长耗时，刷新失败要把异常透出去而不是返回空 token——否则缓存里会留下“看起来有效、其实为空”的脏值。</p>
+<p>注意 <code>40001</code>（凭证失效）和 <code>42001</code>（凭证过期）都说明缓存脏了。正确的处理不是立刻重取后盲目重试，而是先删缓存、再取一次、失败即向上抛，避免把刷新风暴放大。<code>access_token</code> 的并发风险只靠一段本地代码兜不住。多实例部署时锁必须落在 Redis 这类共享存储上，单机 <code>synchronized</code> 无效。锁的 TTL 要略大于一次刷新的最长耗时。刷新失败要把异常透出去而不是返回空 token，否则缓存里会留下“看起来有效、其实为空”的脏值。</p>
 
 <p>这里还要加一条运维侧的护栏：把 access_token 的剩余有效期做成监控指标，低于 900 秒就告警，同时给获取接口设失败重试上限（例如 3 次、指数退避）。微信官方在 2021 年前后为 <code>cgi-bin/token</code> 之外的部分接口提供了“稳定版 access_token”，用 <code>POST /cgi-bin/stable_token</code> 拿，无并发冲突、可重复获取同一值；具体可用范围以官方文档和你账号的开通情况为准，接入前先确认。它能让“多实例互相踢 token”这个问题消掉一半。</p>
 
@@ -428,7 +428,14 @@ public Map&lt;String, String&gt; notify(@RequestBody String body,
     return Map.of("code", "SUCCESS", "message", "成功");
 }</code></pre>
 
-<p>旧代码里常见的那几个坑，在 APIv3 下的正确姿势是：<strong>签名串结尾的换行</strong>必须保留；<code>Wechatpay-Serial</code> 与私钥不匹配会稳定报 401；<strong>平台证书必须缓存并按序列号索引</strong>（序列号每次请求都可能不同，实时全量下载会把回调接口拖垮）；回调应答要返回 HTTP 200 且 body 为 <code>{"code":"SUCCESS"}</code>（V2 时代则回 XML 的 <code>SUCCESS</code>），否则微信会持续重推。商户私钥、APIv3 密钥一律从密钥管理服务或挂载卷读取，绝不进代码仓库。<em>存疑：SDK 类名与各接口的必填字段随版本迭代较快，且平台证书与微信支付公钥两种模式并存，请以商户平台 APIv3 文档与你所用 SDK 版本的说明为准。</em></p>
+<p>旧代码里常见的那几个坑，在 APIv3 下有对应的正确姿势。</p>
+<ul>
+<li><strong>签名串结尾的换行</strong>必须保留。</li>
+<li><code>Wechatpay-Serial</code> 与私钥不匹配会稳定报 401。</li>
+<li><strong>平台证书必须缓存并按序列号索引</strong>，序列号每次请求都可能不同，实时全量下载会把回调接口拖垮。</li>
+<li>回调应答要返回 HTTP 200 且 body 为 <code>{"code":"SUCCESS"}</code>，V2 时代则回 XML 的 <code>SUCCESS</code>，否则微信会持续重推。</li>
+</ul>
+<p>商户私钥、APIv3 密钥一律从密钥管理服务或挂载卷读取，绝不进代码仓库。<em>存疑：SDK 类名与各接口的必填字段随版本迭代较快，且平台证书与微信支付公钥两种模式并存，请以商户平台 APIv3 文档与你所用 SDK 版本的说明为准。</em></p>
 
 <p>回调处理必须按固定顺序做四件事。<strong>验签</strong>，否则任何人都能伪造到账通知；<strong>解密</strong>，V3 的 resource 是密文，不能直接读明文金额；<strong>幂等</strong>，以 <code>out_trade_no</code> 为唯一键，重复通知只处理一次；<strong>校验金额</strong>，回调金额必须与本地订单金额相等，单位是分。最后按平台要求应答成功标识，V2 回 <code>SUCCESS</code> 的 XML，V3 回 <code>{"code":"SUCCESS"}</code>，否则微信会持续重推。签名时最容易翻车的是签名串的拼接顺序、结尾换行、时间戳单位与证书序列号，建议直接使用官方 SDK 的签名工具类，而不是手写字符串拼接。<em>存疑：各接口的必填字段随版本迭代较快，请以商户平台 APIv3 文档为准。</em></p>
 

@@ -146,7 +146,12 @@
 
 <ul>
 <li><strong>堆</strong>：虚拟机管理的最大的内存区域，启动时创建，用来存放对象实例和数组，也是垃圾收集器的主战场，按分代划分为新生代与老年代。堆里没有内存完成实例分配、且堆无法再扩展时，抛 <code>OutOfMemoryError</code>。</li>
-<li><strong>方法区</strong>：存放已被加载的类信息、运行时常量池等。要注意方法区是《Java 虚拟机规范》里的抽象概念，不同版本由不同实现承担：JDK 7 及以前它由<strong>永久代（PermGen）</strong>实现，受 <code>-XX:MaxPermSize</code> 约束；JDK 8 起改由<strong>元空间（Metaspace）</strong>实现，元数据搬到本地内存，改由 <code>-XX:MaxMetaspaceSize</code> 约束（默认不设上限，只受本机内存限制）。参数也随之换代：<code>-XX:MaxPermSize</code> 在 JDK 8 起已失效，JVM 启动时会提示 <code>support was removed in 8.0</code> 并忽略它，想限制元空间只能用 <code>-XX:MaxMetaspaceSize</code>。另外，字符串常量池在 JDK 7 就已经挪进了堆，所以涉及 <code>intern()</code> 的题目要按版本分开回答。</li>
+<li><strong>方法区</strong>：存放已被加载的类信息、运行时常量池等。要注意方法区是《Java 虚拟机规范》里的抽象概念，不同版本由不同实现承担。
+<ul>
+<li>JDK 7 及以前由<strong>永久代（PermGen）</strong>实现，受 <code>-XX:MaxPermSize</code> 约束。</li>
+<li>JDK 8 起改由<strong>元空间（Metaspace）</strong>实现，元数据搬到本地内存，改由 <code>-XX:MaxMetaspaceSize</code> 约束，默认不设上限，只受本机内存限制。</li>
+</ul>
+参数也随之换代：<code>-XX:MaxPermSize</code> 在 JDK 8 起已失效，JVM 启动时会提示 <code>support was removed in 8.0</code> 并忽略它，想限制元空间只能用 <code>-XX:MaxMetaspaceSize</code>。另外，字符串常量池在 JDK 7 就已经挪进了堆，所以涉及 <code>intern()</code> 的题目要按版本分开回答。</li>
 </ul>
 
 <p>还有<strong>直接内存</strong>：它不属于运行时数据区，NIO 的 <code>DirectByteBuffer</code> 会大量使用，受本机总内存限制——这也是“堆没满却 OOM”的常见来源。</p>
@@ -194,7 +199,7 @@
 <p>对象在堆里长什么样？以 HotSpot 为例，可分为三个区域。</p>
 
 <ul>
-<li><strong>对象头</strong>：包含 Mark Word 和类型指针。Mark Word 存对象自身的运行时数据，如哈希码、GC 分代年龄、锁状态标志、偏向线程 ID 等——不过偏向锁在 JDK 15 起默认禁用、JDK 18 起实现被移除，所以 JDK 18 及以后不会再出现偏向状态，偏向线程 ID 这个字段也就不再被使用；类型指针指向该类的元数据（JDK 7 及以前在永久代，JDK 8 起随元空间放在本地内存），虚拟机靠它确定“这个对象是哪个类的实例”。如果对象是数组，对象头里还要多存一个数组长度。</li>
+<li><strong>对象头</strong>：包含 Mark Word 和类型指针。Mark Word 存对象自身的运行时数据，如哈希码、GC 分代年龄、锁状态标志、偏向线程 ID 等。不过偏向锁在 JDK 15 起默认禁用、JDK 18 起实现被移除，所以 JDK 18 及以后不会再出现偏向状态，偏向线程 ID 这个字段也就不再被使用。类型指针指向该类的元数据（JDK 7 及以前在永久代，JDK 8 起随元空间放在本地内存），虚拟机靠它确定“这个对象是哪个类的实例”。如果对象是数组，对象头里还要多存一个数组长度。</li>
 <li><strong>实例数据</strong>：真正存放字段内容的部分。父类定义的字段在前，子类定义的在后；HotSpot 默认会做字段重排，让相同宽度的字段尽量排在一起，以减少填充浪费。</li>
 <li><strong>对齐填充</strong>：不是必然存在，也没有业务含义，只起占位作用。HotSpot 要求对象起始地址按 8 字节对齐，实例数据没凑够 8 字节整数倍时补几个字节，所以对象大小总是 8 的倍数。</li>
 </ul>
