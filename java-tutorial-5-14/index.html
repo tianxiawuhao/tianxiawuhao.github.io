@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="Git,版本控制,分支,合并,rebase,代码协作">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Git 版本控制与分支协作 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script></head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Git 版本控制与分支协作</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，9 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>版本控制是团队协作的基础设施，也是面试里区分「会写代码」和「参与过真实项目」的分水岭。很多人用了几年 Git，实际只会 <code>add</code> / <code>commit</code> / <code>push</code> 三条命令，一遇到冲突、误提交、要回滚就手忙脚乱，甚至直接删库重来。问题出在没理解 Git 的核心模型：它管理的是<strong>提交快照与指针</strong>，而不是「文件的差异」。本章先讲清四个区域与分支的本质，再覆盖日常协作、冲突处理、撤销恢复、暂存与忽略规则，最后给出误提交密码这类真实事故的处理办法。5-3 讲的是 IDE 里的 Git 集成，本章补充命令行视角的完整用法。</p>
+
+<h2>从 SVN 到 Git：为什么是分布式</h2>
+<p>SVN 是集中式版本控制：只有中央仓库保存完整历史，本地工作副本不含版本信息，因此<strong>提交必须联网</strong>，断网就只能改代码不能记录。Git 是分布式版本控制：<code>git clone</code> 会把整个仓库历史复制到本地，<code>git commit</code> 只写入本地 <code>.git</code> 目录，<code>git push</code> 才同步给团队。</p>
+<p>这个差别带来三个实际好处：第一，<strong>离线也能提交</strong>，飞机上写代码照样能分多次提交、随时看历史；第二，<strong>本地操作极快</strong>，除推送拉取外都在本地完成；第三，<strong>每个克隆都是备份</strong>，中央仓库损坏时任意一个开发者的本地仓库都能恢复全部历史。代价是概念变多了：多出暂存区、本地仓库、远程跟踪分支这些层，不理解模型就会用错命令。</p>
+
+<h2>四个区域与文件流转</h2>
+<p>Git 里一份代码要经历四个区域，把这张图记住，绝大多数命令都能对号入座。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-14/01-three-areas.svg" alt="Git 工作区、暂存区、本地仓库、远程仓库四个区域与 add/commit/push/pull 的数据流向"><figcaption>图 1：四个区域，以及文件在各区域之间的流转命令</figcaption></figure>
+
+<p>关键认知有两条。第一，<strong>本地就能提交</strong>：<code>commit</code> 与 <code>push</code> 是两件事，前者写本地历史，后者才共享，所以「还没推出去的提交」可以放心改写。第二，<strong>暂存区是「挑选」的地方</strong>：<code>git add</code> 决定这次提交包含哪些改动，与文件是否保存无关。两个不相关的修改混在一起时，正确做法是分两次 <code>add</code> + <code>commit</code>，而不是图省事一次提交——历史读得懂，回滚才救得回来。</p>
+<p>配套的两个查看命令要分清：<code>git diff</code> 看的是「工作区 vs 暂存区」，<code>git diff --cached</code>（等价于 <code>--staged</code>）看的是「暂存区 vs 上次提交」。提交前先看 <code>--cached</code>，能避免把调试代码、密码、临时文件带进版本库。</p>
+
+<h2>安装与首次配置</h2>
+<p>安装完成后有三件事必须做，否则第一次提交会直接报错 <code>Please tell me who you are</code>。</p>
+<pre><code class="language-bash"># 1. 配置身份：写进每一次提交的作者信息，团队协作必备
+git config --global user.name "tianxia"
+git config --global user.email "tianxia@example.com"
+
+# 2. 换行符：Windows 与 Linux 混用时避免整文件 diff
+#    Windows 上检出为 CRLF、提交时转为 LF；Linux/macOS 保持 LF
+git config --global core.autocrlf true     # Windows
+git config --global core.autocrlf input    # Linux / macOS
+
+# 3. 中文文件名不转义，git status 里能正常显示中文
+git config --global core.quotepath false
+
+# 查看当前配置与来源
+git config --list --show-origin
+
+# 生成 SSH 公钥，免去每次 push 输密码（公钥加到 GitHub/GitLab 设置里）
+ssh-keygen -t ed25519 -C "tianxia@example.com"
+cat ~/.ssh/id_ed25519.pub
+ssh -T git@github.com                      # 验证连通性</code></pre>
+<p>常见坑有两个：<code>--global</code> 是写到用户主目录的配置，如果公司项目要用企业邮箱，应在项目目录里单独执行一次不带 <code>--global</code> 的 <code>git config</code>，它会写入 <code>.git/config</code>，优先级高于全局配置；修改历史提交的邮箱需要重写历史，不是改配置能解决的。</p>
+
+<h2>日常最小工作流</h2>
+<p>把下面这几条练成肌肉记忆，就覆盖了 90% 的日常操作。</p>
+<pre><code class="language-bash">git status                     # 先看状态：哪些改了、哪些已暂存
+git diff                       # 看工作区改动内容
+git add src/OrderService.java  # 只暂存这个文件
+git add -p                     # 交互式挑选同一文件内的部分改动（推荐）
+git diff --cached              # 提交前复查暂存区内容
+git commit -m "fix(order): 修复库存为 0 时仍可下单的问题"
+git push origin main
+
+# 拉取远程更新（团队协作每天第一步）
+git pull --rebase origin main  # 把本地提交「垫」在远程更新之上，历史更线性</code></pre>
+<p>三条经验：第一，<strong>写提交信息时讲清「为什么」而不是「做了什么」</strong>，因为改了什么 diff 里都能看到；第二，<code>git add -p</code> 比 <code>git add .</code> 安全得多，它能让你在同一文件里只挑相关改动提交；第三，<code>git add .</code> 之前务必确认 <code>.gitignore</code> 已生效，否则 <code>target/</code>、<code>node_modules/</code>、<code>*.log</code> 会被一并提交。</p>
+
+<h2>分支：Git 最核心的能力</h2>
+<p>Git 的分支本质上只是一个<strong>指向某个提交的引用文件</strong>（约 41 字节），不是目录副本。所以创建和切换分支几乎零成本，这也是它比 SVN 分支好用的根本原因。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-14/02-branch-merge.svg" alt="Git 分支从主干分叉、并行提交、再合并回主干的提交图"><figcaption>图 2：分支是一条独立的提交线，合并时产生合并提交</figcaption></figure>
+
+<pre><code class="language-bash">git branch                      # 查看本地分支（* 标记当前分支）
+git branch -a                   # 连远程分支一起看
+git switch -c feature/order     # 新建并切换（等价于 git checkout -b）
+git switch main                 # 切回主干（Git 2.23+ 推荐写法）
+git merge feature/order         # 把功能分支合并进当前分支
+git branch -d feature/order     # 合并后删除已无用的分支
+git branch -D feature/order     # 强制删除（未合并时需谨慎）
+
+# 查看提交图，理解分支关系最直观的命令
+git log --oneline --graph --all --decorate</code></pre>
+<p>生产项目里的分支策略不需要复杂，够用即可：<code>main</code> 保持随时可发布，功能开发开 <code>feature/xxx</code>，修紧急线上问题开 <code>hotfix/xxx</code>，合并前先 <code>git pull --rebase</code> 跟上主干。要避免的是「一个人一条长期分支活三个月」——分支活得越久，合并冲突越大，正确的做法是把需求拆小、频繁合并回主干。</p>
+
+<h2>合并、冲突与 rebase</h2>
+<p>合并冲突的本质是：两条分支修改了<strong>同一文件的同一区域</strong>，Git 无法自动决定保留哪一份，于是停下合并，把冲突标记写进文件让你决定。</p>
+<pre><code class="language-bash">git merge feature/order
+# 输出 CONFLICT (content): Merge conflict in src/OrderService.java
+
+# 冲突文件里会出现这样的标记：三个字段分别是 当前分支 / 分界 / 待合并分支
+# &lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+#         int stock = order.getStock();
+# =======
+#         int stock = order.getStock() - 1;
+# &gt;&gt;&gt;&gt;&gt;&gt;&gt; feature/order
+
+# 手工编辑成最终想要的样子，删掉标记，然后：
+git add src/OrderService.java   # 标记为已解决
+git commit                      # 完成合并提交（信息已自动生成）
+
+# 如果解决过程中发现搞乱了，随时可以放弃整个合并：
+git merge --abort</code></pre>
+<p>三条冲突处理纪律：<strong>先看完整标记再动手</strong>，不要凭印象删；解决后<strong>必须编译并跑一次相关测试</strong>，因为 Git 只保证文本合并成功，不保证逻辑正确（典型的「语法没错但语义错了」就出在这里）；<strong>冲突要尽快解决</strong>，合并中断期间 <code>HEAD</code> 处于特殊状态，此时不要再开新分支或做无关提交。</p>
+<p>再说 <code>merge</code> 与 <code>rebase</code> 的区别，这是面试常问的一对：</p>
+<pre><code class="language-text">merge   ：保留两条分支的真实分叉，产生一个「合并提交」，历史是网状但真实
+rebase  ：把你这一串提交逐个「复制」到目标分支之后，历史变成一条直线
+
+选择原则：
+- 主干合并功能分支        → 用 merge --no-ff，保留「这里合并过一个功能」的信息
+- 本地分支跟随主干更新    → 用 pull --rebase，避免产生一堆无意义的合并提交
+- 已经 push 的公共分支    → 绝不要 rebase，因为会重写历史、同事的本地仓库会分叉</code></pre>
+
+<h2>远程协作：clone、fetch、pull、push</h2>
+<pre><code class="language-bash">git clone git@github.com:tianxia/demo.git      # 克隆：拿到完整历史
+git remote -v                                  # 查看远程地址（origin）
+git fetch origin                               # 只下载远程更新，不改工作区（安全）
+git log HEAD..origin/main --oneline            # 看看远程比我多了哪些提交
+git pull origin main                           # fetch + merge（或 --rebase）
+git push -u origin feature/order               # 首次推送并建立跟踪关系
+git push origin --delete feature/order         # 删除远程分支
+
+# 只想看某个文件的历史改动
+git log -p -- src/OrderService.java
+git blame src/OrderService.java                # 逐行看「最后是谁改的」</code></pre>
+<p><code>fetch</code> 与 <code>pull</code> 的区别值得单独记：<code>fetch</code> 只更新本地的远程跟踪分支（<code>origin/main</code>），工作区一动不动；<code>pull</code> 等于 <code>fetch</code> 加一次合并。所以不确定远程改了什么时，先 <code>fetch</code> 再比较，比直接 <code>pull</code> 稳妥。</p>
+
+<h2>撤销与恢复：对着决策树选命令</h2>
+<p>撤销是 Git 最容易出错的地方，因为它有六七个功能相近的命令。判断顺序只有一句话：<strong>先问改动停在哪一步，再问这次提交推没推出去</strong>。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-14/03-undo-tree.svg" alt="Git 撤销决策树：工作区改动、已暂存改动、已提交、已推送四种情形的处理命令"><figcaption>图 3：撤销决策树——先判断改动停在哪一步，再判断是否已推送</figcaption></figure>
+
+<pre><code class="language-bash"># 情形一：改错了，还没 add —— 丢弃工作区改动（不可恢复）
+git restore src/OrderService.java        # Git 2.23+ 推荐
+git checkout -- src/OrderService.java    # 旧写法，效果相同
+
+# 情形二：已经 add，想撤出暂存区（改动还在工作区）
+git restore --staged src/OrderService.java
+git reset HEAD src/OrderService.java     # 旧写法
+
+# 情形三：commit 了但还没 push —— 可以改写历史
+git commit --amend                       # 只改最近一次：补文件或改信息
+git reset --soft HEAD~1                  # 撤销提交，改动留在暂存区
+git reset --mixed HEAD~1                 # 撤销提交与暂存，改动留在工作区
+git reset --hard HEAD~1                  # 连改动一起丢弃（危险）
+
+# 情形四：已经 push —— 只能追加反向提交
+git revert HEAD                          # 生成一个抵消原提交的新提交
+git revert &lt;commit-id&gt;                   # 回退指定的历史提交</code></pre>
+<p>三个必须记住的细节：<code>--soft</code> / <code>--mixed</code> / <code>--hard</code> 的差别在于<strong>改动被保留到哪一层</strong>，只有 <code>--hard</code> 会真正丢数据，且 <code>git reflog</code> 是最后的后悔药（默认保留 90 天，能找到 <code>reset --hard</code> 之前的提交）；<code>--amend</code> 不是「修改」原提交，而是<strong>用一个新的提交替换掉它</strong>，所以只适用于尚未推送的提交；公共分支上一律用 <code>revert</code> 而不是 <code>reset</code>，因为后者会重写历史、让所有同事的本地仓库分叉。</p>
+
+<h3>事故处理：把密码提交上去了怎么办</h3>
+<p>这是最典型的真实事故。要区分两种情况：提交<strong>还没推送</strong>时，可以本地改写历史解决；已经推送就麻烦了——即使你强推覆盖，密钥也已经出现在远程服务器的记录、别人的本地克隆、CI 日志里。</p>
+<pre><code class="language-bash"># 还没推送：从工作区删除敏感文件并把它加入忽略规则
+git rm --cached config/application-prod.yml   # 从版本库移除，保留本地文件
+echo "config/application-prod.yml" &gt;&gt; .gitignore
+git commit -m "chore(config): 移除误提交的生产配置"
+
+# 想彻底从历史中抹掉（整个仓库重写，必须通知所有同事重新克隆）
+# 官方推荐用 git-filter-repo，老教程里的 filter-branch 已被官方标记为不推荐
+git filter-repo --path config/application-prod.yml --invert-paths
+git push --force --all
+git push --force --tags</code></pre>
+<p>正确的事故处置顺序是：<strong>第一步永远是先去平台把密钥吊销/轮换</strong>，而不是先折腾 Git 历史——只要密钥还有效，抹历史没有任何意义；第二步再清理仓库；第三步把 <code>.gitignore</code> 补齐并加一道 pre-commit 检查，防止同类问题再次发生。真实项目里更稳妥的做法是密钥根本不进仓库，用环境变量或配置中心下发。</p>
+
+<h2>暂存与忽略：两个日常高频工具</h2>
+<pre><code class="language-bash"># 临时切分支救火：把没写完的改动先收起来
+git stash push -m "订单模块做到一半"      # 保存工作区与暂存区改动
+git stash list                            # 查看 stash 列表
+git stash pop                             # 恢复最近一次并删除该记录
+git stash apply stash@{1}                 # 恢复指定记录（保留记录）
+git stash drop stash@{0}                  # 丢弃指定记录
+
+# .gitignore 只对「尚未被跟踪」的文件生效
+git check-ignore -v target/classes/App.class   # 排查某文件为何被忽略/为何没被忽略</code></pre>
+<p><code>.gitignore</code> 最容易被误解的一点：它<strong>不会</strong>让已被跟踪的文件「取消跟踪」。如果某个文件在加入忽略规则前就已经提交过，必须先用 <code>git rm --cached &lt;file&gt;</code> 从版本库移除，忽略规则才会生效。下面是一份 Java 项目的常用规则：</p>
+<pre><code class="language-text"># ---------- Java / Maven ----------
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# ---------- 日志与临时文件 ----------
+*.log
+logs/
+*.tmp
+*.bak
+
+# ---------- 敏感配置 ----------
+config/application-local.yml
+*.pem
+*.jks
+.env
+
+# ---------- 前端 ----------
+node_modules/
+dist/
+.npm-cache/</code></pre>
+<p>忽略规则的语法要点：<code>/target/</code> 前导斜杠表示只忽略仓库根目录下的 <code>target</code>；<code>*.log</code> 匹配任意层级的日志文件；<code>!</code> 开头表示「不忽略」，用于给宽泛规则开例外（例如 <code>target/</code> 之后再写 <code>!.mvn/wrapper/maven-wrapper.jar</code>）；目录规则末尾的斜杠表示只匹配目录。</p>
+
+<h2>提交规范与常用命令速查</h2>
+<p>提交信息是给人看的，团队里统一格式能省下大量沟通成本。常用的是一种带类型前缀的写法：</p>
+<pre><code class="language-text">格式：&lt;type&gt;(&lt;scope&gt;): &lt;subject&gt;
+
+fix(order): 修复库存为 0 时仍可下单的问题
+feat(order): 新增订单超时自动关闭
+refactor(common): 抽取 ID 生成工具类
+docs(readme): 补充本地启动说明
+test(order): 补充下单并发场景用例
+chore(deps): 升级 Spring Boot 到 3.2.0
+
+type 取值：feat / fix / docs / style / refactor / perf / test / build / ci / chore / revert</code></pre>
+<p>顺带记一条写历史的经验：<strong>一个提交只做一件事</strong>。修改格式和修改逻辑混在一个提交里，回滚时会连格式化一起回滚；功能开发和依赖升级混在一起，出问题无法单独定位。历史清晰是「能排查问题」的前提。</p>
+<p>最后是几条最容易忘的命令：<code>git log --oneline --graph --all</code> 看提交图；<code>git log -S"关键词"</code> 按代码内容搜索提交（查「这行代码哪来的」神器）；<code>git reflog</code> 找回误删的分支和 <code>reset --hard</code> 前的提交；<code>git diff main...feature/x</code> 比较两条分支的差异。</p>
+<p>小结：Git 只有一个模型——<strong>提交是不可变快照，分支是指向快照的指针</strong>。四个区域解释了 <code>add</code> / <code>commit</code> / <code>push</code> 的分工，暂存区让你能挑选提交内容，分支的低成本让频繁开分支、频繁合并成为可能。遇到问题时先判断「改动停在哪一步、是否已推送」：没推送就能改写历史（<code>amend</code> / <code>reset</code> / <code>rebase</code>），已推送就只能追加（<code>revert</code>）。把冲突解决流程和撤销决策树走熟，协作中的绝大多数麻烦都不会再让你手忙脚乱。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-5-13/"><span class="pn-label">← 上一篇</span><span class="pn-title">设计原则与 UML</span></a>
+      <a class="next-post" href="/java-tutorial-6-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">JVM 内存结构与对象</span></a>
+      </nav>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
