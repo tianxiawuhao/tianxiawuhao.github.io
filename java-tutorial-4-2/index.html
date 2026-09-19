@@ -209,7 +209,7 @@ application：&lt;s:property value="#application.username"/&gt;
 
 <h2>四、拦截器：Struts2 的调用链</h2>
 
-<p>拦截器（Interceptor）是 Struts2 的核心机制之一，它在 Action 执行前后插入逻辑，本质是沿一条调用链的 AOP 式环绕。它和 Servlet 过滤器容易混淆。过滤器基于 Servlet 规范、依赖 Servlet 容器，能过滤所有请求（页面、Servlet、静态资源）；拦截器基于 Struts2 自己的 <code>ActionInvocation</code> 调用链，不依赖 Servlet 容器，只作用于 Action 调用以及结果渲染。也正因如此，拦截器能通过 <code>invocation.getInvocationContext()</code> 拿到值栈与 ActionContext，直接操作值栈——这是过滤器做不到的。</p>
+<p>拦截器（Interceptor）是 Struts2 的核心机制之一，它在 Action 执行前后插入逻辑，本质是沿一条调用链的 AOP 式环绕。它和 Servlet 过滤器容易混淆。过滤器基于 Servlet 规范，依赖 Servlet 容器，能过滤所有请求（页面、Servlet、静态资源）。拦截器则基于 Struts2 自己的 <code>ActionInvocation</code> 调用链，不依赖 Servlet 容器，只作用于 Action 调用以及结果渲染。也正因如此，拦截器能通过 <code>invocation.getInvocationContext()</code> 拿到值栈与 ActionContext，直接操作值栈——这是过滤器做不到的。</p>
 
 <p>写一个拦截器有三种方式：实现 <code>Interceptor</code> 接口，重写 <code>init()</code>、<code>intercept()</code>、<code>destroy()</code>（注意方法名是 <code>intercept</code>，不是 <code>interceptor</code>）；继承 <code>AbstractInterceptor</code>，只需重写 <code>intercept()</code>，最常用；继承 <code>MethodFilterInterceptor</code>，重写 <code>doIntercept()</code>，并可通过 <code>includeMethods</code> / <code>excludeMethods</code> 精确控制拦截哪些方法，灵活度最高。</p>
 
@@ -269,10 +269,18 @@ public class LogInterceptor extends MethodFilterInterceptor {
 <li><strong>拦截器里不调用 <code>invoke()</code> 就必须自己返回结果码</strong>，且该 Action 要有同名的 <code>&lt;result&gt;</code>，否则页面 404 或抛异常。</li>
 <li><strong>同名属性取错，多半是栈序问题。</strong>值栈是「查找」而非覆盖，栈顶 Object 的属性优先于 <code>set()</code> 进去的 Map，更优先于上下文栈。</li>
 <li><strong>静态方法访问默认关闭</strong>（2.3.20 起默认 false，2.5 起开关移除），不要沿用旧写法；确有需要应在服务端显式放开并评估 OGNL 注入风险。</li>
-<li><strong>过滤器与拦截器的边界</strong>：需要拦截 JSP、图片、所有 URL 时用过滤器或 Spring MVC 的 HandlerInterceptor；只需在 Action 调用链上做参数注入、校验、登录检查时用 Struts2 拦截器。</li>
+<li><strong>过滤器与拦截器的边界</strong>：需要拦截 JSP、图片、所有 URL 时，用过滤器或 Spring MVC 的 HandlerInterceptor。只需在 Action 调用链上做参数注入、校验、登录检查时，用 Struts2 拦截器。</li>
 </ul>
 
-<p>小结：Struts2 把「域 + 键」的取数方式换成了「值栈 + OGNL 路径」。记住三点即可上手：数据放值栈（<code>push</code>、<code>set</code>，或直接给 Action 加 getter），取数据不加 <code>#</code> 走对象栈、加 <code>#</code> 走上下文，拦截器是围绕 Action 调用的可配置调用链——一旦在 Action 里显式引用了拦截器，别忘了把 <code>defaultStack</code> 带回来。理解了这一层，<code>&lt;s:property&gt;</code> 为什么能直接写属性名、以及参数注入为什么突然失灵，就都成了同一个问题的两面。</p>
+<p>小结：Struts2 把「域 + 键」的取数方式换成了「值栈 + OGNL 路径」。记住三点即可上手：</p>
+
+<ul>
+<li>数据放在值栈里：用 <code>push</code>、<code>set</code>，或直接给 Action 加 getter；</li>
+<li>取数据时，不加 <code>#</code> 走对象栈，加 <code>#</code> 走上下文；</li>
+<li>拦截器是围绕 Action 调用的可配置调用链：一旦在 Action 里显式引用了拦截器，就要把 <code>defaultStack</code> 带回来。</li>
+</ul>
+
+<p>理解了这一层，<code>&lt;s:property&gt;</code> 为什么能直接写属性名、以及参数注入为什么突然失灵，就都成了同一个问题的两面。</p>
           </article>
   <!-- Footer -->
   <footer>
