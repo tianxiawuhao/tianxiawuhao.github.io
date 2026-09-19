@@ -146,6 +146,8 @@ netstat -nat | awk '{print $6}' | sort | uniq -c | sort -rn | head</code></pre>
 <p>关键判断：<code>load average</code> 要和 CPU 核数一起看，四核机器负载 6 表示有任务在排队；<code>free</code> 输出里不要盯 free 一列，<code>available</code> 小于总内存的 10% 时才需要紧张；<code>df -h</code> 显示 <code>Use%</code> 到 100% 会直接导致写日志失败、应用报错，这比 CPU 高更紧急。</p>
 
 <p>需要提醒的是，这四个命令只回答"是哪一类资源紧张"，不回答"为什么紧张"。请不要一看到 CPU 高就去改代码，也不要一看到内存占用大就重启应用——重启只会把现场丢掉，下一次告警时仍要从零开始判断。正确的做法是先确认问题类型，再沿着"系统整体指标→进程→进程内部资源→代码"这条链路逐层收敛，每往下走一层，可疑范围都会缩小一个数量级。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-3/01-troubleshoot-flow.svg" alt="性能排查逐层收敛路径：系统指标、进程线程、进程内部资源、代码，以及三条常见误区"><figcaption>图 1：性能排查的逐层收敛路径：先用 top、free、df 判断瓶颈类型，再收敛到进程、线程与 JVM，最后落到代码；下方是三条最容易踩的坑</figcaption></figure>
 <p>另外，排障时最好先留证据再动手：把关键输出重定向到文件（例如 <code>top -bn1 &gt; /tmp/top.log</code>、<code>ss -s &gt; /tmp/ss.log</code>），这样既不会因为终端滚动丢掉信息，也方便事后复盘。若机器还能登录，优先做只读的观测命令，不要急着 kill 进程。</p>
 <h2>进程与 CPU：用 ps 和 top 找到"罪魁祸首"</h2>
 <p><code>ps</code> 是 Process Status 的缩写，给出的是执行那一刻的进程快照；需要动态刷新就用 <code>top</code>。常用的两种写法各有侧重：<code>ps -ef</code> 用标准格式列出全部进程，附带 UID、PPID（父进程号）和完整命令行，适合"这个进程是谁拉起来的"；<code>ps aux</code> 用 BSD 格式，多出 <code>%CPU</code>、<code>%MEM</code>、<code>VSZ</code>、<code>RSS</code> 和 <code>STAT</code> 列，适合快速找耗资源大户。</p>

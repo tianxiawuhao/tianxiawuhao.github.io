@@ -144,6 +144,8 @@
 
 <p>JMM 并不消灭这些问题（那等于废掉缓存和流水线），而是规定哪些重排序和延迟同步是允许的，并把底层实现封装成 <code>volatile</code>、<code>synchronized</code>、<code>final</code> 和 <code>java.util.concurrent</code> 供我们直接用。对原子性，Java 用 <code>monitorenter</code>/<code>monitorexit</code> 两条字节码实现 <code>synchronized</code>；对可见性，用「写后同步回主内存、读前从主内存刷新」的传递方式；对有序性，则用锁的互斥或 volatile 的屏障来限定重排序范围。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-4/01-jmm-model.svg" alt="JMM 抽象模型示意图"><figcaption>图 1：JMM 抽象模型 —— 线程只读写自己的工作内存，共享变量通过主内存传递，volatile 让写对后续读可见</figcaption></figure>
+
 <h2>happens-before：判断「是否可见」的规则</h2>
 
 <p>既然工作内存的存在让「谁先谁后」在物理时间上无法确定，JMM 就换了个提法：只关心<strong>一个操作的结果对另一个操作是否可见</strong>。这就是 happens-before（先行发生）原则。关键在于：<strong>它不要求前一个操作必须在时间上先执行完</strong>，只要求前者的结果对后者可见，且后者看到的是一个不违反该原则的执行顺序。</p>
@@ -188,6 +190,8 @@
 <p>把 <code>volatile</code> 去掉，循环体里没有其他同步点，JIT 还可能把 <code>!flag</code> 提升为循环外的一次读取，worker 就永远不会退出——这也是「用变量做线程停止标志却停不下来」的原因。</p>
 
 <p>JMM 为 volatile 定的内存语义是：写之前插入 StoreStore 屏障、写之后插入 StoreLoad 屏障；读之后依次插入 LoadLoad、LoadStore 屏障。屏障有两个作用——把写缓冲刷到缓存让其他核心可见，以及阻止屏障两侧的读写跨越屏障重排序。在 x86 上，StoreStore/LoadLoad/LoadStore 是空操作（x86 本身不允许这类重排序），只有 StoreLoad 需要真正的 <code>lock</code> 前缀指令，这也是 volatile 写比读贵的原因。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-4/02-volatile-barriers.svg" alt="volatile 内存屏障插入位置"><figcaption>图 2：volatile 的内存屏障 —— 写前 StoreStore、写后 StoreLoad，读后依次 LoadLoad、LoadStore</figcaption></figure>
 
 <p>但 volatile <strong>不保证原子性</strong>。<code>volatile int count; count++;</code> 依然会丢更新，需要 <code>AtomicInteger</code> 或加锁。</p>
 

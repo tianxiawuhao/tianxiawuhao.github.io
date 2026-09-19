@@ -175,6 +175,8 @@ http {
 
 <h2>location 匹配优先级，是配置里最容易踩的坑</h2>
 <p>location 决定一个请求最终交给谁处理，规则可以概括为一句话：先看精确匹配，再看前缀匹配并记住最长的那条，然后按配置文件中的书写顺序试正则，第一个命中的正则立即生效，若一个正则都没命中，才回退到之前记住的最长前缀。因此 <code>~</code>（区分大小写正则）和 <code>~*</code>（不区分大小写）的先后顺序会直接改变结果；<code>^~</code> 表示前缀命中后就不再尝试正则；<code>=</code> 用于首页、健康检查这类高频路径，命中即可跳过全部匹配，性能最好。写正则时别忘了转义点号，<code>~ .*.(php|php5)?$</code> 这类写法会把 <code>aXphp</code> 也匹配进来，正确写法是 <code>~ \.(php|php5)$</code>。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-5/01-location-priority.svg" alt="Nginx location 的四步匹配顺序：精确匹配、最长前缀、首个命中的正则、回退最长前缀"><figcaption>图 1：location 的四步匹配顺序：① 精确匹配 → ② 记住最长前缀 → ③ 按书写顺序试正则并停在首个命中 → ④ 正则全不中时回退到最长前缀，最后由 location / 兜底</figcaption></figure>
 <p>下面这份配置把静态资源、接口和兜底规则分开处理，是典型的动静分离结构。</p>
 <pre><code class="language-nginx">server {
     listen 80;

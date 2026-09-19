@@ -146,6 +146,8 @@
 
 <p>这些工具都随 JDK 一起安装，位于 <code>$JAVA_HOME/bin</code> 下，不需要额外下载。有一个前提必须记住：<strong>必须用与目标进程相同（或兼容）的 JDK 版本去执行这些命令</strong>，否则可能连不上进程。另外，<code>jmap</code> 导堆和 <code>jstack</code> 打快照都可能让目标进程短暂停顿（STW），生产环境不要在流量高峰随便执行。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-5/01-diagnosis-chain.svg" alt="线上排查链路与两种视角"><figcaption>图 1：排查链路 —— jps 找进程、jstat 看趋势、jmap/MAT 抓内存、jstack 抓线程，前两步是流程视角，后两步是快照视角</figcaption></figure>
+
 <h2>二、jps 与 jstat：快速判断「是不是 GC 的锅」</h2>
 
 <p>第一步永远是找到进程号。很多人习惯用 <code>ps -ef | grep java</code>，但输出太长，容易看错。用 <code>jps -l</code> 可以只列出 Java 进程，并显示主类或 jar 的全名：</p>
@@ -171,6 +173,8 @@ $ jstat -gc 6219 1000 5
 <pre><code class="language-bash">[GC (Allocation Failure) [ParNew: 4416K-&gt;512K(4928K), 0.0032106 secs] 4416K-&gt;1988K(15872K), 0.0032697 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]</code></pre>
 
 <p>解读方式是：方括号里的 <code>ParNew</code> 是收集器名字（这里是新生代并行收集器），<code>4416K-&gt;512K(4928K)</code> 是新生代回收前后的使用量和总容量，括号外的 <code>4416K-&gt;1988K(15872K)</code> 是整个堆回收前后的使用量和总容量，后面是本次停顿耗时。<code>Full GC</code> 则表示整堆回收。把这行日志和 <code>jstat</code> 的输出对照着看，基本就能判断到底是新生代回收太频繁，还是对象真的晋升到了老年代。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-5/02-gc-log-anatomy.svg" alt="一行 GC 日志的四个信息点"><figcaption>图 2：一行 GC 日志的四个信息点 —— 触发原因、新生代回收、整堆变化、停顿耗时</figcaption></figure>
 
 <p>怎么读这些数字？经验判断有三条：一是 <code>FGC</code> 持续快速增长而 <code>OU</code> 每次都回不到低位，说明老年代真的被占满了，多半有内存泄漏；二是 <code>YGCT</code> 占 <code>GCT</code> 的比例很高、单次 YGC 耗时越来越长，说明对象晋升得太快或者新生代偏小；三是 <code>GCT</code> 占程序运行时间的比例明显偏高，吞吐量就上不去了。判断「频繁 GC」靠的是间隔采样，而不是单次输出的绝对值。</p>
 
