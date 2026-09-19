@@ -291,7 +291,15 @@ UPDATE account SET money = money + 1 WHERE id = 2;   -- 等待 B 释放 id = 2
 
 <p><strong>死锁</strong>的本质是多个事务互相持有对方需要的锁，形成等待环路。InnoDB 不回避死锁，而是开启了死锁检测：一旦发现环路，就选择“代价较小”的那个事务回滚，把 <code>1213</code> 错误返回给客户端，让另一个事务继续。因此应用层捕获到这个异常后<b>重试整个事务</b>才是正确姿势，而不是把错误直接抛给用户。</p>
 
-<div class="tut-tip"><strong>减少死锁的几条硬规则：</strong>多个事务访问多张表时约定<strong>相同的加锁顺序</strong>；尽量在事务一开始就把需要的资源一次锁定，避免“边走边锁”；缩短事务，绝对不要在事务里做远程调用、发消息或等待用户输入；更新条件尽量落在主键或唯一索引上；读多写少、能接受不可重复读的业务可以把隔离级别降到 READ COMMITTED，因为 InnoDB 在 RC 下不使用间隙锁，死锁概率明显降低。排查时可执行 <code>SHOW ENGINE INNODB STATUS</code> 查看最近一次死锁详情，MySQL 8.0 还能查 <code>performance_schema.data_lock_waits</code>。</div>
+<div class="tut-tip"><strong>减少死锁的几条硬规则：</strong>要点如下，逐条遵守即可大幅降低死锁概率。
+<ul>
+<li>多个事务访问多张表时，约定<strong>相同的加锁顺序</strong>；</li>
+<li>尽量在事务一开始就把需要的资源一次锁定，避免“边走边锁”；</li>
+<li>缩短事务，绝对不要在事务里做远程调用、发消息或等待用户输入；</li>
+<li>更新条件尽量落在主键或唯一索引上；</li>
+<li>读多写少、能接受不可重复读的业务可以把隔离级别降到 READ COMMITTED，因为 InnoDB 在 RC 下不使用间隙锁，死锁概率明显降低。</li>
+</ul>
+排查时可执行 <code>SHOW ENGINE INNODB STATUS</code> 查看最近一次死锁详情，MySQL 8.0 还能查 <code>performance_schema.data_lock_waits</code>。</div>
 
 <h2>小结</h2>
 
