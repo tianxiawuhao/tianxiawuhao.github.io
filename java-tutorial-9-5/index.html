@@ -128,15 +128,15 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>数据库题是 Java 面试里最容易「背了却答不对」的一块：索引、事务、锁、优化、分库分表，几乎每个知识点都能出成场景题，而面试官真正想听的不是名词解释，而是你在具体数据量、具体 SQL 下的判断过程。本章按面试实际追问的顺序，把「索引为什么快 → 怎么判断索引有没有生效 → 隔离级别与锁 → 大表与分库分表 → 场景题怎么答」串成一条线，适合已经会写增删改查、准备面试或要给系统做数据库优化的读者。</p>
+<p>数据库题是 Java 面试里最容易“背了却答不对”的一块：索引、事务、锁、优化、分库分表，几乎每个知识点都能出成场景题。面试官真正想听的不是名词解释，而是你在具体数据量、具体 SQL 下的判断过程。本章按面试实际追问的顺序展开：索引为什么快，怎么判断索引有没有生效，隔离级别与锁怎么配合，大表与分库分表怎么取舍，最后给出一套场景题的作答框架。本章适合已经会写增删改查、准备面试或要给系统做数据库优化的读者。</p>
 
 <h2>一、索引：从 B+ 树到最左前缀</h2>
 
-<p>索引的本质是「用有序结构换查找次数」。InnoDB 的索引底层是 B+ 树：只有叶子节点存数据（或主键值），内部节点只存键，因此一个 16KB 的页能装下几百个键，三到四层就能覆盖千万级数据行，一次等值查询通常只需 3～4 次磁盘 I/O。B+ 树相对 B 树的优势也来自这里：内部节点不存数据，同样高度的树能索引更多行；叶子节点用链表相连，范围查询和 <code>ORDER BY</code> 只需定位起点再顺序扫描；且所有查询都走到叶子，耗时稳定。</p>
+<p>索引的本质是“用有序结构换查找次数”。InnoDB 的索引底层是 B+ 树：只有叶子节点存数据（或主键值），内部节点只存键，因此一个 16KB 的页能装下几百个键，三到四层就能覆盖千万级数据行，一次等值查询通常只需 3～4 次磁盘 I/O。B+ 树相对 B 树的优势也来自这里。内部节点不存数据，同样高度的树能索引更多行；叶子节点用链表相连，范围查询和 <code>ORDER BY</code> 只需定位起点再顺序扫描；且所有查询都走到叶子，耗时稳定。</p>
 
-<p>InnoDB 的主键索引是<strong>聚簇索引</strong>（索引即数据，叶子节点存整行）；二级索引的叶子节点只存索引列和主键值，因此通过二级索引取非索引列时必须<strong>回表</strong>——拿主键值再回聚簇索引查一次。若查询所需列全在索引里，就称为<strong>覆盖索引</strong>，可避免回表。这也解释了面试常问的「为什么建议用自增主键」：自增主键顺序写入，页分裂少；UUID 随机插入会导致频繁页分裂与索引碎片。</p>
+<p>InnoDB 的主键索引是<strong>聚簇索引</strong>，索引即数据，叶子节点存整行。二级索引的叶子节点只存索引列和主键值，因此通过二级索引取非索引列时必须<strong>回表</strong>——拿主键值再回聚簇索引查一次。若查询所需列全在索引里，就称为<strong>覆盖索引</strong>，可避免回表。这也解释了面试中常问的问题：为什么建议用自增主键。自增主键顺序写入，页分裂少；UUID 随机插入会导致频繁页分裂与索引碎片。</p>
 
-<p>联合索引遵循<strong>最左前缀匹配</strong>：MySQL 从左往右依次匹配索引列，遇到范围查询（<code>&gt;</code>、<code>&lt;</code>、<code>between</code>、<code>like</code>）就停止后面的列。例如有索引 <code>(a, b, c, d)</code>，查询 <code>WHERE a = 1 AND b = 2 AND c &gt; 3 AND d = 4</code> 时只有 <code>a、b、c</code> 用得上索引，<code>d</code> 用不上；把索引建成 <code>(a, b, d, c)</code> 则四列都能参与。注意 <code>a、b</code> 之间可以任意换序，优化器会自动调整等值条件顺序，但范围列必须放在最后。</p>
+<p>联合索引遵循<strong>最左前缀匹配</strong>：MySQL 从左往右依次匹配索引列，遇到范围查询（<code>&gt;</code>、<code>&lt;</code>、<code>between</code>、<code>like</code>）就停止匹配后面的列。例如有索引 <code>(a, b, c, d)</code>，查询 <code>WHERE a = 1 AND b = 2 AND c &gt; 3 AND d = 4</code> 时只有 <code>a、b、c</code> 用得上索引，<code>d</code> 用不上；把索引建成 <code>(a, b, d, c)</code>，四列就都能参与。注意 <code>a、b</code> 之间可以任意换序，优化器会自动调整等值条件顺序，但范围列必须放在最后。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-5/01-index-lookup.svg" alt="二级索引查询的回表过程与覆盖索引"><figcaption>图 1：回表与覆盖索引 —— 二级索引叶子只存索引列与主键，取非索引列要回聚簇索引再查一次；所需列全在索引里即可免回表</figcaption></figure>
 
@@ -164,11 +164,11 @@ SELECT * FROM t_order WHERE DATE(created_at) = '2024-01-01';
 
 <h2>二、让索引真正生效：EXPLAIN 与慢查询</h2>
 
-<p>回答「索引优化」类问题时，不要空谈原则，而要给出定位手段。第一步开慢查询日志（<code>slow_query_log = ON</code>、<code>long_query_time = 1</code>），把超过阈值的 SQL 捞出来；第二步对每条慢 SQL 执行 <code>EXPLAIN</code>，重点看四列：<code>type</code>（访问类型，从优到劣 <code>system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>，出现 <code>ALL</code> 基本就是全表扫描）、<code>key</code>（实际使用的索引，为 <code>NULL</code> 说明没走索引）、<code>rows</code>（预估扫描行数，越小越好）、<code>Extra</code>（出现 <code>Using filesort</code>、<code>Using temporary</code> 要警惕，出现 <code>Using index</code> 说明是覆盖索引）。</p>
+<p>回答“索引优化”类问题时，不要空谈原则，而要给出定位手段。第一步开慢查询日志（<code>slow_query_log = ON</code>、<code>long_query_time = 1</code>），把超过阈值的 SQL 捞出来。第二步对每条慢 SQL 执行 <code>EXPLAIN</code>，重点看四列。<code>type</code> 是访问类型，从优到劣为 <code>system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>，出现 <code>ALL</code> 基本可判定为全表扫描；<code>key</code> 是实际使用的索引，为 <code>NULL</code> 说明没走索引；<code>rows</code> 是预估扫描行数，越小越好；<code>Extra</code> 中出现 <code>Using filesort</code>、<code>Using temporary</code> 要警惕，出现 <code>Using index</code> 说明是覆盖索引。</p>
 
-<p>常见「索引失效」场景可以归成四类：一是违反最左前缀；二是对索引列做运算或调用函数（如上面的 <code>DATE(created_at)</code>，应改写成 <code>created_at &gt;= '2024-01-01' AND created_at &lt; '2024-01-02'</code>）；三是隐式类型转换，字符串列用数字查询、或字符集不一致的连表；四是以 <code>%</code> 开头的模糊匹配 <code>LIKE '%jack'</code>，只能用 <code>LIKE 'jack%'</code>。此外，<code>OR</code> 连接的条件中只要有一侧无索引，整条语句就可能退化为全表扫描。</p>
+<p>常见“索引失效”场景可以归成四类。一是违反最左前缀；二是对索引列做运算或调用函数，如上面的 <code>DATE(created_at)</code>，应改写成 <code>created_at &gt;= '2024-01-01' AND created_at &lt; '2024-01-02'</code>；三是隐式类型转换，例如字符串列用数字查询，或连表两边的字符集不一致；四是以 <code>%</code> 开头的模糊匹配 <code>LIKE '%jack'</code>，只能用 <code>LIKE 'jack%'</code>。此外，<code>OR</code> 连接的条件中只要有一侧无索引，整条语句就可能退化为全表扫描。</p>
 
-<p>超大分页是另一个高频场景。<code>LIMIT 1000000, 10</code> 会先取出并丢弃前一百万行，代价极高。可改成<strong>延迟关联</strong>，让子查询只在索引上扫描并返回主键，再用主键回表取这 10 行：</p>
+<p>超大分页是另一个高频场景。<code>LIMIT 1000000, 10</code> 会先取出并丢弃前一百万行，代价极高。可改成<strong>延迟关联</strong>：让子查询只在索引上扫描并返回主键，再用主键回表取这 10 行。</p>
 
 <pre><code class="language-sql">-- 慢：扫描并丢弃前 1000000 行
 SELECT id, user_id, amount FROM t_order
@@ -187,9 +187,9 @@ WHERE status = 1 AND id &gt; 1000000 ORDER BY id LIMIT 10;
 
 <h2>三、事务、隔离级别与锁</h2>
 
-<p>事务的四个特性是原子性、一致性、隔离性、持久性（ACID）。其中「隔离性」是面试重点，因为并发事务会带来三类读异常：<strong>脏读</strong>（读到了别的事务尚未提交、随后被回滚的数据）、<strong>不可重复读</strong>（同一事务内两次读同一行结果不同，因为中间有别的事务提交了 <code>UPDATE</code>）、<strong>幻读</strong>（同一事务内两次范围查询行数不同，因为中间有别的事务提交了 <code>INSERT</code> 或 <code>DELETE</code>）。</p>
+<p>事务的四个特性是原子性、一致性、隔离性、持久性，合称 ACID。其中隔离性是面试重点，因为并发事务会带来三类读异常。<strong>脏读</strong>指读到了别的事务尚未提交、随后被回滚的数据；<strong>不可重复读</strong>指同一事务内两次读同一行结果不同，因为中间有别的事务提交了 <code>UPDATE</code>；<strong>幻读</strong>指同一事务内两次范围查询行数不同，因为中间有别的事务提交了 <code>INSERT</code> 或 <code>DELETE</code>。</p>
 
-<p>SQL 标准定义四个隔离级别，逐级解决问题，注意表中「√」表示该级别仍可能发生：</p>
+<p>SQL 标准定义了四个隔离级别，逐级解决问题，表中列出各级别仍可能发生的异常：</p>
 
 <table>
 <thead><tr><th>隔离级别</th><th>脏读</th><th>不可重复读</th><th>幻读</th></tr></thead>
@@ -201,9 +201,9 @@ WHERE status = 1 AND id &gt; 1000000 ORDER BY id LIMIT 10;
 </tbody>
 </table>
 
-<p>MySQL InnoDB 的默认级别是 <code>REPEATABLE READ</code>，Oracle、SQL Server 默认是 <code>READ COMMITTED</code>。<strong>这里要纠正一个常见说法</strong>：很多资料照搬 SQL 标准，说「RR 无法防幻读」，但在 InnoDB 中并不准确。RR 下快照读（普通 <code>SELECT</code>）靠 MVCC 保证一致性，当前读（<code>SELECT ... FOR UPDATE</code>、<code>UPDATE</code>、<code>DELETE</code>）则靠<strong>临键锁</strong>（Next-Key Lock = 记录锁 + 间隙锁）锁住范围，从而避免幻读。所以准确答法是：SQL 标准中 RR 允许幻读，InnoDB 的 RR 在快照读与当前读下都能基本避免幻读；真正无法保证的是「同一事务内先快照读、再当前读」时可能出现的语义偏差。</p>
+<p>MySQL InnoDB 的默认级别是 <code>REPEATABLE READ</code>，Oracle、SQL Server 默认是 <code>READ COMMITTED</code>。<strong>这里要纠正一个常见说法</strong>：很多资料照搬 SQL 标准，说 RR 无法防幻读，这在 InnoDB 中并不准确。RR 下快照读（普通 <code>SELECT</code>）靠 MVCC 保证一致性，当前读（<code>SELECT ... FOR UPDATE</code>、<code>UPDATE</code>、<code>DELETE</code>）则靠<strong>临键锁</strong>（Next-Key Lock，即记录锁加间隙锁）锁住范围，从而避免幻读。准确的答法是：SQL 标准中 RR 允许幻读，InnoDB 的 RR 在快照读与当前读下都能基本避免幻读；真正无法保证的是同一事务内先快照读、再当前读时可能出现的语义偏差。</p>
 
-<p>锁按粒度分为表锁、行锁、页锁；按模式分为共享锁（S 锁）与排他锁（X 锁），另外还有意向锁（IS/IX，用来快速判断表中是否有行被锁）、记录锁、间隙锁、临键锁、插入意向锁。死锁的产生条件是两个事务以相反顺序持有并申请对方需要的锁，InnoDB 会自动检测并回滚其中代价较小的事务（报 <code>Deadlock found when trying to get lock</code>）。工程上的应对是：按固定顺序访问表和行、缩短事务长度、给更新条件加索引避免锁范围升级为全表扫描。</p>
+<p>锁按粒度分为表锁、行锁、页锁；按模式分为共享锁（S 锁）与排他锁（X 锁）。此外还有意向锁（IS/IX，用来快速判断表中是否有行被锁）、记录锁、间隙锁、临键锁、插入意向锁。死锁的产生条件是两个事务以相反顺序持有并申请对方需要的锁，InnoDB 会自动检测并回滚其中代价较小的事务，报错 <code>Deadlock found when trying to get lock</code>。工程上的应对是：按固定顺序访问表和行，缩短事务长度，给更新条件加索引以避免锁范围升级为全表扫描。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-5/02-isolation-levels.svg" alt="四个隔离级别与三类读异常"><figcaption>图 2：隔离级别对照 —— 逐级解决脏读、不可重复读与幻读；InnoDB 的 RR 用 MVCC 加临键锁把幻读基本堵住</figcaption></figure>
 
@@ -220,20 +220,15 @@ COMMIT;
 
 <h2>四、大表优化与分库分表</h2>
 
-<p>面对「一张表近千万数据，CRUD 变慢怎么办」这类场景题，回答要分层递进，先低成本再高成本：<strong>SQL 与索引层</strong>——先看慢日志、补/改索引、消除回表和全表扫描、避免 <code>SELECT *</code>；<strong>表结构层</strong>——选择合适的数据类型（定长串用 <code>CHAR</code>、密码散列用 <code>CHAR(60)</code> 存 BCrypt）、字段尽量 <code>NOT NULL</code>、适度反范式减少连表；<strong>架构层</strong>——加缓存（Redis）、读写分离、历史数据归档、最后才是分库分表。</p>
+<p>面对“一张表近千万数据，CRUD 变慢怎么办”这类场景题，回答要分层递进，先低成本再高成本。<strong>SQL 与索引层</strong>：先看慢日志，补改索引，消除回表和全表扫描，避免 <code>SELECT *</code>。<strong>表结构层</strong>：选择合适的数据类型，定长字符串用 <code>CHAR</code>、密码哈希用 <code>CHAR(60)</code> 存 BCrypt，字段尽量 <code>NOT NULL</code>，并适度反范式以减少连表。<strong>架构层</strong>：加缓存（Redis）、读写分离、历史数据归档，最后才是分库分表。</p>
 
 <p>分库分表分两个方向。<strong>垂直拆分</strong>是按列或按业务拆：垂直分表把不常用的大字段（<code>text</code>、<code>blob</code>）挪到扩展表，让主表更小、每页能装更多行；垂直分库按业务域拆成订单库、用户库，降低单库压力。<strong>水平拆分</strong>是按行拆：把一张大表按分片键（通常是 <code>user_id</code>）散到多个库或表，如 <code>t_order_0</code>～<code>t_order_7</code>。</p>
 
-<p>但分片是有代价的，面试官往往就在这一步追问：跨库 <code>JOIN</code> 做不了、聚合与排序要改写、<code>AUTO_INCREMENT</code> 主键会冲突（需雪花算法或号段模式）、跨分片查询要广播到所有分片、原本单机的事务变成分布式事务。因此分片键的选择至关重要——要保证高频查询都带上分片键，否则一次查询要扫全部分片。落地时通常借助 ShardingSphere 或 MyCat 这类中间件，由它们完成 SQL 解析、路由、改写与结果归并。若只是读多写少，读写分离（基于 binlog 的主从复制，写主库、读从库）往往比分库分表更划算；但要接受主从延迟导致的「写后立刻读不到」问题，一致性要求高的读仍需走主库。</p>
+<p>但分片是有代价的，面试官往往就在这一步追问：跨库 <code>JOIN</code> 做不了，聚合与排序要改写，<code>AUTO_INCREMENT</code> 主键会冲突（需雪花算法或号段模式），跨分片查询要广播到所有分片，原本单机的事务变成分布式事务。因此分片键的选择至关重要，要保证高频查询都带上分片键，否则一次查询就要扫全部分片。落地时通常借助 ShardingSphere 或 MyCat 这类中间件，由它们完成 SQL 解析、路由、改写与结果归并。若只是读多写少，读写分离（基于 binlog 的主从复制，写主库、读从库）往往比分库分表更划算；但要接受主从延迟导致的“写后立刻读不到”问题，一致性要求高的读仍需走主库。</p>
 
 <h2>五、小结</h2>
 
-<p>把本章压缩成三条主线：索引看「结构 + 前缀 + 回表」——B+ 树保证层数低，最左前缀决定能否命中，覆盖索引避免回表，用 <code>EXPLAIN</code> 的 <code>type/key/rows/Extra</code> 验证而不是靠猜；事务看「隔离级别 + MVCC + 锁」——记住 InnoDB 默认 RR、Oracle 默认 RC，脏读/不可重复读/幻读的成因要能举例，并知道 InnoDB 用临键锁把 RR 的幻读基本堵住；大表与分片看「分层递进 + 分片代价」——先索引、再结构、再缓存与读写分离，最后才分库分表，并把分布式事务、跨片查询、全局唯一 ID 这些代价一并说出来。面试中遇到场景题，按「数据量 → 查询模式 → 瓶颈定位 → 方案与副作用」四步作答，比背结论更容易拿到高分。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-9-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spring 全家桶面试题</span></a>
-      <a class="next-post" href="/java-tutorial-9-6/"><span class="pn-label">下一篇 →</span><span class="pn-title">分布式与微服务面试题</span></a>
-      </nav>
+<p>把本章压缩成三条主线。索引看“结构 + 前缀 + 回表”：B+ 树保证层数低，最左前缀决定能否命中，覆盖索引避免回表，用 <code>EXPLAIN</code> 的 <code>type/key/rows/Extra</code> 验证而不是靠猜。事务看“隔离级别 + MVCC + 锁”：记住 InnoDB 默认 RR、Oracle 默认 RC，脏读、不可重复读、幻读的成因要能举例，并知道 InnoDB 用临键锁把 RR 的幻读基本堵住。大表与分片看“分层递进 + 分片代价”：先索引，再结构，再缓存与读写分离，最后才分库分表，并把分布式事务、跨片查询、全局唯一 ID 这些代价一并说出来。面试中遇到场景题，按“数据量 → 查询模式 → 瓶颈定位 → 方案与副作用”四步作答，比背结论更容易拿到高分。</p>
           </article>
   <!-- Footer -->
   <footer>

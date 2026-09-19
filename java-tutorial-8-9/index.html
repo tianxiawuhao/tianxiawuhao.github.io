@@ -128,17 +128,17 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>数据进不了数仓，后面的大数据组件再强也只是空转。业务数据躺在 MySQL 里、日志散落在几十台机器上、用户行为埋点还在往本地文件写，而 Hive、HDFS、Elasticsearch、Kafka 需要的是持续、稳定、可回溯的数据流。「数据采集与同步」解决的正是这段搬运工的工作：把不同源头、不同形态的数据，按不同的时效要求，可靠地送进下游存储。本章面向已经了解 Hadoop／Hive 基础、准备动手接入生产数据的读者，围绕 Sqoop、DataX、Flume、Canal 四条主路线讲清各自的适用边界、一次可运行的最小配置，以及最容易踩的坑。</p>
+<p>数据进不了数仓，后面的大数据组件再强也只是空转。业务数据留在 MySQL 里、日志散落在几十台机器上、用户行为埋点还在往本地文件写，而 Hive、HDFS、Elasticsearch、Kafka 需要的是持续、稳定、可回溯的数据流。「数据采集与同步」解决的正是这段搬运工的工作：把不同源头、不同形态的数据，按不同的时效要求，可靠地送进下游存储。本章面向已经了解 Hadoop、Hive 基础、准备接入生产数据的读者。围绕 Sqoop、DataX、Flume、Canal 四条主路线，下面讲清各自的适用边界、一份可运行的最小配置，以及最容易踩的坑。</p>
 
 <h2>四条路线：批量、日志、增量各解决什么问题</h2>
 <p>采集工具很多，但按「数据从哪来、要什么时效」一划分，绝大多数场景落在四条路线上。</p>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-9/01-sync-routes.svg" alt="四条数据采集路线选型示意图"><figcaption>图 1：四条采集路线——批量关系库、日志文件、binlog 增量与埋点指标流</figcaption></figure>
 
-<p><strong>批量关系型数据库同步</strong>：把 MySQL、Oracle、PostgreSQL 的表整表或按条件搬运到 HDFS、Hive。代表工具是 Apache Sqoop 与阿里开源的 DataX。它们的共同点是基于 JDBC 读取、支持并发切分、以离线批任务方式运行，区别在于 Sqoop 把任务翻译成 MapReduce 作业（依赖 Hadoop 集群资源），而 DataX 是纯单机多线程框架，以 Reader/Writer 插件模型工作，不需要提交 MR。</p>
+<p><strong>批量关系型数据库同步</strong>：把 MySQL、Oracle、PostgreSQL 的表整表或按条件搬运到 HDFS、Hive。代表工具是 Apache Sqoop 与阿里开源的 DataX。两者都以 JDBC 读取、支持并发切分、以离线批任务方式运行，区别在于任务模型：Sqoop 把任务翻译成 MapReduce 作业，依赖 Hadoop 集群资源；DataX 是纯单机多线程框架，以 Reader/Writer 插件模型工作，不需要提交 MR。</p>
 <p><strong>日志文件采集</strong>：把不断追加的文本日志从应用服务器汇聚到 HDFS 或 Kafka。代表工具是 Flume。它的模型是 Agent，一个 Agent 由 Source（采集端）、Channel（缓冲）和 Sink（写出端）组成，用事务把三者串起来，保证不丢但可能重复，即至少一次（at-least-once）语义。</p>
-<p><strong>增量变更订阅（CDC）</strong>：不想每天全表扫一遍，而是实时捕获 MySQL 的 binlog，把 insert/update/delete 变成一条条消息送进 Kafka。代表工具是 Canal，以及更通用的 Debezium。这类方案时效可以做到秒级甚至亚秒级。</p>
-<p><strong>日志／指标实时管道</strong>：Filebeat、Logstash、Fluentd 等更偏轻量采集与清洗，通常与 Kafka、Elasticsearch 搭配。它们与 Flume 定位重叠，选型时按已有技术栈决定即可，不必同时上两套。</p>
-<p>这里必须纠正一处常见混淆：在 Hadoop 源码里会看到 <code>DataXceiverServer</code>、<code>DataXceiver</code> 这两个类名，它们是 HDFS DataNode 内部处理数据块读写请求的线程，负责接收客户端与其他 DataNode 的读写流，与阿里开源的离线同步工具 DataX 没有任何关系，只是名字相似。看到源码笔记里出现 DataXceiver，不要当成 DataX 的资料来用。</p>
+<p><strong>增量变更订阅（CDC）</strong>：不想每天全表扫一遍，而是实时捕获 MySQL 的 binlog，把 insert/update/delete 变成一条条消息送进 Kafka。代表工具是 Canal，以及更通用的 Debezium。这类方案的时效可以做到秒级甚至亚秒级。</p>
+<p><strong>日志／指标实时管道</strong>：Filebeat、Logstash、Fluentd 等更偏轻量采集与清洗，通常与 Kafka、Elasticsearch 搭配。它们与 Flume 定位重叠，选型时按已有技术栈决定即可，不必同时上两套工具。</p>
+<p>这里必须纠正一处常见混淆：在 Hadoop 源码里会看到 <code>DataXceiverServer</code>、<code>DataXceiver</code> 这两个类名，它们是 HDFS DataNode 内部处理数据块读写请求的线程，负责接收客户端与其他 DataNode 的读写流，与阿里开源的离线同步工具 DataX 没有任何关系，只是名字相似。源码里出现 DataXceiver 时，不能把它当成 DataX 的资料来用。</p>
 
 <h2>批量同步实战：Sqoop 与 DataX</h2>
 <p>Sqoop 的用法是「一条命令一个任务」，最典型的全量导入如下。</p>
@@ -158,7 +158,7 @@ sqoop import --connect "jdbc:mysql://mysql01:3306/shop" \
   --table orders --target-dir /warehouse/ods/orders_incr \
   --incremental append --check-column id --last-value 100000 \
   --fields-terminated-by '\t' --num-mappers 4</code></pre>
-<p>两个参数是新手最容易漏的：<code>--null-string</code>／<code>--null-non-string</code> 把数据库的 NULL 写成 Hive 可识别的 <code>\N</code>，否则导入后整列会变成字符串 "null"；<code>--split-by</code> 在表没有主键、或主键分布严重倾斜时必须显式指定，实在没有合适字段就用 <code>--num-mappers 1</code> 单线程跑，硬用默认切分会报找不到切分列或产生大量空切片。</p>
+<p>两个参数是新手最容易漏的：<code>--null-string</code>／<code>--null-non-string</code> 把数据库的 NULL 写成 Hive 可识别的 <code>\N</code>，否则导入后整列会变成字符串 “null”；<code>--split-by</code> 在表没有主键、或主键分布严重倾斜时必须显式指定，实在没有合适字段就用 <code>--num-mappers 1</code> 单线程跑，硬用默认切分会报找不到切分列或产生大量空切片。</p>
 <p>DataX 的作业是一份 JSON：Reader 读 MySQL，Writer 写 HDFS，中间通过 channel 控制并发，用 speed 做限流，避免把线上库打满。</p>
 <pre><code class="language-json">{
   "job": {
@@ -200,7 +200,7 @@ sqoop import --connect "jdbc:mysql://mysql01:3306/shop" \
     }]
   }
 }</code></pre>
-<p>保存为 <code>orders.json</code> 后执行 <code>python datax.py orders.json</code>。注意 DataX 的 <code>column</code> 顺序必须与 Writer 的 <code>column</code> 顺序严格对应，字段名并不会做自动匹配；<code>channel</code> 调大能提速，但每个 channel 都会在内存中缓存一批数据，JVM 堆要相应调整，盲目调到几十反而会 OOM。相较之下，DataX 不依赖 Hadoop 计算资源、JSON 化配置容易做调度集成，因此在新项目中通常优先于 Sqoop；Apache Sqoop 已于 2021 年进入 Apache Attic 停止维护，老集群仍在使用，新项目建议直接选 DataX 或 Flink CDC。若必须在 Hadoop 3 与高版本 JDK 上运行 Sqoop 1.4.7（最后一个发布版），需要自行打补丁或降级 JDK，这是它被替代的直接原因。</p>
+<p>保存为 <code>orders.json</code> 后执行 <code>python datax.py orders.json</code>。注意 DataX 的 <code>column</code> 顺序必须与 Writer 的 <code>column</code> 顺序严格对应，字段名并不会做自动匹配。<code>channel</code> 调大能提速，但每个 channel 都会在内存中缓存一批数据，JVM 堆要相应调整，盲目调到几十反而会 OOM。DataX 不依赖 Hadoop 计算资源，JSON 化配置也容易做调度集成，因此新项目通常优先于 Sqoop。Apache Sqoop 已于 2021 年进入 Apache Attic 停止维护，老集群仍在使用，新项目建议直接选 DataX 或 Flink CDC。若必须在 Hadoop 3 与高版本 JDK 上运行 Sqoop 1.4.7（最后一个发布版），需要自行打补丁或降级 JDK，这也是它被替代的直接原因。</p>
 
 <h2>日志采集与增量订阅：Flume 与 Canal</h2>
 <p>Flume 的经典配置是 Taildir Source 断点续传地盯住日志目录，Memory Channel 做缓冲，Sink 写到 HDFS 或 Kafka。</p>
@@ -261,15 +261,10 @@ while (running) {
 <li><strong>秒级增量、要保留删除动作</strong>：Canal 或 Debezium，配合 Kafka 与 Flink 做下游计算；纯增量同步用 DataX 的定时全量比对是下策，删掉的行你永远发现不了。</li>
 <li><strong>全量 + 增量并存</strong>：通常先做一次全量快照，再从快照位点接增量；Canal 需要人工确认全量完成时的 binlog 位点，否则会漏掉切换期间的变更。</li>
 </ul>
-<p>还有几个跨工具的共性问题：一是编码，MySQL 侧连接串加上 <code>characterEncoding=utf8</code>，DataX 的 <code>encoding</code>、Sqoop 的 <code>--fields-terminated-by</code> 与建表分隔符必须一致，否则中文乱码；二是时间与时区，连接串里的 <code>serverTimezone</code> 写错会导致 created_at 整体偏移几小时；三是并发不是越大越好，源库的连接数与 IO 是硬上限，白天同步线上库务必限流；四是每个任务都要有可观测指标——行数、位点、延迟、失败重试次数，只靠「任务没报错」判断同步正常，是数据事故最常见的起点。</p>
+<p>还有几个跨工具的共性问题：一是编码，MySQL 侧连接串加上 <code>characterEncoding=utf8</code>；DataX 的 <code>encoding</code>、Sqoop 的 <code>--fields-terminated-by</code> 与建表分隔符必须一致，否则中文乱码；二是时间与时区，连接串里的 <code>serverTimezone</code> 写错会导致 created_at 整体偏移几小时；三是并发不是越大越好，源库的连接数与 IO 是硬上限，白天同步线上库务必限流；四是每个任务都要有可观测指标——行数、位点、延迟、失败重试次数，只靠「任务没报错」判断同步正常，是数据事故最常见的起点。</p>
 
 <h2>小结</h2>
 <p>数据采集与同步的核心是「按源头和时效选路线」：批量关系库选 DataX（老任务 Sqoop 过渡），文件日志选 Flume 或 Filebeat，实时增量选 Canal／Debezium，谁也不该越界去干对方的活。动手时记住三件事：Sqoop 要显式处理 NULL 与切分字段，DataX 要对齐字段顺序并限制 channel，Flume 的 Channel 类型与 positionFile 决定丢不丢、重不重，Canal 的 ack/rollback 决定下游是否需要幂等。把这四类任务的边界、配置项和坑摸清，后面无论是接数仓、做实时大屏还是搭搜索索引，数据这一层的可靠性就都有底了。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-8-8/"><span class="pn-label">← 上一篇</span><span class="pn-title">Elasticsearch 搜索引擎</span></a>
-      <a class="next-post" href="/java-tutorial-8-10/"><span class="pn-label">下一篇 →</span><span class="pn-title">8.10 大数据集群运维</span></a>
-      </nav>
           </article>
   <!-- Footer -->
   <footer>

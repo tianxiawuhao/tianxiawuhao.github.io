@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>并发编程是 Java 面试里区分度最高的一块：它能同时考察你对 JMM 的理解、对 JDK 源码的熟悉度，以及线上排障的实战经验。本文不铺陈所有八股，只挑面试官最爱追问、也最容易答错的四条主线：线程池、CAS 与原子类、AQS 与锁、并发容器。适合已经会写多线程代码、准备投递中高级岗位的读者。</p>
+<p>并发编程是 Java 面试里区分度最高的一块：它能同时考察你对 JMM 的理解、对 JDK 源码的熟悉度，以及线上排障的实战经验。本文不铺陈全部考点，只挑面试官最爱追问、也最容易答错的四条主线：线程池、CAS 与原子类、AQS 与锁、并发容器。适合已经会写多线程代码、准备投递中高级岗位的读者。</p>
 
 <h2>一、线程池：先讲清任务提交的决策链</h2>
 
-<p>很多人的回答停在第 4 个构造参数上，但面试官真正想听的是“提交一个任务后，线程池按什么顺序决策”。准确顺序是：</p>
+<p>不少人只记住构造参数，但面试官真正想听的是“提交一个任务后，线程池按什么顺序决策”。准确顺序是：</p>
 
 <ol>
 <li>若当前工作线程数 &lt; <code>corePoolSize</code>，直接新建核心线程执行任务，<strong>不入队</strong>。</li>
@@ -146,7 +146,7 @@
 
 <p>记住这条链，才能理解两个经典现象：使用 <code>LinkedBlockingQueue</code>（默认容量 <code>Integer.MAX_VALUE</code>）时，队列几乎永远不会满，<code>maximumPoolSize</code> 形同虚设；而使用 <code>SynchronousQueue</code> 时任务不排队，必须立刻找到线程接手，否则就扩容或拒绝。</p>
 
-<p>《阿里巴巴 Java 开发手册》强制要求用 <code>ThreadPoolExecutor</code> 显式构造线程池，原因就是 <code>Executors</code> 的工厂方法把关键参数藏了起来：<code>newFixedThreadPool</code> 与 <code>newSingleThreadExecutor</code> 使用无界队列，请求堆积会导致 OOM；<code>newCachedThreadPool</code> 与 <code>newScheduledThreadPool</code> 的最大线程数是 <code>Integer.MAX_VALUE</code>，可能创建海量线程同样导致 OOM。</p>
+<p>《阿里巴巴 Java 开发手册》强制要求用 <code>ThreadPoolExecutor</code> 显式构造线程池，原因是 <code>Executors</code> 的工厂方法把关键参数藏了起来。其中 <code>newFixedThreadPool</code> 与 <code>newSingleThreadExecutor</code> 使用无界队列，请求堆积会导致 OOM；<code>newCachedThreadPool</code> 与 <code>newScheduledThreadPool</code> 的最大线程数是 <code>Integer.MAX_VALUE</code>，可能创建海量线程，同样导致 OOM。</p>
 
 <pre><code class="language-java">ThreadPoolExecutor executor = new ThreadPoolExecutor(
         4,                                  // corePoolSize
@@ -169,7 +169,7 @@
 
 <p>线程池有五种状态：<code>RUNNING</code>、<code>SHUTDOWN</code>、<code>STOP</code>、<code>TIDYING</code>、<code>TERMINATED</code>。其中 <code>shutdown()</code> 进入 <code>SHUTDOWN</code>，会拒绝新任务但继续处理队列中已排队的任务；<code>shutdownNow()</code> 进入 <code>STOP</code>，不再处理队列任务并向正在执行的线程发起中断。<code>TIDYING</code> 是过渡态，工作线程数为 0 时进入，并回调钩子方法 <code>terminated()</code>，随后变为 <code>TERMINATED</code>。</p>
 
-<p>长度上还有一个高频问题：线程数怎么设？计算密集型任务通常取 CPU 核数 + 1；IO 密集型任务因为线程大量时间在等待，可以按“核数 ×（1 + 平均等待时间 / 平均计算时间）”估算。给出公式比报一个拍脑袋的数字更让面试官认可。</p>
+<p>还有一个高频问题是线程数怎么设：计算密集型任务通常取 CPU 核数 + 1；IO 密集型任务因为线程大量时间在等待，可以按“核数 ×（1 + 平均等待时间 / 平均计算时间）”估算。给出公式比只报一个凭经验的数字更容易得到认可。</p>
 
 <h2>二、CAS 与原子类：无锁并不等于没有开销</h2>
 
@@ -223,13 +223,13 @@ if (lock.tryLock(200, TimeUnit.MILLISECONDS)) {
     // 获取锁失败，走降级逻辑，而不是无限等待
 }</code></pre>
 
-<p>关于 <code>synchronized</code> 的锁升级，标准说法是无锁 → 偏向锁 → 轻量级锁（CAS 自旋）→ 重量级锁（互斥量）。这里要补一个版本差异：偏向锁在 JDK 15 中已被默认禁用（JEP 374），JDK 18 起相关实现被移除，所以面试时最好说明“偏向锁是 JDK 15 之前的历史优化”。另外要注意锁对象的选择——对 <code>Integer</code>、<code>String</code> 字面量加锁会因常量池/缓存复用而与他人共享同一把锁，应该使用专门的 <code>private final Object lock = new Object()</code>。</p>
+<p>关于 <code>synchronized</code> 的锁升级，标准说法是无锁 → 偏向锁 → 轻量级锁（CAS 自旋）→ 重量级锁（互斥量）。这里要补一个版本差异：偏向锁在 JDK 15 中已被默认禁用（JEP 374），JDK 18 起相关实现被移除，所以面试时最好说明“偏向锁是 JDK 15 之前的历史优化”。另外要注意锁对象的选择——对 <code>Integer</code>、<code>String</code> 字面量加锁会因常量池或缓存复用而与他人共享同一把锁，应该使用专门的 <code>private final Object lock = new Object()</code>。</p>
 
 <h2>四、并发容器与实战选型</h2>
 
-<p><code>ConcurrentHashMap</code> 在 JDK 8 中放弃了 JDK 7 的分段锁 <code>Segment</code>，改为“CAS + synchronized 锁单个桶头节点”的数组加链表/红黑树结构，锁粒度细到桶级别，并发度不再由构造参数写死。几个常被追问的点：<code>size()</code> 通过 <code>baseCount</code> 与 <code>CounterCell</code> 数组累加得到，是弱一致值；<code>key</code> 和 <code>value</code> 都不允许为 <code>null</code>；扩容时多线程可以协同迁移，读取线程遇到迁移中的桶会通过 <code>ForwardingNode</code> 转发到新表。</p>
+<p><code>ConcurrentHashMap</code> 在 JDK 8 中放弃了 JDK 7 的分段锁 <code>Segment</code>，改为“CAS + synchronized 锁单个桶头节点”的数组加链表或红黑树结构，锁粒度细到桶级别，并发度不再由构造参数写死。几个常被追问的点：<code>size()</code> 通过 <code>baseCount</code> 与 <code>CounterCell</code> 数组累加得到，是弱一致值；<code>key</code> 和 <code>value</code> 都不允许为 <code>null</code>；扩容时多线程可以协同迁移，读取线程遇到迁移中的桶会通过 <code>ForwardingNode</code> 转发到新表。</p>
 
-<p>与 <code>Collections.synchronizedMap</code> 的区别在于锁的粒度：后者对整个 Map 加一把互斥锁，任何操作都串行；前者只锁单个桶。因此高并发读写场景应优先选 <code>ConcurrentHashMap</code>，而需要“复合操作原子性”时（比如“不存在才放入”），要用它提供的 <code>putIfAbsent</code>、<code>computeIfAbsent</code> 等原子方法，而不是自己写“先 get 再 put”。</p>
+<p>与 <code>Collections.synchronizedMap</code> 的区别在于锁的粒度：后者对整个 Map 加一把互斥锁，任何操作都串行；前者只锁单个桶。因此高并发读写场景应优先选 <code>ConcurrentHashMap</code>，而需要复合操作原子性时（比如“不存在才放入”），要用它提供的 <code>putIfAbsent</code>、<code>computeIfAbsent</code> 等原子方法，而不是自己写“先 get 再 put”。</p>
 
 <p><code>ThreadLocal</code> 的本质是让每个线程持有独立副本。内存泄漏的根源在于 <code>ThreadLocalMap</code> 的 key 是 <code>ThreadLocal</code> 的弱引用而 value 是强引用：外部强引用一旦消失，key 会被回收成 <code>null</code>，value 却仍被 <code>Thread</code> 强引用，在线程池这种长生命周期线程中就会累积。虽然 <code>set</code>/<code>get</code>/<code>remove</code> 会顺带清理 key 为 <code>null</code> 的 Entry，但最稳妥的做法仍是“用完即 <code>remove()</code>”，并且要用 <code>try/finally</code> 保证一定会执行——线程池里残留的 value 不只是内存问题，更会造成串号一类的业务错误。</p>
 
@@ -244,11 +244,11 @@ public void handle(Request req) {
     }
 }</code></pre>
 
-<p>选型口诀可以这样记：单变量计数用原子类，高并发计数用 <code>LongAdder</code>；键值缓存用 <code>ConcurrentHashMap</code>；读多写少的列表用 <code>CopyOnWriteArrayList</code>；生产者消费者用 <code>BlockingQueue</code>；需要超时、可中断、多条件队列用 <code>ReentrantLock</code> + <code>Condition</code>，其余情况优先 <code>synchronized</code> 让 JVM 去优化。</p>
+<p>选型思路可以这样记：单变量计数用原子类，高并发计数用 <code>LongAdder</code>；键值缓存用 <code>ConcurrentHashMap</code>；读多写少的列表用 <code>CopyOnWriteArrayList</code>；生产者消费者用 <code>BlockingQueue</code>；需要超时、可中断、多条件队列用 <code>ReentrantLock</code> + <code>Condition</code>；其余情况优先 <code>synchronized</code>，让 JVM 去优化。</p>
 
 <h2>小结</h2>
 
-<p>回答并发面试题的关键不是背 API，而是讲清“为什么这么设计”。线程池要能画出任务提交的四步决策链，并说出无界队列的风险；CAS 要能同时讲出 ABA、自旋开销、单变量限制三个缺点；AQS 要抓住 <code>state</code> 与同步队列这两个核心，并说清公平与非公平的差异；并发容器要落到锁粒度和弱一致性语义上。最后补一句版本意识——偏向锁已于 JDK 15 默认禁用、<code>ConcurrentHashMap</code> 的实现在 JDK 8 发生了结构性变化——会让你的回答明显区别于只会背题的候选人。</p>
+<p>回答并发面试题的关键不是背 API，而是讲清“为什么这么设计”。线程池要能画出任务提交的四步决策链，并说出无界队列的风险。CAS 要能同时讲出 ABA、自旋开销、单变量限制三个缺点；AQS 要抓住 <code>state</code> 与同步队列这两个核心，说清公平与非公平的差异。并发容器则要落到锁粒度和弱一致性语义上。最后补一句版本意识——偏向锁已于 JDK 15 默认禁用、<code>ConcurrentHashMap</code> 的实现在 JDK 8 发生了结构性变化——会让你的回答明显区别于只会背题的候选人。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-9-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">9.1 Java 基础面试题精讲</span></a>
