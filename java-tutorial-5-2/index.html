@@ -130,11 +130,11 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>写业务代码时，占篇幅的往往不是业务逻辑，而是判空、拼接、类型转换、属性拷贝这些重复劳动。一个 Service 里塞进十几个 <code>if (str != null &amp;&amp; !"".equals(str.trim()))</code>，代码就变得又长又难读。工具类解决的正是这个问题：把高频、易错的通用操作收敛成一行调用。</p>
 
-<p>本章梳理 Java 项目里最常用的几类工具，包括 Apache Commons Lang、Commons Collections、Commons BeanUtils、Spring 的 BeanUtils 与 DigestUtils，以及 JDK 自带的 <code>Objects</code>。本章适合已能写基本分支循环、但还在手写判空和 get/set 拷贝的读者。</p>
+<p>本章梳理 Java 项目里最常用的几类工具。既包括第三方库中的 Apache Commons Lang、Commons Collections、Commons BeanUtils，也包括 Spring 的 BeanUtils 与 DigestUtils，还有 JDK 自带的 <code>Objects</code>。本章适合已能写基本分支循环、但还在手写判空和 get/set 拷贝的读者。</p>
 
 <h2>一、StringUtils：判断空字符串的正确姿势</h2>
 
-<p>Commons Lang3 的 <code>StringUtils</code> 提供了比手写更符合业务语义的方法。<code>isEmpty</code> 在长度为 0 或为 null 时返回 true，<strong>不做 trim</strong>；<code>isBlank</code> 在 null、空串、只含空白字符时都返回 true，等价于先 trim 再判空。业务里更常用 <code>defaultIfBlank(str, "默认值")</code>，为空时给默认值，比三目运算清晰；此外还有 <code>capitalize</code>、<code>join(数组, 分隔符)</code>、<code>split</code>、<code>trimToNull</code> 等。</p>
+<p>Commons Lang3 的 <code>StringUtils</code> 提供了比手写更符合业务语义的方法。<code>isEmpty</code> 在长度为 0 或为 null 时返回 true，<strong>不做 trim</strong>；<code>isBlank</code> 在 null、空串、只含空白字符时都返回 true，等价于先 trim 再判空。业务里更常用 <code>defaultIfBlank(str, "默认值")</code>，为空时给默认值，比三目运算清晰。此外还有 <code>capitalize</code>、<code>join(数组, 分隔符)</code>、<code>split</code>、<code>trimToNull</code> 等。</p>
 
 <p>注意 Spring 也有一份 <code>org.springframework.util.StringUtils</code>，它没有 <code>isBlank</code>，判断依据是 <code>hasText</code>（非空白）与 <code>hasLength</code>（长度大于 0）。两个同名类常被同时引入，务必看清 import 来源，否则会遇到「方法存在却编译不通过」的困惑。</p>
 
@@ -157,7 +157,7 @@ public class StringDemo {
 
 <h2>二、集合、数组与日期</h2>
 
-<p>集合工具最常用 <code>org.apache.commons.collections4.CollectionUtils</code>（Commons Collections 3 的包名是 <code>org.apache.commons.collections</code>，包路径不同，别混用）。它解决 JDK 集合 API 的两处不顺手。<code>isEmpty</code> 一次处理 null 与空集合；<code>select</code> 按条件筛选并返回新集合，原集合不受影响；<code>transform</code> 对每个元素做转换，类似 Stream 的 <code>map</code>。<code>emptyIfNull(list)</code> 则把 null 换成空集合，避免调用方到处判空。</p>
+<p>集合工具最常用 <code>org.apache.commons.collections4.CollectionUtils</code>（Commons Collections 3 的包名是 <code>org.apache.commons.collections</code>，包路径不同，别混用）。它解决了 JDK 集合 API 的两处不顺手：<code>isEmpty</code> 一次处理 null 与空集合；<code>select</code> 按条件筛选并返回新集合，原集合不受影响；<code>transform</code> 对每个元素做转换，类似 Stream 的 <code>map</code>。<code>emptyIfNull(list)</code> 则把 null 换成空集合，避免调用方到处判空。</p>
 
 <p>数组用 <code>ArrayUtils</code> 的 <code>contains</code>、<code>add</code>、<code>subarray</code>；文件与流用 <code>FileUtils.deleteQuietly</code>、<code>forceMkdir</code>、<code>readFileToString</code> 与 <code>IOUtils.copy</code>。不过 Java 7 之后有 try-with-resources，新代码优先用它管理流。</p>
 
@@ -185,7 +185,7 @@ public class CollectionDemo {
 
 <h2>三、BeanUtils：属性拷贝与它的两个坑</h2>
 
-<p>实体类（Entity/PO）与展示对象（VO/DTO）字段高度重合，逐个 get/set 既啰嗦又容易漏字段。<code>BeanUtils.copyProperties</code> 利用反射与自省按属性名自动拷贝，但有两个同名方法的参数顺序完全相反：Commons 的 <code>copyProperties(目标对象, 源对象)</code> 目标在前；Spring 的 <code>copyProperties(源对象, 目标对象)</code> 源在前。写反了不报错，只会静默地把字段拷成 null，排查非常费时。</p>
+<p>实体类（Entity/PO）与展示对象（VO/DTO）字段高度重合，逐个 get/set 既啰嗦又容易漏字段。<code>BeanUtils.copyProperties</code> 利用反射与自省按属性名自动拷贝。但有两个同名方法的参数顺序完全相反：Commons 的 <code>copyProperties(目标对象, 源对象)</code> 目标在前，Spring 的 <code>copyProperties(源对象, 目标对象)</code> 源在前。写反了不报错，只会静默地把字段拷成 null，排查非常费时。</p>
 
 <p>另外两个坑：它<strong>只拷贝同名同类型的属性</strong>，字段名不一致时不会自动映射，需要手动赋值或改用 MapStruct；反射拷贝在批量循环中性能不如直接赋值。若两个类结构差距很大，也可用 JSON 中转（<code>JSON.parseObject(json, UserVO.class)</code>），只要求属性名一致、不要求类型继承关系，代价是多一次序列化开销。</p>
 

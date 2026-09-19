@@ -128,13 +128,13 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>写业务代码时，大部分时间都花在<code>new</code>对象上：<code>new ArrayList&lt;&gt;()</code>、<code>new HashMap&lt;&gt;()</code>、<code>new User()</code>。可一旦对象的构造过程变复杂——要读配置、要连数据库、要保证全局只有一个、要按固定顺序装配十几个字段——把<code>new</code>散落在业务代码里就会变成灾难：改一处构造逻辑要翻遍全项目，测试时又没法替换实现。GoF 的 23 种设计模式中，专门解决“对象从哪来、怎么造”的那一类叫<strong>创建型模式</strong>，共五种：单例、工厂方法、抽象工厂、建造者、原型。本文面向已经会写 Java 类与接口、但还没系统接触设计模式的读者，用最小可运行示例讲清它们的意图、写法与常见坑。读完你应该能判断“这段代码该不该上模式”。</p>
+<p>写业务代码时，大部分时间都花在 <code>new</code> 对象上：<code>new ArrayList&lt;&gt;()</code>、<code>new HashMap&lt;&gt;()</code>、<code>new User()</code>。可一旦对象的构造过程变复杂——要读配置、要连数据库、要保证全局只有一个、要按固定顺序装配十几个字段——把 <code>new</code> 散落在业务代码里就会变成灾难：改一处构造逻辑要翻遍全项目，测试时又没法替换实现。GoF 的 23 种设计模式中，专门解决“对象从哪来、怎么造”的那一类叫<strong>创建型模式</strong>，共五种：单例、工厂方法、抽象工厂、建造者、原型。本章面向已经会写 Java 类与接口、但还没系统接触设计模式的读者，用最小可运行示例讲清它们的意图、写法与常见坑。读完你应该能判断“这段代码该不该上模式”。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-4/01-creation-selection.svg" alt="单例、工厂、建造者、原型四种创建型模式的意图、适用场景与代价对照"><figcaption>图 1：创建型模式选型——数量、解耦、参数、拷贝</figcaption></figure>
 
-<h2>单例模式：保证一个类只有一个实例</h2>
-<p>单例的意图是“保证一个类仅有一个实例，并提供一个访问它的全局访问点”，典型场景是配置中心、连接池、缓存、序列号生成器。实现只有三个要素：<strong>构造方法私有化</strong>（外部无法<code>new</code>）、<strong>类内部自己持有唯一实例</strong>（用<code>private static</code>字段）、<strong>暴露一个静态方法返回该实例</strong>。</p>
-<p>写法上有一条演进路线，值得按顺序理解：饿汉式在类加载时就创建，简单且线程安全；懒汉式延迟创建，但"先判断再创建"不是原子操作，多线程下会造出两个对象；给<code>getInstance()</code>整个方法加<code>synchronized</code>虽然安全，却让每次读取都要抢锁。双重检查锁定（DCL）把锁缩小到创建那一刻，但<strong>实例字段必须用<code>volatile</code>修饰</strong>——否则指令重排可能让另一个线程拿到“引用已赋值、构造却还没走完”的半成品对象，这一点在 Java 5 修正内存模型之后才真正成立。生产代码里更推荐下面两种免锁写法。</p>
+<h2>一、单例模式：保证一个类只有一个实例</h2>
+<p>单例的意图是“保证一个类仅有一个实例，并提供一个访问它的全局访问点”，典型场景是配置中心、连接池、缓存、序列号生成器。实现只有三个要素：<strong>构造方法私有化</strong>（外部无法 <code>new</code>）、<strong>类内部自己持有唯一实例</strong>（用 <code>private static</code> 字段）、<strong>暴露一个静态方法返回该实例</strong>。</p>
+<p>写法上有一条演进路线，值得按顺序理解。饿汉式在类加载时就创建，简单且线程安全。懒汉式延迟创建，但“先判断再创建”不是原子操作，多线程下会造出两个对象；给 <code>getInstance()</code> 整个方法加 <code>synchronized</code> 虽然安全，却让每次读取都要抢锁。双重检查锁定（DCL）把锁缩小到创建那一刻，但<strong>实例字段必须用 <code>volatile</code> 修饰</strong>——否则指令重排可能让另一个线程拿到“引用已赋值、构造却还没走完”的半成品对象。这一点在 Java 5 修正内存模型之后才真正成立。生产代码里更推荐下面两种免锁写法。</p>
 <pre><code class="language-java">// 写法一：静态内部类（延迟加载 + 由 JVM 保证线程安全）
 public final class ConfigHolder {
     private ConfigHolder() {}
@@ -156,11 +156,11 @@ public enum ConfigEnum {
         return System.getProperty(key);
     }
 }</code></pre>
-<p>常见坑有三个：反射可以强行调用私有构造方法，需要在构造方法里加“已初始化就抛异常”的守卫。实现<code>Serializable</code>后反序列化会生成新对象，必须补一个<code>readResolve()</code>返回<code>INSTANCE</code>（枚举天然免疫）。分布式或多类加载器环境下，“单例”只在单个 JVM/类加载器内成立，跨进程要靠外部存储。另外不要把所有工具类都做成单例，无状态的方法用静态方法即可。</p>
+<p>常见坑有三个：反射可以强行调用私有构造方法，需要在构造方法里加“已初始化就抛异常”的守卫；实现 <code>Serializable</code> 后反序列化会生成新对象，必须补一个 <code>readResolve()</code> 返回 <code>INSTANCE</code>（枚举天然免疫）；分布式或多类加载器环境下，“单例”只在单个 JVM/类加载器内成立，跨进程要靠外部存储。另外不要把所有工具类都做成单例，无状态的方法用静态方法即可。</p>
 
-<h2>工厂模式家族：把创建逻辑从调用方剥离</h2>
+<h2>二、工厂模式家族：把创建逻辑从调用方剥离</h2>
 <p>工厂模式的核心是“创建对象时不向客户端暴露创建逻辑，而是通过一个共同的接口指向新对象”。它有三种常见形态，抽象程度依次升高：</p>
-<p><strong>简单工厂</strong>（也叫静态工厂方法）用一个具体工厂类加<code>if/switch</code>决定造哪个产品，调用方只传类型标识；它不是 GoF 的独立模式，通常被看作工厂方法的一种特例。<strong>工厂方法</strong>把每个产品的创建延迟到各自的工厂子类，新增产品只需新增一对类，符合开闭原则。<strong>抽象工厂</strong>面向“产品族”：一个工厂接口负责创建一系列相关对象（比如同一套皮肤下的按钮和文本框），保证客户端始终只使用同一族产品，但新增一种产品就要改动所有工厂实现。Java 标准库里的<code>Executors.newFixedThreadPool()</code>、<code>Calendar.getInstance()</code>、<code>NumberFormat.getInstance()</code>都属于工厂方法的实际应用。</p>
+<p><strong>简单工厂</strong>（也叫静态工厂方法）用一个具体工厂类加 <code>if/switch</code> 决定造哪个产品，调用方只传类型标识；它不是 GoF 的独立模式，通常被看作工厂方法的一种特例。<strong>工厂方法</strong>把每个产品的创建延迟到各自的工厂子类，新增产品只需新增一对类，符合开闭原则。<strong>抽象工厂</strong>面向“产品族”：一个工厂接口负责创建一系列相关对象（比如同一套皮肤下的按钮和文本框），保证客户端始终只使用同一族产品，但新增一种产品就要改动所有工厂实现。Java 标准库里的 <code>Executors.newFixedThreadPool()</code>、<code>Calendar.getInstance()</code>、<code>NumberFormat.getInstance()</code> 都属于工厂方法的实际应用。</p>
 <pre><code class="language-java">public interface Logger {
     void log(String message);
 }
@@ -194,10 +194,10 @@ public final class LoggerFactory {
         throw new IllegalArgumentException("不支持的日志类型: " + type);
     }
 }</code></pre>
-<p>坑在于不要把工厂做成"万能上帝类"：产品种类少、创建逻辑只有一行<code>new</code>时，直接<code>new</code>或写一个静态工厂方法就够了，硬套模式只会让类数量成倍增加。另外简单工厂里的字符串标识最好用枚举替代，避免拼写错误在运行期才暴露。</p>
+<p>坑在于不要把工厂做成“万能上帝类”：产品种类少、创建逻辑只有一行 <code>new</code> 时，直接 <code>new</code> 或写一个静态工厂方法就够了，硬套模式只会让类数量成倍增加。另外简单工厂里的字符串标识最好用枚举替代，避免拼写错误在运行期才暴露。</p>
 
-<h2>建造者模式：分步装配复杂对象</h2>
-<p>当一个对象的构造参数很多、其中一部分可选，或者各个部件必须按固定顺序组装时，构造函数会退化成“一长串参数列表”，调用方根本记不住第 4 个参数是<code>true</code>还是<code>false</code>。建造者模式把"构建过程"与"最终表示"分离：建造者负责一步步提供部件，导演（可选）负责决定装配顺序，最后<code>build()</code>产出完整对象。它的关键差别在于——工厂关心"创建哪一个产品"，建造者关心"怎样一步步拼装这个产品"。</p>
+<h2>三、建造者模式：分步装配复杂对象</h2>
+<p>当一个对象的构造参数很多、其中一部分可选，或者各个部件必须按固定顺序组装时，构造函数会退化成“一长串参数列表”，调用方根本记不住第 4 个参数是 <code>true</code> 还是 <code>false</code>。建造者模式把“构建过程”与“最终表示”分离：建造者负责一步步提供部件，导演（可选）负责决定装配顺序，最后 <code>build()</code> 产出完整对象。它的关键差别在于——工厂关心“创建哪一个产品”，建造者关心“怎样一步步拼装这个产品”。</p>
 <pre><code class="language-java">public final class HttpRequest {
     private final String url;
     private final String method;
@@ -239,10 +239,10 @@ public final class LoggerFactory {
         System.out.println(request.url + " " + request.method + " " + request.timeoutMs);
     }
 }</code></pre>
-<p>链式调用返回<code>this</code>，让代码接近自然语言，也不必记住参数顺序。<code>StringBuilder</code>是常被引用的例子，它通过<code>append()</code>逐步累积再<code>toString()</code>，思想一致，只是产物是字符串而非领域对象。坑有两处：一是<code>build()</code>里必须做参数校验，否则非法状态会被带进对象；二是当对象只有两三个字段时，建造者带来的 Builder 内部类纯属噪音，直接用构造方法或静态工厂更清晰。Lombok 的<code>@Builder</code>能自动生成这套代码，但它会顺带把构造方法私有化，需要配合<code>@AllArgsConstructor</code>等一起考虑。</p>
+<p>链式调用返回 <code>this</code>，让代码接近自然语言，也不必记住参数顺序。<code>StringBuilder</code> 是常被引用的例子，它通过 <code>append()</code> 逐步累积再 <code>toString()</code>，思想一致，只是产物是字符串而非领域对象。坑有两处：一是 <code>build()</code> 里必须做参数校验，否则非法状态会被带进对象；二是当对象只有两三个字段时，建造者带来的 Builder 内部类纯属噪音，直接用构造方法或静态工厂更清晰。Lombok 的 <code>@Builder</code> 能自动生成这套代码，但它会顺带把构造方法私有化，需要配合 <code>@AllArgsConstructor</code> 等一起考虑。</p>
 
-<h2>原型模式：用拷贝代替重复创建</h2>
-<p>原型模式是“用原型实例指定创建对象的种类，并通过拷贝这些原型创建新对象”。当对象创建代价高昂（一次高成本查询、复杂计算）或需要大量相似对象时，先准备好原型再克隆，比每次重新<code>new</code>并赋同样的值更快、也更省代码。Java 的实现方式是实现<code>Cloneable</code>接口并重写<code>Object.clone()</code>。</p>
+<h2>四、原型模式：用拷贝代替重复创建</h2>
+<p>原型模式是“用原型实例指定创建对象的种类，并通过拷贝这些原型创建新对象”。当对象创建代价高昂（一次高成本查询、复杂计算）或需要大量相似对象时，先准备好原型再克隆，比每次重新 <code>new</code> 并赋同样的值更快、也更省代码。Java 的实现方式是实现 <code>Cloneable</code> 接口并重写 <code>Object.clone()</code>。</p>
 <pre><code class="language-java">import java.util.ArrayList;
 import java.util.List;
 
@@ -274,11 +274,12 @@ public class Report implements Cloneable {
         System.out.println(prototype.rows.size());      // 输出 1
     }
 }</code></pre>
-<p>坑集中在“拷贝深度”上。<code>super.clone()</code>是浅拷贝，只复制字段的值，引用类型字段仍指向同一个对象。忘记手动复制，就会让“副本”的修改串到原型上，这类 Bug 极难排查，集合与数组最容易中招（数组的<code>clone()</code>同样是浅拷贝元素引用）。此外有两个语义陷阱：<code>clone()</code>不调用构造方法，跳过构造就意味着绕过校验逻辑，<code>final</code>字段也无法被重新赋值，所以不可变类、含不变式校验的类不适合走这条路；<code>Object.clone()</code>是<code>protected</code>的，不重写为<code>public</code>就无法跨包调用。实践中更推荐“拷贝构造方法”（<code>new Report(other)</code>）或静态工厂<code>Report.copyOf(other)</code>，语义明确、不受<code>Cloneable</code>束缚；需要真正深拷贝时才考虑序列化或 JSON 往返。</p>
+<p>坑集中在“拷贝深度”上。<code>super.clone()</code> 是浅拷贝，只复制字段的值，引用类型字段仍指向同一个对象。忘记手动复制，就会让“副本”的修改串到原型上，这类 Bug 极难排查。集合与数组最容易中招（数组的 <code>clone()</code> 同样是浅拷贝元素引用）。此外有两个语义陷阱：<code>clone()</code> 不调用构造方法，跳过构造就意味着绕过校验逻辑，<code>final</code> 字段也无法被重新赋值，所以不可变类、含不变式校验的类不适合走这条路；<code>Object.clone()</code> 是 <code>protected</code> 的，不重写为 <code>public</code> 就无法跨包调用。实践中更推荐“拷贝构造方法”（<code>new Report(other)</code>）或静态工厂 <code>Report.copyOf(other)</code>，语义明确、不受 <code>Cloneable</code> 束缚；需要真正深拷贝时才考虑序列化或 JSON 往返。</p>
 
-<h2>选型建议与常见坑</h2>
-<p>选型可以按问题倒推。要控制实例数量，用单例；要把“造什么”和使用者解耦，用工厂；要解决“一堆可选参数 + 固定装配顺序”，用建造者；创建代价高且需要大量相似副本，用原型。五个模式并非互斥，框架代码中经常组合出现，例如工厂内部返回单例、建造者的产物由工厂创建。几条通用经验。不要为了模式而模式，<strong>先能读懂、再谈解耦</strong>；模式解决的是变化点，如果一段逻辑永远不会变，抽象就是纯粹的负担。所有创建型模式都会增加类的数量，因此必须在文档里写清“为什么需要”，否则后来者只会觉得代码绕。</p>
-<p>小结：创建型模式回答的是“对象怎么来”。单例用私有构造加静态访问点守住唯一性，推荐静态内部类或枚举写法；工厂把创建逻辑收拢到一处，简单工厂够用时不必上抽象工厂。建造者用链式调用收拾臃肿的构造函数，代价是多一个内部类；原型用拷贝换取性能，但必须想清楚拷贝深度、构造绕过与<code>Cloneable</code>的语义限制。把这四个判断标准记住，再回头看框架源码，你会发现大多数"看不懂的类结构"都能对号入座。</p>
+<h2>五、选型建议与常见坑</h2>
+<p>选型可以按问题倒推。要控制实例数量，用单例；要把“造什么”和使用者解耦，用工厂；要解决“一堆可选参数 + 固定装配顺序”，用建造者；创建代价高且需要大量相似副本，用原型。五个模式并非互斥，框架代码中经常组合出现，例如工厂内部返回单例、建造者的产物由工厂创建。</p>
+<p>几条通用经验。不要为了模式而模式，<strong>先能读懂、再谈解耦</strong>；模式解决的是变化点，如果一段逻辑永远不会变，抽象就是纯粹的负担。所有创建型模式都会增加类的数量，因此必须在文档里写清“为什么需要”，否则后来者只会觉得代码绕。</p>
+<p>小结：创建型模式回答的是“对象怎么来”。单例用私有构造加静态访问点守住唯一性，推荐静态内部类或枚举写法；工厂把创建逻辑收拢到一处，简单工厂够用时不必上抽象工厂。建造者用链式调用收拾臃肿的构造函数，代价是多一个内部类；原型用拷贝换取性能，但必须想清楚拷贝深度、构造绕过与 <code>Cloneable</code> 的语义限制。把这四个判断标准记住，再回头看框架源码，你会发现大多数“看不懂的类结构”都能对号入座。</p>
           </article>
   <!-- Footer -->
   <footer>
