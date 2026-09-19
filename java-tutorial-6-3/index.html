@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>类加载机制 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>类加载机制</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，8 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>你写下的 <code>.java</code> 文件编译后只是磁盘上的 <code>.class</code> 二进制文件，它是怎么变成方法区里的运行时结构、变成能被 <code>new</code> 的 <code>Class</code> 对象的？本章讲清三件事：类加载的完整生命周期、双亲委派模型解决的问题、以及如何用自定义类加载器实现热部署。适合想弄明白 <code>ClassNotFoundException</code>、<code>NoClassDefFoundError</code> 背后机制的读者。</p>
+
+<h2>一、类加载的完整生命周期</h2>
+
+<p>Java 与 C/C++ 最大的区别之一是：编译期只做语法与符号层面的检查，真正的链接工作被推迟到运行期。JVM 需要在运行时把外部 <code>.class</code> 文件读进来，经过一系列处理转化为内存中的数据结构，这条链路就叫类加载过程。</p>
+
+<p>从类被加载进内存到被卸载出内存，一个类的生命周期包括五个阶段：<strong>加载、链接、初始化、使用、卸载</strong>。其中链接又细分为<strong>验证、准备、解析</strong>三个子阶段。加载、验证、准备、解析、初始化这五步通常按顺序<em>开始</em>，但解析阶段为了支持动态绑定（多态），可能在初始化之后才发生。</p>
+
+<p>各阶段做的事可以这样记：</p>
+
+<ul>
+<li><strong>加载</strong>：通过类的全限定名获取二进制字节流；把字节流中的静态存储结构转化为方法区的运行时数据结构；在内存中生成一个代表该类的 <code>java.lang.Class</code> 对象，作为方法区数据的访问入口。字节流来源不限于文件，也可以是网络、JAR、动态代理生成，这一点正是自定义加载器的入口。</li>
+<li><strong>验证</strong>：文件格式、元数据、字节码、符号引用四项校验，确保字节流不危害虚拟机。</li>
+<li><strong>准备</strong>：为静态字段在方法区分配内存并设 <strong>零值</strong>。<code>static int a = 10;</code> 在准备阶段后 <code>a</code> 是 <code>0</code>，赋成 10 是初始化阶段的事；只有 <code>static final</code> 常量会在准备阶段直接赋为指定值。</li>
+<li><strong>解析</strong>：把常量池中的符号引用替换为直接引用（指针、相对偏移量或句柄）。</li>
+<li><strong>初始化</strong>：执行编译器生成的类构造器 <code>&lt;clinit&gt;()</code> 方法。</li>
+</ul>
+
+<p>初始化阶段是唯一被《Java 虚拟机规范》严格规定「何时必须发生」的阶段，主要触发时机包括：使用 <code>new</code> 实例化对象、读写静态字段、调用静态方法、反射调用、初始化子类时必须先初始化其父类，以及 JDK 7 之后 <code>java.lang.invoke.MethodHandle</code> 解析结果为 <code>REF_getStatic</code> / <code>REF_putStatic</code> / <code>REF_invokeStatic</code> 且对应类未初始化时。此外，虚拟机启动时指定的主类（含 <code>main</code> 方法的类）必须先初始化——注意是「指定的主类」，不是随便哪个类。</p>
+
+<p>关于 <code>&lt;clinit&gt;()</code>，有四个容易考的细节：</p>
+
+<ol>
+<li>它由编译器收集<strong>静态字段赋值</strong>与<strong>静态代码块</strong>语句合并生成，顺序由源码书写顺序决定。因此静态块只能读取写在它<em>之前</em>的静态字段，之后的字段可赋值不可读。</li>
+<li>虚拟机保证子类的 <code>&lt;clinit&gt;()</code> 执行前，父类的 <code>&lt;clinit&gt;()</code> 已执行完毕（接口不要求先执行父接口的）。</li>
+<li><code>&lt;clinit&gt;()</code> 不是必须的：没有静态赋值也没有静态块的类，编译器可以不生成它。</li>
+<li>虚拟机会对 <code>&lt;clinit&gt;()</code> 加锁同步：多线程同时初始化一个类时，只有一个线程执行，其余线程阻塞等待。这个锁也带来了著名的坑——静态块里做耗时操作或死锁，会导致其他线程长时间阻塞。</li>
+</ol>
+
+<p>与 <code>&lt;clinit&gt;()</code> 相对的是实例构造器 <code>&lt;init&gt;()</code>，即构造方法，它在 <code>new</code> 时调用。两者名字相似，触发时机完全不同。</p>
+
+<h2>二、类加载器与「类相等」的判定</h2>
+
+<p>类加载阶段中「通过全限定名获取二进制字节流」这个动作，由<strong>类加载器（ClassLoader）</strong>实现。这里有个关键结论：<strong>一个类在 JVM 中的唯一性，由「类本身」和「加载它的类加载器」共同确定</strong>。每个类加载器都拥有独立的类名称空间，因此判断两个类是否「相等」（<code>equals</code>、<code>isAssignableFrom</code>、<code>instanceof</code>）的前提是它们由同一个类加载器加载。</p>
+
+<p>这也是「同一个 <code>.class</code> 被两个加载器各加载一次，得到两个不同的 <code>Class</code> 对象，互相强转就抛 <code>ClassCastException</code>」的原因——在 JVM 眼里它们就是两个类。</p>
+
+<p>从虚拟机视角看，类加载器只有两种：启动类加载器（Bootstrap ClassLoader，由 C++ 实现，是虚拟机自身的一部分）和其他所有由 Java 实现、继承自 <code>java.lang.ClassLoader</code> 的加载器。从开发者视角看，JDK 8 及以前常见的是三层结构：</p>
+
+<ul>
+<li><strong>启动类加载器</strong>：加载 <code>JAVA_HOME/lib</code> 目录，或被 <code>-Xbootclasspath</code> 参数指定路径中的类。它在 Java 代码里拿不到，<code>String.class.getClassLoader()</code> 返回 <code>null</code>。</li>
+<li><strong>扩展类加载器</strong>：由 <code>sun.misc.Launcher$ExtClassLoader</code> 实现，加载 <code>JAVA_HOME/lib/ext</code> 目录，或被 <code>java.ext.dirs</code> 系统属性指定路径中的类库。</li>
+<li><strong>应用程序类加载器</strong>：由 <code>sun.misc.Launcher$AppClassLoader</code> 实现，加载用户类路径 <code>classpath</code> 上的类。它通常是程序中的默认加载器。</li>
+</ul>
+
+<p><strong>版本差异要特别注意</strong>：JDK 9 引入模块化后，扩展类加载器已被移除，<code>lib/ext</code> 目录与 <code>java.ext.dirs</code> 不再生效，取而代之的是<strong>平台类加载器（PlatformClassLoader）</strong>，它加载的也不再是 <code>ext</code> 目录，而是平台模块。JDK 11 之后启动类加载器也改由 Java 实现（<code>jdk.internal.loader.ClassLoaders$BootClassLoader</code>），但它对上层依然表现为 <code>null</code>。</p>
+
+<h2>三、双亲委派模型</h2>
+
+<p>类加载器之间不是继承关系，而是<strong>组合</strong>关系：每个加载器通过 <code>getParent()</code> 持有父加载器引用，<code>setParent()</code> 可以指定。这种层次关系就是双亲委派模型，它在 JDK 1.2 引入。它<strong>不是强制约束</strong>，JVM 规范并未要求，只是推荐实现方式。</p>
+
+<p>工作过程可以概括为一句话：<strong>收到加载请求先交给父加载器，父加载器加载不了，子加载器才自己加载。</strong></p>
+
+<ol>
+<li>类加载器收到请求，首先检查自己是否已经加载过该类，有则直接返回缓存的 <code>Class</code>。</li>
+<li>没有缓存，就把请求委派给父加载器。</li>
+<li>每一层都重复上述过程，请求最终到达顶层的启动类加载器。</li>
+<li>父加载器无法完成时（自己的搜索范围内找不到），才回退给子加载器尝试加载。</li>
+</ol>
+
+<p>它解决两个问题：<strong>保证核心类库唯一</strong>（<code>java.lang.Object</code> 无论谁请求都由启动类加载器加载，不会被重复加载）和<strong>防止核心 API 被篡改</strong>（自定义一个 <code>java.lang.String</code> 放进 classpath，委派机制会让它永远加载不到）。</p>
+
+<p>实现上，这段逻辑写在 <code>ClassLoader.loadClass()</code> 里，源码骨架如下：</p>
+
+<pre><code class="language-java">protected Class&lt;?&gt; loadClass(String name, boolean resolve)
+        throws ClassNotFoundException {
+    synchronized (getClassLoadingLock(name)) {
+        // 1. 先查缓存：同一个加载器对同一个类只加载一次
+        Class&lt;?&gt; c = findLoadedClass(name);
+        if (c == null) {
+            try {
+                if (parent != null) {
+                    // 2. 委派给父加载器
+                    c = parent.loadClass(name, false);
+                } else {
+                    // 3. 父加载器为 null，说明父是启动类加载器
+                    c = findBootstrapClassOrNull(name);
+                }
+            } catch (ClassNotFoundException e) {
+                // 父加载器无法完成，落到下面自己加载
+            }
+            if (c == null) {
+                // 4. 父加载器加载不到，才调用自己的 findClass
+                c = findClass(name);
+            }
+        }
+        if (resolve) {
+            resolveClass(c);
+        }
+        return c;
+    }
+}</code></pre>
+
+<p>由此得出正确姿势：<strong>遵守双亲委派就继承 <code>ClassLoader</code> 覆盖 <code>findClass(String name)</code></strong>，在方法里读取字节流并调用 <code>defineClass()</code> 生成 <code>Class</code>；<strong>打破双亲委派才覆盖 <code>loadClass(String name)</code></strong>。注意向启动类加载器委派时，父加载器用 <code>null</code> 表示。</p>
+
+<h2>四、自定义类加载器：从 <code>findClass</code> 到热部署</h2>
+
+<p>下面是一个从指定目录读取 <code>.class</code> 文件的加载器。它遵循双亲委派，只在父加载器找不到时，才去 <code>/tmp/plugins</code> 下找：</p>
+
+<pre><code class="language-java">public class DirClassLoader extends ClassLoader {
+
+    private final String dir;
+
+    public DirClassLoader(String dir) {
+        // 父加载器不传，默认是应用程序类加载器
+        super(DirClassLoader.class.getClassLoader());
+        this.dir = dir;
+    }
+
+    @Override
+    protected Class&lt;?&gt; findClass(String name) throws ClassNotFoundException {
+        String path = dir + "/" + name.replace('.', '/') + ".class";
+        try {
+            byte[] bytes = Files.readAllBytes(Paths.get(path));
+            // defineClass 把字节数组转成 Class 对象，交给 JVM 校验
+            return defineClass(name, bytes, 0, bytes.length);
+        } catch (IOException e) {
+            throw new ClassNotFoundException(name, e);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        // 同一个类，被两个不同的加载器加载，就是两个不同的 Class
+        Class&lt;?&gt; c1 = new DirClassLoader("/tmp/plugins").loadClass("demo.User");
+        Class&lt;?&gt; c2 = new DirClassLoader("/tmp/plugins").loadClass("demo.User");
+        System.out.println(c1 == c2);                        // false
+        System.out.println(c1.getClassLoader() == c2.getClassLoader()); // false
+    }
+}</code></pre>
+
+<p>理解这个例子，就能理解热部署的原理：老版本应用的 Class 对象无法被卸载（有 GC Root 引用）、也无法被就地替换，那么<strong>换一个加载器重新加载一遍，得到新的 Class</strong> 就等价于「替换了类」。容器就是这样做的——为每个 Web 应用创建一个独立的 <code>WebAppClassLoader</code>，重启应用时丢弃整个加载器，旧类随之在 GC 中被回收。</p>
+
+<p>Tomcat 的加载器顺序是很有意思的例外：它<strong>先尝试自己加载</strong>（Web 应用自己的 <code>WEB-INF/classes</code> 与 <code>WEB-INF/lib</code>），失败后再委派给父加载器。这是典型的「打破双亲委派」——因为同一个 Tomcat 里跑多个应用，每个应用需要用自己的版本加载同名的类。但它依然会排除 <code>java.*</code> 等核心包，把核心类强行交给启动类加载器。</p>
+
+<p>最后用一个最小例子验证触发时机——注意静态块的打印在 <code>forName</code> 时就出现了，而不是 <code>newInstance</code> 时：</p>
+
+<pre><code class="language-java">public class Trigger {
+    static { System.out.println("clinit 执行"); }   // 类初始化时执行一次
+    public static void hello() { System.out.println("hello"); }
+
+    public static void main(String[] args) throws Exception {
+        Class&lt;?&gt; c = Class.forName("Trigger");   // 触发初始化，打印 clinit 执行
+        c.getMethod("hello").invoke(null);        // 反射调用静态方法
+    }
+}</code></pre>
+
+<p>最后是几个高频坑。<strong>静态块没执行？</strong> <code>&lt;clinit&gt;()</code> 只在实际使用类时触发，只声明该类型的引用或访问 <code>static final</code> 常量都不会触发初始化。<strong><code>ClassNotFoundException</code> 与 <code>NoClassDefFoundError</code> 混着报？</strong> 前者来自显式加载（<code>Class.forName</code>、<code>loadClass</code>）找不到类；后者常是「类第一次初始化失败」之后再被使用——静态块抛异常会先抛 <code>ExceptionInInitializerError</code>，排查时要往前翻第一条异常。<strong>热部署时报 <code>OutOfMemoryError: PermGen space</code>（JDK 8 后是 Metaspace）？</strong> 通常是 ThreadLocal 或静态集合持有旧类引用，使加载器无法回收，其加载的整个类空间一起泄漏，用 <code>jmap</code>/MAT 查 <code>WebAppClassLoader</code> 实例数量是有效切入点。<strong><code>getClassLoader()</code> 返回 <code>null</code> 不是 bug</strong>，只说明类由启动类加载器加载（如 <code>String</code>），直接链式调用 <code>getResource</code> 会 NPE。<strong><code>Class.forName(name)</code> 与 <code>loadClass(name)</code> 不等价</strong>：前者默认初始化类（静态块执行），后者只加载不初始化；注册 JDBC 驱动要用前者，只做反射分析用后者更轻。</p>
+
+<h2>小结</h2>
+
+<p>类加载是 JVM 把「静态文件」变成「可执行类型」的唯一入口。记住三句话：<strong>生命周期是「加载—链接（验证、准备、解析）—初始化—使用—卸载」，初始化由 <code>&lt;clinit&gt;()</code> 负责，准备阶段只给静态字段零值；类的唯一性由「类 + 加载它的加载器」共同决定，跨加载器的同名类无法互换；双亲委派实现在 <code>loadClass</code> 中，覆盖 <code>findClass</code> 是遵守它，覆盖 <code>loadClass</code> 才是打破它。</strong>热部署、容器隔离、JDBC 驱动注册这些看似无关的现象，背后都是这套机制在起作用。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
