@@ -208,6 +208,8 @@ public class SysRole {
 }</code></pre>
 <p>保存时遵循「先主表、后从表」：没有级联就手动先 <code>save</code> 客户再 <code>save</code> 联系人；配了 <code>cascade = CascadeType.PERSIST</code> 就只保存一方。但级联不等于自动维护双向内存关联，两端都要 <code>set</code>，否则 flush 后从集合里取不到对象。删除同理：删除「一」的一方，Hibernate 默认先把从表外键置为 null 再删主表（多发一条 UPDATE）；要连子记录一起删就配 <code>CascadeType.REMOVE</code> 或 <code>orphanRemoval = true</code>。多对多的 <code>REMOVE</code> 会一路删掉关联对象本身，生产上慎用。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-3/01-relation-mapping.svg" alt="一对多与多对多映射示意图：外键列在多方并由多方维护，一方用 mappedBy 只映射，多对多靠中间表连接两个实体"><figcaption>图 1：一对多与多对多的表结构，以及外键由谁维护</figcaption></figure>
+
 <h2>HQL 与 QBC 查询</h2>
 <p>HQL 是面向对象的查询语言：写类名和属性名，不写表名和列名，因此 <code>from Customer</code> 里的 <code>Customer</code> 是实体类名，条件里的 <code>custName</code> 是属性名。它<strong>不支持</strong> <code>select *</code>，写 <code>from Customer</code> 就等价于查全部。参数一律用命名占位符加 <code>setParameter</code>，旧笔记里的 <code>setString(0, "%李%")</code> 这种按位置设值在 Hibernate 5.2 已标记过时，到 Hibernate 6 已被移除，不要再用。</p>
 <pre><code class="language-java">// 条件查询 + 排序 + 分页
@@ -233,6 +235,8 @@ List&lt;Customer&gt; part = session.createQuery(
 <p>Hibernate 的一级缓存就是 Session 缓存：只要 Session 没关闭，同一 OID 只会有一个持久化对象实例。所以在同一个 Session 里连续两次 <code>session.get(Customer.class, 2L)</code>，第二次不会再发 SQL，而且两次拿到的是<strong>同一个对象引用</strong>，这是判断命中缓存最直接的证据。它同时也是脏检查的基础：查询时 Hibernate 会复制一份数据放进快照，事务提交（flush）时按 OID 比对缓存对象与快照，属性变了就自动发 UPDATE——所以持久态对象改完属性不需要手动调 <code>update()</code>。</p>
 <p>这里必须纠正源笔记的一个说法：笔记称调用 <code>Query</code> 的 <code>list()</code>、<code>iterator()</code> 也会先查一级缓存。实际上 <code>list()</code> 每次都会执行 SQL，只是返回的实体实例会复用 Session 中同 OID 的对象；真正能靠缓存省掉查询的是按 OID 加载实体的路径（<code>get()</code>、<code>load()</code>，以及 <code>iterate()</code> 在拿到 ID 之后逐条装载实体的那一步）。<code>iterate()</code> 先发一条查 ID 的 SQL，再逐个按 OID 命中缓存，缓存没预热时就是典型的 N+1，别为了「用缓存」而改用它。一级缓存随 Session 的关闭而释放，<code>clear()</code> 只清数据不销毁对象。</p>
 <p>二级缓存则是 SessionFactory 级别、可跨 Session 共享，因此必须显式开启：配置 <code>hibernate.cache.use_second_level_cache=true</code>、指定缓存提供者（Ehcache、JCache、Redis 等），再在实体上用 <code>@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)</code> 声明。它只缓存按 ID 装载的实体和集合，且要到事务提交时才真正写入，回滚不会留下脏缓存。查询缓存（<code>hibernate.cache.use_query_cache=true</code> 加 <code>setCacheable(true)</code>）的失效条件很苛刻，默认不要开。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-3/02-session-cache.svg" alt="缓存示意图：Session 级一级缓存与快照随 Session 关闭释放，SessionFactory 级二级缓存跨 Session 共享需显式开启，并标注 get、load、list、iterate 的差别"><figcaption>图 2：一级缓存、快照与二级缓存的作用范围</figcaption></figure>
 
 <h2>常见坑与小结</h2>
 <p>最后把最容易踩的几点收在一起：实体类的集合字段要用 <code>HashSet</code> 或 <code>List</code> 初始化，别留 null；双向关联只 <code>set</code> 一端会导致外键为空或出现多余的 UPDATE，两端都要维护；集合端写了 <code>mappedBy</code> 就不要再加 <code>@JoinColumn</code>；重写 <code>equals()</code>/<code>hashCode()</code> 时不要拿自增主键算哈希值，因为瞬时对象的主键还是 null、保存后又会变，集合里放这种对象会「丢元素」；配了 <code>hibernate.current_session_context_class=thread</code> 后，<code>getCurrentSession()</code> 拿到的 Session 在事务提交后由 Hibernate 自动关闭，不要再手动 <code>close()</code>；排查性能时先看有没有 N+1，<code>@ManyToOne</code> 该 LAZY 就 LAZY，需要一次性取回就用 <code>join fetch</code>。</p>

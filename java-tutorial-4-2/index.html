@@ -168,6 +168,8 @@
 
 <p>取值规律可以概括成两句话：<strong>不加 <code>#</code>，先搜对象栈（从栈顶往下），找不到再搜上下文栈，命中即停；加了 <code>#</code>，只搜上下文栈。</strong>这意味着同名属性一定被栈顶对象遮蔽——Action 的 <code>username</code> 会压住 <code>ActionContext</code> 里的同名键，排查"取值取错"时先看栈序。按下标可以直接定位：<code>[0].top</code> 是栈顶，<code>[1].top</code> 是第二个元素。开发期在页面放一个 <code>&lt;s:debug/&gt;</code>，即可看到完整的值栈与上下文快照。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-2/01-value-stack-lookup.svg" alt="值栈与上下文的取值顺序示意图：对象栈自栈顶向下查找，不加 # 先查对象栈再回落上下文栈，加了 # 只查 ActionContext"><figcaption>图 1：值栈结构与 OGNL 查找顺序——不加 # 走对象栈，加 # 走上下文</figcaption></figure>
+
 <h2>三、OGNL 语法要点：#、%、$ 与集合操作</h2>
 
 <p>三个符号各有分工。<code>#</code> 用于访问上下文（<code>#request</code>、<code>#session</code>、<code>#application</code>、<code>#attr</code>、<code>#parameters</code>）和就地构造集合；其中 <code>#attr</code> 按 page→request→session→application 的顺序查找，<code>#parameters</code> 取到的是数组，通常要写 <code>[0]</code>。<code>%</code> 用于把"被标签当成普通字符串"的文本强制按 OGNL 解析，典型场景是表单回显 <code>value="%{username}"</code>；反过来写成 <code>%{'hello'}</code> 则表示这是字面量。<code>$</code> 主要出现在配置文件与国际化资源里，用于把值栈中的值拼进字符串。</p>
@@ -257,6 +259,8 @@ public class LogInterceptor extends MethodFilterInterceptor {
 <p><code>defaultStack</code> 里已经打包了日常需要的拦截器，常见的有：<code>params</code> 负责把请求参数注入 Action 属性；<code>modelDriven</code> 支持模型驱动传参；<code>conversionError</code> 把类型转换错误写进 fieldError；<code>validation</code> 执行字段校验；<code>workflow</code> 依据校验结果决定流程是否继续；<code>fileUpload</code> 处理文件上传。它们按固定顺序排列，顺序本身就承载语义——例如 <code>workflow</code> 必须在 <code>validation</code> 之后才能读到错误信息并中断。自定义拦截器插进这个序列时，务必想清楚放在 <code>params</code> 之前还是之后：放在之前，Action 属性尚未注入，读到的全是默认值。</p>
 
 <p>配置分局部与全局两种。局部是在 <code>&lt;action&gt;</code> 内写若干 <code>&lt;interceptor-ref&gt;</code>，只对该 Action 生效；全局是用 <code>&lt;interceptor-stack&gt;</code> 把自定义拦截器与 <code>defaultStack</code> 组装成一个栈，再由包的 <code>&lt;default-interceptor-ref&gt;</code> 指定。执行顺序遵循"先声明先执行、返回时逆序"，因此日志、计时类拦截器常放在栈的前面或后面以获得想要的耗时口径。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-2/02-interceptor-chain.svg" alt="Struts2 拦截器调用链示意图：请求经过滤器与 params、自定义拦截器、validation 后进入 Action 与结果渲染，返回时逆序"><figcaption>图 2：拦截器调用链——先声明先执行，返回时逆序，注意 defaultStack 别丢</figcaption></figure>
 
 <h2>五、常见坑与易混点</h2>
 
