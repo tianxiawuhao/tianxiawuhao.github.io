@@ -138,7 +138,7 @@
 
 <h2>二、消息队列四大经典问题</h2>
 <h3>1. 消息丢失：分三段兜底</h3>
-<p>生产者端用 confirm 模式，吞吐远高于 transaction 模式：进入 confirm 后每条消息获得唯一投递序号，Broker 落盘成功回 ACK，失败回 NACK，据此重发。Broker 端靠持久化：<strong>交换机、队列声明 durable，消息 deliveryMode 置为 2</strong>。只设 deliveryMode 而不设队列 durable，重启后队列消失，消息照样丢。消费端改成<strong>手动 ACK</strong>，业务处理成功后再确认。</p>
+<p>生产者端用 confirm 模式，吞吐远高于 transaction 模式：进入 confirm 后每条消息获得唯一投递序号，Broker 落盘成功回 ACK，失败回 NACK，据此重发。Broker 端靠持久化：<strong>交换机、队列声明 durable，消息 deliveryMode 置为 2</strong>。只设 deliveryMode 而不设队列 durable，重启后队列消失，消息照样丢。消费端改成<strong>手动 ACK</strong>，业务处理成功后再确认。这里有一处版本变化：旧答案常提“镜像队列（mirrored classic queue）”，它在 RabbitMQ 3.9 起被废弃、3.13 已不推荐，4.0 起被彻底移除；以 3.13+ 为基线应改用 <strong>Quorum 队列</strong>（基于 Raft 复制，天生具备 quorum 持久化与自动故障转移，声明时队列类型设为 <code>quorum</code>），<code>ha-mode</code> 一类的镜像策略参数也不再配置。</p>
 <pre><code class="language-java">channel.confirmSelect();
 channel.queueDeclare("order.queue", true, false, false, null);
 channel.basicPublish("", "order.queue",
@@ -150,7 +150,7 @@ if (!channel.waitForConfirms(5000)) {
 </code></pre>
 
 <h3>2. 重复消费：用幂等，而不是“保证只消费一次”</h3>
-<p>重复的根因是 ACK 在网络上丢了，Broker 重投。标准答案不是“怎么不重复”，而是<strong>承认重复不可避免，把消费端做成幂等</strong>：消息带全局唯一 ID，消费前用 Redis <code>SET NX</code> 去重；或把写入设计成天然幂等，例如 <code>INSERT ... ON DUPLICATE KEY UPDATE</code>、状态机单向流转；再用数据库唯一索引兜底。</p>
+<p>重复的根因是 ACK 在网络上丢了，Broker 重投。标准答案不是“怎么不重复”，而是<strong>承认重复不可避免，把消费端做成幂等</strong>：消息带全局唯一 ID，消费前用 Redis <code>SET NX</code> 去重；或把写入设计成天然幂等，例如 <code>INSERT ... ON DUPLICATE KEY UPDATE</code>、状态机单向流转；再用数据库唯一索引兜底。若用 Kafka，还要带上两点现状：其一，重复不只来自 ACK 丢失，也来自位点提交时机——消费位点存放在内部主题 <code>__consumer_offsets</code>（默认 50 个分区），自动提交可能在业务处理完成前就推进位点，手动提交又可能重复，所以幂等始终是最后一道防线；其二，Kafka 0.11 起生产者可开启幂等（<code>enable.idempotence=true</code>，Kafka 3.x 已默认开启），配合 <code>acks=all</code> 与 <code>min.insync.replicas&gt;=2</code> 能消除重试导致的重复，但它只覆盖“生产者 → Broker”这一段，端到端仍需消费端幂等。</p>
 <pre><code class="language-java">String key = "mq:consumed:" + orderNo;               // 业务唯一键
 Boolean first = redis.opsForValue()
         .setIfAbsent(key, "1", Duration.ofHours(24)); // 底层即 SET NX
@@ -174,12 +174,12 @@ try {
 
 <h2>三、缓存穿透、击穿、雪崩</h2>
 <p>三个名字很像，成因完全不同，混淆是最常见的失分点。</p>
-<p><strong>穿透</strong>：数据在缓存和数据库<strong>都不存在</strong>，缓存永不命中。解法一是缓存空值并设短 TTL（如 30 秒），否则大量伪造 key 会把缓存撑爆；二是前置布隆过滤器，用大 bitmap 拦截“一定不存在”的 key，代价是有误判率且标准实现不支持删除。</p>
+<p><strong>穿透</strong>：数据在缓存和数据库<strong>都不存在</strong>，缓存永不命中。解法一是缓存空值并设短 TTL（如 30 秒），否则大量伪造 key 会把缓存撑爆；二是前置布隆过滤器，用大 bitmap 拦截“一定不存在”的 key，代价是有误判率，且标准布隆过滤器不支持删除（需要删除能力时可用布谷鸟过滤器，如 RedisBloom 的 <code>CF.DEL</code>，代价是空间占用与误判语义不同）。</p>
 <p><strong>击穿</strong>：数据在数据库<strong>存在</strong>，但某个热点 key 恰好过期，大量并发请求同时回源。它与雪崩的区别是“并发查同一条数据”。解法是互斥锁，只让一个请求回源重建缓存，其余短暂等待后重试。</p>
 <p><strong>雪崩</strong>：<strong>大批 key 同一时刻集中失效</strong>，或缓存服务整体不可用。要分因应对：</p>
 <ul>
 <li><strong>key 集中过期</strong>：在基础 TTL 上叠加随机值打散。</li>
-<li><strong>服务宕机</strong>：事前靠高可用（主从 + 哨兵或 Redis Cluster），事中靠本地缓存与限流降级（Sentinel/Hystrix 兜流量），事后快速恢复（开启持久化，避免冷启动打穿数据库）。</li>
+<li><strong>服务宕机</strong>：事前靠高可用（主从 + 哨兵或 Redis Cluster），事中靠本地缓存与限流降级（Sentinel、Resilience4j 兜流量；Hystrix 自 2018 年底进入维护模式、Spring Cloud 2020 起已移除对它的集成，新项目不应再选），事后快速恢复（开启持久化，避免冷启动打穿数据库）。</li>
 </ul>
 <pre><code class="language-java">private static final long BASE_TTL = 1800;   // 基础 TTL 30 分钟
 private static final Random RANDOM = new Random();
@@ -202,7 +202,7 @@ return order;
 
 <h2>四、双写一致性与 Redis 高可用</h2>
 <p>只要同时写缓存和数据库，就一定存在不一致窗口，工程上追求的是把窗口压到足够小。常用组合是 <strong>Cache Aside：先更新数据库，再删除缓存</strong>，而不是更新缓存。删除优于更新，是因为并发更新缓存容易出现“后写的旧值覆盖先写的新值”；删除则让下一次读请求自然回源。这条路径仍存在“回源读到旧值、写缓存晚于删除”的极小窗口，加固手段是延迟双删或订阅 binlog（如 Canal）异步失效。要求极高一致性时，可把读写串行化到内存队列，代价是吞吐大幅下降。</p>
-<p><strong>持久化</strong>：RDB 是某时刻全量快照，文件紧凑、恢复快，但两次快照之间的数据会丢；AOF 记录写命令，用 <code>appendfsync everysec</code> 折中。需纠正一个流传很广的说法：<strong>“RDB 是 Redis 默认持久化方式”只对 Redis 6.x 及更早版本成立，Redis 7.0 起 AOF 已是默认</strong>，面试最好带版本限定。</p>
+<p><strong>持久化</strong>：RDB 是某时刻全量快照，文件紧凑、恢复快，但两次快照之间的数据会丢；AOF 记录写命令，用 <code>appendfsync everysec</code> 折中。<strong>混合持久化</strong>是 4.0 引入的第三种形态：AOF 重写时先把当前数据以 RDB 格式写成前导（<code>aof-use-rdb-preamble yes</code>，该开关自 Redis 7.0 起默认开启），之后的增量仍按 AOF 追加，兼顾恢复速度与丢失窗口。这里要纠正两处老答案：一是<strong>“RDB 是 Redis 默认持久化方式”至今仍然成立</strong>——<code>appendonly</code> 在 Redis 7.x 乃至 8.x 的默认值依旧是 <code>no</code>，网上“7.0 起 AOF 已默认开启”的说法不准确，7.0 真正改的是 AOF 的实现形式：变为 multi-part（base 文件 + incr 文件 + manifest 统一管理），并默认使用 RDB 前导；二是 AOF 并非“只记录命令、文件一定更大”，混合持久化下 base 部分就是紧凑的二进制 RDB。面试时把这两点带版本说清，比只背结论稳得多。</p>
 <p><strong>内存淘汰</strong>：内存不足时 <code>noeviction</code> 直接对写命令报错；缓存场景常用 <code>allkeys-lru</code>，只淘汰设了过期时间的 key 则用 <code>volatile-lru</code>、<code>volatile-random</code>、<code>volatile-ttl</code>；4.0 以后还有 LFU 系列（<code>allkeys-lfu</code>、<code>volatile-lfu</code>），对访问频率差异大的热点数据比 LRU 更准。要区分“过期删除策略”（惰性删除 + 定期抽样）与“内存淘汰策略”（内存写满时牺牲谁）。</p>
 <p><strong>分布式锁</strong>：正确的加锁方式是用一条原子命令完成“加锁 + 过期”，并写入客户端唯一标识；解锁时校验标识后用 Lua 删除，避免误删他人的锁。</p>
 <pre><code class="language-java">// 加锁：SET key value NX EX 30，避免 SETNX 与 EXPIRE 之间宕机造成死锁

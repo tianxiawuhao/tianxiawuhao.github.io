@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>写 JavaWeb 项目时，服务端的 Servlet、JSP 只管把数据送到浏览器，页面上的表单校验、按钮响应、无刷新请求，最后都要落到 JavaScript 上。很多后端出身的开发者把 JS 当成“能跑就行的脚本语言”，于是反复踩同一批坑：<code>var</code> 提升导致循环里的回调拿到同一个值、<code>this</code> 在回调里莫名变成 <code>undefined</code>、判断数组类型却得到 <code>'object'</code>。这些坑的根源不是语法难，而是 JS 的类型系统、作用域规则和对象模型与 Java 差别很大。本章不追求覆盖全部 API，而是按“类型与变量 → 函数、作用域与闭包 → 对象与原型 → 数组与高阶函数 → 模块化与异步”的顺序，把最容易出错的基础讲透。阅读前只需要会写最基本的 <code>&lt;script&gt;</code>，示例可直接粘贴到浏览器控制台或用 Node.js 运行。</p>
+<p>写 JavaWeb 项目时，服务端的 Servlet、JSP 只管把数据送到浏览器，页面上的表单校验、按钮响应、无刷新请求，最后都要落到 JavaScript 上。很多后端出身的开发者把 JS 当成“能跑就行的脚本语言”，于是反复踩同一批坑：<code>var</code> 提升导致循环里的回调拿到同一个值、<code>this</code> 在回调里莫名变成 <code>undefined</code>、判断数组类型却得到 <code>'object'</code>。这些坑的根源不是语法难，而是 JS 的类型系统、作用域规则和对象模型与 Java 差别很大。本章不追求覆盖全部 API，而是按“类型与变量 → 函数、作用域与闭包 → 对象与原型 → 数组与高阶函数 → 模块化与异步 → 旧写法到现代写法的演进”的顺序，把最容易出错的基础讲透。阅读前只需要会写最基本的 <code>&lt;script&gt;</code>，示例可直接粘贴到浏览器控制台或用 Node.js 运行。</p>
 
 <h2>一、类型与变量：松散类型不等于没有类型</h2>
 <p>JavaScript 是动态类型、松散类型的语言：变量本身不绑定类型，类型属于“值”，同一个变量可以先存数字再存字符串。这一点和 Java 的“变量声明即定类型”正相反，但并不意味着 JS 没有类型。原始类型一共七种：<code>undefined</code>、<code>null</code>、<code>boolean</code>、<code>number</code>、<code>string</code>、<code>symbol</code>（ES6）、<code>bigint</code>（ES2020）；除此之外的一切都是对象。注意 <code>number</code> 同时表示整数和浮点数，没有 <code>int</code>/<code>long</code> 之分。它遵循 IEEE 754 双精度，整数一旦超出安全范围（<code>Number.MAX_SAFE_INTEGER</code>）精度就会丢失，这类场景要用 <code>bigint</code>。</p>
@@ -245,7 +245,84 @@ myMap(nums, n =&gt; n + 1);               // [2, 3, 4, 5]
 <p>早期的 JS 没有模块体系，所有脚本共享一个全局作用域，于是开发者用立即执行函数加闭包来“造”模块，把变量藏在函数内部，只暴露必要的接口。后来 Node.js 带来了 CommonJS（<code>require</code> 引入、<code>module.exports</code> 导出，运行时同步加载，只能在 Node 环境用），浏览器端则出现过 AMD（RequireJS）和 CMD 等方案。现在的主流是 ES Module：<code>export</code> 导出、<code>import</code> 引入，它是静态语法，必须写在模块顶层，打包工具能在编译阶段就分析出依赖关系并做 tree-shaking。<code>export default</code> 与具名导出不要在同一个文件里混着乱用，CommonJS 的 <code>require</code> 和 ESM 的 <code>import</code> 也不要塞进同一个文件。webpack 是“静态模块打包器”，负责从入口出发递归构建依赖图并输出 bundle，它本身并不是模块规范。Vue CLI 默认内置 webpack，只是一种工程选择，与 ES Module 语法本身无关。</p>
 <p>异步编程经历了回调函数 → Promise → <code>async</code>/<code>await</code> 三代。<code>await</code> 只能等待 Promise（更准确说是 thenable），它会让所在函数暂停，但不阻塞主线程；<code>Promise</code> 的失败状态必须处理，用 <code>try/catch</code> 包住 <code>await</code>，或补上 <code>.catch()</code>，否则会触发 <code>unhandledrejection</code>。最容易写出性能问题的地方，是把彼此独立的请求用 <code>await</code> 一个个串起来，白白累加等待时间；正确做法是用 <code>Promise.all([...])</code> 并发发起。<code>Promise.all</code> 是“一个失败整体失败”，需要全部结果无论成败时用 <code>Promise.allSettled</code>；Node 里那些 error-first 风格的回调 API（如 <code>fs.readFile</code>）可以用 <code>util.promisify</code> 一键转成 Promise。</p>
 
-<p><strong>小结：</strong>本章围绕五个基础点做了梳理。变量声明以 <code>const</code> 优先、<code>let</code> 次之，比较用 <code>===</code>，类型判断要绕开 <code>typeof null</code> 这个历史坑；函数的 <code>this</code> 看调用方式，箭头函数按词法绑定。闭包既能做私有状态，也会延长变量生命周期，循环配 <code>let</code> 才不会全体指向同一个值。对象靠原型链查找属性，<code>class</code> 只是语法糖，判数组用 <code>Array.isArray</code>；数组高阶函数不改原数组，注意 <code>every</code> 对空数组返回 <code>true</code>、<code>reduce</code> 记得给初始值。模块化统一用 ES Module，异步优先 <code>async</code>/<code>await</code>，并用 <code>Promise.all</code> 并发。把这些规则变成肌肉记忆后，再学 Vue、webpack 或 Node，就不会被语言层面的意外绊住。</p>
+<h2>六、旧写法到现代写法：一张演进对照表</h2>
+<p>本章开头提到的那些坑，几乎都能对应一条“老写法 → 新写法”的演进路线。下表先把替换关系集中列出，再逐条解释原因。旧代码不必推倒重写，但要知道它为什么被替代。</p>
+
+<table>
+  <thead>
+    <tr><th>旧写法</th><th>问题</th><th>现代写法</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>var</code></td><td>函数作用域、声明提升、没有块级约束</td><td><code>const</code> 优先，确实要重新赋值才用 <code>let</code></td></tr>
+    <tr><td><code>==</code> / <code>!=</code></td><td>隐式类型转换，规则记不全就容易误判</td><td><code>===</code> / <code>!==</code></td></tr>
+    <tr><td><code>for...in</code> 遍历数组</td><td>拿到的是字符串键，还会枚举到原型链上的可枚举属性</td><td><code>for...of</code>、<code>forEach</code>；枚举对象键用 <code>Object.keys()</code></td></tr>
+    <tr><td><code>document.write()</code></td><td>解析完成后调用会清空整个文档，并阻塞解析</td><td>DOM API：<code>createElement</code> 配 <code>appendChild</code>、<code>textContent</code></td></tr>
+    <tr><td>用 <code>+</code> 拼接字符串</td><td>引号与换行易错，多行模板难读</td><td>模板字符串（反引号 + <code>${}</code> 插值）</td></tr>
+    <tr><td>逐个取出对象或数组元素</td><td>样板代码多，默认值处理啰嗦</td><td>解构赋值与默认值、展开运算符 <code>...</code></td></tr>
+    <tr><td><code>XMLHttpRequest</code> 配回调</td><td>回调嵌套，状态码与错误处理分散</td><td><code>fetch()</code> 返回 Promise，配 <code>async</code>/<code>await</code></td></tr>
+    <tr><td>手写 <code>prototype</code> 继承</td><td>链路长，容易漏掉 <code>constructor</code></td><td><code>class</code>（语法糖，原型链底层不变）</td></tr>
+  </tbody>
+</table>
+
+<h3><code>for...in</code> 遍历数组的三个坑</h3>
+<p><code>for...in</code> 枚举的是<b>可枚举属性名</b>，不是元素值。用在数组上会连踩三个坑：第一，拿到的是字符串下标 <code>'0'</code>、<code>'1'</code>，参与算术前得先转换；第二，遍历顺序在规范里并不保证，只是现代引擎恰好多按升序输出；第三，只要有人给 <code>Array.prototype</code> 或 <code>Object.prototype</code> 挂过可枚举属性（早期 polyfill 里很常见），循环就会凭空多出几项，这也是它最危险的地方。按值遍历数组请用 ES6 的 <code>for...of</code>（走迭代器，支持 <code>break</code>/<code>continue</code>），只要元素时用 <code>forEach</code>/<code>map</code>。要枚举对象的键，<code>Object.keys()</code>/<code>Object.entries()</code> 更省心；确需 <code>for...in</code> 时用 <code>Object.hasOwn(obj, k)</code>（ES2022，旧环境可退回 <code>Object.prototype.hasOwnProperty.call(obj, k)</code>）过滤掉继承来的键。</p>
+<pre><code class="language-js">const arr = [10, 20, 30];
+
+for (const v of arr) console.log(v);        // 10 20 30：拿的是值
+arr.forEach((v, i) =&gt; console.log(i, v));   // 需要下标时用 forEach
+arr.map(n =&gt; n * 2);                        // [20, 40, 60]
+
+// 反例：用 for...in 遍历数组
+Array.prototype.extra = 'oops';             // 早期 polyfill 的典型后果
+for (const k in arr) {
+  console.log(k);                           // '0' '1' '2' 'extra'：字符串键，还多一项
+}
+delete Array.prototype.extra;               // 演示结束就清理，真实代码不要这样改原型
+
+const user = { name: 'Tom', age: 18 };
+Object.keys(user);                          // ['name', 'age']
+Object.entries(user);                       // [['name', 'Tom'], ['age', 18]]
+for (const k in user) {
+  if (Object.hasOwn(user, k)) console.log(k, user[k]);  // 过滤继承属性
+}</code></pre>
+
+<h3><code>document.write</code> 为什么不能再用了</h3>
+<p><code>document.write()</code> 只在文档解析阶段由内联脚本调用时，才表现为“往当前位置插入内容”。一旦文档解析完成（例如在事件回调、<code>DOMContentLoaded</code> 之后）再调用，浏览器会先清空整个文档再写入，页面直接被冲掉；它还会阻塞 HTML 解析，并让同一份脚本在同步与异步加载下行为不一致——在 <code>async</code>/<code>defer</code> 脚本里调用甚至会被忽略并给出控制台警告。动态添加内容请改用 DOM API：<code>document.createElement()</code> 搭配 <code>appendChild()</code>/<code>insertBefore()</code>，写文本用 <code>textContent</code>。不要用 <code>innerHTML</code> 拼接用户输入，那等于把 XSS 漏洞写进页面；确需渲染结构时用 <code>&lt;template&gt;</code> 元素，或把数据交给 <code>textContent</code> 逐节点设置。</p>
+<pre><code class="language-js">const list = document.querySelector('#list');
+const li = document.createElement('li');
+li.textContent = userInput;            // 文本按字面处理，不会被当成 HTML 解析
+list.appendChild(li);
+
+// 旧写法：解析完成后执行会清空整页，注释掉仅供对照
+// document.write('&lt;li&gt;' + userInput + '&lt;/li&gt;');</code></pre>
+
+<h3>回调 → Promise → <code>async</code>/<code>await</code>：以 <code>fetch</code> 为例</h3>
+<p>发请求的现代写法是 <code>fetch()</code>：它返回 Promise，天然适配 <code>async</code>/<code>await</code>。三个必须记住的细节：<code>fetch</code> 只在网络层出错时才 reject，HTTP 404、500 依然算“成功”，所以要自己判断 <code>response.ok</code>；响应体是一次性流，<code>response.json()</code> 与 <code>response.text()</code> 只能选一个、且只能调用一次；默认不携带跨域 Cookie，需要时显式写 <code>credentials: 'include'</code>，并让服务端配置好 CORS。旧教程里的 <code>XMLHttpRequest</code> 或 jQuery <code>$.ajax</code> 仍能运行，但嵌套回调、错误处理分散、取消请求麻烦，正是 Promise 与 <code>async</code>/<code>await</code> 要解决的问题。另外，彼此独立的请求不要用 <code>await</code> 逐个串起来，那样等待时间是累加的，应当交给 <code>Promise.all()</code> 并发。</p>
+<pre><code class="language-js">async function loadUser(id) {
+  try {
+    const res = await fetch(`/api/users/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);  // 404/500 不会自动 reject
+    return await res.json();                             // 响应体只能读一次
+  } catch (err) {
+    console.error('请求失败', err);
+  }
+}
+
+// 并发而不是串行：总等待时间约等于最慢的那个请求
+const [a, b] = await Promise.all([loadUser(1), loadUser(2)]);</code></pre>
+
+<h3>解构与模板字符串：少写样板代码</h3>
+<p>取对象字段、给参数默认值、复制并覆盖对象，现代写法都用解构与展开运算符；拼字符串则用反引号模板字符串，<code>${}</code> 直接插值且支持换行。它们由 ES6（ES2015）引入，今天的浏览器和 Node 都原生支持，无需编译即可运行。<code>class</code> 与 ES Module 同理，本章第三节和第五节已经用过。要注意模板字符串里的插值同样是隐式转换：<code>null</code> 与 <code>undefined</code> 会分别变成字符串 <code>'null'</code>、<code>'undefined'</code>，这与 <code>==</code> 的隐式转换是同一类陷阱，该判空还是要判空。</p>
+<pre><code class="language-js">const { name, age = 0 } = user;          // 对象解构 + 默认值
+const [first, ...others] = [1, 2, 3];    // 数组解构 + 剩余元素
+const merged = { ...user, age: 20 };     // 展开复制并覆盖 age
+
+function greet({ name }, greeting = 'Hi') {
+  return `${greeting}, ${name}!`;        // 模板字符串：插值 + 跨行
+}
+greet(user);                             // 'Hi, Tom!'</code></pre>
+
+<p><strong>小结：</strong>本章围绕六个基础点做了梳理。旧写法向现代写法的替换关系同样要记牢：<code>for...in</code> 只用于枚举对象键、遍历数组请用 <code>for...of</code>，<code>document.write</code> 应彻底避免，发请求交给 <code>fetch</code> 配 <code>async</code>/<code>await</code>，取值与拼串用解构和模板字符串。变量声明以 <code>const</code> 优先、<code>let</code> 次之，比较用 <code>===</code>，类型判断要绕开 <code>typeof null</code> 这个历史坑；函数的 <code>this</code> 看调用方式，箭头函数按词法绑定。闭包既能做私有状态，也会延长变量生命周期，循环配 <code>let</code> 才不会全体指向同一个值。对象靠原型链查找属性，<code>class</code> 只是语法糖，判数组用 <code>Array.isArray</code>；数组高阶函数不改原数组，注意 <code>every</code> 对空数组返回 <code>true</code>、<code>reduce</code> 记得给初始值。模块化统一用 ES Module，异步优先 <code>async</code>/<code>await</code>，并用 <code>Promise.all</code> 并发。把这些规则变成肌肉记忆后，再学 Vue、webpack 或 Node，就不会被语言层面的意外绊住。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-3-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">CSS 基础与布局</span></a>

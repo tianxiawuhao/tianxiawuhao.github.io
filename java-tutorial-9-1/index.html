@@ -176,7 +176,7 @@ public final class User {
 
 <p>由此可以解释两个经典现象。其一，私有方法、静态方法、构造方法都<strong>不能</strong>被覆盖：私有方法对子类不可见，静态方法属于类而不属于对象（只能被隐藏），构造方法根本不参与继承。其二，父类构造方法中调用一个被子类覆盖的方法时，会执行子类的版本，而此时子类字段尚未初始化，读到的是默认值 <code>0</code> 或 <code>null</code>——这正是"构造方法里不要调用可被覆盖的方法"这条规范的原因。</p>
 
-<p>顺便区分三组容易混的词：<code>final</code> 是修饰符，类不可继承、方法不可覆盖、变量不可重新赋值；<code>finally</code> 是异常处理的收尾代码块；<code>finalize</code> 是 <code>Object</code> 上一个已被废弃的回收前回调，Java 9 起标记 <code>@Deprecated</code>，三者毫无关系。同理，<code>String</code> 是<strong>不可变</strong>类且被 <code>final</code> 修饰，<code>StringBuilder</code> 可变但线程不安全，<code>StringBuffer</code> 可变且方法加了同步。</p>
+<p>顺便区分三组容易混的词：<code>final</code> 是修饰符，类不可继承、方法不可覆盖、变量不可重新赋值；<code>finally</code> 是异常处理的收尾代码块；<code>finalize</code> 是 <code>Object</code> 上一个已被废弃的回收前回调，Java 9 起标记 <code>@Deprecated</code>、JDK 18 起进一步标记为 <code>forRemoval</code>（Java 21 中仍在，但只剩告警，资源清理应改用 try-with-resources 或 <code>Cleaner</code>），三者毫无关系。同理，<code>String</code> 是<strong>不可变</strong>类且被 <code>final</code> 修饰，<code>StringBuilder</code> 可变但线程不安全，<code>StringBuffer</code> 可变且方法加了同步。顺带纠正一个常被说错的细节：<code>StringBuilder.capacity()</code> 的计量单位是 <strong>char 数</strong>而不是字节数（一个 ASCII 字符和一个中文都算 1 个 char），它返回的是内部数组容量而非字符个数，字符个数要用 <code>length()</code>。</p>
 
 <h2>三、集合：数据结构决定你怎么选</h2>
 
@@ -204,7 +204,7 @@ for (Map.Entry&lt;String, Integer&gt; e : count.entrySet()) {
     System.out.println(e.getKey() + " -&gt; " + e.getValue());
 }</code></pre>
 
-<p>这里还连着一个经典陷阱：<code>==</code> 比较基本类型比的是值，比较引用类型比的是地址，而包装类型之间的 <code>==</code> 是否相等取决于缓存。<code>Integer</code> 会把 -128 到 127 之间的值缓存复用，所以 <code>Integer a = 127; Integer b = 127;</code> 时 <code>a == b</code> 为 <code>true</code>；写成 <code>new Integer(127)</code>，或者值超过 127，结果则为 <code>false</code>。结论很干脆：<strong>所有包装类型的值比较一律用 <code>equals</code></strong>。</p>
+<p>这里还连着一个经典陷阱：<code>==</code> 比较基本类型比的是值，比较引用类型比的是地址，而包装类型之间的 <code>==</code> 是否相等取决于缓存。<code>Integer</code> 会把 -128 到 127 之间的值缓存复用，所以 <code>Integer a = 127; Integer b = 127;</code> 时 <code>a == b</code> 为 <code>true</code>；写成 <code>new Integer(127)</code>，或者值超过 127，结果则为 <code>false</code>。这里补一条版本现状：包装类的构造方法自 JDK 9 起标记 <code>@Deprecated</code>、JDK 16 起标记为 <code>forRemoval</code>，在 Java 17/21 上仍可编译、只发告警（尚未真正移除），新代码应改用 <code>valueOf</code> 或自动装箱。结论很干脆：<strong>所有包装类型的值比较一律用 <code>equals</code></strong>。</p>
 
 <h2>四、异常：什么时候该抛，什么时候该接</h2>
 
@@ -236,7 +236,7 @@ public class OrderNotFoundException extends RuntimeException {
 
 <p>泛型最大的考点是<strong>类型擦除</strong>：泛型信息只存在于编译期：编译后 <code>List&lt;String&gt;</code> 和 <code>List&lt;Integer&gt;</code> 在字节码里都是 <code>List</code>，类型参数被替换为上界（无界时是 <code>Object</code>），并在必要处插入强制类型转换。由此推出四个结论：不能写 <code>new T[10]</code> 或 <code>new ArrayList&lt;T&gt;()</code>；不能用 <code>instanceof List&lt;String&gt;</code>；静态成员不能使用类的类型参数；重载不能只靠泛型参数区分。同时，<code>List&lt;String&gt;</code> 不是 <code>List&lt;Object&gt;</code> 的子类型，想让方法接收任意类型的列表要用通配符 <code>List&lt;?&gt;</code>，需要写入时用 <code>List&lt;? super T&gt;</code>，只读取时用 <code>List&lt;? extends T&gt;</code>，即 PECS 原则：生产者用 <code>extends</code>，消费者用 <code>super</code>。</p>
 
-<p>反射则是运行期获取类信息的入口，<code>Class.forName</code>、<code>getDeclaredFields</code>、<code>setAccessible(true)</code> 这些 API 让框架得以在不知道具体类的情况下创建对象、注入依赖、解析注解。代价是绕过了编译期检查、性能低于直接调用、对模块化与安全性不友好，所以业务代码里应避免滥用，只在框架、序列化、通用工具等确有必要的地方使用。</p>
+<p>反射则是运行期获取类信息的入口，<code>Class.forName</code>、<code>getDeclaredFields</code>、<code>setAccessible(true)</code> 这些 API 让框架得以在不知道具体类的情况下创建对象、注入依赖、解析注解。代价是绕过了编译期检查、性能低于直接调用、对模块化与安全性不友好，所以业务代码里应避免滥用，只在框架、序列化、通用工具等确有必要的地方使用。模块化之后还有一条硬约束：JDK 9 引入 JPMS、JDK 17 起对 JDK 内部 API 的强封装默认开启，此时对 JDK 内部类反射调用 <code>setAccessible(true)</code> 会抛 <code>InaccessibleObjectException</code>，必须显式加 <code>--add-opens</code>（老框架迁到 Java 17 时的常见报错来源）；与之配套，<code>sun.misc.Unsafe</code> 的内存访问方法也在被逐步废弃，新代码应改用 <code>VarHandle</code> 或 <code>MethodHandles</code>。</p>
 
 <p>最后把这一章的高频陷阱收拢成一张“止损清单”：重写 <code>equals</code> 忘了 <code>hashCode</code>；用 <code>==</code> 比较包装类型；<code>String.split</code> 丢弃末尾空串导致下标越界（<code>"a,b,,".split(",")</code> 长度为 2，需要保留时应写 <code>split(",", -1)</code>）；<code>Arrays.asList</code> 返回的是固定长度视图，调用 <code>add</code> 会抛 <code>UnsupportedOperationException</code>；遍历集合时用集合自身的方法删除元素会抛 <code>ConcurrentModificationException</code>，应改用 <code>Iterator.remove()</code> 或 <code>removeIf</code>；<code>long</code> 字面量用小写 <code>l</code> 与数字 <code>1</code> 难分，要用大写 <code>L</code>。</p>
 

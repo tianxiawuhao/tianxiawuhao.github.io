@@ -227,13 +227,40 @@
 
 <p><code>&lt;label for="id"&gt;</code> 与控件的 <code>id</code> 一一对应，点文字也能聚焦控件，对手机端和读屏软件都很重要。还有一个隐蔽的坑：<code>&lt;button&gt;</code> 在表单内的默认 <code>type</code> 就是 <code>submit</code>，如果它只是用来弹个提示，务必显式写 <code>type="button"</code>，否则会意外提交整个表单。</p>
 
+<h3>HTML5 表单校验：第一道关卡交给浏览器</h3>
+
+<p>老教程里的表单校验清一色是 JavaScript 手写：监听 <code>submit</code>、逐个取值、拼提示文字。HTML5 起浏览器内置了<b>约束校验（constraint validation）</b>，多数规则用声明式属性就能表达：<code>required</code> 表示必填，<code>type="email"</code> 按邮箱格式检查，<code>type="url"</code> 检查网址，<code>type="number"</code> 配 <code>min</code>/<code>max</code>/<code>step</code> 限制数值范围，<code>minlength</code>/<code>maxlength</code> 限制长度，<code>pattern</code> 用正则约束格式。校验不通过时浏览器会阻止提交并给出原生提示，不需要额外代码——这是相对“全靠手写 JS 校验”的重要演进。</p>
+
+<pre><code class="language-html">&lt;form action="/user/register" method="post"&gt;
+  &lt;input name="email" type="email" required placeholder="you@example.com"&gt;
+  &lt;input name="phone" type="tel" pattern="1[3-9]\d{9}" title="请输入 11 位手机号"&gt;
+  &lt;input name="age" type="number" min="18" max="120" step="1"&gt;
+  &lt;input name="zip" pattern="\d{6}" required&gt;
+  &lt;button type="submit"&gt;注册&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+
+<p>有三个细节容易踩坑。<b>其一，<code>pattern</code> 里写的是 JavaScript 正则源码</b>（不带两侧的斜杠），并且浏览器会自动整串匹配，相当于替你加了 <code>^(?:…)$</code>，所以不要再自己写 <code>^</code> 和 <code>$</code>；如果正则本身有语法错误，这个属性会被整个忽略、校验直接放行，这是最隐蔽的一种失效。<b>其二，<code>title</code> 会作为原生提示的补充说明</b>，建议写清楚期望的格式。<b>其三，客户端校验只负责体验，不负责安全</b>：请求完全可以绕过页面直接构造，服务端必须把同一套规则再校验一遍，这也是“前端校验 + 后端校验”两道关的由来。</p>
+
+<p>需要自定义逻辑时还有一层 API：在 <code>&lt;form&gt;</code> 上写 <code>novalidate</code> 可关闭原生校验、完全接管流程；<code>form.checkValidity()</code> 返回整体是否通过，<code>form.reportValidity()</code> 让浏览器显示提示，<code>input.setCustomValidity('提示文字')</code> 可注入自定义错误（通过时要传空字符串清除，否则该控件会一直处于无效状态），<code>input.validity</code> 上能读到具体是哪条规则不满足。这些属性与 API 在现代浏览器中普遍可用，老项目里仍是手写 JavaScript，遇到时可以按需逐步替换。</p>
+
+<pre><code class="language-js">const form = document.querySelector('form');
+form.addEventListener('submit', (e) =&gt; {
+  if (!form.checkValidity()) {
+    e.preventDefault();        // 拦下这次提交
+    form.reportValidity();     // 交给浏览器显示原生提示
+  }
+});
+
+const pwd2 = document.querySelector('#pwd2');
+pwd2.setCustomValidity(pwd2.value === pwd.value ? '' : '两次密码不一致');</code></pre>
+
 <h2>五、语义化标签与常见坑</h2>
 
 <p>只用 <code>&lt;div&gt;</code> 加 class 也能拼出一切，但 HTML5 提供了一批<b>语义化标签</b>。常用的有 <code>&lt;header&gt;</code>、<code>&lt;nav&gt;</code>、<code>&lt;main&gt;</code>、<code>&lt;article&gt;</code> 与 <code>&lt;section&gt;</code>。<code>&lt;aside&gt;</code>、<code>&lt;footer&gt;</code>、<code>&lt;figure&gt;</code>、<code>&lt;time&gt;</code> 等标签也很常用。它们不会自动带来样式，却能让结构自解释：搜索引擎知道哪块是正文，读屏软件能跳到主导航，同事读代码时也不必靠 class 名猜测。<code>&lt;main&gt;</code> 每页只应出现一次，<code>&lt;article&gt;</code> 表示可独立成篇的内容（一篇文章、一条评论），<code>&lt;section&gt;</code> 表示带主题的分块。</p>
 
 <p>最后集中清理几个常见的错误写法。<b>其一，<code>&lt;h1&gt;</code>–<code>&lt;h6&gt;</code> 是成对标签</b>，写成 <code>&lt;hn /&gt;</code> 这种“自闭合的标题”并不存在。<b>其二，<code>&lt;font&gt;</code>、<code>&lt;center&gt;</code>、<code>&lt;big&gt;</code> 已被 HTML5 废弃</b>，字号、颜色、字体一律交给 CSS。老代码里的 <code>&lt;font size="4" color="#3366cc"&gt;</code> 应改写成 class 加样式。<b>其三，<code>&lt;frameset&gt;</code> 框架集也已废弃</b>，页面分栏请用 <code>&lt;iframe&gt;</code> 或后端模板、前端路由。<b>其四，<code>&lt;ol&gt;</code> 的 <code>type</code> 与 <code>start</code> 属性能用，但 <code>reversed</code> 是布尔属性</b>，写 <code>reversed</code> 即可，不必写成 <code>reversed="reversed"</code>。<b>其五，加粗和斜体要分清语义</b>：<code>&lt;strong&gt;</code>、<code>&lt;em&gt;</code> 表示强调，<code>&lt;b&gt;</code>、<code>&lt;i&gt;</code> 只表示视觉加粗倾斜，正文里表示强调应优先用前者。此外，标签名不区分大小写，但统一小写是通行规范；属性值建议始终加引号。</p>
 
-<p>小结：HTML 的骨架是 <code>DOCTYPE + html + head + body</code>，head 里管编码和标题，body 里用语义标签组织内容。链接、图片、列表负责表达内容关系，表格只装数据，表单负责把带 <code>name</code> 的控件值交给服务器。写页面时应养成两个习惯：结构用语义化标签，而不是满屏 <code>&lt;div&gt;</code>；样式和布局一律交给 CSS。后面学习 CSS 布局、DOM 操作与服务端模板渲染时，会省下大量返工时间。</p>
+<p>小结：HTML 的骨架是 <code>DOCTYPE + html + head + body</code>，head 里管编码和标题，body 里用语义标签组织内容。链接、图片、列表负责表达内容关系，表格只装数据，表单负责把带 <code>name</code> 的控件值交给服务器。写页面时应养成两个习惯：结构用语义化标签，而不是满屏 <code>&lt;div&gt;</code>；样式和布局一律交给 CSS；表单则先用 <code>required</code>、<code>pattern</code>、<code>type="email"</code> 这类 HTML5 校验属性拦一道，服务端再校验一次。后面学习 CSS 布局、DOM 操作与服务端模板渲染时，会省下大量返工时间。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-2-8/"><span class="pn-label">← 上一篇</span><span class="pn-title">JPA 与 ORM 入门</span></a>

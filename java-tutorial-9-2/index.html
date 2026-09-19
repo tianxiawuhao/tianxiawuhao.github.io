@@ -169,13 +169,13 @@
 
 <p>线程池有五种状态：<code>RUNNING</code>、<code>SHUTDOWN</code>、<code>STOP</code>、<code>TIDYING</code>、<code>TERMINATED</code>。其中 <code>shutdown()</code> 进入 <code>SHUTDOWN</code>，会拒绝新任务但继续处理队列中已排队的任务；<code>shutdownNow()</code> 进入 <code>STOP</code>，不再处理队列任务并向正在执行的线程发起中断。<code>TIDYING</code> 是过渡态，工作线程数为 0 时进入，并回调钩子方法 <code>terminated()</code>，随后变为 <code>TERMINATED</code>。</p>
 
-<p>还有一个高频问题是线程数怎么设：计算密集型任务通常取 CPU 核数 + 1；IO 密集型任务因为线程大量时间在等待，可以按“核数 ×（1 + 平均等待时间 / 平均计算时间）”估算。给出公式比只报一个凭经验的数字更容易得到认可。</p>
+<p>还有一个高频问题是线程数怎么设：计算密集型任务通常取 CPU 核数 + 1；IO 密集型任务因为线程大量时间在等待，可以按“核数 ×（1 + 平均等待时间 / 平均计算时间）”估算。给出公式比只报一个凭经验的数字更容易得到认可。Java 21 起还多了一条新变量：虚拟线程（<code>Executors.newVirtualThreadPerTaskExecutor()</code>）不适合放进固定大小的池里复用，它“一个任务一个虚拟线程”，上面这条 corePoolSize / maximumPoolSize 决策链对它并不适用，此时要先判断瓶颈在 CPU 还是 IO 阻塞，而不是纠结池子开多大。</p>
 
 <h2>二、CAS 与原子类：无锁并不等于没有开销</h2>
 
 <p>CAS（Compare And Swap）包含三个操作数：内存位置 V、预期原值 A、新值 B。仅当 V 处的当前值等于 A 时，才把 V 更新为 B，整个过程由处理器的一条指令保证原子性。它属于乐观策略——先假设没有竞争，冲突时靠自旋重试；而 <code>synchronized</code> 是悲观策略，先加锁再访问。注意一个常见表述错误：CAS 本身是<strong>无锁（lock-free）</strong>操作，说它“基于锁”是不准确的，它恰恰是为了避免阻塞式加锁才被引入的。</p>
 
-<p><code>java.util.concurrent.atomic</code> 下的 <code>AtomicInteger</code>、<code>AtomicLong</code>、<code>AtomicReference</code> 等都基于 <code>Unsafe</code> 提供的 CAS 实现。JDK 8 起，<code>LongAdder</code> 在高并发计数场景下比 <code>AtomicLong</code> 表现更好：它把一个热点值拆成 <code>Cell</code> 数组分散竞争，读取时再求和，代价是 <code>sum()</code> 不保证返回某一瞬间的精确快照。</p>
+<p><code>java.util.concurrent.atomic</code> 下的 <code>AtomicInteger</code>、<code>AtomicLong</code>、<code>AtomicReference</code> 等在 JDK 8 中基于 <code>Unsafe</code> 提供的 CAS 实现；JDK 9 引入 <code>VarHandle</code>（<code>java.lang.invoke</code>）后，这些原子类已改用 <code>VarHandle</code> 完成原子访问，<code>Unsafe</code> 的 CAS 系列方法自 JDK 9 起被标记废弃——“原子类基于 Unsafe”这个说法只在 JDK 8 成立。JDK 8 起，<code>LongAdder</code> 在高并发计数场景下比 <code>AtomicLong</code> 表现更好：它把一个热点值拆成 <code>Cell</code> 数组分散竞争，读取时再求和，代价是 <code>sum()</code> 不保证返回某一瞬间的精确快照。</p>
 
 <pre><code class="language-java">public class Counter {
     private final LongAdder hits = new LongAdder();
@@ -223,7 +223,7 @@ if (lock.tryLock(200, TimeUnit.MILLISECONDS)) {
     // 获取锁失败，走降级逻辑，而不是无限等待
 }</code></pre>
 
-<p>关于 <code>synchronized</code> 的锁升级，标准说法是无锁 → 偏向锁 → 轻量级锁（CAS 自旋）→ 重量级锁（互斥量）。这里要补一个版本差异：偏向锁在 JDK 15 中已被默认禁用（JEP 374），JDK 18 起相关实现被移除，所以面试时最好说明“偏向锁是 JDK 15 之前的历史优化”。另外要注意锁对象的选择——对 <code>Integer</code>、<code>String</code> 字面量加锁会因常量池或缓存复用而与他人共享同一把锁，应该使用专门的 <code>private final Object lock = new Object()</code>。</p>
+<p>关于 <code>synchronized</code> 的锁升级，要按版本分开说。旧答案（JDK 15 之前）是：无锁 → 偏向锁 → 轻量级锁（CAS 自旋）→ 重量级锁（互斥量）。现状是：JDK 15 通过 JEP 374 默认禁用偏向锁，JDK 18 起把偏向锁实现连同 <code>-XX:-UseBiasedLocking</code>、<code>-XX:BiasedLockingStartupDelay</code> 等相关参数一并移除，所以 Java 17/21 上这条链只有无锁 → 轻量级锁 → 重量级锁，面试时最好直接说明“偏向锁是 JDK 15 之前的历史优化”。另外要注意锁对象的选择——对 <code>Integer</code>、<code>String</code> 字面量加锁会因常量池或缓存复用而与他人共享同一把锁，应该使用专门的 <code>private final Object lock = new Object()</code>。</p>
 
 <h2>四、并发容器与实战选型</h2>
 
@@ -231,7 +231,7 @@ if (lock.tryLock(200, TimeUnit.MILLISECONDS)) {
 
 <p>与 <code>Collections.synchronizedMap</code> 的区别在于锁的粒度：后者对整个 Map 加一把互斥锁，任何操作都串行；前者只锁单个桶。因此高并发读写场景应优先选 <code>ConcurrentHashMap</code>，而需要复合操作原子性时（比如“不存在才放入”），要用它提供的 <code>putIfAbsent</code>、<code>computeIfAbsent</code> 等原子方法，而不是自己写“先 get 再 put”。</p>
 
-<p><code>ThreadLocal</code> 的本质是让每个线程持有独立副本。内存泄漏的根源在于 <code>ThreadLocalMap</code> 的 key 是 <code>ThreadLocal</code> 的弱引用而 value 是强引用：外部强引用一旦消失，key 会被回收成 <code>null</code>，value 却仍被 <code>Thread</code> 强引用，在线程池这种长生命周期线程中就会累积。虽然 <code>set</code>/<code>get</code>/<code>remove</code> 会顺带清理 key 为 <code>null</code> 的 Entry，但最稳妥的做法仍是“用完即 <code>remove()</code>”，并且要用 <code>try/finally</code> 保证一定会执行——线程池里残留的 value 不只是内存问题，更会造成串号一类的业务错误。</p>
+<p><code>ThreadLocal</code> 的本质是让每个线程持有独立副本。内存泄漏的根源在于 <code>ThreadLocalMap</code> 的 key 是 <code>ThreadLocal</code> 的弱引用而 value 是强引用：外部强引用一旦消失，key 会被回收成 <code>null</code>，value 却仍被 <code>Thread</code> 强引用，在线程池这种长生命周期线程中就会累积。虽然 <code>set</code>/<code>get</code>/<code>remove</code> 会顺带清理 key 为 <code>null</code> 的 Entry，但最稳妥的做法仍是“用完即 <code>remove()</code>”，并且要用 <code>try/finally</code> 保证一定会执行——线程池里残留的 value 不只是内存问题，更会造成串号一类的业务错误。再补一句 Java 21 的现状：虚拟线程默认不复用、随任务结束而消亡，“线程复用串号”的风险与线程池场景不同，但未 <code>remove</code> 的 value 仍会随线程对象驻留内存，<code>try/finally</code> 中清理的习惯不要丢。</p>
 
 <pre><code class="language-java">private static final ThreadLocal&lt;UserContext&gt; CTX = new ThreadLocal&lt;&gt;();
 
