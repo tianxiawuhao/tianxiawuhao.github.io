@@ -114,7 +114,7 @@
               <h1>Spark 核心</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，8 min read</span>
+                2026-09-19，9 min read</span>
             </div>
           
         
@@ -138,6 +138,7 @@
 
 <p>一个 Spark 应用由一个 Driver 进程发起：Driver 里的 <code>SparkContext</code> 向集群管理器（YARN、Kubernetes 或 Standalone）申请资源，在每台 Worker 上启动 Executor，Executor 内以 Task 为单位并行计算各个分区。这里有两条约定的纪律：传给算子的闭包函数以及它引用的外部对象<strong>必须可序列化</strong>；同一个 JVM 中同时只能有一个活跃的 SparkContext，因此 Spark 2.0 之后统一用 <code>SparkSession</code> 作为入口，内部再去管理那个唯一的 context。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-3/01-rdd-lazy-dag.svg" alt="Spark 惰性求值：Transformation 只记录血缘，遇到 Action 才提交作业并按宽依赖切 Stage"><figcaption>图 1：惰性求值与 Stage 切分——Transformation 只记血缘，Action 触发 Job，遇到宽依赖切一刀并产生 Shuffle</figcaption></figure>
 <p>还有一条贯穿全章的规则：<strong>惰性求值</strong>。Transformation 只记录「要做什么」，并不会立刻执行；只有遇到 Action，Spark 才把这条计算链提交成作业。</p>
 
 <h2>二、算子：Transformation 与 Action</h2>
@@ -174,6 +175,7 @@ public class WordCount {
 
 <p>同样能完成分组统计，<code>reduceByKey</code> 和 <code>groupByKey</code> 的代价却差很多：<code>reduceByKey</code> 会先在 map 端做一次局部聚合（相当于 MapReduce 的 Combiner），只有聚合后的结果进入 Shuffle；<code>groupByKey</code> 则把所有 value 原样拉到 reduce 端再自己遍历，键对应的数据量一大就容易 OOM。所以能用 <code>reduceByKey</code>、<code>aggregateByKey</code>、<code>combineByKey</code> 的场景，就不要用 <code>groupByKey</code> 再 <code>mapValues</code>。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-3/02-shuffle-cost.svg" alt="reduceByKey 与 groupByKey 的 Shuffle 代价对比"><figcaption>图 2：同样是分组统计——reduceByKey 先在 map 端局部聚合，groupByKey 则把全部 value 原样拉过网络，后者更容易 OOM</figcaption></figure>
 <p>调试时可以先用 <code>toDebugString()</code> 把血缘和分区数打印出来，它比反复猜测「这一行到底触发几个作业」直观得多；也可以对照 Spark UI 的 Stages 页面，看看每个 Stage 的 Task 数是否等于分区数。另一个新手常犯的错误是：同一个 RDD 被多个 Action 重复使用时忘了 <code>cache()</code>，于是 Spark 每次都从头重算整条血缘，表现就是「同一段代码第二次跑依然那么慢」。</p>
 
 <h2>三、DAG、宽窄依赖与 Shuffle</h2>
@@ -265,6 +267,11 @@ System.out.println("脏数据行数 = " + badLines.value());
 <p>第三类坑来自版本与环境。本地调试时日志满屏 INFO，Spark 3.x 要改的是 <code>$SPARK_HOME/conf/log4j2.properties</code>（源资料里的 <code>log4j.properties</code> 是 Spark 1.x 的写法，log4j 1.x 早已停止维护）；Windows 上跑本地模式需要 <code>winutils.exe</code>、<code>hadoop.dll</code> 并配置 <code>HADOOP_HOME</code>。依赖版本也要对齐：源资料给出的 <code>spark-core_2.10</code> + Spark 1.6.0 + JDK 1.7 是十年前的老组合，Scala 2.10 已不再维护；新项目应当选用 Spark 3.5.x（需 JDK 8/11/17），Scala 侧用 2.13 或 2.12，即 <code>spark-core_2.13</code>、<code>spark-sql_2.13</code>，Java 8 以上的 lambda 语法才能正常编译。</p>
 
 <p>本章把 Spark 的骨架串了一遍：RDD 是不可变、可分区、靠血缘容错的数据集；算子分惰性的 Transformation 和触发计算的 Action；DAG 在宽依赖处切 Stage，Shuffle 的磁盘与网络开销是性能的主要矛盾；DataFrame/DataSet 与 Spark SQL 让优化器有了发挥空间；调优则围绕减少 Shuffle、均衡分区、广播小表和正确使用共享变量展开。把这几点记住，再去看 Spark 的监控页面和任务日志，就不会只见参数不见原理了。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-8-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">Hive 数据仓库</span></a>
+      <a class="next-post" href="/java-tutorial-8-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">8.4 Flink 流处理</span></a>
+      </nav>
           </article>
   <!-- Footer -->
   <footer>

@@ -133,6 +133,7 @@
 <h2>一、Hive 的定位：SQL 与 MapReduce 之间的翻译层</h2>
 <p>先纠正一个常见说法：<strong>Hive 不是数据库，而是基于 Hadoop 的数据仓库工具</strong>。它自己不存数据，也不负责计算，只做两件事——管理「表和列」这些元数据，以及把 HQL 翻译成分布式作业。元数据默认放在内置的 Derby 里（同一时刻只允许一个会话连接），生产环境必须换成 MySQL 之类的独立数据库；真正的数据则以文件形式躺在 HDFS 上。</p>
 <p>一条 HQL 的执行大致经过：解析（语法树）→ 语义分析（借助 Metastore 校验表、列、类型）→ 逻辑计划 → 优化（谓词下推、分区裁剪、join 重排）→ 物理计划 → 提交给执行引擎。引擎是可换的，由 <code>hive.execution.engine</code> 指定，取值 <code>mr</code>（默认）、<code>tez</code> 或 <code>spark</code>，换成 Tez 或 Spark 往往能省掉大量中间落盘。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-2/01-hive-architecture.svg" alt="Hive 架构：HQL 编译成执行计划，元数据放 Metastore，数据存 HDFS"><figcaption>图 1：Hive 三层结构——上层是 SQL 入口，中间是编译与元数据，底层数据本体仍是 HDFS 上的文件目录</figcaption></figure>
 <p>由此也能推出它<strong>适合什么、不适合什么</strong>：适合海量数据的离线批量分析，一次查询跑几分钟到几小时都能接受；不适合 OLTP 场景——默认没有行级更新与删除，查询延迟以分钟计，也不适合需要反复迭代的算法（那是 Spark 的活）。Hive 0.14 之后通过 ACID 表（必须 ORC 存储且分桶）支持了 UPDATE/DELETE 和事务，但限制不少，别把它当 MySQL 用。</p>
 
 <h2>二、表结构：一张表就是一个 HDFS 目录</h2>
@@ -158,6 +159,7 @@ LOCATION '/warehouse/dwd/dwd_order_detail';</code></pre>
 <h2>三、分区与分桶：把「扫全表」变成「只读一部分」</h2>
 <p>大表查询的第一性能杠杆是分区。分区列的值直接体现为 HDFS 上的目录名，因此当 <code>WHERE</code> 里出现分区条件时，Hive 会做<strong>分区裁剪</strong>，只读命中的子目录，其余目录连打开都不打开。分区字段虽然能像普通列一样查询，但它并不是文件里的数据，而是从路径中解析出来的，所以分区列不能重复出现在表定义的非分区列里。</p>
 <p>写入分区有两种方式：静态分区要手写每个分区值，适合少量分区；动态分区由查询结果的最后一列决定分区值，适合批量导入，但必须打开开关 <code>hive.exec.dynamic.partition=true</code> 并把模式设为 <code>nonstrict</code>，同时用 <code>hive.exec.max.dynamic.partitions</code> 兜底，否则一次插入生成几十万个小目录会把 NameNode 压垮。用 HDFS 直接上传的数据文件，元数据里没有对应分区，需要 <code>MSCK REPAIR TABLE</code> 或 <code>ALTER TABLE ... ADD PARTITION</code> 补登记。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-2/02-partition-bucket.svg" alt="Hive 分区与分桶：分区按列值切子目录做裁剪，分桶按哈希取模切文件"><figcaption>图 2：分区与分桶的差异——分区靠目录名跳读，分桶靠哈希定位文件，服务于抽样与 SMB Join</figcaption></figure>
 <p>分区解决「按范围跳读」，分桶解决「按哈希定位」。<code>CLUSTERED BY (col) INTO n BUCKETS</code> 会对列值取哈希再对桶数取模，把数据拆成 n 个文件。它有两个用处：一是 <code>TABLESAMPLE(BUCKET x OUT OF n)</code> 可以低成本抽样；二是两张按同一列、同样桶数分桶的表做 join 时，可以变成桶对桶的 Map 端连接（SMB Join），省掉整个 shuffle 阶段。分桶要真正生效，写入时必须设置 <code>hive.enforce.bucketing=true</code>（Hive 2.x 起默认即为 true），且数据量太小、桶数太多会退化成大量小文件，反而更慢。</p>
 <pre><code class="language-sql">-- 开启动态分区，按查询结果的最后一列（dt）自动分区
 SET hive.exec.dynamic.partition = true;
@@ -213,6 +215,11 @@ ON u.user_id = o.user_id;</code></pre>
 <h3>参数层面</h3>
 <p>常见的还有：<code>hive.exec.parallel=true</code> 让互不依赖的阶段并行执行；<code>hive.cbo.enable=true</code>（2.x 起默认开启）启用基于代价的优化；<code>hive.vectorized.execution.enabled=true</code> 开启向量化，按批处理而非按行处理；小数据量测试时用 <code>hive.exec.mode.local.auto=true</code> 走本地模式省掉集群调度开销。写 SQL 之前先 <code>EXPLAIN</code> 看一遍执行计划，比反复改参数有效得多。</p>
 <p>小结一下：Hive 的价值在于用 SQL 的表达力换取 MapReduce 的开发效率，它的表结构约定（表即目录、分区即子目录）决定了「先设计好分区与存储格式，再写 SQL」的正确姿势；分区裁剪和列裁剪是收益最大的两个动作，分桶则服务于抽样与 SMB Join；写 HQL 时要时刻记住它与标准 SQL 在排序、join、类型转换上的差异。判断标准也很简单：<strong>批次分析、能容忍分钟级延迟，就用 Hive；要做毫秒级点查或频繁行级更新，请换 ClickHouse、Doris 或关系型数据库</strong>。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-8-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">Hadoop 生态与 HDFS</span></a>
+      <a class="next-post" href="/java-tutorial-8-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">Spark 核心</span></a>
+      </nav>
           </article>
   <!-- Footer -->
   <footer>

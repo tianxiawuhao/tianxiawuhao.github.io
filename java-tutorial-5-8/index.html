@@ -259,6 +259,11 @@ try {
 <p>把上面几节压缩成一张检查表。<strong>第一，别混淆行数上限和 OOM</strong>：65536 是 <code>.xls</code> 的上限，<code>.xlsx</code> 是 1048576，而内存爆掉是对象模型导致的，解决办法是换成 SXSSF。<strong>第二，临时文件要清</strong>：SXSSF 用完不调 <code>dispose()</code>，<code>/tmp</code> 会被 <code>poi-sxssf-*</code> 塞满，磁盘告警往往比内存告警来得更晚也更致命。<strong>第三，列定位别用字符串截取</strong>，超过 26 列必错，交给 <code>CellReference</code>。<strong>第四，样式要复用</strong>：<code>CellStyle</code> 由工作簿统一管理且有数量上限（<code>.xls</code> 约 4000、<code>.xlsx</code> 约 64000），在循环里 <code>createCellStyle()</code> 迟早报错。<strong>第五，流和包要关</strong>：<code>OPCPackage</code>、<code>InputStream</code>、<code>OutputStream</code> 全部走 try-with-resources 或 <code>finally</code>。<strong>第六，数据源要流式</strong>：导出用游标查询，导入用批量入库，否则瓶颈根本不在 POI。</p>
 
 <p>小结：Excel 导入导出的全部技术选择，都是在「内存」和「功能」之间做交换。小数据量、需要公式和动态表头，用 XSSF；几十万行以上、只关心顺序写入，用 SXSSF 的滑动窗口，并记住 <code>dispose()</code>；读取大文件则放弃用户模型，改用 <code>XSSFReader</code> 加 <code>SheetContentsHandler</code> 的事件模式逐行处理。PDF 不在 POI 的能力范围内，生成和解析各有专门的库。把这几条边界判断清楚，剩下的就是最朴素的工程活：流式取数、批量入库、随手关资源。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-5-7/"><span class="pn-label">← 上一篇</span><span class="pn-title">单元测试与代码质量</span></a>
+      <a class="next-post" href="/java-tutorial-5-9/"><span class="pn-label">下一篇 →</span><span class="pn-title">文件上传下载</span></a>
+      </nav>
           </article>
   <!-- Footer -->
   <footer>
