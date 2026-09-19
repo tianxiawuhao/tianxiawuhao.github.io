@@ -134,6 +134,20 @@
 
 <p><strong>索引</strong>是数据库为某一列（或几列）额外维护的、排好序的数据结构。没有索引时，<code>WHERE name = 'tom'</code> 只能从第一行读到最后一行逐行比对，这叫<strong>全表扫描</strong>；有了索引，数据库可以先在这份有序结构里定位到目标，再直接取出那一行。代价是索引本身占磁盘，并且每次写入都要同步维护它，所以索引不是越多越好。</p>
 
+<h3>三种索引结构对比：哈希、有序数组与 B+ 树</h3>
+
+<p>索引不是只有 B+ 树一种实现，选哪种结构决定了它擅长什么查询。把三种常见结构并排比较，就能理解 InnoDB 为什么最终落在 B+ 树上。</p>
+
+<ul>
+  <li><strong>哈希索引</strong>：用哈希函数把键映射到桶，等值查询平均 O(1)，一次定位，比 B+ 树还快。但它<strong>只支持等值</strong>（<code>=</code>、<code>IN</code>），不支持范围查询、<code>ORDER BY</code> 和最左前缀，也没有“有序”可供利用；冲突多时退化成链表，最坏情况会变慢。InnoDB 里有自适应哈希索引（AHI）：引擎根据访问频率自动为热点页建立，<strong>无法手动创建</strong>，也看不到、管不了。能显式使用 HASH 索引的是 MEMORY、NDB 等引擎，具体支持范围以官方文档为准。</li>
+  <li><strong>有序数组</strong>：元素按序存成一整块，二分查找即可，等值查询 O(log n)，<strong>范围查询尤其快</strong>——相邻元素物理上也相邻，定位到起点后顺序读过去就行。缺点在写：往中间插一个元素要挪动它后面所有元素，成本 O(n)，删除同理。<b>所以它只适合“只读或极少写”的数据</b>，例如按年份归档的历史表、基本不变的基础字典表。</li>
+  <li><strong>B+ 树</strong>：读写兼顾。树高只有 3～4 层，等值与范围都能用几次磁盘读完成，插入删除只改动少数节点，叶子又有序相连，天然支持范围扫描与排序。</li>
+</ul>
+
+<p>为什么不是 <strong>B 树</strong>？差别在于<strong>数据放在哪里</strong>。B 树的每个节点都存键和完整数据行，非叶子节点也被数据占满，一个页能装下的键就少了：同样数据量下树更高、IO 更多；更麻烦的是范围查询，B 树的记录散落在各层，要从小到大输出就得在层与层之间反复中序遍历、来回跳，磁盘上非常不友好。B+ 树把数据全部下沉到叶子节点，非叶子节点只做导航、一页能塞进几百个键，扇出大、层数少；叶子之间再用链表串起来，范围查询顺着链表走一遍即可。<strong>一句话：B+ 树用“非叶子不存数据”换来更高扇出，又用“叶子链表”换来范围扫描的顺序 IO，这两点正是磁盘索引最需要的。</strong></p>
+
+<div class="tut-tip"><strong>术语与版本提示：</strong>MySQL 官方文档把 InnoDB 的索引统一称作 B-tree（严格实现是 B+ 树），并明确 InnoDB 不支持用户自行创建的 HASH 索引——在 InnoDB 上写 <code>USING HASH</code> 并不会得到哈希索引。各引擎对索引类型的支持情况、以及自适应哈希索引的开关 <code>innodb_adaptive_hash_index</code>，请以官方文档为准。</div>
+
 <h3>B+ 树与聚簇索引</h3>
 
 <p>InnoDB 的索引实现是 <strong>B+ 树</strong>：非叶子节点只存键值，用来做导航；所有真实数据都放在叶子节点，并且叶子之间用链表串起来。这个设计带来两个直接好处。一是树的层数很少，千万级数据通常 3～4 层就能覆盖，因此一次查找只需要几次磁盘读；二是叶子有序且相连，<code>BETWEEN</code>、<code>&gt;</code>、<code>ORDER BY</code> 这类范围需求可以顺着叶子链表扫过去，不必回根节点重来。</p>
@@ -175,6 +189,55 @@ EXPLAIN SELECT * FROM t_user WHERE name = 'tom';</code></pre>
 </ul>
 
 <p>优化的目标很朴素：把 <code>type=ALL</code> 变成 <code>ref</code> 或 <code>range</code>，把 <code>Using filesort</code> 和 <code>Using temporary</code> 尽量消掉。如果 <code>rows</code> 依然很大，就要回头看索引设计，而不是先怀疑机器性能。</p>
+
+<h3>索引条件下推（ICP）：把过滤提前到存储引擎</h3>
+
+<p>回表的成本在于“每读一行都要回聚簇索引一次”。<strong>索引条件下推</strong>（Index Condition Pushdown，ICP，MySQL 5.6 起支持）要解决的就是这件事：把本来只能在 Server 层做的过滤提前交给存储引擎，在索引上判断完再决定要不要回表，从而少回表、少把行传给 Server 层。</p>
+
+<p>它生效的前提是：<strong>过滤条件里的列也在索引中，但这条条件没法用来缩小索引扫描的范围</strong>——最典型的是前导模糊匹配 <code>LIKE '%xxx'</code>。下面用一张带组合索引 <code>(zipcode, lastname, firstname)</code> 的小表做对照，索引里能用于定位的只有 <code>zipcode</code>，而 <code>lastname</code> 的模糊条件只能作为过滤条件。</p>
+
+<pre><code class="language-sql">-- 1. 建表：组合索引 (zipcode, lastname, firstname)
+CREATE TABLE t_addr (
+  id        BIGINT       NOT NULL AUTO_INCREMENT,
+  zipcode   VARCHAR(10)  NOT NULL,
+  lastname  VARCHAR(32)  NOT NULL,
+  firstname VARCHAR(32)  DEFAULT NULL,
+  address   VARCHAR(128) DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_zip_name (zipcode, lastname, firstname)
+) ENGINE = InnoDB;
+
+-- 2. 造一批数据：让 zipcode 命中很多行，lastname 只留下少数行
+SET SESSION cte_max_recursion_depth = 10000;
+INSERT INTO t_addr (zipcode, lastname, firstname, address)
+WITH RECURSIVE seq(n) AS (
+  SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n &lt; 5000
+)
+SELECT IF(n % 3 = 0, '95055', '95054'),
+       CONCAT(IF(n % 100 = 0, 'etrunia', 'user'), n),
+       'x', 'Main Street'
+FROM seq;
+ANALYZE TABLE t_addr;          -- 更新统计信息，让优化器估算更准
+
+-- 3. ICP 生效：Extra 显示 Using index condition
+EXPLAIN SELECT * FROM t_addr
+WHERE zipcode = '95054' AND lastname LIKE '%etrunia%';
+
+-- 4. 会话内关掉 ICP 再对比：Extra 变成 Using where，回表次数明显变多
+SET optimizer_switch = 'index_condition_pushdown=off';
+EXPLAIN SELECT * FROM t_addr
+WHERE zipcode = '95054' AND lastname LIKE '%etrunia%';
+SET optimizer_switch = 'index_condition_pushdown=on';   -- 用完恢复默认
+
+-- 5. 想看“到底读了多少行”，可以对比两次执行的会话状态值
+FLUSH STATUS;
+SELECT * FROM t_addr
+WHERE zipcode = '95054' AND lastname LIKE '%etrunia%';
+SHOW SESSION STATUS LIKE 'Handler_read%';</code></pre>
+
+<p>两者的差别就是处理顺序。<strong>不开 ICP</strong>：存储引擎按 <code>zipcode = '95054'</code> 从索引里取出主键，<strong>逐行回表</strong>读出整行交给 Server 层，Server 层再用 <code>lastname LIKE '%etrunia%'</code> 过滤——大量行白回表了。<strong>开了 ICP</strong>：存储引擎在索引上顺手判断 <code>lastname</code> 是否匹配（<code>lastname</code> 本来就在索引里，判断它不需要回表），只有通过的行才回表。上面的数据里 <code>95054</code> 大约命中三千多行，而 <code>lastname</code> 匹配的只有几十行，不开 ICP 就要回表三千多次，开了只需几十次。注意表太小时优化器可能直接选 <code>ALL</code> 全表扫描，看不到 ICP；要复现这个对比，数据量得足够大。</p>
+
+<div class="tut-tip"><strong>容易混淆的两组词：</strong><code>Using index</code> 说的是<strong>覆盖索引</strong>——查询要的列都在索引里，根本不用回表；<code>Using index condition</code> 说的是<strong>ICP</strong>——仍然要回表，只是把能下推的过滤条件提前到了索引层。两者可能同时出现，含义并不相同。ICP 只对“需要回表的二级索引扫描”有意义，条件里不含索引列时不会生效，是否下推由优化器按代价决定，细节以官方文档 “Index Condition Pushdown Optimization” 一节为准。</div>
 
 <h2>事务与 ACID：一组操作要么全成、要么全败</h2>
 

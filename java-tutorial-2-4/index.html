@@ -187,6 +187,111 @@ SET GLOBAL log_queries_not_using_indexes = ON;
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-4/02-slow-query-flow.svg" alt="慢查询优化流程图：慢查询日志开启后按总耗时聚合，再用 EXPLAIN 看 type、key、rows、Extra 四列，最后改写 SQL 与索引；下方列出函数包索引列、前导模糊、深分页等常见改写套路"><figcaption>图 2：先定位再动手——慢查询链路、EXPLAIN 四列与常见改写套路</figcaption></figure>
 
+<h3>EXPLAIN 输出逐列解读</h3>
+
+<p>先看上面四列是快速判断的抓手，但排查复杂语句时得把整行读全。传统格式（<code>EXPLAIN</code> 或 <code>EXPLAIN FORMAT=TRADITIONAL</code>）每个表一行，固定十二列，含义如下。</p>
+
+<ul>
+<li><code>id</code>：查询块的编号。<code>id</code> 相同表示同层、按从上到下的顺序执行；<code>id</code> 不同则<strong>数值越大越先执行</strong>（先算子查询，再喂给外层）；<code>id</code> 为 <code>NULL</code> 说明这一行是 <code>UNION RESULT</code> 之类的合并结果，没有对应的真实表。</li>
+<li><code>select_type</code>：这一行属于哪种查询块。<code>SIMPLE</code> 表示不含子查询和 UNION；<code>PRIMARY</code> 是最外层；<code>SUBQUERY</code> 是 SELECT 列表或 WHERE 里的非相关子查询；<code>DEPENDENT SUBQUERY</code> 是相关子查询，会随外层每一行重算，最需要警惕；<code>DERIVED</code> 是 FROM 里的派生表（通常被物化）；<code>UNION</code>／<code>UNION RESULT</code> 对应集合运算；<code>MATERIALIZED</code> 表示子查询被物化成临时表。</li>
+<li><code>table</code>：这一行访问的表名。<code>&lt;derived2&gt;</code> 表示引用 <code>id=2</code> 的派生表，<code>&lt;subquery3&gt;</code> 是物化子查询，它们都是临时结果，不是真实表。</li>
+<li><code>partitions</code>：分区裁剪后真正命中的分区；未分区表恒为 <code>NULL</code>。这里的 <code>NULL</code> 与“有没有走索引”无关，别误读。</li>
+<li><code>type</code>：访问类型，判断效率最直接的列，取值阶梯见下一小节。</li>
+<li><code>possible_keys</code>：理论上可选的索引，仅供参考。它为 <code>NULL</code> 说明没有可用索引，基本只能全表扫。</li>
+<li><code>key</code>：优化器<strong>实际</strong>选用的索引；为 <code>NULL</code> 说明最终没用索引。<code>possible_keys</code> 有值而 <code>key</code> 为 <code>NULL</code>，常见原因是列类型或字符集不一致、条件被函数包裹、或优化器估算全表扫更便宜。</li>
+<li><code>key_len</code>：索引中被使用的字节数，可用来判断组合索引用到了前几列。在 <code>utf8mb4</code> 下 <code>VARCHAR(n)</code> 大致占 <code>4n</code> 字节，再加 2 字节长度（可空列还要加 1 字节空标志位），因此可空的 <code>VARCHAR(10)</code> 约为 43 字节。这是按规则推算的经验值，实际以字段定义和官方说明为准。</li>
+<li><code>ref</code>：与 <code>key</code> 做等值比较的对象，可能是常量 <code>const</code>、另一表的列（<code>库名.表名.列名</code>）或函数结果。</li>
+<li><code>rows</code>：优化器估算的<strong>每步需扫描行数</strong>，来自采样统计，不是精确计数。统计信息过期会严重失真，可用 <code>ANALYZE TABLE</code> 更新。单看 <code>rows</code> 大不一定坏，要和下一列一起看。</li>
+<li><code>filtered</code>：按条件过滤后预计<strong>留下的百分比</strong>（0～100）。<code>rows</code> 与 <code>filtered</code> 相乘才是这一步估算的输出行数：<code>rows=1000</code>、<code>filtered=1</code> 意味着扫一千行只留十行，很值得考虑把过滤列纳入索引。</li>
+<li><code>Extra</code>：优化器的补充说明，信息量最大，常见取值见后文。</li>
+</ul>
+
+<h3>type 取值阶梯：system 到 ALL</h3>
+
+<p>访问类型按效率大致排成一条阶梯：<code>system</code> &gt; <code>const</code> &gt; <code>eq_ref</code> &gt; <code>ref</code> &gt; <code>range</code> &gt; <code>index</code> &gt; <code>ALL</code>。这里的“好”指扫的行数少、回表少，不等于绝对耗时。</p>
+
+<ul>
+<li><code>system</code>：表里只有一行（典型是只有一行的系统表或常量表），是 <code>const</code> 的特例，最快。</li>
+<li><code>const</code>：通过主键或唯一索引做等值查询，最多命中一行，优化器甚至能在执行前把它替换成常量，只读一次。</li>
+<li><code>eq_ref</code>：多表连接时，被驱动表用<strong>主键或非空唯一索引</strong>做等值匹配，每行只对应一行。这是连接里能达到的最好类型。</li>
+<li><code>ref</code>：用普通（非唯一）索引做等值匹配，可能命中多行。日常优化最常见的目标就是把 <code>ALL</code> 变成 <code>ref</code>。</li>
+<li><code>range</code>：索引上的范围扫描，对应 <code>BETWEEN</code>、<code>&gt;</code>、<code>&lt;</code>、<code>IN</code>、<code>LIKE 'abc%'</code> 等条件。<code>IN</code> 最终落成 <code>range</code> 还是 <code>ref</code> 取决于优化器估算，不必死记。</li>
+<li><code>index</code>：扫描整棵索引树，只是比 <code>ALL</code> 少读了数据页，常见于覆盖索引。行数一多仍然是坏消息，别因为它“用上了索引”就放心。</li>
+<li><code>ALL</code>：全表扫描，没有可用索引或优化器认为索引不划算。大表上出现 <code>ALL</code> 是首要消灭目标。</li>
+</ul>
+
+<p>除阶梯上的取值外，还可能出现 <code>index_merge</code>（两个索引取并集或交集）、<code>ref_or_null</code>、<code>unique_subquery</code>、<code>index_subquery</code>、<code>fulltext</code> 等，它们不属于这条从好到差的简单排序，含义以官方文档 <code>EXPLAIN</code> 输出一节为准。</p>
+
+<h3>Extra 常见取值</h3>
+
+<ul>
+<li><code>Using index</code>：<strong>覆盖索引</strong>，查询要的列都在索引里，不需要回表，通常是最好的信号之一。</li>
+<li><code>Using where</code>：存储引擎取回行之后，Server 层还要再过滤一遍。它本身不是问题，但若同时 <code>type=ALL</code>，说明过滤发生在读完整个表之后，代价很高。</li>
+<li><code>Using index condition</code>：索引条件下推（ICP）生效，部分过滤已在存储引擎的索引层完成，减少了回表。原理见上一篇的索引一节。</li>
+<li><code>Using filesort</code>：无法利用索引顺序完成 <code>ORDER BY</code>／<code>GROUP BY</code>，需要额外排序。名字里的 file 不代表一定落磁盘，但排序集合大时开销明显。</li>
+<li><code>Using temporary</code>：为完成查询建了内部临时表，常见于 <code>GROUP BY</code>、<code>DISTINCT</code>、<code>UNION</code>。MySQL 8.0 的内存临时表默认用 TempTable 引擎（<code>internal_tmp_mem_storage_engine</code>），溢出才落盘，所以看到它不必惊慌，但要结合行数判断。</li>
+<li><code>Using join buffer (hash join)</code>／<code>(Block Nested Loop)</code>：被驱动表没有可用索引，只能把驱动表的数据放进连接缓冲里配对。MySQL 8.0.18 起对等值连接引入哈希连接，8.0.20 起进一步用它替代块嵌套循环；看到这个值，优先考虑给被驱动表的连接列加索引。</li>
+<li><code>Using index for group-by</code>／<code>Using index for skip scan</code>：前者说明 <code>GROUP BY</code> 直接用上了索引；后者是 8.0.13 起的索引跳跃扫描，组合索引前导列没出现在条件里时也可能用上索引。</li>
+<li><code>Impossible WHERE</code>／<code>Zero limit</code>／<code>Select tables optimized away</code>：条件恒假、<code>LIMIT 0</code>、或结果能由索引与统计信息直接得出，都不会真正扫数据。</li>
+</ul>
+
+<h3>EXPLAIN ANALYZE 与 FORMAT=JSON</h3>
+
+<p><code>EXPLAIN</code> 给出的始终是<strong>估算</strong>，统计信息一失真，<code>rows</code> 就可能差几个数量级。MySQL 8.0.18 起提供 <code>EXPLAIN ANALYZE</code>：它<strong>真正执行</strong>语句，输出树形结构，把每一步的估算值与实测值并排给出。</p>
+
+<pre><code class="language-sql">-- 8.0.18+：真实执行，给出 actual time / actual rows / loops
+EXPLAIN ANALYZE
+SELECT o.id, o.amount, u.name
+FROM orders AS o
+JOIN t_user AS u ON u.id = o.user_id
+WHERE o.created_at &gt;= '2024-01-01'
+ORDER BY o.created_at
+LIMIT 100;
+
+-- 输出形如（TREE 格式，节选）：
+-- -&gt; Limit: 100 row(s)  (actual time=0.42..0.51 rows=100 loops=1)
+--     -&gt; Nested loop inner join  (cost=120.5 rows=98) (actual time=0.05..0.44 rows=100 loops=1)
+--         -&gt; Filter: (o.created_at &gt;= '2024-01-01')  (actual time=0.03..0.30 rows=100 loops=1)
+--             -&gt; Table scan on o  (actual time=0.02..0.20 rows=5000 loops=1)
+--         -&gt; Index lookup on u using PRIMARY (id=o.user_id)  (actual time=0.001..0.001 rows=1 loops=100)</code></pre>
+
+<p>读 <code>EXPLAIN ANALYZE</code> 有两种基本判断。<strong>估算显著小于实测</strong>（例如预估 100 行、实测 10 万行），说明统计信息不准或条件相关性被低估，优化器很可能因此选错索引、选错连接顺序；<strong>实测行数正常但耗时很高</strong>，就要看 <code>loops</code> 被放大的那一步——嵌套循环里某层的 <code>loops</code> 很大，它单次的开销会被乘成大数目。要注意 <code>EXPLAIN ANALYZE</code> 会真的执行语句（含多表写语句也会执行），8.0.18 最初只支持 <code>SELECT</code>，后续版本才逐步扩展到多表 <code>UPDATE</code>／<code>DELETE</code>，可用范围以官方为准；分析慢语句时也应避开业务高峰。</p>
+
+<p><code>EXPLAIN ANALYZE</code> 目前只输出 TREE 格式。要机器可读、信息更全的结果，用 <code>FORMAT=JSON</code>：</p>
+
+<pre><code class="language-sql">-- 键值结构，含 cost_info、used_columns、attached_condition 等，便于脚本采集与对比
+EXPLAIN FORMAT=JSON
+SELECT id, name FROM t_user WHERE name = 'tom';
+
+-- 输出节选：
+-- {
+--   "query_block": {
+--     "select_id": 1,
+--     "cost_info": { "query_cost": "0.35" },
+--     "table": {
+--       "table_name": "t_user",
+--       "access_type": "ref",
+--       "possible_keys": ["idx_name"],
+--       "key": "idx_name",
+--       "used_key_parts": ["name"],
+--       "key_length": "102",
+--       "ref": ["const"],
+--       "rows_examined_per_scan": 1,
+--       "filtered": "100.00",
+--       "using_index": true
+--     }
+--   }
+-- }
+
+-- 8.0 也支持 TREE 格式，比传统表格更直观
+EXPLAIN FORMAT=TREE
+SELECT id, name FROM t_user WHERE name = 'tom';
+
+-- 想看不属于自己的连接正在跑什么，可按连接 id 查它的执行计划
+EXPLAIN FOR CONNECTION 12345;</code></pre>
+
+<p>三种格式各有用处：传统格式适合人眼一行行扫；JSON 适合脚本采集与版本间对比，<code>cost_info</code> 里有 <code>read_cost</code>、<code>eval_cost</code>、<code>prefix_cost</code> 等细项，<code>used_columns</code> 能直接看出是否覆盖索引；TREE 与 <code>ANALYZE</code> 适合顺着嵌套层次往下找瓶颈。JSON／TREE 的字段随版本仍在增加，具体字段名以官方文档为准。</p>
+
 <h2>四、常见改写套路与分库分表的分寸</h2>
 
 <p>执行计划暴露问题之后，多数慢查询都落在下面几类：</p>
@@ -201,6 +306,90 @@ SET GLOBAL log_queries_not_using_indexes = ON;
 </ul>
 
 <p>当索引、SQL、缓存、读写分离都做过仍然撑不住，才轮到分库分表。垂直拆分按业务把宽表、大库切小；水平拆分按分片键（如用户 ID 取模或按时间范围）把行分散到多个库表。代价也很实在：跨分片 JOIN 和聚合要在应用层拼装，全局唯一 ID 得另想办法（号段模式、雪花算法），跨分片分页和事务都变复杂，扩容还要迁移数据。因此分片键一旦定下就很难改，务必选“查询必带、分布均匀”的列。</p>
+
+<h2>五、触发器：能放应用层就别放数据库</h2>
+
+<p><strong>触发器</strong>（trigger）是绑定在表上的、由 <code>INSERT</code>／<code>UPDATE</code>／<code>DELETE</code> 自动触发的一段 SQL。它和存储过程最大的区别是<strong>没有显式调用点</strong>：只要那条语句执行了，触发器就一定执行。先看怎么写，再看该不该用。</p>
+
+<h3>建一个触发器：before/after × insert/update/delete</h3>
+
+<p>一个触发器由三件事唯一确定：<strong>时机</strong>（<code>BEFORE</code> 或 <code>AFTER</code>）、<strong>事件</strong>（<code>INSERT</code>／<code>UPDATE</code>／<code>DELETE</code>）和<strong>表</strong>，三乘二共六种组合。MySQL 8.0 里同一张表的同一时机＋事件可以挂多个触发器，用 <code>FOLLOWS</code>／<code>PRECEDES</code> 指定先后顺序。</p>
+
+<p>触发器体里靠 <code>NEW</code> 和 <code>OLD</code> 访问数据行：<code>NEW</code> 是即将写入（或已写入）的新行，<code>OLD</code> 是更新前（或已删除）的旧行。可用性很好记：<code>INSERT</code> 只有 <code>NEW</code>，<code>DELETE</code> 只有 <code>OLD</code>，<code>UPDATE</code> 两者都有。<code>BEFORE</code> 触发器里可以给 <code>NEW.列</code> 赋值，从而改写即将写入的值（这是 MySQL 的扩展用法）；<code>AFTER</code> 触发器里 <code>NEW</code>／<code>OLD</code> 只读。任何情况下 <code>OLD</code> 都不能被改写。</p>
+
+<pre><code class="language-sql">-- 目标：新增用户时写日志、更新时补时间戳、删除前先归档
+CREATE TABLE t_user (
+  id         BIGINT         NOT NULL AUTO_INCREMENT,
+  name       VARCHAR(32)    NOT NULL,
+  balance    DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  updated_at DATETIME       DEFAULT NULL,
+  PRIMARY KEY (id)
+) ENGINE = InnoDB;
+
+CREATE TABLE user_log (
+  id      BIGINT      NOT NULL AUTO_INCREMENT,
+  user_id BIGINT      NOT NULL,
+  action  VARCHAR(16) NOT NULL,
+  note    VARCHAR(64) DEFAULT NULL,
+  PRIMARY KEY (id)
+) ENGINE = InnoDB;
+
+-- 触发器体里有分号，命令行客户端会把它当成语句结束，
+-- 所以先用 DELIMITER 临时换一个分隔符（DELIMITER 是客户端命令，不是 SQL 语句）
+DELIMITER $$
+
+CREATE TRIGGER trg_user_after_insert
+AFTER INSERT ON t_user
+FOR EACH ROW
+BEGIN
+  INSERT INTO user_log (user_id, action, note)
+  VALUES (NEW.id, 'INSERT', CONCAT('name=', NEW.name));
+END$$
+
+-- BEFORE UPDATE：给 NEW 赋值，等于在写库前统一补默认值
+CREATE TRIGGER trg_user_before_update
+BEFORE UPDATE ON t_user
+FOR EACH ROW
+BEGIN
+  SET NEW.updated_at = NOW();
+END$$
+
+-- BEFORE DELETE：把要删的行先归档（此时 OLD 可用、NEW 不可用）
+CREATE TRIGGER trg_user_before_delete
+BEFORE DELETE ON t_user
+FOR EACH ROW
+BEGIN
+  INSERT INTO user_log (user_id, action, note)
+  VALUES (OLD.id, 'DELETE', CONCAT('balance=', OLD.balance));
+END$$
+
+DELIMITER ;
+
+-- 触发并验证
+INSERT INTO t_user (name, balance) VALUES ('tom', 100.00);
+UPDATE t_user SET balance = 120.00 WHERE name = 'tom';
+DELETE FROM t_user WHERE name = 'tom';
+SELECT * FROM user_log ORDER BY id;   -- INSERT、DELETE 各一条
+
+SHOW TRIGGERS;                        -- 查看当前库的所有触发器
+DROP TRIGGER trg_user_after_insert;   -- 删除触发器</code></pre>
+
+<div class="tut-tip"><strong>JDBC 里不要写 DELIMITER。</strong><code>DELIMITER</code> 只在 <code>mysql</code> 命令行客户端里有效，服务器根本不认识它。用 JDBC 时把整条 <code>CREATE TRIGGER ... BEGIN ... END</code> 作为一个字符串交给 <code>Statement.execute</code> 即可，驱动会当成单条语句发送，不需要分隔符。另外要注意：触发器<strong>不能读写触发它的那张表</strong>——在 <code>t_user</code> 的触发器里再写 <code>t_user</code> 会报 1442 错误，但操作其他表不受限。</div>
+
+<h3>为什么“能用应用层就别用触发器”</h3>
+
+<p>触发器语法不难，难的是长期维护。下面几条是实践中最常被抱怨的，足以构成默认不用它的理由。</p>
+
+<ul>
+<li><strong>隐式执行，调用方看不见</strong>：应用代码里只有一句 <code>INSERT INTO t_user</code>，实际却动了三张表、还改了字段值。读代码根本判断不出副作用从哪来，接手的人最容易踩。</li>
+<li><strong>难排查</strong>：触发器里出错，报错信息指向触发它的那条语句，堆栈里没有业务上下文；日志、监控、链路追踪通常也覆盖不到数据库内部这一层。</li>
+<li><strong>难测试、难版本管理</strong>：触发器不在应用代码仓库的主流程里，容易被漏进发布脚本；单元测试也绕不开它，只能连真库跑。</li>
+<li><strong>放大事务与锁</strong>：触发器在<strong>同一个事务</strong>内执行，额外写的表会把事务拉长、把锁范围扩大，死锁概率随之上升，而主语句看起来只是一次简单写入。</li>
+<li><strong>复制风险</strong>：基于语句的复制（STATEMENT）会把原语句发到从库、让触发器在从库再执行一次，一旦其中用到 <code>NOW()</code>、<code>RAND()</code>、<code>UUID()</code> 这类非确定性函数，主从数据就可能不一致（生产推荐 ROW 格式正有这层原因）；触发器还带 <code>DEFINER</code>，主从账号权限不一致时也可能执行失败。具体行为随 binlog 格式与版本而异，以官方文档为准。</li>
+<li><strong>能力受限</strong>：不能改触发自己的表，难以单步调试，也无法像应用代码那样方便地做灰度、回滚与单元测试。</li>
+</ul>
+
+<p>更推荐的做法是把这些逻辑放回<strong>应用层</strong>：在同一个事务里显式写日志表，或用 ORM／AOP 统一拦截，好处是逻辑可见、可测、可回滚，还能顺手带上 <code>traceId</code> 之类的上下文。触发器留下的合理场景不多，主要是改不动应用代码的遗留系统，以及必须由数据库独立保证的审计与强约束。若确实要用，至少做到：只做简单、确定性、单表的事，避免跨表联锁，把定义写进版本化的迁移脚本，并在主从上验证复制行为。</p>
 
 <h2>小结</h2>
 
