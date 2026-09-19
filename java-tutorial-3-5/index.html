@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们让浏览器把页面渲染得漂漂亮亮，但那些页面上的数据从哪来？如果每换一个用户名、每翻一页列表，都要让整个页面重新加载一次，用户会看到白屏闪烁，服务器也要重复传输导航栏、页脚、CSS 这些根本没必要重发的字节。本章要解决的就是这件事：<strong>让 JavaScript 在后台悄悄发一次 HTTP 请求，拿到数据后只更新页面的一小块</strong>。这就是 Ajax（Asynchronous JavaScript and XML）。我们会依次看清原生 <code>XMLHttpRequest</code> 的四步流程、现代写法 <code>fetch</code> 与 <code>axios</code> 的取舍，最后解释那道几乎人人都会撞上的墙——同源策略与 CORS。如果你已经会写 HTML/CSS 和一点 JavaScript，但还说不清"请求发出去了为什么被浏览器拦住"，本章正适合你。</p>
+<p>上一章讲了怎样让浏览器把页面渲染得漂漂亮亮，但那些页面上的数据从哪来？如果每换一个用户名、每翻一页列表，都要让整个页面重新加载一次，用户会看到白屏闪烁，服务器也要重复传输导航栏、页脚、CSS 这些根本没必要重发的字节。本章要解决的就是这件事：<strong>让 JavaScript 在后台悄悄发一次 HTTP 请求，拿到数据后只更新页面的一小块</strong>。这就是 Ajax（Asynchronous JavaScript and XML）。你会依次看清原生 <code>XMLHttpRequest</code> 的四步流程、现代写法 <code>fetch</code> 与 <code>axios</code> 的取舍，最后解释那道几乎人人都会撞上的墙——同源策略与 CORS。如果你已经会写 HTML/CSS 和一点 JavaScript，但还说不清“请求发出去了为什么被浏览器拦住”，本章正适合你。</p>
 
 <h2>一、Ajax 到底改变了什么</h2>
 
-<p>传统网页的交互模型是"提交—跳转—重新渲染"：表单 <code>action</code> 指向一个 Servlet，点提交后浏览器把整个文档换掉。Ajax 把这条链路拆成两半，请求依旧由浏览器发出，但<strong>响应不再交给浏览器去替换文档，而是交给一段 JavaScript 回调函数</strong>，由它决定把数据塞进哪个 <code>&lt;div&gt;</code>。浏览器地址栏不动、页面不闪、上下文不丢，这就是"局部刷新"。</p>
+<p>传统网页的交互模型是“提交—跳转—重新渲染”：表单 <code>action</code> 指向一个 Servlet，点提交后浏览器把整个文档换掉。Ajax 把这条链路拆成两半，请求依旧由浏览器发出，但<strong>响应不再交给浏览器去替换文档，而是交给一段 JavaScript 回调函数</strong>，由它决定把数据塞进哪个 <code>&lt;div&gt;</code>。浏览器地址栏不动、页面不闪、上下文不丢，这就是“局部刷新”。</p>
 
 <p>这条链路的三个角色需要记牢：请求由 Ajax 引擎（也就是 <code>XMLHttpRequest</code> 对象）发送；服务器照旧处理并返回数据；数据的落点由回调函数里的 DOM 操作决定。理解了这个分工，后面所有框架的 API 就都只是包装形式的差异而已。</p>
 
@@ -162,13 +162,13 @@
   xhr.send(); // 4. GET 请求参数已拼在 URL 上，send 不传参
 }</code></pre>
 
-<p>这里有两处值得单独强调。第一，<strong><code>onreadystatechange</code> 必须在 <code>send()</code> 之前绑定</strong>，否则请求若很快返回，回调可能来不及注册就被触发，页面表现为"偶尔没反应"。第二，<code>readyState === 4</code> 只说明请求结束，不代表成功，必须同时判断 <code>status</code>；把条件写成 <code>status == 200</code> 会漏掉 201、204 这些同样合法的成功响应，使用范围判断更稳妥。</p>
+<p>这里有两处值得单独强调。第一，<strong><code>onreadystatechange</code> 必须在 <code>send()</code> 之前绑定</strong>，否则请求若很快返回，回调可能来不及注册就被触发，页面表现为“偶尔没反应”。第二，<code>readyState === 4</code> 只说明请求结束，不代表成功，必须同时判断 <code>status</code>；把条件写成 <code>status == 200</code> 会漏掉 201、204 这些同样合法的成功响应，使用范围判断更稳妥。</p>
 
-<p>POST 请求要多做一步：把参数从 URL 挪进请求体，并用 <code>setRequestHeader</code> 声明编码方式，否则服务端按默认字符集解码，中文参数就变成了乱码。流程依旧是先 <code>open('POST', 路径, true)</code>，紧接着设置请求头，再把 <code>'nickname=' + 值</code> 作为 <code>send()</code> 的实参发出，最后在 <code>onreadystatechange</code> 里判断 <code>readyState</code> 与 <code>status</code>，把响应写进目标元素。这里有两个细节必须核对：一是请求头的准确拼写是 <code>application/x-www-form-urlencoded</code>，中间那两个连字符缺一不可，写成 <code>application/x-www-formurlencoded</code> 是不合法的；二是参数值要先经 <code>encodeURIComponent</code> 编码，否则 <code>&amp;</code>、<code>=</code>、空格等字符会破坏请求体结构——GET 请求把参数拼在 URL 上时同理。顺带一提，GET 与 POST 在 Ajax 里的差别并不神秘：GET 把参数放在 URL 上、只适合查询且受长度限制，POST 把参数放在请求体里、适合提交与修改，接口该用哪个方法由语义决定，而不是由"哪个更方便"决定。至于网上老教程里那段 <code>window.XMLHttpRequest ? ... : new ActiveXObject('Microsoft.XMLHTTP')</code> 的兼容判断，是为 IE5/IE6 准备的，今天可以放心删掉，直接 <code>new XMLHttpRequest()</code> 即可。</p>
+<p>POST 请求要多做一步：把参数从 URL 挪进请求体，并用 <code>setRequestHeader</code> 声明编码方式，否则服务端按默认字符集解码，中文参数就变成了乱码。流程依旧是先 <code>open('POST', 路径, true)</code>，紧接着设置请求头，再把 <code>'nickname=' + 值</code> 作为 <code>send()</code> 的实参发出，最后在 <code>onreadystatechange</code> 里判断 <code>readyState</code> 与 <code>status</code>，把响应写进目标元素。这里有两个细节必须核对。一是请求头的准确拼写是 <code>application/x-www-form-urlencoded</code>，中间那两个连字符缺一不可，写成 <code>application/x-www-formurlencoded</code> 是不合法的。二是参数值要先经 <code>encodeURIComponent</code> 编码，否则 <code>&amp;</code>、<code>=</code>、空格等字符会破坏请求体结构，GET 请求把参数拼在 URL 上时同理。GET 与 POST 在 Ajax 里的差别并不神秘：GET 把参数放在 URL 上，只适合查询且受长度限制；POST 把参数放在请求体里，适合提交与修改。接口该用哪个方法由语义决定，而不是由“哪个更方便”决定。至于网上老教程里那段 <code>window.XMLHttpRequest ? ... : new ActiveXObject('Microsoft.XMLHTTP')</code> 的兼容判断，是为 IE5/IE6 准备的，今天可以放心删掉，直接 <code>new XMLHttpRequest()</code> 即可。</p>
 
 <h2>三、fetch 与 axios：现代写法怎么选</h2>
 
-<p><code>fetch</code> 是 ES6 之后浏览器内置的 API（不是库，无需引入），它返回 Promise，配合 <code>async/await</code> 写起来比回调清爽得多。但要记住一个关键差异：<strong><code>fetch</code> 只在网络层面失败时才 reject，HTTP 的 404、500 对它来说都是"成功完成"的请求</strong>，必须自己检查 <code>response.ok</code>。另外，<code>response.json()</code> 返回的也是 Promise，漏写 <code>await</code> 会得到一个 Promise 对象而不是数据——这是新手最常见的 bug。</p>
+<p><code>fetch</code> 是 ES6 之后浏览器内置的 API（不是库，无需引入），它返回 Promise，配合 <code>async/await</code> 写起来比回调清爽得多。但要记住一个关键差异：<strong><code>fetch</code> 只在网络层面失败时才 reject，HTTP 的 404、500 对它来说都是“成功完成”的请求</strong>，必须自己检查 <code>response.ok</code>。另外，<code>response.json()</code> 返回的也是 Promise，漏写 <code>await</code> 会得到一个 Promise 对象而不是数据——这是新手最常见的 bug。</p>
 
 <pre><code class="language-js">async function login(username, password) {
   try {
@@ -188,7 +188,7 @@
   }
 }</code></pre>
 
-<p><code>axios</code> 是第三方库，浏览器端底层同样是 <code>XMLHttpRequest</code>（在 Node.js 里则用 <code>http</code> 模块，所以它并非"只是 XHR 的封装"），优势在于工程化的细节都替你做好了：自动把 JSON 响应转成对象、非 2xx 状态码直接 reject、拦截器统一加 token 与处理错误、并发请求接口、可取消、可设超时。<code>fetch</code> 这些都要自己封装一层。</p>
+<p><code>axios</code> 是第三方库，浏览器端底层同样是 <code>XMLHttpRequest</code>（在 Node.js 里则用 <code>http</code> 模块，所以它并非“只是 XHR 的封装”），优势在于工程化的细节都替你做好了：自动把 JSON 响应转成对象、非 2xx 状态码直接 reject、拦截器统一加 token 与处理错误、并发请求接口、可取消、可设超时。<code>fetch</code> 这些都要自己封装一层。</p>
 
 <pre><code class="language-js">const api = axios.create({
   baseURL: '/api',
@@ -208,11 +208,11 @@ api.post('/login', { username: 'tom', password: '123456' })
   .then(function (data) { console.log(data); })
   .catch(function (err) { console.error(err); });</code></pre>
 
-<p>关于常被引用的"fetch 不支持中断和超时"这一说法，需要更新：现代浏览器已经支持 <code>AbortController</code> 中断请求，也可用 <code>AbortSignal.timeout(5000)</code> 设置超时，只是比 axios 的 <code>timeout</code> 配置啰嗦。真正仍然成立的短板是<strong>无法原生获取上传/下载进度</strong>，需要进度条时应改用 <code>XMLHttpRequest</code> 的 <code>upload.onprogress</code>。选型建议很直接：小项目或不想引依赖就用 <code>fetch</code>，中大型项目、需要拦截器和统一错误处理就用 <code>axios</code>；jQuery 的 <code>$.ajax</code> 只是历史写法，新项目不必再引入整个 jQuery。另外，<code>$.ajax</code> 支持 JSONP 这件事容易误导——JSONP 靠的是动态插入 <code>&lt;script&gt;</code> 标签，与 <code>XMLHttpRequest</code> 无关，且只支持 GET，今天应该用 CORS 取代它。</p>
+<p>关于常被引用的“fetch 不支持中断和超时”这一说法，需要更新：现代浏览器已经支持 <code>AbortController</code> 中断请求，也可用 <code>AbortSignal.timeout(5000)</code> 设置超时，只是比 axios 的 <code>timeout</code> 配置啰嗦。真正仍然成立的短板是<strong>无法原生获取上传/下载进度</strong>，需要进度条时应改用 <code>XMLHttpRequest</code> 的 <code>upload.onprogress</code>。选型建议很直接：小项目或不想引依赖就用 <code>fetch</code>，中大型项目、需要拦截器和统一错误处理就用 <code>axios</code>；jQuery 的 <code>$.ajax</code> 只是历史写法，新项目不必再引入整个 jQuery。另外，<code>$.ajax</code> 支持 JSONP 这件事容易误导——JSONP 靠的是动态插入 <code>&lt;script&gt;</code> 标签，与 <code>XMLHttpRequest</code> 无关，且只支持 GET，今天应该用 CORS 取代它。</p>
 
 <h2>四、跨域与 CORS：请求为什么被拦住</h2>
 
-<p>当页面地址与接口地址的<strong>协议、域名、端口三者中任意一项不同</strong>，浏览器就判定为跨域，并施加同源策略限制。注意"被拦住"的准确含义：请求通常已经发出、服务器也处理了，只是<strong>响应被浏览器拦下不交给 JavaScript</strong>。所以看到 CORS 报错时，先去后端加响应头，而不是怀疑前端代码写错了。</p>
+<p>当页面地址与接口地址的<strong>协议、域名、端口三者中任意一项不同</strong>，浏览器就判定为跨域，并施加同源策略限制。注意“被拦住”的准确含义：请求通常已经发出、服务器也处理了，只是<strong>响应被浏览器拦下不交给 JavaScript</strong>。所以看到 CORS 报错时，先去后端加响应头，而不是怀疑前端代码写错了。</p>
 
 <p>解决方案是 CORS（跨域资源共享），由服务器通过响应头声明允许哪些来源访问。简单请求（GET、POST 配少量安全头）只需一个 <code>Access-Control-Allow-Origin</code>；带自定义头、<code>Content-Type: application/json</code> 或 PUT/DELETE 的请求，浏览器会先发一次 <code>OPTIONS</code> 预检请求，服务器需应答 <code>Access-Control-Allow-Methods</code>、<code>Access-Control-Allow-Headers</code>。若前端要带 cookie，前后端都得开启凭证：前端 <code>credentials: 'include'</code>，后端 <code>Access-Control-Allow-Credentials: true</code>。Spring Boot 中集中配置最省事：</p>
 
@@ -234,12 +234,7 @@ public class WebConfig implements WebMvcConfigurer {
 
 <h2>小结</h2>
 
-<p>Ajax 的本质是"用 JavaScript 发请求、用回调更新局部 DOM"，<code>XMLHttpRequest</code> 是这套机制的原生引擎，<code>fetch</code> 与 <code>axios</code> 是两种更好的书写方式。记住四条要点：<code>onreadystatechange</code> 要在 <code>send()</code> 前绑定并同时校验 <code>status</code>；<code>fetch</code> 不会因 404/500 而 reject，且 <code>response.json()</code> 必须 <code>await</code>；<code>axios</code> 用拦截器和 <code>timeout</code> 省掉大量样板代码；跨域由服务端 CORS 响应头解决，带 cookie 时不能把允许来源写成 <code>*</code>。把这几点落实到代码里，前后端联调时绝大多数"数据拿不到"的问题都能自己定位。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-3-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">DOM、BOM 与事件</span></a>
-      <a class="next-post" href="/java-tutorial-3-6/"><span class="pn-label">下一篇 →</span><span class="pn-title">jQuery 与 UI 框架</span></a>
-      </nav>
+<p>Ajax 的本质是“用 JavaScript 发请求、用回调更新局部 DOM”，<code>XMLHttpRequest</code> 是这套机制的原生引擎，<code>fetch</code> 与 <code>axios</code> 是两种更好的书写方式。记住四条要点：<code>onreadystatechange</code> 要在 <code>send()</code> 前绑定并同时校验 <code>status</code>；<code>fetch</code> 不会因 404/500 而 reject，且 <code>response.json()</code> 必须 <code>await</code>；<code>axios</code> 用拦截器和 <code>timeout</code> 省掉大量样板代码；跨域由服务端 CORS 响应头解决，带 cookie 时不能把允许来源写成 <code>*</code>。把这几点落实到代码里，前后端联调时绝大多数“数据拿不到”的问题都能自己定位。</p>
           </article>
   <!-- Footer -->
   <footer>

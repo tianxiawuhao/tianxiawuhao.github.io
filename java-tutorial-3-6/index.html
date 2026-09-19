@@ -128,19 +128,19 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>jQuery 是老一代前端工程师的必修课，也是今天读懂大量遗留项目、后台管理页面和 Bootstrap 3 站点的钥匙。本章解决三个问题：怎样用选择器精准而简短地选中元素，怎样用链式调用把「选、改、取」串成一条流水线，怎样用 Ajax 和现成的 UI 框架把页面拼出来。内容适合已经会写原生 JavaScript、做过 DOM 操作、准备接手 Web 项目的 Java 后端读者。</p>
+<p>jQuery 是老一代前端工程师的必修课，也是今天读懂大量遗留项目、后台管理页面和 Bootstrap 3 站点的钥匙。本章解决三个问题：怎样用选择器精准而简短地选中元素，怎样用链式调用把“选、改、取”串成一条流水线，怎样用 Ajax 和现成的 UI 框架把页面拼出来。内容适合已经会写原生 JavaScript、做过 DOM 操作、准备接手 Web 项目的 Java 后端读者。</p>
 
 <h2>一、jQuery 到底解决了什么问题</h2>
-<p>原生 DOM 的痛点是「啰嗦加兼容」：按 id 取一个元素要写 <code>document.getElementById</code>，遍历一批节点要自己写循环，改样式要记住 <code>style</code> 与 <code>classList</code> 的差别，绑定事件还要考虑 IE 的 <code>attachEvent</code>。jQuery 用两招把这些问题一起抹平：一是 <code>$()</code> 工厂函数接收 CSS 选择器字符串，返回一个类数组的 jQuery 对象；二是这些对象自带一整套跨浏览器的 DOM、样式、事件和 Ajax 方法。</p>
-<p>要牢记的第一条规则是：jQuery 对象不是 DOM 对象。事件回调里的 <code>this</code> 是原生 DOM 对象，必须写成 <code>$(this)</code> 才能调用 jQuery 方法；反过来，<code>$("#box").get(0)</code> 或 <code>$("#box")[0]</code> 又能取回原生 DOM，交给依赖 DOM 的第三方库使用。新手最常见的报错「undefined is not a function」，大多就是把 <code>this</code> 当成 jQuery 对象直接调用了 <code>.css()</code>。</p>
+<p>原生 DOM 的痛点是“啰嗦”加“兼容”：按 id 取一个元素要写 <code>document.getElementById</code>，遍历一批节点要自己写循环，改样式要记住 <code>style</code> 与 <code>classList</code> 的差别，绑定事件还要考虑 IE 的 <code>attachEvent</code>。jQuery 用两招把这些问题一起抹平。一是 <code>$()</code> 工厂函数接收 CSS 选择器字符串，返回一个类数组的 jQuery 对象。二是这些对象自带一整套跨浏览器的 DOM、样式、事件和 Ajax 方法。</p>
+<p>要牢记的第一条规则是：jQuery 对象不是 DOM 对象。事件回调里的 <code>this</code> 是原生 DOM 对象，必须写成 <code>$(this)</code> 才能调用 jQuery 方法；反过来，<code>$("#box").get(0)</code> 或 <code>$("#box")[0]</code> 又能取回原生 DOM，交给依赖 DOM 的第三方库使用。新手最常见的报错“undefined is not a function”，大多就是把 <code>this</code> 当成 jQuery 对象直接调用了 <code>.css()</code>。</p>
 
-<p>实践中还有一个细节：<code>$(function () { ... })</code> 是 <code>$(document).ready()</code> 的简写，它保证 DOM 解析完成后再执行绑定，比把 <code>&lt;script&gt;</code> 写在哪里都更稳妥。引入方式上，jQuery 1.x 兼容 IE6–8，2.x 起放弃老 IE，3.x 是当前主线并移除了 <code>$.browser</code>、<code>$(window).load()</code> 等老 API；老项目里常见的 1.11.3 正是为兼容 IE8 而保留的版本。文件既可用 CDN 引入，也可下载到 <code>webapp/js/</code> 下由页面引用，后者在离线环境更可靠。</p>
+<p><code>$(function () { ... })</code> 是 <code>$(document).ready()</code> 的简写，它保证 DOM 解析完成后再执行绑定，比把 <code>&lt;script&gt;</code> 放在任何位置都更稳妥。引入方式上，jQuery 1.x 兼容 IE6–8，2.x 起放弃老 IE，3.x 是当前主线并移除了 <code>$.browser</code>、<code>$(window).load()</code> 等老 API；老项目里常见的 1.11.3 正是为兼容 IE8 而保留的版本。文件既可用 CDN 引入，也可下载到 <code>webapp/js/</code> 下由页面引用，后者在离线环境更可靠。</p>
 
 <h2>二、选择器：一句话选中目标元素</h2>
 <p>jQuery 的选择器沿用 CSS 规范，按用途可分为基本、层级和过滤三类。基本选择器包括 <code>#id</code>、<code>.class</code>、<code>element</code>、<code>*</code> 以及并集写法 <code>selector1, selector2</code>，其中 <code>*</code> 会匹配全部元素，性能很差，实际项目中几乎不该出现。</p>
 <p>层级选择器描述元素之间的位置关系：<code>ancestor descendant</code>（中间是空格，匹配所有后代）、<code>parent &gt; child</code>（只匹配直接子元素）、<code>prev + next</code>（紧跟其后的下一个兄弟）、<code>prev ~ siblings</code>（后面的所有兄弟）。示例中 <code>$(".itcast a")</code> 会把嵌套在 <code>p</code> 里的链接也染红，而 <code>$(".itcast&gt;a")</code> 只处理直接子链接，差别就在这个符号上。</p>
-<p>过滤选择器是在已有结果集里「再筛一刀」：<code>:first</code>、<code>:last</code>、<code>:eq(index)</code>、<code>:gt(index)</code>、<code>:lt(index)</code>、<code>:even</code>、<code>:odd</code> 按索引筛（索引从 0 开始）；<code>:not(selector)</code>、<code>:has(selector)</code>、<code>:contains(text)</code>、<code>:empty</code>（既无子元素也无文本）、<code>:parent</code>（有子元素或文本）按内容与结构筛；<code>:visible</code>、<code>:hidden</code>、<code>:animated</code> 按可见性与状态筛；<code>[attr=value]</code>、<code>[attr^=value]</code>、<code>[attr$=value]</code>、<code>[attr*=value]</code> 按属性筛；表单场景还有 <code>:input</code>、<code>:text</code>、<code>:checked</code>、<code>:selected</code>、<code>:disabled</code> 等。</p>
-<p>两个容易踩的坑：<code>:even</code>、<code>:odd</code> 数的是结果集内的索引而不是视觉行号，所以 <code>$("tr:even")</code> 命中的是第 1、3、5 行（索引 0、2、4）；<code>:first</code> 只取整个结果集的第一个元素，而 CSS 的 <code>:first-child</code> 是「每个父元素下的第一个子元素」，两者语义完全不同。此外 <code>*</code>、<code>:contains()</code> 这类选择器无法交给浏览器原生的 <code>querySelectorAll</code> 处理，数据量大时明显变慢，能用 id、class 就不要用它们。</p>
+<p>过滤选择器是在已有结果集里“再筛一刀”。<code>:first</code>、<code>:last</code>、<code>:eq(index)</code>、<code>:gt(index)</code>、<code>:lt(index)</code>、<code>:even</code>、<code>:odd</code> 按索引筛（索引从 0 开始）；<code>:not(selector)</code>、<code>:has(selector)</code>、<code>:contains(text)</code>、<code>:empty</code>（既无子元素也无文本）、<code>:parent</code>（有子元素或文本）按内容与结构筛；<code>:visible</code>、<code>:hidden</code>、<code>:animated</code> 按可见性与状态筛；<code>[attr=value]</code>、<code>[attr^=value]</code>、<code>[attr$=value]</code>、<code>[attr*=value]</code> 按属性筛；表单场景还有 <code>:input</code>、<code>:text</code>、<code>:checked</code>、<code>:selected</code>、<code>:disabled</code> 等。</p>
+<p>两个容易踩的坑：<code>:even</code>、<code>:odd</code> 数的是结果集内的索引而不是视觉行号，所以 <code>$("tr:even")</code> 命中的是第 1、3、5 行（索引 0、2、4）；<code>:first</code> 只取整个结果集的第一个元素，而 CSS 的 <code>:first-child</code> 是“每个父元素下的第一个子元素”，两者语义完全不同。此外 <code>*</code>、<code>:contains()</code> 这类选择器无法交给浏览器原生的 <code>querySelectorAll</code> 处理，数据量大时明显变慢，能用 id、class 就不要用它们。</p>
 
 <h2>三、链式调用：一次选中，连续加工</h2>
 <p>jQuery 的大多数方法都返回 jQuery 对象本身，于是可以像流水线一样一路点下去。下面这段代码演示了选择器与链式调用的配合：给表格隔行着色、给列表项加标记，并用 <code>.end()</code> 回到上一层集合。</p>
@@ -201,12 +201,12 @@
 });</code></pre>
 
 <p>日常开发中更常用的是快捷方法：<code>$.get(url, data, callback, dataType)</code>、<code>$.post()</code>、<code>$.getJSON(url, callback)</code>，以及把整个表单序列化成查询串的 <code>$("#form").serialize()</code>。如果页面上已经有 form 且需要异步提交，可以引入 jquery.form.js 插件，用 <code>$("#form").ajaxForm(options)</code> 在页面加载时绑定一次，或用 <code>$("#form").ajaxSubmit(options)</code> 在事件中临时提交，二者的参数与 <code>$.ajax</code> 一致，只多了 <code>beforeSubmit</code> 回调。</p>
-<p>必须提醒的是：只写成功分支是线上「点了没反应」的头号原因。超时、断网、后端返回 4xx/5xx 都会落到 <code>fail</code>，这里至少要给出提示并复位 loading 状态。</p>
+<p>必须提醒的是：只写成功分支是线上“点了没反应”的头号原因。超时、断网、后端返回 4xx/5xx 都会落到 <code>fail</code>，这里至少要给出提示并复位 loading 状态。</p>
 
 <p>发送数据时还要留意编码：<code>$.ajax</code> 默认以 <code>application/x-www-form-urlencoded</code> 提交，中文可能乱码，建议显式声明 <code>contentType: "application/json;charset=UTF-8"</code> 并配合 <code>JSON.stringify</code>；若后端只接受表单格式，则用 <code>$.param()</code> 或 <code>$("#form").serialize()</code> 序列化后再发送。</p>
 
 <h2>五、UI 框架：Bootstrap 与 Element UI</h2>
-<p>Bootstrap 是一个「半成品」前端框架：它预定义好一整套 CSS 类和对应行为，你只要提供固定的 HTML 结构、加上固定的 class，就能得到栅格、按钮、表单、导航、模态框等成品效果。所谓响应式，就是同一份页面在手机、平板、桌面自动重排，Bootstrap 靠栅格系统与 CSS3 媒体查询实现。</p>
+<p>Bootstrap 是一个“半成品”前端框架：它预定义好一整套 CSS 类和对应行为，你只要提供固定的 HTML 结构、加上固定的 class，就能得到栅格、按钮、表单、导航、模态框等成品效果。所谓响应式，就是同一份页面在手机、平板、桌面自动重排，Bootstrap 靠栅格系统与 CSS3 媒体查询实现。</p>
 
 <pre><code class="language-html">&lt;div class="container"&gt;
   &lt;div class="row"&gt;
@@ -227,7 +227,7 @@
 &lt;/div&gt;</code></pre>
 
 <p>版本差异必须分清：Bootstrap 3 的 JS 组件（模态框、下拉菜单、折叠面板等）依赖 jQuery，所以引入 <code>bootstrap.js</code> 前必须先引入 jQuery；Bootstrap 5 已经移除 jQuery 依赖，改用原生 JavaScript，同时把 <code>col-xs-*</code> 改成 <code>col-*</code>、<code>.panel</code> 改成 <code>.card</code>、<code>.well</code> 改成 <code>.card</code> 或 <code>.alert</code>。照抄旧教程的 class 名，是样式失效最常见的原因。</p>
-<p>Element UI 是饿了么团队为 Vue 2 打造的组件库，思路与 Bootstrap 相似，但组件粒度更重：表格、分页、表单校验、弹窗、日期选择器拿来即用。在 vue-cli 创建的项目里安装后，用 <code>Vue.use(ElementUI)</code> 全局注册即可，也可以按需引入以减小打包体积。</p>
+<p>Element UI 是饿了么团队为 Vue 2 打造的组件库，思路与 Bootstrap 相似，但组件粒度更重：表格、分页、表单校验、弹窗、日期选择器都可以拿来即用。在 vue-cli 创建的项目里安装后，用 <code>Vue.use(ElementUI)</code> 全局注册即可，也可以按需引入以减小打包体积。</p>
 
 <pre><code class="language-html">&lt;template&gt;
   &lt;el-table :data="rows" stripe&gt;
@@ -249,14 +249,9 @@ import "element-ui/lib/theme-chalk/index.css";
 Vue.use(ElementUI);   // 全局注册后，所有 el- 开头的组件均可直接使用
 &lt;/script&gt;</code></pre>
 
-<p>官网地址已从 <code>element-cn.eleme.io</code> 迁移到 <code>element.eleme.cn</code>，旧地址会跳转或失效；Vue 3 项目应改用 Element Plus（包名 <code>element-plus</code>），两者 API 大体相近但不能混用。选型建议很直接：jQuery 与 Bootstrap 3 的老项目继续沿用栅格和 panel；Vue 2 后台系统优先 Element UI，Vue 3 用 Element Plus。</p>
+<p>官网地址已从 <code>element-cn.eleme.io</code> 迁移到 <code>element.eleme.cn</code>，旧地址会跳转或失效。Vue 3 项目应改用 Element Plus（包名 <code>element-plus</code>），两者 API 大体相近，但不能混用。选型建议很直接：jQuery 与 Bootstrap 3 的老项目继续沿用栅格和 panel，Vue 2 后台系统优先 Element UI，Vue 3 用 Element Plus。</p>
 
-<p><strong>小结：</strong>把本章的四步串起来就是一套完整的旧时代前端工作流——用 <code>$()</code> 加选择器定位元素，用链式调用连续加工，用 Ajax 从后端取数据，用 UI 框架拼出界面。掌握它们，就能读懂并维护绝大多数 jQuery + Bootstrap 时代的页面；当项目迁移到 Vue 或 React 时，直接操作 DOM 的选择器思维会退场，但「组件复用」和「数据变化驱动视图」正是这些框架的升级方向。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-3-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">Ajax 与前后端交互</span></a>
-      <a class="next-post" href="/java-tutorial-3-7/"><span class="pn-label">下一篇 →</span><span class="pn-title">Vue 基础</span></a>
-      </nav>
+<p><strong>小结：</strong>把本章的四步串起来，就是一套完整的旧时代前端工作流——用 <code>$()</code> 加选择器定位元素，用链式调用连续加工，用 Ajax 从后端取数据，用 UI 框架拼出界面。掌握它们，就能读懂并维护绝大多数 jQuery + Bootstrap 时代的页面；当项目迁移到 Vue 或 React 时，直接操作 DOM 的选择器思维会退场，但“组件复用”和“数据变化驱动视图”正是这些框架的升级方向。</p>
           </article>
   <!-- Footer -->
   <footer>
