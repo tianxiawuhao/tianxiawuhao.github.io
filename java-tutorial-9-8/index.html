@@ -161,6 +161,8 @@ public void seckill(long userId, long skuId) {
 
 <p>注意顺序：先在 Redis 挡住无效请求，再让 MQ 缓冲有效请求，最后数据库用条件更新兜底。三层缺一不可，只靠 Redis 会丢数据，只靠数据库会打满。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-8/01-seckill-layers.svg" alt="秒杀分层削峰示意图"><figcaption>图 1：秒杀分层削峰，把流量挡在数据库之前</figcaption></figure>
+
 <h2>三、限流与幂等：保护系统的两道闸门</h2>
 <p>限流的常见算法有四种：固定窗口计数器实现最简单，但存在临界问题（窗口边界处可能瞬间放过两倍流量）；滑动窗口用更细的粒度统计，缓解临界问题；漏桶以恒定速率放行，适合保护下游；令牌桶允许一定程度的突发流量，是工程中最常用的方案。单机限流可以直接用 Guava 的 <code>RateLimiter</code>，但集群中每台机器的阈值会被放大 N 倍，必须用 Redis + Lua 实现分布式令牌桶，或采用 Sentinel 这类带集群限流能力的组件。</p>
 <p>幂等解决的是“同一个请求被执行多次，结果必须与执行一次相同”。触发场景很现实：用户连点、RPC 超时重试、MQ 至少一次投递。可用手段包括：数据库唯一索引或去重表、Redis <code>setIfAbsent</code> 预占令牌、状态机约束（订单只能从“待支付”流向“已支付”，重复通知会被状态判断挡掉）、乐观锁版本号。</p>

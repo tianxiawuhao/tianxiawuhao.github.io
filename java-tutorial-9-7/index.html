@@ -194,6 +194,8 @@ redis.opsForValue().set(key, toJson(order), Duration.ofSeconds(ttl));
 return order;
 </code></pre>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-7/01-cache-three-problems.svg" alt="缓存穿透、击穿、雪崩对比"><figcaption>图 1：缓存穿透、击穿、雪崩的成因与解法对比</figcaption></figure>
+
 <h2>四、双写一致性与 Redis 高可用</h2>
 <p>只要同时写缓存和数据库，就一定存在不一致窗口，工程上追求的是把窗口压到足够小。常用组合是 <strong>Cache Aside：先更新数据库，再删除缓存</strong>（而非更新缓存）。删除优于更新，是因为并发更新缓存容易出现「后写的旧值覆盖先写的新值」；删除让下一次读请求自然回源。仍存在「回源读到旧值、写缓存晚于删除」的极小窗口，加固手段是延迟双删或订阅 binlog（如 Canal）异步失效。要求极高一致性时，可把读写串行化到内存队列，代价是吞吐大幅下降。</p>
 <p><strong>持久化</strong>：RDB 是某时刻全量快照，文件紧凑、恢复快，但两次快照之间的数据会丢；AOF 记录写命令，用 <code>appendfsync everysec</code> 折中。需纠正一个流传很广的说法：<strong>「RDB 是 Redis 默认持久化方式」只对 Redis 6.x 及更早版本成立，Redis 7.0 起 AOF 已是默认</strong>，面试最好带版本限定。</p>

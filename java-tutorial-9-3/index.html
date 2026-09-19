@@ -144,7 +144,9 @@
   <li><b>直接内存</b>：JDK 1.4 的 NIO 可用 Native 库分配堆外内存，由堆中 <code>DirectByteBuffer</code> 引用，省去堆内堆外拷贝；受本机内存限制，同样会 OOM。</li>
 </ul>
 
-<div class="tut-tip">追问：<b>为什么移除永久代？</b>永久代大小受加载类与常量数量影响、每次 Full GC 后还会变化，很难调准，容易 OOM；改为本地内存中的元空间后由 <code>-XX:MaxMetaspaceSize</code> 限制。</div>
+<div class="tut-tip"><figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-3/01-runtime-data-areas.svg" alt="JVM 运行时数据区域分为线程私有与线程共享两类"><figcaption>图 1：运行时数据区域 —— 程序计数器、虚拟机栈、本地方法栈线程私有；堆、方法区、运行时常量池与直接内存线程共享，且都可能 OOM</figcaption></figure>
+
+追问：<b>为什么移除永久代？</b>永久代大小受加载类与常量数量影响、每次 Full GC 后还会变化，很难调准，容易 OOM；改为本地内存中的元空间后由 <code>-XX:MaxMetaspaceSize</code> 限制。</div>
 
 <h2>二、垃圾回收：怎么判断对象已死，什么时候回收</h2>
 
@@ -184,6 +186,8 @@ public class RefCountDemo {
 <p>必考的双亲委派模型分三层：<b>启动类加载器</b>（C++ 实现，加载 <code>&lt;JAVA_HOME&gt;/lib</code> 下被识别的类库，Java 代码里只能用 <code>null</code> 引用）、<b>扩展类加载器</b>（JDK 9 起被平台类加载器取代）、<b>应用程序类加载器</b>（加载 ClassPath，即 <code>ClassLoader.getSystemClassLoader()</code> 的返回值）。注意父子关系是<b>组合</b>而非继承。</p>
 
 <p>工作过程一句话：<b>先查自己加载过没有，再委派父加载器，父加载器搞不定才自己加载</b>。好处是基础类统一——即使在 ClassPath 下写一个 <code>java.lang.Object</code>，最终加载的仍是启动类加载器加载的那个 Object。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-3/02-parent-delegation.svg" alt="双亲委派模型的三层加载器与委派方向"><figcaption>图 2：双亲委派 —— loadClass 先查已加载、再委派 parent、父加载不到才回退 findClass；父子关系是组合而非继承</figcaption></figure>
 
 <pre><code class="language-java">public class MyClassLoader extends ClassLoader {
     private final String rootDir;

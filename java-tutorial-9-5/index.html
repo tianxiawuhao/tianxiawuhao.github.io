@@ -114,7 +114,7 @@
               <h1>数据库面试题</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，5 min read</span>
+                2026-09-19，6 min read</span>
             </div>
           
         
@@ -137,6 +137,8 @@
 <p>InnoDB 的主键索引是<strong>聚簇索引</strong>（索引即数据，叶子节点存整行）；二级索引的叶子节点只存索引列和主键值，因此通过二级索引取非索引列时必须<strong>回表</strong>——拿主键值再回聚簇索引查一次。若查询所需列全在索引里，就称为<strong>覆盖索引</strong>，可避免回表。这也解释了面试常问的「为什么建议用自增主键」：自增主键顺序写入，页分裂少；UUID 随机插入会导致频繁页分裂与索引碎片。</p>
 
 <p>联合索引遵循<strong>最左前缀匹配</strong>：MySQL 从左往右依次匹配索引列，遇到范围查询（<code>&gt;</code>、<code>&lt;</code>、<code>between</code>、<code>like</code>）就停止后面的列。例如有索引 <code>(a, b, c, d)</code>，查询 <code>WHERE a = 1 AND b = 2 AND c &gt; 3 AND d = 4</code> 时只有 <code>a、b、c</code> 用得上索引，<code>d</code> 用不上；把索引建成 <code>(a, b, d, c)</code> 则四列都能参与。注意 <code>a、b</code> 之间可以任意换序，优化器会自动调整等值条件顺序，但范围列必须放在最后。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-5/01-index-lookup.svg" alt="二级索引查询的回表过程与覆盖索引"><figcaption>图 1：回表与覆盖索引 —— 二级索引叶子只存索引列与主键，取非索引列要回聚簇索引再查一次；所需列全在索引里即可免回表</figcaption></figure>
 
 <pre><code class="language-sql">-- 建表时就规划好索引：等值列在前，范围列在后
 CREATE TABLE t_order (
@@ -202,6 +204,8 @@ WHERE status = 1 AND id &gt; 1000000 ORDER BY id LIMIT 10;
 <p>MySQL InnoDB 的默认级别是 <code>REPEATABLE READ</code>，Oracle、SQL Server 默认是 <code>READ COMMITTED</code>。<strong>这里要纠正一个常见说法</strong>：很多资料照搬 SQL 标准，说「RR 无法防幻读」，但在 InnoDB 中并不准确。RR 下快照读（普通 <code>SELECT</code>）靠 MVCC 保证一致性，当前读（<code>SELECT ... FOR UPDATE</code>、<code>UPDATE</code>、<code>DELETE</code>）则靠<strong>临键锁</strong>（Next-Key Lock = 记录锁 + 间隙锁）锁住范围，从而避免幻读。所以准确答法是：SQL 标准中 RR 允许幻读，InnoDB 的 RR 在快照读与当前读下都能基本避免幻读；真正无法保证的是「同一事务内先快照读、再当前读」时可能出现的语义偏差。</p>
 
 <p>锁按粒度分为表锁、行锁、页锁；按模式分为共享锁（S 锁）与排他锁（X 锁），另外还有意向锁（IS/IX，用来快速判断表中是否有行被锁）、记录锁、间隙锁、临键锁、插入意向锁。死锁的产生条件是两个事务以相反顺序持有并申请对方需要的锁，InnoDB 会自动检测并回滚其中代价较小的事务（报 <code>Deadlock found when trying to get lock</code>）。工程上的应对是：按固定顺序访问表和行、缩短事务长度、给更新条件加索引避免锁范围升级为全表扫描。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-5/02-isolation-levels.svg" alt="四个隔离级别与三类读异常"><figcaption>图 2：隔离级别对照 —— 逐级解决脏读、不可重复读与幻读；InnoDB 的 RR 用 MVCC 加临键锁把幻读基本堵住</figcaption></figure>
 
 <pre><code class="language-sql">-- 查看与调整隔离级别（MySQL 8.0）
 SELECT @@transaction_isolation;         -- 默认 REPEATABLE-READ
