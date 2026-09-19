@@ -120,7 +120,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>分布式系统里有一类问题不属于任何单个服务，却谁都需要：谁当主节点、配置怎么统一刷新、多个节点如何抢同一把锁、某个服务下线了别人怎么立刻知道。这类问题统称为<strong>分布式协调</strong>，Zookeeper 就是为解决它们而生的中间件。它是 Google Chubby 的开源实现，也是 Hadoop 生态的协调基础。本章讲清它的数据模型与四种节点类型、半数机制与 ZAB 选举、Watch 的通知语义，再用完整的代码把分布式锁、配置中心和 Master 选举做出来，最后回答一个高频面试题：为什么现在不推荐用 Zookeeper 做服务注册中心。学完这一章，9-6 分布式面试题里的协调类问题就有落点了。</p>
+<p>分布式系统里有一类问题不属于任何单个服务，却谁都需要：谁当主节点、配置怎么统一刷新、多个节点如何抢同一把锁、某个服务下线了别人怎么立刻知道。这类问题统称为<strong>分布式协调</strong>，Zookeeper 就是为解决它们而生的中间件。它是 Google Chubby 的开源实现，也是 Hadoop 生态的协调基础。本章讲清它的数据模型与四种节点类型，再讲半数机制与 ZAB 选举、Watch 的通知语义。之后用完整的代码把分布式锁、配置中心和 Master 选举做出来，最后回答一个高频面试题：为什么现在不推荐用 Zookeeper 做服务注册中心。学完这一章，9-6 分布式面试题里的协调类问题就有落点了。</p>
 
 <h2>Zookeeper 是什么：四个原语</h2>
 <p>分布式系统的子模块往往不是孤立的，它们需要互相协作：配置要一致、状态要同步、主节点要唯一。Zookeeper 提供的就是这样一套「协调原语」，客户端基于它组合出上层能力。它主要支撑四件事：</p>
@@ -148,7 +148,12 @@
 <p>另一件必须记牢的事是 <strong>Watch 是一次性的</strong>：客户端在 <code>getData</code>、<code>getChildren</code> 或 <code>exists</code> 时可以顺手注册监听，节点变化后服务端推送一次事件，然后这个监听就失效了，<strong>要持续监听必须重新注册</strong>。此外事件只告诉「什么变了」，不告诉「变成什么」，客户端收到通知后需要自己重新读取数据。这直接决定了写代码的方式：通知处理函数里必须重新 <code>getData</code> 并再次注册 Watch，否则只能收到第一次变更。</p>
 
 <h2>集群架构：一个 Leader、多个 Follower、半数可用</h2>
-<p>Zookeeper 集群中的服务器有三种角色：<strong>Leader</strong> 负责发起投票与处理所有写请求；<strong>Follower</strong> 接收读请求、参与投票与写转发；<strong>Observer</strong> 只同步数据、不参与投票，用于在不降低写性能的前提下扩展读能力。</p>
+<p><p>Zookeeper 集群中的服务器有三种角色：</p>
+<ul>
+<li><strong>Leader</strong> 负责发起投票与处理所有写请求；</li>
+<li><strong>Follower</strong> 接收读请求、参与投票与写转发；</li>
+<li><strong>Observer</strong> 只同步数据、不参与投票，用于在不降低写性能的前提下扩展读能力。</li>
+</ul>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-16/02-cluster.svg" alt="Zookeeper 集群角色、半数机制、ZAB 选举规则与分布式锁流程"><figcaption>图 2：集群角色、半数机制、选举规则与分布式锁流程</figcaption></figure>
 
@@ -157,7 +162,7 @@
 
 <h2>ZAB 协议与选主规则</h2>
 <p>Zookeeper 靠 ZAB（Zookeeper Atomic Broadcast）协议在集群间同步数据并选出 Leader。选举分两种情况。</p>
-<p><strong>全新集群</strong>的选举很简单：没有历史数据时，谁的 <code>myid</code> 大谁当 Leader。以 5 台机器（<code>myid</code> 为 1～5）依次启动为例：1 启动时只有自己，无法形成多数派，保持 LOOKING 状态；2 启动后两者比较，2 的 id 大，但只有 2 票、未过半，仍无法选出；3 启动后，1、2、3 三台中 3 最大且已获得三票（超过半数 2.5），3 成为 Leader；4、5 之后启动只能当 Follower。</p>
+<p><strong>全新集群</strong>的选举很简单：没有历史数据时，谁的 <code>myid</code> 大谁当 Leader。以 5 台机器（<code>myid</code> 为 1～5）依次启动为例。1 启动时只有自己，无法形成多数派，保持 LOOKING 状态。2 启动后两者比较，2 的 id 大，但只有 2 票、未过半，仍无法选出。3 启动后，1、2、3 三台中 3 最大且已获得三票（超过半数 2.5），3 成为 Leader。4、5 之后启动只能当 Follower。</p>
 <p><strong>运行一段时间后的重新选举</strong>要复杂一些，投票内容变成 <code>(myid, zxid)</code> 的组合，规则有三条优先级：</p>
 <ol>
 <li>先比<strong>逻辑时钟（epoch）</strong>，时钟小的那一轮选举结果直接忽略，只认最新一轮；</li>
@@ -268,11 +273,15 @@ public class ConfigCenter {
         System.out.println("当前配置: " + config);
     }
 }</code></pre>
-<p>配置中心的实现就是「读 + 注册 Watch + 变更后重新读取并重新注册」这个循环。工程上要注意两点：一是<strong>通知风暴</strong>，成百上千个客户端同时监听同一个配置节点，一次变更会同时唤醒全部客户端并产生大量读请求，解决思路是客户端本地缓存 + 随机延迟（加抖动）后再拉取；二是<strong>会话超时后的补偿</strong>，会话过期期间可能错过事件，所以客户端重连后必须全量拉一次配置，不能只等通知。</p>
+<p>配置中心的实现就是「读 + 注册 Watch + 变更后重新读取并重新注册」这个循环。<p>配置中心的实现就是「读 + 注册 Watch + 变更后重新读取并重新注册」这个循环。工程上要注意两点：</p>
+<ul>
+<li><strong>通知风暴</strong>：成百上千个客户端同时监听同一个配置节点，一次变更会同时唤醒全部客户端并产生大量读请求。解决思路是客户端本地缓存 + 随机延迟（加抖动）后再拉取；</li>
+<li><strong>会话超时后的补偿</strong>：会话过期期间可能错过事件，所以客户端重连后必须全量拉一次配置，不能只等通知。</li>
+</ul>
 
 <h3>Master 选举与集群成员感知</h3>
 <p>Master 选举的写法与分布式锁几乎一致：所有候选节点在 <code>/election</code> 下创建临时顺序节点，<strong>序号最小的即为主</strong>，其余监听自己前一个节点。主节点挂掉后会话超时、节点自动删除，下一个节点被唤醒并成为新主。集群成员管理则更简单：每个服务实例启动时在 <code>/services/order</code> 下创建临时节点登记自身地址，其他服务用 <code>getChildren</code> 拿到全部实例列表并注册 Watch，实例上下线时就能及时感知。</p>
-<p>关于命名服务与全局 ID 补一句：利用持久顺序节点的自增序号可以生成全局有序编号，但<strong>性能很低</strong>（每个 ID 都要写一次 Zookeeper），生产环境生成分布式 ID 应该用雪花算法或号段模式，顺序节点只适合「需要严格有序且频率不高」的命名场景。</p>
+<p><p>关于命名服务与全局 ID 补一句：利用持久顺序节点的自增序号可以生成全局有序编号，但<strong>性能很低</strong>，因为每个 ID 都要写一次 Zookeeper。生产环境生成分布式 ID 应该用雪花算法或号段模式，顺序节点只适合「需要严格有序且频率不高」的命名场景。</p>
 
 <h2>注册中心之争：为什么现在不推荐用 Zookeeper</h2>
 <p>Dubbo 早期默认用 Zookeeper 做注册中心，所以很多人默认「注册中心就该用 ZK」。但从 CAP 角度分析，这个选择并不理想。</p>

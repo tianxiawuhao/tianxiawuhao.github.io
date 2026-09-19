@@ -246,7 +246,7 @@ public class UploadServlet extends HttpServlet {
       location: /data/tmp         # 临时目录，不配则用容器默认
 </code></pre>
 
-<p>内嵌 Tomcat 还有两个容易混淆的开关：<code>server.tomcat.max-post-size</code>（默认 2MB）管的是 <code>application/x-www-form-urlencoded</code> 的请求体，对 <code>multipart/form-data</code> 不生效——上传上限以 <code>max-file-size</code> / <code>max-request-size</code> 为准；<code>server.tomcat.max-swallow-size</code>（默认 2MB）决定请求被拒后容器愿意读掉多少剩余字节，它小于 <code>max-request-size</code> 时超限请求会直接断连而不是返回 413，排错时要一起看。反向代理另有 nginx 的 <code>client_max_body_size</code>，链路上任何一环截断，前端看到的都是失败。</p>
+<p>内嵌 Tomcat 还有两个容易混淆的开关，值得单独说清：<ul><li><code>server.tomcat.max-post-size</code>（默认 2MB）管的是 <code>application/x-www-form-urlencoded</code> 的请求体，对 <code>multipart/form-data</code> 不生效。上传上限以 <code>max-file-size</code> / <code>max-request-size</code> 为准；</li><li><code>server.tomcat.max-swallow-size</code>（默认 2MB）决定请求被拒后容器愿意读掉多少剩余字节，它小于 <code>max-request-size</code> 时超限请求会直接断连而不是返回 413，排错时要一起看。</li></ul>反向代理另有 nginx 的 <code>client_max_body_size</code>，链路上任何一环截断，前端看到的都是失败。</p>
 
 <h3>下载：把文件流写回响应</h3>
 <p>下载只需设置 <code>Content-Disposition: attachment</code> 响应头，再把文件流拷进 <code>response.getOutputStream()</code>。中文名不要再写成 <code>filename=URLEncoder.encode(name)</code>——<code>+</code> 号与百分号大小写会让部分浏览器解码失败，现行做法是按 RFC 5987/6266 写成 <code>filename*=UTF-8''%E4%B8%AD%E6%96%87.pdf</code>（<code>URLEncoder.encode(name, StandardCharsets.UTF_8)</code> 之后把 <code>+</code> 换成 <code>%20</code>），并同时给一个纯 ASCII 的 <code>filename</code> 兜底。</p>
@@ -296,8 +296,8 @@ Promise.all(tasks).then(() =&gt; fetch("/upload/merge", {
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-9/02-chunk-resume.svg" alt="大文件切片上传与断点续传流程"><figcaption>图 2：切片上传的五个环节——断点记录决定重传范围，merge 必须按分片序号排序后再追加</figcaption></figure>
 
 <h3>前端：并发控制、文件指纹与秒传</h3>
-<p>上面的写法能跑，但把几百个分片一次性丢给 <code>Promise.all</code> 会瞬间占满浏览器连接数（HTTP/1.1 下同域通常只有 6 个并发），排在后面的请求还没发出去就可能超时，因此现行做法是<strong>固定并发数的工作池</strong>：开 N 个 worker，各自从队列里取分片。另外，只靠「文件名 + 大小 + 修改时间」当标识并不够：同名同大小的两个不同文件会互相覆盖，也无法实现秒传，至少要引入内容指纹。</p>
-<p>指纹的算力是瓶颈：对 2GB 文件做全量 MD5 会让主线程卡几十秒。折中方案是<strong>抽样哈希</strong>——头、中、尾各取固定长度拼起来算，再把 <code>file.size</code> 一起混入，几十毫秒即可完成，足够支撑断点续传的上下文标识和秒传的粗筛；但它<strong>不是全量校验</strong>，理论上存在碰撞，所以秒传判定必须同时比对文件大小，更严格的做法是在 Web Worker 里分块做全量 SHA-256。另有一个常见笔误：文件对象只有 <code>file.size</code>，没有 <code>file.length</code>，写成 <code>file.length</code> 只会得到 <code>undefined</code>，总分片数随之算成 <code>NaN</code>。</p>
+<p>上面的写法能跑，但把几百个分片一次性丢给 <code>Promise.all</code> 会瞬间占满浏览器连接数（HTTP/1.1 下同域通常只有 6 个并发），排在后面的请求还没发出去就可能超时。因此现行做法是<strong>固定并发数的工作池</strong>：开 N 个 worker，各自从队列里取分片。另外，只靠「文件名 + 大小 + 修改时间」当标识并不够：同名同大小的两个不同文件会互相覆盖，也无法实现秒传，至少要引入内容指纹。</p>
+<p>指纹的算力是瓶颈：对 2GB 文件做全量 MD5 会让主线程卡几十秒。折中方案是<strong>抽样哈希</strong>——头、中、尾各取固定长度拼起来算，再把 <code>file.size</code> 一起混入，几十毫秒即可完成，足够支撑断点续传的上下文标识和秒传的粗筛。但它<strong>不是全量校验</strong>，理论上存在碰撞，所以秒传判定必须同时比对文件大小；更严格的做法是在 Web Worker 里分块做全量 SHA-256。另有一个常见笔误：文件对象只有 <code>file.size</code>，没有 <code>file.length</code>，写成 <code>file.length</code> 只会得到 <code>undefined</code>，总分片数随之算成 <code>NaN</code>。</p>
 
 <pre><code class="language-js">// 依赖 spark-md5 3.x（npm i spark-md5；浏览器直接引 spark-md5.min.js 得到全局 SparkMD5）
 const CHUNK = 5 * 1024 * 1024;   // 单片 5MB，必须不大于服务端 multipart 的单文件上限
@@ -386,10 +386,15 @@ async function upload(file, { signal, onProgress } = {}) {
 // 暂停：controller.abort()；续传：重新调用 upload(file)，check 会返回已完成分片并被跳过
 </code></pre>
 
-<p>三个细节容易被忽略：<strong>暂停不是取消</strong>，中断后分片仍在服务端，下次续传只补缺失的那些；<strong>进度按「已完成片数 / 总片数」算</strong>，不要按上传字节数估算，最后一片通常更小；<strong>本地记录与服务端记录要取并集</strong>，只信 localStorage 会在换设备或清缓存后重传，只信服务端则多一次请求——两者都记、取并集最稳。</p>
+<p>有三个细节容易被忽略：</p>
+<ul>
+<li><strong>暂停不是取消</strong>，中断后分片仍在服务端，下次续传只补缺失的那些；</li>
+<li><strong>进度按「已完成片数 / 总片数」算</strong>，不要按上传字节数估算，最后一片通常更小；</li>
+<li><strong>本地记录与服务端记录要取并集</strong>，只信 localStorage 会在换设备或清缓存后重传，只信服务端则多一次请求——两者都记、取并集最稳。</li>
+</ul>
 
 <h3>服务端：分片落盘、校验、合并与清理</h3>
-<p>服务端要做四件事：把分片落到以指纹命名的目录、校验大小与哈希、按序号拼接成成品、合并成功后清理分片。下面用 Spring Boot 3.x（3.0 至 3.5 均可，<code>javax</code> 到 <code>jakarta</code> 的迁移见本章第二节）演示，落盘用「先写临时名再原子改名的 <code>MultipartFile.transferTo</code>」，拼接用 <code>RandomAccessFile</code> 按序号定位写入——定位写入不依赖分片到达顺序，重复的分片重传也会被覆盖成同一结果。</p>
+<p>服务端要做四件事：把分片落到以指纹命名的目录、校验大小与哈希、按序号拼接成成品、合并成功后清理分片。下面用 Spring Boot 3.x（3.0 至 3.5 均可，<code>javax</code> 到 <code>jakarta</code> 的迁移见本章第二节）演示。落盘用「先写临时名再原子改名的 <code>MultipartFile.transferTo</code>」，拼接用 <code>RandomAccessFile</code> 按序号定位写入——定位写入不依赖分片到达顺序，重复的分片重传也会被覆盖成同一结果。</p>
 
 <pre><code class="language-java">import org.springframework.http.HttpStatus;
 import org.springframework.util.DigestUtils;
@@ -544,7 +549,7 @@ public class ChunkUploadController {
 }
 </code></pre>
 
-<p>几点工程约定值得写进规范：分片先落临时名再原子改名，这样 merge 永远读不到写了一半的文件；merge 全程持锁，而 <code>check</code> 与 <code>chunk</code> 不加锁，因此锁的粒度只包住拼接这一小段；成品与分片目录都在 Web 根之外，下载统一走鉴权接口。<code>ReentrantLock</code> 只在单个 JVM 内有效，一旦多实例部署，要么把 merge 请求按指纹路由到同一实例，要么换成 Redis 分布式锁，更省事的做法是直接使用对象存储自带的分片上传接口，把并发与清理交给服务端。最后别忘了给分片目录设 TTL（例如 24 小时）定时清理，用户中途放弃上传是常态。</p>
+<p>几点工程约定值得写进规范：分片先落临时名再原子改名，这样 merge 永远读不到写了一半的文件。merge 全程持锁，而 <code>check</code> 与 <code>chunk</code> 不加锁，因此锁的粒度只包住拼接这一小段。成品与分片目录都在 Web 根之外，下载统一走鉴权接口。<code>ReentrantLock</code> 只在单个 JVM 内有效，一旦多实例部署，要么把 merge 请求按指纹路由到同一实例，要么换成 Redis 分布式锁。更省事的做法是直接使用对象存储自带的分片上传接口，把并发与清理交给服务端。最后别忘了给分片目录设 TTL（例如 24 小时）定时清理，用户中途放弃上传是常态。</p>
 
 <p>配置这一层要和切片大小对齐。传统写法（<code>commons-fileupload</code> 的 <code>setFileSizeMax</code>）与 Servlet 3.0+ 原生 <code>@MultipartConfig</code> 的演进、以及两者代码上的差别，本章第二节已经讲过，这里只做交叉引用、不再重复。切片场景下它们的语义只差一点但很关键：<code>maxFileSize</code>（<code>@MultipartConfig</code>）限制的是<strong>每个 part</strong>，也就是单片，而不是整个文件，所以 5MB 分片把上限设到 8MB 左右即可。Spring Boot 的等价配置是 <code>spring.servlet.multipart.max-file-size: 8MB</code>（单个 part）与 <code>max-request-size: 10MB</code>（整个请求），两者都必须大于单片大小，否则请求在进入 Controller 之前就被拒掉并抛 <code>MaxUploadSizeExceededException</code>。要留意 <code>max-request-size</code> 管的是「单次请求」而非「文件总量」——这正是切片顺带解决的第二个问题：总量再大，单请求也始终只有一片。</p>
 
@@ -593,7 +598,14 @@ public class ChunkUploadController {
 }
 </code></pre>
 
-<p>落到代码里还有五条约定：<code>check</code> 必须便宜，前端每次刷新、每次续传都会先调它，只读文件系统或读 Redis 缓存，不要在里面落盘；<code>upload</code> 必须幂等，同一 <code>index</code> 重复提交直接覆盖并返回成功，客户端的自动重试才不会造出重复分片；<code>merge</code> 必须幂等且被锁保护，重复调用返回同一个 URL，缺片时明确返回缺失列表而不是 500；三步里的指纹语义要一致，抽样指纹只能做粗筛，秒传判定必须再比对 <code>size</code>（或改用 Web Worker 全量 SHA-256）；分片目录要有 TTL 定时清理，否则被放弃的上传会长期占着磁盘。</p>
+<p>落到代码里还有五条约定：</p>
+<ul>
+<li><code>check</code> 必须便宜，前端每次刷新、每次续传都会先调它，只读文件系统或读 Redis 缓存，不要在里面落盘；</li>
+<li><code>upload</code> 必须幂等，同一 <code>index</code> 重复提交直接覆盖并返回成功，客户端的自动重试才不会造出重复分片；</li>
+<li><code>merge</code> 必须幂等且被锁保护，重复调用返回同一个 URL，缺片时明确返回缺失列表而不是 500；</li>
+<li>三步里的指纹语义要一致，抽样指纹只能做粗筛，秒传判定必须再比对 <code>size</code>（或改用 Web Worker 全量 SHA-256）；</li>
+<li>分片目录要有 TTL 定时清理，否则被放弃的上传会长期占着磁盘。</li>
+</ul>
 
 <h2>四、文件最终放哪里：本地目录还是对象存储</h2>
 <p>单机部署写本地目录可行，但要做到三点：</p>
@@ -605,7 +617,7 @@ public class ChunkUploadController {
 <p>一旦有多台应用服务器，本地目录立刻失效：A 机上传、请求被负载均衡打到 B 机就会 404。这时要把文件抽成独立存储层。</p>
 <p>选型上，FastDFS 是轻量级专用分布式文件系统，对文件不分块（因此没有分片合并开销），适合图片等小文件。HDFS 则相反，靠牺牲延迟换吞吐，适合批量大文件。MinIO 兼容 S3 协议，通用性好、部署简单，大文件用 <code>putObject</code> 会自动分片。需要精细控制时，可用 <code>createMultipartUpload</code>、<code>uploadPart</code>、<code>completeMultipartUpload</code> 手动完成，本质与前端切片是同一套模型。云服务（阿里 OSS、七牛云、腾讯云）接口风格类似，都提供 SDK、断点续传和直传凭证，业务侧只保存 object key，因此建议从第一天起就按「库里只存 key、访问时拼 URL」设计，换存储实现时改动最小。</p>
 
-<p>MinIO Java SDK 现行大版本为 8.x / 9.x（坐标 <code>io.minio:minio</code>），对超过 5MB 的对象 <code>putObject</code> 会自动切成 multipart 上传，业务代码不必自己切片；<code>stream(in, size, -1)</code> 的第三个参数是分片大小，<code>-1</code> 表示用默认值，只有在长度完全未知时才写成 <code>stream(in, -1, 10L * 1024 * 1024)</code> 并显式给出分片大小。阿里云 OSS、腾讯云 COS、AWS S3 除了各自 SDK，也提供 S3 兼容端点，基于 S3 API 写的代码基本可以平移，这正是本地用 MinIO、线上换云存储的常见做法。</p>
+<p>MinIO Java SDK 现行大版本为 8.x / 9.x（坐标 <code>io.minio:minio</code>），对超过 5MB 的对象 <code>putObject</code> 会自动切成 multipart 上传，业务代码不必自己切片。<code>stream(in, size, -1)</code> 的第三个参数是分片大小，<code>-1</code> 表示用默认值，只有在长度完全未知时才写成 <code>stream(in, -1, 10L * 1024 * 1024)</code> 并显式给出分片大小。阿里云 OSS、腾讯云 COS、AWS S3 除了各自 SDK，也提供 S3 兼容端点，基于 S3 API 写的代码基本可以平移，这正是本地用 MinIO、线上换云存储的常见做法。</p>
 
 <pre><code class="language-java">// MinIO：accessKey / secretKey 必须来自配置或环境变量，绝不能硬编码进代码库
 MinioClient client = MinioClient.builder()
@@ -640,7 +652,7 @@ try (InputStream in = new FileInputStream("/data/a.png")) {
 <li>AK/SK 与 uploadToken 属于密钥，写死在源码里等同泄露，必须外置配置；</li>
 <li>合并要按序号排序，成功后清理分片目录。</li>
 </ul>
-<p>另外，Commons FileUpload（1.5/1.6）、FastDFS 属于较早期的技术栈，新项目优先选云对象存储或 MinIO / S3 SDK v2（坐标 <code>software.amazon.awssdk:s3</code>），前端拿服务端签发的临时凭证直传，还能省掉一次中转带宽；上传成功后数据库只存 object key，把「文件」与「访问 URL」解耦。</p>
+<p>另外，Commons FileUpload（1.5/1.6）、FastDFS 属于较早期的技术栈，新项目优先选云对象存储或 MinIO / S3 SDK v2（坐标 <code>software.amazon.awssdk:s3</code>）。前端拿服务端签发的临时凭证直传，还能省掉一次中转带宽；上传成功后数据库只存 object key，把「文件」与「访问 URL」解耦。</p>
 <p>小结：文件上传的复杂度不在「写文件」，而在请求格式、体积和存储位置这三件事。小文件用 <code>multipart/form-data</code> 加 <code>MultipartFile</code> 直传；大文件必须切片，用文件标识加分片序号保证可还原，用已传分片记录实现断点续传，并给分片设过期清理；文件量一大就交给对象存储，数据库只留 key。把这三层分清楚，上传功能基本就不会再出线上问题了。</p>
           
           <nav class="post-pn">
