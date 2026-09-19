@@ -148,12 +148,7 @@
 <p>另一件必须记牢的事是 <strong>Watch 是一次性的</strong>：客户端在 <code>getData</code>、<code>getChildren</code> 或 <code>exists</code> 时可以顺手注册监听，节点变化后服务端推送一次事件，然后这个监听就失效了，<strong>要持续监听必须重新注册</strong>。此外事件只告诉「什么变了」，不告诉「变成什么」，客户端收到通知后需要自己重新读取数据。这直接决定了写代码的方式：通知处理函数里必须重新 <code>getData</code> 并再次注册 Watch，否则只能收到第一次变更。</p>
 
 <h2>集群架构：一个 Leader、多个 Follower、半数可用</h2>
-<p><p>Zookeeper 集群中的服务器有三种角色：</p>
-<ul>
-<li><strong>Leader</strong> 负责发起投票与处理所有写请求；</li>
-<li><strong>Follower</strong> 接收读请求、参与投票与写转发；</li>
-<li><strong>Observer</strong> 只同步数据、不参与投票，用于在不降低写性能的前提下扩展读能力。</li>
-</ul>
+<p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-16/02-cluster.svg" alt="Zookeeper 集群角色、半数机制、ZAB 选举规则与分布式锁流程"><figcaption>图 2：集群角色、半数机制、选举规则与分布式锁流程</figcaption></figure>
 
@@ -273,11 +268,7 @@ public class ConfigCenter {
         System.out.println("当前配置: " + config);
     }
 }</code></pre>
-<p>配置中心的实现就是「读 + 注册 Watch + 变更后重新读取并重新注册」这个循环。<p>配置中心的实现就是「读 + 注册 Watch + 变更后重新读取并重新注册」这个循环。工程上要注意两点：</p>
-<ul>
-<li><strong>通知风暴</strong>：成百上千个客户端同时监听同一个配置节点，一次变更会同时唤醒全部客户端并产生大量读请求。解决思路是客户端本地缓存 + 随机延迟（加抖动）后再拉取；</li>
-<li><strong>会话超时后的补偿</strong>：会话过期期间可能错过事件，所以客户端重连后必须全量拉一次配置，不能只等通知。</li>
-</ul>
+
 
 <h3>Master 选举与集群成员感知</h3>
 <p>Master 选举的写法与分布式锁几乎一致：所有候选节点在 <code>/election</code> 下创建临时顺序节点，<strong>序号最小的即为主</strong>，其余监听自己前一个节点。主节点挂掉后会话超时、节点自动删除，下一个节点被唤醒并成为新主。集群成员管理则更简单：每个服务实例启动时在 <code>/services/order</code> 下创建临时节点登记自身地址，其他服务用 <code>getChildren</code> 拿到全部实例列表并注册 Watch，实例上下线时就能及时感知。</p>

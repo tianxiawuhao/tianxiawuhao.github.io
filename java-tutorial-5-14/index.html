@@ -124,13 +124,7 @@
 
 <h2>从 SVN 到 Git：为什么是分布式</h2>
 <p>SVN 是集中式版本控制：只有中央仓库保存完整历史，本地工作副本不含版本信息，因此<strong>提交必须联网</strong>，断网就只能改代码不能记录。Git 是分布式版本控制：<code>git clone</code> 会把整个仓库历史复制到本地，<code>git commit</code> 只写入本地 <code>.git</code> 目录，<code>git push</code> 才同步给团队。</p>
-<p><p>这个差别带来三个实际好处：</p>
-<ul>
-<li><strong>离线也能提交</strong>：飞机上写代码照样能分多次提交、随时看历史；</li>
-<li><strong>本地操作极快</strong>：除推送拉取外都在本地完成；</li>
-<li><strong>每个克隆都是备份</strong>：中央仓库损坏时任意一个开发者的本地仓库都能恢复全部历史。</li>
-</ul>
-<p>代价是概念变多了：多出暂存区、本地仓库、远程跟踪分支这些层，不理解模型就会用错命令。</p></p>
+<p></p>
 
 <h2>四个区域与文件流转</h2>
 <p>Git 里一份代码要经历四个区域，把这张图记住，绝大多数命令都能对号入座。</p>
@@ -175,7 +169,7 @@ git push origin main
 
 # 拉取远程更新（团队协作每天第一步）
 git pull --rebase origin main  # 把本地提交「垫」在远程更新之上，历史更线性</code></pre>
-<p><p>三条经验：</p>
+<p>三条经验：</p>
 <ul>
 <li>写提交信息时讲清「为什么」而不是「做了什么」——改了什么 diff 里都能看到；</li>
 <li><code>git add -p</code> 比 <code>git add .</code> 安全得多，它能让你在同一文件里只挑相关改动提交；</li>
@@ -217,7 +211,7 @@ git commit                      # 完成合并提交（信息已自动生成）
 
 # 如果解决过程中发现搞乱了，随时可以放弃整个合并：
 git merge --abort</code></pre>
-<p><p>三条冲突处理纪律：</p>
+<p>三条冲突处理纪律：</p>
 <ul>
 <li><strong>先看完整标记再动手</strong>，不要凭印象删；</li>
 <li>解决后<strong>必须编译并跑一次相关测试</strong>。Git 只保证文本合并成功，不保证逻辑正确，典型的「语法没错但语义错了」就出在这里；</li>
@@ -268,12 +262,13 @@ git reset --hard HEAD~1                  # 连改动一起丢弃（危险）
 # 情形四：已经 push —— 只能追加反向提交
 git revert HEAD                          # 生成一个抵消原提交的新提交
 git revert &lt;commit-id&gt;                   # 回退指定的历史提交</code></pre>
-<p><p>三个必须记住的细节：</p>
+<p>三个必须记住的细节：</p>
 <ul>
 <li><code>--soft</code> / <code>--mixed</code> / <code>--hard</code> 的差别在于<strong>改动被保留到哪一层</strong>。只有 <code>--hard</code> 会真正丢数据，而 <code>git reflog</code> 是最后的后悔药，默认保留 90 天，能找到 <code>reset --hard</code> 之前的提交；</li>
 <li><code>--amend</code> 不是「修改」原提交，而是<strong>用一个新的提交替换掉它</strong>。所以它只适用于尚未推送的提交；</li>
 <li>公共分支上一律用 <code>revert</code> 而不是 <code>reset</code>。后者会重写历史、让所有同事的本地仓库分叉。</li>
 </ul>
+<h3>事故处理：把密码提交上去了怎么办</h3>
 
 <h3>事故处理：把密码提交上去了怎么办</h3>
 <p>这是最典型的真实事故。要区分两种情况：提交<strong>还没推送</strong>时，可以本地改写历史解决；已经推送就麻烦了——即使你强推覆盖，密钥也已经出现在远程服务器的记录、别人的本地克隆、CI 日志里。</p>
@@ -292,7 +287,7 @@ git push --force --tags</code></pre>
 <li><strong>第一步永远是先去平台把密钥吊销/轮换</strong>，而不是先折腾 Git 历史——只要密钥还有效，抹历史没有任何意义；</li>
 <li>第二步再清理仓库；</li>
 <li>第三步把 <code>.gitignore</code> 补齐并加一道 pre-commit 检查，防止同类问题再次发生。</li>
-</ul>真实项目里更稳妥的做法是密钥根本不进仓库，用环境变量或配置中心下发。</p>
+<p>真实项目里更稳妥的做法是密钥根本不进仓库，用环境变量或配置中心下发。</p>
 
 <h2>暂存与忽略：两个日常高频工具</h2>
 <pre><code class="language-bash"># 临时切分支救火：把没写完的改动先收起来
