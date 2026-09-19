@@ -130,7 +130,7 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>在 Spring Boot 里写一个 <code>@RestController</code>，请求就自动落到方法上了；很多人用了几年也没想明白「请求到底是谁接的、放在哪儿、页面上的数据从哪来」。本章把这层机制拆开：先讲 Servlet 这个最底层的 HTTP 入口，再讲转发与重定向的区别、会话与作用域、JSP 与 EL 的取值规则，最后用 MVC 把 Servlet 与 JSP 组装成分层结构。看完会发现，Spring MVC 的 <code>DispatcherServlet</code> 只是把这套手工流程做成了框架。适合已经会写 Java SE、能看懂 XML 与 HTTP 基础的读者。</p>
 
-<div class="tut-tip"><p><strong>先对齐版本与现状</strong>：本章讲的 Servlet 与 JSP 是 Java Web 的底层规范，机制没变，但包名和使用场景都变了。基线为 Java 17/21、Spring Boot 3.x（内嵌 Tomcat 10+，对应 Servlet 5.0/6.0）、Spring Framework 6.x、Maven 3.9。最关键的破坏性变化是<strong>包名由 <code>javax.servlet.*</code> 改为 <code>jakarta.servlet.*</code></strong>：Java EE 8 及以前用 javax，Jakarta EE 9（Tomcat 10.0、Spring Boot 3.x 起）统一改为 jakarta，两者不能混用，混用会直接编译失败。JSP 则已退居维护场景：前后端分离之后，新项目用模板引擎（Thymeleaf、Freemarker 等）或 SPA + REST，JSP 主要出现在存量老系统里——但老系统仍要维护，所以本章依然值得读。</p></div>
+<div class="tut-tip"><p><strong>先对齐版本与现状</strong>：本章讲的 Servlet 与 JSP 是 Java Web 的底层规范，机制没变，但包名和使用场景都变了。基线为 Java 17/21、Spring Boot 3.x（内嵌 Tomcat 10+，对应 Servlet 5.0/6.0）、Spring Framework 6.x、Maven 3.9。最关键的破坏性变化是<strong>包名由 <code>javax.servlet.*</code> 改为 <code>jakarta.servlet.*</code></strong>：Java EE 8 及以前用 javax，Jakarta EE 9（Tomcat 10.0、Spring Boot 3.x 起）统一改为 jakarta。两者不能混用，混用会直接编译失败。JSP 则已退居维护场景：前后端分离之后，新项目用模板引擎（Thymeleaf、Freemarker 等）或 SPA + REST，JSP 主要出现在存量老系统里——但老系统仍要维护，所以本章依然值得读。</p></div>
 
 <h2>Servlet：HTTP 请求的 Java 入口</h2>
 
@@ -324,7 +324,11 @@ public class BookServlet extends HttpServlet {
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-1/03-mvc-dispatch.svg" alt="Spring MVC 请求处理流程图：请求进入 DispatcherServlet，依次经过 HandlerMapping、Controller、Service 与 DAO，返回 ModelAndView 后由 ViewResolver 渲染视图"><figcaption>图 3：MVC 分层与 DispatcherServlet 的调度流程</figcaption></figure>
 
-<p>理解了这一层，就理解了两件事。第一，Servlet 接口被捐给 Eclipse 基金会并改名：Java EE 8 及以前的 <code>javax.servlet</code> 在 Jakarta EE 9（Tomcat 10、Spring Boot 3.x 起）变成 <code>jakarta.servlet</code>，写代码时用错包名会直接编译失败；升级老项目时，包名、JSTL 的 taglib URI、依赖坐标里的 <code>javax.*</code> 产物都要一起换。第二，<code>/WEB-INF</code> 下的 JSP 必须转发才能访问，那是容器的安全约定，不是框架的限制。</p>
+<p>理解了这一层，就理解了两件事。</p>
+<ul>
+  <li>第一，Servlet 接口被捐给 Eclipse 基金会并改名：Java EE 8 及以前的 <code>javax.servlet</code> 在 Jakarta EE 9（Tomcat 10、Spring Boot 3.x 起）变成 <code>jakarta.servlet</code>。写代码时用错包名会直接编译失败。升级老项目时，包名、JSTL 的 taglib URI、依赖坐标里的 <code>javax.*</code> 产物都要一起换。</li>
+  <li>第二，<code>/WEB-INF</code> 下的 JSP 必须转发才能访问，那是容器的安全约定，不是框架的限制。</li>
+</ul>
 
 <p>升级老项目时，把左边这些包名全局替换成右边即可，其余 API 签名基本不变：</p>
 
