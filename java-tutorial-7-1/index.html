@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>Linux 基础与文件操作 | tianxia</title>
+<title>7.1 Linux 基础与文件操作 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,10 +111,10 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>Linux 基础与文件操作</h1>
+              <h1>7.1 Linux 基础与文件操作</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，5 min read</span>
+                2026-09-19，6 min read</span>
             </div>
           
         
@@ -128,115 +128,102 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>写完 Java 代码，最终总要部署到一台 Linux 服务器上。很多人第一次 SSH 登上生产机时最容易慌的三件事：看不懂 <code>ls -l</code> 那串 <code>drwxr-xr-x</code>、不知道该往哪个目录放东西、明明文件是自己的却删不掉。本章就围绕「目录结构 + 权限 + 常用文件操作 + 软链接 + 用户与组」这条主线，把服务器上最常打交道的文件系统基础讲透。适合已经会写 Java、但没系统用过 Linux 的开发者阅读；所有命令都可以在一台测试机上直接敲。</p>
+<p>写完 Java 代码，最终总要部署到一台 Linux 服务器上，这时你会发现：程序不过是一堆文件——一个 jar、一份 application.yml、一个不断变大的日志目录、一个启动脚本。很多人第一次 SSH 登上生产机时最容易慌的三件事：看不懂 <code>ls -l</code> 那串 <code>drwxr-xr-x</code>、不知道该把东西放在哪个目录、明明文件是自己的却删不掉。本章围绕「目录结构 + 文件操作 + 权限 + 用户与组 + 软链接」这条主线，把服务器上最常打交道的文件系统基础一次讲透。适合已经会写 Java、但没系统用过 Linux 的开发者，命令都可以在测试机上直接敲。</p>
 
-<h2>一、先认识 Linux 的目录结构</h2>
+<h2>一、先建立地图：Linux 的目录结构</h2>
 
-<p>与 Windows 的「C 盘、D 盘」不同，Linux 只有一棵以 <code>/</code> 为根的目录树，所有磁盘分区、U 盘、网络存储都是通过「挂载」挂到树的某个节点上的。作为开发者，只需要先记住这几个位置：</p>
+<p>与 Windows 的「C 盘、D 盘」不同，Linux 只有一棵以 <code>/</code> 为根的目录树，磁盘分区和外接存储都通过「挂载」挂到树的某个节点上。主流发行版遵循 FHS（Filesystem Hierarchy Standard）约定，所以记住下面几个位置，换发行版也不会迷路：</p>
 
 <ul>
-  <li><code>/etc</code>：配置文件，如 <code>/etc/passwd</code>、<code>/etc/group</code>、网卡配置 <code>/etc/sysconfig/network-scripts/ifcfg-eth0</code>；</li>
-  <li><code>/usr</code>：系统级程序与库，<code>/usr/local</code> 常用来放自己编译安装的软件（如 JDK、Tomcat）；</li>
-  <li><code>/var</code>：会不断增长的数据，<code>/var/log</code> 是日志目录，排障第一站；</li>
-  <li><code>/opt</code>：可选的大型第三方软件，很多团队习惯把应用装在这里；</li>
-  <li><code>/tmp</code>：临时文件，可能被系统定期清理，别放重要数据；</li>
-  <li><code>/root</code>：root 用户的家目录；<code>/home/用户名</code> 是普通用户的家目录。</li>
+  <li><code>/etc</code>：配置文件，如 <code>/etc/passwd</code>、<code>/etc/group</code>、网卡配置 <code>/etc/sysconfig/network-scripts/ifcfg-eth0</code>（目录名是复数的 <code>network-scripts</code>，很多讲义会写错成 <code>network-script</code>）；</li>
+  <li><code>/usr</code>：系统级程序与库，<code>/usr/local</code> 常用来放自己安装的软件，如 JDK、Tomcat；</li>
+  <li><code>/var</code>：运行中不断变化的数据，<code>/var/log</code> 是日志目录，排障第一站；</li>
+  <li><code>/opt</code>：可选的第三方大型软件，很多团队把应用装在这里，如 <code>/opt/myapp</code>；</li>
+  <li><code>/tmp</code>：临时目录，重启可能被清理，不要放持久数据；</li>
+  <li><code>/root</code> 是 root 用户的家目录，<code>/home/用户名</code> 是普通用户的家目录。</li>
 </ul>
 
-<p>注意 <code>/</code>（根目录）和 <code>/root</code>（root 的家目录）是两个完全不同的地方，这是新手最常见的混淆点。定位自己在哪里用 <code>pwd</code>，切换目录用 <code>cd</code>：<code>cd ~</code> 回家目录、<code>cd /</code> 去根目录、<code>cd -</code> 回上一次待过的目录、<code>cd ..</code> 上一级。</p>
+<p>注意 <code>/</code>（根目录）与 <code>/root</code>（root 的家目录）是两个完全不同的地方，这是新手最常见的混淆点。定位自己在哪用 <code>pwd</code>，切换目录用 <code>cd</code>：<code>cd ~</code> 回家目录、<code>cd /</code> 去根目录、<code>cd -</code> 回上一次的目录、<code>cd ..</code> 上一级。</p>
 
-<p>Linux 不靠扩展名判断文件类型，后缀只为人眼服务。「一切皆文件」是它的设计哲学：普通文件、目录、设备、套接字在文件系统里都是文件，类型由 <code>ls -l</code> 输出的第一个字符区分：<code>-</code> 普通文件、<code>d</code> 目录、<code>l</code> 符号链接、<code>b</code> 块设备、<code>c</code> 字符设备、<code>s</code> 套接字。</p>
+<p>另外，Linux 不靠扩展名判断文件类型，后缀主要给人看，只有少数约定依赖它（如 Shell 脚本的 <code>.sh</code>、包管理器的 <code>.rpm</code>）。真实类型看 <code>ls -l</code> 输出的第一个字符：<code>-</code> 普通文件、<code>d</code> 目录、<code>l</code> 软链接、<code>b</code> 块设备、<code>c</code> 字符设备、<code>s</code> 套接字、<code>p</code> 命名管道；拿不准时用 <code>file 文件名</code> 让内核告诉你。</p>
 
-<h2>二、看懂文件权限：drwxr-xr-x 到底是什么</h2>
+<h2>二、文件与目录的常用操作</h2>
 
-<p>执行 <code>ls -l</code> 会看到类似下面的一行，它是理解 Linux 权限的入口：</p>
+<p>日常操作可以归纳成「定位 → 查看 → 增删改查」。创建目录用 <code>mkdir -p</code>，它能一次建出多层父目录；空目录删除用 <code>rmdir</code>，目录里一旦有内容它就会拒绝执行，这正是它比 <code>rm -r</code> 安全的地方。查看文件内容按「文件多大」选工具：<code>cat</code> 适合几行的小文件，<code>more</code> / <code>less</code> 适合大文件分页（<code>less</code> 支持上下翻页与 <code>/关键词</code> 搜索，按 <code>q</code> 退出），<code>head -n 50</code> 看开头，<code>tail -n 100</code> 看结尾，而 <code>tail -f app.log</code> 会持续输出新增行——这是盯滚动日志最常用的命令。</p>
+
+<pre><code class="language-bash">mkdir -p /opt/myapp/{conf,logs}   # -p：父目录不存在时一并创建
+touch app.log                     # 创建空文件或更新时间戳
+ls -lh                            # 人类可读大小；ll 通常是 ls -l 的别名
+
+cp -r conf conf.bak               # -r 递归复制目录，缺了它复制目录会报错
+mv app.log /tmp/                  # 移动；目标在同目录时就是重命名
+rm -rf /opt/myapp-bak             # 危险操作：先 pwd + ls 确认路径再回车
+
+tail -n 100 -f /var/log/myapp/app.log    # 跟踪最后 100 行，Ctrl+C 退出
+find /opt -name '*.jar' -mtime -7        # 近 7 天内修改过的 jar 包
+grep -rn 'OutOfMemoryError' /var/log/myapp
+ps -ef | grep java                       # | 是管道：把前一个命令的输出交给后一个处理</code></pre>
+
+<p>两个小坑提前记住：<code>ping 127.0.0.1 &gt; ip.log &amp;</code> 里的 <code>&gt;</code> 是覆盖写入（追加要用 <code>&gt;&gt;</code>），行尾的 <code>&amp;</code> 表示后台运行，否则命令会一直占住终端；<code>&gt;</code> 覆盖很容易把已有日志写没，重定向到重要文件前先确认。还有，<code>cp</code> 和 <code>rm</code> 默认都不带确认，且 <code>rm</code> 没有回收站。</p>
+
+<h2>三、看懂权限：九个字符与 chmod</h2>
+
+<p>执行 <code>ls -l</code> 看到的每一行，开头那串字符就是权限。把它切成四段读：</p>
 
 <pre><code class="language-bash">$ ls -l
 -rw-r--r-- 1 root root 302108 Nov 13 06:03 log2012.log
 drwxr-xr-x 2 root root   4096 Nov 13 05:50 test4
 lrwxrwxrwx 1 root root     11 Nov 22 06:58 linklog.log -&gt; log2012.log</code></pre>
 
-<p>把第一列切成四段来读：<code>-</code> 是文件类型；紧接着的 9 个字符，每 3 个一组，依次是 <strong>属主（u）</strong>、<strong>属组（g）</strong>、<strong>其他用户（o）</strong> 的权限；每组内部的顺序固定是 <code>r</code>（读）、<code>w</code>（写）、<code>x</code>（执行），没有该权限就用 <code>-</code> 占位。所以 <code>-rw-r--r--</code> 的意思是：普通文件，属主可读写，同组用户和其他用户只能读。</p>
+<p>第一列第 1 个字符是类型；紧接的 9 个字符每 3 个一组，依次是<strong>属主（u）</strong>、<strong>属组（g）</strong>、<strong>其他用户（o）</strong>的权限，每组内部顺序固定为 <code>r</code>（读）、<code>w</code>（写）、<code>x</code>（执行），无权限用 <code>-</code> 占位。所以 <code>-rw-r--r--</code> 表示：普通文件，属主可读写，同组和其他用户只能读。数字设定法按 4（r）+2（w）+1（x）累加：<code>rwx</code>=7、<code>rw-</code>=6、<code>r-x</code>=5、<code>r--</code>=4。于是 <code>755</code> 是最常见的可执行脚本权限，<code>644</code> 是普通文件，<code>600</code> 用于私钥这类只许自己看的文件。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-1/01-permission-bits.svg" alt="ls -l 第一列九个权限字符的分组解读与数字权限换算表"><figcaption>图 1：九个权限字符的分组解读，以及 7/6/5/4 的数字权限换算</figcaption></figure>
 
-<p>对目录而言，<code>r</code> 是「能列出目录内文件名」，<code>x</code> 是「能进入目录、能访问目录内已知路径的文件」，<code>w</code> 是「能在目录内创建、删除、重命名条目」。很多人以为「文件写权限」决定能不能删文件，其实删除和重命名看的是<strong>所在目录</strong>的 <code>w</code> 权限；只有当目录设置了粘滞位（<code>t</code>，如 <code>/tmp</code>）时，才额外要求你是文件属主或 root。</p>
 
-<p>权限的数字表示法按 4（r）+2（w）+1（x） 累加，比如 <code>rw-</code>=6、<code>r-x</code>=5、<code>rwx</code>=7。因此 <code>chmod 755 app.sh</code> 就是「属主 rwx，同组和其他人 r-x」，这也正是可执行脚本最常见的权限。</p>
+<p>对目录而言，<code>r</code> 是「能列出目录内文件名」，<code>x</code> 是「能进入目录、能访问目录内已知路径的文件」，<code>w</code> 是「能在目录内创建、删除、重命名条目」。因此目录至少要 <code>r-x</code> 才用得顺手：只有 <code>r</code> 时能看名字却进不去，只有 <code>x</code> 时进得去却列不出名字。很多人以为「文件写权限」决定能不能删文件，其实<strong>删除和重命名看的是所在目录的 <code>w</code> 权限</strong>；只有目录设了粘滞位（<code>t</code>，如 <code>/tmp</code>）时，才额外要求你是文件属主或 root。</p>
 
-<h2>三、修改权限与归属：chmod、chown、chgrp</h2>
+<pre><code class="language-bash">chmod 755 app.sh              # 属主 rwx，属组 r-x，其他人 r-x
+chmod a+x app.sh              # 字母法：u/g/o/a 指定对象，+ 增加权限
+chmod ug+w,o-x app.sh         # 属主与属组加写权限，去掉其他人的执行权限
+chmod u=x app.sh              # = 会先清空该组原有权限，结果 ---xrw-r--
+chmod -R u+rwX /var/log/myapp # 递归；大写 X 只给目录和本来就有 x 的文件加执行位
 
-<p><code>chmod</code> 支持数字设定法和字母设定法两种写法。字母法中 <code>u/g/o/a</code> 指定作用对象，<code>+ - =</code> 表示增加、删除、直接赋值：</p>
+chown -R appuser:appgroup /opt/myapp   # 同时改属主与属组；只改组用 chgrp</code></pre>
 
-<pre><code class="language-bash"># 数字法：属主 rwx，属组 r-x，其他人 r-x
-chmod 755 app.sh
+<p>两个易错点值得单独点出。第一，字母法里 <code>+</code> 增加、<code>-</code> 删除、<code>=</code> 是「先清空该组权限再赋值」，所以 <code>chmod u=x</code> 的结果是属主只剩执行位，而不是「拥有读权限」，有资料在这句说明上写反了。第二，数字权限别相加出错：<code>r-x</code> 是 4+1=5，不是 7。此外，递归时用大写 <code>X</code> 比小写 <code>x</code> 安全，它只给目录和本来就有执行位的文件加 <code>x</code>，不会把一批普通文件误变成可执行文件。</p>
 
-# 字母法：给属主和属组加写权限，去掉其他人的执行权限
-chmod ug+w,o-x app.sh
+<h2>四、用户、用户组与软链接</h2>
 
-# 用 = 直接覆盖：只给属主留执行权限，其余权限全部清掉
-chmod u=x app.sh        # 结果是 ---x------
+<p>Linux 是多用户系统，每个文件都记录自己的属主与属组，权限判定顺序是：先看你是不是文件属主（u），再看你的主属组或附加组是否匹配（g），最后落到其他用户（o）。创建和管理的基本命令如下，其中 <code>su -</code> 的 <code>-</code> 表示同时切换环境变量，<code>userdel -r</code> 会连带删除家目录（确认要删再用）。</p>
 
-# 递归处理目录及其下所有内容，常用于放开日志目录
-chmod -R u+rwX /var/log/myapp
+<pre><code class="language-bash">groupadd appgroup               # 建组
+useradd -g appgroup appuser     # 建用户并指定主属组
+passwd appuser                  # 设置密码，太简单的密码会被拒绝
+id appuser                      # 查看 uid/gid 及所属组
+su - appuser                    # 切换用户
+userdel -r appuser              # 删除用户并连带家目录
 
-# 同时改属主和属组（属主:属组），只改属组可用 chgrp
-chown -R appuser:appgroup /opt/myapp</code></pre>
+cat /etc/passwd                 # 用户信息（密码位置是占位符 x）
+cat /etc/group                  # 组信息；真实密码哈希在 /etc/shadow
 
-<p>两点实用细节：一是 <code>-R</code> 递归时用大写 <code>X</code> 比小写 <code>x</code> 更安全，它只给目录和本来就有执行位的文件加 <code>x</code>，不会把一批普通文件误变成可执行文件；二是生产环境不要习惯性 <code>chmod 777</code>，它等于对所有用户开放读写执行，是典型的提权隐患，正确做法是让服务以专用用户运行，只给它恰好够用的权限。</p>
+ln -s /opt/myapp/releases/20240601 /opt/myapp/current   # 软链接：当前版本开关
+ls -l /opt/myapp/current        # lrwxrwxrwx ... current -&gt; releases/20240601
+ln -sfn /opt/myapp/releases/20240520 /opt/myapp/current # 回滚；-n 避免链进目录内部</code></pre>
 
-<h2>四、文件日常操作与软链接</h2>
+<p>软链接是「指向另一个路径的快捷方式」，用 <code>ln -s</code> 创建；<code>ln</code> 不加 <code>-s</code> 建的是硬链接。两者区别要清楚：软链接是独立文件，可跨文件系统、可指向目录，源文件删掉后它变成「断链」；硬链接只是同一 inode 的另一个名字，不能跨文件系统、通常不能指向目录，删掉任何一个名字文件仍在。发布系统最爱的用法就是把带版本号的目录链成固定的 <code>current</code> 路径，回滚只需重建链接，瞬间完成。</p>
 
-<p>增删查改的骨架命令不多，关键是记牢 <code>rm</code> 的破坏性——Linux 没有回收站：</p>
+<p>回到开头那个困惑：文件 <code>/opt/myapp/data/aaa</code> 属于 <code>appuser</code>，但目录 <code>data</code> 属于 root、权限是 <code>755</code>，那么即使你是 <code>aaa</code> 的属主也无法删除或重命名它——因为操作的是目录条目，而你没有该目录的 <code>w</code> 权限。同理，「读得到文件却进不去目录」通常就是目录缺 <code>x</code> 权限。排查时沿路径一级级 <code>ls -ld</code> 检查，比盲目 <code>chmod 777</code> 高效得多。顺便说，CentOS 7 以后网卡命名变成 <code>ifcfg-ens33</code> 这类形式，重启网络用 <code>systemctl restart network</code>（CentOS 8 / Ubuntu 请用 <code>nmcli</code> 或 <code>netplan</code>）。</p>
 
-<pre><code class="language-bash"># 创建与查看
-mkdir -p /opt/myapp/{conf,logs}     # -p：父目录不存在时一并创建
-touch app.log                       # 创建空文件或更新时间戳
-ls -lh                              # 人类可读的大小；ll 只是 ls -l 的别名
+<h2>五、新手最容易踩的五个坑</h2>
 
-# 复制、移动、删除
-cp -r conf conf.bak                 # -r 递归复制目录
-mv app.log /tmp/                    # 移动（同分区内改名是纯元数据操作，很快）
-rm -f app.log                       # -f 不提示；-r 删目录；rm -rf 慎用
+<ul>
+  <li><strong>上来就 <code>chmod -R 777</code></strong>。它确实能让报错消失，但等于对所有用户开放读写执行，是典型的提权隐患。正确顺序是：先 <code>ls -l</code> 看属主属组，分辨是「人不对」还是「权限位不对」，人不对用 <code>chown</code>，位不对再按最小必要改 <code>chmod</code>。</li>
+  <li><strong>在错误目录执行 <code>rm -rf</code></strong>。删除前先 <code>pwd</code> 确认位置，再用 <code>ls</code> 看一眼匹配结果；生产环境宁可先 <code>mv</code> 到 <code>/tmp</code> 观察一天。</li>
+  <li><strong>权限看着对但脚本跑不起来</strong>。脚本需要执行位 <code>x</code>，且要用 <code>./run.sh</code> 而不是 <code>run.sh</code>（当前目录默认不在 <code>PATH</code> 里）。若报 <code>bad interpreter</code>，多半是 Windows 的 CRLF 换行导致的，用 <code>dos2unix</code> 转换即可。</li>
+  <li><strong>把日志写进 <code>/home</code> 或根分区</strong>。日志暴涨会把分区写满，服务连日志都写不出来；日志放 <code>/var/log</code> 或独立数据盘，并配 <code>logrotate</code> 做切割。</li>
+  <li><strong>直接改 <code>/etc</code> 下的配置</strong>。改前先 <code>cp nginx.conf nginx.conf.bak</code>，再用 <code>nginx -t</code> 这类命令校验语法，确认无误再重启服务。</li>
+</ul>
 
-# 查看内容与实时日志
-cat /etc/hosts
-tail -n 100 -f /var/log/myapp/app.log   # 跟踪最后 100 行并持续输出，Ctrl+C 退出
-
-# 查找文件
-find /opt -name '*.jar' -mtime -7   # 近 7 天内修改过的 jar 包</code></pre>
-
-<p>软链接（symbolic link）是「指向另一个路径的快捷方式」，用 <code>ln -s</code> 创建，用 <code>ln</code> 不加 <code>-s</code> 创建的是硬链接。发布系统里最常见的用法是把带版本号的目录链接成一个固定的当前版本路径，回滚时只需重建链接，一次切换、瞬间完成：</p>
-
-<pre><code class="language-bash">ln -s /opt/myapp/releases/20240601 /opt/myapp/current
-ls -l /opt/myapp/current        # lrwxrwxrwx ... current -&gt; /opt/myapp/releases/20240601
-
-# 回滚：注意 -n 表示把符号链接本身当作普通文件替换，避免被链接进目录里
-ln -sfn /opt/myapp/releases/20240520 /opt/myapp/current</code></pre>
-
-<p>软链接与硬链接的区别要清楚：软链接是独立文件，可以跨文件系统、可以指向目录，源文件删掉后它变成「断链」；硬链接只是同一 inode 的另一个名字，不能跨文件系统、通常不能指向目录，删掉其中任何一个名字文件仍存在。</p>
-
-<h2>五、用户与组：为什么「我的文件我删不掉」</h2>
-
-<p>Linux 是多用户系统，权限判定的顺序是：先看你是不是文件属主（u），再看你的主属组或附加组是否匹配（g），最后才落到其他用户（o）。创建和管理用户的命令如下：</p>
-
-<pre><code class="language-bash">groupadd appgroup                 # 建组
-useradd -g appgroup appuser       # 建用户并指定主属组
-passwd appuser                    # 设置密码（密码过简单会被拒绝）
-
-id appuser                        # 查看 uid/gid 及所属组
-su - appuser                      # 切换用户（- 表示同时切换环境变量）
-userdel -r appuser                # 删除用户并连带删除其家目录
-groupdel appgroup
-
-cat /etc/passwd                   # 用户信息（密码占位符 x，真实密码在 /etc/shadow）
-cat /etc/group                    # 组信息</code></pre>
-
-<p>现在可以回答开头那个困惑了：文件 <code>/opt/myapp/data/aaa</code> 属于 <code>appuser</code>，但目录 <code>data</code> 属于 root 且权限是 <code>755</code>，那么即使你是 <code>aaa</code> 的属主，也无法删除或重命名它——因为操作的是目录条目，而你没有该目录的 <code>w</code> 权限。同理，「读得到文件却进不去目录」，通常就是目录缺少 <code>x</code> 权限。排查时沿着路径从上到下一级级 <code>ls -ld</code> 检查，比盲目 <code>chmod 777</code> 高效得多。</p>
-
-<p>需要提权执行单条命令时用 <code>sudo</code> 而不是长期使用 root；注意 <code>su appuser</code> 只是切换身份但保留当前环境变量，<code>su - appuser</code> 才会加载目标用户的完整登录环境，环境变量相关的诡异问题常常出在这。</p>
-
-<h2>小结</h2>
-
-<p>本章从目录结构讲到权限与用户：Linux 只有一棵根目录树，<code>/etc</code>、<code>/usr</code>、<code>/var</code>、<code>/opt</code> 是你最常打交道的四个位置；<code>ls -l</code> 的第一列按「类型 + u/g/o 各三位」解读，数字权限由 4/2/1 相加而来；修改权限用 <code>chmod</code>、修改归属用 <code>chown/chgrp</code>，递归时优先用 <code>X</code> 且远离 <code>777</code>；文件操作牢记 <code>rm</code> 不可恢复，实时看日志用 <code>tail -f</code>；软链接适合做版本切换和发布回滚。最后记住一条判定原则：<strong>能不能删文件看目录的 <code>w</code>，能不能进目录看目录的 <code>x</code>，遇到权限报错先按路径逐级核查，再决定是否授权。</strong>下一章我们会把这些文件操作能力用到 Nginx 与 Docker 的配置管理上。</p>
+<p>小结：Linux 只有一棵根目录树，<code>/etc</code>、<code>/usr</code>、<code>/var</code>、<code>/opt</code> 是最常打交道的四个位置；<code>ls -l</code> 第一列按「类型 + u/g/o 各三位」解读，数字权限由 4/2/1 相加而来；改权限用 <code>chmod</code>、改归属用 <code>chown/chgrp</code>，递归时优先用大写 <code>X</code> 并远离 <code>777</code>；文件操作牢记 <code>rm</code> 不可恢复、实时看日志用 <code>tail -f</code>；软链接适合做版本切换与发布回滚。最后记住这条判定原则：<strong>能不能删文件看目录的 <code>w</code>，能不能进目录看目录的 <code>x</code>；遇到 <code>Permission denied</code> 先按路径逐级核查，再决定是改归属还是改权限位。</strong>下一章我们把这套基础用到实处：把 Spring Boot 应用部署到 Linux，并交给 systemd 管理。</p>
           </article>
   <!-- Footer -->
   <footer>

@@ -168,6 +168,8 @@ public class RefCountTest {
 
 <p>没有哪种算法通吃，于是有了<strong>分代收集</strong>：依据"绝大多数对象朝生夕灭、熬过越多次 GC 的对象越难死"这一经验规律，把堆分成新生代与老年代分别施策。HotSpot 中新生代默认按 <code>Eden : Survivor0 : Survivor1 = 8 : 1 : 1</code> 划分，新对象优先在 Eden 分配；Minor GC 时 Eden 与 From Survivor 中的存活对象被<strong>复制</strong>到 To Survivor，然后清空前两者并交换两个 Survivor 的角色。对象每熬过一次 GC 年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）或 Survivor 空间不足时晋升老年代。老年代存活率高适合标记-整理或标记-清除，空间不足时触发 Full GC。大对象（如 <code>new byte[4 * 1024 * 1024]</code>）通常直接进入老年代，避免在 Eden 与 Survivor 间反复复制。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-2/01-generational-heap-gc.svg" alt="分代堆结构示意图：新生代按 Eden 比 S0 比 S1 等于 8 比 1 比 1 划分，熬过阈值的对象晋升老年代；下方对比 Minor GC 与 Full GC 的触发条件与停顿差异"><figcaption>图 1：分代堆结构——新生代 8:1:1 与对象晋升路径</figcaption></figure>
+
 <h2>三、收集器的演进：从 Serial 到 G1 与低延迟收集器</h2>
 
 <p>算法要有落地实现，HotSpot 的收集器可以按"是否并行、是否并发、作用于哪一代"来区分。并行（Parallel）指多条 GC 线程同时工作，但用户线程仍然暂停；并发（Concurrent）指 GC 线程与用户线程同时运行，能显著缩短单次停顿，代价是占用 CPU 并产生浮动垃圾。</p>
