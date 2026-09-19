@@ -128,7 +128,9 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>程序出错并不可怕，可怕的是出错之后不知道发生了什么。本章讲 Java 的异常机制与调试手段：用 try-catch-finally 捕获并处理错误，用 throw / throws 把问题交给上层，用自定义异常表达业务规则，用断点调试找到异常的真正源头。本章适合已经会写基本 Java 类和方法、但一看到红色堆栈就发懵的读者。</p>
+<p>程序出错并不可怕，可怕的是出错之后不知道发生了什么。本章讲 Java 的异常机制与调试手段。前半部分解决“怎么处理错误”：用 try-catch-finally 捕获并处理，用 throw / throws 把问题交给上层，用自定义异常表达业务规则。后半部分解决“怎么定位错误”：用断点调试找到异常的真正源头。</p>
+
+<p>本章适合已经会写基本 Java 类和方法、但一看到红色堆栈就发懵的读者。</p>
 
 <p>假设要写一个“计算两个整数相除”的方法。如果不用异常，就得让方法返回一个特殊值表示失败，比如返回 <code>-1</code>；可调用方怎么区分“结果是 -1”和“出错了”？再比如数组越界，返回什么值都无法表达“下标超出范围”这件事。靠返回值传递错误，会让每个调用点都塞满 <code>if</code> 判断，正常逻辑反而被淹没。</p>
 
@@ -176,7 +178,7 @@
 
 <p>关于捕获，有几条规则必须记牢。<strong>catch 的顺序不能颠倒</strong>：如果把 <code>catch (Exception e)</code> 写在 <code>catch (NumberFormatException e)</code> 前面，编译器会报错，因为后面的分支永远不可能被执行（unreachable）。<strong>多重捕获有前提</strong>：<code>catch (A | B e)</code> 中的多个类型之间<em>不能</em>存在继承关系。原因就是重复捕获：子类与父类能捕获同一批异常，编译器同样判定为错误。旧笔记只含糊地说“只能使用没有继承关系的异常类”，没有点明这层原因。</p>
 
-<p>处理资源时，Java 7 之前必须把 <code>close()</code> 写在 finally 里，还得再套一层 try，非常啰嗦。现在应优先使用 try-with-resources：只要资源实现了 <code>AutoCloseable</code>，就会在语句结束时自动关闭，关闭顺序与打开顺序相反；关闭时抛出的异常会作为 suppressed 异常附加到主异常上，不会丢失。</p>
+<p>处理资源时，Java 7 之前必须把 <code>close()</code> 写在 finally 里，还得再套一层 try，非常啰嗦。现在应优先使用 try-with-resources。只要资源实现了 <code>AutoCloseable</code>，就会在语句结束时自动关闭，关闭顺序与打开顺序相反。关闭时抛出的异常会作为 suppressed 异常附加到主异常上，不会丢失。</p>
 
 <pre><code class="language-java">public static String readFirstLine(String path) throws IOException {
     try (BufferedReader reader = new BufferedReader(new FileReader(path))) {

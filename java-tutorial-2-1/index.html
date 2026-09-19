@@ -128,19 +128,19 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们从 Java 语法一路读到了 JDBC，但代码里的数据始终活不过一次进程重启。<code>ArrayList</code> 存在内存里，程序一退出就没了；就算写进文件，想按条件筛选、并发修改也很快会失控。要让数据真正“留下来并被多人同时用”，就需要数据库。数据库是后端开发的地基，也是 Java 面试绕不开的一环。本章讲清楚三件事：数据在关系型数据库里是怎么组织的、表结构怎么用 DDL 建出来、数据怎么用 DML 增删改。读完这一章，你应该能在 MySQL 里从零建出一个带约束的业务库，并看懂别人写的建表语句。本章适合已掌握 Java 基础语法、准备动手写第一个持久化程序的读者。</p>
+<p>前面几章从 Java 语法一路读到了 JDBC，但代码里的数据始终活不过一次进程重启。<code>ArrayList</code> 存在内存里，程序一退出就没了；就算写进文件，想按条件筛选、并发修改也很快会失控。要让数据真正“留下来并被多人同时用”，就需要数据库。数据库是后端开发的地基，也是 Java 面试绕不开的一环。本章讲清楚三件事：数据在关系型数据库里怎么组织、表结构怎么用 DDL 建出来、数据怎么用 DML 增删改。读完本章，应当能在 MySQL 里从零建出一个带约束的业务库，并看懂别人写的建表语句。本章适合已掌握 Java 基础语法、准备动手写第一个持久化程序的读者。</p>
 
 <h2>一、为什么需要数据库：关系模型</h2>
 
-<p>把数据存成文件，问题会一个接一个冒出来：两个人同时写同一个文件会互相覆盖；想按年龄过滤得一整行一整行地读；某天字段从 5 个变成 6 个，历史数据全要手工改。数据库管理系统（DBMS）就是为了统一解决这些问题而生的软件，它对外提供四类能力：<b>数据定义</b>（定义库和表的结构）、<b>数据操纵</b>（增删改查）、<b>运行管理</b>（并发、权限、完整性、一致性）、<b>建立与维护</b>（转储恢复、性能监控）。</p>
+<p>把数据存成文件，问题会一个接一个冒出来：两个人同时写同一个文件会互相覆盖；想按年龄过滤，得把文件一整行一整行地读一遍；某天字段从 5 个变成 6 个，历史数据全要手工改。数据库管理系统（DBMS）正是为统一解决这些问题而出现的软件。它对外提供四类能力：<b>数据定义</b>（定义库和表的结构）、<b>数据操纵</b>（增删改查）、<b>运行管理</b>（并发、权限、完整性、一致性）、<b>建立与维护</b>（转储恢复、性能监控）。</p>
 
-<p>最常见的数据库是<b>关系型数据库</b>，用二维表来组织数据，代表产品有 MySQL、Oracle、SQL Server、PostgreSQL；另一类是<b>非关系型数据库</b>（NoSQL），如 Redis、HBase、MongoDB，它们用键值、列族、文档等模型，牺牲一部分关系约束换取水平扩展能力。本章以 MySQL 为例，其余关系型数据库的概念完全相通。</p>
+<p>最常见的数据库是<b>关系型数据库</b>，它用二维表组织数据，代表产品有 MySQL、Oracle、SQL Server、PostgreSQL。另一类是<b>非关系型数据库</b>（NoSQL），如 Redis、HBase、MongoDB，它们采用键值、列族、文档等模型，牺牲一部分关系约束，换取水平扩展能力。本章以 MySQL 为例，其余关系型数据库的概念完全相通。</p>
 
-<p>关系模型只有几个术语，但必须分清层次：<b>库</b>（database）是表的集合；<b>表</b>（table）是同一类实体的集合；表中的一行（row）是一条记录，一列（column）是一个字段属性；同一列在所有行里含义一致，且要有确定的数据类型。为了让每一行都能被唯一指认，需要指定<b>主键</b>（primary key）；当两张表需要关联时，从表里指向主表主键的那一列称为<b>外键</b>（foreign key）。</p>
+<p>关系模型只有几个术语，但层次必须分清：<b>库</b>（database）是表的集合；<b>表</b>（table）是同一类实体的集合；表中的一行（row）是一条记录，一列（column）是一个字段属性。同一列在所有行里含义一致，并且要有确定的数据类型。为了让每一行都能被唯一指认，需要指定<b>主键</b>（primary key）；两张表需要关联时，从表里指向主表主键的那一列称为<b>外键</b>（foreign key）。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-1/01-relational-model.svg" alt="关系模型中数据库、表、行、列与主键的层次关系示意图"><figcaption>图 1：关系模型的层次：库 &gt; 表 &gt; 行 / 列，主键唯一标识每一行</figcaption></figure>
 
-<p>SQL（Structured Query Language）是操作关系型数据库的标准语言。虽然各数据库有方言差异，但按作用可以把语句分成四类，图 2 是它们的职责划分。</p>
+<p>SQL（Structured Query Language）是操作关系型数据库的标准语言。各数据库的方言虽然有差异，但按作用可以把语句分成四类，图 2 是它们的职责划分。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-1/02-sql-categories.svg" alt="SQL 语句分为 DDL、DML、DQL、DCL 四类及其代表命令"><figcaption>图 2：SQL 语句的四大分类与代表命令</figcaption></figure>
 
@@ -150,7 +150,7 @@
 
 <h3>2.1 建库与字符集</h3>
 
-<p>建库时一定要显式指定字符集。MySQL 5.7 的默认字符集还是 <code>latin1</code>，一旦按默认建库，中文会变成乱码；MySQL 8.0 才把默认字符集改成 <code>utf8mb4</code>。</p>
+<p>建库时一定要显式指定字符集。MySQL 5.7 的默认字符集还是 <code>latin1</code>，一旦按默认建库，中文就会变成乱码；MySQL 8.0 才把默认字符集改成 <code>utf8mb4</code>。</p>
 
 <pre><code class="language-sql">-- 建库：字符集用 utf8mb4，不建议写 utf8
 CREATE DATABASE shop
@@ -166,11 +166,11 @@ SHOW CREATE DATABASE shop;
 -- 查看当前连接与服务器的字符集变量
 SHOW VARIABLES LIKE 'character%';</code></pre>
 
-<p>这里有个流传很广的坑：MySQL 里的 <code>utf8</code> <b>不是完整的 UTF-8</b>，它每个字符最多只存 3 字节，真正的 UTF-8 里常用的 emoji 占 4 字节，存进去会直接报错或被截断。MySQL 在 2010 年补充发布了 <code>utf8mb4</code>（mb4 = most bytes 4）来支持完整 UTF-8，从 MySQL 8.0.28 起 <code>utf8</code> 已被标记为 <code>utf8mb3</code> 的别名并逐步废弃。所以新库一律写 <code>utf8mb4</code>。</p>
+<p>这里有个流传很广的坑：MySQL 里的 <code>utf8</code> <b>不是完整的 UTF-8</b>，它每个字符最多只存 3 字节，而真正的 UTF-8 里常用的 emoji 占 4 字节，存进去会直接报错或被截断。MySQL 在 2010 年补充发布了 <code>utf8mb4</code>（mb4 = most bytes 4）来支持完整 UTF-8。从 MySQL 8.0.28 起，<code>utf8</code> 已被标记为 <code>utf8mb3</code> 的别名并逐步废弃，所以新库一律写 <code>utf8mb4</code>。</p>
 
 <h3>2.2 建表：数据类型与常用约束</h3>
 
-<p>建表语句由列定义组成，每一列要给出「列名 + 数据类型 + 约束」。常用类型按用途记三类就够了：整数用 <code>INT</code>、<code>BIGINT</code>；小数和金额用 <code>DECIMAL(m,d)</code>（不用 <code>FLOAT</code>/<code>DOUBLE</code>，它们有精度误差）；字符串用 <code>VARCHAR(n)</code> 存变长、<code>CHAR(n)</code> 存定长，时间用 <code>DATETIME</code> 或 <code>TIMESTAMP</code>。</p>
+<p>建表语句由列定义组成，每一列要给出“列名 + 数据类型 + 约束”。常用类型按用途记三类就够了：整数用 <code>INT</code>、<code>BIGINT</code>；小数和金额用 <code>DECIMAL(m,d)</code>，不用 <code>FLOAT</code>/<code>DOUBLE</code>，它们有精度误差；字符串用 <code>VARCHAR(n)</code> 存变长、<code>CHAR(n)</code> 存定长，时间用 <code>DATETIME</code> 或 <code>TIMESTAMP</code>。</p>
 
 <pre><code class="language-sql">CREATE TABLE user (
   id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -214,7 +214,7 @@ SHOW VARIABLES LIKE 'character%';</code></pre>
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES user (id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;</code></pre>
 
-<p>加了外键以后，插入一条 <code>user_id = 99</code> 而 user 表里没有 99 号用户，数据库会直接拒绝。这挡住了脏数据，但每次写入都要回主表校验，高并发场景会成为瓶颈，所以大型互联网系统常把外键约束关掉、改由应用层保证一致性——这是工程取舍，不是外键本身有问题。</p>
+<p>加了外键以后，如果再插入一条 <code>user_id</code> 为 99、而 user 表里并没有 99 号用户的记录，数据库会直接拒绝。这挡住了脏数据，但每次写入都要回主表校验，高并发场景会成为瓶颈。所以大型互联网系统常把外键约束关掉，改由应用层保证一致性——这是工程取舍，不是外键本身有问题。</p>
 
 <h3>2.3 改结构与删表</h3>
 
@@ -250,7 +250,7 @@ INSERT INTO user (name, age, email) VALUES
 -- id 是自增列不用给值；status、created_at 走默认值
 INSERT INTO orders (user_id, amount) VALUES (1, 99.50);</code></pre>
 
-<p>要注意三点：字符串和日期必须用<b>单引号</b>（双引号在 MySQL 中默认也是字符串，但不标准，且 MySQL 8.0 在 <code>ANSI_QUOTES</code> 模式下双引号表示标识符）；带 <code>NOT NULL</code> 且无默认值的列不能省略；存在 <code>UNIQUE</code> 约束时，重复插入会报 <code>Duplicate entry</code> 错误。</p>
+<p>要注意三点：字符串和日期必须用<b>单引号</b>；双引号在 MySQL 中默认也表示字符串，但不标准，而且 MySQL 8.0 在 <code>ANSI_QUOTES</code> 模式下双引号表示标识符。带 <code>NOT NULL</code> 且无默认值的列不能省略；存在 <code>UNIQUE</code> 约束时，重复插入会报 <code>Duplicate entry</code> 错误。</p>
 
 <h3>3.2 UPDATE 与 DELETE：务必带 WHERE</h3>
 
@@ -263,7 +263,7 @@ SELECT * FROM user WHERE status = 0;
 -- 删数据同样必须带条件
 DELETE FROM user WHERE id = 3;</code></pre>
 
-<p><b><code>WHERE</code> 是整个 DML 里最贵的一个单词。</b>漏写它，<code>UPDATE user SET status = 0</code> 会把全表用户禁用，<code>DELETE FROM user</code> 会清空整张表（后者在 MySQL 里还是一次一行的 DML，可以回滚，但生产事故往往来不及）。养成两个习惯：动手前先用相同条件 <code>SELECT COUNT(*)</code> 确认行数；把 <code>sql_safe_updates</code> 打开，让不带 <code>WHERE</code> 的 UPDATE/DELETE 直接报错。</p>
+<p><b><code>WHERE</code> 是整个 DML 里代价最高的单词。</b>漏写它，<code>UPDATE user SET status = 0</code> 会把全表用户禁用，<code>DELETE FROM user</code> 会清空整张表（后者在 MySQL 里还是一次一行的 DML，可以回滚，但生产事故往往来不及）。养成两个习惯：动手前先用相同条件 <code>SELECT COUNT(*)</code> 确认行数；把 <code>sql_safe_updates</code> 打开，让不带 <code>WHERE</code> 的 UPDATE/DELETE 直接报错。</p>
 
 <h3>3.3 串起来跑一遍</h3>
 
@@ -277,14 +277,9 @@ ORDER BY o.amount DESC;</code></pre>
 
 <h2>四、常见坑与小结</h2>
 
-<p>最后集中列几个新手最容易踩的坑：<b>字符集</b>——建库不写 <code>utf8mb4</code>，中文和 emoji 迟早出问题；<b>字符集只管到列</b>——建库时定了字符集，建表不写 <code>DEFAULT CHARSET</code> 时表会继承库的字符集，但若显式写了 <code>utf8</code> 就会覆盖掉，需要 <code>SHOW CREATE TABLE</code> 复查；<b>主键选择</b>——用自增 <code>BIGINT</code> 做业务无关主键，不要拿手机号、身份证号当主键，因为它们会变且通常不该暴露；<b>金额类型</b>——金额一律 <code>DECIMAL</code>，用 <code>DOUBLE</code> 累加会出现 0.01 级别的误差；<b>无 WHERE 的 UPDATE/DELETE</b>——生产事故排行榜第一名。</p>
+<p>最后集中列几个新手最容易踩的坑。<b>字符集</b>：建库不写 <code>utf8mb4</code>，中文和 emoji 迟早出问题。<b>字符集的继承</b>：建库时定了字符集，建表若不写 <code>DEFAULT CHARSET</code>，表会继承库的字符集；但若显式写了 <code>utf8</code> 就会覆盖掉，需要 <code>SHOW CREATE TABLE</code> 复查。<b>主键选择</b>：用自增 <code>BIGINT</code> 做与业务无关的主键，不要拿手机号、身份证号当主键，因为它们会变，而且通常不该暴露。<b>金额类型</b>：金额一律用 <code>DECIMAL</code>，用 <code>DOUBLE</code> 累加会出现 0.01 级别的误差。<b>无 WHERE 的 UPDATE/DELETE</b>：生产事故排行榜第一名。</p>
 
-<p>本章从关系模型讲到落地的 SQL：数据库用二维表组织数据，主键唯一标识一行，外键把表连起来；DDL 负责把库、表、约束这些结构定义出来，一经执行即生效且自动提交；DML 负责往表里写数据，处于事务保护之下。掌握这三件事，你就具备了读懂任何一份建表脚本的能力，也就能为后面的 JDBC 编程和 JPA 映射打下地基。下一章我们把这个库接到 Java 代码里，用 JDBC 真正跑起来。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-1-12/"><span class="pn-label">← 上一篇</span><span class="pn-title">多线程与并发基础</span></a>
-      <a class="next-post" href="/java-tutorial-2-2/"><span class="pn-label">下一篇 →</span><span class="pn-title">多表查询与子查询</span></a>
-      </nav>
+<p>本章从关系模型讲到落地的 SQL：数据库用二维表组织数据，主键唯一标识一行，外键把表连起来；DDL 负责把库、表、约束这些结构定义出来，一经执行即生效且自动提交；DML 负责往表里写数据，处于事务保护之下。掌握这三件事，就具备了读懂任何一份建表脚本的能力，也就能为后面的 JDBC 编程和 JPA 映射打下地基。下一章专门讲多表查询与子查询。</p>
           </article>
   <!-- Footer -->
   <footer>

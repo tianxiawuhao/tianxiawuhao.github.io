@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们把单张表的增删改查讲完了，可真实业务里数据几乎从不放在一张表：用户、订单、商品各自成表，靠关联字段串起来。本章解决的就是「数据分散在多张表时怎么查」这个问题——包括连接查询（JOIN）、子查询、分组过滤和结果集合并。适合已经会写 <code>SELECT ... FROM 单表 WHERE ...</code>、想跨到多表查询的读者。读完后你应该能判断一条需求该用 JOIN 还是子查询，并避开最常见的两个坑：笛卡尔积和重复行。</p>
+<p>前面几章把单张表的增删改查讲完了，可真实业务里数据几乎从不放在一张表：用户、订单、商品各自成表，靠关联字段串起来。本章解决的是“数据分散在多张表时怎么查”这个问题，包括连接查询（JOIN）、子查询、分组过滤和结果集合并，适合已经会写 <code>SELECT ... FROM 单表 WHERE ...</code>、想跨到多表查询的读者。读完后应当能判断一条需求该用 JOIN 还是子查询，并避开最常见的两个坑：笛卡尔积和重复行。</p>
 
 <h2>一、多表查询与内连接：先理解笛卡尔积</h2>
 
-<p>最朴素的「多表查询」是在 FROM 后面并列写两张表：</p>
+<p>最朴素的多表查询，是在 FROM 后面并列写两张表：</p>
 
 <pre><code class="language-sql">-- 笛卡尔积：A 的每一行与 B 的每一行两两组合
 select * from A, B;
@@ -146,13 +146,13 @@ where A.A_ID = B.A_ID;
 select A.A_ID, A.A_NAME, B.B_PRICE
 from A inner join B on A.A_ID = B.A_ID;</code></pre>
 
-<p>第一条语句的结果行数 = A 的行数 × B 的行数，这个结果集叫<strong>笛卡尔积</strong>，几乎总是没有业务意义的，只是多表连接的「原料」。真正有用的是在连接之后补上过滤条件，把无意义的组合剔除掉。上面前两种写法的区别只在连接条件的位置，结果一致；但推荐 <code>inner join ... on</code>，因为它让 <code>on</code> 专门描述「两张表怎么关联」、<code>where</code> 专门描述「要过滤出哪些行」，两件事分开后，后续再叠加业务条件不容易出错。多个表连接时依次追加 <code>join ... on ...</code> 即可，比如「列出每部影片的片名和主演姓名」要连接影片表、影片演员关系表和演员表三张表，就是两个 join 串联。另外要注意，内连接会丢掉「在另一张表里找不到匹配」的行：A 表里的 banana 在 B 表没有价格记录，内连接的结果里就没有它。</p>
+<p>第一条语句的结果行数 = A 的行数 × B 的行数，这个结果集叫<strong>笛卡尔积</strong>，几乎总是没有业务意义，只是多表连接的“原料”。真正有用的是在连接之后补上过滤条件，把无意义的组合剔除掉。上面前两种写法的区别只在连接条件的位置，结果一致；但推荐 <code>inner join ... on</code>，因为它让 <code>on</code> 专门描述“两张表怎么关联”、<code>where</code> 专门描述“要过滤出哪些行”。两件事分开之后，再叠加业务条件就不容易出错。多个表连接时依次追加 <code>join ... on ...</code> 即可：比如要列出每部影片的片名和主演姓名，就要把影片表、影片演员关系表和演员表三张表连起来，也就是两个 join 串联。另外要注意，内连接会丢掉“在另一张表里找不到匹配”的行：A 表里的 banana 在 B 表没有价格记录，内连接的结果里就没有它。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-2/01-join-types.svg" alt="内连接与左外连接对比图：内连接丢掉无匹配的 banana 行，左外连接保留该行并用 NULL 补齐右表字段"><figcaption>图 1：内连接丢行，左外连接保行补 NULL</figcaption></figure>
 
 <h2>二、左外连接、右外连接与全外连接</h2>
 
-<p>如果需求是「以左表为主，右表没有匹配也要把左表的行留下」，就要用<strong>外连接</strong>。左外连接以左表为基准表（驱动表），右表匹配不上的字段用 <code>NULL</code> 补齐，因此它不会丢行，只会多出 <code>NULL</code>：</p>
+<p>如果需求是“以左表为主，右表没有匹配也要把左表的行留下”，就要用<strong>外连接</strong>。左外连接以左表为基准表（驱动表），右表匹配不上的字段用 <code>NULL</code> 补齐，因此它不会丢行，只会多出 <code>NULL</code>：</p>
 
 <pre><code class="language-sql">-- 左外连接：banana 在 B 表没有匹配，B 表字段为 NULL，但这一行仍然保留
 select * from A left join B on A.A_ID = B.A_ID;
@@ -162,13 +162,11 @@ select * from A left join B on A.A_ID = B.A_ID
 union
 select * from A right join B on A.A_ID = B.A_ID;</code></pre>
 
-<p>右外连接正好相反，以右表为基准表，保留右表全部记录，左表匹配不上则补 <code>NULL</code>。工程上更常用的技巧是：<strong>统一只用 left join</strong>，把右外连接改写成调换两张表位置的左外连接，SQL 可读性和可维护性都更好。</p>
+<p>右外连接正好相反，它以右表为基准表，保留右表全部记录，左表匹配不上则补 <code>NULL</code>。工程上更常用的技巧是<strong>统一只用 left join</strong>：把右外连接改写成调换两张表位置的左外连接，SQL 的可读性和可维护性都更好。</p>
 
-<p>至于<strong>全外连接</strong>（<code>full outer join</code>，即把左右外连接的结果合并且去重），需要特别纠正一点：<strong>MySQL 并不支持 <code>full outer join</code> 语法</strong>，写出来会直接报语法错误（Oracle、PostgreSQL、SQL Server 支持）。在 MySQL 中要用 <code>left join</code> 与 <code>right join</code> 的结果做 <code>union</code> 来模拟（见下面的示例）：</p>
+<p>至于<strong>全外连接</strong>（<code>full outer join</code>，即把左右外连接的结果合并且去重），需要特别纠正一点：<strong>MySQL 并不支持 <code>full outer join</code> 语法</strong>，写出来会直接报语法错误，Oracle、PostgreSQL、SQL Server 才支持。在 MySQL 中，要用 <code>left join</code> 与 <code>right join</code> 的结果做 <code>union</code> 来模拟，示例见上文。</p>
 
-
-
-<p>还有一种只涉及一张表的<strong>自连接</strong>：把同一张表取两个别名当作两张表来连接，典型场景是「查出每个商品中价格最高的那条记录」，此时要用 <code>left join</code> 配合 <code>on s1.price &lt; s2.price</code>，再筛出 <code>s2</code> 侧为 <code>NULL</code> 的行。</p>
+<p>还有一种只涉及一张表的<strong>自连接</strong>：把同一张表取两个别名当作两张表来连接，典型场景是“查出每个商品中价格最高的那条记录”，此时要用 <code>left join</code> 配合 <code>on s1.price &lt; s2.price</code>，再筛出 <code>s2</code> 侧为 <code>NULL</code> 的行。</p>
 
 <h2>三、子查询：in、exists 与关联子查询</h2>
 
@@ -186,14 +184,14 @@ select * from A where exists (select 1 from B where B.A_ID = A.A_ID);</code></pr
 <p>这里有三个容易出错的点，务必记牢：</p>
 
 <ul>
-<li><code>exists</code> 后面应当是<strong>关联子查询</strong>，子查询里要用外层表的列做条件（如上例的 <code>B.A_ID = A.A_ID</code>）。如果写成 <code>exists (select A_ID from B)</code> 这种不带关联条件的子查询，它对外层每一行都恒为真，实际效果约等于「B 表非空就返回 A 表全部数据」，通常不是你要的结果；同理，<code>not exists</code> 缺少关联条件会直接返回空集。</li>
-<li><code>not in</code> 遇到 <code>NULL</code> 会「踩空」：只要子查询结果里有一个 <code>NULL</code>，整个条件对任何值都不成立，结果集为空。相关需求建议改用 <code>not exists</code>。</li>
+<li><code>exists</code> 后面应当是<strong>关联子查询</strong>，子查询里要用外层表的列做条件（如上例的 <code>B.A_ID = A.A_ID</code>）。如果写成 <code>exists (select A_ID from B)</code> 这种不带关联条件的子查询，它对外层每一行都恒为真，实际效果约等于“B 表非空就返回 A 表全部数据”，通常不是期望的结果。同理，<code>not exists</code> 缺少关联条件会直接返回空集。</li>
+<li><code>not in</code> 遇到 <code>NULL</code> 会“踩空”：只要子查询结果里有一个 <code>NULL</code>，整个条件对任何值都不成立，结果集为空。相关需求建议改用 <code>not exists</code>。</li>
 <li><code>exists</code> 只关心子查询有没有结果，因此子查询里写 <code>select 1</code> 就够，不必写 <code>select *</code>。</li>
 </ul>
 
 <h3>子查询与 join 的取舍</h3>
 
-<p>很多场景下 <code>in</code> 子查询可以改写成 join，而且往往更快——优化器更擅长为连接选择驱动表和索引。但改写时<strong>必须确认关联键是不是一对多</strong>。例如 <code>select * from t where t.id in (select t1.tid from t1)</code>，直接改写成 <code>select id from t join t1 on t.id = t1.tid</code>，当 t1 中同一个 tid 出现两次时，结果就会把同一条 t 记录返回两次；而 <code>in</code> 在语义上天然去重。此时要么补 <code>distinct</code>，要么改用 <code>exists</code>，这是实际开发中最常见的数据重复来源之一。反过来，子查询也并非总是慢：在只需判断「存在与否」时，<code>exists</code> 往往能提前结束扫描。</p>
+<p>很多场景下 <code>in</code> 子查询可以改写成 join，而且往往更快，因为优化器更擅长为连接选择驱动表和索引。但改写时<strong>必须确认关联键是不是一对多</strong>。例如 <code>select * from t where t.id in (select t1.tid from t1)</code> 直接改写成 <code>select id from t join t1 on t.id = t1.tid</code>，当 t1 中同一个 tid 出现两次时，结果就会把同一条 t 记录返回两次，而 <code>in</code> 在语义上天然去重。此时要么补 <code>distinct</code>，要么改用 <code>exists</code>，这是实际开发中最常见的数据重复来源之一。反过来，子查询也并非总是慢：在只需判断“存在与否”时，<code>exists</code> 往往能提前结束扫描。</p>
 
 <h2>四、分组过滤：where、group by 与 having</h2>
 
@@ -209,20 +207,15 @@ group by name
 having sum(singin) &gt; 5
 order by total desc;</code></pre>
 
-<p>两个规范必须遵守。第一，聚合函数要写具体的列，<strong><code>sum(*)</code> 是错误写法</strong>，聚合函数的参数只能是列名或表达式，只有 <code>count(*)</code> 是统计行数的特例。第二，<code>select</code> 列表里出现的非聚合列都应当出现在 <code>group by</code> 中；MySQL 5.7 起默认开启 <code>only_full_group_by</code>，不满足这一点的 SQL 会直接报错，而不是像老版本那样随机取一行。至于分组键的选择，原则是尽量用被过滤、被索引覆盖的列，能显著减少临时表和文件排序。</p>
+<p>两个规范必须遵守。第一，聚合函数要写具体的列，<strong><code>sum(*)</code> 是错误写法</strong>，因为聚合函数的参数只能是列名或表达式，只有 <code>count(*)</code> 是统计行数的特例。第二，<code>select</code> 列表里出现的非聚合列都应当出现在 <code>group by</code> 中；MySQL 5.7 起默认开启 <code>only_full_group_by</code>，不满足这一点的 SQL 会直接报错，而不会像老版本那样随机取一行。至于分组键的选择，原则是尽量用被过滤、被索引覆盖的列，这样能显著减少临时表和文件排序。</p>
 
 <h2>五、union 与 union all，以及本章小结</h2>
 
-<p><code>union</code> 用于把多条 <code>select</code> 的结果上下拼接成一个结果集（是「加行」，不是 join 的「加列」）。两者差别只有一处：<code>union</code> 合并后<strong>去重</strong>，因此需要额外排序，开销更大；<code>union all</code> <strong>不去重</strong>，直接拼接，效率更高。所以能确定两侧结果不会重复时，优先写 <code>union all</code>。</p>
+<p><code>union</code> 用于把多条 <code>select</code> 的结果上下拼接成一个结果集，是“加行”，而不是 join 的“加列”。两者的差别只有一处：<code>union</code> 合并后<strong>去重</strong>，因此需要额外排序，开销更大；<code>union all</code> <strong>不去重</strong>，直接拼接，效率更高。所以在能确定两侧结果不会重复时，优先写 <code>union all</code>。</p>
 
-<p>使用时还有三条约束：参与合并的各条 <code>select</code> 列数必须相同、对应列的数据类型要兼容（不能一边是名字字符串、一边是价格数字），结果集的列名以第一条 <code>select</code> 为准；而 <code>order by</code>、<code>limit</code> 写在整条语句最后，作用于合并后的整体结果，不是某一条 <code>select</code>。</p>
+<p>使用时还有三条约束：参与合并的各条 <code>select</code> 列数必须相同；对应列的数据类型要兼容，不能一边是名字字符串、一边是价格数字；结果集的列名以第一条 <code>select</code> 为准。而 <code>order by</code>、<code>limit</code> 写在整条语句最后，作用于合并后的整体结果，而不是某一条 <code>select</code>。</p>
 
-<p>多表查询的核心是把「关联」和「过滤」分开想：<code>on</code> 负责两张表怎么对上，<code>where</code> 负责留下哪些行，<code>having</code> 负责过滤分组后的结果。记住四条判断规则：内连接只留匹配行，外连接保留基准表全部行并用 <code>NULL</code> 补齐，MySQL 没有 <code>full outer join</code> 要用 <code>union</code> 模拟；子查询改写成 join 时必须先确认关联键是否一对多，否则会凭空多出重复行；<code>not in</code> 遇到 <code>NULL</code> 会返回空集，改用 <code>not exists</code> 更安全；<code>union</code> 去重、<code>union all</code> 不去重，不确定是否有重复时先核对再决定。把这些边界情况摸清，后面学习索引与执行计划优化时会顺畅很多。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-2-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">数据库与 SQL 入门</span></a>
-      <a class="next-post" href="/java-tutorial-2-3/"><span class="pn-label">下一篇 →</span><span class="pn-title">索引、事务与锁</span></a>
-      </nav>
+<p>多表查询的核心是把“关联”和“过滤”分开想：<code>on</code> 负责两张表怎么对上，<code>where</code> 负责留下哪些行，<code>having</code> 负责过滤分组后的结果。判断规则可以记四条。内连接只留匹配行；外连接保留基准表全部行并用 <code>NULL</code> 补齐，MySQL 没有 <code>full outer join</code>，要用 <code>union</code> 模拟。子查询改写成 join 时必须先确认关联键是否一对多，否则会凭空多出重复行。<code>not in</code> 遇到 <code>NULL</code> 会返回空集，改用 <code>not exists</code> 更安全。<code>union</code> 去重、<code>union all</code> 不去重，不确定是否有重复时先核对再决定。把这些边界情况摸清，后面学习索引与执行计划优化时会顺畅很多。</p>
           </article>
   <!-- Footer -->
   <footer>

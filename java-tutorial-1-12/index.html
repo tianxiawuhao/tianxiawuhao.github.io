@@ -179,7 +179,7 @@
         ready = true;
     }
 }</code></pre>
-<p>但 <code>volatile</code> <strong>不保证原子性</strong>：<code>count++</code> 依然是“读-改-写”，加 <code>volatile</code> 也会丢更新，必须用 <code>synchronized</code> 包住或改用 <code>AtomicInteger.incrementAndGet()</code>。所以它适合“一个线程写、多个线程读”的状态标志量，经典用法是双重检查锁定的单例。源笔记里“赋值后多执行一条 <code>load addl $0x0,(%esp)</code>”是特定平台与编译器的实现细节，不同 CPU 和 JDK 版本并不相同，理解内存屏障的语义就够了（此细节存疑）。</p>
+<p>但 <code>volatile</code> <strong>不保证原子性</strong>：<code>count++</code> 依然是“读-改-写”，加 <code>volatile</code> 也会丢更新，必须用 <code>synchronized</code> 包住或改用 <code>AtomicInteger.incrementAndGet()</code>。所以它适合“一个线程写、多个线程读”的状态标志量，经典用法是双重检查锁定的单例。至于“赋值后多执行一条 <code>load addl $0x0,(%esp)</code>”的说法，那是特定平台与编译器的实现细节，不同 CPU 和 JDK 版本并不相同，理解内存屏障的语义就够了。</p>
 
 <h2>五、从锁到线程池：工具怎么选</h2>
 <p><code>synchronized</code> 上手最简单，异常时 JVM 自动释放锁，JDK 6 之后还有偏向锁、轻量级锁、锁消除、锁粗化等优化。<code>ReentrantLock</code> 的价值在于 <code>synchronized</code> 做不到的三件事：<code>tryLock()</code> 尝试获取、带超时的 <code>tryLock(time, unit)</code>、可被中断的 <code>lockInterruptibly()</code>，构造时还能选择公平锁（默认非公平）。日常优先用 <code>synchronized</code>，确实需要超时或中断语义时再换 <code>Lock</code>，并且 <code>unlock()</code> 必须写在 <code>finally</code> 里。</p>

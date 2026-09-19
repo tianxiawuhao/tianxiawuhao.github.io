@@ -128,17 +128,17 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们把 SQL 和表设计过了一遍，但"能查出结果"和"查得又快、并发还不出错"是两件事：一条没走索引的查询可能老老实实扫过千万行；一次没包在事务里的转账，可能在扣款成功后、入账前被打断。本章把 InnoDB 的三块核心机制串成一条线——索引与执行计划决定"读得快不快"，事务与隔离级别决定"并发读得对不对"，锁与死锁则是隔离级别必须付出的代价。适合已经会写基本 SQL、准备把数据库用进真实项目的读者。</p>
+<p>前面几章把 SQL 和表设计过了一遍，但“能查出结果”和“查得又快、并发还不出错”是两件事：一条没走索引的查询可能老老实实扫过千万行；一次没包在事务里的转账，可能在扣款成功后、入账前被打断。本章把 InnoDB 的三块核心机制串成一条线——索引与执行计划决定“读得快不快”，事务与隔离级别决定“并发读得对不对”，锁与死锁则是隔离级别必须付出的代价。本章适合已经会写基本 SQL、准备把数据库用进真实项目的读者。</p>
 
 <h2>索引：把全表扫描换成按图索骥</h2>
 
-<p><strong>索引</strong>是数据库为某一列（或几列）额外维护的、排好序的数据结构。没有索引时，<code>WHERE name = 'tom'</code> 只能从第一行读到最后一行的逐行比对，这叫<strong>全表扫描</strong>；有了索引，数据库可以先在这份有序结构里定位到目标，再直接取出那一行。代价是索引本身占磁盘、并且每次写入都要同步维护它，所以索引不是越多越好。</p>
+<p><strong>索引</strong>是数据库为某一列（或几列）额外维护的、排好序的数据结构。没有索引时，<code>WHERE name = 'tom'</code> 只能从第一行读到最后一行逐行比对，这叫<strong>全表扫描</strong>；有了索引，数据库可以先在这份有序结构里定位到目标，再直接取出那一行。代价是索引本身占磁盘，并且每次写入都要同步维护它，所以索引不是越多越好。</p>
 
 <h3>B+ 树与聚簇索引</h3>
 
-<p>InnoDB 的索引实现是 <strong>B+ 树</strong>：非叶子节点只存键值，用来做导航；所有真实数据都放在叶子节点，并且叶子之间用链表串起来。这个设计带来两个直接好处——树的层数很少（千万级数据通常 3～4 层就能覆盖），因此一次查找只需要几次磁盘读；同时叶子有序且相连，<code>BETWEEN</code>、<code>&gt;</code>、<code>ORDER BY</code> 这类范围需求可以顺着叶子链表扫过去，不必回根节点重来。</p>
+<p>InnoDB 的索引实现是 <strong>B+ 树</strong>：非叶子节点只存键值，用来做导航；所有真实数据都放在叶子节点，并且叶子之间用链表串起来。这个设计带来两个直接好处。一是树的层数很少，千万级数据通常 3～4 层就能覆盖，因此一次查找只需要几次磁盘读；二是叶子有序且相连，<code>BETWEEN</code>、<code>&gt;</code>、<code>ORDER BY</code> 这类范围需求可以顺着叶子链表扫过去，不必回根节点重来。</p>
 
-<p>InnoDB 的表本身就是一棵 B+ 树，称为<strong>聚簇索引</strong>（clustered index）：它的叶子节点存放的是<strong>整行数据</strong>，而键就是主键。所以"按主键查一行"是最快的路径，一次树查找就拿到整行。如果建表时没有主键，InnoDB 会退而选择第一个非空唯一索引，再没有就自己生成一个隐藏的 6 字节 row_id 当键。这也是"每张表都该显式定义主键"的真正原因：主键不只是约束，它决定了数据在磁盘上怎么排。</p>
+<p>InnoDB 的表本身就是一棵 B+ 树，称为<strong>聚簇索引</strong>（clustered index）：它的叶子节点存放的是<strong>整行数据</strong>，而键就是主键。所以“按主键查一行”是最快的路径，一次树查找就拿到整行。如果建表时没有主键，InnoDB 会退而选择第一个非空唯一索引，再没有就自己生成一个隐藏的 6 字节 row_id 当键。这也是“每张表都该显式定义主键”的真正原因：主键不只是约束，它还决定了数据在磁盘上怎么排。</p>
 
 <h3>回表与覆盖索引</h3>
 
@@ -165,7 +165,7 @@ EXPLAIN SELECT * FROM t_user WHERE name = 'tom';</code></pre>
 
 <h2>用 EXPLAIN 看真实执行计划</h2>
 
-<p>索引有没有生效，不能靠猜，要在语句前加 <code>EXPLAIN</code> 让优化器把计划打印出来。MySQL 8.0 还支持 <code>EXPLAIN ANALYZE</code>（8.0.18 起），它会真正执行语句并给出各步骤的实际耗时，比估算值更可信。日常最该看的是四列：</p>
+<p>索引有没有生效，不能靠猜，要在语句前加 <code>EXPLAIN</code>，让优化器把执行计划打印出来。MySQL 8.0 还支持 <code>EXPLAIN ANALYZE</code>（8.0.18 起），它会真正执行语句并给出各步骤的实际耗时，比估算值更可信。日常最该看的是四列：</p>
 
 <ul>
   <li><code>type</code>：访问类型，性能由好到差大致是 <code>system</code> → <code>const</code> → <code>eq_ref</code> → <code>ref</code> → <code>range</code> → <code>index</code> → <code>ALL</code>。看到 <code>ALL</code> 就意味着全表扫描，这是首要消灭的目标。</li>
@@ -186,7 +186,7 @@ UPDATE account SET money = money + 100 WHERE id = 2;
 COMMIT;                                               -- 两条更新一起生效
 -- 中途出错则执行 ROLLBACK，回到 START TRANSACTION 之前的状态</code></pre>
 
-<p>MySQL 默认 <code>autocommit = 1</code>，也就是说每条 SQL 自成一个事务、执行完立刻提交，所以不加 <code>START TRANSACTION</code> 时你看不到"撤销"的效果。Oracle 则相反，默认不自动提交，必须显式 <code>COMMIT</code>——但要注意 Oracle 的 DDL（如 <code>CREATE</code>、<code>TRUNCATE</code>）会隐式提交，不要把它当成事务的一部分。在 Java 里，事务由 <code>Connection</code> 控制：<code>setAutoCommit(false)</code> 开启事务，<code>commit()</code> 提交，<code>rollback()</code> 回滚。</p>
+<p>MySQL 默认 <code>autocommit = 1</code>，也就是说每条 SQL 自成一个事务、执行完立刻提交，所以不加 <code>START TRANSACTION</code> 时看不到“撤销”的效果。Oracle 则相反，默认不自动提交，必须显式 <code>COMMIT</code>；但要注意 Oracle 的 DDL（如 <code>CREATE</code>、<code>TRUNCATE</code>）会隐式提交，不要把它当成事务的一部分。在 Java 里，事务由 <code>Connection</code> 控制：<code>setAutoCommit(false)</code> 开启事务，<code>commit()</code> 提交，<code>rollback()</code> 回滚。</p>
 
 <pre><code class="language-java">import java.math.BigDecimal;
 import java.sql.Connection;
@@ -247,7 +247,7 @@ public class AccountService {
 
 <h2>隔离级别：并发问题的四档取舍</h2>
 
-<p>完全隔离的最高效手段是让事务排队执行，但那等于放弃并发。SQL 标准因此定义了四种隔离级别，让使用者在"正确性"和"并发性能"之间选一档。要理解这四档，先看并发不加约束时会出现什么：</p>
+<p>实现完全隔离最彻底的手段是让事务排队执行，但那等于放弃并发。SQL 标准因此定义了四种隔离级别，让使用者在“正确性”和“并发性能”之间选一档。要理解这四档，先看并发不加约束时会出现什么：</p>
 
 <ul>
   <li><strong>脏读</strong>：读到了另一个事务<strong>还未提交</strong>的数据。对方一旦回滚，你读到的东西从未存在过，属于最严重的问题。</li>
@@ -266,11 +266,11 @@ SELECT @@transaction_isolation;        -- 默认 REPEATABLE-READ
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 -- 可选值：READ UNCOMMITTED / READ COMMITTED / REPEATABLE READ / SERIALIZABLE</code></pre>
 
-<div class="tut-tip"><strong>纠正一个常见说法：</strong>标准 SQL 里 REPEATABLE READ 只承诺挡住脏读和不可重复读，不承诺挡住幻读。但 InnoDB 在可重复读下用<strong>间隙锁（next-key lock）</strong>把范围内的间隙也锁住了，因此幻读在 MySQL 里基本也复现不出来——这不是"MySQL 偷偷优化掉了幻读"，而是它加了锁。代价是锁的范围变大，更容易发生死锁，这也是下面一节要讲的内容。</div>
+<div class="tut-tip"><strong>纠正一个常见说法：</strong>标准 SQL 里 REPEATABLE READ 只承诺挡住脏读和不可重复读，不承诺挡住幻读。但 InnoDB 在可重复读下用<strong>间隙锁（next-key lock）</strong>把范围内的间隙也锁住了，因此幻读在 MySQL 里基本复现不出来。这不是 MySQL 偷偷把幻读优化掉了，而是它加了锁。代价是锁的范围变大，更容易发生死锁，这也是下一节要讲的内容。</div>
 
 <h2>锁与死锁：隔离级别的实现代价</h2>
 
-<p>隔离级别不是口号，落地靠的是锁。InnoDB 支持行级锁，但有一个容易被忽略的前提：<strong>行锁是加在索引上的</strong>。如果 <code>UPDATE</code> 的 <code>WHERE</code> 条件没有走索引，InnoDB 只能锁住它扫描过的所有行，效果接近锁表，并发度直接掉下来。所以"更新语句尽量基于主键或唯一索引"不是风格建议，而是性能要求。</p>
+<p>隔离级别不是口号，落地靠的是锁。InnoDB 支持行级锁，但有一个容易被忽略的前提：<strong>行锁是加在索引上的</strong>。如果 <code>UPDATE</code> 的 <code>WHERE</code> 条件没有走索引，InnoDB 只能锁住它扫描过的所有行，效果接近锁表，并发度直接掉下来。所以“更新语句尽量基于主键或唯一索引”不是风格建议，而是性能要求。</p>
 
 <p>从粒度看，InnoDB 有共享锁（S 锁，读锁）和排他锁（X 锁，写锁）：普通的 <code>SELECT</code> 走 MVCC 快照读，不加锁；而 <code>SELECT ... FOR UPDATE</code> 是当前读，会加 X 锁，<code>UPDATE</code>、<code>DELETE</code> 则自动加 X 锁。这些锁都持有到事务结束才释放，所以事务越长，锁被占的时间越久，冲突概率越高。</p>
 
@@ -289,18 +289,13 @@ UPDATE account SET money = money + 1 WHERE id = 2;   -- 等待 B 释放 id = 2
 -- InnoDB 检测到环路，回滚其中一方，另一方报错：
 -- ERROR 1213 (40001): Deadlock found when trying to get lock; try restarting transaction</code></pre>
 
-<p><strong>死锁</strong>的本质是多个事务互相持有对方需要的锁，形成等待环路。InnoDB 不回避死锁，而是开启了死锁检测：一旦发现环路，就选择"代价较小"的那个事务回滚，把 <code>1213</code> 错误返回给客户端，让另一个事务继续。因此应用层捕获到这个异常后<b>重试整个事务</b>才是正确姿势，而不是报错给用户。</p>
+<p><strong>死锁</strong>的本质是多个事务互相持有对方需要的锁，形成等待环路。InnoDB 不回避死锁，而是开启了死锁检测：一旦发现环路，就选择“代价较小”的那个事务回滚，把 <code>1213</code> 错误返回给客户端，让另一个事务继续。因此应用层捕获到这个异常后<b>重试整个事务</b>才是正确姿势，而不是把错误直接抛给用户。</p>
 
-<div class="tut-tip"><strong>减少死锁的几条硬规则：</strong>多个事务访问多张表时约定<strong>相同的加锁顺序</strong>；尽量在事务一开始就把需要的资源一次锁定，避免"边走边锁"；缩短事务，绝对不要在事务里做远程调用、发消息或等待用户输入；更新条件尽量落在主键或唯一索引上；读多写少、能接受不可重复读的业务可以把隔离级别降到 READ COMMITTED，InnoDB 在 RC 下不使用间隙锁，死锁概率明显降低。排查时可执行 <code>SHOW ENGINE INNODB STATUS</code> 查看最近一次死锁详情，MySQL 8.0 还能查 <code>performance_schema.data_lock_waits</code>。</div>
+<div class="tut-tip"><strong>减少死锁的几条硬规则：</strong>多个事务访问多张表时约定<strong>相同的加锁顺序</strong>；尽量在事务一开始就把需要的资源一次锁定，避免“边走边锁”；缩短事务，绝对不要在事务里做远程调用、发消息或等待用户输入；更新条件尽量落在主键或唯一索引上；读多写少、能接受不可重复读的业务可以把隔离级别降到 READ COMMITTED，因为 InnoDB 在 RC 下不使用间隙锁，死锁概率明显降低。排查时可执行 <code>SHOW ENGINE INNODB STATUS</code> 查看最近一次死锁详情，MySQL 8.0 还能查 <code>performance_schema.data_lock_waits</code>。</div>
 
 <h2>小结</h2>
 
-<p>索引与执行计划解决"读得快不快"：B+ 树让查找从全表扫描降到几次磁盘读，聚簇索引的叶子存整行，二级索引查非索引列要回表，覆盖索引则免掉第二次查找；<code>EXPLAIN</code> 的 <code>type</code>、<code>key</code>、<code>rows</code>、<code>Extra</code> 是判断索引是否生效的依据。事务与隔离级别解决"并发读得对不对"：ACID 保证一组操作全成或全败，四种隔离级别则是正确性与并发性能之间的取舍，MySQL 默认可重复读，Oracle 默认读已提交。锁与死锁是隔离的实现代价：InnoDB 的行锁加在索引上，走不到索引就退化成近似锁表，间隙锁挡住幻读的同时也让死锁更容易发生。实务上的顺序也很清晰——先用 <code>EXPLAIN</code> 把慢查询推进到 <code>ref</code>/<code>range</code> 并争取覆盖索引，再把事务写短、按固定顺序、基于主键更新，最后为死锁准备一次重试。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-2-2/"><span class="pn-label">← 上一篇</span><span class="pn-title">多表查询与子查询</span></a>
-      <a class="next-post" href="/java-tutorial-2-4/"><span class="pn-label">下一篇 →</span><span class="pn-title">MySQL 高阶</span></a>
-      </nav>
+<p>索引与执行计划解决“读得快不快”：B+ 树让查找从全表扫描降到几次磁盘读，聚簇索引的叶子存整行，二级索引查非索引列要回表，覆盖索引则免掉第二次查找；<code>EXPLAIN</code> 的 <code>type</code>、<code>key</code>、<code>rows</code>、<code>Extra</code> 是判断索引是否生效的依据。事务与隔离级别解决“并发读得对不对”：ACID 保证一组操作全成或全败，四种隔离级别则是正确性与并发性能之间的取舍，MySQL 默认可重复读，Oracle 默认读已提交。锁与死锁是隔离的实现代价：InnoDB 的行锁加在索引上，走不到索引就退化成近似锁表，间隙锁挡住幻读的同时也让死锁更容易发生。实务上的顺序也很清晰——先用 <code>EXPLAIN</code> 把慢查询推进到 <code>ref</code>/<code>range</code> 并争取覆盖索引，再把事务写短、按固定顺序、基于主键更新，最后为死锁准备一次重试。</p>
           </article>
   <!-- Footer -->
   <footer>
