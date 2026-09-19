@@ -167,7 +167,7 @@ public class Customer implements Serializable {
 <li><code>TABLE</code>：用一张序列表模拟，跨数据库但性能最差。</li>
 <li><code>AUTO</code>：交给方言决定，也是版本差异最大的一档。Hibernate 5.x 上连 MySQL 时，<code>AUTO</code> 会回退为「用一张表模拟序列」，额外建出 <code>hibernate_sequence</code> 表，主键并不走自增列，所以明确要自增就必须写 <code>IDENTITY</code>；连 Oracle、PostgreSQL 时则解析为序列。Hibernate 6.x 起 <code>AUTO</code> 的解析规则做了调整，改为按方言能力优先挑选生成器，同一份代码在不同数据库、甚至不同 6.x 小版本上仍可能落到序列、表或自增，升级后务必实测确认实际落点（看建表 DDL 或启动日志）。结论：跨库项目只要依赖具体策略，就显式写 <code>IDENTITY</code> 或 <code>SEQUENCE</code>，不要赌 <code>AUTO</code>。</li>
 </ul>
-<p>如果项目还在用 <code>hbm.xml</code>（注意版本演进：Hibernate 5 起注解映射已是主流，6 起 XML 映射不再推荐，新项目请统一用注解，只有维护老工程时才需要读它），对应写法是 <code>&lt;generator class="native"/&gt;</code>，可选值有 <code>identity</code>、<code>sequence</code>、<code>native</code>、<code>uuid</code>、<code>assigned</code>、<code>increment</code>，其中 <code>native</code> 表示由方言自动在 identity 和 sequence 之间选（在 MySQL 上即解析为 <code>identity</code>，与需要自增时的预期一致）。</p>
+<p>如果项目还在用 <code>hbm.xml</code>，对应写法是 <code>&lt;generator class="native"/&gt;</code>。注意版本演进：Hibernate 5 起注解映射已是主流，6 起 XML 映射不再推荐，新项目请统一用注解，只有维护老工程时才需要读它。可选值有 <code>identity</code>、<code>sequence</code>、<code>native</code>、<code>uuid</code>、<code>assigned</code>、<code>increment</code>，其中 <code>native</code> 表示由方言自动在 identity 和 sequence 之间选（在 MySQL 上即解析为 <code>identity</code>，与需要自增时的预期一致）。</p>
 
 <h2>一对多与多对多关联映射</h2>
 <p>做关联映射按四步走：先确定两张表的关系是一对多、多对一还是多对多；再在数据库里建好外键或中间表；然后在实体类里用集合或引用描述关系；最后写映射注解。以客户和联系人为例，一个客户有多个联系人，所以在「一」的一方放集合，在「多」的一方放引用：</p>
@@ -247,7 +247,7 @@ List&lt;Customer&gt; part = session.createQuery(
 <p><code>list()</code> 返回集合，<code>uniqueResult()</code> 返回唯一结果。<code>setFirstResult()</code> 与 <code>setMaxResults()</code> 配合即可实现分页。至于 QBC（<code>session.createCriteria()</code> + <code>Restrictions</code> + <code>Projections</code>）：源笔记把它称作「Hibernate 的核心查询对象」，这在今天已经过时了——<code>Criteria</code> 自 Hibernate 5.2 起被标注为 <code>@Deprecated</code>，Hibernate 6 中已删除。新项目请改用 HQL、JPA 标准的 <code>CriteriaBuilder</code>（<code>session.getCriteriaBuilder()</code>）或 QueryDSL，只有维护老代码时才需要认识 <code>DetachedCriteria</code> 这类离线查询对象。</p>
 
 <h3>旧 API 与 JPA：Session、SessionFactory 的对应关系</h3>
-<p>本章示例用的是 Hibernate 原生 API，而 Spring Boot 3.x 的默认写法是 JPA 标准接口，两者只是同一套底层能力的两个门面：<code>SessionFactory</code> 对应 <code>EntityManagerFactory</code>，<code>Session</code> 对应 <code>EntityManager</code>，一级缓存、快照脏检查、flush 的时机完全一致。对照关系如下（左为 Hibernate 原生，右为 JPA，也是 6.x 上更推荐的一侧）：</p>
+<p>本章示例用的是 Hibernate 原生 API，而 Spring Boot 3.x 的默认写法是 JPA 标准接口，两者只是同一套底层能力的两个门面。<code>SessionFactory</code> 对应 <code>EntityManagerFactory</code>，<code>Session</code> 对应 <code>EntityManager</code>；一级缓存、快照脏检查、flush 的时机完全一致。对照关系如下（左为 Hibernate 原生，右为 JPA，也是 6.x 上更推荐的一侧）：</p>
 <table>
 <thead>
 <tr><th>Hibernate 原生 API</th><th>JPA 对应写法</th></tr>
