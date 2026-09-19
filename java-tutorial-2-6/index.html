@@ -128,12 +128,14 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>MySQL 学完以后，不少人第一次接手 Oracle 项目会立刻卡住：同样叫“数据库”，Oracle 里却多出了实例、表空间、模式、序列这一整套概念，取第二页数据还要套一层子查询，甚至连自增主键都得自己造。本章不铺开讲 Oracle 的安装与运维，只聚焦后端开发里天天要写的四件事：</p>
+<p>MySQL 学完以后，不少人第一次接手 Oracle 项目会立刻卡住：同样叫“数据库”，Oracle 里却多出了实例、表空间、模式、序列这一整套概念，取第二页数据还要套一层子查询，甚至连自增主键都得自己造。本章不铺开讲 Oracle 的安装与运维，只聚焦后端开发里天天要写的几件事：</p>
 <ul>
 <li><strong>序列（Sequence）</strong></li>
 <li><strong>ROWNUM 分页</strong></li>
 <li><strong>常用单行函数与查询执行顺序</strong></li>
 <li><strong>PL/SQL 与存储过程</strong></li>
+<li><strong>PL/SQL 块结构、游标、触发器与异常处理</strong></li>
+<li><strong>视图 / 索引 / 同义词、decode 与 case、外连接写法</strong></li>
 </ul>
 <p>顺带把“实例 / 表空间 / 用户”这组基础概念摆正。本章适合已经会写 SQL、正要上手 Oracle 项目或准备面试的读者。</p>
 
@@ -265,9 +267,450 @@ end;
 
 <p>在 SQL*Plus 或 PL/SQL Developer 里查看 <code>dbms_output</code> 的输出，要先执行 <code>set serveroutput on</code>。用 <code>call pro_owners_add2(...)</code> 调用时无法直接接收 OUT 参数，所以带传出参数的过程一般用匿名块调用。Java 侧则用 <code>CallableStatement</code>：<code>conn.prepareCall("{call pro_owners_add2(?,?,?,?,?,?)}")</code>，前五个参数用 <code>setXxx</code> 传入，第六个先 <code>registerOutParameter(6, OracleTypes.NUMBER)</code>，执行后用 <code>getLong(6)</code> 取出。</p>
 
+<h2>六、PL/SQL 编程基础：块、变量与控制结构</h2>
+
+<p>PL/SQL 的最小执行单位是<strong>块</strong>，结构固定为三段：声明部分（可选）、可执行部分（必需）、异常处理部分（可选）。在 SQL*Plus 或 PL/SQL Developer 里，块的结束用单独一行 <code>/</code> 提交执行。</p>
+
+<pre><code class="language-sql">declare
+  -- 1. 声明部分（可选）：变量、常量、游标、自定义异常
+begin
+  -- 2. 可执行部分（必需）：SQL 语句 + 流程控制
+exception
+  -- 3. 异常处理部分（可选）
+end;
+/
+</code></pre>
+
+<p>变量声明写成「名字 类型 [:= 初值]」，赋值用 <code>:=</code>（<code>=</code> 只用于比较），初值也可以写 <code>default</code>。类型优先用 <code>%type</code> 跟随列定义，列类型变了变量自动跟着变：</p>
+
+<pre><code class="language-sql">declare
+  v_ename emp.ename%type;               -- 与 emp.ename 同类型
+  v_sal   emp.sal%type := 0;            -- 声明时给初值
+  v_rate  constant number := 1.1;       -- 常量，再赋值会报错
+  v_note  varchar2(50) default 'ok';    -- default 等价于 :=
+begin
+  select ename, sal into v_ename, v_sal
+  from emp
+  where empno = 7369;                   -- 结果必须恰好一行
+
+  dbms_output.put_line(v_ename || ' 调整后 ' || v_sal * v_rate || ' ' || v_note);
+end;
+/
+</code></pre>
+
+<p>分支用 <code>if / elsif / else</code>，注意拼写是 <code>elsif</code> 而不是 <code>elseif</code>，结束必须写 <code>end if;</code>：</p>
+
+<pre><code class="language-sql">declare
+  v_sal emp.sal%type;
+begin
+  select sal into v_sal from emp where empno = 7369;
+
+  if v_sal &gt;= 3000 then
+    dbms_output.put_line('高薪档');
+  elsif v_sal &gt;= 1000 then
+    dbms_output.put_line('中薪档');
+  else
+    dbms_output.put_line('低薪档');
+  end if;
+end;
+/
+</code></pre>
+
+<p><code>case</code> 有<strong>简单 case</strong>（比较一个表达式的值）和<strong>搜索 case</strong>（直接写条件）两种写法，既可以当赋值表达式，也可以当多分支语句：</p>
+
+<pre><code class="language-sql">declare
+  v_deptno dept.deptno%type := 20;
+  v_dname  dept.dname%type;
+  v_level  varchar2(10);
+begin
+  -- 简单 case：按等值比较，作为表达式赋值
+  v_dname := case v_deptno
+               when 10 then 'ACCOUNTING'
+               when 20 then 'RESEARCH'
+               when 30 then 'SALES'
+               else 'OTHER'
+             end;
+
+  -- 搜索 case：按条件判断，前一个条件命中就不再往后走
+  v_level := case
+               when v_deptno = 10 then 'A'
+               when v_deptno = 20 then 'B'
+               else 'C'
+             end;
+
+  dbms_output.put_line(v_dname || ' ' || v_level);
+end;
+/
+</code></pre>
+
+<p>循环有三种写法。最省事的是数值 <code>for</code>：循环变量由 Oracle 自动声明，只能在循环体内读、不能改。循环里还可以用 <code>exit</code> 直接退出、<code>continue</code>（11g 起）跳过本轮，两者都能带 <code>when 条件</code>。</p>
+
+<pre><code class="language-sql">declare
+  v_i number := 1;
+begin
+  -- 1. 基础 loop：靠 exit when 跳出，至少执行一次
+  loop
+    dbms_output.put_line('loop ' || v_i);
+    v_i := v_i + 1;
+    exit when v_i &gt; 3;
+  end loop;
+
+  -- 2. while：先判断后执行
+  while v_i &lt;= 5 loop
+    dbms_output.put_line('while ' || v_i);
+    v_i := v_i + 1;
+  end loop;
+
+  -- 3. 数值 for：1 .. 3 含两端；reverse 表示递减
+  for i in 1 .. 3 loop
+    dbms_output.put_line('for ' || i);
+  end loop;
+
+  for i in reverse 1 .. 3 loop
+    dbms_output.put_line('reverse ' || i);    -- 输出 3 2 1
+  end loop;
+end;
+/
+</code></pre>
+
+<h2>七、游标：隐式游标与显式游标</h2>
+
+<p>游标（Cursor）是 PL/SQL 处理「多行结果集」的手段。Oracle 会为每条 SQL 自动开一个<strong>隐式游标</strong>，名字固定叫 <code>sql</code>，它的属性用来判断有没有结果、影响了几行：</p>
+
+<ul>
+<li><code>sql%rowcount</code>：最近一条 SQL 影响的行数，<code>insert</code>/<code>update</code>/<code>delete</code> 之后就是实际改动的行数（与是否提交无关）。</li>
+<li><code>sql%found</code> / <code>sql%notfound</code>：是否有结果、是否已经没有更多行。</li>
+<li><code>sql%isopen</code>：隐式游标执行完即自动关闭，这个值恒为 <code>false</code>，实际很少用到。</li>
+</ul>
+
+<pre><code class="language-sql">begin
+  update emp set sal = sal * 1.1 where deptno = 10;
+
+  if sql%found then
+    dbms_output.put_line('改动行数：' || sql%rowcount);
+  else
+    dbms_output.put_line('没有匹配的行');
+  end if;
+
+  commit;                     -- DML 不会自动提交
+end;
+/
+</code></pre>
+
+<p>要逐行处理时用<strong>显式游标</strong>，标准四步是「声明 → open → fetch → close」。判断 <code>%notfound</code> 必须紧跟在 <code>fetch</code> 之后，否则会少处理最后一行：</p>
+
+<pre><code class="language-sql">declare
+  cursor c_emp is
+    select empno, ename, sal from emp where deptno = 20 order by empno;
+  v_empno emp.empno%type;
+  v_ename emp.ename%type;
+  v_sal   emp.sal%type;
+begin
+  open c_emp;
+  loop
+    fetch c_emp into v_empno, v_ename, v_sal;
+    exit when c_emp%notfound;              -- 一定要紧跟 fetch
+    dbms_output.put_line(v_empno || ' ' || v_ename || ' ' || v_sal);
+  end loop;
+  close c_emp;
+end;
+/
+</code></pre>
+
+<p>日常开发更推荐 <code>for rec in 游标 loop</code> 的简化写法：Oracle 自动完成 open / fetch / close，循环变量是 <code>%rowtype</code> 类型，字段直接点出来，也不会忘记关游标。游标还可以带参数，连游标声明都能省成内联子查询：</p>
+
+<pre><code class="language-sql">declare
+  cursor c_emp(p_deptno number) is                 -- 带参数的游标
+    select empno, ename, sal from emp where deptno = p_deptno;
+begin
+  for r in c_emp(20) loop                          -- 传参打开，自动关闭
+    dbms_output.put_line(r.empno || ' ' || r.ename || ' ' || r.sal);
+  end loop;
+
+  -- 直接写子查询，连游标声明都省了
+  for r in (select ename, sal from emp where deptno = 10) loop
+    dbms_output.put_line(r.ename || ' ' || r.sal);
+  end loop;
+end;
+/
+</code></pre>
+
+<p><code>%rowtype</code> 表示「一整行」的类型，常和 <code>select * into</code> 搭配，字段增删不用改声明：</p>
+
+<pre><code class="language-sql">declare
+  v_emp emp%rowtype;                               -- 整行类型
+begin
+  select * into v_emp from emp where empno = 7369;
+  dbms_output.put_line(v_emp.ename || ' 属于部门 ' || v_emp.deptno);
+end;
+/
+</code></pre>
+
+<p>如果要在遍历的同时改当前行，声明时加 <code>for update</code>，更新时用 <code>where current of 游标名</code> 定位，比再拼一次主键条件更稳妥：</p>
+
+<pre><code class="language-sql">declare
+  cursor c_emp is
+    select empno, sal from emp where deptno = 10 for update of sal;
+begin
+  for r in c_emp loop
+    update emp set sal = r.sal * 1.1 where current of c_emp;
+  end loop;
+  commit;
+end;
+/
+</code></pre>
+
+<h2>八、存储过程、函数与触发器</h2>
+
+<p>过程（procedure）和函数（function）都用 <code>create or replace</code> 创建，改逻辑时不必先 drop。区别只有两条：<strong>函数必须 return 一个值</strong>，所以能出现在 SQL 里；过程没有返回值，靠 OUT 参数带回结果。过程与函数的参数<strong>只写类型、不写长度</strong>。</p>
+
+<pre><code class="language-sql">-- 函数：算某个部门的工资合计
+create or replace function f_dept_sal(p_deptno in number) return number
+is
+  v_total number;
+begin
+  select nvl(sum(sal), 0) into v_total from emp where deptno = p_deptno;
+  return v_total;
+end;
+/
+
+-- 函数可以直接写在 SQL 里
+select d.deptno, d.dname, f_dept_sal(d.deptno) as total_sal
+from dept d
+order by d.deptno;
+</code></pre>
+
+<p>参数方向有三种：默认是 <code>in</code>（只读入），<code>out</code> 只写出、用来带回结果，<code>in out</code> 可读可写。校验失败时不要静默返回，用 <code>raise_application_error</code> 抛出带错误码的异常，Java 侧能通过 <code>SQLException.getErrorCode()</code> 拿到：</p>
+
+<pre><code class="language-sql">create or replace procedure p_raise_sal
+(
+  p_empno in  emp.empno%type,        -- 传入
+  p_rate  in  number,                -- 传入
+  p_new   out emp.sal%type           -- 传出：调整后的工资
+)
+is
+begin
+  update emp set sal = sal * p_rate where empno = p_empno;
+
+  if sql%rowcount = 0 then
+    raise_application_error(-20001, '员工不存在：' || p_empno);
+  end if;
+
+  select sal into p_new from emp where empno = p_empno;
+  commit;
+end;
+/
+</code></pre>
+
+<p>调用方式有三种：SQL*Plus 里用 <code>execute</code> 命令（可简写 <code>exec</code>，OUT 参数用绑定变量接）；<code>call</code> 是 SQL 语句，Java 侧就是 <code>{call ...}</code> 加占位符；在 PL/SQL 里最通用的还是匿名块。</p>
+
+<pre><code class="language-sql">-- 1. SQL*Plus 命令：execute / exec
+variable v_new number
+execute p_raise_sal(7369, 1.1, :v_new)
+print v_new
+
+-- 2. call 是 SQL 语句；JDBC 里写成
+--    conn.prepareCall("{call p_raise_sal(?,?,?)}")
+call p_raise_sal(7369, 1.1, ?);
+
+-- 3. 匿名块：OUT 参数用局部变量接，最通用
+declare
+  v_new emp.sal%type;
+begin
+  p_raise_sal(7369, 1.1, v_new);
+  dbms_output.put_line('调整后工资：' || v_new);
+end;
+/
+</code></pre>
+
+<p><strong>触发器</strong>（trigger）绑在表上，由 DML 自动触发，常用于审计、补默认值、维护冗余字段，它<strong>不能被显式调用</strong>。按时机分 <code>before</code>/<code>after</code>，按粒度分<strong>语句级</strong>（一条语句触发一次）和<strong>行级</strong>（每行触发一次，要写 <code>for each row</code>）。行级触发器里用 <code>:new</code> 取新值、<code>:old</code> 取旧值（<code>:old</code> 在 insert 中不可用，<code>:new</code> 在 delete 中不可用）。</p>
+
+<pre><code class="language-sql">-- 建一张审计小表
+create table emp_audit
+(
+  id      number generated as identity,     -- 12c 起可用，替代「序列 + 默认值」
+  empno   number,
+  old_sal number,
+  new_sal number,
+  op_user varchar2(30),
+  op_time date
+);
+
+-- 行级触发器：工资被改动时记一条审计
+create or replace trigger trg_emp_sal_audit
+  after update of sal on emp
+  for each row
+  when (old.sal &lt;&gt; new.sal)                -- when 里不加冒号，也不能调用函数
+begin
+  insert into emp_audit(empno, old_sal, new_sal, op_user, op_time)
+  values(:old.empno, :old.sal, :new.sal, user, sysdate);
+end;
+/
+</code></pre>
+
+<p><code>before</code> 行级触发器还可以直接给 <code>:new</code> 赋值，用来补默认值；语句级触发器没有 <code>:new</code>/<code>:old</code>，只能做整表校验或记录。触发器里有两条硬限制：<strong>不能写 <code>commit</code>/<code>rollback</code></strong>（确需独立事务要声明 <code>pragma autonomous_transaction</code>）；逻辑要短，否则排错会很痛苦。临时停用触发器用 <code>alter trigger trg_emp_sal_audit disable;</code>，事后 <code>enable</code>。</p>
+
+<pre><code class="language-sql">-- before 行级触发器：入职时间留空就补当前时间
+create or replace trigger trg_emp_before_insert
+  before insert on emp
+  for each row
+begin
+  if :new.hiredate is null then
+    :new.hiredate := sysdate;
+  end if;
+end;
+/
+</code></pre>
+
+<h2>九、异常处理：when、raise 与自定义异常</h2>
+
+<p>异常处理写在块的 <code>exception</code> 段，格式是 <code>when 异常名 then ...</code>。捕获的顺序是自上而下，<code>when others</code> 必须放在最后兜底。Oracle 预定义了一批命名异常，最常用的几个是：</p>
+
+<ul>
+<li><code>no_data_found</code>：<code>select into</code> 一行都没查到。</li>
+<li><code>too_many_rows</code>：<code>select into</code> 查到了多行。</li>
+<li><code>zero_divide</code>：除数为零。</li>
+<li><code>dup_val_on_index</code>：违反唯一约束。</li>
+<li><code>value_error</code>：类型转换失败或长度超限。</li>
+<li><code>others</code>：未列出的所有异常，只能放最后。</li>
+</ul>
+
+<pre><code class="language-sql">declare
+  v_sal emp.sal%type;
+begin
+  select sal into v_sal from emp where deptno = 10;   -- 部门 10 有多人，会抛异常
+  dbms_output.put_line(v_sal);
+exception
+  when no_data_found then
+    dbms_output.put_line('没有这个员工');
+  when too_many_rows then
+    dbms_output.put_line('结果不止一行，改用游标或聚合函数');
+  when others then
+    dbms_output.put_line('未预期的错误 ' || sqlcode || '：' || sqlerrm);
+    raise;                                            -- 记完日志再抛给上层
+end;
+/
+</code></pre>
+
+<p>业务规则不满足时用 <code>raise</code> 主动抛出。自定义异常先在声明段用 <code>异常名 exception;</code> 定义，需要的话再用 <code>pragma exception_init(异常名, 错误号)</code> 把它绑到某个 Oracle 错误号上。抛给应用层的异常建议用 <code>raise_application_error(错误号, 消息)</code>，错误号取 <code>-20000</code> 到 <code>-20999</code>，JDBC 侧用 <code>getErrorCode()</code> 就能读到。</p>
+
+<pre><code class="language-sql">declare
+  e_sal_invalid exception;                    -- 1. 自定义异常
+  v_sal emp.sal%type;
+begin
+  select sal into v_sal from emp where empno = 7369;
+
+  if v_sal &lt; 0 then
+    raise e_sal_invalid;                      -- 2. 主动抛出
+  end if;
+exception
+  when e_sal_invalid then                     -- 3. 捕获处理
+    dbms_output.put_line('工资不能为负');
+    raise_application_error(-20002, '工资不能为负：' || v_sal);
+end;
+/
+</code></pre>
+
+<p>还有两点要知道：<strong>异常会逐层向外传播</strong>——内层块没捕获的异常会交给外层块的 <code>exception</code> 段，最外层再没人管就返回给调用方，事务状态也留给调用方决定；<strong>异常处理段里的 DML 要自己收尾</strong>，写操作出错时不要在过程内部随意 <code>rollback</code>，把提交或回滚交给调用方，避免把别人的事务一起回滚掉。</p>
+
+<h2>十、视图、索引、同义词与外连接写法</h2>
+
+<p>除了序列，日常最常打交道的对象还有视图、索引和同义词。</p>
+
+<ul>
+<li><strong>视图</strong>把复杂查询固化成一张「虚表」，本身不存数据。它能简化调用、控制列级权限；含连接、聚合、<code>distinct</code>、分组的视图通常只能查不能改，单表简单视图才允许直接 DML。</li>
+<li><strong>索引</strong>用来加速查询，代价是写操作要同步维护。Oracle 会为主键和唯一约束自动建索引，不用重复建；在索引列上套函数会让索引失效，除非建函数索引。</li>
+<li><strong>同义词</strong>是对象的别名，用来屏蔽真实对象名和模式名，迁移或换 schema 时不用改代码。</li>
+</ul>
+
+<pre><code class="language-sql">-- 视图：把常用的连接查询封装起来
+create or replace view v_emp_dept as
+select e.empno, e.ename, e.sal, d.deptno, d.dname
+from emp e join dept d on e.deptno = d.deptno
+with read only;                                      -- 明确只读，避免误更新
+
+select * from v_emp_dept where dname = 'SALES';
+
+-- 索引：普通索引、唯一索引、函数索引
+create index idx_emp_deptno on emp(deptno);
+create unique index uk_emp_ename on emp(ename);
+create index idx_emp_upper_ename on emp(upper(ename));   -- 让 where upper(ename)=... 也能走索引
+
+-- 同义词：私有同义词只有当前用户能用
+create synonym e for emp;
+select * from e where deptno = 10;
+drop synonym e;
+</code></pre>
+
+<p>第二节讲过的序列，这里补两个细节：<code>currval</code> 必须在当前会话先取过一次 <code>nextval</code> 之后才能用；12c 起更推荐直接建 <code>identity</code> 列，省掉「序列 + 触发器」这一套。</p>
+
+<pre><code class="language-sql">create sequence seq_ownersid start with 1 increment by 1 nocache;
+select seq_ownersid.nextval from dual;      -- 先取一次
+select seq_ownersid.currval from dual;      -- 本会话内可用
+
+-- 12c 起：自增列，插入时不用管主键
+create table t_demo
+(
+  id   number generated by default as identity (start with 1 increment by 1),
+  name varchar2(30)
+);
+insert into t_demo(name) values ('a');
+select * from t_demo;
+</code></pre>
+
+<p>条件取值有 <code>decode</code> 和 <code>case when</code> 两种写法。<code>decode</code> 是 Oracle 特有的老函数，只能做等值比较；<code>case when</code> 是 SQL 标准写法，支持范围条件、可移植性更好，新代码优先用它。</p>
+
+<pre><code class="language-sql">select ename,
+       sal,
+       decode(deptno, 10, '财务', 20, '研发', 30, '销售', '其他') as dname_old,
+       case deptno
+         when 10 then '财务'
+         when 20 then '研发'
+         when 30 then '销售'
+         else '其他'
+       end as dname_new,
+       case
+         when sal &gt;= 3000 then '高'
+         when sal &gt;= 1000 then '中'
+         else '低'
+       end as sal_level
+from emp
+order by empno;
+</code></pre>
+
+<p>两者有一个容易踩的区别：<code>decode</code> 把 <code>null</code> 当成相等的值，所以 <code>decode(comm, null, 0, comm)</code> 能直接把空提成 0；而 <code>case comm when null then ...</code> 永远不成立，必须换成 <code>case when comm is null then ...</code>。</p>
+
+<p>最后是外连接。ANSI 标准写法是 <code>left join</code> / <code>right join</code> / <code>full outer join</code>，Oracle 从 9i 起就完整支持，<strong>现行代码应优先用标准写法</strong>。老代码里更常见的是 <code>(+)</code> 写法：它是 <strong>Oracle 特有的旧语法</strong>，规则是「把 <code>(+)</code> 加在<strong>可能为空的那一侧</strong>（被补 null 的表）的列上」，读起来别扭，表一多极易写反，而且 <code>(+)</code> 无法表达 <code>full join</code>，也不能和 <code>or</code>、<code>in</code> 混用。看老项目时要能读懂，写新代码请用标准写法。</p>
+
+<pre><code class="language-sql">-- 需求：列出所有部门及其员工，没有员工的部门也要出现
+
+-- 旧写法：dept 是被补 null 的一侧，加 (+)，因此 dept 全保留
+select d.deptno, d.dname, e.ename
+from emp e, dept d
+where e.deptno(+) = d.deptno;
+
+-- 标准写法（推荐）：语义一目了然
+select d.deptno, d.dname, e.ename
+from dept d
+left join emp e on e.deptno = d.deptno;
+
+-- 反过来：员工全保留、部门信息允许为空
+-- 旧写法：这次是 emp 的列加 (+)，等价于 emp 左连接 dept
+select e.ename, d.dname
+from emp e, dept d
+where e.deptno = d.deptno(+);
+
+-- 标准写法（推荐）
+select e.ename, d.dname
+from emp e
+left join dept d on e.deptno = d.deptno;
+</code></pre>
+
 <h2>小结</h2>
 
 <p>Oracle 的日常开发可以浓缩成四句话：<strong>表空间管存储、用户即模式；自增靠序列，序列不保证连续；分页靠 ROWNUM，必须子查询套一层，排序要先进内层；能连表就不写子查询，把函数和类型转换从索引列上挪开</strong>。需要复用业务逻辑时再上 PL/SQL：简单查询封装成函数，带事务的写操作封装成过程。同时记住两个高频失误点——DML 之后手动 <code>commit</code>，过程参数不写长度。把这几件事写熟，从 MySQL 迁到 Oracle 的主要不适感基本就消失了。</p>
+
+<p>再补一句 PL/SQL 的取舍：能用一个 SQL 解决的别写过程，游标优先用 <code>for rec in 游标 loop</code> 的简化写法，异常一律在 <code>exception</code> 段显式处理、别让 <code>others</code> 悄悄吞掉错误；触发器只用来做审计和兜底默认值，业务逻辑留在应用层或存储过程里更好维护。外连接新代码写 <code>left join</code>，只在读老项目时认得 <code>(+)</code> 就够了。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-2-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">JDBC 与连接池</span></a>
