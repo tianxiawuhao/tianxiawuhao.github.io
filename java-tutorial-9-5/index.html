@@ -162,7 +162,11 @@ SELECT * FROM t_order WHERE status = 1;
 SELECT * FROM t_order WHERE DATE(created_at) = '2024-01-01';
 </code></pre>
 
-<p><strong>旧答案 → 现状：字符集 <code>utf8</code> 已过时。</strong>旧笔记里常见 <code>DEFAULT CHARSET = utf8</code>，这在面试中现在要主动纠正：MySQL 的 <code>utf8</code> 是“最多 3 字节”的残缺实现，存不下 4 字节字符（emoji、部分生僻汉字），写入会报 <code>Incorrect string value</code>。正确写法是 <code>utf8mb4</code>。MySQL 8.0 起服务端默认字符集已经是 <code>utf8mb4</code>（默认排序规则 <code>utf8mb4_0900_ai_ci</code>），8.0 中 <code>utf8</code> 已作为 <code>utf8mb3</code> 的别名被标记废弃，所以新项目不再需要显式指定；但升级旧库时仍要检查：库、表、列、连接（<code>character_set_client</code> 等）以及 JDBC URL 要一起改成 <code>utf8mb4</code>，只改表不改连接会出现“列是 4 字节、连接是 3 字节”的隐式转换，既可能乱码也可能让索引失效。</p>
+<p><strong>旧答案 → 现状：字符集 <code>utf8</code> 已过时。</strong>旧笔记里常见 <code>DEFAULT CHARSET = utf8</code>，这在面试中现在要主动纠正：MySQL 的 <code>utf8</code> 是“最多 3 字节”的残缺实现，存不下 4 字节字符（emoji、部分生僻汉字），写入会报 <code>Incorrect string value</code>。正确写法是 <code>utf8mb4</code>。MySQL 8.0 起服务端默认字符集已经是 <code>utf8mb4</code>（默认排序规则 <code>utf8mb4_0900_ai_ci</code>），8.0 中 <code>utf8</code> 已作为 <code>utf8mb3</code> 的别名被标记废弃，所以新项目不再需要显式指定。但升级旧库时仍要检查：库、表、列、连接（<code>character_set_client</code> 等）以及 JDBC URL 要一起改成 <code>utf8mb4</code>。只改表不改连接会出现“列是 4 字节、连接是 3 字节”的隐式转换，后果有两点：</p>
+<ul>
+<li>可能乱码；</li>
+<li>可能让索引失效。</li>
+</ul>
 
 <h3>哈希索引与索引下推（ICP）</h3>
 
@@ -257,7 +261,7 @@ COMMIT;
 <p>但分片是有代价的，面试官往往就在这一步追问：跨库 <code>JOIN</code> 做不了，聚合与排序要改写，<code>AUTO_INCREMENT</code> 主键会冲突（需雪花算法或号段模式），跨分片查询要广播到所有分片，原本单机的事务变成分布式事务。因此分片键的选择至关重要，要保证高频查询都带上分片键，否则一次查询就要扫全部分片。落地时通常借助 ShardingSphere 或 MyCat 这类中间件，由它们完成 SQL 解析、路由、改写与结果归并。若只是读多写少，读写分离（基于 binlog 的主从复制，写主库、读从库）往往比分库分表更划算；但要接受主从延迟导致的“写后立刻读不到”问题，一致性要求高的读仍需走主库。</p>
 <h3>旧参数 → 新参数：redo log 与几个高频配置</h3>
 
-<p>旧笔记里配置 redo log 的写法是 <code>innodb_log_file_size</code> 与 <code>innodb_log_files_in_group</code>，这个组合在 MySQL 8.0.30 起被废弃，取而代之的是 <code>innodb_redo_log_capacity</code>：它用一个变量统一控制 redo log 总容量，InnoDB 在 <code>#innodb_redo</code> 目录下自动维护最多 32 个文件，不再手工调文件个数。默认容量 100MB，高写入负载的实例通常调到 1～4GB 量级，目标是让一次 checkpoint 的间隔能覆盖业务峰值而不是频繁刷盘。8.0.30 之前的版本仍用旧参数，8.4 则只认新参数，所以面试时最好把版本边界说出来，而不是给一个死数字。</p>
+<p>旧笔记里配置 redo log 的写法是 <code>innodb_log_file_size</code> 与 <code>innodb_log_files_in_group</code>，这个组合在 MySQL 8.0.30 起被废弃，取而代之的是 <code>innodb_redo_log_capacity</code>。它用一个变量统一控制 redo log 总容量，InnoDB 在 <code>#innodb_redo</code> 目录下自动维护最多 32 个文件，不再手工调文件个数。默认容量 100MB，高写入负载的实例通常调到 1～4GB 量级，目标是让一次 checkpoint 的间隔能覆盖业务峰值而不是频繁刷盘。8.0.30 之前的版本仍用旧参数，8.4 则只认新参数，所以面试时最好把版本边界说出来，而不是给一个死数字。</p>
 
 <p>其他常见变更也值得一并交代：查询缓存 <code>query_cache_size</code> 在 5.7 已废弃、8.0 彻底删除，不要再提“打开查询缓存加速读”；<code>innodb_buffer_pool_size</code>、<code>innodb_flush_log_at_trx_commit</code>（1 最安全、2 折中）与 <code>sync_binlog</code> 没有更名，仍是核心调优项，但要注意 8.0 默认 <code>binlog_format = ROW</code>，而 <code>binlog_format = STATEMENT</code> 的旧建议早已不推荐。若涉及复制，8.0.22 起 <code>CHANGE MASTER TO</code> 等语句被 <code>CHANGE REPLICATION SOURCE TO</code> 系列取代。</p>
 

@@ -247,11 +247,16 @@ server {
     }
 }</code></pre>
 <p>两个容易混淆的概念要分清：<code>expires</code> 是发给浏览器的缓存指令，<code>proxy_cache</code> 才是缓存在 Nginx 本机、能直接挡掉回源请求的缓存。另外，Nginx 的“自动剔除”是被动健康检查，只对连接失败、超时这类情况生效，后端返回 500 时默认仍算一次成功响应。要覆盖这一点，需要配合 <code>proxy_next_upstream</code> 与 <code>proxy_cache_use_stale</code>，或由应用提供健康检查接口。</p>
-<p>与后端的长连接同样有版本边界：upstream 中的 <code>keepalive</code> 自 1.1.4 起提供，在 1.29.7 之前必须成对写出 <code>proxy_http_version 1.1;</code> 与 <code>proxy_set_header Connection "";</code>——否则请求走默认的 HTTP/1.0，连接随响应关闭，<code>keepalive</code> 形同虚设。自 1.29.7 起，Nginx 默认开启 upstream 连接缓存（默认上限 32，相当于 <code>keepalive 32 local</code>），<code>proxy_http_version</code> 的默认值也改为 1.1，上面两行因此可以省略；但 1.24~1.29.6 这个区间仍需显式写出，这也是旧配置里它们随处可见的原因。另外 <code>hash ... consistent</code> 需要 1.7.2 及以上，<code>proxy_cache_path</code> 的 <code>use_temp_path=off</code> 需要 1.7.10 及以上，抄旧配置时报 <code>unknown parameter</code> 多半就是这个原因。</p>
+<p>与后端的长连接同样有版本边界：upstream 中的 <code>keepalive</code> 自 1.1.4 起提供，在 1.29.7 之前必须成对写出 <code>proxy_http_version 1.1;</code> 与 <code>proxy_set_header Connection "";</code>——否则请求走默认的 HTTP/1.0，连接随响应关闭，<code>keepalive</code> 形同虚设。自 1.29.7 起，Nginx 默认开启 upstream 连接缓存（默认上限 32，相当于 <code>keepalive 32 local</code>），<code>proxy_http_version</code> 的默认值也改为 1.1。上面两行因此可以省略；但 1.24~1.29.6 这个区间仍需显式写出，这也是旧配置里它们随处可见的原因。另外 <code>hash ... consistent</code> 需要 1.7.2 及以上，<code>proxy_cache_path</code> 的 <code>use_temp_path=off</code> 需要 1.7.10 及以上，抄旧配置时报 <code>unknown parameter</code> 多半就是这个原因。</p>
 
 <h2>HTTPS、调优与上线自查</h2>
 <p>启用 HTTPS 只需一对证书和一段 server 配置，生产环境建议顺便把 HTTP 全量跳转过去，并关闭老旧协议版本。第一次部署最容易忽略的有两点：证书链要完整，私钥权限要收紧（600，且属主为运行用户）。</p>
-<p>协议与写法同样有版本边界：<code>ssl_protocols TLSv1.2 TLSv1.3</code> 中列出 TLSv1.3，需要 Nginx 1.13.0 及以上、且链接的 OpenSSL 为 1.1.1 及以上（用 <code>nginx -V</code> 可同时核对版本与编译参数）；把 http2 写在 <code>listen 443 ssl http2;</code> 里的旧写法，自 1.25.1 起被独立的 <code>http2 on;</code> 取代并会打弃用告警。TLSv1 与 TLSv1.1 已被主流浏览器停用，现代配置不要再列进 <code>ssl_protocols</code>；<code>ssl_ciphers</code> 也不必照抄旧配置里的长串，默认套件对绝大多数场景已经够用。</p>
+<p>协议与写法同样有版本边界：</p>
+<ul>
+<li><code>ssl_protocols TLSv1.2 TLSv1.3</code> 中列出 TLSv1.3，需要 Nginx 1.13.0 及以上、且链接的 OpenSSL 为 1.1.1 及以上（用 <code>nginx -V</code> 可同时核对版本与编译参数）。</li>
+<li>把 http2 写在 <code>listen 443 ssl http2;</code> 里的旧写法，自 1.25.1 起被独立的 <code>http2 on;</code> 取代并会打弃用告警。</li>
+</ul>
+<p>TLSv1 与 TLSv1.1 已被主流浏览器停用，现代配置不要再列进 <code>ssl_protocols</code>；<code>ssl_ciphers</code> 也不必照抄旧配置里的长串，默认套件对绝大多数场景已经够用。</p>
 <pre><code class="language-nginx">server {
     listen 80;
     server_name www.example.com;
