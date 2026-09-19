@@ -175,7 +175,16 @@
 <li><strong>应用程序类加载器</strong>：由 <code>sun.misc.Launcher$AppClassLoader</code> 实现，加载用户类路径 <code>classpath</code> 上的类。它通常是程序中的默认加载器。</li>
 </ul>
 
-<p><strong>版本差异要特别注意</strong>：JDK 9 引入模块化后，扩展类加载器已被移除，<code>lib/ext</code> 目录与 <code>java.ext.dirs</code> 不再生效。取而代之的是<strong>平台类加载器（PlatformClassLoader）</strong>，它加载的不再是 <code>ext</code> 目录，而是平台模块。JDK 11 之后启动类加载器也改由 Java 实现（<code>jdk.internal.loader.ClassLoaders$BootClassLoader</code>），但它对上层依然表现为 <code>null</code>。</p>
+<p>从 <strong>JDK 17/21</strong> 回看，如今实际生效的是下面这四层（JDK 9 引入模块化之后的形态）：</p>
+
+<ul>
+<li><strong>启动类加载器（Bootstrap ClassLoader）</strong>：加载 <code>java.base</code> 等核心模块（旧版本对应 <code>JAVA_HOME/lib</code> 下的核心类库）。在 Java 代码里依然拿不到，<code>String.class.getClassLoader()</code> 返回 <code>null</code>；JDK 9 起它自身改由 Java 实现（<code>jdk.internal.loader.ClassLoaders$BootClassLoader</code>），<code>null</code> 只是对上层保留的对外表示。</li>
+<li><strong>平台类加载器（PlatformClassLoader）</strong>：JDK 9 引入的平台类加载器，由 <code>jdk.internal.loader.ClassLoaders$PlatformClassLoader</code> 实现。它加载的是<strong>平台模块</strong>（<code>java.sql</code>、<code>java.xml</code>、<code>java.desktop</code> 等不在 <code>java.base</code> 里的标准模块），<code>ClassLoader.getPlatformClassLoader()</code> 可以直接拿到它。</li>
+<li><strong>应用程序类加载器</strong>：JDK 9 起由 <code>jdk.internal.loader.ClassLoaders$AppClassLoader</code> 实现（模块路径上的应用模块与 classpath 上的类都由它负责），通常是程序中的默认加载器。</li>
+<li><strong>自定义类加载器</strong>：开发者继承 <code>ClassLoader</code> 实现的加载器，用来做插件隔离、热部署、字节码加密等，这几个版本里语义没有变化。</li>
+</ul>
+
+<p><strong>版本演进要特别注意</strong>：扩展类加载器<strong>不是被“更名”</strong>，而是随 JDK 9 的模块化被<strong>移除</strong>了——<code>sun.misc.Launcher$ExtClassLoader</code> 在 JDK 9 中已不存在，<code>lib/ext</code> 目录与 <code>java.ext.dirs</code> 系统属性不再生效（JDK 8 上它们仍然有效，属于要作对照的旧写法）。取代它的是<strong>平台类加载器（PlatformClassLoader）</strong>，语义也变了：它不再扫描某个扩展目录，而是按模块图加载平台模块，因此“扩展类加载器加载 <code>lib/ext</code>”这类描述只能放在 JDK 8 语境下讲。相关的 <code>-Xbootclasspath</code> 系列参数同样在 JDK 9 被移除，改为用 <code>--patch-module</code>、<code>--upgrade-module-path</code> 处理（详见第四节末尾）。JDK 11 起启动类加载器改由 Java 实现，但对上层依然表现为 <code>null</code>；JDK 17/21 延续这套结构，没有新的加载器加入。</p>
 
 <h2>三、双亲委派模型</h2>
 
@@ -226,6 +235,10 @@
 }</code></pre>
 
 <p>由此得出正确姿势：<strong>遵守双亲委派就继承 <code>ClassLoader</code> 覆盖 <code>findClass(String name)</code></strong>，在方法里读取字节流并调用 <code>defineClass()</code> 生成 <code>Class</code>；<strong>打破双亲委派才覆盖 <code>loadClass(String name)</code></strong>。注意向启动类加载器委派时，父加载器用 <code>null</code> 表示。</p>
+
+<p><strong>JDK 9 起，模块化前提下的顺序有两点调整</strong>：一是委派链的顶端被显式写成 <code>ClassLoaders.BOOT_LOADER</code>（即那个返回 <code>null</code> 的启动类加载器），平台类加载器的父是它、应用程序类加载器的父是平台类加载器，三层一条线没有断；二是 <code>loadClass</code> 在委派之前先按<strong>模块可见性</strong>做判断——类若属于当前加载器已定义的模块（或用 <code>getResource</code>／包定义约束命中），就直接走自己的 <code>findClass</code>，不再无脑向上委派；同时 <code>findClass</code> 内部会先查 <code>java.base</code> 等核心模块，保证核心类依然只由启动类加载器定义。所以“<strong>覆盖 <code>findClass</code> 是遵守双亲委派、覆盖 <code>loadClass</code> 才是打破它</strong>”这条结论在 JDK 8 与 JDK 17/21 上都成立，JDK 9+ 只是在 <code>loadClass</code> 里多了模块这一层判断，源码骨架的顺序没有反转。</p>
+
+<p>顺便把 <code>Class.forName</code> 与 <code>ClassLoader.loadClass</code> 的差异讲透，这是两种加载方式最容易混的地方：<code>ClassLoader.loadClass(name)</code> 只完成“加载—链接”，<strong>不初始化</strong>（等价于 <code>loadClass(name, false)</code>）；<code>Class.forName(name)</code> 默认<strong>加载并初始化</strong>（静态块执行）；<code>Class.forName(name, false, loader)</code> 把 <code>initialize</code> 参数显式置为 <code>false</code>，才等价于不做初始化的轻量加载。两者都是显式加载，区别只在是否触发 <code>&lt;clinit&gt;()</code>。</p>
 
 <h2>四、自定义类加载器：从 <code>findClass</code> 到热部署</h2>
 

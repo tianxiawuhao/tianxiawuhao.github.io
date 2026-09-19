@@ -138,6 +138,18 @@
 
 <p>版本用错还有一组典型异常：拿 HSSF 去读 <code>.xlsx</code> 会抛 <code>org.apache.poi.poifs.filesystem.OfficeXmlFileException</code>，反向操作会抛 <code>org.apache.poi.openxml4j.exceptions.InvalidOperationException</code>。判断版本不要自己写 if-else，交给 <code>WorkbookFactory.create(inputStream)</code> 自动识别；如果明确要 SXSSF，就用 <code>new SXSSFWorkbook(xssfWorkbook, 1000)</code> 把已有的 XSSF 包一层，这样还能复用现有代码里的样式与模板。</p>
 
+<p>版本上，本章以 <strong>Apache POI 5.x</strong>（截至 5.5.x，2025 年底仍在发布）为基线，运行在 Java 17 上。POI 从 4.0 到 5.x 完成的是一次真正的模块拆分：<code>poi</code> 只管 BIFF（<code>.xls</code>）与通用用户模型，OOXML（<code>.xlsx</code>）的能力全部搬进 <code>poi-ooxml</code>；而 3.x 时代那个体积巨大的 <code>poi-ooxml-schemas</code> 已经消失，被拆成默认随 <code>poi-ooxml</code> 引入的 <code>poi-ooxml-lite</code>（只含常用 schema，体积小得多）和按需引入的 <code>poi-ooxml-full</code>。所以在 5.x 的新项目里，<code>XSSFWorkbook</code> 找不到类几乎总是依赖坐标写错，而不是代码写错：</p>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.poi&lt;/groupId&gt;
+    &lt;artifactId&gt;poi-ooxml&lt;/artifactId&gt;   &lt;!-- 自动带上 poi、poi-ooxml-lite、commons-compress、xmlbeans 等 --&gt;
+    &lt;version&gt;5.5.1&lt;/version&gt;              &lt;!-- 5.x 区间内取最新，写死前先看官方发布说明 --&gt;
+&lt;/dependency&gt;
+&lt;!-- 只有需要处理冷门 OOXML 部件（完整 chart/signature schema 等）时才换成 poi-ooxml-full --&gt;
+</code></pre>
+
+<p>从 3.x 升级上来的老项目，除了改坐标还要留意两点。一是 3.x 里那些已废弃的入口在 5.x 上大多已被移除或不再维护（典型如直接拿 <code>XMLReaderFactory</code> 造解析器、部分 <code>HSSFWorkbook</code> 的老构造方式），编译期就会报错，早暴露比运行时炸好。二是 5.x 明确放弃了对 Java 8 以下和一批老旧容器的支持，<code>poi-ooxml</code> 会拉入较新的 <code>commons-compress</code> 与 <code>xmlbeans</code>，与 Spring Boot 的依赖管理版本冲突时要显式对齐，否则容易在运行时抛 <code>NoSuchMethodError</code> 而不是编译失败。</p>
+
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-8/01-workbook-memory.svg" alt="HSSF、XSSF、SXSSF 的格式上限与内存模型"><figcaption>图 1：三种 Workbook 的上限与内存模型，以及导入侧的事件模式流程</figcaption></figure>
 
 <h2>百万行导出：SXSSF 的滑动窗口怎么用</h2>
@@ -178,7 +190,7 @@ try {
 }
 </code></pre>
 
-<p>这段代码里有三个容易漏掉的点。第一是 <code>dispose()</code>：SXSSF 会在 <code>java.io.tmpdir</code>（Linux 上通常是 <code>/tmp</code>）下生成形如 <code>poi-sxssf-sheet4654655121378979321.xml</code> 的临时文件，只管写不管删，几天就能把磁盘写满；<code>dispose()</code> 负责清理，所以它必须在 <code>finally</code> 里。第二是响应头：<code>.xlsx</code> 建议用上面那个完整的 MIME 类型，而 <code>URLEncoder.encode</code> 会把空格编成 <code>+</code>，浏览器下载时会变成乱码文件名，所以要 <code>replace("+", "%20")</code>。第三是数据源。导出慢，通常是慢在把整张表查进内存；用 JDBC 游标或 MyBatis 的 <code>ResultHandler</code> 流式取数，再配合 SXSSF，才是完整的低内存方案。另外，代码里若出现「外层再循环一百次」，那只是为造出大数据量做压测，并不是技巧。</p>
+<p>这段代码里有三个容易漏掉的点。第一是 <code>dispose()</code>：SXSSF 会在 <code>java.io.tmpdir</code>（Linux 上通常是 <code>/tmp</code>）下生成形如 <code>poi-sxssf-sheet4654655121378979321.xml</code> 的临时文件，只管写不管删，几天就能把磁盘写满；<code>dispose()</code> 负责清理，所以它必须在 <code>finally</code> 里。这里还有一个运行环境的变量：CentOS 7 已于 2024 年 6 月 30 日停止维护（EOL），新部署应换到 Rocky Linux 9／AlmaLinux 9 或 Ubuntu 22.04 及之后的 LTS。这些较新发行版的 systemd 服务常默认开启 <code>PrivateTmp=true</code>，进程看到的 <code>/tmp</code> 实为 <code>/tmp/systemd-private-*</code> 下的独立目录，排查「临时文件到底写哪去了」要用 <code>systemctl show -p PrivateTmp 服务名</code>，而不是直接翻宿主机的 <code>/tmp</code>；反过来，<code>PrivateTmp</code> 也会让这些临时文件随服务重启被清掉，所以它只能兜底，不能当成可靠的落盘缓存。第二是响应头：<code>.xlsx</code> 建议用上面那个完整的 MIME 类型，而 <code>URLEncoder.encode</code> 会把空格编成 <code>+</code>，浏览器下载时会变成乱码文件名，所以要 <code>replace("+", "%20")</code>。第三是数据源。导出慢，通常是慢在把整张表查进内存；用 JDBC 游标或 MyBatis 的 <code>ResultHandler</code> 流式取数，再配合 SXSSF，才是完整的低内存方案。另外，代码里若出现「外层再循环一百次」，那只是为造出大数据量做压测，并不是技巧。</p>
 
 <h2>大数据量导入：换用事件模式逐行解析</h2>
 
@@ -208,7 +220,7 @@ try {
 }
 </code></pre>
 
-<p>构造 <code>XSSFSheetXMLHandler</code> 时最后那个 <code>boolean</code> 是 <code>formulasNotResults</code>，传 <code>false</code> 表示取公式的计算结果而不是公式文本；不同 POI 版本的构造参数略有出入（4.x/5.x 增加了 <code>DataFormatter</code> 参数，<code>SharedStringsTable</code> 也可换成只读的 <code>ReadOnlySharedStringsTable</code>），升级时留意一下。</p>
+<p>构造 <code>XSSFSheetXMLHandler</code> 时最后那个 <code>boolean</code> 是 <code>formulasNotResults</code>，传 <code>false</code> 表示取公式的计算结果而不是公式文本；这个类在演进中改过构造签名：3.x 时代是 <code>(StylesTable, SharedStringsTable, SheetContentsHandler, boolean)</code>；带 <code>DataFormatter</code> 的重载自 4.x 引入，到 5.x 已成为推荐写法，上面那种不带 <code>DataFormatter</code> 的老构造被标记为过时（<code>@Deprecated</code>）。因此新代码更宜写成 <code>new XSSFSheetXMLHandler(styles, sst, new SheetHandler(), new DataFormatter(), false)</code>，把数值与日期的格式化策略显式交出去，避免不同版本默认行为差异带来的字段错位。同时 <code>SharedStringsTable</code> 可以换成只读的 <code>ReadOnlySharedStringsTable</code>——它省一份内存，代价是构造时要处理 <code>IOException</code>，属于小改动、大收益。</p>
 
 <p>真正写业务逻辑的是处理器。这里必须纠正一种常见写法：用 <code>cellReference.substring(0, 1)</code> 取列只能识别 A 到 Z，一遇到第 27 列（AA）就会把列号当成 <code>A</code>，并覆盖第一列的数据。正确做法是交给 <code>CellReference</code> 解析出列下标。另外 SAX 只回调<strong>存在</strong>的单元格，空单元格会被跳过，所以不能靠「第几次回调」来数第几列。</p>
 
@@ -250,7 +262,7 @@ try {
 
 <p>报表往往要求固定格式，于是就有了模板导出：把做好的 <code>.xlsx</code> 作为输入流交给 <code>new SXSSFWorkbook(new XSSFWorkbook(templateStream), 1000)</code>，在既有表头下追加数据。注意模板必须先落到磁盘或内存里再包成 SXSSF，且如前所述，SXSSF 不能再改已刷盘内容、也不做公式求值，所以「动态改表头」「导出后自动算合计」这类需求用 SXSSF 会很别扭，行数不大时直接用 XSSF 更省心。</p>
 
-<p>如果不想被裸 POI 的样板代码淹没，可以考虑 EasyExcel（该项目已更名为 FastExcel，新坐标为 <code>cn.idev.excel</code>，老坐标 <code>com.alibaba.excel</code> 仍被大量项目使用）：它用注解声明表头映射，底层仍是 POI 的 SAX 解析，写法短得多。<code>EasyExcel.write(outputStream, EmployeeRow.class).sheet("人员信息").doWrite(list)</code> 完成导出，<code>EasyExcel.read(file, EmployeeRow.class, new PageReadListener&lt;&gt;(rows -&gt; save(rows))).sheet().doRead()</code> 分批读入。它的价值在于省去手写处理器，但不会替你解决「一次性把数据查进内存」的问题——读进来的批次该落库还是要落库。</p>
+<p>如果不想被裸 POI 的样板代码淹没，可以考虑 EasyExcel 这一系，但它的维护脉络必须先说清楚：最初是阿里的 <code>com.alibaba.excel:EasyExcel</code>，后来由原团队接管并更名为 <strong>FastExcel</strong>，坐标为 <code>cn.idev.excel:fastexcel</code>，老坐标 <code>com.alibaba.excel</code> 仍被大量存量项目使用，两者包结构与注解基本一致、迁移成本主要在改坐标；再往后该项目又进入 Apache 孵化器，成为 <strong>Apache Fesod (Incubating)</strong>，坐标与包名再次变化。也就是说「EasyExcel」这个名字背后的实际维护方已经换过两轮，网上旧博客里的依赖坐标大多已过期，选型时请直接看官方仓库的当前说明，版本与坐标以官方发布为准（存疑）。功能上它用注解声明表头映射，底层仍是 POI 的 SAX 解析，写法短得多。<code>EasyExcel.write(outputStream, EmployeeRow.class).sheet("人员信息").doWrite(list)</code> 完成导出，<code>EasyExcel.read(file, EmployeeRow.class, new PageReadListener&lt;&gt;(rows -&gt; save(rows))).sheet().doRead()</code> 分批读入。它的价值在于省去手写处理器，但不会替你解决「一次性把数据查进内存」的问题——读进来的批次该落库还是要落库。</p>
 
 <p>最后说说标题里的 PDF。这一点必须明确：<strong>POI 只处理 OOXML 和 BIFF，不生成 PDF</strong>。生成 PDF 常用的库是 Apache PDFBox（Apache 2.0，商用友好）和 OpenPDF／iText（iText 5 为 AGPL，闭源商用需要商业授权，选型前务必确认许可证）。解析方向更麻烦：PDF 里没有「行」和「列」的概念，只有带坐标的文字块，PDFBox 的 <code>PDFTextStripper</code> 只能取出文本流，表格结构要靠坐标自己还原，扫描件还得先 OCR。两个原始文档都没有涉及 PDF，上面的选型建议属于通用经验，具体版本与授权条款请以官方文档为准（存疑）。</p>
 
