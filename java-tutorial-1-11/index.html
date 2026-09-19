@@ -139,7 +139,7 @@
 <p>结论很实用：<strong>处理纯文本用字符流，处理图片、音频、视频等二进制数据必须用字节流</strong>。下面的 <code>FileWriter</code> / <code>FileReader</code> 就是字符流的便捷类，构造时直接传文件路径，写字符串不需要先转成 <code>byte[]</code>。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/01-byte-char-stream.svg" alt="字节流与字符流对比图：字符流等于字节流加编码表，字节流处理二进制，字符流处理文本"><figcaption>图 1：字节流与字符流的分工——字符流 = 字节流 + 编码表</figcaption></figure>
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/01-stream-family.svg" alt="字节流与字符流的谱系图"><figcaption>图 1：IO 流谱系 —— 按方向分输入输出，按处理单位分字节流与字符流</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/01-stream-family.svg" alt="字节流与字符流的谱系图"><figcaption>图 2：IO 流谱系 —— 按方向分输入输出，按处理单位分字节流与字符流</figcaption></figure>
 
 <h2>二、文件的写出与读入</h2>
 
@@ -186,7 +186,7 @@ public class CopyFileDemo {
 }</code></pre>
 
 <p>转换流解决编码问题：<code>InputStreamReader</code> 是字节输入到字符输入的桥梁，<code>OutputStreamWriter</code> 是字符输出到字节输出的桥梁，两者都能在构造时指定编码表。便捷类是它们的子类，<code>FileWriter</code> / <code>FileReader</code> 其实等于用平台默认编码的转换流。<strong>新手最容易踩的坑正在这里</strong>：平台默认编码随环境变化（早期中文 Windows 是 GBK，现代 JVM 多为 UTF-8），文件编码与默认编码不一致就会乱码，而 <code>FileReader</code> 根本无法指定编码。所以需要指定编码时必须用转换流，例如 <code>new InputStreamReader(new FileInputStream("a.txt"), "UTF-8")</code>。乱码的本质就是"用一种编码表编码、用另一种解码"，保持一致即可。</p>
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/02-stream-chain.svg" alt="缓冲流与转换流层层包装示意图"><figcaption>图 2：一条流一条流地套上去 —— 转换流负责编码，缓冲流负责效率</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/02-stream-chain.svg" alt="缓冲流与转换流层层包装示意图"><figcaption>图 3：一条流一条流地套上去 —— 转换流负责编码，缓冲流负责效率</figcaption></figure>
 
 <h2>四、对象序列化</h2>
 
@@ -225,7 +225,7 @@ class FlyPig implements Serializable {
 }</code></pre>
 
 <p>三个必须记住的细节：<code>static</code> 字段属于类，不参与序列化，读回来是当前类的值；<code>transient</code> 字段被跳过，读回来是 <code>null</code> 或默认值；<code>serialVersionUID</code> 是版本号，反序列化时 JVM 拿文件里的版本号与本地类比对，不一致就抛 <code>InvalidClassException</code>。不显式声明时 JVM 会按类结构自动算一个值，你哪怕只加一个字段版本号也会变，旧数据立刻读不出来，所以<strong>建议所有可序列化类都显式声明 <code>private static final long serialVersionUID = 1L;</code></strong>。此外，未实现 <code>Serializable</code> 的类写入对象流会抛 <code>NotSerializableException</code>。</p>
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/03-serialization.svg" alt="对象序列化与反序列化流程图"><figcaption>图 3：序列化与反序列化 —— 对象经对象流变成字节序列再恢复，static 与 transient 字段不参与</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-11/03-serialization.svg" alt="对象序列化与反序列化流程图"><figcaption>图 4：序列化与反序列化 —— 对象经对象流变成字节序列再恢复，static 与 transient 字段不参与</figcaption></figure>
 
 <h2>小结</h2>
 

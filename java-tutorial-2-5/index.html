@@ -114,7 +114,7 @@
               <h1>JDBC 与连接池</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，7 min read</span>
+                2026-09-19，8 min read</span>
             </div>
           
         
@@ -159,7 +159,9 @@
     }
 }</code></pre>
 
-<p>这里的 URL 参数值得单独说一句：<code>serverTimezone</code> 是 MySQL 8 驱动的要求，缺少它经常报时区错误；<code>useSSL=false</code> 在本地开发也常加，但生产环境应当显式配置加密而不是关掉 SSL。</p>
+<p><figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-5/01-jdbc-flow.svg" alt="JDBC 最小闭环流程图：加载驱动、获取连接、创建语句对象、执行并取结果、归还连接五步构成闭环，下半部分对比字符串拼接 SQL 被输入改写成恒真条件，以及 PreparedStatement 用问号占位符把参数当纯数据处理"><figcaption>图 1：JDBC 的五步闭环，以及 PreparedStatement 为什么能堵住注入</figcaption></figure>
+
+这里的 URL 参数值得单独说一句：<code>serverTimezone</code> 是 MySQL 8 驱动的要求，缺少它经常报时区错误；<code>useSSL=false</code> 在本地开发也常加，但生产环境应当显式配置加密而不是关掉 SSL。</p>
 
 <h2>二、事务：把多条 SQL 绑成一个原子操作</h2>
 
@@ -212,7 +214,9 @@
 
 <p>建立一个数据库连接需要 TCP 握手、身份认证、初始化会话，代价远高于执行一条简单 SQL。高并发下「一次请求一个连接」，数据库会先被连接创建拖垮。连接池的思路是提前创建若干连接并缓存起来，用的时候借、用完还，把创建成本摊薄到整个运行期。它同时还能充当流量阀门：池大小固定，超出阈值的请求排队，避免把数据库压死。</p>
 
-<p>自己实现一个连接池有两个关键点：用容器（如 <code>LinkedList</code>）保存空闲连接；由于业务代码习惯调用 <code>conn.close()</code>，需要返回一个代理对象，用动态代理把 <code>close()</code> 改写成「归还连接」而不是真的关闭物理连接。理解了这一点，就明白为什么用第三方池时 <code>close()</code> 依然可以放心调用。</p>
+<p><figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-5/02-pool-vs-new.svg" alt="连接池对比图：左侧没有连接池时每个请求都要 TCP 握手、认证与初始化会话，连接创建开销大于 SQL 本身；右侧连接池提前建好空闲连接，业务线程借出、执行 SQL 后 close() 被代理改写成归还，池大小固定形成流量阀门"><figcaption>图 2：一次请求一次物理连接与连接池借还复用的对比</figcaption></figure>
+
+自己实现一个连接池有两个关键点：用容器（如 <code>LinkedList</code>）保存空闲连接；由于业务代码习惯调用 <code>conn.close()</code>，需要返回一个代理对象，用动态代理把 <code>close()</code> 改写成「归还连接」而不是真的关闭物理连接。理解了这一点，就明白为什么用第三方池时 <code>close()</code> 依然可以放心调用。</p>
 
 <p>生产上基本不再手写，主流选择是 Druid 与 HikariCP。Druid 由阿里开源，参数丰富、自带监控页面，国内项目见得多；HikariCP 以轻量和低延迟著称，是 Spring Boot 2.x 之后的默认连接池。以 Druid 为例，用配置文件加载：</p>
 

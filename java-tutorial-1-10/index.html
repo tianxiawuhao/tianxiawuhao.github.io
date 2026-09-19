@@ -145,8 +145,6 @@
 <p><strong>Exception</strong>：表示程序运行中可以处理的问题，我们日常打交道的基本都在这一支。它的子类 <code>RuntimeException</code> 及其派生类被称为<strong>非受检异常</strong>（unchecked，也叫运行时异常），其余 Exception 子类被称为<strong>受检异常</strong>（checked，笔记里常叫"编译期异常"）。</p>
 
 <p>这里有两个源笔记中常见的说法需要纠正。<strong>第一</strong>，"编译期异常"这个叫法容易让人误解为"异常发生在编译期"。事实上所有异常都发生在运行时，受检异常之所以名字里有"编译期"，只是因为编译器会检查你有没有写处理代码：要么用 try-catch 捕获，要么在方法签名上用 throws 声明出去，否则编译直接失败。<strong>第二</strong>，非受检的并不只有 RuntimeException 一族，<code>Error</code> 及其子类同样不受编译检查——因为 Java 语言规范里"受检"的定义是"Throwable 的子类中除 RuntimeException 和 Error 及其子类之外的部分"。很多笔记只写 Exception 分支，漏掉了 Error 这一支。</p>
-
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/01-throwable-tree.svg" alt="Throwable 异常体系树状图：Error 与 RuntimeException 一族为非受检，其余 Exception 子类为受检"><figcaption>图 1：Throwable 的两条分支——编译器只强制处理受检异常</figcaption></figure>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/01-throwable-hierarchy.svg" alt="Throwable 异常体系分支图"><figcaption>图 1：Throwable 的两个分支 —— Error 与 RuntimeException 一族不受编译检查，其余 Exception 子类是受检异常</figcaption></figure>
 
 <p>常见受检异常：<code>IOException</code>、<code>SQLException</code>、<code>ClassNotFoundException</code>、<code>InterruptedException</code>。常见非受检异常：<code>NullPointerException</code>、<code>ArrayIndexOutOfBoundsException</code>、<code>ClassCastException</code>、<code>IllegalArgumentException</code>，以及它的子类 <code>NumberFormatException</code>。</p>
@@ -233,7 +231,7 @@ public class Person {
 <p>堆栈轨迹只告诉你"异常在哪里抛出"，却常常回答不了"这个 null 是谁放进来的"。断点调试就是补上后半句的工具。以 IntelliJ IDEA 为例：在行号左侧单击打上断点（Ctrl+F8），以 Debug 方式启动（Shift+F9），程序停在断点后通过 Debug 窗口查看调用栈（Frames）、当前变量（Variables）和自定义表达式（Watches，或 Alt+F8 打开 Evaluate Expression 临时求值）。单步操作记住四个就够：Step Over（F8，不进入方法）、Step Into（F7，进入方法）、Step Out（Shift+F8，跳出当前方法）、Resume（F9，继续运行到下一个断点）。</p>
 
 <p>四类断点在排查异常时特别有用：<strong>行断点</strong>最常用，用于观察某个时刻的变量状态；<strong>条件断点</strong>可以右键断点填写 Condition，例如 <code>i == 500</code> 或 <code>name == null</code>，避免在循环里连续暂停几百次；<strong>异常断点</strong>在 Run → View Breakpoints（Ctrl+Shift+F8）中添加 Java Exception Breakpoint 并填入异常类名，程序会在异常被抛出的第一现场停下，这是定位空指针最有效的手段；<strong>字段断点</strong>（Watchpoint）则用于监视某个字段被谁修改。</p>
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/02-stack-breakpoint.svg" alt="用断点调试定位异常源头的流程图"><figcaption>图 2：从堆栈轨迹到异常第一现场 —— 用异常断点加调用栈回溯定位谁放进了 null</figcaption></figure>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-10/02-stack-breakpoint.svg" alt="用断点调试定位异常源头的流程图"><figcaption>图 3：从堆栈轨迹到异常第一现场 —— 用异常断点加调用栈回溯定位谁放进了 null</figcaption></figure>
 
 <p>最后是几个实战中反复出现的坑。<strong>不要写空的 catch 块</strong>，<code>catch (Exception e) {}</code> 是最典型的排查灾难，异常被静默吞掉后，你只能看到错误的结果却看不到原因，至少要用日志记录下来。<strong>不要用异常控制正常流程</strong>，创建异常对象时要填充栈轨迹，开销远高于一次普通判断。<strong>捕获后重新抛出要保留原因</strong>，写成 <code>throw new OrderException("下单失败", e)</code> 而不是丢掉 <code>e</code>，否则异常链断裂，排查又从零开始。<strong>区分环境使用手段</strong>：<code>e.printStackTrace()</code> 只适合本地调试，生产环境应当接入 SLF4J + Logback 之类的日志框架，输出上下文并做告警。</p>
 
