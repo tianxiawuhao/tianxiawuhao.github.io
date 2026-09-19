@@ -196,7 +196,7 @@ sed -n '10,20p' app.log
 
 # 5. 在匹配行后面追加一行
 sed -i '/server_name/a\    access_log /var/log/nginx/access.log;' site.conf</code></pre>
-<p>使用 <code>sed</code> 有三条经验值得记住。第一，<strong>先用不带 <code>-i</code> 的方式预览输出，确认无误再原地修改</strong>，因为 <code>-i</code> 会直接覆盖文件，写错正则几乎没有后悔的机会。第二，替换内容里出现 <code>/</code> 时不必一路转义，可以换个分隔符，例如 <code>sed 's#/opt/old#/opt/new#g'</code>，可读性会好很多。第三，Linux 上用的是 GNU sed，<code>-i</code> 后面的备份后缀可以紧跟其后（如 <code>-i.bak</code>）；而 macOS/BSD 的 <code>-i</code> 必须带一个参数，写成 <code>sed -i '' 's/a/b/'</code>。如果脚本要在两种系统上跑，最好显式写出备份后缀来规避差异。</p>
+<p>使用 <code>sed</code> 有三条经验值得记住。第一，<strong>先用不带 <code>-i</code> 的方式预览输出，确认无误再原地修改</strong>，因为 <code>-i</code> 会直接覆盖文件，写错正则几乎没有后悔的机会。第二，替换内容里出现 <code>/</code> 时不必一路转义，可以换个分隔符，例如 <code>sed 's#/opt/old#/opt/new#g'</code>，可读性会好很多。第三，Linux 上用的是 GNU sed，<code>-i</code> 后面的备份后缀可以紧跟其后（如 <code>-i.bak</code>）。而 macOS/BSD 的 <code>-i</code> 必须带一个参数，写成 <code>sed -i '' 's/a/b/'</code>。如果脚本要在两种系统上跑，最好显式写出备份后缀来规避差异。</p>
 
 <h2>五、awk：按字段筛选、计算与统计</h2>
 <p><code>awk</code> 的名字来自三位创造者 Alfred Aho、Peter Weinberger 和 Brian Kernighan 的姓氏首字母。它每次读一行，把行切成若干字段：<code>$1</code> 是第一列、<code>$2</code> 是第二列，<code>$0</code> 代表整行。两个内置变量必须记住：<code>NF</code> 是当前行的字段总数，<code>NR</code> 是当前处理到第几行。默认分隔符是空白，用 <code>FS</code> 可以修改（在 <code>BEGIN</code> 里设置）。</p>
@@ -222,11 +222,11 @@ awk 'BEGIN {OFS=","} {print $1, $7, $9}' access.log</code></pre>
 <li><strong>Windows 换行导致匹配不上</strong>：文件里每行结尾是 <code>\r\n</code>，<code>'error$'</code> 就永远匹配不到。可以先用 <code>cat -A app.log | head</code> 观察行尾是否有 <code>^M</code>，再用 <code>sed -i 's/\r$//' app.log</code> 把 <code>\r</code> 去掉。</li>
 <li><strong>忘记引号，正则被 shell 抢先展开</strong>：模式里含 <code>*</code>、<code>?</code>、<code>$</code> 时一律用单引号包住，例如 <code>grep 'ERROR.*timeout'</code>。用双引号会被 shell 先做变量替换和路径展开，结果往往不是你想要的。</li>
 <li><strong><code>grep</code> 卡住不返回</strong>：对正在被写入的文件递归搜索大目录，或把 <code>tail -f</code> 的输出通过管道交给 grep 时，命令会一直等待新内容。排查前先确认目标范围，必要时用 <code>timeout 10 grep ...</code> 给自己加一道保险。</li>
-<li><strong>直接改生产配置文件</strong>：<code>sed -i</code> 之前先备份，或者先输出到新文件再比对，例如 <code>sed 's/a/b/g' old.conf &gt; new.conf &amp;&amp; diff old.conf new.conf</code>。批量改完记得让服务重新加载配置，不要想当然地认为进程已经生效。</li>
+<li><strong>直接改生产配置文件</strong>：<code>sed -i</code> 之前先备份，或者先输出到新文件再比对。例如 <code>sed 's/a/b/g' old.conf &gt; new.conf &amp;&amp; diff old.conf new.conf</code>。批量改完记得让服务重新加载配置，不要想当然地认为进程已经生效。</li>
 </ul>
 
 <h2>七、小结</h2>
-<p>这一章的核心只有一句话：<strong>grep 挑行、sed 改行、awk 拆列</strong>。围绕这个分工，记住三组关键参数就足够应付日常排查。<code>grep</code> 方面是 <code>-i -n -v -c -r -A/-B/-C</code> 与退出码 0/1/2；<code>sed</code> 方面是 <code>s/正则/替换/g</code>、<code>d</code>、<code>-n 'x,yp'</code>，以及改文件前先预览的习惯；<code>awk</code> 方面是 <code>$1/$0</code>、<code>NF</code>、<code>NR</code>、<code>-F</code> 和 <code>BEGIN/END</code>。真正拉开差距的不是记住更多参数，而是把三者串成管道。先用 <code>grep</code> 缩小范围，再用 <code>awk</code> 抽列和统计，最后用 <code>sort | uniq -c | sort -rn</code> 排序取前几名，一条命令就能回答“哪个接口最慢、哪个 IP 打得最多”这类问题。建议在自己的测试环境里找一份真实日志，把本章示例逐个跑一遍，再改写成适合自己项目的版本。</p>
+<p>这一章的核心只有一句话：<strong>grep 挑行、sed 改行、awk 拆列</strong>。围绕这个分工，记住三组关键参数就足够应付日常排查。<code>grep</code> 方面是 <code>-i -n -v -c -r -A/-B/-C</code> 与退出码 0/1/2。<code>sed</code> 方面是 <code>s/正则/替换/g</code>、<code>d</code>、<code>-n 'x,yp'</code>，以及改文件前先预览的习惯。<code>awk</code> 方面是 <code>$1/$0</code>、<code>NF</code>、<code>NR</code>、<code>-F</code> 和 <code>BEGIN/END</code>。真正拉开差距的不是记住更多参数，而是把三者串成管道。先用 <code>grep</code> 缩小范围，再用 <code>awk</code> 抽列和统计，最后用 <code>sort | uniq -c | sort -rn</code> 排序取前几名，一条命令就能回答“哪个接口最慢、哪个 IP 打得最多”这类问题。建议在自己的测试环境里找一份真实日志，把本章示例逐个跑一遍，再改写成适合自己项目的版本。</p>
           </article>
   <!-- Footer -->
   <footer>

@@ -132,7 +132,7 @@
 
 <h2>一、Shell 脚本的最小可用骨架</h2>
 
-<p>Shell 脚本的本质，就是把平时逐条敲的命令存成文件、按顺序执行。第一行是 shebang，告诉系统用哪个解释器；接着用 <code>set -euo pipefail</code> 把三种常见事故变成显式失败：命令出错就退出（<code>-e</code>）、用到未定义变量就报错（<code>-u</code>）、管道中任一环失败整条管道算失败（<code>pipefail</code>）。生产脚本不加这三个开关，最容易出现“脚本返回 0，其实什么也没干”的假成功。</p>
+<p>Shell 脚本的本质，就是把平时逐条敲的命令存成文件、按顺序执行。第一行是 shebang，告诉系统用哪个解释器；接着用 <code>set -euo pipefail</code> 把三种常见事故变成显式失败。命令出错就退出（<code>-e</code>），用到未定义变量就报错（<code>-u</code>），管道中任一环失败则整条管道算失败（<code>pipefail</code>）。生产脚本不加这三个开关，最容易出现“脚本返回 0，其实什么也没干”的假成功。</p>
 
 <p>变量的规则只有两条，却常被忽略：赋值时等号两边<strong>不能有空格</strong>（<code>A=1</code> 对，<code>A = 1</code> 会被当成执行命令 <code>A</code>）；引用时尽量写成 <code>"${VAR}"</code>，因为 <code>$VAR</code> 遇空格会断词。<code>$(命令)</code> 取命令输出，位置参数 <code>$1</code> 是第一个参数、<code>$#</code> 是参数个数、<code>$0</code> 是脚本名。</p>
 
@@ -158,7 +158,7 @@ echo "环境=${ENV_NAME} 日志目录=${LOG_DIR} 保留=${KEEP_DAYS} 天 日期=
 
 <h2>二、流程控制与函数</h2>
 
-<p>判断条件用 <code>if</code>，字符串和文件比较靠 <code>[ ]</code>（或 bash 增强版 <code>[[ ]]</code>）；多分支用 <code>case</code> 比一长串 <code>elif</code> 清楚；遍历用 <code>for</code>，逐行读取文件用 <code>while read</code>。这里有个容易忽略的点：<code>[ ]</code> 是命令，所以方括号内侧必须有空格，<code>[ -d "$dir" ]</code> 才对。</p>
+<p>判断条件用 <code>if</code>，字符串和文件比较靠 <code>[ ]</code>（或 bash 增强版 <code>[[ ]]</code>）。多分支用 <code>case</code> 比一长串 <code>elif</code> 清楚；遍历用 <code>for</code>，逐行读取文件用 <code>while read</code>。这里有个容易忽略的点：<code>[ ]</code> 是命令，所以方括号内侧必须有空格，<code>[ -d "$dir" ]</code> 才对。</p>
 
 <p>遍历文件时有一个经典反例：<code>for f in $(ls)</code> 会把带空格的文件名拆成两段。正确写法是 <code>for f in "$LOG_DIR"/*.log</code>，或者更稳妥地逐行读取 <code>while IFS= read -r line; do ...; done &lt; list.txt</code>。其中 <code>IFS=</code> 保证行首行尾的空格不被吃掉，<code>-r</code> 保证反斜杠不被解释。</p>
 
@@ -197,7 +197,7 @@ esac</code></pre>
 
 <p>crond 是 Linux 上的定时任务守护进程，每分钟醒来一次，检查有没有到点的任务。任务分两类：用户级任务用 <code>crontab -e</code> 编辑，文件实际存在 <code>/var/spool/cron/用户名</code>；系统级任务写在 <code>/etc/crontab</code> 或 <code>/etc/cron.d/</code> 下。两者的区别是系统级每行<strong>多一个用户名字段</strong>。</p>
 
-<p>日常管理只需要四个选项：<code>crontab -l</code> 列出任务、<code>crontab -e</code> 编辑任务、<code>crontab -r</code> 删除全部任务、<code>crontab -u 用户名 -e</code> 由 root 代管他人任务。谁能使用 crontab 由两个白名单/黑名单文件决定：<code>/etc/cron.allow</code> 里列出的用户才允许使用，<code>/etc/cron.deny</code> 里列出的用户被禁止。两者同时存在时以 allow 为准，都不存在时默认只有 root 能用。此外，<code>/etc/cron.daily</code>、<code>/etc/cron.hourly</code> 这些目录是靠 <code>run-parts</code> 批量执行的。它只运行文件名中不含点的可执行文件，所以放进去的脚本不要写成 <code>clean.sh</code>。</p>
+<p>日常管理只需要四个选项。<code>crontab -l</code> 列出任务、<code>crontab -e</code> 编辑任务、<code>crontab -r</code> 删除全部任务、<code>crontab -u 用户名 -e</code> 由 root 代管他人任务。谁能使用 crontab 由两个白名单/黑名单文件决定：<code>/etc/cron.allow</code> 里列出的用户才允许使用，<code>/etc/cron.deny</code> 里列出的用户被禁止。两者同时存在时以 allow 为准，都不存在时默认只有 root 能用。此外，<code>/etc/cron.daily</code>、<code>/etc/cron.hourly</code> 这些目录是靠 <code>run-parts</code> 批量执行的。它只运行文件名中不含点的可执行文件，所以放进去的脚本不要写成 <code>clean.sh</code>。</p>
 
 <p>用户级 crontab 每行六个字段：<code>分 时 日 月 周 命令</code>。分钟 0–59，小时 0–23，日 1–31，月 1–12，星期 0–7（0 和 7 都表示周日）。五个时间字段支持四种写法：<code>*</code> 任意值、<code>1,15</code> 列表、<code>8-11</code> 范围、<code>*/10</code> 步长（每 10 分钟）。另外，星期和日两个字段是“或”的关系：写了“4 号”又写了“周一”，则 4 号和每周一都会执行，这是新手最常误判的一条规则。</p>
 
@@ -241,13 +241,13 @@ echo "$(date '+%F %T') 清理完成，${LOG_DIR} 保留最近 ${KEEP_DAYS} 天"<
   <li><strong>手动能跑、cron 不跑</strong>：九成是环境变量。cron 不加载 <code>/etc/profile</code>、<code>~/.bashrc</code>，PATH 只有系统默认值。解法是在脚本里用绝对路径；需要 Java 环境时，显式 <code>source /etc/profile</code>，或直接在脚本里写死 <code>export JAVA_HOME=/usr/local/jdk</code>。</li>
   <li><strong>命令里有 <code>%</code></strong>：crontab 把未转义的 <code>%</code> 当换行符，<code>date '+%F'</code> 会写坏任务。要写成 <code>date '+\%F'</code>，或者把逻辑放进脚本、任务行只调用脚本。</li>
   <li><strong>输出不收口</strong>：不重定向就会收到一堆 cron 邮件。习惯写法是 <code>&gt;/dev/null 2&gt;&amp;1</code>，需要留痕时改成 <code>&gt;&gt; /var/log/xxx.log 2&gt;&amp;1</code>。</li>
-  <li><strong>任务不生效</strong>：确认 crond 在运行（<code>systemctl status crond</code>），确认 crontab 文件名与用户一致（如 <code>/var/spool/cron/root</code> 要有结尾换行）。同时确认 <code>/etc/cron.deny</code> 没有把自己挡在外面。日志在 <code>/var/log/cron</code>，用 <code>tail -f /var/log/cron</code> 边等边看最直接。</li>
+  <li><strong>任务不生效</strong>：确认 crond 在运行（<code>systemctl status crond</code>）。再确认 crontab 文件名与用户一致（如 <code>/var/spool/cron/root</code> 要有结尾换行），同时确认 <code>/etc/cron.deny</code> 没有把自己挡在外面。日志在 <code>/var/log/cron</code>，用 <code>tail -f /var/log/cron</code> 边等边看最直接。</li>
   <li><strong>别乱按</strong>：<code>crontab -r</code> 会删掉当前用户的<em>全部</em>任务且没有回收站，它和 <code>crontab -e</code> 在键盘上只差一个键。删之前先执行 <code>crontab -l &gt; ~/cron.bak</code>。</li>
 </ul>
 
 <p>最后补一条排查套路。搞不清是脚本问题还是 cron 问题时，把任务行临时换成 <code>* * * * * date &gt;&gt; /tmp/cron-test.log</code> 观察一分钟。日志出现说明 crond 正常，问题在脚本或环境变量；日志不出现，就要去看 <code>/var/log/cron</code> 和 crond 进程本身。crond 每分钟检查一次任务表，用 <code>crontab -e</code> 新建的任务通常一分钟内就会生效，不需要重启服务。</p>
 
-<p>小结：一个靠谱的自动化任务由三部分组成。脚本本身要“失败得响亮”，也就是 <code>set -euo pipefail</code>、参数校验和文件锁；任务行要“说得清楚”，即绝对路径与明确的重定向；时间字段要“想明白边界”，注意星期与日的或关系和 <code>*/n</code> 的实际含义。掌握这几条，日志清理、定时备份、健康巡检这类工作就可以彻底交给机器，只需在出问题时看一眼日志。下一章会把这套脚本能力用到容器与镜像的构建流程里。</p>
+<p>小结：一个靠谱的自动化任务由三部分组成。脚本本身要“失败得响亮”，也就是 <code>set -euo pipefail</code>、参数校验和文件锁。任务行要“说得清楚”，即绝对路径与明确的重定向。时间字段要“想明白边界”，注意星期与日的或关系和 <code>*/n</code> 的实际含义。掌握这几条，日志清理、定时备份、健康巡检这类工作就可以彻底交给机器，只需在出问题时看一眼日志。下一章会把这套脚本能力用到容器与镜像的构建流程里。</p>
           </article>
   <!-- Footer -->
   <footer>

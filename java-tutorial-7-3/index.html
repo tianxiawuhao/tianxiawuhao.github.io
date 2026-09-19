@@ -173,7 +173,7 @@ top -Hp 12345</code></pre>
 done</code></pre>
 <p>这比反复手工敲命令更可靠。字段也可以按需裁剪，<code>-o</code> 后跟 <code>pid,ppid,%cpu,%mem,rss,stat,etime,cmd</code> 这类列表即可；输出列太多时反而看不清重点。</p>
 <h2>三、内存与容器：cgroup 限制和 /proc 的坑</h2>
-<p>容器场景下有一类看起来很反常的现象：明明 <code>docker run -m 512m</code> 限制了内存，容器里执行 <code>free</code> 和 <code>top</code> 显示的却是宿主机的内存；JVM 也按宿主机的核数与内存来计算默认堆大小和 GC 线程数，结果被 cgroup 直接 OOM Kill。</p>
+<p>容器场景下有一类看起来很反常的现象。明明 <code>docker run -m 512m</code> 限制了内存，容器里执行 <code>free</code> 和 <code>top</code> 显示的却是宿主机的内存。JVM 也按宿主机的核数与内存来计算默认堆大小和 GC 线程数，结果被 cgroup 直接 OOM Kill。</p>
 <p>根源在于 Linux 的 <code>/proc</code> 文件系统并不知道 cgroup 的存在，它按宿主机的真实资源汇报。可以在 cgroup v1 的文件系统里核对容器限额：</p>
 <pre><code class="language-bash"># cgroup v1：查看 CPU 限额（quota / period 单位均为微秒）
 cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us    # -1 表示不限制
@@ -187,7 +187,7 @@ grep -E 'nr_throttled|throttled_time' /sys/fs/cgroup/cpu/cpu.stat
 
 # JVM 侧确认它"看到"了多少内存与核数
 java -XX:+PrintFlagsFinal -version | grep -Ei 'maxheapsize|activeprocessorcount|maxram'</code></pre>
-<p>要注意 cgroup v2 的路径与文件已经改名（配额在 <code>cpu.max</code>，格式是 <code>quota period</code>），照抄 v1 的路径会找不到文件。修复思路是让 JVM 而非宿主机数据说话：升级到具备容器感知能力的 JDK 后，用 <code>-XX:MaxRAMPercentage</code> 按容器限额配置堆，用 <code>-XX:ActiveProcessorCount</code> 显式指定核数。这样线程池就不会按宿主机的 64 核去开线程。生产环境也可以在容器内挂载 lxcfs，让 <code>/proc/meminfo</code>、<code>/proc/cpuinfo</code> 返回容器视角的数据。<code>free -h</code> 与 <code>top</code> 只用于看趋势。判断内存是否泄漏，仍应回到 <code>jstat -gcutil</code>、<code>jcmd &lt;pid&gt; GC.heap_info</code> 和堆转储。</p>
+<p>要注意 cgroup v2 的路径与文件已经改名（配额在 <code>cpu.max</code>，格式是 <code>quota period</code>），照抄 v1 的路径会找不到文件。修复思路是让 JVM 而非宿主机数据说话。升级到具备容器感知能力的 JDK 后，用 <code>-XX:MaxRAMPercentage</code> 按容器限额配置堆，用 <code>-XX:ActiveProcessorCount</code> 显式指定核数。这样线程池就不会按宿主机的 64 核去开线程。生产环境也可以在容器内挂载 lxcfs，让 <code>/proc/meminfo</code>、<code>/proc/cpuinfo</code> 返回容器视角的数据。<code>free -h</code> 与 <code>top</code> 只用于看趋势。判断内存是否泄漏，仍应回到 <code>jstat -gcutil</code>、<code>jcmd &lt;pid&gt; GC.heap_info</code> 和堆转储。</p>
 
 <p>这里要先澄清一个常见误解：进程占用内存高，并不等于 JVM 堆大。<code>ps aux</code> 里的 <code>RSS</code> 包含了堆、元空间、线程栈、直接内存以及 mmap 映射的文件页，其中共享内存还可能被重复计算。因此它只能作为趋势参考，判断是否真的内存泄漏，要看老年代在多次 Full GC 后是否仍持续上涨。</p>
 <p>另一条经验是：把“现象”和“容量”分开看。容器被 OOM Kill 时，先确认是达到了 cgroup 内存上限，还是宿主机整体内存不足触发了内核 OOM Killer。<code>memory.max</code> 与 <code>memory.events</code> 里的 <code>oom_kill</code> 计数可以看到前者的证据。两者处理方式完全不同：前者要调 JVM 堆参数，后者要查同机上其他进程。若现场还在，先用 <code>jcmd &lt;pid&gt; GC.heap_info</code> 看堆使用情况。需要留证据时用 <code>jmap -dump:live,format=b,file=/tmp/heap.hprof &lt;pid&gt;</code> 导出堆转储，再离线分析。注意 dump 会造成短暂停顿，生成的文件也可能很大。</p>
@@ -209,7 +209,7 @@ lsof -p 12345 | wc -l</code></pre>
 <p>状态本身就能指出方向。<code>CLOSE_WAIT</code> 大量堆积，说明对端已关闭而本端代码没有关闭连接，是典型的连接泄漏，要去检查 HTTP 客户端是否漏了 close。<code>TIME_WAIT</code> 短时间偏高属于正常的四次挥手回收过程，不必急着改内核参数。<code>SYN_RECV</code> 激增则要警惕 SYN Flood。</p>
 <p>需要抓包分析时，可以用 <code>tcpdump -i eth0 -nn port 8080 -w /tmp/8080.pcap</code> 落盘，再交给 Wireshark 看三次握手与重传。容器里没有这些命令时，最快的办法是用 <code>nsenter -t &lt;容器主进程PID&gt; -n ss -lntp</code> 借用宿主机的工具，进入容器网络命名空间查看。抓包命令会输出原始报文摘要，注意不要在高峰期对高流量网卡做无过滤的抓包，也不要留下包含敏感数据的 pcap 文件。</p>
 
-<p>网络排查还需要区分 TCP 与 UDP、TCP 与 Unix 域套接字。<code>ss -lntup</code> 可以同时看 TCP 与 UDP 的监听，<code>ss -lx</code> 则用于查看本机进程间通信的 Unix 套接字。某些“端口没被占用却连不上”的情况，正是因为客户端连的是 Unix socket。此外，<code>ip a</code> 看网卡地址、<code>ip route</code> 看路由表，比 <code>ifconfig</code>、<code>route</code> 这些旧命令更完整；而 <code>ping</code> 通不代表端口可达，因为 ICMP 与 TCP 走的策略可能不同，防火墙只放行了其中一种。</p>
+<p>网络排查还需要区分 TCP 与 UDP、TCP 与 Unix 域套接字。<code>ss -lntup</code> 可以同时看 TCP 与 UDP 的监听，<code>ss -lx</code> 则用于查看本机进程间通信的 Unix 套接字。某些“端口没被占用却连不上”的情况，正是因为客户端连的是 Unix socket。此外，<code>ip a</code> 看网卡地址、<code>ip route</code> 看路由表，比 <code>ifconfig</code>、<code>route</code> 这些旧命令更完整。<code>ping</code> 通不代表端口可达，因为 ICMP 与 TCP 走的策略可能不同，防火墙只放行了其中一种。</p>
 <p>如果应用是“偶发超时”，重点看重传与队列丢弃。<code>netstat -s</code> 里的重传段数、<code>ss -lnt</code> 输出中 <code>Send-Q</code> 长期非零（监听队列被打满，新连接会被丢弃），都是硬证据。前者通常指向网络链路或对端处理慢；后者说明应用 accept 速度跟不上，需要调大 backlog 或增加工作线程。</p>
 <h2>五、小结</h2>
 <p>性能排查的通用节奏是：用 <code>top</code>、<code>free</code>、<code>df</code>、<code>ss</code> 四板斧判断瓶颈类型，用 <code>ps</code> 与 <code>top -Hp</code> 把问题收敛到进程和线程。接着用 cgroup 文件与 JVM 参数确认容器视角的资源限额，最后用 <code>lsof</code>、<code>tcpdump</code> 处理连接与协议层的疑难。请记住三条最容易踩的坑。<code>ps -aux</code> 是错误语法；容器里的 <code>/proc</code> 默认汇报宿主机数据，会让 JVM 误判可用资源。<code>CLOSE_WAIT</code> 堆积是代码问题，<code>TIME_WAIT</code> 偏多通常无需干预。把这个顺序固化成清单，下次告警时就不必再从零猜测。</p>

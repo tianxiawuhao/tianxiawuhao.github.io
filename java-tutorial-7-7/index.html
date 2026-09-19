@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们把一个 Java 应用装进镜像跑了起来。但真实项目很少只有一个容器：Spring Boot 后端要连 MySQL、用 Redis 做缓存，前面还得有 Nginx 做反向代理和静态资源。如果继续手工敲 <code>docker run</code>，很快会撞上三件事：命令参数越来越长、散落在聊天记录里；容器之间的网络要手动建、手动连；换一台机器部署时所有命令得重拼一遍，还容易漏掉某个环境变量。Compose 正是为解决这件事而生：用一份 YAML 声明“我要哪些服务、它们怎么组网、数据放哪、谁先启动”，再用一条命令把整套环境拉起来。本章面向已经会写 Dockerfile、会用 <code>docker run</code> 的读者，讲清 Compose 的定位、文件怎么写、常用命令、四个最容易踩的坑，以及它和 Kubernetes 的边界；末尾顺带把镜像分发到私有仓库这条链路补完。</p>
+<p>上一章我们把一个 Java 应用装进镜像跑了起来。但真实项目很少只有一个容器：Spring Boot 后端要连 MySQL、用 Redis 做缓存，前面还得有 Nginx 做反向代理和静态资源。如果继续手工敲 <code>docker run</code>，很快会撞上三件事：命令参数越来越长、散落在聊天记录里；容器之间的网络要手动建、手动连；换一台机器部署时所有命令得重拼一遍，还容易漏掉某个环境变量。Compose 正是为解决这件事而生：用一份 YAML 声明“我要哪些服务、它们怎么组网、数据放哪、谁先启动”，再用一条命令把整套环境拉起来。本章面向已经会写 Dockerfile、会用 <code>docker run</code> 的读者。内容上会讲清 Compose 的定位、文件怎么写、常用命令、四个最容易踩的坑，以及它和 Kubernetes 的边界；末尾顺带把镜像分发到私有仓库这条链路补完。</p>
 
 <h2>一、Compose 的定位：单机多容器编排</h2>
 
-<p>所谓"编排"（orchestration），指的不是"把容器跑起来"，而是描述一组容器之间的<strong>关系</strong>：谁依赖谁、怎么互相发现、副本要几个、挂了要不要重启、发布时怎么替换。这个概念在容器生态里出现得很早——最早叫 Fig 的项目就允许在配置文件里定义各容器的副本数等编排参数，被 Docker 公司收购后改名为 Compose，并在很长时间里是 Docker 生态中最受欢迎的项目之一。</p>
+<p>所谓“编排”（orchestration），指的不是“把容器跑起来”，而是描述一组容器之间的<strong>关系</strong>：谁依赖谁、怎么互相发现、副本要几个、挂了要不要重启、发布时怎么替换。这个概念在容器生态里出现得很早。最早叫 Fig 的项目就允许在配置文件里定义各容器的副本数等编排参数，被 Docker 公司收购后改名为 Compose，并在很长时间里是 Docker 生态中最受欢迎的项目之一。</p>
 
 <p>但必须先把 Compose 的<strong>范围</strong>讲清楚：它管理的是<strong>一个 Docker 环境</strong>，通常就是一台宿主机（也可以是 <code>docker context</code> 指向的远端 Docker）。它不负责跨主机调度、节点故障自愈和滚动升级，那些是 Swarm、Kubernetes 这类集群编排系统的事。判断标准很简单：单机放得下、不需要零停机发布，Compose 就是性价比最高的选择；一旦需要多机容灾或自动扩缩容，就该换 Kubernetes，而不是硬把 Compose 用到集群上。</p>
 
@@ -140,7 +140,7 @@
 
 <h2>二、一份 compose.yaml 是怎么写的</h2>
 
-<p>Compose 文件是声明式的：你描述"最终要什么状态"，而不是"依次执行哪些命令"。下面这份配置是 Java 后端 + MySQL + Redis + Nginx 的最小可用编排，建议先整体读一遍，再逐段看说明。</p>
+<p>Compose 文件是声明式的：你描述“最终要什么状态”，而不是“依次执行哪些命令”。下面这份配置是 Java 后端 + MySQL + Redis + Nginx 的最小可用编排，建议先整体读一遍，再逐段看说明。</p>
 <pre><code class="language-yaml"># compose.yaml
 services:
   mysql:
@@ -272,11 +272,11 @@ docker compose pull &amp;&amp; docker compose up -d</code></pre>
 
 <h2>五、什么时候该上 Kubernetes</h2>
 
-<p>Compose 的边界很清晰：它的世界是单机。而 Kubernetes 提供的是另一层能力——把若干节点组成集群，用 Pod/Deployment 管理副本数与滚动升级，用 Service 做稳定的服务发现与负载均衡，用探针在实例不健康时自动剔除重建。Kubernetes 之所以成为容器编排的事实标准，正是因为它把"编排"从"定义一组容器的关系"提升到了"定义整个集群期望状态"的层次；Compose+Swarm 的组合则止步于更轻量的场景。</p>
+<p>Compose 的边界很清晰：它的世界是单机。而 Kubernetes 提供的是另一层能力。它把若干节点组成集群，用 Pod/Deployment 管理副本数与滚动升级，用 Service 做稳定的服务发现与负载均衡，用探针在实例不健康时自动剔除重建。Kubernetes 之所以成为容器编排的事实标准，正是因为它把“编排”从“定义一组容器的关系”提升到了“定义整个集群期望状态”的层次；Compose+Swarm 的组合则止步于更轻量的场景。</p>
 
-<p>落地建议：个人项目、测试环境、单机部署的小型服务，用 Compose 就够了，一份 YAML 交给运维即可；当出现"要部署到三台以上机器""发布时不能停服""流量涨了要自动扩容"这类需求时，才值得引入 Kubernetes 的复杂度。不要为了用而用。</p>
+<p>落地建议：个人项目、测试环境、单机部署的小型服务，用 Compose 就够了，一份 YAML 交给运维即可；当出现“要部署到三台以上机器”“发布时不能停服”“流量涨了要自动扩容”这类需求时，才值得引入 Kubernetes 的复杂度。不要为了用而用。</p>
 
-<p>小结：Compose 用一份声明式 YAML 解决了单机多容器的组网、依赖顺序、数据持久化和一键启停，核心机制是<strong>服务名即 DNS 名</strong>与<strong>项目级隔离的默认网络</strong>；日常用 <code>docker compose up -d</code> / <code>ps</code> / <code>logs</code> / <code>exec</code> / <code>down</code> 五条命令即可，注意 V2 的命令是 <code>docker compose</code>。最容易踩的坑是 <code>depends_on</code> 只保证启动顺序，要靠 <code>healthcheck</code> 加 <code>condition: service_healthy</code> 才能真正等待就绪；<code>down -v</code> 会删数据卷；私仓镜像必须带完整仓库前缀并让每个节点信任它。把它当"单机编排"用，它就是最省心的一环；需要多机调度与自愈时，再交给 Kubernetes。</p>
+<p>小结：Compose 用一份声明式 YAML 解决了单机多容器的组网、依赖顺序、数据持久化和一键启停，核心机制是<strong>服务名即 DNS 名</strong>与<strong>项目级隔离的默认网络</strong>；日常用 <code>docker compose up -d</code> / <code>ps</code> / <code>logs</code> / <code>exec</code> / <code>down</code> 五条命令即可，注意 V2 的命令是 <code>docker compose</code>。最容易踩的坑是 <code>depends_on</code> 只保证启动顺序，要靠 <code>healthcheck</code> 加 <code>condition: service_healthy</code> 才能真正等待就绪；<code>down -v</code> 会删数据卷；私仓镜像必须带完整仓库前缀并让每个节点信任它。把它当“单机编排”用，它就是最省心的一环；需要多机调度与自愈时，再交给 Kubernetes。</p>
           </article>
   <!-- Footer -->
   <footer>
