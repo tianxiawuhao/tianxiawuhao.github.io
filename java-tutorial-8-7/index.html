@@ -213,7 +213,7 @@ private static final ThreadLocal&lt;Channel&gt; CHANNEL = ThreadLocal.withInitia
 
 <ul>
 <li><strong>生产者到 Broker</strong>：开事务（<code>txSelect/txCommit/txRollback</code>）或更常用的 confirm 模式。信道进入 confirm 模式后每条消息获得唯一递增 ID，Broker 确认后才回调 ack；未确认的消息可重发。</li>
-<li><strong>Broker 内部</strong>：队列声明为 durable、消息标记为持久化，并且刷盘成功后才算落盘；节点故障要靠复制兜底。这里有一条重要的版本演进：早期的镜像队列（classic mirror queue）自 3.9 起弃用、<strong>4.0 起已被彻底移除</strong>，新部署应改用 Quorum Queue（声明时 <code>x-queue-type: quorum</code>，可用 <code>x-delivery-limit</code> 限制重投次数）或 Streams；非复制的 classic queue 仍受支持。以官方 4.x 文档为准。</li>
+<li><strong>Broker 内部</strong>：队列声明为 durable、消息标记为持久化，并且刷盘成功后才算落盘；节点故障要靠复制兜底。这里有一条重要的版本演进：早期的镜像队列（classic mirror queue）自 3.9 起弃用，<strong>4.0 起已被彻底移除</strong>。新部署应改用 Quorum Queue（声明时 <code>x-queue-type: quorum</code>，可用 <code>x-delivery-limit</code> 限制重投次数）或 Streams。非复制的 classic queue 仍受支持，以官方 4.x 文档为准。</li>
 <li><strong>Broker 到消费者</strong>：关闭 autoAck，业务处理成功后再 <code>basicAck</code>；失败走 <code>basicNack</code> 或直接送死信交换机（DLX）配 TTL 实现延迟队列。</li>
 </ul>
 
@@ -246,7 +246,7 @@ channel.exchangeDeclare("order.dlx", BuiltinExchangeType.DIRECT, true);</code></
 
 <ul>
 <li><strong>CommitLog</strong>：所有消息按到达顺序追加写在一个文件组里，单文件默认 1&nbsp;GB。写入完全顺序，是它高吞吐的根基。</li>
-<li><strong>ConsumeQueue</strong>：每个 Topic 的每个队列一个轻量索引，只记录消息在 CommitLog 中的物理偏移、消息大小和 Tag 的哈希值，条目<strong>定长 20 字节</strong>（8 字节物理偏移 + 4 字节消息长度 + 8 字节 Tag 哈希；5.x 仍是这一结构，以官方文档或实测为准）。所以队列本身几乎不占空间。</li>
+<li><strong>ConsumeQueue</strong>：每个 Topic 的每个队列一个轻量索引，只记录消息在 CommitLog 中的物理偏移、消息大小和 Tag 的哈希值。条目<strong>定长 20 字节</strong>（8 字节物理偏移 + 4 字节消息长度 + 8 字节 Tag 哈希），5.x 仍是这一结构，以官方文档或实测为准。所以队列本身几乎不占空间。</li>
 <li><strong>IndexFile</strong>：按 Message Key 建立的哈希索引，供控制台按业务键查询，结构类似 HashMap。</li>
 </ul>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-7/02-rocketmq-storage.svg" alt="RocketMQ 分层存储结构示意图"><figcaption>图 2：CommitLog 顺序写全量消息，ConsumeQueue 只存 20 字节索引指向它</figcaption></figure>
@@ -274,13 +274,13 @@ SendResult result = producer.send(msg, (queues, m, arg) -&gt; {
 }, "order-1001");
 System.out.println(result.getSendStatus() + " " + result.getMsgId());</code></pre>
 
-<p>顺带说明版本边界：这段用的是 <code>DefaultMQProducer</code> 这套 remoting 客户端，4.x 时代就是经典写法，5.x 依然提供并兼容。RocketMQ 5.x 另外提供了基于 gRPC 与 Proxy 的新一代 Java 客户端（<code>rocketmq-client-java</code>），API 是 builder 风格、消费模型也略有差别；新项目选哪一套建议以官方 5.x 客户端文档为准，不要混用两套客户端。</p>
+<p>顺带说明版本边界：这段用的是 <code>DefaultMQProducer</code> 这套 remoting 客户端，4.x 时代就是经典写法，5.x 依然提供并兼容。RocketMQ 5.x 另外提供了基于 gRPC 与 Proxy 的新一代 Java 客户端（<code>rocketmq-client-java</code>），API 是 builder 风格，消费模型也略有差别。新项目选哪一套建议以官方 5.x 客户端文档为准，不要混用两套客户端。</p>
 
 <h3>3.3 事务消息与定时消息</h3>
 
 <p>RocketMQ 的事务消息采用两阶段思路：先发送半消息（对消费者不可见），执行本地事务，再根据结果提交或回滚；若 Broker 长时间未收到二次确认，会回查生产者的本地事务状态。它的实现绕开了按 Key 查消息，而是复用第一条消息的 Offset 定位状态，因此半消息数量大时会产生较多脏页，需要关注。</p>
 
-<p>定时消息这块的写法随版本变化最大，值得单独记。4.x 只支持固定延迟级别，不能指定任意时刻：档位表由 broker 的 <code>messageDelayLevel</code> 决定，常见默认是 <code>1s 5s 10s 30s 1m … 1h 2h</code> 共 18 级，所以“能延迟多久”是配置出来的，级别个数也随版本和部署而变——有资料把 5.x 的默认级别数写作 24 级，这里<strong>以官方文档与实际 broker 配置为准</strong>，不要照抄常量。5.x 新增了真正的定时消息（timer message）：直接给出绝对投递时间即可，秒级精度，官方 Delay Message 文档说明默认可设的最大时间范围为 24 小时（不可调）。固定级别写法仍然保留，两者按场景选。</p>
+<p>定时消息这块的写法随版本变化最大，值得单独记。4.x 只支持固定延迟级别，不能指定任意时刻。档位表由 broker 的 <code>messageDelayLevel</code> 决定，常见默认是 <code>1s 5s 10s 30s 1m … 1h 2h</code> 共 18 级。所以“能延迟多久”是配置出来的，级别个数也随版本和部署而变——有资料把 5.x 的默认级别数写作 24 级，这里<strong>以官方文档与实际 broker 配置为准</strong>，不要照抄常量。5.x 新增了真正的定时消息（timer message）：直接给出绝对投递时间即可，秒级精度，官方 Delay Message 文档说明默认可设的最大时间范围为 24 小时（不可调）。固定级别写法仍然保留，两者按场景选。</p>
 
 <pre><code class="language-java">// 5.x 定时消息：给出绝对投递时间（秒级精度，默认最长 24 小时，以官方为准）
 Message timer = new Message("OrderTopic", "PAY", body);
@@ -312,7 +312,7 @@ delayed.setDelayTimeLevel(3);   // 第 3 档，实际延迟多久取决于 broke
 <li><strong>高吞吐源于分层存储</strong>：RocketMQ 的高吞吐来自 CommitLog 顺序写加 ConsumeQueue 轻量索引的分层存储，代价是随机读，顺序消息要靠队列选择器加单队列单线程消费。</li>
 <li><strong>选型没有银弹</strong>：按业务对吞吐、延迟、可靠性和堆积能力的要求取舍。</li>
 </ul>
-<p>最后提醒一句：本章不少数字与语义都是版本敏感的——RabbitMQ 4.x 移除了 classic mirror queue 与 <code>global</code> QoS 语义，RocketMQ 的延迟级别数量、定时消息能力在 4.x 与 5.x 之间也有差别。上线前请以所用版本的官方文档和实际 broker 配置为准，不要照搬博客里的常量。</p>
+<p>最后提醒一句：本章不少数字与语义都是版本敏感的。RabbitMQ 4.x 移除了 classic mirror queue 与 <code>global</code> QoS 语义，RocketMQ 的延迟级别数量、定时消息能力在 4.x 与 5.x 之间也有差别。上线前请以所用版本的官方文档和实际 broker 配置为准，不要照搬博客里的常量。</p>
 <p>下一章继续看消息中间件在真实项目中的落地与排障。</p>
           
           <nav class="post-pn">

@@ -150,7 +150,7 @@
 
 <p>还有两个常见错误说法要纠正。一是“CAP 只适用于 NoSQL”——分库分表后的关系型数据库同样受它约束。二是“Spring Cloud 满足 AP，Dubbo 和 ZooKeeper 满足 CP”——Dubbo 是 RPC 框架，不定义一致性语义。CP/AP 形容的是它依赖的注册中心：Eureka 走 AP；ZooKeeper 走 CP，靠 ZAB 多数派写入，脑裂时少数派拒绝服务；Nacos 则可按实例类型切换。</p>
 
-<p><strong>旧答案 → 现状：注册中心的选型变了。</strong>旧笔记默认“Eureka 是 Spring Cloud 标配”，这在今天要加限定。Eureka 1.x 早已进入维护模式，2.x 未开源，Spring Cloud 2020 之后的新项目更常选 Nacos（注册与配置一体、支持 AP/CP 切换、有中文社区与国产化落地）或 Consul（多数据中心、健康检查成熟）。Eureka 仍是自建 AP 注册中心的有效选项，尤其是已有大量遗留服务时，但面试答“为什么用 Eureka”要能说出 AP 取舍，而不是“Spring Cloud 自带”。</p>
+<p><strong>旧答案 → 现状：注册中心的选型变了。</strong>旧笔记默认“Eureka 是 Spring Cloud 标配”，这在今天要加限定。Eureka 1.x 早已进入维护模式，2.x 未开源。Spring Cloud 2020 之后的新项目更常选 Nacos（注册与配置一体、支持 AP/CP 切换、有中文社区与国产化落地）或 Consul（多数据中心、健康检查成熟）。Eureka 仍是自建 AP 注册中心的有效选项，尤其是已有大量遗留服务时，但面试答“为什么用 Eureka”要能说出 AP 取舍，而不是“Spring Cloud 自带”。</p>
 
 <h2>二、分布式事务：五种方案怎么选</h2>
 
@@ -180,7 +180,14 @@
 
 <p>选择上可以记一句话：参与者少、要求强一致、并发低，用 2PC；业务能定义补偿动作、要求较高性能，用 TCC；只想解决“本地写库 + 发消息”的一致性问题，优先本地消息表或 MQ 事务消息；流程特别长，用 Saga。</p>
 
-<p><strong>旧答案 → 现状：落地时先看 Seata 的四种模式边界。</strong>旧笔记往往只说“用 Seata 解决分布式事务”，但 Seata 本身并不等于某一种方案，它按模式对应上面的模型：<strong>AT 模式</strong>靠 undo log 自动生成反向 SQL，业务无侵入，是默认首选，但要求全局锁与本地事务配合，强一致读场景和高并发写热点下性能会退化；<strong>TCC 模式</strong>即上面的补偿事务，侵入大但可控；<strong>Saga 模式</strong>由状态机引擎驱动长流程，隔离性最弱；<strong>XA 模式</strong>复用数据库 XA，强一致但阻塞。所以准确答法是：短事务、能接受最终一致选 AT；资金、库存这类需要精细控制资源的选 TCC；跨多个系统的长流程选 Saga；并发低又必须强一致才考虑 XA。此外 Seata 的 TC（事务协调者）自身要集群部署，否则它成了新的单点。</p>
+<p><strong>旧答案 → 现状：落地时先看 Seata 的四种模式边界。</strong>旧笔记往往只说“用 Seata 解决分布式事务”，但 Seata 本身并不等于某一种方案，它按模式对应上面的模型。</p>
+<ul>
+<li><strong>AT 模式</strong>：靠 undo log 自动生成反向 SQL，业务无侵入，是默认首选，但要求全局锁与本地事务配合，强一致读场景和高并发写热点下性能会退化。</li>
+<li><strong>TCC 模式</strong>：即上面的补偿事务，侵入大但可控。</li>
+<li><strong>Saga 模式</strong>：由状态机引擎驱动长流程，隔离性最弱。</li>
+<li><strong>XA 模式</strong>：复用数据库 XA，强一致但阻塞。</li>
+</ul>
+<p>所以准确答法是：短事务、能接受最终一致选 AT；资金、库存这类需要精细控制资源的选 TCC；跨多个系统的长流程选 Saga；并发低又必须强一致才考虑 XA。此外 Seata 的 TC（事务协调者）自身要集群部署，否则它成了新的单点。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-9-6/01-distributed-tx.svg" alt="分布式事务五种方案对比"><figcaption>图 1：分布式事务五种方案的一致性、代价与适用场景</figcaption></figure>
 
@@ -260,7 +267,7 @@ public String pay(String orderId) {
     }
 }</code></pre>
 
-<p><strong>旧答案 → 现状：Ribbon 与 Hystrix 都已停更。</strong>旧笔记里“Ribbon 做客户端负载均衡、Hystrix 做熔断”的组合已经不能照答：两者都进入维护模式、不再发新版本，Spring Cloud 2020 起从 Netflix 套件中移除。现状是客户端负载均衡由 <strong>Spring Cloud LoadBalancer</strong> 承担（<code>ReactiveLoadBalancer</code> / <code>BlockingLoadBalancer</code>，支持轮询、随机与自定义策略，配合服务发现的实例列表使用）；熔断降级则由 <strong>Resilience4j</strong> 或 <strong>Sentinel</strong> 承担。Resilience4j 是轻量函数式库，即上面代码里的 <code>CircuitBreaker</code>，适合 Spring Boot 3.x 与 Java 17+；Sentinel 是阿里开源、带控制台和规则动态推送的流量治理组件，限流、熔断、系统自适应保护一体化，规则可视化更强，国内团队用得多。答题时把“组件名字 + 为什么换”一起说，比只报新名字更可信。</p>
+<p><strong>旧答案 → 现状：Ribbon 与 Hystrix 都已停更。</strong>旧笔记里“Ribbon 做客户端负载均衡、Hystrix 做熔断”的组合已经不能照答：两者都进入维护模式、不再发新版本，Spring Cloud 2020 起从 Netflix 套件中移除。现状是客户端负载均衡由 <strong>Spring Cloud LoadBalancer</strong> 承担（<code>ReactiveLoadBalancer</code> / <code>BlockingLoadBalancer</code>，支持轮询、随机与自定义策略），配合服务发现的实例列表使用。熔断降级则由 <strong>Resilience4j</strong> 或 <strong>Sentinel</strong> 承担。Resilience4j 是轻量函数式库，即上面代码里的 <code>CircuitBreaker</code>，适合 Spring Boot 3.x 与 Java 17+。Sentinel 是阿里开源、带控制台和规则动态推送的流量治理组件，限流、熔断、系统自适应保护一体化，规则可视化更强，国内团队用得多。答题时把“组件名字 + 为什么换”一起说，比只报新名字更可信。</p>
 
 <p>这一块最常见的坑有三个。一是熔断只统计异常、不统计慢调用，下游“不报错但很慢”时线程池照样被拖垮，应该同时配置慢调用比例阈值。二是失败后立刻重试，重试流量又把刚恢复的服务打挂，形成重试风暴，所以重试要加退避和次数上限。三是降级逻辑没有开关，线上出故障时改不了行为。</p>
 
@@ -268,7 +275,12 @@ public String pay(String orderId) {
 
 <p>分布式章节常被追问到缓存层，这里把旧笔记里几处过时表述一并修正。<strong>主从复制的命令改了名</strong>：<code>SLAVEOF</code> 与 <code>SLAVE OF</code> 从 Redis 5.0 起被 <code>REPLICAOF</code> 取代，配置项也从 <code>slaveof</code> 改成 <code>replicaof</code>，<code>slave-read-only</code> 改成 <code>replica-read-only</code>。旧名字在 5.x 尚可兼容，但新版本里应统一写 <code>REPLICAOF</code>，答题时说“主从/副本”而不是“从节点 slave”也更符合当前文档口径。</p>
 
-<p><strong>持久化已经不只是“RDB 或 AOF 二选一”</strong>。Redis 4.0 引入了<strong>混合持久化</strong>（配置 <code>aof-use-rdb-preamble yes</code>，4.0 起默认开启）：AOF 重写时先写一份 RDB 格式的全量快照作为文件头，后续增量命令再以 AOF 格式追加。这样重启时先加载紧凑的 RDB 头、再重放少量增量命令，兼顾了 RDB 的恢复速度与 AOF 的数据安全性。现代表述应是：RDB 是某一时刻的全量快照，文件小、恢复快，但两次快照之间的数据可能丢失；AOF 按写命令追加（<code>appendfsync</code> 可选 always / everysec / no），数据更安全但文件更大、恢复更慢；生产上通常两者都开，并让混合持久化生效。</p>
+<p><strong>持久化已经不只是“RDB 或 AOF 二选一”</strong>。Redis 4.0 引入了<strong>混合持久化</strong>（配置 <code>aof-use-rdb-preamble yes</code>，4.0 起默认开启）：AOF 重写时先写一份 RDB 格式的全量快照作为文件头，后续增量命令再以 AOF 格式追加。这样重启时先加载紧凑的 RDB 头、再重放少量增量命令，兼顾了 RDB 的恢复速度与 AOF 的数据安全性。现代表述应是：</p>
+<ul>
+<li><strong>RDB</strong>：某一时刻的全量快照，文件小、恢复快，但两次快照之间的数据可能丢失。</li>
+<li><strong>AOF</strong>：按写命令追加（<code>appendfsync</code> 可选 always / everysec / no），数据更安全但文件更大、恢复更慢。</li>
+</ul>
+<p>生产上通常两者都开，并让混合持久化生效。</p>
 
 <p><strong>集群与高可用有两条路线，别混为一谈</strong>。哨兵（Sentinel）解决的是<strong>高可用</strong>：监控主节点、主观/客观下线判定、自动故障转移与通知，数据仍然只有一份、容量受单机内存限制，客户端要支持哨兵寻址（Redis 2.8 起提供，当前版本特性稳定）。Cluster 解决的是<strong>分片</strong>：把数据按 16384 个槽分到多个主节点，每个主节点可挂副本，支持在线扩缩容与槽迁移（Redis 3.0 引入，5.0 起 <code>redis-cli --cluster</code> 等工具成熟，7.x 主要是性能与协议层面的演进）。所以“数据量大选 Cluster、只要故障自动切换选 Sentinel”是准确的答法；两者也可以组合，但不要答成“哨兵能分片”。另外 Redis 7.x 的淘汰策略、<code>IO 多线程</code>、<code>Function</code> 等属于版本演进细节，回答时给区间即可，不必背小版本号。</p>
 
