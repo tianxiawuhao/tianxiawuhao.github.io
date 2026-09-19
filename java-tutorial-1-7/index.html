@@ -128,7 +128,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章把类、对象、封装和继承串了起来。Java 的类型系统还有三块拼图没有讲到。<strong>接口</strong>把“能做什么”从“怎么做”里剥出来，是面向接口编程的起点；<strong>内部类</strong>让一个类可以藏在另一个类里，写回调和事件监听时几乎绕不开；<strong>枚举</strong>用类型安全的方式取代满天飞的 <code>static final int</code> 常量。本章面向已经会写类与对象的读者，把这三块一次讲透，并给出可以照抄的代码模板。</p>
+<p>上一章把类、对象、封装和继承串了起来。Java 的类型系统还有三块拼图没有讲到。<strong>接口</strong>把“能做什么”从“怎么做”里剥出来，是面向接口编程的起点；<strong>内部类</strong>让一个类可以藏在另一个类里，写回调和事件监听时几乎绕不开；<strong>枚举</strong>用类型安全的方式取代满天飞的 <code>static final int</code> 常量。本章以 <strong>Java 17/21</strong> 为基线（Java 8 仍在广泛使用但已非现行基线），面向已经会写类与对象的读者，把这三块一次讲透，并给出可以照抄的代码模板；凡涉及版本差异的地方都会标出准确边界。</p>
 
 <h2>一、接口：一份对外承诺的契约</h2>
 
@@ -157,7 +157,7 @@ class Order implements Payable {
     }
 }</code></pre>
 
-<p>这里有两个容易记混的点。Java 8 之前，接口里的方法不能有方法体；接口里的字段不是普通字段，而是<strong>常量</strong>。字段会被编译器自动加上 <code>public static final</code>，因此必须在声明时就赋值，也不能被实现类修改。</p>
+<p>这里有两个容易记混的点。第一，接口里的字段不是普通字段，而是<strong>常量</strong>：编译器会自动补上 <code>public static final</code>，因此必须在声明时赋值，也不能被实现类改写。第二，接口里的方法有一条清晰的版本演进线——<strong>Java 8 之前</strong>，接口只能声明抽象方法（外加常量），任何方法都不能有方法体；<strong>Java 8</strong> 引入默认方法与接口静态方法；<strong>Java 9</strong> 又放开了接口私有方法。也就是说，“接口里绝不能有方法体”这句话在 Java 8 之后就不再成立了。</p>
 
 <h3>为什么需要默认方法</h3>
 
@@ -176,6 +176,27 @@ class Order implements Payable {
         return () -&gt; 0;
     }
 }</code></pre>
+
+<p>接口静态方法同样自 <strong>Java 8</strong> 起才有：它属于接口本身，只能用 <code>接口名.方法名()</code> 调用，实现类继承不到。默认方法解决“加方法不破坏已有实现类”，接口静态方法解决“把与接口强相关的工具方法放在它身边”，下面要说的私有方法则解决“默认方法之间怎么复用代码”。</p>
+
+<pre><code class="language-java">public interface Payable {
+    double amount();
+
+    default String describe() {
+        return format(amount());               // 调用本接口的私有方法
+    }
+
+    default String describeWithCurrency() {
+        return format(amount()) + " " + CURRENCY_CNY;
+    }
+
+    // Java 9 起（JEP 213）：接口允许 private 方法
+    private String format(double value) {
+        return String.format("%.2f", value);
+    }
+}</code></pre>
+
+<p>在 <strong>Java 9</strong> 之前，两个默认方法想做同一件小事，只能复制粘贴，或者把辅助代码挪进一个多余的 <code>XxxUtil</code> 类——后者会把实现细节暴露成公开 API。接口私有方法（Java 9 起，含 <code>private static</code>）让这段代码留在接口内部，只有接口自己看得见。<strong>实践提醒</strong>：仍有大量项目停留在 Java 8 或 11，写给别人用的库时，<code>default</code>/<code>static</code> 看齐 Java 8 最保险，<code>private</code> 方法则要求 Java 9 以上；Java 17/21 的新项目可以放心使用。</p>
 
 <p>默认方法不是可有可无的语法糖，JDK 自己就是最大的受益者。Java 8 给 <code>Collection</code> 加上 <code>stream()</code>、<code>forEach()</code>，给 <code>List</code> 加上 <code>sort()</code>、<code>replaceAll()</code>，靠的都是默认方法；没有它，全世界的集合实现类都得跟着改一遍。</p>
 
@@ -209,7 +230,7 @@ class C implements A, B {
 
 <h3>接口 vs 抽象类</h3>
 
-<p>两者都<strong>不能被实例化</strong>，也都可以声明抽象方法，但用途不同。接口表达的是“具备什么能力”，可以多实现，适合给互不相关的类打上同一个能力标签；抽象类表达的是“是什么”，只能单继承，适合承载子类共用的字段和部分实现。经验法则是：先想清楚子类是“是一个 X”还是“能做 X”，前者用抽象类，后者用接口。</p>
+<p>两者都<strong>不能被实例化</strong>，也都可以声明抽象方法，但用途不同。接口表达的是“具备什么能力”，可以多实现，适合给互不相关的类打上同一个能力标签；抽象类表达的是“是什么”，只能单继承，适合承载子类共用的字段和部分实现。经验法则是：先想清楚子类是“是一个 X”还是“能做 X”，前者用抽象类，后者用接口。还有一个较新的能力值得知道：<strong>Java 17</strong> 起（JEP 409，密封类与密封接口在 Java 17 正式转正）接口可以声明为 <code>sealed</code>，并用 <code>permits</code> 列出允许的实现者；在那之前接口完全开放，任何人写个类都能实现它。设计需要受控扩展的框架 API 时，<code>sealed interface</code> 比“文档里写一句请勿实现”有效得多。</p>
 
 <h2>二、内部类：写回调和事件监听的基本功</h2>
 
@@ -281,7 +302,7 @@ public class Demo {
     }
 }</code></pre>
 
-<p>使用匿名内部类有几个必须记住的限制。第一，它<strong>没有类名</strong>，因此不能定义构造方法，也无法复用。第二，它只能继承一个类或实现一个接口。第三，在方法内访问局部变量时，该变量必须是 <code>final</code> 或“事实上的 final”（effectively final）；Java 8 起不再强制写 <code>final</code> 关键字，但值不能改。如果接口是函数式接口（只有一个抽象方法），Java 8 起可以改写成 Lambda：<code>Greeting g = name -&gt; System.out.println("Hello, " + name);</code>，比匿名内部类更短。但需要多个方法，或需要让 <code>this</code> 指向内部类自身时，匿名内部类仍然不可替代。</p>
+<p>使用匿名内部类有几个必须记住的限制。第一，它<strong>没有类名</strong>，因此不能定义构造方法，也无法复用。第二，它只能继承一个类或实现一个接口。第三，在方法内访问局部变量时，该变量必须是 <code>final</code> 或“事实上的 final”（effectively final）；Java 8 起不再强制写 <code>final</code> 关键字，但值不能改。如果接口是函数式接口（只有一个抽象方法），Java 8 起可以改写成 Lambda：<code>Greeting g = name -&gt; System.out.println("Hello, " + name);</code>，比匿名内部类更短。但需要多个方法，或需要让 <code>this</code> 指向内部类自身时，匿名内部类仍然不可替代（Lambda 里的 <code>this</code> 指向外层实例，不是 Lambda 自身）。如果匿名类里装的是“一组不可变数据 + 少量行为”，还可以看看 <strong>Java 16</strong> 起的 <code>record</code>：记录类可以声明在类内部或方法内部（嵌套 record、局部 record），样板代码比匿名类少得多。</p>
 
 <h2>三、枚举：把常量收进类型里</h2>
 
@@ -352,6 +373,7 @@ public class Demo {
 
 <ul>
   <li><strong>接口字段当变量用</strong>：接口里的字段是 <code>public static final</code> 常量，实现类里写 <code>CURRENCY_CNY = "USD"</code> 会直接编译失败。</li>
+  <li><strong>记错接口方法的版本边界</strong>：接口的 <code>default</code> 与 <code>static</code> 方法自 Java 8 才有，接口 <code>private</code> 方法自 Java 9 才有；给仍跑在 Java 8 上的项目写公共库时，这三档要分清楚。</li>
   <li><strong>以为默认方法能覆盖 Object 的方法</strong>：接口不能提供 <code>equals</code>、<code>hashCode</code>、<code>toString</code> 的默认实现，写了也编译不过，这些方法只能由类提供。</li>
   <li><strong>在静态方法里 new 非静态内部类</strong>：非静态内部类需要外部实例，静态上下文里没有 <code>this</code>，必须先 <code>new Outer()</code> 再 <code>outer.new Inner()</code>。</li>
   <li><strong>匿名内部类里改局部变量</strong>：被匿名内部类捕获的局部变量必须是事实上的 final，想“改”就用只有一个元素的数组或 <code>AtomicInteger</code> 之类的持有对象。</li>

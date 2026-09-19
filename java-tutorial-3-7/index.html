@@ -128,26 +128,22 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章把页面的骨架（HTML）、样式（CSS）和交互（JavaScript）拼在了一起。但真正写起来会发现：每改一次数据，都要自己找到对应的 DOM 节点，手动改它的 <code>innerHTML</code> 或 <code>value</code>。数据一多，取节点、改节点、再同步回数据的代码就会散落各处。本章要解决的正是这件事——用 Vue 2 把“数据”和“视图”绑在一起，让数据变化自动驱动界面更新。本章覆盖模板语法、常用指令、计算属性、侦听器和生命周期五块基础，适合已经会写 HTML/CSS/JS、能看懂 <code>document.getElementById</code> 的读者。学完就能不依赖任何构建工具，用一个 <code>script</code> 标签写出可运行的小应用。</p>
+<p>上一章把页面的骨架（HTML）、样式（CSS）和交互（JavaScript）拼在了一起。但真正写起来会发现：每改一次数据，都要自己找到对应的 DOM 节点，手动改它的 <code>innerHTML</code> 或 <code>value</code>。数据一多，取节点、改节点、再同步回数据的代码就会散落各处。本章要解决的正是这件事——用 Vue 3 把“数据”和“视图”绑在一起，让数据变化自动驱动界面更新。本章覆盖模板语法、常用指令、计算属性、侦听器和生命周期五块基础，适合已经会写 HTML/CSS/JS、能看懂 <code>document.getElementById</code> 的读者。入门示例可以不依赖构建工具，用一个 <code>script</code> 标签直接跑起来；正式项目请统一用 Vue 3 + Vite 的工程结构。</p>
 
 <h2>一、为什么需要 Vue：从操作 DOM 到数据驱动</h2>
 <p>Vue 的核心思想是<strong>数据驱动</strong>加<strong>组件系统</strong>。它提供 MVVM 式的双向绑定，把“数据对象”和“DOM 视图”交给框架去同步：你只负责修改数据，视图更新由 Vue 完成。</p>
-<p>实现原理上，Vue 2 用 ES5 的 <code>Object.defineProperty</code> 把 <code>data</code> 里的属性改造成存储器属性（getter/setter），这个过程叫“可观察化”。解析模板时，每个依赖数据的指令或插值都会创建一个 <strong>watcher</strong>，在求值过程中把当前 watcher 注册为所读取数据的订阅者。数据被赋值触发 setter 时，Vue 就通知所有订阅者重新求值并更新对应的 DOM。因为依赖是“按需收集”的，不需要像脏检查那样遍历所有 watcher，效率更高。</p>
-<p>这套机制带来两条限制：</p>
-<ul>
-<li>只能兼容 IE9 及以上浏览器，因为 <code>defineProperty</code> 在更低版本不可用。</li>
-<li>在 Vue 2 中，直接给对象新增属性、或通过下标修改数组元素（<code>arr[0] = x</code>）都不会触发更新。这类场景要用 <code>Vue.set(obj, key, value)</code>（组件内是 <code>this.$set</code>），或者改用 <code>push</code>、<code>splice</code> 等被 Vue 包裹过的数组变异方法。</li>
-</ul>
-<p>需要说明的是，网上不少旧笔记写的是 <code>obj.$add(key, value)</code>，这是 Vue 1.x 的写法，<strong>在 Vue 2 中已被移除</strong>，请统一改用 <code>Vue.set / this.$set</code>。另外 Vue 3 改用 <code>Proxy</code> 重写了响应式，新增属性和下标赋值都能被侦测到，且不再支持 IE；本章的结论只适用于 Vue 2。</p>
+<p>实现原理上，Vue 3 用 ES2015 的 <code>Proxy</code> 拦截对象的读写（默认行为交给 <code>Reflect</code> 完成），把 <code>data</code> 里的属性改造成响应式的，这个过程叫“可观察化”。解析模板时，每个依赖数据的指令或插值都会生成一个渲染副作用（effect），在求值过程中把当前 effect 注册为所读取数据的订阅者。数据被赋值触发拦截时，Vue 就通知所有订阅者重新求值并更新对应的 DOM。因为依赖是“按需收集”的，不需要像脏检查那样遍历所有 watcher，效率更高。</p>
+<p>由于 <code>Proxy</code> 是语言层面的拦截，Vue 3 能侦测到新增属性、删除属性（<code>delete obj.key</code>）以及按下标给数组元素赋值（<code>arr[0] = x</code>），不再需要任何补充 API。同时 Vue 3 使用 ES2015+ 语法，不再支持 IE 浏览器，开发环境建议 Node 18 及以上。</p>
+<div class="tut-tip"><p><strong>版本提示</strong>：Vue 2 用 ES5 的 <code>Object.defineProperty</code> 把 <code>data</code> 属性改造成存储器属性（getter/setter）来做响应式，因此有两条限制：只能兼容 IE9 及以上浏览器；直接给对象新增属性、或通过下标修改数组元素都不会触发更新，这类场景要用 <code>Vue.set(obj, key, value)</code>（组件内是 <code>this.$set</code>），或者改用 <code>push</code>、<code>splice</code> 等被 Vue 包裹过的数组变异方法。网上不少旧笔记写的 <code>obj.$add(key, value)</code> 是 Vue 1.x 的写法，<strong>在 Vue 2 中已被移除</strong>。以上结论只适用于 Vue 2：Vue 2 已于 2023 年 12 月 31 日停止维护（EOL），新项目请直接选 Vue 3，正文里的写法才是现行写法。</p></div>
 
 <h2>二、模板语法与常用指令</h2>
 <p>模板语法分两类：插值和指令。插值就是双大括号 <code>{{ }}</code>，它会把表达式的结果渲染成文本；指令则是带 <code>v-</code> 前缀的特殊属性，用来给元素附加行为。</p>
-<p>初学阶段最容易被一个问题绊住：页面加载瞬间会闪一下 <code>{{ msg }}</code> 原文。原因是 JS 还没执行、Vue 还没接管模板。解决办法是用 <code>v-text</code> 渲染文本（它不会显示原始大括号），或者在根元素上加 <code>v-cloak</code> 并配合 CSS 隐藏。渲染 HTML 片段要用 <code>v-html</code>，但内容来自用户输入时存在 XSS 风险，能不用就不用。</p>
+<p>初学阶段最容易被一个问题绊住：页面加载瞬间会闪一下 <code>{{ msg }}</code> 原文。原因是 JS 还没执行、Vue 还没接管模板。用 Vite 构建的单文件组件在打包阶段就编译好了模板，不存在这个问题；直接在页面里用 <code>script</code> 标签引入全局构建时，才需要处理闪现：用 <code>v-text</code> 渲染文本（它不会显示原始大括号），或者在根元素上加 <code>v-cloak</code> 并配合 CSS 隐藏。渲染 HTML 片段要用 <code>v-html</code>，但内容来自用户输入时存在 XSS 风险，能不用就不用。</p>
 <p>常用指令可以按用途记成四组：</p>
 <ul>
 <li><strong>绑定属性</strong>：<code>v-bind:href</code>，简写 <code>:href</code>。</li>
 <li><strong>绑定事件</strong>：<code>v-on:click</code>，简写 <code>@click</code>。</li>
-<li><strong>双向绑定</strong>：<code>v-model</code>，只适用于表单控件和组件，它本质上是 <code>:value</code> 加 <code>@input</code> 的语法糖。配合修饰符使用更省事：<code>.lazy</code> 改成 change 时同步、<code>.number</code> 把输入转成数字、<code>.trim</code> 去掉首尾空格。</li>
+<li><strong>双向绑定</strong>：<code>v-model</code>，只适用于表单控件和组件，它本质上是 <code>:value</code> 加 <code>@input</code> 的语法糖。配合修饰符使用更省事：<code>.lazy</code> 改成 change 时同步、<code>.number</code> 把输入转成数字、<code>.trim</code> 去掉首尾空格。用在组件上时，Vue 3 默认绑定 <code>modelValue</code> 属性并监听 <code>update:modelValue</code>，需要多个双向绑定时写 <code>v-model:title</code> 这样的具名形式。</li>
 <li><strong>条件与循环</strong>：<code>v-if</code>/<code>v-else</code> 会真正销毁和重建元素，<code>v-show</code> 只是切换 <code>display</code>；<code>v-for</code> 用于列表渲染，务必写 <code>:key</code>，且 key 要用稳定唯一的值（例如数据 id），用数组下标做 key 在列表增删时会导致复用错乱。</li>
 </ul>
 <p>事件绑定还可以加修饰符来省掉手写样板代码：<code>@click.stop</code> 阻止事件冒泡、<code>@submit.prevent</code> 阻止表单默认提交、<code>@click.once</code> 让事件只触发一次。这些修饰符可以串联书写，例如 <code>@click.stop.prevent</code>，顺序会影响执行结果。在列表或嵌套结构里，一个 <code>.stop</code> 往往能省掉好几行手动调用事件对象的代码。</p>
@@ -171,32 +167,41 @@
   &lt;button @click="add"&gt;添加一条&lt;/button&gt;
 &lt;/div&gt;
 
-&lt;script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"&gt;&lt;/script&gt;
 &lt;script&gt;
-  new Vue({
-    el: '#app',
-    data: {
-      msg: 'Hello Vue',
-      list: [{ id: 1, name: '张三' }]
+  const { createApp } = Vue;
+
+  createApp({
+    // Vue 3 中 data 统一写成函数，每次返回一个新对象
+    data() {
+      return {
+        msg: 'Hello Vue',
+        list: [{ id: 1, name: '张三' }]
+      };
     },
     methods: {
       add() {
-        // 用 push 这类变异方法才能触发视图更新
+        // push 这类数组方法在 Vue 3 中同样是响应式的
         this.list.push({ id: Date.now(), name: '新同学' });
       }
     }
-  });
+  }).mount('#app');
 &lt;/script&gt;</code></pre>
+<div class="tut-tip"><p><strong>版本提示</strong>：<code>new Vue({ el: '#app', ... })</code> 是 Vue 2 的启动方式；Vue 3 改为 <code>Vue.createApp({ ... }).mount('#app')</code>，<code>el</code> 选项由 <code>mount()</code> 取代。两个大版本的 CDN 全局构建也不同，Vue 3 取 <code>vue@3</code> 目录下的 <code>vue.global.js</code>，Vue 2 取 <code>vue@2</code> 下的 <code>vue.js</code>，混用会报 <code>createApp is not a function</code>。在 Vite 工程里不必手写 <code>createApp</code>，入口文件会完成挂载。</p></div>
 
 <h2>三、计算属性与侦听器</h2>
 <p>模板里可以写表达式，但只适合简单运算；逻辑一复杂就该搬到 <code>computed</code> 里。计算属性有两个关键特性：一是<strong>有缓存</strong>，只要它依赖的响应式数据没变，多次访问都直接返回上次的结果，不会重复计算；二是它<strong>依赖其他响应式数据</strong>，依赖变化时会自动重新求值。相比之下 <code>methods</code> 里的方法每次重新渲染都会被调用一次，没有缓存。所以“由已有数据推导出的值”用 <code>computed</code>，“由事件触发的动作”用 <code>methods</code>。</p>
 <p>计算属性默认只有 getter，是只读的；如果确实需要给它赋值，要写成带 <code>get</code>/<code>set</code> 的对象形式。而 <code>watch</code> 用于“数据变化后做一件副作用的事”，典型场景是发异步请求、写本地存储、操作非 Vue 管理的第三方库。侦听对象时可以用 <code>deep: true</code> 深度侦听，用 <code>immediate: true</code> 让它在初始化时先执行一次。</p>
-<pre><code class="language-js">new Vue({
-  el: '#app',
-  data: {
-    price: 100,
-    count: 2,
-    keyword: ''
+<pre><code class="language-js">const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      price: 100,
+      count: 2,
+      keyword: '',
+      form: { name: '' }
+    };
   },
   computed: {
     // 有缓存：price 和 count 不变时不会重复计算
@@ -234,23 +239,28 @@
       console.log('搜索：' + kw);
     }
   }
-});</code></pre>
+}).mount('#app');</code></pre>
+<p>组合式 API 里对应的是 <code>computed()</code> 与 <code>watch()</code>：<code>const total = computed(() =&gt; price.value * count.value)</code> 返回一个只读 ref，取值时写 <code>total.value</code>；<code>watch(source, callback, { immediate: true })</code> 的参数与选项式一一对应。Vue 3 还有一个细节：侦听 <code>reactive</code> 对象时默认就是深层侦听，不必再写 <code>deep: true</code>；只有侦听 <code>ref</code> 时才需要显式打开。</p>
 <p>一句话选择标准：能用 <code>computed</code> 推导出来的，就别用 <code>watch</code> 再去存一份；只有“做事情”而不是“算数值”时才用 <code>watch</code>。</p>
+<div class="tut-tip"><p><strong>版本提示</strong>：Vue 2 写成 <code>new Vue({ el: '#app', data: { ... }, ... })</code>，且根实例的 <code>data</code> 允许直接写成对象——Vue 3 仍兼容对象写法，但统一用函数更稳妥。实例上的 <code>vm.$watch('keyword', cb)</code> 在 Vue 3 中依然可用；变化最大的是 <code>el</code> 被 <code>mount()</code> 取代，以及深层侦听的默认行为不同，迁移时容易踩坑。</p></div>
 
 <h2>四、生命周期：什么时候能拿到 DOM</h2>
-<p>每个 Vue 实例从创建到销毁会依次触发若干钩子函数。理解它们的触发时机，能省掉大量“为什么这里取不到元素”的困惑。Vue 2 的八个钩子按顺序是：<code>beforeCreate</code>、<code>created</code>、<code>beforeMount</code>、<code>mounted</code>、<code>beforeUpdate</code>、<code>updated</code>、<code>beforeDestroy</code>、<code>destroyed</code>。</p>
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-7/01-vue-lifecycle.svg" alt="Vue 2 八个生命周期钩子的执行顺序与三个高频节点"><figcaption>图 1：Vue 2 生命周期顺序——created 发请求、mounted 碰 DOM、beforeDestroy 清理副作用</figcaption></figure>
+<p>每个 Vue 应用实例从创建到卸载会依次触发若干钩子函数。理解它们的触发时机，能省掉大量“为什么这里取不到元素”的困惑。Vue 3 的八个钩子按顺序是：<code>beforeCreate</code>、<code>created</code>、<code>beforeMount</code>、<code>mounted</code>、<code>beforeUpdate</code>、<code>updated</code>、<code>beforeUnmount</code>、<code>unmounted</code>。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-7/01-vue-lifecycle.svg" alt="Vue 生命周期钩子的执行顺序与三个高频节点"><figcaption>图 1：生命周期钩子顺序——created 发请求、mounted 碰 DOM、卸载前清理副作用（图为 Vue 2 的命名，Vue 3 把最后两个钩子改称 beforeUnmount / unmounted）</figcaption></figure>
 
 <p>实际使用中真正高频的只有三个：</p>
 <ul>
 <li><code>created</code>：实例已创建，<code>data</code>、<code>methods</code>、<code>computed</code> 可用，适合发起初始数据的异步请求；但此时还没有挂载，<strong>拿不到真实 DOM</strong>。</li>
-<li><code>mounted</code>：模板已渲染成真实 DOM 并插入页面，可以访问 <code>this.$refs</code>，适合初始化需要 DOM 的第三方库（如富文本编辑器、图表）。</li>
-<li><code>beforeDestroy</code>：实例销毁前调用，用来清理定时器、解绑全局事件、销毁第三方实例，否则容易内存泄漏。</li>
+<li><code>mounted</code>：模板已渲染成真实 DOM 并插入页面，选项式写法里可以访问 <code>this.$refs</code>，适合初始化需要 DOM 的第三方库（如富文本编辑器、图表）。</li>
+<li><code>beforeUnmount</code>：实例卸载前调用，用来清理定时器、解绑全局事件、销毁第三方实例，否则容易内存泄漏。</li>
 </ul>
-<p>要注意 Vue 1.x 到 2.0 的钩子名称变化很大：旧教程里的 <code>ready</code> 对应现在的 <code>mounted</code>，<code>compiled</code> 对应 <code>beforeMount</code>，<code>attached</code> 已被移除。照旧教程的写法，钩子会静默失效，根本不会执行。</p>
-<pre><code class="language-js">new Vue({
-  el: '#app',
-  data: { list: [] },
+<p>要注意钩子名称在版本之间改过：Vue 2 的最后两个钩子是 <code>beforeDestroy</code> 和 <code>destroyed</code>，Vue 3 更名为 <code>beforeUnmount</code> / <code>unmounted</code>，旧名字在 Vue 3 中不会执行；更早的 Vue 1.x 用的 <code>ready</code>、<code>compiled</code>、<code>attached</code> 也早已移除。照旧教程的写法，钩子会静默失效，根本不会执行。组合式 API 用的是 <code>onMounted</code>、<code>onBeforeUnmount</code>、<code>onUnmounted</code> 这类以 <code>on</code> 开头的注册函数，同一个钩子可以在组件里注册多次。</p>
+<pre><code class="language-js">const { createApp } = Vue;
+
+createApp({
+  data() {
+    return { list: [] };
+  },
   created() {
     // 有 data，没有 DOM：这里发请求最合适
     console.log('created', this.list.length);
@@ -263,24 +273,25 @@
       console.log('轮询中');
     }, 1000);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     // 清理副作用，避免内存泄漏
     clearInterval(this.timer);
   }
-});</code></pre>
-<p>另外，Vue 2 的 DOM 更新是<strong>异步批量</strong>的：修改数据后立刻读 DOM 拿到的还是旧值。需要等更新完成再操作，用 <code>this.$nextTick(callback)</code>。</p>
+}).mount('#app');</code></pre>
+<p>另外，Vue 的 DOM 更新是<strong>异步批量</strong>的：修改数据后立刻读 DOM 拿到的还是旧值。需要等更新完成再操作，用 <code>this.$nextTick(callback)</code>；它返回 Promise，也可以直接 <code>await</code>。组合式 API 中从 <code>vue</code> 导入 <code>nextTick</code> 使用。</p>
 
 <h2>五、常见坑与小结</h2>
 <p>把上面几节的内容收拢成一份避坑清单：</p>
 <ul>
-<li>新增对象属性、按下标改数组不会触发更新，用 <code>this.$set</code> 或数组变异方法。</li>
+<li>Vue 3 中新增属性、删除属性、按下标改数组都能侦测，不必再找 <code>$set</code>；但如果对 <code>reactive()</code> 返回的对象整体解构、或把 props 解构后当普通变量用，会丢掉响应性，需要 <code>toRefs</code> / <code>storeToRefs</code>。</li>
 <li>组件的 <code>data</code> 必须是函数并返回新对象，直接写成对象会让多个组件实例共享同一份数据。</li>
-<li><code>v-if</code> 和 <code>v-for</code> 不要写在同一个元素上：Vue 2 中 <code>v-for</code> 优先级更高，会先循环再逐个判断，既浪费性能，也无法在 <code>v-if</code> 里访问循环变量；正确做法是用计算属性先过滤出需要的列表。</li>
+<li><code>v-if</code> 和 <code>v-for</code> 不要写在同一个元素上：Vue 3 中 <code>v-if</code> 优先级更高，会先判断再循环，根本无法访问循环变量；Vue 2 的顺序相反（先循环再判断），但同样浪费性能。正确做法是用计算属性先过滤出需要的列表。</li>
 <li><code>v-for</code> 的 <code>:key</code> 要用稳定唯一值，不要用下标。</li>
-<li>想立刻拿到更新后的 DOM，要用 <code>$nextTick</code>。</li>
-<li>别把旧版本的钩子名（<code>ready</code>、<code>compiled</code>）当成本章 API，它们在 Vue 2 中已不存在。</li>
+<li>想立刻拿到更新后的 DOM，要用 <code>$nextTick</code> / <code>nextTick</code>。</li>
+<li>别把旧版本的钩子名当成本章 API：<code>ready</code>、<code>compiled</code> 属于 Vue 1.x，<code>beforeDestroy</code>、<code>destroyed</code> 是 Vue 2 的写法，它们在 Vue 3 中都已不存在。</li>
+<li>Vue 3 移除了实例上的 <code>$on</code> / <code>$off</code> / <code>$once</code>，跨组件通信请改用 props 与事件、<code>provide / inject</code> 或 Pinia，不要照搬事件总线写法。</li>
 </ul>
-<p>小结：本章围绕“数据驱动”讲了五件事——响应式的原理与边界、模板语法与常用指令、计算属性与侦听器的分工、生命周期的关键节点与版本差异。真正需要记住的判断标准只有几条：由数据推导的值放 <code>computed</code>，数据变化后要做的副作用放 <code>watch</code>，发请求放 <code>created</code>，要碰 DOM 放 <code>mounted</code> 或 <code>$nextTick</code>。下一章把这些能力收进组件，讲清楚组件通信与单文件组件的写法。</p>
+<p>小结：本章围绕“数据驱动”讲了五件事——响应式的原理与边界、模板语法与常用指令、计算属性与侦听器的分工、生命周期的关键节点与版本差异。真正需要记住的判断标准只有几条：由数据推导的值放 <code>computed</code>，数据变化后要做的副作用放 <code>watch</code>，发请求放 <code>created</code>，要碰 DOM 放 <code>mounted</code> 或 <code>nextTick</code>。选项式 API 在 Vue 3 中依然完整可用，两种写法可以混用。下一章把这些能力收进组件，用 Vue 3 + Vite 讲清楚组件通信与单文件组件的写法。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-3-6/"><span class="pn-label">← 上一篇</span><span class="pn-title">jQuery 与 UI 框架</span></a>
