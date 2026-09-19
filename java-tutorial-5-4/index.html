@@ -164,6 +164,89 @@ public enum ConfigEnum {
 </ul>
 <p>另外不要把所有工具类都做成单例，无状态的方法用静态方法即可。</p>
 
+<h3>单例的六种写法和取舍</h3>
+<p>把上面的演进路线完整写开，其实是六种写法，面试里经常要求手写其中任意一种：</p>
+<pre><code class="language-java">// 1. 懒汉式：延迟创建，但「先判断再创建」不是原子操作，多线程下会造出多个实例
+public class LazySingleton {
+    private static LazySingleton instance;
+
+    private LazySingleton() {}
+
+    public static LazySingleton getInstance() {
+        if (instance == null) {
+            instance = new LazySingleton();   // 多线程下这里会被执行多次
+        }
+        return instance;
+    }
+}
+
+// 2. 饿汉式：类加载时就创建，简单且线程安全，代价是没有延迟加载
+public class EagerSingleton {
+    private static final EagerSingleton INSTANCE = new EagerSingleton();
+
+    private EagerSingleton() {}
+
+    public static EagerSingleton getInstance() {
+        return INSTANCE;
+    }
+}
+
+// 3. 同步方法：安全，但每次读取都要抢锁，已经创建好之后仍然串行
+public class SynchronizedSingleton {
+    private static SynchronizedSingleton instance;
+
+    private SynchronizedSingleton() {}
+
+    public static synchronized SynchronizedSingleton getInstance() {
+        if (instance == null) {
+            instance = new SynchronizedSingleton();
+        }
+        return instance;
+    }
+}
+
+// 4. 双重检查锁定（DCL）：把锁缩小到创建那一刻，字段必须 volatile
+public class DclSingleton {
+    private static volatile DclSingleton instance;   // 少了 volatile 就可能拿到半成品
+
+    private DclSingleton() {}
+
+    public static DclSingleton getInstance() {
+        if (instance == null) {                      // 第一次检查：避免每次都抢锁
+            synchronized (DclSingleton.class) {
+                if (instance == null) {              // 第二次检查：避免重复创建
+                    instance = new DclSingleton();
+                }
+            }
+        }
+        return instance;
+    }
+}
+
+// 5. 静态内部类：延迟加载，线程安全由 JVM 的类初始化机制保证，无需加锁
+public class HolderSingleton {
+    private HolderSingleton() {}
+
+    private static class Holder {
+        private static final HolderSingleton INSTANCE = new HolderSingleton();
+    }
+
+    public static HolderSingleton getInstance() {
+        return Holder.INSTANCE;
+    }
+}
+
+// 6. 枚举：写法最短，天然防反射、防反序列化，是《Effective Java》推荐的做法
+public enum EnumSingleton {
+    INSTANCE;
+
+    public void doSomething() {
+        System.out.println("业务方法");
+    }
+}</code></pre>
+<p><code>volatile</code> 为什么不能省？<code>instance = new DclSingleton()</code> 在字节码层面分三步：分配内存、初始化对象、把引用指向内存地址。JVM 允许指令重排成「分配内存 → 指向地址 → 初始化」，此时另一个线程在第一次检查时看到 <code>instance</code> 已非空，就会拿到一个引用已赋值、构造却还没走完的半成品对象。这个坑在 Java 5 修正内存模型后才真正被 <code>volatile</code> 封死。</p>
+<p>选型上给结论：绝大多数业务代码用<strong>静态内部类</strong>或<strong>饿汉式</strong>即可；需要防反射与反序列化破坏时用<strong>枚举</strong>；DCL 主要价值是理解内存模型，不必为了性能特意手写。另外 <code>getInstance()</code> 返回的实例如果可被外部改状态，就等价于引入了全局可变状态，这类「单例」在并发下往往就是隐藏的 Bug 源头。</p>
+
 <h2>二、工厂模式家族：把创建逻辑从调用方剥离</h2>
 <p>工厂模式的核心是“创建对象时不向客户端暴露创建逻辑，而是通过一个共同的接口指向新对象”。它有三种常见形态，抽象程度依次升高：</p>
 <p><strong>简单工厂</strong>（也叫静态工厂方法）用一个具体工厂类加 <code>if/switch</code> 决定造哪个产品，调用方只传类型标识；它不是 GoF 的独立模式，通常被看作工厂方法的一种特例。<strong>工厂方法</strong>把每个产品的创建延迟到各自的工厂子类，新增产品只需新增一对类，符合开闭原则。<strong>抽象工厂</strong>面向“产品族”：一个工厂接口负责创建一系列相关对象（比如同一套皮肤下的按钮和文本框），保证客户端始终只使用同一族产品，但新增一种产品就要改动所有工厂实现。Java 标准库里的 <code>Executors.newFixedThreadPool()</code>、<code>Calendar.getInstance()</code>、<code>NumberFormat.getInstance()</code> 都属于工厂方法的实际应用。</p>
@@ -201,6 +284,63 @@ public final class LoggerFactory {
     }
 }</code></pre>
 <p>坑在于不要把工厂做成“万能上帝类”：产品种类少、创建逻辑只有一行 <code>new</code> 时，直接 <code>new</code> 或写一个静态工厂方法就够了，硬套模式只会让类数量成倍增加。另外简单工厂里的字符串标识最好用枚举替代，避免拼写错误在运行期才暴露。</p>
+
+<h3>工厂模式的三种形态：简单工厂、工厂方法、抽象工厂</h3>
+<p>「工厂模式」其实是三种抽象程度不同的写法，很多资料把它们混着讲，导致面试时一被追问「工厂方法模式和抽象工厂模式的区别」就卡壳。用同一个例子——发送邮件、短信、站内信——把三种形态摆在一起，差别就清楚了。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-4/02-factory-compare.svg" alt="简单工厂、工厂方法、抽象工厂的抽象程度、扩展代价与适用场景对照"><figcaption>图 2：工厂三形态的抽象程度与扩展代价</figcaption></figure>
+
+<pre><code class="language-java">// 产品接口
+public interface Sender {
+    void send(String message);
+}
+
+// ---------- 形态一：简单工厂（静态工厂方法），一个类 + if/switch 决定造哪个产品 ----------
+public class SenderFactory {
+    public static Sender create(String type) {
+        switch (type) {
+            case "mail":
+                return new MailSender();
+            case "sms":
+                return new SmsSender();
+            default:
+                throw new IllegalArgumentException("未知的发送类型: " + type);
+        }
+    }
+}
+// 客户端：优点是简单；缺点是新增产品要改这个 switch，违反开闭原则
+
+// ---------- 形态二：工厂方法，每个产品配一个工厂，新增产品只加类不改老代码 ----------
+public interface SenderFactory2 {
+    Sender create();
+}
+
+public class MailSenderFactory implements SenderFactory2 {
+    @Override
+    public Sender create() {
+        return new MailSender();
+    }
+}
+
+// ---------- 形态三：抽象工厂，一个工厂负责创建「一整族」相关的产品 ----------
+public interface MessageFactory {
+    Sender createSender();          // 发送通道
+
+    MessageTemplate createTemplate();   // 与发送通道配套的消息模板
+}
+
+public class MailMessageFactory implements MessageFactory {
+    @Override
+    public Sender createSender() {
+        return new MailSender();
+    }
+
+    @Override
+    public MessageTemplate createTemplate() {
+        return new MailTemplate();      // 邮件专用模板，保证与 MailSender 配套
+    }
+}</code></pre>
+<p>三者的本质区别只有一句话：<strong>简单工厂解决「造哪一个」，工厂方法解决「谁来决定造哪一个」，抽象工厂解决「怎么保证一整套产品配套」</strong>。抽象工厂新增一个产品族（比如再支持一套「短信通道 + 短信模板」）很容易，只需加一个工厂类；但要在接口里新增一种产品（比如再加一个 <code>createSignature()</code>），所有工厂实现都得跟着改——这正是开闭原则在「产品族扩展」与「产品种类扩展」两个方向上的取舍。</p>
+<p>还有一个常被问的对比：<strong>工厂与建造者的区别</strong>。工厂关心「创建哪一个产品」，一步到位返回成品；建造者关心「怎样一步步装配这个产品」，把构建过程与最终表示分离。参数少、产品种类多时用工厂；参数多且可选、装配顺序固定时用建造者。<code>Executors.newFixedThreadPool()</code>、<code>Calendar.getInstance()</code>、<code>NumberFormat.getInstance()</code> 都是工厂方法在 JDK 里的实际应用。</p>
 
 <h2>三、建造者模式：分步装配复杂对象</h2>
 <p>当一个对象的构造参数很多、其中一部分可选，或者各个部件必须按固定顺序组装时，构造函数会退化成“一长串参数列表”，调用方根本记不住第 4 个参数是 <code>true</code> 还是 <code>false</code>。建造者模式把“构建过程”与“最终表示”分离：建造者负责一步步提供部件，导演（可选）负责决定装配顺序，最后 <code>build()</code> 产出完整对象。它的关键差别在于——工厂关心“创建哪一个产品”，建造者关心“怎样一步步拼装这个产品”。</p>
@@ -286,6 +426,11 @@ public class Report implements Cloneable {
 <p>选型可以按问题倒推。要控制实例数量，用单例；要把“造什么”和使用者解耦，用工厂；要解决“一堆可选参数 + 固定装配顺序”，用建造者；创建代价高且需要大量相似副本，用原型。五个模式并非互斥，框架代码中经常组合出现，例如工厂内部返回单例、建造者的产物由工厂创建。</p>
 <p>几条通用经验。不要为了模式而模式，<strong>先能读懂、再谈解耦</strong>；模式解决的是变化点，如果一段逻辑永远不会变，抽象就是纯粹的负担。所有创建型模式都会增加类的数量，因此必须在文档里写清“为什么需要”，否则后来者只会觉得代码绕。</p>
 <p>小结：创建型模式回答的是“对象怎么来”。单例用私有构造加静态访问点守住唯一性，推荐静态内部类或枚举写法；工厂把创建逻辑收拢到一处，简单工厂够用时不必上抽象工厂。建造者用链式调用收拾臃肿的构造函数，代价是多一个内部类；原型用拷贝换取性能，但必须想清楚拷贝深度、构造绕过与 <code>Cloneable</code> 的语义限制。把这四个判断标准记住，再回头看框架源码，你会发现大多数“看不懂的类结构”都能对号入座。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-5-3/"><span class="pn-label">← 上一篇</span><span class="pn-title">开发工具与环境配置</span></a>
+      <a class="next-post" href="/java-tutorial-5-5/"><span class="pn-label">下一篇 →</span><span class="pn-title">设计模式：结构型</span></a>
+      </nav>
           </article>
   <!-- Footer -->
   <footer>

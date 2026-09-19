@@ -313,9 +313,362 @@ public class CsvImporter extends DataImporter {
 
 <p>另外两个行为型模式适合在需要时再深入。<strong>命令模式</strong>（Command）把一次请求封装成对象，因而支持参数化、排队、记录日志与撤销重做，GUI 的按钮回调与事务型操作日志都是它的应用。实现撤销时，通常为命令接口追加 <code>undo()</code>，由具体命令自己保存执行前的状态。<strong>迭代器模式</strong>（Iterator）把遍历逻辑从聚合中剥离，让聚合只负责存储、迭代器负责访问顺序；Java 集合已经内置了这一模式，<code>Iterator</code> 的 <code>hasNext()</code>/<code>next()</code> 就是它的标准形态，自定义容器只要实现 <code>Iterable</code> 即可获得增强 for 循环支持。需要提醒的是：在使用迭代器遍历时直接调用集合的 <code>add</code>/<code>remove</code> 会抛出 <code>ConcurrentModificationException</code>，删除元素应使用迭代器自身的 <code>remove()</code>。</p>
 
+<h2>访问者、备忘录与中介者：三个「非典型」行为型模式</h2>
+
+<p>前面七个模式处理的是「怎么替换、怎么通知、怎么传递」。还有一批行为型模式解决的是另外三类问题：给稳定的数据结构不断加新操作（访问者）、让对象能回滚到历史状态（备忘录）、把网状依赖收敛成星型（中介者）。它们用得比策略、观察者少，但在面试与框架源码里出现频率很高，值得单独认识。</p>
+
+<h3>访问者模式：把「操作」从「数据结构」里搬出来</h3>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-6/03-visitor-memento.svg" alt="访问者的双重分派过程与备忘录三个角色的协作关系"><figcaption>图 3：访问者的双重分派，以及备忘录的保存—保管—恢复链路</figcaption></figure>
+
+
+
+<p>访问者模式（Visitor）的意图是：将数据结构与作用于其上的操作分离，使新增操作不必修改元素类。它有两个角色——<strong>元素</strong>提供 <code>accept(visitor)</code> 方法并把自身交给访问者，<strong>访问者</strong>为每种元素提供一个 <code>visit</code> 重载。新增一种导出格式时，只需加一个访问者类，元素类一行不动。</p>
+
+<pre><code class="language-java">import java.util.ArrayList;
+import java.util.List;
+
+/** 元素接口：所有节点都能接受访问者 */
+public interface DocNode {
+    void accept(DocVisitor visitor);
+}
+
+public class Paragraph implements DocNode {
+    private final String text;
+
+    public Paragraph(String text) {
+        this.text = text;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    @Override
+    public void accept(DocVisitor visitor) {
+        visitor.visit(this);          // 把自身交给访问者，由访问者决定怎么处理
+    }
+}
+
+public class Image implements DocNode {
+    private final String url;
+
+    public Image(String url) {
+        this.url = url;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    @Override
+    public void accept(DocVisitor visitor) {
+        visitor.visit(this);
+    }
+}
+
+/** 访问者接口：为每种元素声明一个 visit 重载 */
+public interface DocVisitor {
+    void visit(Paragraph paragraph);
+
+    void visit(Image image);
+}
+
+/** 具体访问者一：导出 Markdown */
+public class MarkdownExportVisitor implements DocVisitor {
+    @Override
+    public void visit(Paragraph paragraph) {
+        System.out.println(paragraph.getText());
+    }
+
+    @Override
+    public void visit(Image image) {
+        System.out.println("![](" + image.getUrl() + ")");
+    }
+}
+
+/** 具体访问者二：统计字数，新增操作无需改动任何元素类 */
+public class WordCountVisitor implements DocVisitor {
+    private int total;
+
+    @Override
+    public void visit(Paragraph paragraph) {
+        total += paragraph.getText().length();
+    }
+
+    @Override
+    public void visit(Image image) {
+        // 图片不计入字数，这里实现为空即可
+    }
+
+    public int getTotal() {
+        return total;
+    }
+}
+
+public class Document {
+    private final List&lt;DocNode&gt; nodes = new ArrayList&lt;&gt;();
+
+    public void add(DocNode node) {
+        nodes.add(node);
+    }
+
+    public void accept(DocVisitor visitor) {
+        for (DocNode node : nodes) {
+            node.accept(visitor);     // 由元素反向调用访问者，即「双重分派」
+        }
+    }
+}</code></pre>
+
+<p>这里有一个面试高频点：<strong>为什么不能只在访问者里用 <code>instanceof</code> 判断类型，而要写 <code>accept</code>？</strong>因为 <code>node.accept(visitor)</code> 这一调用同时决定了「哪种元素」和「哪个访问者」两个维度的具体类型，Java 靠这一次虚方法调用完成了所谓的<strong>双重分派</strong>；若改成 <code>instanceof</code> 链，每加一种元素就要修改所有访问者，退化成了 <code>if-else</code>。</p>
+
+<p>访问者的收益与代价是同一件事的两面：<strong>新增操作容易，新增元素困难</strong>。往 <code>DocNode</code> 家族里加一个 <code>Table</code>，就必须给 <code>DocVisitor</code> 及全部实现补上 <code>visit(Table)</code>，接口一变全线报错。此外，访问者为了处理元素，通常需要元素暴露内部细节（如上面的 <code>getText()</code>），这在某种程度上违反了迪米特法则，也让它依赖具体元素类而非抽象——所以它适用且仅适用于「元素种类稳定、操作频繁增加」的场景，编译器语法树、代码检查工具、报表导出是最典型的落点。</p>
+
+<h3>备忘录模式：不破坏封装地保存与恢复状态</h3>
+
+<p>备忘录模式（Memento）在不暴露对象内部细节的前提下，捕获并保存对象的某个状态，以便之后恢复。它有三个角色：<strong>发起人</strong>（Originator，拥有状态并负责创建/恢复备忘录）、<strong>备忘录</strong>（Memento，只保存状态快照）、<strong>管理者</strong>（Caretaker，负责保管备忘录，但不关心里面是什么）。</p>
+
+<pre><code class="language-java">import java.util.ArrayDeque;
+import java.util.Deque;
+
+/** 备忘录：对外只暴露不透明的状态，字段用 final 保证快照不可变 */
+public final class EditorMemento {
+    private final String content;
+    private final int cursor;
+
+    EditorMemento(String content, int cursor) {
+        this.content = content;
+        this.cursor = cursor;
+    }
+
+    String getContent() {
+        return content;
+    }
+
+    int getCursor() {
+        return cursor;
+    }
+}
+
+/** 发起人：负责创建快照与从快照恢复 */
+public class Editor {
+    private String content = "";
+    private int cursor = 0;
+
+    public void type(String text) {
+        content += text;
+        cursor = content.length();
+    }
+
+    public EditorMemento save() {
+        return new EditorMemento(content, cursor);
+    }
+
+    public void restore(EditorMemento memento) {
+        this.content = memento.getContent();
+        this.cursor = memento.getCursor();
+    }
+
+    @Override
+    public String toString() {
+        return content;
+    }
+}
+
+/** 管理者：只负责存取快照，不解读内容；用栈实现多级撤销 */
+public class History {
+    private final Deque&lt;EditorMemento&gt; stack = new ArrayDeque&lt;&gt;();
+
+    public void push(EditorMemento memento) {
+        stack.push(memento);
+    }
+
+    public EditorMemento pop() {
+        return stack.isEmpty() ? null : stack.pop();
+    }
+}</code></pre>
+
+<p>使用方式就是「改之前存一份、撤销时弹一份」：<code>history.push(editor.save())</code> 与 <code>editor.restore(history.pop())</code>。设计上的关键点有两个：一是<strong>备忘录必须不可变</strong>，否则外部一改，历史状态就被污染；二是<strong>管理者不应提供读取状态的接口</strong>，它只管保管，这就是「不破坏封装」的含义——状态没有被暴露给第三方，却依然能恢复。</p>
+
+<p>它要解决的痛点是真实的：文本编辑器的 <code>Ctrl + Z</code>、游戏存档、数据库事务回滚、表单草稿，都是状态的保存与恢复。代价是内存——每次快照都会复制一份状态，字段多、保存频繁时内存会迅速膨胀。常见优化有三条：只保存<strong>增量（diff）</strong>而不是全量；对快照对象使用<strong>原型模式</strong>做浅拷贝并共享不可变部分；限制历史栈深度（例如只保留最近 20 步）。与原型模式的区别也要分清：<strong>原型是为了少创建对象而拷贝，备忘录是为了能回到过去而快照</strong>，前者的产物是同类对象，后者的产物是历史数据。</p>
+
+<h3>中介者模式：把网状依赖收敛成星型</h3>
+
+<p>中介者模式（Mediator）用一个中介对象封装一系列对象之间的交互，让对象之间不再显式互相引用。判断是否该用它，只要看类图上有没有出现「网状依赖」——五个同事类两两通信会连出十条线，改一个类的接口可能波及另外四个。</p>
+
+<pre><code class="language-java">import java.util.ArrayList;
+import java.util.List;
+
+/** 中介者接口 */
+public interface ChatMediator {
+    void register(User user);
+
+    void send(String message, User from);   // 由中介者决定转发给谁
+}
+
+/** 同事类：只认识中介者，不认识其他同事 */
+public abstract class User {
+    protected final ChatMediator mediator;   // 抽象依赖，不依赖具体中介者
+    protected final String name;
+
+    protected User(ChatMediator mediator, String name) {
+        this.mediator = mediator;
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public abstract void receive(String message, String from);
+
+    public void send(String message) {
+        mediator.send(message, this);
+    }
+}
+
+public class ChatUser extends User {
+    public ChatUser(ChatMediator mediator, String name) {
+        super(mediator, name);
+    }
+
+    @Override
+    public void receive(String message, String from) {
+        System.out.println(name + " 收到 " + from + " 的消息: " + message);
+    }
+}
+
+/** 具体中介者：掌握全部同事，负责路由与广播 */
+public class ChatRoom implements ChatMediator {
+    private final List&lt;User&gt; users = new ArrayList&lt;&gt;();
+
+    @Override
+    public void register(User user) {
+        users.add(user);
+    }
+
+    @Override
+    public void send(String message, User from) {
+        for (User user : users) {
+            if (user != from) {              // 广播给除发送者外的所有人
+                user.receive(message, from.getName());
+            }
+        }
+    }
+}</code></pre>
+
+<p>同事类只持有 <code>ChatMediator</code> 接口，通信规则全部集中在中介者里：把广播改成「只发给管理员」或「按房间隔离」，只改 <code>ChatRoom</code> 一处。代价同样明确——<strong>中介者会随着交互规则变多而膨胀成上帝类</strong>。因此实践中有两条纪律：中介者只负责「转发与路由」，不要塞业务计算；交互规则复杂到一定程度时，把中介者本身再拆分（例如按房间拆成多个中介者）。</p>
+
+<p>它与外观模式、观察者模式的区别经常被问到：<strong>外观</strong>是单向的——客户端调门面，子系统之间不通过门面互相通信；<strong>中介者</strong>是双向的——同事之间通过中介者互相通信；<strong>观察者</strong>是一对多的通知，目标与观察者之间仍是直接引用，而中介者把引用也一并收走了。MVC 里的控制器其实就是模型与视图之间的中介者。</p>
+
+<h3>解释器模式与空对象模式：两个「窄场景」工具</h3>
+
+<p><strong>解释器模式</strong>（Interpreter）为一种简单语言定义文法表示，并给出解释器来求值。它的结构是构建一棵抽象语法树：终结符表达式对应叶子，非终结符表达式（与、或、非）对应内部节点，<code>interpret</code> 递归求值。</p>
+
+<pre><code class="language-java">/** 抽象表达式 */
+public interface Expression {
+    boolean interpret(String context);
+}
+
+/** 终结符：判断上下文是否包含某个关键词 */
+public class KeywordExpression implements Expression {
+    private final String keyword;
+
+    public KeywordExpression(String keyword) {
+        this.keyword = keyword;
+    }
+
+    @Override
+    public boolean interpret(String context) {
+        return context != null && context.contains(keyword);
+    }
+}
+
+/** 非终结符：或 */
+public class OrExpression implements Expression {
+    private final Expression left;
+    private final Expression right;
+
+    public OrExpression(Expression left, Expression right) {
+        this.left = left;
+        this.right = right;
+    }
+
+    @Override
+    public boolean interpret(String context) {
+        return left.interpret(context) || right.interpret(context);
+    }
+}
+
+/** 非终结符：与 */
+public class AndExpression implements Expression {
+    private final Expression left;
+    private final Expression right;
+
+    public AndExpression(Expression left, Expression right) {
+        this.left = left;
+        this.right = right;
+    }
+
+    @Override
+    public boolean interpret(String context) {
+        return left.interpret(context) && right.interpret(context);
+    }
+}
+
+// 用法：组合出「包含 Java 且包含 教程」的规则
+Expression rule = new AndExpression(
+        new KeywordExpression("Java"),
+        new KeywordExpression("教程"));
+System.out.println(rule.interpret("Java 设计模式教程"));   // true</code></pre>
+
+<p>它的优点是文法易扩展、实现简单；缺点是复杂文法会导致类的数量爆炸，且递归调用带来性能开销。真实项目中很少手写完整解释器，通常只在「规则表达式」这一层使用，其余场景直接换用成熟方案：定时任务的 cron 表达式交给 Quartz，权限与规则表达式交给 SpEL 或 Aviator，SQL 交给数据库。一句话总结：<strong>解释器适合「文法简单且需要频繁组合」的规则判断，不适合当通用语言解析器</strong>。</p>
+
+<p><strong>空对象模式</strong>（Null Object）用一个「什么都不做」的对象代替 <code>null</code>，让调用方不必到处判空：</p>
+
+<pre><code class="language-java">public interface Logger {
+    void log(String message);
+}
+
+public class ConsoleLogger implements Logger {
+    @Override
+    public void log(String message) {
+        System.out.println(message);
+    }
+}
+
+/** 空对象：实现同一接口，但所有方法都是安全的空实现 */
+public class NullLogger implements Logger {
+    @Override
+    public void log(String message) {
+        // 有意为空：关闭日志时不产生任何输出
+    }
+}
+
+public class Service {
+    private final Logger logger;
+
+    public Service(Logger logger) {
+        this.logger = logger == null ? new NullLogger() : logger;   // 一次兜底，处处省心
+    }
+
+    public void doWork() {
+        logger.log("开始处理");     // 不需要再判空
+    }
+}</code></pre>
+
+<p>空对象模式消除了大量 <code>if (x != null)</code>，但<strong>它只适合「什么都不做」是合理默认行为的场景</strong>。如果空值意味着调用出错，用空对象把错误吞掉，只会让问题推迟到更难排查的地方——这时抛出异常或返回 <code>Optional</code> 更合适。JDK 里也有同样的取舍：<code>Collections.emptyList()</code> 返回的空集合可安全遍历，而 <code>Optional</code> 明确要求调用方处理「值不存在」，两者面向的是不同语义。</p>
+
+<p>这五个模式可以串成一句话记忆：<strong>访问者把操作搬出数据结构，备忘录把历史存进快照，中介者把网状收成星型，解释器把文法搭成语法树，空对象把判空换成空实现</strong>。它们的共同点依然是那个核心手法——找出会变的部分并抽成对象，只是变化点的形态不同。</p>
+
 <h2>小结</h2>
 
 <p>行为型模式的核心动作只有两步：找出代码里会变化的那一部分，把它抽成对象，再让稳定的一端持有它。策略模式抽走整个算法，模板方法只放开算法中的几步，观察者抽走“谁要知道”，责任链抽走“谁来处理”。状态抽走“当前在哪个阶段”，命令抽走“一次请求”，迭代器抽走“遍历顺序”。选用时先问三句话：变化的是一个完整算法还是其中几步？是运行期切换还是编译期继承？调用方需要知道细节吗？想清楚这三点，多数“该用哪个模式”的纠结都会迎刃而解。最后提醒一句：设计模式是重构的结果而非设计的起点，代码还没到需要抽象的时候，用 <code>if-else</code> 反而更清楚。</p>
+          
+          <nav class="post-pn">
+      <a class="prev-post" href="/java-tutorial-5-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">设计模式：结构型</span></a>
+      <a class="next-post" href="/java-tutorial-5-7/"><span class="pn-label">下一篇 →</span><span class="pn-title">单元测试与代码质量</span></a>
+      </nav>
           </article>
   <!-- Footer -->
   <footer>
