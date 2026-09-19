@@ -142,7 +142,7 @@
 
 <h2>二、索引、映射与分词器</h2>
 
-<p>ES 中的索引（index）是一个逻辑概念，相当于 MySQL 中的一张表，它由若干分片（shard）组成，每个分片是一个完整的 Lucene 索引；副本（replica）是分片的拷贝，用于容灾和分担读请求。建索引时就要确定分片数，因为分片数创建后不能改（只能 reindex 重建，或用 shrink/split 变相调整），副本数则随时可调。</p>
+<p>ES 中的索引（index）是一个逻辑概念，相当于 MySQL 中的一张表。索引由若干分片（shard）组成，每个分片是一个完整的 Lucene 索引；副本（replica）是分片的拷贝，用于容灾和分担读请求。建索引时就要确定分片数，因为分片数创建后不能改（只能 reindex 重建，或用 shrink/split 变相调整），副本数则随时可调。</p>
 
 <pre><code class="language-bash"># 建索引：1 个分片、1 个副本（单机开发可把副本设为 0）
 curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
@@ -174,7 +174,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 
 <p>ES 的查询走 HTTP，可以是 URL 参数式的轻量查询（<code>_search?q=name:spring</code>），也可以是请求体里的完整 DSL。前者只适合调试，正式代码一律用 DSL：它能表达组合条件、控制返回字段、做高亮、分页和聚合。</p>
 
-<p>最容易被混淆的是 <code>term</code> 与 <code>match</code>，二者的差别就是「分不分词」：<code>match</code> 会把查询词交给字段的分词器处理后再匹配，是全文检索的入口；<code>term</code> 把查询词当成一个完整的词条，直接去词表里找，因此只对 <code>keyword</code> 字段、数值和日期可靠。用 <code>term</code> 去查一个 <code>text</code> 字段（例如 <code>term: name = "Spring 实战"</code>），几乎必然查不到结果，这是新手最常见的坑。介于两者之间的是 <code>match_phrase</code>，它要求词条按顺序相邻出现，适合短语检索；<code>query_string</code> 则支持 <code>AND</code>/<code>OR</code> 与字段前缀等语法，灵活但容易因用户输入的特殊字符而报错，不建议直接暴露给终端用户。</p>
+<p>最容易被混淆的是 <code>term</code> 与 <code>match</code>，二者的差别就是「分不分词」：<code>match</code> 会把查询词交给字段的分词器处理后再匹配，是全文检索的入口；<code>term</code> 把查询词当成一个完整的词条，直接去词表里找，因此只对 <code>keyword</code> 字段、数值和日期可靠。用 <code>term</code> 去查一个 <code>text</code> 字段（例如 <code>term: name = “Spring 实战”</code>），几乎必然查不到结果，这是新手最常见的坑。介于两者之间的是 <code>match_phrase</code>，它要求词条按顺序相邻出现，适合短语检索；<code>query_string</code> 则支持 <code>AND</code>/<code>OR</code> 与字段前缀等语法，灵活但容易因用户输入的特殊字符而报错，不建议直接暴露给终端用户。</p>
 
 <pre><code class="language-json">POST /course/_search
 {
@@ -202,7 +202,7 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 
 <h2>四、聚合与集群调优</h2>
 
-<p>聚合（aggregation）是 ES 的另一半价值：它能在检索结果之上做分组统计，把「先查出来再在内存里 group by」的工作交给搜索引擎。聚合只对不分词的字段有意义，所以对 <code>text</code> 字段做 <code>terms</code> 聚合会报 fielddata 相关错误，正确做法是给它加一个 <code>keyword</code> 子字段（<code>"fields": { "keyword": { "type": "keyword" } }</code>），或者干脆在建映射时就规划好。</p>
+<p>聚合（aggregation）是 ES 的另一半价值：它能在检索结果之上做分组统计，把「先查出来再在内存里 group by」的工作交给搜索引擎。聚合只对不分词的字段有意义，所以对 <code>text</code> 字段做 <code>terms</code> 聚合会报 fielddata 相关错误。正确做法是给它加一个 <code>keyword</code> 子字段（<code>"fields": { "keyword": { "type": "keyword" } }</code>），或者干脆在建映射时就规划好。</p>
 
 <pre><code class="language-json">POST /course/_search
 {
@@ -226,11 +226,6 @@ curl -X PUT "localhost:9200/course" -H 'Content-Type: application/json' -d '
 <h2>五、小结</h2>
 
 <p>ES 的能力边界由倒排索引决定：分词决定能不能搜到，映射决定能不能过滤和聚合，DSL 决定搜得准不准，分片与堆内存决定能不能扛住量。实践顺序建议是：先用 <code>_analyze</code> 确认分词结果，再按查询方式（全文检索用 text，精确匹配与聚合用 keyword）设计映射，然后用 <code>bool</code> 查询把打分条件放进 must、把过滤条件放进 filter，最后才是加副本、调堆内存、批量写入这些运维手段。把这几步按顺序做对，绝大多数「搜不到、搜不准、搜得慢」的问题都能在源头定位。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-8-7/"><span class="pn-label">← 上一篇</span><span class="pn-title">RabbitMQ 与 RocketMQ</span></a>
-      <a class="next-post" href="/java-tutorial-8-9/"><span class="pn-label">下一篇 →</span><span class="pn-title">数据采集与同步</span></a>
-      </nav>
           </article>
   <!-- Footer -->
   <footer>

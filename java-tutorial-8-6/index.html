@@ -10,7 +10,7 @@
 <meta name="keywords" content="大语言模型,undefined">
 <meta name="description" content="欢迎访问[tianxia]的个人博客">
 <meta name="author" content="kveln">
-<title>8.6 Kafka 消息中间件 | tianxia</title>
+<title>Kafka 消息中间件 | tianxia</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
 <link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
 <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -111,7 +111,7 @@
               <span class="tags">
                 <a href="/tutorial/java/" class="tag">Java 教程</a>
 </span>
-              <h1>8.6 Kafka 消息中间件</h1>
+              <h1>Kafka 消息中间件</h1>
               <span class="meta">
                 Posted on
                 2026-09-19，9 min read</span>
@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面几章我们处理的数据，要么来自本地文件，要么来自数据库。但在真实系统里，日志、埋点、订单变更这些数据是持续不断产生的，而且往往有好几个下游同时要用：实时风控要、离线数仓要、搜索索引也要。如果让每个业务都直接连业务库，数据库会被拖垮，上下游也被死死耦合在一起。Kafka 就是为这类问题而生的分布式消息中间件。本章面向已经会写 Java、但还没在生产环境用过消息队列的读者，目标是讲清 Kafka 的核心模型（分区、副本、消费组、offset、事务），并能写出可运行的生产者与消费者代码。</p>
+<p>前面几章处理的数据，要么来自本地文件，要么来自数据库。但在真实系统里，日志、埋点、订单变更这些数据是持续不断产生的，而且往往有好几个下游同时要用：实时风控要、离线数仓要、搜索索引也要。如果让每个业务都直接连业务库，数据库会被拖垮，上下游也被死死耦合在一起。Kafka 就是为这类问题而生的分布式消息中间件。本章面向已经会写 Java、但还没在生产环境用过消息队列的读者，目标是讲清 Kafka 的核心模型（分区、副本、消费组、offset、事务），并能写出可运行的生产者与消费者代码。</p>
 
 <h2>一、Kafka 是什么：一个分布式提交日志</h2>
 
-<p>Kafka 由 LinkedIn 开发并于 2010 年捐献给 Apache 基金会，用 Scala 和 Java 编写。它最容易被误解的一点是：Kafka 本质不是一个"消息队列"，而是一个<strong>分布式、可分区的、多副本的提交日志（commit log）</strong>。消息不是被消费掉就删除，而是按配置的保留时间（如 7 天）或保留大小统一清理，因此同一个 topic 可以被多个业务反复读取，互不影响。</p>
+<p>Kafka 由 LinkedIn 开发并于 2010 年捐献给 Apache 基金会，用 Scala 和 Java 编写。它最容易被误解的一点是：Kafka 本质不是一个“消息队列”，而是一个<strong>分布式、可分区的、多副本的提交日志（commit log）</strong>。消息不是被消费掉就删除，而是按配置的保留时间（如 7 天）或保留大小统一清理，因此同一个 topic 可以被多个业务反复读取，互不影响。</p>
 
 <p>几个必须记住的术语：</p>
 
@@ -165,9 +165,9 @@
 
 <h3>2.2 副本与 ISR</h3>
 
-<p>每个分区可以配置多个副本（replication factor）。副本中只有一个 leader 对外提供读写，其余 follower 持续向 leader 拉取数据。为了让"同步"有一个明确的判定标准，Kafka 引入了 <strong>ISR（In-Sync Replicas，同步副本集合）</strong>：只有跟得上 leader 进度的副本才在 ISR 里。落后太多的副本会被踢出 ISR，追上后再加回来。当 leader 所在 broker 宕机时，controller 会从 ISR 中选一个新 leader；如果 ISR 空了，说明没有副本能保证数据完整，此时只能等待 ISR 成员恢复。</p>
+<p>每个分区可以配置多个副本（replication factor）。副本中只有一个 leader 对外提供读写，其余 follower 持续向 leader 拉取数据。为了让“同步”有一个明确的判定标准，Kafka 引入了 <strong>ISR（In-Sync Replicas，同步副本集合）</strong>：只有跟得上 leader 进度的副本才在 ISR 里。落后太多的副本会被踢出 ISR，追上后再加回来。当 leader 所在 broker 宕机时，controller 会从 ISR 中选一个新 leader；如果 ISR 空了，说明没有副本能保证数据完整，此时只能等待 ISR 成员恢复。</p>
 
-<p>需要特别纠正一个常见说法——"备份数为 n 就允许 n-1 个节点失败"：这句话只描述了<strong>数据不丢</strong>的容灾能力。如果同时宕机的副本数超过容忍范围，虽然集群还能读，但已经写入却未同步的消息会丢失。要保证不丢，必须让 acks 和 ISR 判定配合起来，下一节会讲。</p>
+<p>需要特别纠正一个常见说法——“备份数为 n 就允许 n-1 个节点失败”：这句话只描述了<strong>数据不丢</strong>的容灾能力。如果同时宕机的副本数超过容忍范围，虽然集群还能读，但已经写入却未同步的消息会丢失。要保证不丢，必须让 acks 和 ISR 判定配合起来，下一节会讲。</p>
 
 <h2>三、上手：创建主题并读写消息</h2>
 
@@ -234,7 +234,7 @@ kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     }
 }</code></pre>
 
-<p>消费者的基本形态是一个"拉取循环"。Kafka 消费者采用 poll 模式，没有数据时会阻塞等待，因此必须在循环里正确处理唤醒与提交。</p>
+<p>消费者的基本形态是一个“拉取循环”。Kafka 消费者采用 poll 模式，没有数据时会阻塞等待，因此必须在循环里正确处理唤醒与提交。</p>
 
 <pre><code class="language-java">Properties props = new Properties();
 props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -260,15 +260,15 @@ try (KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(pr
 
 <h3>3.1 offset 存到哪里</h3>
 
-<p>消费者的位移（offset）表示"下一条要读的消息编号"。早期版本把位移写在 ZooKeeper 上，而 ZooKeeper 的频繁写入是低效的；<strong>Kafka 0.9 起默认改为提交到内部主题 <code>__consumer_offsets</code></strong>，该主题是 compact 类型的日志，以「消费组 + topic + 分区」为 key 只保留每个 key 的最新值，既好扩展又能快速恢复。如果查资料时看到"offset 存在 ZooKeeper"，那基本是 0.9 之前的老内容。</p>
+<p>消费者的位移（offset）表示“下一条要读的消息编号”。早期版本把位移写在 ZooKeeper 上，而 ZooKeeper 的频繁写入是低效的。<strong>Kafka 0.9 起默认改为提交到内部主题 <code>__consumer_offsets</code></strong>。该主题是 compact 类型的日志，以「消费组 + topic + 分区」为 key，只保留每个 key 的最新值，既好扩展又能快速恢复。如果查资料时看到“offset 存在 ZooKeeper”，那基本是 0.9 之前的老内容。</p>
 
-<p>提交方式的选择直接决定消息语义：自动提交可能丢消息（提交后处理失败），先处理后提交则是"至少一次"（处理成功但提交失败会重复）。想要"恰好一次"，要么让业务处理本身幂等，要么使用下一节的事务。</p>
+<p>提交方式的选择直接决定消息语义：自动提交可能丢消息（提交后处理失败），先处理后提交则是“至少一次”（处理成功但提交失败会重复）。想要“恰好一次”，要么让业务处理本身幂等，要么使用下一节的事务。</p>
 
 <h2>四、可靠性：从 acks 到事务</h2>
 
 <h3>4.1 生产者不丢消息的三个条件</h3>
 
-<p>只设置 <code>acks=all</code> 还不够，它必须与 broker 端的 <code>min.insync.replicas</code> 联合判断：当 ISR 中的副本数少于该值时，broker 会直接拒绝写入并抛错，而不是"假装成功"。典型配置是 <code>replication.factor=3</code>、<code>min.insync.replicas=2</code>、<code>acks=all</code>：允许一个副本故障，同时保证每条被确认的消息至少存在于两个副本上。此外，还要配合足够大的 <code>delivery.timeout.ms</code> 和重试次数，否则重试还没成功，超时就已经把消息判死了。</p>
+<p>只设置 <code>acks=all</code> 还不够，它必须与 broker 端的 <code>min.insync.replicas</code> 联合判断：当 ISR 中的副本数少于该值时，broker 会直接拒绝写入并抛错，而不是“假装成功”。典型配置是 <code>replication.factor=3</code>、<code>min.insync.replicas=2</code>、<code>acks=all</code>：允许一个副本故障，同时保证每条被确认的消息至少存在于两个副本上。此外，还要配合足够大的 <code>delivery.timeout.ms</code> 和重试次数，否则重试还没成功，超时就已经把消息判死了。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-8-6/02-isr-acks.svg" alt="Kafka 副本、ISR 与 acks 可靠性配置示意图"><figcaption>图 2：分区副本与 ISR 集合，以及 acks=all / 1 / 0 在可靠性与吞吐之间的取舍</figcaption></figure>
 
@@ -280,7 +280,7 @@ try (KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(pr
 
 <h3>4.3 事务与恰好一次</h3>
 
-<p>在 0.11 版本之前，Kafka 只能做到"至少一次"。0.11 引入了幂等生产者与事务 API：用同一个 <code>transactional.id</code> 跨会话标识一个生产者实例，broker 会对该实例的写入做去重，并把多次发送与位移提交打包成一个原子事务。</p>
+<p>在 0.11 版本之前，Kafka 只能做到“至少一次”。0.11 引入了幂等生产者与事务 API：用同一个 <code>transactional.id</code> 跨会话标识一个生产者实例，broker 会对该实例的写入做去重，并把多次发送与位移提交打包成一个原子事务。</p>
 
 <pre><code class="language-java">// 事务要求：acks=all、enable.idempotence=true、且设置唯一的 transactional.id
 props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "order-tx-1");
@@ -300,7 +300,7 @@ try {
     producer.abortTransaction();      // 其他异常回滚并重试
 }</code></pre>
 
-<p>需要强调：<strong>事务只保证 Kafka 内部的原子性</strong>，如果下游写的是 MySQL，跨系统的恰好一次要靠两阶段提交或本地事务表来兜底。另外 <code>transactional.id</code> 必须每个生产者实例唯一，重复会导致旧实例被"隔离"（fenced）而报错。</p>
+<p>需要强调：<strong>事务只保证 Kafka 内部的原子性</strong>，如果下游写的是 MySQL，跨系统的恰好一次要靠两阶段提交或本地事务表来兜底。另外 <code>transactional.id</code> 必须每个生产者实例唯一，重复会导致旧实例被“隔离”（fenced）而报错。</p>
 
 <h2>五、常见坑与小结</h2>
 
@@ -309,17 +309,12 @@ try {
 <ol>
 <li><strong>key 为 null 导致乱序</strong>：不指定 key 时消息会轮询进各分区，同一实体的先后顺序就丢了。要顺序就按业务主键做 key。</li>
 <li><strong>消费堆积</strong>：先看是分区数不足还是单条处理太慢，前者加分区并同步加消费者（数量对齐分区数），后者优化处理逻辑或改为批量处理。</li>
-<li><strong>把提交位移当成"处理完成"</strong>：手动提交务必放在业务处理成功之后，并小心批内部分失败——此时应记录失败明细，而不是整批提交或整批重来。</li>
+<li><strong>把提交位移当成“处理完成”</strong>：手动提交务必放在业务处理成功之后，并小心批内部分失败——此时应记录失败明细，而不是整批提交或整批重来。</li>
 <li><strong>副本数与 min.insync.replicas 配置矛盾</strong>：若 <code>min.insync.replicas</code> 大于实际可用副本数，写入会被全面拒绝，可用性骤降。</li>
 <li><strong>照抄老教程的参数</strong>：<code>--zookeeper</code> 已废弃，<code>partitioner.class</code> 自 2.4 起废弃，消费者位移也不再存 ZooKeeper。</li>
 </ol>
 
-<p>小结：Kafka 用"分区"解决吞吐与有序，用"ISR 副本 + acks + min.insync.replicas"解决不丢，用"消费组 + offset 提交"解决多下游并行消费，用"幂等生产者 + 事务"解决重复。把这四条记住，再结合自己的分区数、副本数和消费位点提交策略，就能搭出一个既跑得快、又不丢数据的消息链路。下一章我们看看流式处理框架如何消费这些数据做实时计算。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-8-5/"><span class="pn-label">← 上一篇</span><span class="pn-title">8.5 Storm 与实时计算</span></a>
-      <a class="next-post" href="/java-tutorial-8-7/"><span class="pn-label">下一篇 →</span><span class="pn-title">RabbitMQ 与 RocketMQ</span></a>
-      </nav>
+<p>小结：Kafka 用“分区”解决吞吐与有序，用“ISR 副本 + acks + min.insync.replicas”解决不丢，用“消费组 + offset 提交”解决多下游并行消费，用“幂等生产者 + 事务”解决重复。把这四条记住，再结合自己的分区数、副本数和消费位点提交策略，就能搭出一个既跑得快、又不丢数据的消息链路。下一章看看流式处理框架如何消费这些数据做实时计算。</p>
           </article>
   <!-- Footer -->
   <footer>
