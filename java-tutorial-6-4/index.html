@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>并发与内存模型 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>并发与内存模型</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，7 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>这一章解决一个几乎所有 Java 工程师都踩过的坑：把「Java 内存模型（JMM）」当成「JVM 内存结构」来理解。前者是并发规范，讲的是多线程读写共享变量时「什么时候能看到对方改的值、什么顺序算合法」；后者讲的是堆、栈、方法区怎么划分。本章面向已经会写多线程、但说不清 <code>volatile</code> 和 <code>synchronized</code> 到底保证了什么的读者，按「为什么需要 → 规则 → 工具 → 常见坑」走一遍。</p>
+
+<h2>先分清两个词：JVM 内存结构 vs Java 内存模型</h2>
+
+<p>JVM 内存结构是真实存在的物理划分：堆、虚拟机栈、本地方法栈、方法区、程序计数器，面试问「对象分配在哪里」时答的是它。而 JMM 是一套<strong>抽象规范</strong>，出自 JSR-133，它不描述任何一块内存，只描述多线程下共享变量读写的合法行为。</p>
+
+<p>JMM 的抽象模型只有两层：所有变量存在<strong>主内存</strong>，每条线程有自己的<strong>工作内存</strong>（对应寄存器、各级缓存、写缓冲、无效化队列等硬件暂存区）。线程对变量的读写都在工作内存完成，线程之间不能直接访问对方的工作内存，只能通过主内存传递。硬件引入这些缓存是为了快，代价就是三个问题：</p>
+
+<ul>
+<li><strong>原子性</strong>：CPU 按时间片调度线程，<code>i++</code> 这种「读—改—写」可能在中间被挂起。</li>
+<li><strong>可见性</strong>：一个线程改了值，别的线程的工作内存副本还是旧的。</li>
+<li><strong>有序性</strong>：编译器和处理器会重排序指令，也会因为写缓冲异步刷出而表现出乱序。</li>
+</ul>
+
+<p>JMM 并不消灭这些问题（那等于废掉缓存和流水线），而是规定哪些重排序和延迟同步是允许的，并把底层实现封装成 <code>volatile</code>、<code>synchronized</code>、<code>final</code> 和 <code>java.util.concurrent</code> 供我们直接用。对原子性，Java 用 <code>monitorenter</code>/<code>monitorexit</code> 两条字节码实现 <code>synchronized</code>；对可见性，用「写后同步回主内存、读前从主内存刷新」的传递方式；对有序性，则用锁的互斥或 volatile 的屏障来限定重排序范围。</p>
+
+<h2>happens-before：判断「是否可见」的规则</h2>
+
+<p>既然工作内存的存在让「谁先谁后」在物理时间上无法确定，JMM 就换了个提法：只关心<strong>一个操作的结果对另一个操作是否可见</strong>。这就是 happens-before（先行发生）原则。关键在于：<strong>它不要求前一个操作必须在时间上先执行完</strong>，只要求前者的结果对后者可见，且后者看到的是一个不违反该原则的执行顺序。</p>
+
+<p>举个例子：线程 A 写普通变量 <code>a = 1</code>，再写 volatile 变量 <code>flag = true</code>；线程 B 读到 <code>flag == true</code>。由程序顺序规则，<code>a = 1</code> happens-before <code>flag = true</code>；由 volatile 规则，<code>flag = true</code> happens-before B 对 <code>flag</code> 的读；再由传递性，B 读 <code>flag</code> 之后的代码一定能看到 <code>a == 1</code>——哪怕 <code>a</code> 本身不是 volatile。这就是「用 volatile 变量当发布开关」能安全发布普通字段的原理。</p>
+
+<p>常用的几条规则：</p>
+
+<ul>
+<li><strong>程序顺序</strong>：同一线程内，按代码顺序，前面的操作 happens-before 后面的操作。</li>
+<li><strong>监视器锁</strong>：对同一个锁的解锁 happens-before 后续的加锁。</li>
+<li><strong>volatile 变量</strong>：对 <code>volatile</code> 字段的写 happens-before 后续对它的读。</li>
+<li><strong>线程启动与终止</strong>：<code>Thread.start()</code> happens-before 新线程中的一切；线程中的所有操作 happens-before 其他线程从 <code>join()</code> 成功返回。</li>
+<li><strong>传递性</strong>：A happens-before B，B happens-before C，则 A happens-before C。</li>
+</ul>
+
+<p>还有一条 as-if-serial 语义作为底线：不管怎么重排序，单线程程序的执行结果不能变。所以 <code>double area = pi * r * r;</code> 里，两句赋值和乘法可以互换，但乘法不能被提到取 <code>pi</code>、<code>r</code> 之前——否则结果就变了。</p>
+
+<h2>volatile：可见性 + 禁止特定重排序</h2>
+
+<p>下面这段代码是可见性问题的经典复现：主线程把 <code>flag</code> 改成 <code>true</code>，工作线程却可能永远看不到。</p>
+
+<pre><code class="language-java">public class VisibilityDemo {
+    // 去掉 volatile，程序很可能一直不退出
+    private static volatile boolean flag = false;
+
+    public static void main(String[] args) throws InterruptedException {
+        Thread worker = new Thread(() -&gt; {
+            while (!flag) {          // 反复读取工作内存中的副本
+                // 空转
+            }
+            System.out.println("worker 看到了 flag = true");
+        });
+        worker.start();
+
+        Thread.sleep(100);
+        flag = true;                 // volatile 写：立即可见
+        System.out.println("main 已置为 true");
+    }
+}</code></pre>
+
+<p>把 <code>volatile</code> 去掉，循环体里没有其他同步点，JIT 还可能把 <code>!flag</code> 提升为循环外的一次读取，worker 就永远不会退出——这也是「用变量做线程停止标志却停不下来」的原因。</p>
+
+<p>JMM 为 volatile 定的内存语义是：写之前插入 StoreStore 屏障、写之后插入 StoreLoad 屏障；读之后依次插入 LoadLoad、LoadStore 屏障。屏障有两个作用——把写缓冲刷到缓存让其他核心可见，以及阻止屏障两侧的读写跨越屏障重排序。在 x86 上，StoreStore/LoadLoad/LoadStore 是空操作（x86 本身不允许这类重排序），只有 StoreLoad 需要真正的 <code>lock</code> 前缀指令，这也是 volatile 写比读贵的原因。</p>
+
+<p>但 volatile <strong>不保证原子性</strong>。<code>volatile int count; count++;</code> 依然会丢更新，需要 <code>AtomicInteger</code> 或加锁。</p>
+
+<h2>CAS 与 AQS：从自旋到锁的骨架</h2>
+
+<p>CAS（Compare-And-Swap）是处理器提供的原子「比较并交换」指令，Java 侧入口是 <code>sun.misc.Unsafe#compareAndSwapInt</code>，实际由 <code>AtomicInteger</code> 等原子类包装。它把「读—比较—写」做成一条不可中断的指令，从而在没有锁的情况下保证原子性。</p>
+
+<pre><code class="language-java">import java.util.concurrent.atomic.AtomicInteger;
+
+public class CasDemo {
+    private static final AtomicInteger COUNT = new AtomicInteger(0);
+
+    public static void main(String[] args) throws InterruptedException {
+        Runnable task = () -&gt; {
+            for (int i = 0; i &lt; 10_000; i++) {
+                COUNT.incrementAndGet();   // 内部就是 CAS 自旋
+            }
+        };
+        Thread t1 = new Thread(task);
+        Thread t2 = new Thread(task);
+        t1.start(); t2.start();
+        t1.join(); t2.join();
+        System.out.println(COUNT.get());   // 稳定输出 20000
+    }
+}</code></pre>
+
+<p>CAS 有三个经典问题：一是 ABA（值从 A 改回 A，比较不出来，可用 <code>AtomicStampedReference</code> 加版本号）；二是自旋失败时空耗 CPU；三是只能保证<strong>一个</strong>变量的原子性，多个变量要 <code>AtomicReference</code> 或锁。</p>
+
+<p>AQS（<code>AbstractQueuedSynchronizer</code>）就是把这套 CAS 自旋 + 失败排队的思想做成了框架：它内部维护一个 <code>volatile int state</code> 表示同步状态，用一个 CLH 变体的双向队列存放没抢到锁的线程，抢锁时 CAS 改 state，失败就 <code>LockSupport.park()</code> 挂起，释放时 <code>unpark()</code> 唤醒后继。ReentrantLock、Semaphore、CountDownLatch 都建立在它之上。</p>
+
+<pre><code class="language-java">import java.util.concurrent.locks.AbstractQueuedSynchronizer;
+
+/** 基于 AQS 的极简不可重入互斥锁 */
+public class SimpleLock {
+    private static class Sync extends AbstractQueuedSynchronizer {
+        @Override
+        protected boolean tryAcquire(int arg) {
+            if (compareAndSetState(0, 1)) {   // CAS 抢锁
+                setExclusiveOwnerThread(Thread.currentThread());
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        protected boolean tryRelease(int arg) {
+            if (getState() == 0) {
+                throw new IllegalMonitorStateException();
+            }
+            setExclusiveOwnerThread(null);
+            setState(0);                      // volatile 写，对后续加锁可见
+            return true;
+        }
+
+        @Override
+        protected boolean isHeldExclusively() {
+            return getState() == 1;
+        }
+    }
+
+    private final Sync sync = new Sync();
+
+    public void lock()   { sync.acquire(1); }
+    public void unlock() { sync.release(1); }
+}</code></pre>
+
+<p>注意：<code>state</code> 是 volatile 字段，<code>setState</code> 的写 happens-before 后续 <code>compareAndSetState</code> 的读，这把「释放锁之前的操作」安全地交给了下一个拿到锁的线程。AQS 的 state 语义由子类定义：ReentrantLock 里它表示重入次数，Semaphore 里表示可用许可数，CountDownLatch 里表示剩余计数。因为 <code>tryAcquire</code> 返回 <code>false</code> 时由 AQS 负责入队与挂起，子类只需要回答「现在能不能拿」，不必自己写自旋和等待队列，这也是它比裸写 CAS 更适合做同步器的原因。</p>
+
+<h2>常见坑：DCL 与「锁升级」的误传</h2>
+
+<p>双重检查锁定（DCL）是最能说明重排序危害的例子：</p>
+
+<pre><code class="language-java">public class Singleton {
+    // 缺少 volatile 时，其他线程可能拿到「构造未完成」的半成品对象
+    private static volatile Singleton instance;
+
+    public static Singleton getInstance() {
+        if (instance == null) {                 // 第一次检查，避免每次都加锁
+            synchronized (Singleton.class) {
+                if (instance == null) {         // 第二次检查，防止重复创建
+                    instance = new Singleton(); // 1.分配内存 2.初始化 3.赋值给引用
+                }
+            }
+        }
+        return instance;
+    }
+}</code></pre>
+
+<p>没有 <code>volatile</code> 时，步骤 2 和 3 可能被重排序，另一线程在第一次检查处就会看到一个非 null、但字段还是默认值的对象。加 <code>volatile</code> 后，写之前的 StoreStore 屏障禁止了这种重排序，写之后的 StoreLoad 屏障保证后续读取能看到完整对象。（更简单的写法是静态内部类或枚举单例，由类加载机制保证线程安全。）</p>
+
+<p>两个容易说错的知识点，这里直接纠正：</p>
+
+<ul>
+<li><strong>volatile 不是「轻量级锁」，也没有「锁升级成 synchronized」这回事。</strong>「锁升级」是 <code>synchronized</code> 自己的优化路径（偏向锁 → 轻量级锁 → 重量级锁），volatile 完全不涉及锁，它只插入内存屏障。此外偏向锁在 JDK 15 起默认关闭（JEP 374），JDK 18 起相关实现已被移除，面试时按版本说清。</li>
+<li><strong>volatile 的可见性不等于「直接写主内存」。</strong>它只是通过屏障保证刷新与顺序，让其他核心最终能观察到新值；「立即同步回主内存」是便于理解的简化说法。</li>
+</ul>
+
+<h2>小结</h2>
+
+<p>记住三句话：<strong>JMM 是并发规范，不是堆栈方法区；happens-before 保证的是可见性而不是时间先后；volatile 给可见性和有序性但不给原子性，需要原子性就用 CAS/原子类或锁。</strong>排查并发问题时，先问「这两个操作之间有 happens-before 关系吗」，如果没有，就一定要靠 volatile、锁或并发工具类补上——DCL 的 <code>volatile</code> 和 AQS 的 <code>state</code>，都是这条规则的具体落点。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
