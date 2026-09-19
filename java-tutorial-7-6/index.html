@@ -148,7 +148,11 @@
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-6/01-image-layers.svg" alt="镜像由只读层叠加，容器在镜像之上再加一层可写层"><figcaption>图 1：镜像是一堆只读层的叠加，容器则在镜像最上面再叠一层可写层；删容器会连可写层一起删掉，docker commit 则把可写层固化成新的只读层</figcaption></figure>
 <h2>二、上手：安装、加速与常用命令</h2>
 
-<p>官方文档以 Ubuntu 为例，生产环境上 RHEL 系（CentOS/Rocky/Alma）也很常见。动手前先更新两个前提。其一，<strong>CentOS 7 已在 2024 年 6 月停止维护</strong>，新机器应改用 Ubuntu LTS、Rocky Linux 或 AlmaLinux；下面这套 yum 命令在 CentOS 7 上仍能执行，只是不该再拿它上新环境。其二，版本基线是 <strong>Docker 24+ 与 Compose V2</strong>，后者最容易被旧笔记带偏：Compose 原本是独立的 Python 程序（Compose V1，命令带连字符，写作 <code>docker-compose</code>，通常靠 <code>pip install docker-compose</code> 安装），官方自 2023 年起不再维护；现在它是 Docker CLI 的插件（Compose V2，命令带空格，写作 <code>docker compose</code>），随 <code>docker-compose-plugin</code> 包一起安装。装完第一件事是配镜像加速，否则从 Docker Hub 拉镜像极慢：</p>
+<p>官方文档以 Ubuntu 为例，生产环境上 RHEL 系（CentOS/Rocky/Alma）也很常见。动手前先更新两个前提：
+<ul>
+<li><strong>CentOS 7 已在 2024 年 6 月停止维护</strong>，新机器应改用 Ubuntu LTS、Rocky Linux 或 AlmaLinux。下面这套 yum 命令在 CentOS 7 上仍能执行，只是不该再拿它上新环境。</li>
+<li>版本基线是 <strong>Docker 24+ 与 Compose V2</strong>，后者最容易被旧笔记带偏。Compose 原本是独立的 Python 程序（Compose V1，命令带连字符，写作 <code>docker-compose</code>，通常靠 <code>pip install docker-compose</code> 安装），官方自 2023 年起不再维护。现在它是 Docker CLI 的插件（Compose V2，命令带空格，写作 <code>docker compose</code>），随 <code>docker-compose-plugin</code> 包一起安装。</li>
+</ul>装完第一件事是配镜像加速，否则从 Docker Hub 拉镜像极慢：</p>
 
 <pre><code class="language-bash"># ---- 安装依赖与 Docker CE（RHEL/CentOS 系，Docker 24+ 已拆成多个包）----
 sudo yum install -y yum-utils device-mapper-persistent-data lvm2
@@ -187,7 +191,7 @@ docker stop app &amp;&amp; docker rm app</code></pre>
 
 <p>Dockerfile 描述「如何从基础镜像构建新镜像」，每条指令生成一层，指令越少层越薄，镜像就越小。常用指令如下。<code>FROM</code> 指定基础镜像，且必须是第一条；<code>RUN</code> 在构建时执行命令；<code>COPY</code>/<code>ADD</code> 把宿主机文件复制进镜像，优先用 <code>COPY</code>。<code>ADD</code> 额外支持解压本地压缩包和从 URL 下载，除非确实要解压，否则别用。<code>WORKDIR</code> 设工作目录，并对其后的 <code>RUN</code>、<code>CMD</code>、<code>COPY</code> 生效；<code>ENV</code> 设环境变量，构建期与运行期都可见，<code>ARG</code> 只在构建期有效。<code>EXPOSE</code> 只是声明端口，对外映射仍靠 <code>-p</code>；<code>CMD</code> 与 <code>ENTRYPOINT</code> 都只取最后一条，区别是前者会被 <code>docker run</code> 后跟的命令覆盖，后者不会。常见组合是 <code>ENTRYPOINT</code> 写可执行程序、<code>CMD</code> 写默认参数。</p>
 
-<p>下面是 Java 应用的典型 Dockerfile，用多阶段构建分开编译与运行环境，最终镜像不含 Maven 和源码。基础镜像这里刻意用了仍在维护的正式版本，因为旧笔记的写法已不能照抄：<strong>基础镜像 <code>jdk1.8</code>、<code>openjdk:8</code>（含 <code>openjdk:8-jdk-alpine</code> 这类变体）都已停止更新，官方 <code>openjdk</code> 仓库本身也早已废弃</strong>，现行用 <code>eclipse-temurin:17-jre</code>，需要更高版本就用 <code>eclipse-temurin:21-jre</code>（构建阶段对应 <code>eclipse-temurin:17-jdk</code>/<code>21-jdk</code>）；Maven 侧同理，早期资料里的 <code>maven:3.5.4-jdk-8</code> 一类早已停止维护，这里锁 <code>maven:3.9-eclipse-temurin-17</code>。另外在 Maven 3.9 + JDK 17/21 这套组合下，编译目标版本应改用 <code>&lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;</code> 表达，取代旧的 <code>source</code>/<code>target</code> 写法——后者只声明语法与字节码版本，跨 JDK 编译时容易产出调用了高版本 API 的字节码。</p>
+<p>下面是 Java 应用的典型 Dockerfile，用多阶段构建分开编译与运行环境，最终镜像不含 Maven 和源码。基础镜像这里刻意用了仍在维护的正式版本，因为旧笔记的写法已不能照抄：<strong>基础镜像 <code>jdk1.8</code>、<code>openjdk:8</code>（含 <code>openjdk:8-jdk-alpine</code> 这类变体）都已停止更新，官方 <code>openjdk</code> 仓库本身也早已废弃</strong>。现行用 <code>eclipse-temurin:17-jre</code>，需要更高版本就用 <code>eclipse-temurin:21-jre</code>（构建阶段对应 <code>eclipse-temurin:17-jdk</code>/<code>21-jdk</code>）。Maven 侧同理，早期资料里的 <code>maven:3.5.4-jdk-8</code> 一类早已停止维护，这里锁 <code>maven:3.9-eclipse-temurin-17</code>。另外在 Maven 3.9 + JDK 17/21 这套组合下，编译目标版本应改用 <code>&lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;</code> 表达，取代旧的 <code>source</code>/<code>target</code> 写法；后者只声明语法与字节码版本，跨 JDK 编译时容易产出调用了高版本 API 的字节码。</p>
 
 <pre><code class="language-bash"># ---------- 构建阶段 ----------
 FROM maven:3.9-eclipse-temurin-17 AS builder
