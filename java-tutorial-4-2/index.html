@@ -130,6 +130,8 @@
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
 <p>在 Servlet/JSP 里，Action 处理完数据要带回页面，只有一条路：<code>request.setAttribute(...)</code>，页面再用 EL 表达式取。Struts2 换了一套模型：数据默认放进值栈（ValueStack），页面用 OGNL 表达式取值。理解值栈与 OGNL，是看懂 <code>&lt;s:property&gt;</code>、<code>&lt;s:iterator&gt;</code>，以及拦截器为什么能改参数、做校验的前提。本章先与 Servlet 域模型做对比，再讲值栈的读写与查找顺序、OGNL 中 <code>#</code>、<code>%</code>、<code>$</code> 三个符号和集合操作，最后落到拦截器的编写与 struts.xml 配置。适合已经能跑通一个 Struts2 Action、却对「页面里为什么能直接写 username」心存疑惑的读者。</p>
 
+<div class="tut-tip"><p><strong>现状先说明</strong>：Struts2 已基本停止活跃维护，Apache 官方目前主要在 6.x 主线上发布安全修复，2.5.x 及更早版本已停止支持；<strong>新项目不应再选用 Struts2，直接用 Spring MVC / Spring Boot</strong>。本章仍然值得读，一是存量系统还在跑、维护时必须看得懂，二是值栈 / OGNL / 拦截器这套设计能帮你看清「框架如何把请求参数自动绑进对象」的一般做法。基线版本：Java 17/21、Spring Boot 3.x + Spring Framework 6.x、Tomcat 10+；Servlet API 已由 <code>javax.servlet.*</code> 改名为 <code>jakarta.servlet.*</code>，所以把老 Struts 应用迁到 Tomcat 10+ 时，必须换成已适配 jakarta 命名空间的 Struts 6.x 版本（具体版本以官方发行说明为准），2.5.x 无法直接部署。</p></div>
+
 <h2>一、从 Servlet 的域模型到值栈</h2>
 
 <p>Servlet 的思路是「把数据放进域，再按键取值」：数据存在 request、session、application 等作用域里，EL 按域查找，键名就是全部线索。Struts2 的思路是「把数据放到一棵可导航的对象图上，再按路径取值」，承担这棵树的就是 OGNL。</p>
@@ -270,7 +272,26 @@ public class LogInterceptor extends MethodFilterInterceptor {
 <li><strong>同名属性取错，多半是栈序问题。</strong>值栈是「查找」而非覆盖，栈顶 Object 的属性优先于 <code>set()</code> 进去的 Map，更优先于上下文栈。</li>
 <li><strong>静态方法访问默认关闭</strong>（2.3.20 起默认 false，2.5 起开关移除），不要沿用旧写法；确有需要应在服务端显式放开并评估 OGNL 注入风险。</li>
 <li><strong>过滤器与拦截器的边界</strong>：需要拦截 JSP、图片、所有 URL 时，用过滤器或 Spring MVC 的 HandlerInterceptor。只需在 Action 调用链上做参数注入、校验、登录检查时，用 Struts2 拦截器。</li>
+<li><strong>版本必须跟上官方的安全修复。</strong>Struts2 历史上多次出现 OGNL 表达式注入导致的远程代码执行（S2-xxx 系列），官方目前只在 6.x 主线继续发布安全版本，2.5.x 及更早已停止支持；只要系统还在跑，就要盯住官方的安全公告。</li>
+<li><strong>不要把用户输入拼进表达式。</strong>OGNL 能调用方法、访问静态成员，这既是能力也是注入面；请求参数只用于数据绑定，不要拿来拼接表达式文本。</li>
+<li><strong>迁到 Tomcat 10+ 必须先换命名空间。</strong>老应用编译期依赖 <code>javax.servlet.*</code>，而 Tomcat 10 / Boot 3.x 只提供 <code>jakarta.servlet.*</code>，要么改用适配 jakarta 的 Struts 6.x 版本，要么整体迁到 Spring MVC。</li>
 </ul>
+
+<p>如果手头是存量 Struts2 项目，迁到 Spring MVC / Boot 3.x 后原来的概念都有对应物，逐个替换即可：</p>
+
+<table>
+<thead>
+<tr><th>Struts2 概念</th><th>Spring MVC / Boot 3.x 对应</th></tr>
+</thead>
+<tbody>
+<tr><td>Action（继承 <code>ActionSupport</code>）</td><td><code>@Controller</code> / <code>@RestController</code> 类</td></tr>
+<tr><td><code>struts.xml</code> 中的动作映射</td><td><code>@GetMapping</code> / <code>@PostMapping</code> 注解</td></tr>
+<tr><td>值栈 + OGNL 取值</td><td><code>Model</code> / <code>ModelMap</code> + Thymeleaf（或 EL）</td></tr>
+<tr><td>拦截器（<code>Interceptor</code>）</td><td><code>HandlerInterceptor</code>（只拦 Controller）或 <code>jakarta.servlet.Filter</code>（拦所有请求）</td></tr>
+<tr><td>参数注入（<code>params</code> 拦截器）</td><td>方法参数上的 <code>@RequestParam</code> / <code>@ModelAttribute</code></td></tr>
+<tr><td>校验（<code>validation</code> + <code>workflow</code>）</td><td>Bean Validation（<code>@Valid</code> 配合约束注解）+ <code>BindingResult</code></td></tr>
+</tbody>
+</table>
 
 <p>小结：Struts2 把「域 + 键」的取数方式换成了「值栈 + OGNL 路径」。记住三点即可上手：</p>
 
@@ -281,6 +302,8 @@ public class LogInterceptor extends MethodFilterInterceptor {
 </ul>
 
 <p>理解了这一层，<code>&lt;s:property&gt;</code> 为什么能直接写属性名、以及参数注入为什么突然失灵，就都成了同一个问题的两面。</p>
+
+<p>最后再强调一次定位：这些都是<strong>维护存量系统</strong>的技能。新项目请直接用 Spring Boot 3.x 的 Spring MVC——REST + 模板引擎或 SPA，既没有值栈，也不需要 OGNL。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-4-1/"><span class="pn-label">← 上一篇</span><span class="pn-title">Servlet、JSP 与 MVC</span></a>
