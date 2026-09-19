@@ -245,7 +245,66 @@ session.invalidate();</code></pre>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-10/02-cookie-session-flow.svg" alt="Cookie 与 Session 会话流程示意图：首次请求不带 Cookie，服务端用 Set-Cookie 下发 JSESSIONID，浏览器后续请求自动带回，服务端据此命中自己的 Session 数据"><figcaption>图 2：Set-Cookie 下发会话 ID，后续请求自动带回</figcaption></figure>
 
-<h2>五、浏览器拿到响应后做了什么</h2>
+<h2>五、多实例部署后的会话共享：Spring Session</h2>
+<p>「四」里的 <code>HttpSession</code> 是 Servlet 容器提供的：数据默认存在当前 JVM 的堆内存里，只靠 Cookie 里的 <code>JSESSIONID</code> 关联。单机部署看不出问题，一旦把应用部署成多个实例，问题立刻出现——用户第一次请求落在实例 A，Session 建在 A 的内存里；下一次请求被负载均衡分到实例 B，B 找不到这个 <code>JSESSIONID</code>，于是把用户当成未登录，重新发一个会话 ID。表现就是“登录成功，刷新一下又要重新登录”，而且时好时坏。</p>
+<p>常见的临时办法是把某个用户固定打到同一台机器上，也就是<strong>会话粘滞</strong>（sticky session）。它依赖网关或负载均衡器的 hash 规则，代价是：实例重启或缩容时，它承载的会话全部丢失；扩容后新实例分不到流量，热点实例依然热；做灰度发布、滚动更新时几乎必然掉登录态。所以粘滞只能算权宜之计，正解是把会话数据从单机内存搬到所有实例都能访问的共享存储里。</p>
+<p><strong>Spring Session</strong> 就是官方给出的方案：它用一层 Filter 包装原始的 <code>HttpServletRequest</code>，把 <code>getSession()</code> 的读写重定向到共享存储（Redis、JDBC 等），上层业务代码完全不用改。关键点是：引入依赖并配置后，它<strong>自动接管 <code>HttpSession</code></strong>——控制器里拿到的 <code>HttpSession</code> 已由 Spring Session 实现，<code>setAttribute</code>、<code>invalidate</code> 的语义与原来一致。</p>
+
+<h3>接入与配置：@EnableRedisHttpSession</h3>
+<p>以 Redis 为例，依赖只需 <code>spring-session-data-redis</code>（内部通过 <code>spring-boot-starter-data-redis</code> 使用 Lettuce 连接），版本跟随 Spring Boot BOM 管理即可；若是独立管理，这一系列以 <code>3.x</code> 为主，具体补丁版本<strong>以官方为准</strong>。</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.session&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-session-data-redis&lt;/artifactId&gt;
+    &lt;version&gt;3.x&lt;/version&gt;   &lt;!-- 建议交给 Spring Boot BOM 管理，具体版本以官方为准 --&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-data-redis&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+<p>然后加一个配置类。Boot 3.x 用的是 <code>jakarta.*</code>，注解位置与旧教程里的 <code>javax.*</code> 不同，照抄老代码会直接编译不过：</p>
+<pre><code class="language-java">@Configuration
+@EnableRedisHttpSession(maxInactiveIntervalInSeconds = 1800) // 30 分钟无活动过期
+public class SessionConfig {
+
+    @Bean
+    public RedisSerializer&lt;Object&gt; springSessionDefaultRedisSerializer() {
+        // 用 JSON 存会话，见下一小节的取舍
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.activateDefaultTyping(
+                BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
+                ObjectMapper.DefaultTyping.NON_FINAL);
+        return new GenericJackson2JsonRedisSerializer(mapper);
+    }
+}</code></pre>
+<p>对应的连接与命名空间配置：</p>
+<pre><code class="language-yaml">spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      # password: your-password
+      database: 0
+  session:
+    redis:
+      namespace: myapp:session   # Redis 中的键前缀，多应用共用一个库时必须区分
+      flush-mode: on_save        # 请求结束时统一写回，减少 Redis 往返
+server:
+  servlet:
+    session:
+      timeout: 30m               # 容器会话超时兜底；@EnableRedisHttpSession 的显式值优先</code></pre>
+<p>启动后可以用 <code>redis-cli</code> 验证：登录一次，执行 <code>keys myapp:session*</code> 应能看到会话键，其类型是 Hash；用一个实例写入、另一个实例读取，应能直接命中。若键没有出现，优先检查是否真的走了 Spring Session 的 Filter（例如自定义 Filter 顺序把它挤到了后面），而不是先怀疑 Redis。</p>
+
+<h3>序列化：JDK 序列化与 JSON 序列化的取舍</h3>
+<p>Spring Session 默认使用 <strong>JDK 序列化</strong>（<code>JdkSerializationRedisSerializer</code>）。它的优点是接入零成本，任何实现了 <code>Serializable</code> 的对象都能存；缺点是存储内容是二进制，<code>redis-cli</code> 里几乎读不出内容，排障困难，而且对象类结构一旦改动（加字段、改包名）旧会话反序列化就会失败。更麻烦的是它把类名写进字节流，等于给反序列化留了一个攻击面。</p>
+<p>生产上更推荐 <strong>JSON 序列化</strong>，即 <code>GenericJackson2JsonRedisSerializer</code>：值可读、跨语言、跨版本升级时迁移成本低，调试时能直接看到 Session 里有哪些属性。代价是需要在 JSON 里保留类型信息（否则 <code>getAttribute()</code> 还原不出原始类型），因此要开启 Jackson 的 default typing；上面的 <code>BasicPolymorphicTypeValidator</code> 限定了允许反序列化的基类型，不要图省事写成 <code>LaissezFaireSubTypeValidator</code>，那会重新打开反序列化漏洞。另外，存进 Session 的对象需要有无参构造与标准 getter／setter，对象过大时还应评估“是否真的该放进会话”。</p>
+<p>两种序列化混用会直接报错，切换时最好清理一次旧会话键（<code>myapp:session*</code>），避免上线后集中出现反序列化异常。</p>
+
+<h3>过期时间与 Spring Security 的联动</h3>
+<p>过期时间有三处会影响结果，优先级从高到低是：<code>@EnableRedisHttpSession(maxInactiveIntervalInSeconds = ...)</code> 的显式值、<code>server.servlet.session.timeout</code> 配置、容器默认值。语义与原生 Session 一致，都是“无活动”而非“绝对时长”：每次请求都会刷新 Redis 键的 TTL。若配置值小于 60 秒，Spring Session 会直接报错，这是为了避免误配把会话瞬间清空。</p>
+<p>与 Spring Security 一起使用时，登录态并不以业务对象的形式存在，而是以 <code>SPRING_SECURITY_CONTEXT</code> 为键存进同一个会话。因此只要 Spring Session 生效，<code>SecurityContext</code> 就随之共享，多实例下不会出现“A 实例已登录、B 实例匿名”的问题。要注意两点：一是序列化配置必须能正确处理 <code>SecurityContextImpl</code> 这类对象，JDK 序列化天然支持，切到 JSON 时要确认 default typing 已开启；二是“按用户名强制下线”需要查找到某个用户的全部会话，<code>RedisIndexedSessionRepository</code> 会维护 principal 索引，但它依赖 Redis 的键空间通知，生产环境需要确认该能力可用（部分托管 Redis 会关闭或延迟通知），否则索引不会建立。常用做法是：给会话加 <code>FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME</code> 属性，再通过 <code>findByPrincipalName()</code> 定位并逐个 <code>deleteById()</code>。</p>
+<p>最后提醒一句使用边界：Spring Session 解决的是“多实例共享会话”，它不会让会话变成永久存储，也不适合放大量业务数据——会话应当保持小而短命，真正的持久状态仍然放在数据库里。</p>
+
+
 
 <p>响应字节流到达浏览器后，先按 <code>Content-Type</code> 里的 charset 解码成字符，然后进入渲染管线。渲染管线分为如下几步：</p>
 <ul>
@@ -259,10 +318,41 @@ session.invalidate();</code></pre>
 
 <p>把这条链路和前面的知识连起来看：一次页面加载就是“缓存判断 → 请求 → 响应 → 渲染”的重复循环。Cookie、状态码、缓存头都在这个循环里各管一段，任何一段理解错了，表现都是“页面看起来不对”，而不是一句清晰的报错。</p>
 
+
+
 <p><strong>小结：</strong>本章沿着一次真实交互走了一遍。HTTP 用“请求行 + 头 + 体”和“状态行 + 头 + 体”这两段对称的文本承载全部通信；状态码是服务端给出的结论，3xx 要留意 304 不带正文。缓存分为强缓存（Cache-Control / Expires）与协商缓存（Last-Modified / ETag），开发时关缓存，上线后用内容哈希。Cookie 通过 Set-Cookie 与 Cookie 头在客户端存小段文本，其唯一性由 domain、path、name 共同决定，属性错误会导致覆盖和删除失效。Session 把状态放在服务端，只靠 JSESSIONID 关联；<code>getSession()</code> 会创建会话，只有 <code>getSession(false)</code> 才可能返回 null。最后，浏览器按“解析 → 渲染树 → 布局 → 绘制 → 合成”的流程把字节变成像素。把这些环节串起来，再遇到登录态丢失、页面不更新这类问题，你就有了一条可排查的路径。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-3-9/"><span class="pn-label">← 上一篇</span><span class="pn-title">Node.js 与构建工具</span></a>
+
+          <h2>六、浏览器拿到响应后做了什么</h2>
+<p>响应字节流到达浏览器后，先按 <code>Content-Type</code> 里的 charset 解码成字符，然后进入渲染管线。渲染管线分为如下几步：</p>
+<ul>
+<li>解析 HTML 生成 DOM 树，解析 CSS 生成 CSSOM 树，两者合并成渲染树（不可见元素如 <code>display:none</code> 不会进入）。</li>
+<li>计算每个盒子的位置与大小，这一步叫布局或回流。</li>
+<li>填充颜色与文字，即绘制。</li>
+<li>按层合成并显示。</li>
+</ul>
+
+<p>理解这条链路就能解释日常现象。<code>&lt;link rel="stylesheet"&gt;</code> 会阻塞渲染，因为浏览器不想先画一版没有样式的页面。普通 <code>&lt;script&gt;</code> 会阻塞 HTML 解析，因为它可能用 <code>document.write</code> 改写文档；加 <code>defer</code> 表示解析完再按顺序执行，加 <code>async</code> 表示下载完就执行且顺序不确定。频繁触发回流与重绘的样式属性（如 <code>width</code>、<code>top</code>）代价远高于只触发合成的属性（如 <code>transform</code>、<code>opacity</code>），这也是动画优先用 <code>transform</code> 的原因。</p>
+
+<p>把这条链路和前面的知识连起来看：一次页面加载就是“缓存判断 → 请求 → 响应 → 渲染”的重复循环。Cookie、状态码、缓存头都在这个循环里各管一段，任何一段理解错了，表现都是“页面看起来不对”，而不是一句清晰的报错。</p>
+
+<h2>六、浏览器拿到响应后做了什么</h2>
+<p>响应字节流到达浏览器后，先按 <code>Content-Type</code> 里的 charset 解码成字符，然后进入渲染管线。渲染管线分为如下几步：</p>
+<ul>
+<li>解析 HTML 生成 DOM 树，解析 CSS 生成 CSSOM 树，两者合并成渲染树（不可见元素如 <code>display:none</code> 不会进入）。</li>
+<li>计算每个盒子的位置与大小，这一步叫布局或回流。</li>
+<li>填充颜色与文字，即绘制。</li>
+<li>按层合成并显示。</li>
+</ul>
+
+<p>理解这条链路就能解释日常现象。<code>&lt;link rel="stylesheet"&gt;</code> 会阻塞渲染，因为浏览器不想先画一版没有样式的页面。普通 <code>&lt;script&gt;</code> 会阻塞 HTML 解析，因为它可能用 <code>document.write</code> 改写文档；加 <code>defer</code> 表示解析完再按顺序执行，加 <code>async</code> 表示下载完就执行且顺序不确定。频繁触发回流与重绘的样式属性（如 <code>width</code>、<code>top</code>）代价远高于只触发合成的属性（如 <code>transform</code>、<code>opacity</code>），这也是动画优先用 <code>transform</code> 的原因。</p>
+
+<p>把这条链路和前面的知识连起来看：一次页面加载就是“缓存判断 → 请求 → 响应 → 渲染”的重复循环。Cookie、状态码、缓存头都在这个循环里各管一段，任何一段理解错了，表现都是“页面看起来不对”，而不是一句清晰的报错。</p>
+
+<h2>六、浏览器拿到响应后做了什么</h2>
+
+<p><strong>小结：</strong>本章沿着一次真实交互走了一遍。HTTP 用“请求行 + 头 + 体”和“状态行 + 头 + 体”这两段对称的文本承载全部通信；状态码是服务端给出的结论，3xx 要留意 304 不带正文。缓存分为强缓存（Cache-Control / Expires）与协商缓存（Last-Modified / ETag），开发时关缓存，上线后用内容哈希。Cookie 通过 Set-Cookie 与 Cookie 头在客户端存小段文本，其唯一性由 domain、path、name 共同决定，属性错误会导致覆盖和删除失效。Session 把状态放在服务端，只靠 JSESSIONID 关联；<code>getSession()</code> 会创建会话，只有 <code>getSession(false)</code> 才可能返回 null。最后，浏览器按“解析 → 渲染树 → 布局 → 绘制 → 合成”的流程把字节变成像素。把这些环节串起来，再遇到登录态丢失、页面不更新这类问题，你就有了一条可排查的路径。</p>
+
+               <a class="prev-post" href="/java-tutorial-3-9/"><span class="pn-label">← 上一篇</span><span class="pn-title">Node.js 与构建工具</span></a>
       <a class="next-post" href="/java-tutorial-4-1/"><span class="pn-label">下一篇 →</span><span class="pn-title">Servlet、JSP 与 MVC</span></a>
       </nav>
           </article>

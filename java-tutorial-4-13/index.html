@@ -223,6 +223,114 @@ public class NacosConsumerApplication {
 </ul>
 <p>注意 TCC 与本地事务的边界：TCC 只保证各参与方最终一致，不提供隔离性，中间态对外可见，业务上要接受“预留中”这个短暂状态。若业务无法改造，也可以考虑基于消息队列的最终一致方案或 Seata 的 AT 模式，但同样需要评估性能与侵入性。</p>
 
+<h2>ZooKeeper 与 Curator：把协调逻辑收敛成配方</h2>
+<p>注册中心解决“地址在哪里”，而“同一时刻只允许一个实例做某件事”是另一类问题：定时任务不能重复执行、对账只能有一个主节点、跨实例的临界区需要互斥。这类需求属于<strong>分布式协调</strong>，ZooKeeper 是这一领域最经典的基础设施。它的数据模型是一棵类似文件系统的树，节点叫 znode，配合临时节点（会话断开自动删除）、顺序节点（父节点下单调递增编号）和 Watch（节点变化通知），就能拼出锁、选主、成员感知等能力。</p>
+<p>直接用 ZooKeeper 原生 API 写这些逻辑却相当难受，主要有三个痛点：</p>
+<ul>
+    <li><strong>会话重连要自己兜底</strong>：网络抖动导致会话过期后，客户端的临时节点会全部消失，锁、注册信息随之作废，业务代码必须监听连接状态并重建全部状态，漏一处就出现“锁还在，其实早没了”的隐性错误。</li>
+    <li><strong>Watch 是一次性的</strong>：每次收到通知后都要重新注册；而在“获取通知”与“重新注册”之间发生的变化会被永久丢失，必须靠“读取数据 + 注册监听”成对执行来规避。</li>
+    <li><strong>异常处理繁琐</strong>：连接丢失、节点已存在、节点不存在被拆成不同异常，重试逻辑（指数退避）要在每个调用点重复书写。</li>
+</ul>
+<p><strong>Apache Curator</strong> 就是官方推荐的封装：它把连接管理与重试策略抽象成 <code>CuratorFramework</code>，把 Watch 封装成可重复触发的 <code>CuratorCache</code>／<code>PathChildrenCache</code>，并把常用协调算法做成开箱即用的 <strong>CuratorRecipe</strong>，让业务代码只关心“加锁、让位、计数”。</p>
+
+<h3>依赖与建连：blockUntilConnected 不能省</h3>
+<p>依赖只需要 <code>curator-recipes</code>，它已经传递引入 <code>curator-framework</code> 与 ZooKeeper 客户端。版本采用 5.x 系列，与 Boot 3.x（<code>jakarta.*</code>）搭配没有冲突；5.x 内部各小版本差异不大，具体使用哪个补丁版本<strong>以官方为准</strong>，不建议凭记忆写死。</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.curator&lt;/groupId&gt;
+    &lt;artifactId&gt;curator-recipes&lt;/artifactId&gt;
+    &lt;version&gt;5.x&lt;/version&gt;   &lt;!-- 具体补丁版本以官方为准 --&gt;
+&lt;/dependency&gt;</code></pre>
+<p>建连推荐用配置类显式声明，避免旧教程里依赖 XML 自动装配的写法：</p>
+<pre><code class="language-java">@Configuration
+public class CuratorConfig {
+
+    @Bean(destroyMethod = "close")
+    public CuratorFramework curatorFramework() {
+        RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3); // 首次 1s，最多重试 3 次
+        CuratorFramework client = CuratorFrameworkFactory.builder()
+                .connectString("127.0.0.1:2181")
+                .sessionTimeoutMs(30_000)
+                .connectionTimeoutMs(15_000)
+                .retryPolicy(retryPolicy)
+                // .authorization("digest", "user:pass".getBytes(StandardCharsets.UTF_8))
+                .namespace("myapp")   // 业务隔离：所有节点自动挂在 /myapp 下
+                .build();
+        client.start();
+        try {
+            // 关键：start() 只是异步发起连接，这里阻塞等待真正连上
+            if (!client.blockUntilConnected(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("连接 ZooKeeper 超时");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();   // 恢复中断标志，不要吞掉
+            throw new IllegalStateException("等待 ZooKeeper 连接时被中断", e);
+        }
+        return client;
+    }
+}</code></pre>
+<p>两个容易踩的坑：<code>start()</code> 是异步的，不调用 <code>blockUntilConnected</code> 就立刻执行业务操作，会直接拿到 <code>ConnectionLossException</code>；<code>catch InterruptedException</code> 后必须调用 <code>Thread.currentThread().interrupt()</code> 把中断状态还回去，否则线程池里的中断信号会被吞掉。此外，容器关闭时应让 Bean 走 <code>close()</code>，确保临时节点被及时清理。</p>
+
+<h3>CuratorRecipe：锁、选主、计数与屏障</h3>
+<p>Curator 把常见协调算法统称为 Recipe，常用的有四类。</p>
+<p><strong>分布式锁 InterProcessMutex</strong>：它基于临时顺序节点实现，同一线程可重复获取（可重入），跨 JVM 互斥。<code>acquire()</code> 会一直阻塞，生产上更该用带超时的重载，并务必用 <code>try/finally</code> 保证释放：</p>
+<pre><code class="language-java">@Service
+public class OrderJobService {
+
+    private final InterProcessMutex lock;
+
+    public OrderJobService(CuratorFramework client) {
+        // 锁的路径只约定一个逻辑名，namespace 会自动加在前面
+        this.lock = new InterProcessMutex(client, "/locks/order-job");
+    }
+
+    public void runOnce() throws Exception {
+        // 最多等 5 秒，等不到就放弃本次执行，避免请求线程被拖死
+        if (!lock.acquire(5, TimeUnit.SECONDS)) {
+            return;                      // 未抢到锁，直接让位给持有者
+        }
+        try {
+            // 临界区：同一时刻全集群只有一个实例会执行到这里
+            doBiz();
+        } finally {
+            lock.release();              // 必须放在 finally，异常也不能漏放
+        }
+    }
+
+    private void doBiz() {
+        // 真正的业务逻辑
+    }
+}</code></pre>
+<p><strong>领导者选举</strong>有两种语义，选择取决于“主节点失效后是否允许换人”：</p>
+<ul>
+    <li><code>LeaderLatch</code>：一旦抢到 leadership 就持有到进程结束；适合“主备”模型，主节点退出后，等待队列里的下一个实例立即补位。用 <code>hasLeadership()</code> 判断当前是否为主，用 <code>await()</code> 阻塞等待成为主，并在关闭时 <code>close()</code> 让出。</li>
+    <li><code>LeaderSelector</code>：拿到 leadership 后执行 <code>takeLeadership()</code>，方法返回即自动释放并重新参与竞选；适合“轮流执行”模型，例如让每个实例轮流做一次全量对账。注意 <code>takeLeadership()</code> 内部不要写不返回的死循环，否则选举不会再轮转。</li>
+</ul>
+<pre><code class="language-java">@Component
+public class MasterElection implements AutoCloseable {
+
+    private final LeaderLatch latch;
+
+    public MasterElection(CuratorFramework client) throws Exception {
+        this.latch = new LeaderLatch(client, "/election/master", "node-1");
+        latch.start();                                  // 开始参与竞选
+    }
+
+    public boolean isMaster() {
+        return latch.hasLeadership();                    // 仅主节点返回 true
+    }
+
+    @Override
+    public void close() throws Exception {
+        latch.close();                                   // 释放 leadership，让位给其他实例
+    }
+}</code></pre>
+<p><strong>分布式计数器</strong>用于跨实例累加，例如全局任务序号、当天调用次数：<code>DistributedAtomicLong</code> 的 <code>increment()</code>、<code>add()</code> 是原子的，<code>trySet()</code> 带版本比较可避免覆盖并发写入。若只需要“读一个会变化的配置”，用 <code>CuratorCache</code>（2.6 之前的 <code>NodeCache</code> 已标记过时）注册监听比轮询更合适。</p>
+<p><strong>屏障</strong>分两种：<code>DistributedBarrier</code> 由主控方 <code>setBarrier()</code> 放开，其他实例 <code>waitOnBarrier()</code> 阻塞等待，适合“等所有实例初始化完成再放流量”；<code>DistributedDoubleBarrier</code> 则要求固定数量的成员全部 <code>enter()</code> 后才一起继续，适合批量任务的分片同步。两者都要注意成员数量与超时，避免个别实例离线把整批任务卡住。</p>
+
+<h3>定位选择：协调服务与注册中心不是一回事</h3>
+<p>ZooKeeper 确实能当注册中心（临时节点 + Watch 天然满足“实例下线自动摘除”），但它的设计目标是<strong>协调服务</strong>：强一致（ZAB 协议，写操作需要集群半数以上确认）、容量小、写延迟相对高。而注册中心的核心诉求是高并发读、海量实例的健康状态快速收敛，因此 Nacos、Consul、Eureka 这类专门组件更合适——Nacos 还顺带提供配置中心、命名空间隔离与控制台运维能力。</p>
+<p>结论很明确：<strong>新项目里 ZooKeeper 多用于协调与选主（分布式锁、Leader 选举、成员感知），注册中心更常用 Nacos 或 Consul</strong>。需要特别提醒的是，ZooKeeper 是 CP 系统，集群失去多数节点（例如 3 节点挂 2 个）时会拒绝服务，用它做注册中心会连带影响服务发现；而 Nacos 允许在可用性与一致性之间做选择。因此不要因为“项目里已经有 ZooKeeper”就顺手把它当注册中心用，两件事分开选型更稳妥。</p>
+
 <h2>小结</h2>
 <p>服务分发与治理本质上是把“地址管理、流量分配、故障隔离、问题定位”这四件事从业务代码中抽出来，交给基础设施统一处理。落地顺序建议是：先用 Nacos 完成注册与发现，让调用方只依赖服务名；再引入网关统一入口，配上限流与灰度规则；随后接入链路追踪，让问题可观测。最后才根据业务一致性要求，选择 TCC 或消息最终一致方案。每一步都要在依赖版本上确认清楚——Ribbon、Hystrix、Sleuth 这些曾经的标准组件都已进入维护或替换阶段，照搬旧教程的依赖很容易在启动阶段就卡住。</p>
           

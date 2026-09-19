@@ -227,7 +227,7 @@
 
 <p>并发会带来三类问题。<strong>脏读</strong>读到了别的事务未提交的数据。<strong>不可重复读</strong>指同一个事务里两次读同一行结果不同，因为别人 <code>update</code> 并提交了。<strong>幻读</strong>指两次范围查询的记录条数不同，因为别人 <code>insert</code> 或 <code>delete</code> 并提交了。SQL 标准用四个隔离级别来权衡：<code>read uncommitted</code>、<code>read committed</code>、<code>repeatable read</code>、<code>serializable</code>，级别越高一致性越强、并发性能越差。默认值是重点：MySQL 默认 <code>repeatable read</code>，Oracle 默认 <code>read committed</code>。可以用 <code>select @@transaction_isolation;</code> 查看（MySQL 5.7.20 之前是 <code>@@tx_isolation</code>，该变量在 8.0 中已移除），用 <code>set session transaction isolation level ...</code> 修改。需要注意的是，具体行为由存储引擎实现决定，InnoDB 的 <code>repeatable read</code> 借助间隙锁在很大程度上也避免了幻读，所以“MySQL 可重复读挡不住幻读”这句话对 InnoDB 并不严谨。</p>
 
-<h2>三、连接池：为什么不能每次都 new 一个连接</h2>
+<h2 id="why-pool">三、连接池：为什么不能每次都 new 一个连接</h2>
 
 <p>建立一个数据库连接需要 TCP 握手、身份认证、初始化会话，代价远高于执行一条简单 SQL。高并发下“一次请求一个连接”，数据库会先被连接创建拖垮。连接池的思路是提前创建若干连接并缓存起来，用的时候借、用完还，把创建成本摊薄到整个运行期。它同时还能充当流量阀门：池大小固定，超出阈值的请求排队，避免把数据库压死。</p>
 
@@ -269,9 +269,332 @@ public class DruidUtils {
     }
 }</code></pre>
 
-<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>，与 Druid 的对应关系是 <code>url</code> ↔ <code>jdbcUrl</code>、<code>maxActive</code> ↔ <code>maximumPoolSize</code>、<code>minIdle</code> ↔ <code>minimumIdle</code>、<code>maxWait</code> ↔ <code>connectionTimeout</code>（默认 30 秒）；配置方式从 Properties 换成 <code>HikariConfig</code>，或直接 new 一个 <code>HikariDataSource</code>，驱动类名同样可以省（5.x/6.x 对应 8.x 的 <code>com.mysql.cj.jdbc.Driver</code>，由 SPI 注册）。HikariCP 官方给出的经验值是把 <code>maximumPoolSize</code> 取成与 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好：连接数超过数据库的处理能力后，多出来的连接只会带来线程上下文切换与锁竞争。另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的“死连接”，报出 <code>Communications link failure</code> 这类错误（具体配合策略见第四节）。</p>
+<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>，与 Druid 的对应关系是 <code>url</code> ↔ <code>jdbcUrl</code>、<code>maxActive</code> ↔ <code>maximumPoolSize</code>、<code>minIdle</code> ↔ <code>minimumIdle</code>、<code>maxWait</code> ↔ <code>connectionTimeout</code>（默认 30 秒）；配置方式从 Properties 换成 <code>HikariConfig</code>，或直接 new 一个 <code>HikariDataSource</code>，驱动类名同样可以省（5.x/6.x 对应 8.x 的 <code>com.mysql.cj.jdbc.Driver</code>，由 SPI 注册）。HikariCP 官方给出的经验值是把 <code>maximumPoolSize</code> 取成与 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好：连接数超过数据库的处理能力后，多出来的连接只会带来线程上下文切换与锁竞争。另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的“死连接”，报出 <code>Communications link failure</code> 这类错误（具体配合策略见第六节）。</p>
 
-<h2>四、常见坑与落地建议</h2>
+<h2 id="how-pool-works">四、连接池是怎么实现的：手写一个最小池</h2>
+
+<p>上一节解释了<a href="#why-pool">为什么要有池</a>，这一节把它拆开实现一遍。目的不是让你在生产代码里手写池（生产上直接用 HikariCP 或 Druid，参数见上一节），而是为了看懂三件事：池容量是怎么被控制的、<code>close()</code> 为什么能变成归还、空闲连接是怎么被回收的。看懂这三件事，第三方池的参数表就不再是一堆名词。</p>
+
+<h3>4.1 三个必须解决的问题</h3>
+
+<ul>
+<li><strong>容量</strong>：同时最多借出多少个连接？超出的线程是排队、报错还是继续新建？</li>
+<li><strong>归还</strong>：业务代码写的是 <code>conn.close()</code>，池必须把“关闭”翻译成“放回队列”。</li>
+<li><strong>回收</strong>：空闲太久的连接要物理关闭，否则数据库侧的 <code>wait_timeout</code> 会先把它掐掉，池里留着一堆死连接。</li>
+</ul>
+
+<h3>4.2 用动态代理改写 close()</h3>
+
+<p>关键点是：不能把真实的 <code>Connection</code> 直接交给业务。真实连接一旦 <code>close()</code>，物理连接就没了；而业务代码（尤其是 try-with-resources 和各种框架）已经习惯“用完就 close”。所以池返回一个<strong>代理对象</strong>：它和真实连接实现同一个 <code>Connection</code> 接口，业务看不出区别，但每个方法调用都会先经过 <code>InvocationHandler.invoke()</code>。在 <code>invoke()</code> 里判断方法名，拦截 <code>close</code> 并改成“归还到队列”，其余方法原样转发给真实连接。</p>
+
+<p>这正是 JDK 动态代理的典型用法：<code>Proxy.newProxyInstance(类加载器, 接口数组, InvocationHandler)</code> 在运行期生成一个实现指定接口的类，不必为 <code>Connection</code> 的几十个方法逐个写包装类。下面三段代码合起来是一个完整可编译的最小池（已在 JDK 21 上跑通：容量到顶时按超时排队抛异常、<code>close()</code> 后连接被复用、只有 <code>pool.close()</code> 才真正关闭物理连接）。先看字段、构造方法与借出逻辑：</p>
+
+<pre><code class="language-java">public class SimpleConnectionPool {
+    private final String url, user, password;
+    private final int maxSize, minIdle;
+    private final long borrowTimeoutMs, maxIdleMs;
+    private final ArrayBlockingQueue&lt;PooledConnection&gt; idle;      // 空闲连接队列
+    private final AtomicInteger total = new AtomicInteger();       // 已创建的物理连接数
+    private final ScheduledExecutorService evictor;                // 空闲回收线程
+    private volatile boolean closed = false;
+
+    public SimpleConnectionPool(String url, String user, String password,
+                                int maxSize, int minIdle,
+                                long borrowTimeoutMs, long maxIdleMs) {
+        this.url = url; this.user = user; this.password = password;
+        this.maxSize = maxSize; this.minIdle = Math.min(minIdle, maxSize);
+        this.borrowTimeoutMs = borrowTimeoutMs; this.maxIdleMs = maxIdleMs;
+        this.idle = new ArrayBlockingQueue&lt;&gt;(maxSize);           // 队列容量 = 池上限
+        this.evictor = Executors.newSingleThreadScheduledExecutor(r -&gt; {
+            Thread t = new Thread(r, "conn-pool-evictor");
+            t.setDaemon(true);                                     // 守护线程，不挡 JVM 退出
+            return t;
+        });
+        this.evictor.scheduleWithFixedDelay(this::evictIdle, 30, 30, TimeUnit.SECONDS);
+    }
+
+    /** 借连接：先拿空闲的，没有就新建，到上限就在队列上排队等归还。 */
+    public Connection getConnection() throws SQLException {
+        if (closed) throw new SQLException("连接池已关闭");
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(borrowTimeoutMs);
+        while (true) {
+            PooledConnection p = idle.poll();                      // 1. 有没有空闲的
+            if (p != null) return wrap(p);
+            if (total.incrementAndGet() &lt;= maxSize) {              // 2. 没到上限就建一个
+                try {
+                    return wrap(new PooledConnection(
+                            DriverManager.getConnection(url, user, password)));
+                } catch (SQLException e) {
+                    total.decrementAndGet();                       // 建失败要退还名额
+                    throw e;
+                }
+            }
+            total.decrementAndGet();                               // 名额已满，退回去排队
+            long remain = deadline - System.nanoTime();
+            if (remain &lt;= 0) {
+                throw new SQLException("获取连接超时（" + borrowTimeoutMs + " ms），池上限 " + maxSize);
+            }
+            try {
+                p = idle.poll(remain, TimeUnit.NANOSECONDS);       // 3. 阻塞等待别人归还
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();                // 别吞掉中断标志
+                throw new SQLException("等待连接时被中断", e);
+            }
+            if (p != null) return wrap(p);
+        }
+    }
+
+    /** 关键一步：交给业务的是代理对象，不是真实连接。 */
+    private Connection wrap(PooledConnection pooled) {
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(),
+                new Class&lt;?&gt;[]{Connection.class},                 // 代理要实现 Connection 全部方法
+                new PooledConnectionHandler(pooled));
+    }</code></pre>
+
+<p>接下来是代理的处理逻辑，也是整套实现的核心。注意 <code>close</code> 被拦下来做归还，<code>released</code> 保证幂等，而 <code>default</code> 分支把其余方法全部转发给 <code>pooled.raw</code>：</p>
+
+<pre><code class="language-java">    private class PooledConnectionHandler implements InvocationHandler {
+        private final PooledConnection pooled;
+        private boolean released;                                  // 保证只归还一次
+
+        PooledConnectionHandler(PooledConnection pooled) { this.pooled = pooled; }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            switch (method.getName()) {
+                case "close":
+                    release();                                     // 魔法在这里：close() = 归还
+                    return null;
+                case "isClosed":
+                    return released;                               // 归还后对业务来说就是“已关闭”
+                case "toString":
+                    return "PooledConnection[" + pooled.raw + "]";
+                case "hashCode":
+                    return System.identityHashCode(proxy);
+                case "equals":
+                    return proxy == args[0];
+                default:
+                    break;
+            }
+            if (released) throw new SQLException("连接已归还，不能继续使用");
+            try {
+                // 其余几十个方法（prepareStatement / createStatement / setAutoCommit / getMetaData ...）
+                // 一律转发给真实连接；不转发，业务拿到的就是个空壳。
+                return method.invoke(pooled.raw, args);
+            } catch (InvocationTargetException e) {
+                throw e.getTargetException();                      // 还原真实异常，否则 catch(SQLException) 匹配不上
+            }
+        }
+
+        private void release() {
+            if (released) return;                                  // 幂等：try-with-resources 可能重复 close()
+            released = true;
+            try {
+                reset(pooled.raw);                                 // 复位事务状态，别让下一个借用者继承脏状态
+            } catch (SQLException e) {
+                closePhysical(pooled);                            // 连接已经坏了，别再放回池里
+                return;
+            }
+            pooled.lastReturnedAt = System.currentTimeMillis();
+            if (closed || !idle.offer(pooled)) closePhysical(pooled);
+        }
+    }
+
+    /** 归还前复位：未提交的事务回滚，autoCommit 打开。 */
+    private void reset(Connection raw) throws SQLException {
+        if (!raw.getAutoCommit()) {
+            raw.rollback();
+            raw.setAutoCommit(true);
+        }
+    }</code></pre>
+
+<p>最后是空闲回收与关闭。<code>closePhysical()</code> 是全类中唯一调用 <code>raw.close()</code> 的地方，也是“包一层”与“真关闭”的唯一出口：</p>
+
+<pre><code class="language-java">    private void closePhysical(PooledConnection pooled) {
+        total.decrementAndGet();
+        try { pooled.raw.close(); } catch (SQLException ignored) { }   // 真正的关闭只发生在这里
+    }
+
+    /** 空闲回收 + 探活：够久没用的物理关闭，但至少保留 minIdle 个。 */
+    private void evictIdle() {
+        if (closed) return;
+        long now = System.currentTimeMillis();
+        for (int i = 0, n = idle.size(); i &lt; n; i++) {
+            PooledConnection p = idle.poll();
+            if (p == null) return;
+            boolean expired = now - p.lastReturnedAt &gt; maxIdleMs;
+            if (expired &amp;&amp; total.get() &gt; minIdle) {
+                closePhysical(p);
+            } else if (!isAlive(p.raw)) {                          // 探活失败的死连接也淘汰
+                closePhysical(p);
+            } else {
+                idle.offer(p);                                     // 还回去，下一轮再看
+            }
+        }
+    }
+
+    private boolean isAlive(Connection raw) {
+        try {
+            return raw.isValid(1);                                 // JDBC 4；老驱动可执行 validationQuery: select 1
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    public int idleCount() { return idle.size(); }
+    public int borrowedCount() { return total.get() - idle.size(); }
+
+    public void close() {                                          // 池自己关闭时才批量关物理连接
+        closed = true;
+        evictor.shutdownNow();
+        PooledConnection p;
+        while ((p = idle.poll()) != null) closePhysical(p);
+    }
+
+    private static class PooledConnection {
+        final Connection raw;                                      // 真实连接
+        volatile long lastReturnedAt = System.currentTimeMillis();  // 上次归还时间，回收线程用
+        PooledConnection(Connection raw) { this.raw = raw; }
+    }
+}</code></pre>
+
+<h3>4.3 为什么包装后的 Connection 必须把其他方法委托给真实连接</h3>
+
+<p>这是动态代理部分最容易写错、也最需要理解的一点。代理对象只是一个“实现接口的空壳”，它自己不懂任何数据库逻辑，<code>prepareStatement()</code>、<code>createStatement()</code>、<code>getMetaData()</code> 这些方法在代理里没有任何实现。如果只拦截 <code>close</code>、其他方法返回 <code>null</code>，业务侧第一行 <code>conn.prepareStatement(sql)</code> 就会 NPE。所以规则是：<strong>只改写需要改写的那个方法（<code>close</code>），其余一律用 <code>method.invoke(pooled.raw, args)</code> 原样转发给真实连接。</strong>代理与真实连接是“外壳与内核”的关系，不是替代关系。</p>
+
+<p>具体有五个坑：</p>
+
+<ul>
+<li><strong>异常必须拆包。</strong>反射调用把真实方法抛出的异常包在 <code>InvocationTargetException</code> 里，若原样往外抛，业务写的 <code>catch (SQLException)</code> 永远匹配不上，只会看到一个 <code>UndeclaredThrowableException</code>，栈信息也难读。要 <code>throw e.getTargetException()</code> 把真实异常还原出来。</li>
+<li><strong><code>equals</code>/<code>hashCode</code>/<code>toString</code> 也要处理。</strong>这三个是 <code>Object</code> 上的方法，不处理就会转发到真实连接，导致同一个代理对象放进 <code>Set</code> 或做 <code>Map</code> 的 key 时行为诡异（代理与自身比较都可能失败）。示例里用 identity 语义实现：<code>equals</code> 比较引用、<code>hashCode</code> 取 <code>System.identityHashCode(proxy)</code>。</li>
+<li><strong>归还前要复位状态。</strong>业务如果开着事务就 <code>close()</code>（或忘了 <code>commit()</code>），连接回到池里时自动提交仍是关的，下一个借用者会莫名其妙地“在事务里”执行 SQL，甚至把上一个事务的修改一起提交。所以归还前 <code>rollback()</code> 并把 <code>setAutoCommit(true)</code> 设回去。真实池做得更多：还会重置只读标记、隔离级别和会话变量。</li>
+<li><strong><code>close()</code> 必须幂等。</strong>try-with-resources 和框架的 <code>finally</code> 可能重复关闭，重复归还会让同一个对象在队列里出现两次，被两个线程同时使用。用 <code>released</code> 标志挡住第二次。</li>
+<li><strong>归还后要继续拦截。</strong>连接已经还回队列、可能已被别的线程借走，此时旧引用再调用方法就会造成两个线程共用一条连接。示例里 <code>released</code> 为真时直接抛异常，把这种 bug 暴露在调用点，而不是让它变成难以复现的数据错乱。</li>
+</ul>
+
+<h3>4.4 容量与借出超时：ArrayBlockingQueue 的 poll(timeout)</h3>
+
+<p>队列 <code>idle</code> 装空闲连接，计数器 <code>total</code> 记录已创建的物理连接总数（含借出中的）。<code>getConnection()</code> 按顺序做三件事：先 <code>poll()</code> 捞一个空闲的；没有空闲且 <code>total</code> 未到上限就新建一条；已经到上限就在队列上 <code>poll(remain, NANOSECONDS)</code> 阻塞等待别人归还，累计等到 <code>borrowTimeoutMs</code> 仍未拿到就抛异常。这里刻意用 <code>AtomicInteger</code> 而不是 <code>idle.size()</code> 判断上限：正在创建的连接还没进队列，只按队列长度判断会让并发线程集体超额创建。</p>
+
+<p>几个实现细节值得记住：等待时间要从 deadline 算剩余量，而不是每轮重新等满一个超时，否则借不到连接时会一直等下去；<code>InterruptedException</code> 要先恢复中断标志再抛出，不要吞掉，否则线程池的取消信号会丢失；归还用非阻塞的 <code>offer()</code>，失败时直接物理关闭，避免归还线程被卡住，也顺手兜住了连接泄漏。这套“队列 + 超时”的模型也可以换成 <code>synchronized</code> 加 <code>wait()</code>/<code>notifyAll()</code> 手写，语义一样，但 <code>ArrayBlockingQueue</code> 已经把这些封装好，更不容易写错。</p>
+
+<p>把参数名对上第三方池，读配置就不再陌生：示例里的 <code>maxSize</code> 对应 Druid 的 <code>maxActive</code>、HikariCP 的 <code>maximumPoolSize</code>；<code>borrowTimeoutMs</code> 对应 <code>maxWait</code> 与 <code>connectionTimeout</code>；<code>maxIdleMs</code> 对应 <code>minEvictableIdleTimeMillis</code> 与 <code>idleTimeout</code>。区别只在于真实池用更精细的数据结构（分段锁、连接状态机）扛住了高并发。</p>
+
+<h3>4.5 空闲回收与探活</h3>
+
+<p>用一个 daemon 线程按固定间隔扫描空闲队列：空闲时间超过 <code>maxIdleMs</code> 且总数高于 <code>minIdle</code> 的连接物理关闭并让 <code>total</code> 减一；其余连接用 <code>isValid()</code>（老驱动可以退回执行 <code>select 1</code>）探活，失效的直接淘汰。这就是 Druid 的 <code>timeBetweenEvictionRunsMillis</code> 加 <code>testWhileIdle</code>、HikariCP 的 <code>idleTimeout</code> 加 <code>keepaliveTime</code> 在做的事。两个注意点：回收线程只处理空闲队列，绝不能去动正在被业务使用的连接；<code>isValid</code> 会走一次网络往返，间隔太小反而增加数据库负担，几十秒一次是常见量级。</p>
+
+<h2 id="c3p0-dbutils">五、C3P0 与 DBUtils：老项目的常见组合</h2>
+
+<p class="tut-tip"><strong>先把现状说清楚：</strong>新项目不必采用这一节的技术。连接池用 HikariCP（Spring Boot 2.x 起是默认实现）或 Druid，数据访问层用 MyBatis、Spring 的 <code>JdbcTemplate</code> 或 JPA；Spring Boot 只要引入 <code>spring-boot-starter-jdbc</code>，HikariCP 与 <code>JdbcTemplate</code> 就已经就位。C3P0 与 <code>commons-dbutils</code> 的意义在于“接手老项目时一定会遇到”：2010 年代前后的 SSH 与早期 SSM 项目里，<code>ComboPooledDataSource</code> 加 <code>QueryRunner</code> 是极常见的组合。读懂它们是为了改得动老代码，而不是为了新项目选型。</p>
+
+<h3>5.1 C3P0：ComboPooledDataSource 的基本配置</h3>
+
+<p>C3P0 的入口是 <code>ComboPooledDataSource</code>（Maven 坐标 <code>com.mchange:c3p0</code>）。版本上长期停留在 0.9.5.x（0.9.5.5 是 2019 年前后最常用的版本），之后只有 0.10.x、0.11.x 等低频维护版本，不同版本之间参数基本兼容。配置可以纯代码写，也可以交给 <code>c3p0-config.xml</code>。代码方式如下：</p>
+
+<pre><code class="language-java">public class C3p0Utils {
+    private static final ComboPooledDataSource DS = new ComboPooledDataSource();
+
+    static {
+        try {
+            DS.setDriverClass("com.mysql.cj.jdbc.Driver");   // 8.x 驱动可省，由 SPI 自动注册
+            DS.setJdbcUrl("jdbc:mysql://localhost:3306/day06_db"
+                    + "?characterEncoding=utf8&amp;connectionTimeZone=Asia/Shanghai");
+            DS.setUser("root");
+            DS.setPassword("root");
+            DS.setInitialPoolSize(5);        // 启动时先建几条
+            DS.setMinPoolSize(5);
+            DS.setMaxPoolSize(20);           // 上限，相当于 Druid 的 maxActive
+            DS.setAcquireIncrement(5);       // 不够用时一次补几条
+            DS.setCheckoutTimeout(3000);     // 借出等待上限，毫秒，相当于 maxWait
+            DS.setMaxIdleTime(1800);         // 空闲多久后回收，单位是【秒】，注意不是毫秒
+            DS.setIdleConnectionTestPeriod(60);       // 每 60 秒探活一次，单位是【秒】
+            DS.setPreferredTestQuery("select 1");     // 探活语句，必须配
+        } catch (PropertyVetoException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    public static DataSource getDataSource() {
+        return DS;
+    }
+}</code></pre>
+
+<p>参数与上一节的池、以及 Druid/HikariCP 一一对得上：<code>maxPoolSize</code> 对 <code>maxActive</code> 与 <code>maximumPoolSize</code>，<code>checkoutTimeout</code> 对 <code>maxWait</code> 与 <code>connectionTimeout</code>，<code>maxIdleTime</code> 对 <code>minEvictableIdleTimeMillis</code> 与 <code>idleTimeout</code>，<code>preferredTestQuery</code> 对 <code>validationQuery</code> 与 <code>connectionTestQuery</code>。最容易踩的坑是单位：C3P0 的 <code>maxIdleTime</code>、<code>idleConnectionTestPeriod</code> 按秒，<code>checkoutTimeout</code> 按毫秒，写错一个数量级就会出现“连接怎么都不回收”或“一借就超时”。</p>
+
+<p>配置文件方式更常见，文件必须叫 <code>c3p0-config.xml</code> 并放在 classpath 根目录：</p>
+
+<pre><code class="language-xml">&lt;c3p0-config&gt;
+  &lt;default-config&gt;
+    &lt;property name="driverClass"&gt;com.mysql.cj.jdbc.Driver&lt;/property&gt;
+    &lt;property name="jdbcUrl"&gt;jdbc:mysql://localhost:3306/day06_db&lt;/property&gt;
+    &lt;property name="user"&gt;root&lt;/property&gt;
+    &lt;property name="password"&gt;root&lt;/property&gt;
+    &lt;property name="initialPoolSize"&gt;5&lt;/property&gt;
+    &lt;property name="minPoolSize"&gt;5&lt;/property&gt;
+    &lt;property name="maxPoolSize"&gt;20&lt;/property&gt;
+    &lt;property name="checkoutTimeout"&gt;3000&lt;/property&gt;
+    &lt;property name="maxIdleTime"&gt;1800&lt;/property&gt;
+    &lt;property name="preferredTestQuery"&gt;select 1&lt;/property&gt;
+  &lt;/default-config&gt;
+&lt;/c3p0-config&gt;</code></pre>
+
+<p>XML 里可以写多个命名配置（<code>&lt;named-config name="mysql"&gt;</code> 这种形式），再用 <code>new ComboPooledDataSource("mysql")</code> 按名字加载，多数据源场景靠的就是它；不写名字则使用 <code>default-config</code>。</p>
+
+<h3>5.2 commons-dbutils：QueryRunner 与 ResultSetHandler</h3>
+
+<p>DBUtils 解决的是 JDBC 样板代码：拿连接、建 Statement、遍历 <code>ResultSet</code>、在 <code>finally</code> 里关三个对象、再把结果映射成 Java 对象。它把流程拆成两个角色：<code>QueryRunner</code> 负责连接与资源关闭（内部就是 <code>DataSource.getConnection()</code> 用完 <code>close()</code>，所以它天然和连接池配合，而池的代理保证了这里的 <code>close()</code> 是归还），<code>ResultSetHandler</code> 负责把结果集变成对象。版本上常用 1.7（坐标 <code>commons-dbutils:commons-dbutils:1.7</code>，2017 年发布后基本没再更新），API 从 1.6 起没有大变化。</p>
+
+<p>四个最常用的 Handler 是：<code>BeanHandler&lt;T&gt;</code> 把单行结果变成一个 JavaBean（列名要与属性名对得上）；<code>BeanListHandler&lt;T&gt;</code> 把多行结果变成 <code>List&lt;T&gt;</code>；<code>ScalarHandler&lt;T&gt;</code> 只取单行单列，适合 <code>count(*)</code>、<code>max(id)</code> 这类聚合；<code>MapListHandler</code> 把多行结果变成 <code>List&lt;Map&lt;String,Object&gt;&gt;</code>，列名做 key，适合列不固定的报表查询。此外还有 <code>MapHandler</code>（单行 Map）、<code>ArrayHandler</code>（单行数组）、<code>KeyedHandler</code>（按某列做成 Map），用法同构，需要时查一眼即可。</p>
+
+<pre><code class="language-java">// QueryRunner 是无状态的，可以做成单例复用
+QueryRunner runner = new QueryRunner(C3p0Utils.getDataSource());
+
+// 1. 单行 → 对象：BeanHandler，列名要能对上属性名
+Account one = runner.query("select id, name, money from account where id = ?",
+        new BeanHandler&lt;&gt;(Account.class), 1L);
+
+// 2. 多行 → List：BeanListHandler
+List&lt;Account&gt; list = runner.query("select id, name, money from account where money &gt; ?",
+        new BeanListHandler&lt;&gt;(Account.class), 1000);
+
+// 3. 单值（count / max / sum）：ScalarHandler
+Long count = runner.query("select count(*) from account", new ScalarHandler&lt;Long&gt;());
+
+// 4. 多行 → List&lt;Map&gt;：MapListHandler，列名做 key
+List&lt;Map&lt;String, Object&gt;&gt; rows = runner.query(
+        "select id, name, money from account", new MapListHandler());
+
+// 增删改用 update，返回影响行数；同样的写法支持 batch(...) 批处理
+int updated = runner.update("update account set money = money + ? where id = ?", 100, 1L);</code></pre>
+
+<p>用法上有三点要注意。第一是参数顺序：<code>query(sql, handler, params...)</code>，Handler 排在参数前面，写反了编译期就能发现。第二是 <code>BeanHandler</code> 靠反射按列名匹配属性，数据库的 <code>snake_case</code> 列名对不上 Java 的驼峰属性（<code>create_time</code> 对不上 <code>createTime</code>），需要传一个配置了 <code>GenerousBeanProcessor</code> 或自定义 <code>RowProcessor</code> 的构造器；这一点也是后来 MyBatis 的 <code>mapUnderscoreToCamelCase</code> 更省事的原因。第三是别混用：<code>QueryRunner</code> 只传 <code>DataSource</code> 时由它自己管理连接，如果同时又手工 <code>getConnection()</code> 再 <code>runner.query(conn, ...)</code>，很容易出现连接双重关闭或事务落在两条连接上的问题（事务与池的配合见第六节）。</p>
+
+<h3>5.3 迁移到现代栈时的对应关系</h3>
+
+<p>接手老项目后如果要替换，最省事的路径是“先补测试、再逐个 API 平移”，而不是推倒重写。常见对应关系如下。</p>
+
+<table>
+<thead>
+<tr><th>老写法（C3P0 / DBUtils）</th><th>现代对应写法</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ComboPooledDataSource</code></td><td><code>HikariDataSource</code> / <code>DruidDataSource</code>，Spring Boot 下由 <code>spring.datasource.*</code> 自动装配</td></tr>
+<tr><td><code>checkoutTimeout</code> / <code>maxPoolSize</code> / <code>maxIdleTime</code> / <code>preferredTestQuery</code></td><td><code>connectionTimeout</code> / <code>maximumPoolSize</code> / <code>idleTimeout</code> / <code>connectionTestQuery</code></td></tr>
+<tr><td><code>new QueryRunner(dataSource)</code></td><td>注入 <code>JdbcTemplate</code>，或注入 MyBatis 的 Mapper 接口</td></tr>
+<tr><td><code>new BeanHandler&lt;&gt;(Account.class)</code></td><td><code>BeanPropertyRowMapper.newInstance(Account.class)</code>，或 MyBatis 的 <code>resultType</code></td></tr>
+<tr><td><code>new BeanListHandler&lt;&gt;(Account.class)</code></td><td><code>jdbcTemplate.query(sql, rowMapper, args)</code></td></tr>
+<tr><td><code>new ScalarHandler&lt;Long&gt;()</code></td><td><code>jdbcTemplate.queryForObject(sql, Long.class)</code></td></tr>
+<tr><td><code>new MapListHandler()</code></td><td><code>jdbcTemplate.queryForList(sql)</code></td></tr>
+<tr><td><code>runner.update(sql, args)</code></td><td><code>jdbcTemplate.update(sql, args)</code></td></tr>
+<tr><td>SQL 拼在 Java 字符串里</td><td>MyBatis 的 Mapper XML / 注解，或 <code>JdbcTemplate</code> + 具名参数</td></tr>
+</tbody>
+</table>
+
+<p>还有一个现实约束：C3P0 在高并发下的表现明显不如 HikariCP，等待队列与探活策略都更粗糙，所以“只换连接池实现”通常是老项目里性价比最高、风险最低的一步改造；而替换 DBUtils 会动到每个 DAO 方法，建议配合集成测试分批推进。注意两者的收益是独立的：只换池不换 DAO 层，也能立刻拿到更好的并发表现与更清晰的监控指标。</p>
+
+<h2>六、常见坑与落地建议</h2>
 
 <p>第一，<strong>事务与连接池配合失误</strong>。最典型的写法是 Service 层开了事务，DAO 层却各自从池里取新连接，结果两条 SQL 落在两个连接上，回滚只回滚了其中一条。解决办法是让 Service 统一获取连接并透传给 DAO；若不想改方法签名，可用 <code>ThreadLocal</code> 把连接绑定到当前线程，由同一个工具类提供取连接与释放连接的方法。但必须成对释放，否则线程复用时会拿到脏连接。</p>
 
