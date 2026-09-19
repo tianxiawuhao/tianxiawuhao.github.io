@@ -170,11 +170,11 @@ console.log(list.children.length);  // 3
 
 <p>事件是页面与用户之间的通道。一次点击其实经历了三个阶段，这就是<strong>事件流</strong>：捕获阶段从 <code>window</code> 一路向下传到目标元素，然后进入目标阶段，最后是冒泡阶段从目标元素一路向上传回 <code>window</code>。绝大多数事件默认冒泡，所以父元素能"顺便"知道子元素上发生了什么。<code>addEventListener(type, handler, options)</code> 的第三个参数就是控制开关：<code>{ capture: true }</code> 让回调在捕获阶段执行，<code>{ once: true }</code> 让回调只执行一次后自动解绑，<code>{ passive: true }</code> 告诉浏览器"这个回调不会调用 <code>preventDefault()</code>"，从而让滚动更顺滑——这也是移动端 <code>touchstart</code>/<code>wheel</code> 性能优化的常用手段。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-4/01-event-flow.svg" alt="事件流捕获、目标、冒泡三阶段示意图"><figcaption>图 1：事件流的捕获、目标与冒泡三阶段，以及事件委托的落点</figcaption></figure>
+
 <p>回调里的 <code>event</code> 对象携带了本次事件的上下文：<code>event.target</code> 是实际触发事件的元素，<code>event.currentTarget</code> 是绑定监听器的那个元素，两者在冒泡场景下往往不同。<code>event.preventDefault()</code> 阻止浏览器默认行为（比如链接跳转、表单提交），<code>event.stopPropagation()</code> 阻止事件继续传播。这两个方法作用完全不同，混用是新手最常见的表达错误。</p>
 
 <p>既然事件会冒泡，就不必给每个子元素都挂监听器。<strong>事件委托</strong>的做法是：把监听器挂在父容器上，在回调里用 <code>event.target.closest(selector)</code> 找到真正被点击的元素，再根据它做分发。这样即使列表后续动态新增上百项，也只有一个监听器，省内存、好维护、不会因为忘记重新绑定而失效。</p>
-
-<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-4/01-event-flow.svg" alt="事件流捕获、目标、冒泡三阶段与事件委托示意图"><figcaption>图 1：事件流的捕获、目标、冒泡三阶段，以及把监听器挂在父容器上的事件委托</figcaption></figure>
 
 <pre><code class="language-js">const list = document.querySelector('#todo-list');
 

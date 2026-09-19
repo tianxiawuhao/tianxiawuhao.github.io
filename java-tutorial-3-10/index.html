@@ -153,6 +153,8 @@ Cache-Control: no-cache
 
 <p>请求方法里 GET 与 POST 最常用。GET 把参数拼在 URL 后面，POST 把参数放进请求体；浏览器地址栏回车、点超链接都是 GET，要发 POST 得靠表单或 AJAX。这里有两个流传很广的说法需要纠正：一是"GET 参数不能超过 1K"——协议并没有规定 URL 长度上限，1K 只是早年某些浏览器与服务器的实现限制，今天常见实现的上限在 2KB 到 8KB 之间，具体取决于浏览器和 Tomcat 的 <code>maxHttpHeaderSize</code>；二是"POST 数据量无限制"——POST 同样受服务端配置约束，Tomcat 默认的表单体上限是 2MB（<code>maxPostSize</code>，Tomcat 10 起为 <code>maxPostSize</code> 与 <code>maxSwallowSize</code> 配合）。所以结论是：要传大量数据，用 POST 更合适，但别以为它没有边界。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-10/01-http-request-response.svg" alt="HTTP 请求与响应结构示意图：请求行、请求头、请求体与状态行、响应头、响应体一一对称对应，HTTP 协议本身不保存上下文"><figcaption>图 1：请求与响应结构对称，HTTP 本身是无状态的</figcaption></figure>
+
 <h2>二、状态码：服务端给出的结论</h2>
 
 <p>状态码是三位十进制数，按首位分五类：1xx 表示请求已收到、还需继续（如 101 切换协议）；2xx 表示成功（200 正常返回，204 成功但无实体内容）；3xx 表示需要客户端再做一步（301 永久重定向、302 临时重定向、304 资源未修改、307/308 保留原方法重定向）；4xx 表示客户端的问题（400 参数错误、401 未认证、403 已认证但无权限、404 资源不存在、405 方法不允许）；5xx 表示服务端出错（500 内部异常、502 网关收到无效响应、503 暂时不可用）。</p>
@@ -227,6 +229,8 @@ response.addCookie(cookie);
 session.invalidate();</code></pre>
 
 <p>关于有效期：Cookie 的 <code>maxAge</code> 单位是秒，由浏览器判断；服务端再次读取时只能拿到 name 与 value，path、domain 等属性不会被提交回来。Session 的超时时间可以在 <code>web.xml</code> 中用 <code>&lt;session-timeout&gt;</code> 配置，单位是分钟，而 <code>setMaxInactiveInterval()</code> 的单位是秒，两处别搞混。至于容器默认值，Tomcat 的 <code>conf/web.xml</code> 给的是 30 分钟（有资料写 20 分钟，属于版本与配置差异，请以你本机容器的实际配置为准，存疑）。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-10/02-cookie-session-flow.svg" alt="Cookie 与 Session 会话流程示意图：首次请求不带 Cookie，服务端用 Set-Cookie 下发 JSESSIONID，浏览器后续请求自动带回，服务端据此命中自己的 Session 数据"><figcaption>图 2：Set-Cookie 下发会话 ID，后续请求自动带回</figcaption></figure>
 
 <h2>五、浏览器拿到响应后做了什么</h2>
 
