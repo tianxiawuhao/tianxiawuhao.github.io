@@ -320,7 +320,13 @@ if (contractGeneration == null || contractGeneration == 0) {
 if (Integer.valueOf(0).equals(contractGeneration)) {
     return JsonResult.fail("尚未生成合同");
 }</code></pre>
-<p><strong>经验</strong>：三条规则可以避开这一类问题。<strong>包装类型之间比较值必须用 <code>equals</code></strong>（<code>==</code> 比的是引用，只有 <code>-128~127</code> 的缓存区间会「碰巧」相等）；<strong>包装类型与基本类型比较前先判空</strong>，或者直接用 <code>Objects.equals(a, b)</code>；<strong>能定成基本类型或给默认值就不要用包装类型</strong>，比如统计计数字段在数据库里设 <code>NOT NULL DEFAULT 0</code>，从源头消灭 null。此外 <code>JSONNull</code> 是同一类问题：某些 JSON 库解析出的 <code>null</code> 是它自己的 <code>JSONNull</code> 对象而不是 Java <code>null</code>，用 <code>obj == null</code> 判断不出来，必须调用 <code>JSONObject.isNull(key)</code> 或 <code>obj.isNull()</code>。</p>
+<p><strong>经验</strong>：三条规则可以避开这一类问题。</p>
+<ul>
+<li><strong>包装类型之间比较值必须用 <code>equals</code></strong>：<code>==</code> 比的是引用，只有 <code>-128~127</code> 的缓存区间会「碰巧」相等。</li>
+<li><strong>包装类型与基本类型比较前先判空</strong>，或者直接用 <code>Objects.equals(a, b)</code>。</li>
+<li><strong>能定成基本类型或给默认值就不要用包装类型</strong>：比如统计计数字段在数据库里设 <code>NOT NULL DEFAULT 0</code>，从源头消灭 null。</li>
+</ul>
+<p>此外 <code>JSONNull</code> 是同一类问题：某些 JSON 库解析出的 <code>null</code> 是它自己的 <code>JSONNull</code> 对象而不是 Java <code>null</code>，用 <code>obj == null</code> 判断不出来，必须调用 <code>JSONObject.isNull(key)</code> 或 <code>obj.isNull()</code>。</p>
 
 <h3>案例二：HashSet 去重失效与顺序依赖</h3>
 <p><strong>现象</strong>：明明用 <code>HashSet</code> 做了去重，结果列表里依然出现重复元素；或者去重后的顺序每次都不同，导致分页数据错乱。</p>

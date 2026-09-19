@@ -173,7 +173,7 @@
 
 <h2>三、上手：创建主题并读写消息</h2>
 
-<p>先创建主题。这里要注意版本差异：<strong>Kafka 2.8 起 <code>kafka-topics.sh</code> 的 <code>--zookeeper</code> 参数已被废弃，应改用 <code>--bootstrap-server</code></strong>（4.0 中已彻底移除）。原因在于所有管理类命令都改从 broker 获取元数据：broker 无论跑在 ZooKeeper 模式还是 KRaft 模式下，都能通过 bootstrap 地址应答；而 <code>--zookeeper</code> 是绕过 broker 直连 ZooKeeper 读元数据的老路子，在 KRaft 模式下根本不存在 ZooKeeper 可连。消费者组、位移等命令同理，见 <code>kafka-consumer-groups.sh --bootstrap-server</code>。</p>
+<p>先创建主题。这里要注意版本差异：<strong>Kafka 2.8 起 <code>kafka-topics.sh</code> 的 <code>--zookeeper</code> 参数已被废弃，应改用 <code>--bootstrap-server</code></strong>（4.0 中已彻底移除）。原因在于所有管理类命令都改从 broker 获取元数据。broker 无论跑在 ZooKeeper 模式还是 KRaft 模式下，都能通过 bootstrap 地址应答。而 <code>--zookeeper</code> 是绕过 broker 直连 ZooKeeper 读元数据的老路子，在 KRaft 模式下根本不存在 ZooKeeper 可连。消费者组、位移等命令同理，见 <code>kafka-consumer-groups.sh --bootstrap-server</code>。</p>
 
 <pre><code class="language-bash"># 创建 3 个分区、2 个副本的主题（副本数不能超过 broker 数）
 kafka-topics.sh --bootstrap-server localhost:9092 \
@@ -306,9 +306,24 @@ try {
 
 <h2>五、部署模式：ZooKeeper 与 KRaft 对照</h2>
 
-<p>Kafka 早期把「元数据」全部外包给 ZooKeeper：topic 与分区列表、副本分配、ISR 变更、controller 选举、ACL 都存在 ZooKeeper 的 znode 里，broker 本身几乎无状态。代价是要多维护一套 ZooKeeper 集群，而且元数据规模一大（几十万分区），controller 启动时的全量加载就成了瓶颈。KRaft（KIP-500）把元数据收回到 Kafka 自己内部：用内置的 Raft 仲裁取代 ZooKeeper，元数据以日志 + 快照的形式存在内部主题 <code>__cluster_metadata</code> 中，controller 与 broker 可以合并在同一进程（<code>process.roles=broker,controller</code>），也可以分开部署。</p>
+<p>Kafka 早期把「元数据」全部外包给 ZooKeeper，broker 本身几乎无状态。托管在 ZooKeeper znode 里的内容包括：</p>
+<ul>
+<li>topic 与分区列表；</li>
+<li>副本分配；</li>
+<li>ISR 变更；</li>
+<li>controller 选举；</li>
+<li>ACL。</li>
+</ul>
+<p>代价是要多维护一套 ZooKeeper 集群，而且元数据规模一大（几十万分区），controller 启动时的全量加载就成了瓶颈。KRaft（KIP-500）把元数据收回到 Kafka 自己内部：用内置的 Raft 仲裁取代 ZooKeeper。元数据以日志 + 快照的形式存在内部主题 <code>__cluster_metadata</code> 中；controller 与 broker 可以合并在同一进程（<code>process.roles=broker,controller</code>），也可以分开部署。</p>
 
-<p>演进时间线：2.8 引入 KRaft 作为实验特性；3.3（3.3.1）起 KRaft 可用于生产；3.5 起提供 ZooKeeper → KRaft 的迁移能力并在此后版本逐步成熟；<strong>4.0 起 ZooKeeper 模式被彻底移除，KRaft 成为唯一模式</strong>。因此 3.x 是最后一个「两种模式都支持」的版本线，新集群没有理由再选 ZooKeeper。</p>
+<p>演进时间线：</p>
+<ul>
+<li>2.8 引入 KRaft 作为实验特性；</li>
+<li>3.3（3.3.1）起 KRaft 可用于生产；</li>
+<li>3.5 起提供 ZooKeeper → KRaft 的迁移能力，并在此后版本逐步成熟；</li>
+<li><strong>4.0 起 ZooKeeper 模式被彻底移除，KRaft 成为唯一模式</strong>。</li>
+</ul>
+<p>因此 3.x 是最后一个「两种模式都支持」的版本线，新集群没有理由再选 ZooKeeper。</p>
 
 <table>
 <thead>
@@ -356,7 +371,7 @@ log.dirs=/var/lib/kafka/data</code></pre>
 <li><strong>消费堆积</strong>：先看是分区数不足还是单条处理太慢，前者加分区并同步加消费者（数量对齐分区数），后者优化处理逻辑或改为批量处理。</li>
 <li><strong>把提交位移当成“处理完成”</strong>：手动提交务必放在业务处理成功之后，并小心批内部分失败——此时应记录失败明细，而不是整批提交或整批重来。</li>
 <li><strong>副本数与 min.insync.replicas 配置矛盾</strong>：若 <code>min.insync.replicas</code> 大于实际可用副本数，写入会被全面拒绝，可用性骤降。</li>
-<li><strong>照抄老教程的参数</strong>：<code>--zookeeper</code> 已废弃（4.0 移除），应统一用 <code>--bootstrap-server</code>；消费者位移自 0.9 起不再存 ZooKeeper，而在 <code>__consumer_offsets</code>；自定义 <code>partitioner.class</code> 自 2.4 起进入废弃演进（2.4 KIP-480 粘性分区 → 3.3 KIP-794 均匀粘性分区，相关实现类已标记 <code>@Deprecated</code>），新代码不要再显式指定它，需要按键均匀分布时用 <code>partitioner.ignore.keys=true</code>；另外新集群应直接建 KRaft 模式，ZooKeeper 模式已是遗留路径。</li>
+<li><strong>照抄老教程的参数</strong>：<code>--zookeeper</code> 已废弃（4.0 移除），应统一用 <code>--bootstrap-server</code>。消费者位移自 0.9 起不再存 ZooKeeper，而在 <code>__consumer_offsets</code>。自定义 <code>partitioner.class</code> 自 2.4 起进入废弃演进（2.4 KIP-480 粘性分区 → 3.3 KIP-794 均匀粘性分区，相关实现类已标记 <code>@Deprecated</code>）。新代码不要再显式指定它；需要按键均匀分布时用 <code>partitioner.ignore.keys=true</code>。另外新集群应直接建 KRaft 模式，ZooKeeper 模式已是遗留路径。</li>
 </ol>
 
 <p>小结：Kafka 用“分区”解决吞吐与有序，用“ISR 副本 + acks + min.insync.replicas”解决不丢。它还用“消费组 + offset 提交”解决多下游并行消费，用“幂等生产者 + 事务”解决重复。把这四条记住，再结合自己的分区数、副本数和消费位点提交策略，就能搭出一个既跑得快、又不丢数据的消息链路。下一章看看流式处理框架如何消费这些数据做实时计算。</p>
