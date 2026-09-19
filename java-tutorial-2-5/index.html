@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>JDBC 与连接池 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>JDBC 与连接池</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，7 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>前面几章我们把 SQL 写顺了，但业务代码最终要通过 Java 去执行 SQL。这一章解决三个递进的问题：怎么用 JDBC 安全地执行 SQL、怎么让多条 SQL 要么全成功要么全失败、以及怎么避免「每个请求新建一次数据库连接」这种把数据库拖垮的写法。它适合已经会写基本 SQL、准备写第一个 DAO 的人阅读；如果你只记得 <code>Statement</code> 和 <code>conn.close()</code>，读完这一章应当能写出可用于生产的数据库访问层。</p>
+
+<h2>一、JDBC 的最小闭环与 PreparedStatement</h2>
+
+<p>JDBC 是 JDK 提供的一套数据库访问规范，驱动（MySQL 的 <code>mysql-connector-j</code>、Oracle 的 <code>ojdbc</code>）负责把规范翻译成具体数据库的协议。一次查询的固定动作是：注册/加载驱动 → 用 URL、用户名、密码拿到 <code>Connection</code> → 创建语句对象 → 执行并处理 <code>ResultSet</code> → 关闭资源。现代驱动通过 SPI 自动注册，通常不必再写 <code>Class.forName("com.mysql.cj.jdbc.Driver")</code>。</p>
+
+<p>真正容易写错的是语句对象的选择。用字符串拼接 SQL 会引入 SQL 注入：用户输入 <code>' OR '1'='1</code> 就能把条件改写成恒真。<code>PreparedStatement</code> 使用 <code>?</code> 占位符，参数通过 <code>setXxx</code> 绑定，驱动会把参数当作纯数据而非 SQL 语法，从根本上堵住注入。此外，同一条 SQL 重复执行时，数据库可以复用执行计划，性能也更好。所以除了极少数动态表名、动态排序字段（这类无法参数化的部分必须用白名单校验），都应该用 <code>PreparedStatement</code>。</p>
+
+<pre><code class="language-java">public class JdbcDemo {
+    private static final String URL = "jdbc:mysql://localhost:3306/day06_db"
+            + "?useUnicode=true&amp;characterEncoding=utf8&amp;serverTimezone=Asia/Shanghai";
+
+    public static List&lt;String&gt; findNamesAbove(double money) {
+        String sql = "select name from account where money &gt; ?";
+        List&lt;String&gt; names = new ArrayList&lt;&gt;();
+        // try-with-resources：Connection、Statement、ResultSet 都是 AutoCloseable
+        try (Connection conn = DriverManager.getConnection(URL, "root", "root");
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDouble(1, money);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    names.add(rs.getString("name"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询账户失败", e);
+        }
+        return names;
+    }
+}</code></pre>
+
+<p>这里的 URL 参数值得单独说一句：<code>serverTimezone</code> 是 MySQL 8 驱动的要求，缺少它经常报时区错误；<code>useSSL=false</code> 在本地开发也常加，但生产环境应当显式配置加密而不是关掉 SSL。</p>
+
+<h2>二、事务：把多条 SQL 绑成一个原子操作</h2>
+
+<p>转账是最经典的例子：A 扣 100、B 加 100，如果扣款成功而加款失败，钱就凭空消失了。事务就是把这两条 <code>update</code> 包成一个不可分割的工作单元，要么都生效，要么都撤销。数据库事务必须满足 ACID：<strong>原子性</strong>（Atomicity，操作全做或全不做）、<strong>一致性</strong>（Consistency，事务前后数据都满足业务约束）、<strong>隔离性</strong>（Isolation，并发事务互不干扰）、<strong>持久性</strong>（Durability，提交后的改动不会因故障丢失）。</p>
+
+<p>JDBC 默认是「自动提交」：每条 SQL 执行完立刻提交。手动控制事务只需三步——<code>setAutoCommit(false)</code> 开启，成功后 <code>commit()</code>，异常时 <code>rollback()</code>。要注意三点：一是 <code>setAutoCommit(false)</code> 之后执行的语句并不会自动落库，忘记 <code>commit()</code> 就等于没执行；二是回滚必须放在 <code>catch</code> 中，且 <code>rollback()</code> 自身也可能抛异常；三是事务边界必须落在同一个 <code>Connection</code> 上，这也是后面讲连接池时要格外小心的原因。</p>
+
+<pre><code class="language-java">public void transfer(String from, String to, double money) {
+    String out = "update account set money = money - ? where name = ?";
+    String in  = "update account set money = money + ? where name = ?";
+    Connection conn = null;
+    try {
+        conn = DriverManager.getConnection(URL, "root", "root");
+        conn.setAutoCommit(false);          // 1. 开启事务
+        try (PreparedStatement ps1 = conn.prepareStatement(out);
+             PreparedStatement ps2 = conn.prepareStatement(in)) {
+            ps1.setDouble(1, money);
+            ps1.setString(2, from);
+            ps1.executeUpdate();
+
+            ps2.setDouble(1, money);
+            ps2.setString(2, to);
+            ps2.executeUpdate();
+        }
+        conn.commit();                       // 2. 全部成功才提交
+    } catch (SQLException e) {
+        if (conn != null) {
+            try {
+                conn.rollback();             // 3. 任一步失败则整体撤销
+            } catch (SQLException ignored) {
+                // 回滚失败同样要记录日志
+            }
+        }
+        throw new RuntimeException("转账失败", e);
+    } finally {
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException ignored) {
+            }
+        }
+    }
+}</code></pre>
+
+<p>事务的提交为什么能扛住断电？关键在于数据库是先写日志、再改数据文件：执行事务时先把重做（redo）日志落盘，真正改数据页则可以延后。崩溃重启后，数据库根据日志做 undo（撤销未提交的事务）或 redo（重放已提交的事务），从而把数据恢复到一致状态。这也是「日志文件往往比数据文件还大」的原因。顺带一提，Oracle 默认不自动提交、MySQL 默认自动提交，所以迁移数据库时事务代码要重新确认一遍行为。</p>
+
+<p>并发会带来三类问题。<strong>脏读</strong>读到了别的事务未提交的数据；<strong>不可重复读</strong>在同一个事务里两次读同一行结果不同（别人 <code>update</code> 并提交了）；<strong>幻读</strong>两次范围查询的记录条数不同（别人 <code>insert</code> 或 <code>delete</code> 并提交了）。SQL 标准用四个隔离级别来权衡：<code>read uncommitted</code>、<code>read committed</code>、<code>repeatable read</code>、<code>serializable</code>，级别越高一致性越强、并发性能越差。默认值是重点：MySQL 默认 <code>repeatable read</code>，Oracle 默认 <code>read committed</code>；可以用 <code>select @@transaction_isolation;</code> 查看（MySQL 8 之前是 <code>@@tx_isolation</code>），用 <code>set session transaction isolation level ...</code> 修改。需要注意的是，具体行为由存储引擎实现决定，InnoDB 的 <code>repeatable read</code> 借助间隙锁在很大程度上也避免了幻读，所以「MySQL 可重复读挡不住幻读」这句话对 InnoDB 并不严谨。</p>
+
+<h2>三、连接池：为什么不能每次都 new 一个连接</h2>
+
+<p>建立一个数据库连接需要 TCP 握手、身份认证、初始化会话，代价远高于执行一条简单 SQL。高并发下「一次请求一个连接」，数据库会先被连接创建拖垮。连接池的思路是提前创建若干连接并缓存起来，用的时候借、用完还，把创建成本摊薄到整个运行期。它同时还能充当流量阀门：池大小固定，超出阈值的请求排队，避免把数据库压死。</p>
+
+<p>自己实现一个连接池有两个关键点：用容器（如 <code>LinkedList</code>）保存空闲连接；由于业务代码习惯调用 <code>conn.close()</code>，需要返回一个代理对象，用动态代理把 <code>close()</code> 改写成「归还连接」而不是真的关闭物理连接。理解了这一点，就明白为什么用第三方池时 <code>close()</code> 依然可以放心调用。</p>
+
+<p>生产上基本不再手写，主流选择是 Druid 与 HikariCP。Druid 由阿里开源，参数丰富、自带监控页面，国内项目见得多；HikariCP 以轻量和低延迟著称，是 Spring Boot 2.x 之后的默认连接池。以 Druid 为例，用配置文件加载：</p>
+
+<pre><code class="language-java">// druid.properties
+// driverClassName=com.mysql.cj.jdbc.Driver
+// url=jdbc:mysql://localhost:3306/day06_db?serverTimezone=Asia/Shanghai
+// username=root
+// password=root
+// initialSize=5       初始连接数
+// minIdle=5           最小空闲连接
+// maxActive=20        最大活跃连接
+// maxWait=3000        获取连接的最长等待毫秒数
+
+public class DruidUtils {
+    private static final DataSource DATA_SOURCE;
+
+    static {
+        try (InputStream in = DruidUtils.class.getClassLoader()
+                .getResourceAsStream("druid.properties")) {
+            Properties props = new Properties();
+            props.load(in);
+            DATA_SOURCE = DruidDataSourceFactory.createDataSource(props);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    public static DataSource getDataSource() {
+        return DATA_SOURCE;
+    }
+}</code></pre>
+
+<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>。HikariCP 官方给出的经验值是 <code>maximumPoolSize</code> 取 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好；另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的「死连接」，报出 <code>Communications link failure</code> 这类错误。</p>
+
+<h2>四、常见坑与落地建议</h2>
+
+<p>第一，<strong>事务与连接池配合失误</strong>。最典型的写法是 Service 层开了事务，DAO 层却各自从池里取新连接，结果两条 SQL 落在两个连接上，回滚只回滚了其中一条。解决办法是让 Service 统一获取连接并透传给 DAO；若不想改方法签名，可用 <code>ThreadLocal</code> 把连接绑定到当前线程，由同一个工具类提供取连接与释放连接的方法。但必须成对释放，否则线程复用时会拿到脏连接。</p>
+
+<p>第二，<strong>不归还连接</strong>。异常路径上漏掉 <code>close()</code>，池里的连接会被逐渐耗尽，表现是请求卡在获取连接处直至超时。统一用 try-with-resources 或 <code>finally</code> 释放，且把 <code>Connection</code>、<code>Statement</code>、<code>ResultSet</code> 都关掉。</p>
+
+<p>第三，<strong>在事务里做长耗时操作</strong>。事务持有行锁期间若去做远程调用或大批量计算，会显著放大锁等待。原则是让事务尽量短：先做参数校验和远程调用，再开事务写库。</p>
+
+<p>第四，<strong>批处理写法</strong>。循环逐条 <code>executeUpdate()</code> 意味着 N 次网络往返，改成 <code>addBatch()</code> 累积、<code>executeBatch()</code> 一次提交，并配合 <code>setAutoCommit(false)</code> 与 <code>rewriteBatchedStatements=true</code>（MySQL）可成倍提速。注意批处理量大时要分段提交，避免一次性撑爆内存。</p>
+
+<h2>小结</h2>
+
+<p>本章的主线是「安全执行 → 原子提交 → 高效复用」。用 <code>PreparedStatement</code> 参数化，杜绝 SQL 注入；用 <code>setAutoCommit(false)</code> 加 <code>commit()</code>/<code>rollback()</code> 把多条 SQL 绑成事务，并记住 MySQL 默认 <code>repeatable read</code>、Oracle 默认 <code>read committed</code>；用 Druid 或 HikariCP 复用连接，注意池大小的经验取值和 <code>maxLifetime</code> 与数据库超时的配合。至于跨服务、跨库的分布式事务，本质是把「一个本地事务」扩展成「多个本地事务加一套补偿或协调机制」，需要先理解 2PC/XA、TCC、本地消息表这些方案在一致性与可用性之间的取舍，本章不展开，留到分布式章节。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
