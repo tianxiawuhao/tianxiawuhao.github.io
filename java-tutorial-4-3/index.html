@@ -165,9 +165,9 @@ public class Customer implements Serializable {
 <li><code>IDENTITY</code>：依赖数据库自增列，写法简单，但 Hibernate 无法批量插入。</li>
 <li><code>SEQUENCE</code>：使用序列，在 Oracle、PostgreSQL 上首选，可配 <code>@SequenceGenerator</code>；默认 <code>allocationSize=50</code>，想让主键连续不跳号就设成 1。</li>
 <li><code>TABLE</code>：用一张序列表模拟，跨数据库但性能最差。</li>
-<li><code>AUTO</code>：交给方言决定。在 Hibernate 5.x 上连 MySQL 时往往走 <code>hibernate_sequence</code> 表而不是自增，所以明确要自增就写 <code>IDENTITY</code>（Hibernate 6 起 <code>AUTO</code> 的解析规则有调整，升级时建议实测确认落到了哪种生成器）。</li>
+<li><code>AUTO</code>：交给方言决定，也是版本差异最大的一档。Hibernate 5.x 上连 MySQL 时，<code>AUTO</code> 会回退为「用一张表模拟序列」，额外建出 <code>hibernate_sequence</code> 表，主键并不走自增列，所以明确要自增就必须写 <code>IDENTITY</code>；连 Oracle、PostgreSQL 时则解析为序列。Hibernate 6.x 起 <code>AUTO</code> 的解析规则做了调整，改为按方言能力优先挑选生成器，同一份代码在不同数据库、甚至不同 6.x 小版本上仍可能落到序列、表或自增，升级后务必实测确认实际落点（看建表 DDL 或启动日志）。结论：跨库项目只要依赖具体策略，就显式写 <code>IDENTITY</code> 或 <code>SEQUENCE</code>，不要赌 <code>AUTO</code>。</li>
 </ul>
-<p>如果项目还在用 <code>hbm.xml</code>，对应写法是 <code>&lt;generator class="native"/&gt;</code>，可选值有 <code>identity</code>、<code>sequence</code>、<code>native</code>、<code>uuid</code>、<code>assigned</code>、<code>increment</code>，其中 <code>native</code> 表示由方言自动在 identity 和 sequence 之间选（在 MySQL 上即解析为 <code>identity</code>，与需要自增时的预期一致）。</p>
+<p>如果项目还在用 <code>hbm.xml</code>（注意版本演进：Hibernate 5 起注解映射已是主流，6 起 XML 映射不再推荐，新项目请统一用注解，只有维护老工程时才需要读它），对应写法是 <code>&lt;generator class="native"/&gt;</code>，可选值有 <code>identity</code>、<code>sequence</code>、<code>native</code>、<code>uuid</code>、<code>assigned</code>、<code>increment</code>，其中 <code>native</code> 表示由方言自动在 identity 和 sequence 之间选（在 MySQL 上即解析为 <code>identity</code>，与需要自增时的预期一致）。</p>
 
 <h2>一对多与多对多关联映射</h2>
 <p>做关联映射按四步走：先确定两张表的关系是一对多、多对一还是多对多；再在数据库里建好外键或中间表；然后在实体类里用集合或引用描述关系；最后写映射注解。以客户和联系人为例，一个客户有多个联系人，所以在「一」的一方放集合，在「多」的一方放引用：</p>
@@ -226,25 +226,44 @@ public class SysRole {
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-3/01-relation-mapping.svg" alt="一对多与多对多映射示意图：外键列在多方并由多方维护，一方用 mappedBy 只映射，多对多靠中间表连接两个实体"><figcaption>图 1：一对多与多对多的表结构，以及外键由谁维护</figcaption></figure>
 
 <h2>HQL 与 QBC 查询</h2>
-<p>HQL 是面向对象的查询语言，写类名和属性名，不写表名和列名。因此 <code>from Customer</code> 里的 <code>Customer</code> 是实体类名，条件里的 <code>custName</code> 是属性名。它<strong>不支持</strong> <code>select *</code>，写 <code>from Customer</code> 就等价于查全部。参数一律用命名占位符加 <code>setParameter</code>。早期的 <code>setString(0, "%李%")</code> 这类按位置设值在 Hibernate 5.2 已标记过时，到 Hibernate 6 被移除，不要再用。</p>
+<p>HQL 是面向对象的查询语言，写类名和属性名，不写表名和列名。因此 <code>from Customer</code> 里的 <code>Customer</code> 是实体类名，条件里的 <code>custName</code> 是属性名。它<strong>不支持</strong> <code>select *</code>，写 <code>from Customer</code> 就等价于查全部。参数一律用命名占位符加 <code>setParameter</code>。早期的 <code>setString(0, "%李%")</code> 这类按位置设值在 Hibernate 5.2 已标记过时，到 Hibernate 6 被移除，不要再用。同一批被淘汰的还有 Hibernate 原生 <code>Query</code> 上的 <code>list()</code>、<code>uniqueResult()</code>、<code>iterate()</code>（以及无参的 <code>scroll()</code>）：5.2 起标记为过时，6.x 已从 API 中移除，取而代之的是 JPA 标准的 <code>getResultList()</code> 与 <code>getSingleResult()</code>。下文讲缓存时会提到 <code>iterate()</code>，那属于 5.x 的语义，6.x 上若需要类似效果请改用 <code>stream()</code> 或 <code>scroll(ScrollMode)</code>。</p>
 <pre><code class="language-java">// 条件查询 + 排序 + 分页
 String hql = "from Customer where custName like :name and custLevel = :level order by custId desc";
 List&lt;Customer&gt; list = session.createQuery(hql, Customer.class)
         .setParameter("name", "%李%")
         .setParameter("level", "普通客户")
-        .setFirstResult(0)      // 起始索引，从 0 开始
-        .setMaxResults(10)      // 每页条数
-        .list();
+        .setFirstResult(0)          // 起始索引，从 0 开始
+        .setMaxResults(10)          // 每页条数
+        .getResultList();           // 旧写法 list() 已在 Hibernate 6 移除
 
-// 聚合：确定只有一行一列时才能用 uniqueResult()
+// 聚合：确定只有一行一列时才能用 getSingleResult()
 Long total = session.createQuery("select count(c) from Customer c", Long.class)
-        .uniqueResult();
+        .getSingleResult();         // 旧写法 uniqueResult() 已在 Hibernate 6 移除
 
 // 投影：只取部分字段，实体类要有对应参数的构造方法
 List&lt;Customer&gt; part = session.createQuery(
         "select new com.example.domain.Customer(c.custId, c.custName) from Customer c",
-        Customer.class).list();</code></pre>
+        Customer.class).getResultList();</code></pre>
 <p><code>list()</code> 返回集合，<code>uniqueResult()</code> 返回唯一结果。<code>setFirstResult()</code> 与 <code>setMaxResults()</code> 配合即可实现分页。至于 QBC（<code>session.createCriteria()</code> + <code>Restrictions</code> + <code>Projections</code>）：源笔记把它称作「Hibernate 的核心查询对象」，这在今天已经过时了——<code>Criteria</code> 自 Hibernate 5.2 起被标注为 <code>@Deprecated</code>，Hibernate 6 中已删除。新项目请改用 HQL、JPA 标准的 <code>CriteriaBuilder</code>（<code>session.getCriteriaBuilder()</code>）或 QueryDSL，只有维护老代码时才需要认识 <code>DetachedCriteria</code> 这类离线查询对象。</p>
+
+<h3>旧 API 与 JPA：Session、SessionFactory 的对应关系</h3>
+<p>本章示例用的是 Hibernate 原生 API，而 Spring Boot 3.x 的默认写法是 JPA 标准接口，两者只是同一套底层能力的两个门面：<code>SessionFactory</code> 对应 <code>EntityManagerFactory</code>，<code>Session</code> 对应 <code>EntityManager</code>，一级缓存、快照脏检查、flush 的时机完全一致。对照关系如下（左为 Hibernate 原生，右为 JPA，也是 6.x 上更推荐的一侧）：</p>
+<table>
+<thead>
+<tr><th>Hibernate 原生 API</th><th>JPA 对应写法</th></tr>
+</thead>
+<tbody>
+<tr><td><code>sessionFactory.openSession()</code>、<code>getCurrentSession()</code></td><td>托管环境下注入 <code>@PersistenceContext EntityManager</code>；非托管环境用 <code>entityManagerFactory.createEntityManager()</code></td></tr>
+<tr><td><code>session.get(Customer.class, 2L)</code></td><td><code>em.find(Customer.class, 2L)</code></td></tr>
+<tr><td><code>session.load(Customer.class, 2L)</code></td><td><code>em.getReference(Customer.class, 2L)</code>，同样返回延迟代理</td></tr>
+<tr><td><code>session.save()</code> / <code>update()</code> / <code>saveOrUpdate()</code> / <code>delete()</code></td><td><code>em.persist()</code> / <code>em.merge()</code> / <code>em.merge()</code> / <code>em.remove()</code></td></tr>
+<tr><td><code>session.createQuery(hql, Customer.class)</code></td><td><code>em.createQuery(jpql, Customer.class)</code>，HQL 是 JPQL 的超集</td></tr>
+<tr><td><code>query.list()</code> / <code>query.uniqueResult()</code></td><td><code>query.getResultList()</code> / <code>query.getSingleResult()</code></td></tr>
+<tr><td><code>session.getTransaction().begin()</code> / <code>commit()</code></td><td>同名方法；Spring 环境下改由 <code>@Transactional</code> 声明事务边界</td></tr>
+<tr><td><code>session.flush()</code> / <code>clear()</code> / <code>evict()</code></td><td><code>em.flush()</code> / <code>clear()</code> / <code>detach()</code>，其中 <code>detach()</code> 对应 <code>evict()</code></td></tr>
+</tbody>
+</table>
+<p>接到 Spring Boot 后不要再自己 <code>new</code> 一个 <code>SessionFactory</code>：Boot 的 JPA 自动配置已经通过 <code>LocalContainerEntityManagerFactoryBean</code> 建好 <code>EntityManagerFactory</code>，直接注入 <code>EntityManager</code> 即可；原本写在 <code>hibernate.cfg.xml</code> 或 <code>hibernate.properties</code> 里的项，改放到 <code>application.yml</code> 的 <code>spring.jpa.properties.hibernate.*</code> 下（例如二级缓存开关写成 <code>spring.jpa.properties.hibernate.cache.use_second_level_cache</code>）。确实需要原生能力时可以 <code>entityManager.unwrap(Session.class)</code> 取回 <code>Session</code> 应急，但业务代码应当只依赖 JPA 接口，避免被具体实现绑死。</p>
 
 <h2>一级缓存、快照与二级缓存</h2>
 <p>Hibernate 的一级缓存就是 Session 缓存：只要 Session 没关闭，同一 OID 只会有一个持久化对象实例。所以在同一个 Session 里连续两次 <code>session.get(Customer.class, 2L)</code>，第二次不会再发 SQL，而且两次拿到的是<strong>同一个对象引用</strong>，这是判断命中缓存最直接的证据。它同时也是脏检查的基础：查询时 Hibernate 会复制一份数据放进快照，事务提交（flush）时按 OID 比对缓存对象与快照，属性变了就自动发 UPDATE——所以持久态对象改完属性不需要手动调 <code>update()</code>。</p>
