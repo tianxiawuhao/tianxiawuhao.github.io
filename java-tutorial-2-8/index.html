@@ -240,6 +240,8 @@ try {
 
 <p>这里的关键是实体的四个状态：new 出来的对象是<strong>瞬时态</strong>；<code>persist</code> 或查询之后进入<strong>持久化态</strong>，此后任何字段改动都会在 flush 时同步到数据库，不需要调用 update；<code>em.close()</code> 或 <code>clear()</code> 之后变成<strong>游离态</strong>；<code>merge</code> 把游离对象的改动复制回一个托管实例并把托管实例返回，所以一定要接住它的返回值。此外，除查询外的写操作必须包在活动事务中，否则不会真正落库，甚至抛 <code>TransactionRequiredException</code>。最后别忘了 <code>EntityManager</code> 自带一级缓存：同一个 <code>em</code> 里连续 <code>find</code> 同一主键两次，第二次不会再发 SQL，拿到的是同一个对象引用，这正是脏检查能生效的前提。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-8/01-entity-lifecycle.svg" alt="JPA 实体四种状态与 persist、remove、close、merge 的流转关系图"><figcaption>图 1：JPA 实体的四态流转——瞬时态经 persist 进入持久化态，close/clear 后变游离态，merge 把游离对象的改动复制回托管实例，remove 只作用于托管对象</figcaption></figure>
+
 <h2>JPQL：面向实体的查询语言</h2>
 
 <p>JPQL 语法接近 SQL，但操作的是<strong>实体名和属性名</strong>，不是表名和列名——这带来可移植性，换数据库时查询基本不用改。查询通过 <code>em.createQuery</code> 得到 <code>TypedQuery</code>，参数一律用 <code>setParameter</code> 绑定，不要拼字符串，既慢又有注入风险。<code>@NamedQuery</code> 则可以把固定 JPQL 写在实体类上，启动时预编译、不必每次解析，适合热点查询。</p>

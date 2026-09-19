@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>ROWNUM 分页：错误写法与正确写法对比</title>
+  <rect width="900" height="400" fill="#ffffff"/>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">ROWNUM 分页：错误写法恒为空，正确写法必须先编号再过滤</text>
+
+  <rect x="40" y="55" width="380" height="280" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="60" y="82" font-size="14" font-weight="700" fill="#e08a1e">错误写法：在 WHERE 里直接比较 ROWNUM</text>
+  <rect x="60" y="96" width="340" height="60" rx="6" fill="#ffffff" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="74" y="118" font-size="12" fill="#1f2b38">select rownum, t.* from t_account t</text>
+  <text x="74" y="140" font-size="12" fill="#1f2b38">where rownum &gt; 10 and rownum &lt;= 20;</text>
+  <text x="60" y="184" font-size="12" fill="#5b6b7c">分配时机：ROWNUM 在 WHERE 过滤过程中逐行给出</text>
+  <text x="60" y="210" font-size="12" fill="#1f2b38">第 1 行取出时 rownum = 1，不满足 &gt; 10，被丢弃</text>
+  <text x="60" y="234" font-size="12" fill="#1f2b38">第 2 行取出时 rownum 仍是 1（按当前候选行编号）</text>
+  <text x="60" y="258" font-size="12" fill="#1f2b38">如此往复，任何一行都留不下来</text>
+  <text x="60" y="290" font-size="13" font-weight="700" fill="#e08a1e">结论：结果恒为空，第二页永远查不出</text>
+  <text x="60" y="314" font-size="12" fill="#5b6b7c">只有 &lt;=、&lt; 能用，&gt; n 一定为空</text>
+
+  <rect x="460" y="55" width="400" height="280" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="480" y="82" font-size="14" font-weight="700" fill="#2f6fd0">正确写法：子查询套一层，把 ROWNUM 变成列</text>
+
+  <rect x="480" y="96" width="360" height="56" rx="6" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="496" y="120" font-size="12.5" font-weight="700" fill="#1f2b38">外层：where rn &gt; 10</text>
+  <text x="496" y="140" font-size="11.5" fill="#5b6b7c">rn 已是普通列，可以参与比较</text>
+
+  <rect x="480" y="178" width="360" height="56" rx="6" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="496" y="202" font-size="12.5" font-weight="700" fill="#1f2b38">中层：where rownum &lt;= 20</text>
+  <text x="496" y="222" font-size="11.5" fill="#5b6b7c">只限制上界，并给伪列取别名 rn</text>
+
+  <rect x="480" y="260" width="360" height="56" rx="6" fill="#ffffff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="496" y="284" font-size="12.5" font-weight="700" fill="#1f2b38">内层：order by usenum desc</text>
+  <text x="496" y="304" font-size="11.5" fill="#5b6b7c">排序必须发生在编号之前，否则结果错乱</text>
+
+  <line x1="660" y1="154" x2="660" y2="174" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="660" y1="236" x2="660" y2="256" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <text x="450" y="364" font-size="12" fill="#5b6b7c" text-anchor="middle">Oracle 12c 之后可直接写 order by … offset 10 rows fetch next 10 rows only，语义更清晰</text>
+</svg>
