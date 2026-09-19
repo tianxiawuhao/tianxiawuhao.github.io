@@ -153,7 +153,12 @@ netstat -nat | awk '{print $6}' | sort | uniq -c | sort -rn | head</code></pre>
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-7-3/01-troubleshoot-flow.svg" alt="性能排查逐层收敛路径：系统指标、进程线程、进程内部资源、代码，以及三条常见误区"><figcaption>图 1：性能排查的逐层收敛路径：先用 top、free、df 判断瓶颈类型，再收敛到进程、线程与 JVM，最后落到代码；下方是三条最容易踩的坑</figcaption></figure>
 <p>另外，排障时最好先留证据再动手：把关键输出重定向到文件（例如 <code>top -bn1 &gt; /tmp/top.log</code>、<code>ss -s &gt; /tmp/ss.log</code>），这样既不会因为终端滚动丢掉信息，也方便事后复盘。若机器还能登录，优先做只读的观测命令，不要急着 kill 进程。</p>
 <h3>命令换代：net-tools 已弃用，改用 iproute2 的 ip 与 ss</h3>
-<p>这套命令的基线是 Rocky 9 / Ubuntu 22.04 及更新的发行版：<code>ip</code> 与 <code>ss</code> 由系统自带的 <code>iproute2</code> 提供；而 <code>ifconfig</code>、<code>route</code>、<code>netstat</code>、<code>arp</code> 属于 net-tools，RHEL 8/9 与 Ubuntu 20.04 起的默认安装已不再包含它，需要 <code>dnf install net-tools</code> 或 <code>apt install net-tools</code> 才能补上。旧命令不必背，但要看得懂——它们仍大量出现在旧文档、旧脚本和老镜像里，下表按“旧→新”对照。</p>
+<p>这套命令的基线是 Rocky 9 / Ubuntu 22.04 及更新的发行版：</p>
+<ul>
+<li><code>ip</code> 与 <code>ss</code> 由系统自带的 <code>iproute2</code> 提供。</li>
+<li><code>ifconfig</code>、<code>route</code>、<code>netstat</code>、<code>arp</code> 属于 net-tools，RHEL 8/9 与 Ubuntu 20.04 起的默认安装已不再包含它，需要 <code>dnf install net-tools</code> 或 <code>apt install net-tools</code> 才能补上。</li>
+</ul>
+<p>旧命令不必背，但要看得懂——它们仍大量出现在旧文档、旧脚本和老镜像里，下表按“旧→新”对照。</p>
 <table>
 <thead><tr><th>旧写法（net-tools，已弃用）</th><th>现代写法（iproute2 自带）</th><th>用途</th></tr></thead>
 <tbody>
@@ -169,7 +174,12 @@ netstat -nat | awk '{print $6}' | sort | uniq -c | sort -rn | head</code></pre>
 <tr><td><code>netstat -s</code></td><td><code>ss -s</code>；细项看 <code>nstat -az</code></td><td>协议栈统计（重传、丢包）</td></tr>
 </tbody>
 </table>
-<p>发行版基线也顺带说明：CentOS 7 已于 2024-06-30 EOL、CentOS 8 于 2021-12-31 EOL，都不再有安全更新，新部署请改用 Rocky Linux 9、AlmaLinux 9 或 Ubuntu 22.04 LTS 及以上。这些系统默认既不带 net-tools，也默认启用 cgroup v2，本节的写法以它们为准；若你还在 CentOS 7 上排障，见到的会是下一节的 cgroup v1 路径——命令仍能用，但已是历史写法。</p>
+<p>发行版基线也顺带说明：</p>
+<ul>
+<li>CentOS 7 已于 2024-06-30 EOL、CentOS 8 于 2021-12-31 EOL，都不再有安全更新。新部署请改用 Rocky Linux 9、AlmaLinux 9 或 Ubuntu 22.04 LTS 及以上。</li>
+<li>这些系统默认既不带 net-tools，也默认启用 cgroup v2，本节的写法以它们为准。</li>
+<li>若你还在 CentOS 7 上排障，见到的会是下一节的 cgroup v1 路径——命令仍能用，但已是历史写法。</li>
+</ul>
 <h2>二、进程与 CPU：用 ps 和 top 找到“罪魁祸首”</h2>
 <p><code>ps</code> 是 Process Status 的缩写，给出的是执行那一刻的进程快照；需要动态刷新就用 <code>top</code>。常用的两种写法各有侧重。<code>ps -ef</code> 用标准格式列出全部进程，附带 UID、PPID（父进程号）和完整命令行，适合回答“这个进程是谁拉起来的”。<code>ps aux</code> 用 BSD 格式，多出 <code>%CPU</code>、<code>%MEM</code>、<code>VSZ</code>、<code>RSS</code> 和 <code>STAT</code> 列，适合快速找耗资源大户。</p>
 <p>注意一个常见错误：把两者混写成 <code>ps -aux</code> 会触发警告 <code>Warning: bad syntax, perhaps a bogus '-'?</code>。原因是带杠的 <code>-a</code> 与 BSD 的 <code>u</code>、<code>x</code> 不属于同一套语法。请统一写成 <code>ps aux</code> 或 <code>ps -ef</code>。</p>

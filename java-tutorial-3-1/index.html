@@ -239,9 +239,20 @@
   &lt;button type="submit"&gt;注册&lt;/button&gt;
 &lt;/form&gt;</code></pre>
 
-<p>有三个细节容易踩坑。<b>其一，<code>pattern</code> 里写的是 JavaScript 正则源码</b>（不带两侧的斜杠），并且浏览器会自动整串匹配，相当于替你加了 <code>^(?:…)$</code>，所以不要再自己写 <code>^</code> 和 <code>$</code>；如果正则本身有语法错误，这个属性会被整个忽略、校验直接放行，这是最隐蔽的一种失效。<b>其二，<code>title</code> 会作为原生提示的补充说明</b>，建议写清楚期望的格式。<b>其三，客户端校验只负责体验，不负责安全</b>：请求完全可以绕过页面直接构造，服务端必须把同一套规则再校验一遍，这也是“前端校验 + 后端校验”两道关的由来。</p>
+<p>有三个细节容易踩坑：</p>
+<ul>
+<li><b>其一，<code>pattern</code> 里写的是 JavaScript 正则源码</b>（不带两侧的斜杠），并且浏览器会自动整串匹配，相当于替你加了 <code>^(?:…)$</code>，所以不要再自己写 <code>^</code> 和 <code>$</code>。如果正则本身有语法错误，这个属性会被整个忽略、校验直接放行，这是最隐蔽的一种失效。</li>
+<li><b>其二，<code>title</code> 会作为原生提示的补充说明</b>，建议写清楚期望的格式。</li>
+<li><b>其三，客户端校验只负责体验，不负责安全</b>：请求完全可以绕过页面直接构造，服务端必须把同一套规则再校验一遍。这也是“前端校验 + 后端校验”两道关的由来。</li>
+</ul>
 
-<p>需要自定义逻辑时还有一层 API：在 <code>&lt;form&gt;</code> 上写 <code>novalidate</code> 可关闭原生校验、完全接管流程；<code>form.checkValidity()</code> 返回整体是否通过，<code>form.reportValidity()</code> 让浏览器显示提示，<code>input.setCustomValidity('提示文字')</code> 可注入自定义错误（通过时要传空字符串清除，否则该控件会一直处于无效状态），<code>input.validity</code> 上能读到具体是哪条规则不满足。这些属性与 API 在现代浏览器中普遍可用，老项目里仍是手写 JavaScript，遇到时可以按需逐步替换。</p>
+<p>需要自定义逻辑时还有一层 API。在 <code>&lt;form&gt;</code> 上写 <code>novalidate</code> 可关闭原生校验、完全接管流程，其余接口各管一段：</p>
+<ul>
+<li><code>form.checkValidity()</code> 返回整体是否通过；<code>form.reportValidity()</code> 让浏览器显示提示。</li>
+<li><code>input.setCustomValidity('提示文字')</code> 可注入自定义错误，通过时要传空字符串清除，否则该控件会一直处于无效状态。</li>
+<li><code>input.validity</code> 上能读到具体是哪条规则不满足。</li>
+</ul>
+<p>这些属性与 API 在现代浏览器中普遍可用，老项目里仍是手写 JavaScript，遇到时可以按需逐步替换。</p>
 
 <pre><code class="language-js">const form = document.querySelector('form');
 form.addEventListener('submit', (e) =&gt; {
