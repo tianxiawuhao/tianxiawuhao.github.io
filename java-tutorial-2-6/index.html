@@ -172,7 +172,7 @@ drop sequence seq_ownersid;
 <ul>
 <li><code>currval</code> 必须先在本会话执行过一次 <code>nextval</code> 才能用，否则报 <code>ORA-08002: sequence xxx.CURRVAL is not yet defined in this session</code>；而且它返回的是<strong>本会话</strong>的当前值，别的会话取到哪儿了它并不知道。</li>
 <li>只执行 <code>select seq.nextval from dual</code> 而不插入，序列照样往前走，所以<strong>序列值天然不连续</strong>：事务回滚、实例重启丢缓存都会造成跳号。主键只需要唯一，不要用“有没有断号”来校验业务。</li>
-<li><code>cycle</code>（循环）配合 <code>maxvalue/minvalue</code> 时要留神缓存：一轮可取的值是 <code>maxvalue - minvalue</code>，<code>cache × increment</code> 不能超过一轮的容量，否则创建时就会报错（具体错误号随版本不同，此处存疑，以实际报错为准）。生产上更建议用 <code>nocycle</code> + 足够大的 <code>maxvalue</code>。</li>
+<li><code>cycle</code>（循环）配合 <code>maxvalue/minvalue</code> 时要留神缓存：一轮可取的值是 <code>maxvalue - minvalue</code>，<code>cache × increment</code> 不能超过一轮的容量，否则创建时就会报 <code>ORA-04013: number to CACHE must be less than one cycle</code>。生产上更建议用 <code>nocycle</code> + 足够大的 <code>maxvalue</code>。</li>
 <li>如果业务要求“编号必须连续”，序列做不到，只能在事务里 <code>select ... for update</code> 锁住一张单行编号表自己维护，代价是并发能力急剧下降。</li>
 </ul>
 
@@ -219,7 +219,7 @@ select to_char(123456789, '999,999,999') from dual;     -- ' 123,456,789'，注�
 select nvl(null, 0) from dual;                          -- 0，空值处理
 </code></pre>
 
-<p>细节上有几处容易出错。<code>substr</code> 的<strong>下标从 1 开始，没有下标 0 的概念</strong>（常说成“没有索引 0”，容易和索引混淆），第二、三个参数传小数会被四舍五入，起始位置传负数表示从右往左数。<code>replace</code> 按整串匹配且<strong>区分大小写</strong>，所以 <code>replace('ADBCD', 'Db', 'db')</code> 什么也不会替换——把它当成“替换成功”的例子是错的；<code>translate</code> 才是字符级映射，且源串与目标串按位置一一对应。<code>round</code> 四舍五入而 <code>trunc</code> 直接截断，做金额计算时要明确用哪个。<code>to_char</code> 的数字格式串位数不够会返回一串 <code>#</code>，位数够则按格式补前导空格，做报表时通常再套一层 <code>trim()</code>。</p>
+<p>细节上有几处容易出错。<code>substr</code> 的<strong>下标从 1 开始，没有下标 0 的概念</strong>（常说成“没有索引 0”，容易和索引混淆），第二、三个参数建议始终传整数（传小数时的取整行为随版本而异，不要依赖），起始位置传负数表示从右往左数。<code>replace</code> 按整串匹配且<strong>区分大小写</strong>，所以 <code>replace('ADBCD', 'Db', 'db')</code> 什么也不会替换——把它当成“替换成功”的例子是错的；<code>translate</code> 才是字符级映射，且源串与目标串按位置一一对应。<code>round</code> 四舍五入而 <code>trunc</code> 直接截断，做金额计算时要明确用哪个。<code>to_char</code> 的数字格式串位数不够会返回一串 <code>#</code>，位数够则按格式补前导空格，做报表时通常再套一层 <code>trim()</code>。</p>
 
 <p>查询的书写顺序和执行顺序并不一致，实际执行顺序是：<code>from → where → group by → having → select → order by</code>。这解释了两条常见规则：<code>where</code> 里不能使用 <code>select</code> 中定义的列别名（那时还没算出来），而 <code>order by</code> 可以使用列别名甚至列序号。</p>
 

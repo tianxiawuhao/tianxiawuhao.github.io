@@ -214,7 +214,7 @@
 
 <p>事务的提交为什么能扛住断电？关键在于数据库是先写日志、再改数据文件：执行事务时先把重做（redo）日志落盘，真正改数据页则可以延后。崩溃重启后，数据库根据日志做 undo（撤销未提交的事务）或 redo（重放已提交的事务），从而把数据恢复到一致状态。这也是“日志文件往往比数据文件还大”的原因。另外，Oracle 默认不自动提交、MySQL 默认自动提交，所以迁移数据库时事务代码要重新确认一遍行为。</p>
 
-<p>并发会带来三类问题。<strong>脏读</strong>读到了别的事务未提交的数据。<strong>不可重复读</strong>指同一个事务里两次读同一行结果不同，因为别人 <code>update</code> 并提交了。<strong>幻读</strong>指两次范围查询的记录条数不同，因为别人 <code>insert</code> 或 <code>delete</code> 并提交了。SQL 标准用四个隔离级别来权衡：<code>read uncommitted</code>、<code>read committed</code>、<code>repeatable read</code>、<code>serializable</code>，级别越高一致性越强、并发性能越差。默认值是重点：MySQL 默认 <code>repeatable read</code>，Oracle 默认 <code>read committed</code>。可以用 <code>select @@transaction_isolation;</code> 查看（MySQL 8 之前是 <code>@@tx_isolation</code>），用 <code>set session transaction isolation level ...</code> 修改。需要注意的是，具体行为由存储引擎实现决定，InnoDB 的 <code>repeatable read</code> 借助间隙锁在很大程度上也避免了幻读，所以“MySQL 可重复读挡不住幻读”这句话对 InnoDB 并不严谨。</p>
+<p>并发会带来三类问题。<strong>脏读</strong>读到了别的事务未提交的数据。<strong>不可重复读</strong>指同一个事务里两次读同一行结果不同，因为别人 <code>update</code> 并提交了。<strong>幻读</strong>指两次范围查询的记录条数不同，因为别人 <code>insert</code> 或 <code>delete</code> 并提交了。SQL 标准用四个隔离级别来权衡：<code>read uncommitted</code>、<code>read committed</code>、<code>repeatable read</code>、<code>serializable</code>，级别越高一致性越强、并发性能越差。默认值是重点：MySQL 默认 <code>repeatable read</code>，Oracle 默认 <code>read committed</code>。可以用 <code>select @@transaction_isolation;</code> 查看（MySQL 5.7.20 之前是 <code>@@tx_isolation</code>，该变量在 8.0 中已移除），用 <code>set session transaction isolation level ...</code> 修改。需要注意的是，具体行为由存储引擎实现决定，InnoDB 的 <code>repeatable read</code> 借助间隙锁在很大程度上也避免了幻读，所以“MySQL 可重复读挡不住幻读”这句话对 InnoDB 并不严谨。</p>
 
 <h2>三、连接池：为什么不能每次都 new 一个连接</h2>
 
