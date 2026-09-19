@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="black" name="apple-mobile-web-app-status-bar-style" />
+<meta name="referrer" content="never">
+<meta name="keywords" content="大语言模型,undefined">
+<meta name="description" content="欢迎访问[tianxia]的个人博客">
+<meta name="author" content="kveln">
+<title>Spring IoC 与依赖注入 | tianxia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+<link href="https://cdn.bootcss.com/font-awesome/5.11.2/css/all.min.css" rel="stylesheet">
+<link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+<link
+  href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800'
+  rel='stylesheet' type='text/css'>
+<link rel="alternate" type="application/rss+xml" title="1.1 数据集 | tianxia » Feed"
+  href="/atom.xml">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.15.10/build/styles/androidstudio.min.css">
+<link href="/styles/main.css" rel="stylesheet">
+<script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/850552586/ericamcdn@0.1/css/live2d.css">
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+  <meta property="og:description" content="1.1 数据集" />
+  <meta property="og:url" content="https://tianxiawuhao.github.io/llm-tutorial-1-1/" />
+  <meta property="og:locale" content="zh-CN" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="tianxia" />
+  <!-- <script src="../assets/styles/scripts/tocScript.js"></script> -->
+<script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><script>try{var t=localStorage.getItem("tw-theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";document.documentElement.setAttribute("data-theme",t||"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <!-- Navigation -->
+  
+  <!-- Page Header -->
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+  <div class="container">
+    <a class="navbar-brand" href="/">tianxia</a>
+    <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+      data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false"
+      aria-label="Toggle navigation">
+      Menu
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarResponsive">
+      <ul class="navbar-nav ml-auto">
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/">首页</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/archives">归档</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/tags">标签</a>
+          
+        </li>
+        <li class="nav-item">
+          
+          <a class="nav-link" href="/ai-weekly">周报</a>
+          
+        </li>
+                <li class="nav-item">
+          
+          <a class="nav-link" href="/tutorial">教程</a>
+          
+        </li>
+        
+        <li class="nav-item">
+          <div class="gridea-search-container">
+            <form id="gridea-search-form" style="position: relative" data-update="1742729663519"
+              action="/search/index.html">
+              <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+              <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<header class="masthead" style="background-image: url('/media/images/home-bg.jpg')">
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-md-10 mx-auto">
+        
+          <!-- 没Title为其他页面Header -->
+          
+            <!-- 没Title并且有headerType为Post：文章Header -->
+            <div class="post-heading">
+              <span class="tags">
+                <a href="/tutorial/java/" class="tag">Java 教程</a>
+</span>
+              <h1>Spring IoC 与依赖注入</h1>
+              <span class="meta">
+                Posted on
+                2026-09-19，6 min read</span>
+            </div>
+          
+        
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- Post Content -->
+  <article id="post-content-article">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto post-content-container">
+          <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
+<p>上一章我们让 Spring MVC 跑通了第一个请求，但你可能还没弄清：那些 Service、DAO 对象究竟是谁 new 出来的，为什么在 Controller 里只写一个字段就能直接调用？答案就是本章的主角——IoC 容器与依赖注入（DI）。这一章面向已经会写 Java、准备上手或正在被面试追问的读者，把「容器怎么建对象、怎么塞依赖、Bean 从生到死经历什么、有哪几种作用域、循环依赖为什么能解又为什么解不了」这一条主线讲透。读完你应当能看懂任意一份 Spring 配置，并能说出每一步背后的取舍。</p>
+
+<h2>一、容器与 IoC：把 new 的权力交出去</h2>
+
+<p>传统写法里，对象自己负责寻找和创建协作者：<code>NoticeService</code> 要发通知，就自己 <code>new</code> 一个 <code>SmsSender</code>。后果是编译期就绑死了实现，想换成邮件通知必须改源码，单元测试也没法替换成假实现。IoC（Inversion of Control，控制反转）把这件事倒过来：对象只声明「我需要什么」，由容器在运行期把实现塞给它，这个塞的动作就是依赖注入。所以 IoC 是思想，DI 是它的实现手段。</p>
+
+<p>Spring 侧的容器有两代接口。<code>BeanFactory</code> 是最底层的 IoC 容器，默认<strong>懒加载</strong>，只有 <code>getBean()</code> 时才创建对象，功能少、启动快；<code>ApplicationContext</code> 是它的超集，启动时就预实例化所有单例 Bean，额外提供国际化消息、事件发布、资源加载等能力，日常开发基本都用它。两者最常见的实现分别是 <code>DefaultListableBeanFactory</code> 与 <code>ClassPathXmlApplicationContext</code>、<code>AnnotationConfigApplicationContext</code>。</p>
+
+<p>至于配置元数据，Spring 支持 XML、注解、Java 配置类三种来源，现代项目以 Java 配置（<code>@Configuration</code> + <code>@Bean</code>）和组件扫描（<code>@ComponentScan</code>）为主，XML 在维护老项目时仍会遇到。</p>
+
+<h2>二、三种注入方式：构造器、Setter、字段</h2>
+
+<p>按注入入口区分，共有三种写法。构造器注入通过构造参数传入依赖，能保证对象一创建就处于可用状态，也便于把依赖声明为 <code>final</code>；Setter 注入在无参构造或静态工厂实例化之后调用 setter，适合可选依赖；字段注入直接标注在成员变量上，代码最短，但绕过了构造器，对象脱离容器就无法工作，测试时只能靠反射赋值。</p>
+
+<pre><code class="language-java">@Configuration
+@ComponentScan("com.example.notice")
+public class AppConfig {
+}
+
+@Component
+public class SmsSender {
+
+    public void send(String to, String text) {
+        System.out.println("sms -&gt; " + to + ": " + text);
+    }
+}
+
+@Component
+public class NoticeService {
+
+    private final SmsSender smsSender;   // 强制依赖：不给就创建不了
+
+    public NoticeService(SmsSender smsSender) {   // Spring 4.3 起单构造器可省略 @Autowired
+        this.smsSender = smsSender;
+    }
+
+    public void notice(String user) {
+        smsSender.send(user, "your order has been shipped");
+    }
+}</code></pre>
+
+<p>当容器里存在多个同类型候选时，构造器参数上的 <code>@Autowired</code> 就会抛 <code>NoUniqueBeanDefinitionException</code>，此时用 <code>@Qualifier("smsSender")</code> 指明 Bean 名，或在候选 Bean 上加 <code>@Primary</code> 指定首选。<code>@Resource</code> 是 JSR-250 的注解，默认<strong>按名称</strong>装配，名字找不到时才退回按类型，这是它与 <code>@Autowired</code>（默认按类型）最本质的区别。</p>
+
+<p>XML 时代对应的是 <code>&lt;constructor-arg&gt;</code> 与 <code>&lt;property&gt;</code>。看一段老项目里很典型的 Setter 注入：</p>
+
+<pre><code class="language-xml">&lt;bean id="noticeService" class="com.example.notice.NoticeService"&gt;
+    &lt;property name="sender" ref="smsSender"/&gt;
+    &lt;property name="retryTimes" value="3"/&gt;
+&lt;/bean&gt;
+
+&lt;bean id="smsSender" class="com.example.notice.SmsSender"/&gt;</code></pre>
+
+<p>值得注意的是，属性上的 <code>@Autowired</code> 与 <code>@Resource</code> 由 <code>AutowiredAnnotationBeanPostProcessor</code> 和 <code>CommonAnnotationBeanPostProcessor</code> 处理，二者随 <code>AnnotationConfigApplicationContext</code> 自动注册；如果用的是纯 XML 容器，则必须加 <code>&lt;context:annotation-config/&gt;</code> 或 <code>&lt;context:component-scan/&gt;</code>，否则注解形同注释。</p>
+
+<h2>三、Bean 的生命周期：从实例化到销毁</h2>
+
+<p>把容器启动一个单例 Bean 的过程拆开，顺序大致如下：容器读取 Bean 定义 → 调用 <code>BeanFactoryPostProcessor</code>（Bean 定义的后处理器，可在此修改元数据）（其中 <code>ConfigurationClassPostProcessor</code> 负责解析配置类、完成组件扫描与条件判断）→ 实例化 Bean → 属性注入 → 各类 <code>Aware</code> 回调（<code>BeanNameAware.setBeanName</code>、<code>BeanFactoryAware.setBeanFactory</code>、<code>ApplicationContextAware.setApplicationContext</code>）→ <code>BeanPostProcessor.postProcessBeforeInitialization</code> → <code>@PostConstruct</code>、<code>InitializingBean.afterPropertiesSet()</code>、<code>init-method</code> 依次执行 → <code>postProcessAfterInitialization</code>（AOP 代理通常在这一步生成）→ Bean 就绪。容器关闭时，<code>@PreDestroy</code> → <code>DisposableBean.destroy()</code> → <code>destroy-method</code> 依次执行。</p>
+
+<pre><code class="language-java">@Component
+public class CacheWarmer implements InitializingBean, DisposableBean {
+
+    private final Map&lt;String, String&gt; cache = new HashMap&lt;&gt;();
+
+    @PostConstruct
+    public void loadHotData() {
+        cache.put("hot", "ready");            // 依赖注入已完成，可以安全使用字段
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        System.out.println("@PostConstruct 先执行，本方法后执行");
+    }
+
+    @Override
+    public void destroy() {
+        cache.clear();
+    }
+}</code></pre>
+
+<p>这里有三个容易记错的点。第一，<code>@PostConstruct</code> 属于 JSR-250，在 Spring 6 / Spring Boot 3 中随 <code>jakarta.annotation-api</code> 迁移到 <code>jakarta.annotation</code> 包，不再是 <code>javax.annotation</code>，升级时导入错包是真实存在的坑。第二，同一个 Bean 上三种初始化方式同时存在时，执行顺序固定为注解 → <code>InitializingBean</code> → 配置里的 <code>init-method</code>，销毁顺序同理。第三，<code>BeanPostProcessor</code> 会作用于容器内几乎<strong>所有</strong> Bean，是「容器级」扩展点；而 <code>Aware</code>、<code>InitializingBean</code> 只作用于实现了它们的那个 Bean，是「Bean 级」扩展点，把这两类混为一谈是常见的表述错误。另外要注意，<code>prototype</code> 作用域的 Bean，容器只负责创建和装配，销毁阶段不再回调。</p>
+
+<h2>四、作用域：单例之外的选择</h2>
+
+<p>Spring 提供六种作用域：<code>singleton</code>（默认，每个容器一个实例）、<code>prototype</code>（每次获取都新建）、<code>request</code>、<code>session</code>、<code>application</code>，以及用于 WebSocket 会话的 <code>websocket</code>。后四种依赖 Web 环境，在普通容器里注册会直接抛异常。历史上还有一个 <code>global-session</code>，用于 Portlet 应用的全局会话，Spring 5 已经移除，现在再提它属于过时知识。</p>
+
+<p>第二个高频误区是：单例 Bean 不等于线程安全。容器只保证「每个容器一个实例」，并不给这个实例加锁。只要 Bean 里存在可变的成员状态，多线程并发写就会出现数据错乱。正确做法是让单例 Bean <strong>无状态</strong>——依赖字段全部 <code>final</code> 且不可变，需要变化的数据放进方法局部变量、<code>ThreadLocal</code> 或交给数据库；确实有状态时再评估是否改成 <code>prototype</code>，并同步评估频繁创建对象的开销。</p>
+
+<p>还有一种真实场景：单例 Bean 里注入 <code>prototype</code> Bean，结果拿到的永远是同一个实例。原因是一次性注入只发生一次。此时可以让单例实现 <code>ApplicationContextAware</code> 每次 <code>getBean()</code>，更优雅的做法是用 <code>@Lookup</code> 标注一个抽象方法，由 CGLIB 在运行期覆盖它，每次调用都向容器要一个新实例。</p>
+
+<h2>五、常见坑：循环依赖与容器误用</h2>
+
+<p>循环依赖指 A 依赖 B、B 又依赖 A。Spring 用三级缓存解决其中的 Setter / 字段注入场景：一级缓存 <code>singletonObjects</code> 存成品 Bean；二级缓存 <code>earlySingletonObjects</code> 存尚未完成属性填充的早期引用；三级缓存 <code>singletonFactories</code> 存返回早期引用的 <code>ObjectFactory</code>。A 实例化后先把工厂放进三级缓存，再填充属性时发现需要 B；B 创建时从三级缓存拿到 A 的早期引用完成注入，B 顺利走完流程后 A 再补全属性。需要强调的是，三级缓存的价值不只是「提前暴露引用」，更在于通过工厂让循环依赖处能拿到 AOP 代理对象，避免注入到半成品。</p>
+
+<p>但构造器注入的循环依赖<strong>无解</strong>：B 的构造需要 A，而 A 的构造也需要 B，两者都卡在实例化之前，容器只能抛 <code>BeanCurrentlyInCreationException</code>。Spring Boot 2.6 起默认禁止循环引用（<code>spring.main.allow-circular-references=false</code>），把它从「能跑但危险」变成「启动即失败」。正确姿势是重构：抽出第三个 Bean 承接共同职责，或对其中一处依赖加 <code>@Lazy</code>，让注入的是一个延迟解析的代理，从而打断构造期的死锁。</p>
+
+<p>最后是两个工程习惯。其一，不要让业务代码直接 <code>new ClassPathXmlApplicationContext()</code> 或到处 <code>getBean()</code>，前者会创建出容器之外的野容器，后者把依赖关系藏进字符串，等于退回手动查找；在 Web 项目里让 <code>ContextLoaderListener</code> 或 Spring Boot 的引导类统一启动容器。其二，<code>@Component</code> 家族只负责把类注册为 Bean，<code>@Bean</code> 方法则用于装配第三方类，两者不要为了「看起来更 Spring」而滥用。</p>
+
+<h2>小结</h2>
+
+<p>本章的主线其实是一条链：容器负责创建与装配（IoC），装配的方式是注入（构造器 / Setter / 字段），装配完成后 Bean 走过生命周期回调，期间受作用域约束，而循环依赖是在这条链上被三级缓存兜住的一个特例。记住三句话：构造器注入强制依赖、Setter 注入可选依赖；单例不等于线程安全；循环依赖是设计信号而非配置问题。下一章我们进入 AOP，看 Spring 怎样用动态代理把日志、事务这些横切逻辑从业务代码里剥离出去。</p>
+          </article>
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <ul class="list-inline text-center">
+            
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+              <!-- <li class="list-inline-item">
+              <a href="/atom.xml" target="_blank">
+                <span class="fa-stack fa-lg">
+                  <i class="fas fa-circle fa-stack-2x"></i>
+                  <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                </span>
+              </a>
+              </li> -->
+          </ul>
+          <p class="copyright text-muted">Copyright &copy;<span>tianxia</span></p>
+        </div>
+      </div>
+    </div>
+   </footer>
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+  <!-- <script src="/media/scripts/bootstrap.bundle.min.js"></script> -->
+  <!-- Bootstrap core JavaScript -->
+  <script src="https://cdn.jsdelivr.net/gh/Alanrk/clean-cdn@1.0/scripts/clean-blog.min.js"></script>
+  <!-- <script src="/media/scripts/clean-blog.min.js"></script> -->
+  <script src="//instant.page/3.0.0" type="module" defer integrity="sha384-OeDn4XE77tdHo8pGtE1apMPmAipjoxUQ++eeJa6EtJCfHlvijigWiJpD7VDPWXV1"></script>
+  <style type="text/css">a.back_to_top{text-decoration:none;position:fixed;bottom:40px;right:30px;background:#f0f0f0;height:40px;width:40px;border-radius:50%;line-height:36px;font-size:18px;text-align:center;transition-duration:.5s;transition-propety:background-color;display:none}a.back_to_top span{color:#888}a.back_to_top:hover{cursor:pointer;background:#dfdfdf}a.back_to_top:hover span{color:#555}@media print,screen and(max-width:580px){.back_to_top{display:none!important}}</style>
+<a id="back_to_top" href="#" class="back_to_top">
+  <span>▲</span></a>
+<script>$(document).ready((function(_this) {
+    return function() {
+      var bt;
+      bt = $('#back_to_top');
+      if ($(document).width() > 480) {
+        $(window).scroll(function() {
+          var st;
+          st = $(window).scrollTop();
+          if (st > 30) {
+            return bt.css('display', 'block')
+          } else {
+            return bt.css('display', 'none')
+          }
+        });
+        return bt.click(function() {
+          $('body,html').animate({
+            scrollTop: 0
+          },
+          800);
+          return false
+        })
+      }
+    }
+  })(this));</script>
+  
+  <script src="/media/scripts/tocScript.js"></script>
+
+<script src="/media/scripts/site.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [{left: "$$", right: "$$", display: true},{left: "\[", right: "\]", display: true},{left: "\(", right: "\)", display: false},{left: "$", right: "$", display: false}],
+      throwOnError: false,
+      ignoredTags: ["script","noscript","style","textarea","pre","code"]
+    });
+  }
+});
+</script>
+</body>
+
+</html>
