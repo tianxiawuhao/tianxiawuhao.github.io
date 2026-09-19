@@ -120,7 +120,7 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>有两类需求几乎每个业务系统都会遇到：一是「到点自动做一件事」，比如活动到期自动下架、订单超时自动关闭、每天凌晨跑对账；二是「服务端主动把消息告诉浏览器」，比如站内通知、客服消息、实时进度。前者靠定时任务，后者靠服务端推送。本章把这两块放在一起讲：定时任务从 JDK 自带的调度器讲到 Quartz 与集群防重，推送从轮询讲到 WebSocket 与集群广播。5-13 讲的 Git 属于交付链路，本章则是运行期的定时与实时能力。</p>
+<p>有两类需求几乎每个业务系统都会遇到：一是「到点自动做一件事」，比如活动到期自动下架、订单超时自动关闭、每天凌晨跑对账；二是「服务端主动把消息告诉浏览器」，比如站内通知、客服消息、实时进度。前者靠定时任务，后者靠服务端推送。本章把这两块放在一起讲：定时任务从 JDK 自带的调度器讲到 Quartz 与集群防重，推送从轮询讲到 WebSocket 与集群广播。5-14 讲的 Git 属于交付链路，本章则是运行期的定时与实时能力。</p>
 
 <h2>定时任务：从 JDK 自带调度器开始</h2>
 <p>很多人第一反应是 <code>java.util.Timer</code>，但它在生产代码里几乎不该出现，原因有四条：它是<strong>单线程</strong>执行，一个任务卡住会拖住其它任务；任务抛出未捕获异常会<strong>直接终止整个 Timer</strong>，后续调度全部失效；它按绝对时间计算，系统时间被改动会影响调度；任务列表只在内存里，重启即丢。</p>
@@ -208,7 +208,7 @@ public class QuartzDemo {
 
 注意：日和周不能同时指定，其中一个必须写 ?（Quartz 的强制约定）
      与 Linux crontab 的区别：crontab 是「分 时 日 月 周」五位，没有秒</code></pre>
-<p>还要理解 <strong>Misfire（错失触发）</strong>：任务该执行时线程池被占满、应用正在重启或宕机，Quartz 会记录一次「错失」。不同 Trigger 有不同的补偿策略，例如 <code>withMisfireHandlingInstructionFireNow()</code> 表示错过后立即补执行一次，<code>...DoNothing()</code> 表示直接跳过。对账、扣款这类任务应选择补执行，而「每天 8 点推送早报」这类任务跳过更合理。</p>
+<p>还要理解<strong>错失触发（Misfire）</strong>：任务该执行时线程池被占满、应用正在重启或宕机，Quartz 会记录一次「错失」。不同 Trigger 有不同的补偿策略，例如 <code>withMisfireHandlingInstructionFireNow()</code> 表示错过后立即补执行一次，<code>...DoNothing()</code> 表示直接跳过。对账、扣款这类任务应选择补执行，而「每天 8 点推送早报」这类任务跳过更合理。</p>
 
 <h2>Spring 的 @Scheduled：单体项目最省事</h2>
 <p>Spring Boot 项目里如果只是单体应用，用 <code>@Scheduled</code> 就够了，不必引入 Quartz。</p>
@@ -272,7 +272,7 @@ public class DbLockScheduler {
         System.out.println("执行对账任务");
     }
 }</code></pre>
-<p>这条路线的要点是<strong>用数据库的原子性做互斥</strong>，靠唯一索引 + 条件更新保证只有一个节点改成功，不依赖任何中间件。第二种是 <strong>Redis 分布式锁</strong>：<code>SET key value NX PX 30000</code> 抢锁，执行期间要续期，释放时要用 Lua 脚本校验持有者，避免误删他人的锁。第三种是<strong>直接用专业调度平台</strong>：XXL-JOB、ElasticJob 自带调度中心、失败重试、分片执行（把一个大任务拆到多台机器并行）、执行日志与可视化界面，是中大型项目的常规选择。技术选型的经验是：只有几个简单定时任务就用 <code>@Scheduled</code> + 数据库锁；任务数量上规模、需要运维可视化与分片，就直接上 XXL-JOB，不要自己造轮子。</p>
+<p><strong>第一种是数据库抢锁</strong>，要点是用数据库的原子性做互斥：靠唯一索引 + 条件更新保证只有一个节点改成功，不依赖任何中间件。另外两点容易被忽略——任务逻辑必须<strong>幂等</strong>（抢到锁的节点执行到一半宕机，重启后会重跑，重复扣款、重复发消息都出在这里），并且要留<strong>执行记录与重试入口</strong>（在 <code>sys_task_lock</code> 里补上开始时间、结束时间、执行结果三个字段，失败时可人工或定时补偿重跑，而不是只靠翻日志）。<strong>第二种是 Redis 分布式锁</strong>：<code>SET key value NX PX 30000</code> 抢锁，执行期间要续期，释放时要用 Lua 脚本校验持有者，避免误删他人的锁。第三种是<strong>直接用专业调度平台</strong>：XXL-JOB、ElasticJob 自带调度中心、失败重试、分片执行（把一个大任务拆到多台机器并行）、执行日志与可视化界面，是中大型项目的常规选择。技术选型的经验是：只有几个简单定时任务就用 <code>@Scheduled</code> + 数据库锁；任务数量上规模、需要运维可视化与分片，就直接上 XXL-JOB，不要自己造轮子。</p>
 
 <h2>服务端推送：四种方案怎么选</h2>
 <p>「服务端主动通知浏览器」并不只有 WebSocket 一条路，四种方案各有适用区间。</p>
@@ -386,8 +386,8 @@ public class PushMessageListener implements MessageListener {
         }
     }
 }</code></pre>
-<p>除此之外还有四件必须做的事。<strong>心跳与超时</strong>：Nginx 默认 60 秒断开空闲连接，客户端要每 30 秒发一次 ping、服务端回 pong，同时清理掉没有回应的僵尸会话。<strong>断线重连</strong>：前端用指数退避重连（1s、2s、4s……），重连成功后带上「最后收到的消息 ID」向服务端补拉，避免漏消息。<strong>消息可靠性</strong>：重要消息要在服务端落库，客户端收到后回 ACK，超时未 ACK 就重发，用消息 ID 做幂等避免重复处理。<strong>安全</strong>：生产必须用 <code>wss://</code>，并在握手时校验 <code>Origin</code> 头——WebSocket 不受同源策略保护，不校验 Origin 会存在跨站 WebSocket 劫持（CSWSH）风险。</p>
-<p>小结：定时任务优先用 <code>@Scheduled</code> 起步，需要 cron、持久化、集群防重时再上 Quartz 或调度平台；集群下无论用哪种，都必须解决「多节点重复执行」，数据库抢锁是成本最低的方案。服务端推送先按「单向还是双向」选 SSE 或 WebSocket，再用中间件解决集群广播，最后补上心跳、重连、ACK 与 Origin 校验这四道保险。这两块能力的共同经验是：<strong>单机demo都很简单，真正的工作量在集群与异常路径上</strong>。</p>
+<p>除此之外还有四件必须做的事。<strong>心跳与超时</strong>：Nginx 的 <code>proxy_read_timeout</code> 与 <code>keepalive_timeout</code> 默认都是 60 秒，空闲连接会被断开，客户端要每 30 秒发一次 ping、服务端回 pong，同时清理掉没有回应的僵尸会话。<strong>断线重连</strong>：前端用指数退避重连（1s、2s、4s……），重连成功后带上「最后收到的消息 ID」向服务端补拉，避免漏消息。<strong>消息可靠性</strong>：重要消息要在服务端落库，客户端收到后回 ACK，超时未 ACK 就重发，用消息 ID 做幂等避免重复处理。<strong>安全</strong>：生产必须用 <code>wss://</code>，并在握手时校验 <code>Origin</code> 头——WebSocket 不受同源策略保护，不校验 Origin 会存在跨站 WebSocket 劫持（CSWSH）风险。</p>
+<p>小结：定时任务优先用 <code>@Scheduled</code> 起步，需要 cron、持久化、集群防重时再上 Quartz 或调度平台；集群下无论用哪种，都必须解决「多节点重复执行」，数据库抢锁是成本最低的方案。服务端推送先按「单向还是双向」选 SSE 或 WebSocket，再用中间件解决集群广播，最后补上心跳、重连、ACK 与 Origin 校验这四道保险。这两块能力的共同经验是：<strong>单机 demo 都很简单，真正的工作量在集群与异常路径上</strong>。</p>
           
           <nav class="post-pn">
       <a class="prev-post" href="/java-tutorial-5-14/"><span class="pn-label">← 上一篇</span><span class="pn-title">Git 版本控制与分支协作</span></a>

@@ -420,7 +420,7 @@ public class Document {
     }
 }</code></pre>
 
-<p>这里有一个面试高频点：<strong>为什么不能只在访问者里用 <code>instanceof</code> 判断类型，而要写 <code>accept</code>？</strong>因为 <code>node.accept(visitor)</code> 这一调用同时决定了「哪种元素」和「哪个访问者」两个维度的具体类型，Java 靠这一次虚方法调用完成了所谓的<strong>双重分派</strong>；若改成 <code>instanceof</code> 链，每加一种元素就要修改所有访问者，退化成了 <code>if-else</code>。</p>
+<p>这里有一个面试高频点：<strong>为什么不能只在访问者里用 <code>instanceof</code> 判断类型，而要写 <code>accept</code>？</strong>因为 <code>node.accept(visitor)</code> 这一调用同时决定了「哪种元素」和「哪个访问者」两个维度的具体类型，Java 靠这一次虚方法调用完成了所谓的<strong>双重分派</strong>。若改成 <code>instanceof</code> 链，同一种操作的类型判断就会散落在各处：<strong>每加一种元素，所有操作类里的判断链都得改一遍</strong>——这正是访问者要用 <code>accept</code> 把选择权交回元素的原因。</p>
 
 <p>访问者的收益与代价是同一件事的两面：<strong>新增操作容易，新增元素困难</strong>。往 <code>DocNode</code> 家族里加一个 <code>Table</code>，就必须给 <code>DocVisitor</code> 及全部实现补上 <code>visit(Table)</code>，接口一变全线报错。此外，访问者为了处理元素，通常需要元素暴露内部细节（如上面的 <code>getText()</code>），这在某种程度上违反了迪米特法则，也让它依赖具体元素类而非抽象——所以它适用且仅适用于「元素种类稳定、操作频繁增加」的场景，编译器语法树、代码检查工具、报表导出是最典型的落点。</p>
 
@@ -580,7 +580,7 @@ public class KeywordExpression implements Expression {
 
     @Override
     public boolean interpret(String context) {
-        return context != null && context.contains(keyword);
+        return context != null &amp;&amp; context.contains(keyword);
     }
 }
 
@@ -612,7 +612,7 @@ public class AndExpression implements Expression {
 
     @Override
     public boolean interpret(String context) {
-        return left.interpret(context) && right.interpret(context);
+        return left.interpret(context) &amp;&amp; right.interpret(context);
     }
 }
 
