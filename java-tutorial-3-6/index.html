@@ -172,7 +172,208 @@
 
 <p>事件绑定同样支持链式与委托，这一块也是旧代码里废弃写法最集中的地方：<code>.click(fn)</code>、<code>.bind("click", fn)</code>、<code>.delegate()</code>（以及更早的 <code>.live()</code>）<strong>在 jQuery 3.0 起都已废弃</strong>，统一改用 <code>.on()</code>。<code>$("button").on("click", fn)</code> 等价于旧的 <code>$("button").bind("click", fn)</code>；委托写法 <code>.on(events, selector, handler)</code> 则取代了 <code>.delegate(selector, events, handler)</code>。如果按钮是 Ajax 动态渲染出来的，就应该用这种委托形式把监听绑在静态父元素上：<code>$("#list").on("click", ".del", fn)</code>，这样新增的行自动生效，不必反复重新绑定。</p>
 
-<h2>四、Ajax：不刷新页面拿数据</h2>
+<h2>四、DOM 增删改查：创建、插入、删除、复制与遍历</h2>
+<p>选择器和链式调用解决的是“怎么拿到元素”，这一节解决“拿到之后怎么改结构”。这是 jQuery 最常用的另一半 API，也是维护老页面时改动量最大的部分。先记住一条贯穿全节的规则：<strong>jQuery 的插入方法移动的是已经存在于页面上的节点，而不是复制一个副本</strong>。例如 <code>$("#box").append($("#src"))</code> 执行后，<code>#src</code> 会从原来的位置消失，被搬到 <code>#box</code> 内部的末尾；如果确实需要保留原节点，必须先 <code>clone()</code>。</p>
+
+<h3>4.1 创建与插入：谁被移动</h3>
+<p>创建元素用 <code>$()</code> 包一段 HTML 字符串，它会当场构造出新的 DOM 节点（尚未进入文档，因此页面上看不到）。字符串形式时注意补全闭标签，<code>$("&lt;div&gt;")</code> 与 <code>$("&lt;div&gt;&lt;/div&gt;")</code> 等价；也可以传属性对象，如 <code>$("&lt;a&gt;", { href: "/list", text: "列表" })</code>。</p>
+
+<pre><code class="language-js">$(function () {
+  // 1. 创建：只构造节点，此时还在文档之外，页面上看不到
+  const $row = $("&lt;div class=\"row\"&gt;新行&lt;/div&gt;");
+  const $link = $("&lt;a&gt;", { href: "/list", text: "列表" });  // 属性对象写法
+
+  // 2. 插入到内部：append 放末尾，prepend 放开头
+  $("#box").append($row);          // 把 $row 追加进 #box 内部的末尾
+  $("#box").prepend("&lt;span&gt;置顶&lt;/span&gt;");
+  $row.appendTo("#box");           // 与 append 同义，只是主语和宾语颠倒
+  $("&lt;span&gt;置顶&lt;/span&gt;").prependTo("#box");
+
+  // 3. 插入到外部：after / before 是“兄弟关系”，不是父子关系
+  $("#box").after($link);          // $link 成为 #box 后面紧邻的兄弟
+  $("#box").before("&lt;hr&gt;");     // 成为 #box 前面紧邻的兄弟
+  $link.insertAfter("#box");       // 与 after 同义
+  $("&lt;hr&gt;").insertBefore("#box"); // 与 before 同义
+
+  // 4. 移动的证明：$("#src") 会从原位置消失，只剩一份
+  $("#target").append($("#src"));
+  console.log($("#src").length, $("#target #src").length); // 1 1，不是 2 1
+
+  // 5. 想保留原节点必须先克隆
+  $("#target").append($("#src").clone());
+});</code></pre>
+
+<p>四组方法的区别只有两个维度：<strong>位置</strong>（内部还是外部）和<strong>主语</strong>（谁写在前面）。<code>append</code>/<code>prepend</code> 插入到目标元素<em>内部</em>的末尾/开头，<code>after</code>/<code>before</code> 插入到目标元素<em>外部</em>的后面/前面；<code>appendTo</code>/<code>prependTo</code>/<code>insertAfter</code>/<code>insertBefore</code> 是前四者的镜像写法，返回的是<strong>被插入的那个节点</strong>而不是目标节点，链式调用时务必分清，否则后续方法会作用到错误的集合上。若传入的是一段 HTML 字符串，jQuery 会先创建再插入，因此不涉及“移动”。</p>
+<p class="tut-tip"><strong>性能提示：</strong>在循环里逐个 <code>append</code> 会触发多次重排。数据量大时应先把整段 HTML 拼成一个字符串或 <code>DocumentFragment</code>，一次性插入；也可以先 <code>detach()</code> 容器，改完再插回。</p>
+
+<h3>4.2 删除与分离：remove、detach 与 empty</h3>
+<p>三个删除类方法的差别集中在<strong>是否保留事件与数据</strong>、<strong>是否保留自己</strong>这两点上。旧代码里最典型的内存泄漏，就是在 <code>detach</code> 与 <code>remove</code> 之间选错，或在移除后仍持有引用。</p>
+
+<pre><code class="language-js">$(function () {
+  $("#list li").on("click", function () { $(this).toggleClass("done"); });
+
+  // remove：把自己和后代从文档中摘掉，并清除其上的事件与数据
+  const $gone = $("#list li:first").remove();
+  $gone.appendTo("#list");     // 插得回去，但 click 事件已经没了
+
+  // detach：同样摘掉，但完整保留事件与 jQuery 数据，可原样插回
+  const $keep = $("#list li:first").detach();
+  $keep.appendTo("#list");     // 插回后 click 事件依然生效
+
+  // empty：只清空内部，自己留在页面上（子元素的事件与数据一并清除）
+  $("#box").empty();           // #box 还在，内容全没了
+
+  // 彻底清场并释放引用，避免持有已移除节点造成泄漏
+  $("#old").find("*").addBack().off();  // 先解绑（3.x 起 off 代替 unbind）
+  $("#old").empty().remove();
+});</code></pre>
+
+<ul>
+  <li><code>remove()</code>：把自己和所有后代从文档中摘掉，同时<strong>清除绑定的事件与 jQuery 数据</strong>。适合确实不再使用、要彻底回收的元素；返回值仍是该集合，理论上可再插入，但事件不会跟着回来。</li>
+  <li><code>detach()</code>：同样从文档中摘掉，但<strong>保留事件与数据</strong>。适合“临时移出、改完再放回”的场景，例如表格重排、把节点挪到另一个容器，插回后原有监听依然有效。</li>
+  <li><code>empty()</code>：只删除<strong>子节点</strong>，自己留在原处；子节点上的事件与数据会被一并清除，常用于局部刷新前清空容器，如 <code>$("#list").empty()</code> 之后重新渲染数据。</li>
+  <li><code>unwrap()</code>：删除<strong>父元素</strong>而保留自己（下一小节与替换一并讲）。</li>
+</ul>
+<p>选择准则可以简化成一句话：还要用、还想保留监听就用 <code>detach()</code>；确定不要了就 <code>remove()</code>；只是清空内容就用 <code>empty()</code>。用 <code>remove()</code> 移出的节点若被 JavaScript 变量长期引用，它占用的内存不会释放，这一点与原生 <code>removeChild</code> 一致。</p>
+
+<h3>4.3 复制与替换：clone、replaceWith、wrap</h3>
+<p><code>clone()</code> 的默认行为是<strong>浅复制</strong>：只复制元素与后代的结构、属性和文本，<strong>不复制</strong>绑定的事件与附加数据。传入 <code>true</code> 才会连事件与数据一起深拷贝，这就是 <code>clone(true)</code> 的含义。</p>
+
+<pre><code class="language-js">$(function () {
+  $("#add").on("click", function () {
+    // clone() 不带参数：副本没有事件，点击副本不会触发
+    const $plain = $("#tpl li:first").clone();
+    $("#list").append($plain);
+
+    // clone(true)：连事件与数据一起复制，副本点击照常生效
+    const $deep = $("#tpl li:first").clone(true);
+    $("#list").append($deep);
+  });
+
+  // 替换：replaceWith 用新内容换掉自己，返回被换掉的旧元素
+  const $old = $("#title").replaceWith("&lt;h2&gt;新标题&lt;/h2&gt;");
+  // replaceAll 是镜像写法：返回被换掉的旧集合，主语是“新的内容”
+  $("&lt;h2&gt;同样的新标题&lt;/h2&gt;").replaceAll("#title");
+
+  // 包装：wrap 给每个匹配元素各套一层父元素，自己保留
+  $("#list li").wrap("&lt;div class=\"cell\"&gt;&lt;/div&gt;");
+  // wrapAll 只套一层，把所有匹配元素装进同一个父元素
+  $("#list li").wrapAll("&lt;ul class=\"outer\"&gt;&lt;/ul&gt;");
+  // wrapInner 包的是内部内容，元素本身留在外层
+  $("#box").wrapInner("&lt;div class=\"inner\"&gt;&lt;/div&gt;");
+  // unwrap 是 wrap 的逆操作：删掉父元素，自己上移一级
+  $("#list li").unwrap();
+  // replaceWith(函数) 可以按当前元素逐个生成新内容
+  $("#list li").replaceWith(function (i) { return "&lt;li&gt;第 " + (i + 1) + " 项&lt;/li&gt;"; });
+});</code></pre>
+<p>两点容易忽略的细节：<code>clone(true)</code> 复制的是<strong>直接绑在该元素上</strong>的事件；用委托方式绑在祖先上的监听（如 <code>$("#list").on("click", "li", fn)</code>）本来就不属于 <code>li</code>，因此新副本只要插进同一个 <code>#list</code> 就自动生效，无需克隆事件。另外，<code>replaceWith</code> 返回的是<strong>已被移除的旧元素</strong>，对它再调用 <code>.end()</code> 或插入方法时，操作对象是被换掉的旧节点，这一点与直觉相反。</p>
+
+<h3>4.4 遍历与筛选：集合的下标与父子的序号</h3>
+<p>遍历方法可以归为两类：一类沿 DOM 树横向或纵向走（<code>children</code>、<code>parent</code>、<code>siblings</code>、<code>closest</code>、<code>find</code>），一类在当前集合里按下标或条件再筛（<code>filter</code>、<code>eq</code>、<code>slice</code>、<code>first</code>、<code>last</code>）。</p>
+
+<pre><code class="language-js">$(function () {
+  const $items = $("#list li");
+
+  $items.find("a");                 // 后代中的 a（含深层）
+  $items.children("a");             // 只找直接子元素中的 a
+  $items.first();                   // 集合第 1 个（下标 0）
+  $items.last();                    // 集合最后 1 个
+  $items.eq(2);                     // 集合中下标为 2 的那个（第 3 个）
+  $items.slice(1, 3);               // 集合下标 [1, 3) 的切片，即第 2、3 个
+  $items.filter(".hot");            // 保留自身满足条件的（不查后代）
+  $items.not(".hot");               // 去掉自身满足条件的
+  $items.has("a");                  // 保留“后代里含 a”的那些项
+  $items.parent();                  // 各自的直接父元素
+  $items.parents("ul");             // 各自的所有祖先中匹配 ul 的
+  $items.closest("ul");             // 从自身开始向上找第一个 ul（含自身）
+  $items.siblings("li");            // 各自的兄弟元素
+  $items.next();                    // 各自后面紧邻的兄弟
+  $items.prevAll();                 // 各自前面所有兄弟
+  $items.addBack();                 // 把上一轮集合合并回来
+  $items.each(function (i) {        // 遍历：this 是 DOM 对象，i 是下标
+    $(this).attr("data-index", i);
+  });
+  $items.map(function () { return $(this).text(); }).get(); // 收集文本为数组
+
+  // 两个 index：不传参数返回“在兄弟中的位置”，传选择器返回“在集合中的位置”
+  console.log($items.index($items.eq(2)));  // 2
+  console.log($items.eq(2).index());        // 2（同为第 3 个兄弟）
+});</code></pre>
+
+<p>下面这组对比是本节最容易出错的地方。两者都带“第几个”的含义，但计数起点和计数范围完全不同：</p>
+<ul>
+  <li><code>:eq(n)</code> 是 <strong>jQuery 集合的下标</strong>，<strong>从 0 开始</strong>，只对当前 jQuery 对象有效：<code>$("li:eq(0)")</code> 取整个页面结果集里的第一个 <code>li</code>。</li>
+  <li><code>:nth-child(n)</code> 是 <strong>CSS 的伪类</strong>，<strong>从 1 开始</strong>，且<strong>逐个父元素分别计算</strong>：<code>$("li:nth-child(1)")</code> 会取每个父元素下的第一个 <code>li</code>，有 3 个列表就有 3 个匹配。</li>
+  <li>因此 <code>$("li:eq(1)")</code> 是“全集第 2 个”，而 <code>$("li:nth-child(2)")</code> 是“每个父元素下排第 2 个的 li”，两者通常并不相同，也不存在固定的换算关系。</li>
+  <li>计数基准也不同：<code>:nth-child</code> 数的是<strong>父元素下所有子元素</strong>的序号（中间夹着别的标签也会占号），jQuery 另有 <code>:nth-of-type</code> 表示“同类型元素中的第几个”；也可以用 <code>nth-child(2n)</code> / <code>nth-child(odd)</code> 按奇偶批量匹配。</li>
+</ul>
+
+<pre><code class="language-js">$(function () {
+  // :eq 从 0 起，按集合下标；:nth-child 从 1 起，按各自父元素下的子元素序号
+  $("li:eq(1)").css("color", "red");            // 全部 li 里的第 2 个
+  $("li:nth-child(2)").css("color", "blue");    // 每个父元素下排第 2 个的 li
+  $("li:nth-child(2n)").addClass("even");       // 每个父元素下的偶数位
+  $("li:nth-of-type(2)").addClass("second-of-type"); // 同类型元素里的第 2 个
+
+  // 类比：:eq 相当于结果数组下标 0 起，:nth-child 相当于 CSS 的第 1 个
+  $("#list li").eq(0).addClass("first-by-index");      // 只命中 1 个
+  $("#list li:nth-child(1)").addClass("first-by-child"); // 每个父元素各命中 1 个
+
+  $(".card")
+    .find(".title")            // 破坏性操作：集合变为各卡片内的标题
+    .addClass("big")
+    .end()                     // 回退一层，集合重新变回 .card
+    .addClass("checked")
+    .end()                     // 继续回退（已到栈底，仍是 .card）
+    .css("margin", "8px");
+});</code></pre>
+<p><code>end()</code> 的行为取决于 jQuery 对象的“回退栈”：<code>find</code>、<code>filter</code>、<code>children</code>、<code>parent</code>、<code>eq</code>、<code>slice</code> 等破坏性方法会在改变集合前压栈，<code>end()</code> 弹出上一层；能连续回退几层，取决于之前链了几次破坏性操作。而 <code>addClass</code>、<code>css</code>、<code>attr</code> 这类不改变集合的方法不压栈，<code>end()</code> 会直接跳回更早的集合——链式调用出现“结果作用到意外的元素上”时，八成是这里数错了层数。</p>
+
+<h3>4.5 jQuery 的现状与原生 DOM 等价写法</h3>
+<p><strong>先给结论：新项目已经不该再把 jQuery 作为首选。</strong>它诞生于 IE6–8 时代，当时的主要价值是抹平浏览器差异；这些差异今天已经消失，而原生 API 早已补齐：<code>querySelector</code>/<code>querySelectorAll</code> 支持完整 CSS 选择器（含 <code>:nth-child</code>），<code>classList</code> 与 <code>dataset</code> 让样式与数据属性读写更直接，<code>addEventListener</code> 支持事件委托（<code>event.target.closest()</code>），<code>fetch</code> 取代了 Ajax 封装。jQuery 目前的维护线是 <strong>3.x</strong>（另有 4.0 处于 beta 阶段、API 有破坏性调整，1.x / 2.x 已停止维护），如今它主要出现在老后台管理页面、Bootstrap 3/4 站点、以及大量历史业务代码中。<strong>所以本章的定位是“读得懂、改得动存量项目”，而不是“新项目从 jQuery 起步”</strong>：接手老代码时按原有写法保持一致，新写模块则优先原生 DOM 或 Vue 3 / React。</p>
+<p>下面的对照表把这一节的方法一一映射到原生写法，迁移或局部替换时可直接查用（<code>el</code> 表示原生 DOM 元素，<code>$el</code> 表示 jQuery 对象）：</p>
+<ul>
+  <li>选择：<code>$("#id")</code> ↔ <code>document.querySelector("#id")</code>；<code>$(".item")</code> ↔ <code>document.querySelectorAll(".item")</code>（返回静态 NodeList，不能直接点 jQuery 方法）</li>
+  <li>创建：<code>$("&lt;div&gt;")</code> ↔ <code>document.createElement("div")</code></li>
+  <li>插入：<code>$el.append(x)</code> ↔ <code>el.appendChild(x)</code>；<code>prepend</code> ↔ <code>el.prepend(x)</code>；<code>before</code>/<code>after</code> ↔ <code>el.before(x)</code>/<code>el.after(x)</code>（原生同样“移动已有节点”，需要保留时先克隆）</li>
+  <li>删除：<code>$el.remove()</code> ↔ <code>el.remove()</code>（DOM4 起支持，旧浏览器用 <code>el.parentNode.removeChild(el)</code>）；<code>empty()</code> ↔ <code>el.replaceChildren()</code> 或 <code>el.textContent = ""</code></li>
+  <li>分离：<code>detach()</code> 没有一对一的原生方法——用 <code>el.remove()</code> 摘下来并自己保存引用，原生监听本来就不随节点删除而消失，<code>removeEventListener</code> 才会解绑</li>
+  <li>复制：<code>$el.clone()</code> ↔ <code>el.cloneNode(false)</code>（仅自身）、<code>$el.clone(true)</code> ↔ <code>el.cloneNode(true)</code>（含后代）；但原生克隆<strong>不复制</strong> <code>addEventListener</code> 注册的监听，需要重新绑定</li>
+  <li>替换：<code>replaceWith</code> ↔ <code>el.replaceWith(newEl)</code>；<code>wrap</code> ↔ 先 <code>createElement</code> 再 <code>parent.insertBefore(wrapper, el)</code> 后 <code>wrapper.appendChild(el)</code>；<code>unwrap</code> ↔ 用 <code>replaceWith(...el.childNodes)</code> 把自己替换掉</li>
+  <li>遍历：<code>children()</code> ↔ <code>el.children</code>；<code>parent()</code> ↔ <code>el.parentElement</code>；<code>siblings()</code> 无直接对应，可用 <code>[...el.parentElement.children].filter(n =&gt; n !== el)</code>；<code>closest()</code> ↔ <code>el.closest(sel)</code>；<code>eq(n)</code>/<code>slice()</code> ↔ 展开 NodeList 后的 <code>list[n]</code>/<code>list.slice(a, b)</code></li>
+  <li>样式与属性：<code>addClass</code> ↔ <code>el.classList.add()</code>；<code>attr</code> ↔ <code>el.getAttribute</code>/<code>setAttribute</code> 或 <code>el.dataset</code></li>
+</ul>
+
+<pre><code class="language-js">// 原生等价写法：把“新增一行并绑定删除按钮”做完，全程不需要 jQuery
+document.addEventListener("click", function (event) {
+  const btn = event.target.closest(".del");     // 事件委托，等价于 $("#list").on("click", ".del", fn)
+  if (!btn) { return; }
+  const row = btn.closest("li");
+  row.remove();                                 // 等价于 $(row).remove()
+});
+
+function addRow(text) {
+  const li = document.createElement("li");      // 等价于 $("&lt;li&gt;")
+  li.className = "item";
+  li.textContent = text;
+  const btn = document.createElement("button");
+  btn.className = "del";
+  btn.textContent = "删除";
+  li.appendChild(btn);                          // 等价于 li.append(btn)
+  document.querySelector("#list").prepend(li);  // 等价于 $("#list").prepend(li)
+}
+
+// 循环里逐个插入同样会多次重排，先用 Fragment 攒好再插一次
+const frag = document.createDocumentFragment();
+for (let i = 0; i !== 20; i++) {
+  const li = document.createElement("li");
+  li.textContent = "第 " + (i + 1) + " 项";
+  frag.appendChild(li);
+}
+document.querySelector("#list").appendChild(frag);</code></pre>
+<p>最后提醒一句：迁移时不要把 jQuery 与原生写法在同一段逻辑里来回混用，尤其是事件——同一元素上既用 <code>.on()</code> 又用 <code>addEventListener</code> 并不冲突，但 <code>.off()</code> 解不掉 <code>addEventListener</code> 注册的监听，反之亦然。要么整块用 jQuery，要么整块用原生。</p>
+
+<h2>五、Ajax：不刷新页面拿数据</h2>
 <p>jQuery 的 Ajax 是对原生 <code>XMLHttpRequest</code> 的封装，顺带解决了 JSONP 跨域和浏览器差异。<strong>jQuery 3.0 起</strong>，<code>$.ajax()</code> 配置对象里的 <code>success:</code>、<code>error:</code>、<code>complete:</code> 回调已被废弃（挂在 jqXHR 上的 <code>.success()</code> / <code>.error()</code> / <code>.complete()</code> 方法在 3.0 中直接被移除），应改用 Promise 风格的 <code>done</code>、<code>fail</code>、<code>always</code>。新旧写法的对应关系如下——老代码照原样保留可读，但新写或改造时请用右边那一版。</p>
 
 <pre><code class="language-js">// 旧写法：jQuery 1.x 时代的 success/error 回调，3.0 起废弃
@@ -219,7 +420,7 @@ $.ajax({ url: "/api/user" })
 
 <p>发送数据时还要留意编码：<code>$.ajax</code> 默认以 <code>application/x-www-form-urlencoded</code> 提交，中文可能乱码，建议显式声明 <code>contentType: "application/json;charset=UTF-8"</code> 并配合 <code>JSON.stringify</code>；若后端只接受表单格式，则用 <code>$.param()</code> 或 <code>$("#form").serialize()</code> 序列化后再发送。</p>
 
-<h2>五、UI 框架：Bootstrap 与 Element UI</h2>
+<h2>六、UI 框架：Bootstrap 与 Element UI</h2>
 <p>Bootstrap 是一个“半成品”前端框架：它预定义好一整套 CSS 类和对应行为，你只要提供固定的 HTML 结构、加上固定的 class，就能得到栅格、按钮、表单、导航、模态框等成品效果。所谓响应式，就是同一份页面在手机、平板、桌面自动重排，Bootstrap 靠栅格系统与 CSS3 媒体查询实现。</p>
 
 <pre><code class="language-html">&lt;div class="container"&gt;
