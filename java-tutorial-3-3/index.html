@@ -114,7 +114,7 @@
               <h1>JavaScript 基础</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，8 min read</span>
+                2026-09-19，9 min read</span>
             </div>
           
         
@@ -133,6 +133,8 @@
 <h2>一、类型与变量：松散类型不等于没有类型</h2>
 <p>JavaScript 是动态类型、松散类型的语言：变量本身不绑定类型，类型属于「值」，同一个变量可以先存数字再存字符串。这一点和 Java 的「变量声明即定类型」正相反，但并不意味着 JS 没有类型。原始类型一共七种：<code>undefined</code>、<code>null</code>、<code>boolean</code>、<code>number</code>、<code>string</code>、<code>symbol</code>（ES6）、<code>bigint</code>（ES2020）；除此之外的一切都是对象。注意 <code>number</code> 同时表示整数和浮点数，且没有 <code>int</code>/<code>long</code> 之分，超出安全整数范围要用 <code>bigint</code> 或 <code>Number.MAX_SAFE_INTEGER</code> 之外的手段处理。</p>
 <p>判断类型有两个必须记住的结论。第一，用 <code>typeof</code> 时 <code>typeof null === 'object'</code>，这是语言诞生第一版就留下的历史 bug，因为改动会让大量旧代码崩溃，所以永远不会修；判断 <code>null</code> 要写 <code>value === null</code>。第二，<code>typeof</code> 对数组和普通对象都返回 <code>'object'</code>，想准确区分要用 <code>Object.prototype.toString.call(x)</code> 得到形如 <code>'[object Array]'</code> 的字符串，日常判数组则直接用 <code>Array.isArray(x)</code>。另外，判 <code>NaN</code> 请用 <code>Number.isNaN()</code>，全局的 <code>isNaN()</code> 会先做隐式类型转换，<code>isNaN('abc')</code> 也返回 <code>true</code>，容易误判。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-3/01-types.svg" alt="JavaScript 七种原始类型、typeof 返回值对照表与三个常见判断陷阱"><figcaption>图 1：JS 的七种原始类型与 typeof 返回值——注意 typeof null 是 object、判数组要用 Array.isArray()</figcaption></figure>
 <p>变量声明有 <code>var</code>、<code>let</code>、<code>const</code> 三种。老资料（包括不少 JavaWeb 笔记）会说「所有数据类型都用 <code>var</code> 定义」，这是 ES5 时代的写法，现代项目里应当默认 <code>const</code>，只有确实需要重新赋值时才用 <code>let</code>。原因是 <code>var</code> 只有函数作用域、没有块级作用域，并且声明会被提升到作用域顶部且初始值为 <code>undefined</code>，先使用后声明不报错却拿到空值；<code>let</code>/<code>const</code> 是块级作用域，在声明前访问会直接抛 <code>ReferenceError</code>（这段区间叫暂时性死区，TDZ）。<code>const</code> 只约束「绑定不可重新赋值」，对象内部属性照样能改，想彻底冻结要用 <code>Object.freeze()</code>（且只冻结第一层）。最后，比较一律用 <code>===</code>：<code>==</code> 会做隐式转换，<code>'1' == 1</code>、<code>null == undefined</code> 都为 <code>true</code>，这类规则记不全就干脆别用。</p>
 <pre><code class="language-js">const name = 'Tom';        // 字符串
 let age = 18;              // 数字：后面可能变化，所以用 let
@@ -188,6 +190,8 @@ function debounce(fn, delay) {
 <p>JS 的对象本质是「键值对集合」，键只能是字符串或 <code>symbol</code>，读取时 <code>obj.a</code> 与 <code>obj['a']</code> 等价（键名含特殊字符或来自变量时必须用后者）。对象字面量 <code>{}</code> 比 <code>new Object()</code> 更简洁常用，同理数组应写 <code>[1, 2]</code> 而不是 <code>new Array(1, 2)</code>——后者的参数语义还很坑：<code>new Array(3)</code> 得到的是长度为 3 的空数组，而不是 <code>[3]</code>。</p>
 <p>属性查找靠原型链：每个对象都有一个内部引用 <code>[[Prototype]]</code>（通过 <code>Object.getPrototypeOf()</code> 读取），访问属性时先查自身，找不到就沿着原型链往上找，直到值为 <code>null</code> 为止。要区分两个容易混淆的东西：函数的 <code>prototype</code> 属性是给 <code>new</code> 出来的实例当原型用的，而对象的原型要用 <code>[[Prototype]]</code>/<code>__proto__</code> 访问，二者不是一回事。老笔记常写「JS 是基于对象的语言」，更准确的说法是：JS 是<strong>基于原型</strong>的面向对象语言，它没有 Java 那样的类继承，ES6 的 <code>class</code> 只是原型继承的语法糖，底层依旧是构造函数加原型对象。<code>instanceof</code> 判断的也不是「由谁创建」，而是「构造函数的 <code>prototype</code> 是否出现在对象的原型链上」，所以判断数组更可靠的是 <code>Array.isArray()</code>。</p>
 <p>用 <code>class</code> 书写时有三点与 Java 不同：类声明不会被提升（存在 TDZ），必须先定义后使用；类体内的代码默认运行在严格模式下；子类必须在构造函数里先调用 <code>super()</code> 才能使用 <code>this</code>。ES2022 起支持 <code>#字段</code> 私有成员，这才是语言层面的真私有——此前只能靠闭包或 <code>WeakMap</code> 模拟，而用「构造函数里保存私有变量」的写法会让每个实例都重新创建一份特权方法，内存开销更大。</p>
+
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-3-3/02-prototype.svg" alt="原型链属性查找顺序示意图，以及 Class.prototype 与对象原型引用的区别"><figcaption>图 2：属性沿原型链一路向上查找直到 null；class 只是构造函数加原型对象的语法糖</figcaption></figure>
 <pre><code class="language-js">function Person(name) {
   this.name = name;
 }

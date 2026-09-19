@@ -251,6 +251,8 @@ db.orders.getShardDistribution()
 
 <p>分片键的选择几乎决定了集群的长期健康度。理想的分片键基数高、取值分布均匀，并且能覆盖大多数查询条件，这样查询才能被定向到单个 shard，避免广播到所有分片。最典型的反面案例是用单调递增的值（自增 ID、ObjectId、写入时间）做范围分片键，新写入会永远落在最后一个 chunk 上，形成热点。若查询条件无法覆盖分片键，可考虑哈希分片换取均匀写入，再用冗余字段或聚合层解决定向查询问题。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-7/01-mongodb-cluster.svg" alt="MongoDB 分片集群请求路径与各层角色示意图"><figcaption>图 1：MongoDB 分片集群——应用经 mongos 路由，元数据从 config server 加载，shard 真正存数据且每个 shard 本身就是一个复制集</figcaption></figure>
+
 <h2>常见坑与小结</h2>
 
 <p>最后集中列出几个高频事故：Redis 上执行 <code>KEYS *</code> 会阻塞整个实例，线上排查应改用 <code>SCAN</code> 游标遍历；大 key（几十万成员的 Hash、超大 List）在删除和迁移时同样会阻塞，拆分和异步删除要提前规划；缓存穿透用空值缓存加参数校验挡住，缓存击穿用互斥锁或逻辑过期挡住，缓存雪崩则给过期时间加随机偏移并做多级缓存。MongoDB 侧，未加索引的查询在分片集群上会广播到所有 shard，代价被放大数倍，上线前要用 explain 确认索引命中情况。</p>
