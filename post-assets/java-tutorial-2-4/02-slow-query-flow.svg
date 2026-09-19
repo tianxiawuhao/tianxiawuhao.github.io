@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>慢查询定位流程、EXPLAIN 四列与常见改写套路</title>
+  <rect width="900" height="520" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">先定位、再动手：慢查询定位链路与 EXPLAIN 四列</text>
+
+  <!-- 定位链路 -->
+  <rect x="30" y="55" width="180" height="58" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="120" y="79" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">开启慢查询日志</text>
+  <text x="120" y="99" font-size="11" fill="#5b6b7c" text-anchor="middle">slow_query_log = ON</text>
+
+  <rect x="260" y="55" width="180" height="58" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="350" y="79" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">日志按总耗时聚合</text>
+  <text x="350" y="99" font-size="11" fill="#5b6b7c" text-anchor="middle">pt-query-digest / mysqldumpslow</text>
+
+  <rect x="490" y="55" width="180" height="58" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="580" y="79" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">EXPLAIN 看执行计划</text>
+  <text x="580" y="99" font-size="11" fill="#5b6b7c" text-anchor="middle">type / key / rows / Extra</text>
+
+  <rect x="720" y="55" width="150" height="58" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="795" y="79" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">改写 SQL 与索引</text>
+  <text x="795" y="99" font-size="11" fill="#5b6b7c" text-anchor="middle">对症下药</text>
+
+  <line x1="210" y1="84" x2="258" y2="84" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="440" y1="84" x2="488" y2="84" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="670" y1="84" x2="718" y2="84" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <!-- 两个坑 -->
+  <rect x="30" y="128" width="840" height="66" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="46" y="150" font-size="12" fill="#1f2b38">坑一：long_query_time 是全局动态变量，SET GLOBAL 只对之后建立的连接生效，当前连接需重连或补 SET SESSION。</text>
+  <text x="46" y="174" font-size="12" fill="#1f2b38">坑二：log_queries_not_using_indexes 只额外记录没走索引的语句，不能代替 slow_query_log = ON 开启慢日志。</text>
+
+  <!-- type 效率阶梯 -->
+  <text x="30" y="228" font-size="13" font-weight="700" fill="#5b6b7c">① type：访问类型，从好到坏</text>
+  <rect x="30" y="238" width="92" height="38" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="76" y="262" font-size="12" fill="#1f2b38" text-anchor="middle">const</text>
+  <rect x="136" y="238" width="92" height="38" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="182" y="262" font-size="12" fill="#1f2b38" text-anchor="middle">eq_ref</text>
+  <rect x="242" y="238" width="92" height="38" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="288" y="262" font-size="12" fill="#1f2b38" text-anchor="middle">ref</text>
+  <rect x="348" y="238" width="92" height="38" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="394" y="262" font-size="12" fill="#1f2b38" text-anchor="middle">range</text>
+  <rect x="454" y="238" width="92" height="38" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="500" y="262" font-size="12" fill="#1f2b38" text-anchor="middle">index</text>
+  <rect x="560" y="238" width="92" height="38" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="606" y="262" font-size="12" fill="#1f2b38" text-anchor="middle">ALL</text>
+  <text x="670" y="262" font-size="12" font-weight="700" fill="#e08a1e">← 出现 index / ALL 就要警惕</text>
+
+  <line x1="115" y1="257" x2="134" y2="257" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="221" y1="257" x2="240" y2="257" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="327" y1="257" x2="346" y2="257" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="433" y1="257" x2="452" y2="257" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="539" y1="257" x2="558" y2="257" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <!-- 其余三列 -->
+  <rect x="30" y="296" width="270" height="80" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="165" y="319" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">② key</text>
+  <text x="165" y="340" font-size="11" fill="#5b6b7c" text-anchor="middle">真正用上的索引；possible_keys 有值</text>
+  <text x="165" y="358" font-size="11" fill="#5b6b7c" text-anchor="middle">而 key 为 NULL 说明索引没被采纳</text>
+
+  <rect x="315" y="296" width="270" height="80" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="450" y="319" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">③ rows</text>
+  <text x="450" y="340" font-size="11" fill="#5b6b7c" text-anchor="middle">优化器估算的扫描行数，统计信息过期</text>
+  <text x="450" y="358" font-size="11" fill="#5b6b7c" text-anchor="middle">会失真；8.0.18 起可用 EXPLAIN ANALYZE</text>
+
+  <rect x="600" y="296" width="270" height="80" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="735" y="319" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">④ Extra</text>
+  <text x="735" y="340" font-size="11" fill="#5b6b7c" text-anchor="middle">Using filesort / temporary 是坏信号</text>
+  <text x="735" y="358" font-size="11" fill="#5b6b7c" text-anchor="middle">Using index 是覆盖索引，无需回表</text>
+
+  <!-- 改写套路 -->
+  <text x="30" y="402" font-size="13" font-weight="700" fill="#5b6b7c">常见改写套路（坏写法 → 好写法）</text>
+  <line x1="40" y1="414" x2="860" y2="414" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="40" y="434" font-size="11" fill="#5b6b7c">左：让索引失效的写法　　右：改写后</text>
+
+  <text x="40" y="458" font-size="12" fill="#1f2b38">DATE(create_time) = '2024-01-01'</text>
+  <line x1="290" y1="452" x2="330" y2="452" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="342" y="458" font-size="12" fill="#1f2b38">create_time &gt;= '2024-01-01' AND &lt; '2024-01-02'</text>
+
+  <text x="40" y="482" font-size="12" fill="#1f2b38">LIKE '%abc'（前导模糊）</text>
+  <line x1="290" y1="476" x2="330" y2="476" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="342" y="482" font-size="12" fill="#1f2b38">LIKE 'abc%'（可用 B+ 树有序性）</text>
+
+  <text x="40" y="506" font-size="12" fill="#1f2b38">LIMIT 1000000, 20（深分页）</text>
+  <line x1="290" y1="500" x2="330" y2="500" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="342" y="506" font-size="12" fill="#1f2b38">WHERE id &gt; ? ORDER BY id LIMIT 20（游标）</text>
+</svg>

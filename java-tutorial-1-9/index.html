@@ -135,6 +135,7 @@
 <p>第一条是 <code>Collection</code>，表示「一组单个元素的容器」，它下面分三支：<code>List</code> 有序、可重复、能按下标访问；<code>Set</code> 不重复、没有下标，只关心「在不在」；<code>Queue</code> 按排队规则取元素，用于先进先出等场景。第二条是 <code>Map</code>，表示「键到值的映射」，它以一对键值作为一个存储单位，所以不继承 <code>Collection</code>。判断该用哪一个，只需问自己：我存的是单个元素还是一组对应关系？元素顺序重要吗？允许重复吗？</p>
 <p>这些接口下各有一批常用实现类：<code>ArrayList</code>（数组实现，查询快）、<code>LinkedList</code>（双向链表实现，头尾增删快）、<code>HashSet</code>（哈希去重，无序）、<code>TreeSet</code>（红黑树，自动排序）、<code>HashMap</code>（哈希表，最常用的键值容器）、<code>TreeMap</code>（按键排序的映射）。写代码时应尽量把变量声明为接口类型，例如 <code>List&lt;String&gt; list = new ArrayList&lt;&gt;();</code>，这样以后换成 <code>LinkedList</code> 时只改一行。</p>
 <p>需要说明的是，早期的 <code>Vector</code>、<code>Hashtable</code>、<code>Stack</code> 等类属于遗留集合（legacy collections），它们是同步的，因此单线程下性能较差，新代码不应该再使用；需要线程安全请用 <code>ConcurrentHashMap</code> 或 <code>Collections</code> 工具类包装。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-9/01-collection-two-roots.svg" alt="Java 集合框架的两条主线示意图"><figcaption>图 1：集合框架的两条主线 —— Collection 管单个元素，Map 管键值对应关系</figcaption></figure>
 
 <h2>二、List 与 Set：ArrayList、HashSet 的取舍</h2>
 <p><code>ArrayList</code> 内部是一个 <code>Object[]</code> 数组，所以按下标取值是常数时间，非常快；但往中间插入或删除元素时，需要把后面的元素整体复制后移，代价与元素个数成正比。它有一个容量（capacity）和元素个数（size）两个容易混淆的概念：容量是底层数组的长度，会随元素增多自动扩容，默认约为原容量的 1.5 倍，扩容时会复制整个数组，所以如果能预估元素数量，可以用 <code>new ArrayList&lt;&gt;(1000)</code> 一次性给足容量。</p>
@@ -207,6 +208,7 @@ public class MapDemo {
     }
 }</code></pre>
 <p>使用 <code>TreeMap</code>/<code>TreeSet</code> 有一个必须知道的前提：元素必须「可比较」，否则运行时抛 <code>ClassCastException</code>。排序规则有两种来源——元素自身实现 <code>Comparable</code> 接口（自然排序），或者在构造时传入 <code>Comparator</code>（定制排序），后者优先级更高。注意「有序」不等于「有序遍历且高效」：<code>TreeMap</code> 的单次操作是 O(log n)，比 <code>HashMap</code> 的常数时间慢，所以只在确实需要按键排序时才选择它。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-9/02-map-compare.svg" alt="HashMap TreeMap Hashtable 对比表"><figcaption>图 2：HashMap、TreeMap、Hashtable 的结构、复杂度与 null 规则对比</figcaption></figure>
 <p>关于 <code>Hashtable</code>，它是 JDK 1.0 就存在的遗留类，继承自 <code>Dictionary</code>，所有公开方法都加了 <code>synchronized</code>，因此是线程安全的，但并发性能远不如 <code>ConcurrentHashMap</code>。<strong>它与 <code>HashMap</code> 最关键的差别是：<code>Hashtable</code> 既不允许 <code>null</code> 键，也不允许 <code>null</code> 值</strong>，而 <code>HashMap</code> 两者都允许（<code>null</code> 键只允许一个）。一些旧笔记写成「<code>Hashtable</code> 的 key 不能为 null，value 可以为 null」，这是错的：<code>Hashtable.put</code> 会先校验 value，为 <code>null</code> 直接抛 <code>NullPointerException</code>。旧教材里常见的 <code>Enumeration</code> 遍历方式也已被 <code>Iterator</code> 取代，新代码不应再用。</p>
 
 <h2>四、迭代器、泛型与三个常见坑</h2>

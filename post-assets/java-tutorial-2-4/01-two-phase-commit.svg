@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"
+     font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>一次提交：三层日志与两阶段提交的写入顺序</title>
+  <rect width="900" height="520" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="30" font-size="17" font-weight="700" fill="#1f2b38" text-anchor="middle">一次提交：三层日志与两阶段提交的写入顺序</text>
+
+  <!-- 层次划分 -->
+  <rect x="30" y="52" width="120" height="24" rx="6" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="90" y="69" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">Server 层</text>
+  <rect x="30" y="112" width="120" height="24" rx="6" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="90" y="129" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">InnoDB 引擎层</text>
+  <line x1="160" y1="120" x2="860" y2="120" stroke="#c8d3e0" stroke-width="1.4" stroke-dasharray="6 5"/>
+
+  <!-- 三条日志 -->
+  <rect x="180" y="52" width="210" height="56" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="285" y="76" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">binlog</text>
+  <text x="285" y="95" font-size="11" fill="#5b6b7c" text-anchor="middle">逻辑日志，主从复制与恢复</text>
+
+  <rect x="420" y="52" width="210" height="56" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="525" y="76" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">redo log（循环写）</text>
+  <text x="525" y="95" font-size="11" fill="#5b6b7c" text-anchor="middle">物理逻辑日志，崩溃恢复</text>
+
+  <rect x="660" y="52" width="210" height="56" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="765" y="76" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">undo log</text>
+  <text x="765" y="95" font-size="11" fill="#5b6b7c" text-anchor="middle">旧版本，回滚与 MVCC 快照读</text>
+
+  <!-- 两阶段提交流程 -->
+  <text x="30" y="176" font-size="13" font-weight="700" fill="#5b6b7c">两阶段提交</text>
+
+  <rect x="30" y="190" width="180" height="60" rx="8" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.4"/>
+  <text x="120" y="215" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">① redo prepare</text>
+  <text x="120" y="235" font-size="11" fill="#5b6b7c" text-anchor="middle">写 redo，标记为准备状态</text>
+
+  <rect x="290" y="190" width="180" height="60" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="380" y="215" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">② 写 binlog</text>
+  <text x="380" y="235" font-size="11" fill="#5b6b7c" text-anchor="middle">Server 层落盘归档日志</text>
+
+  <rect x="550" y="190" width="180" height="60" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="640" y="215" font-size="13" font-weight="700" fill="#1f2b38" text-anchor="middle">③ redo commit</text>
+  <text x="640" y="235" font-size="11" fill="#5b6b7c" text-anchor="middle">改回提交状态，事务可见</text>
+
+  <line x1="210" y1="220" x2="288" y2="220" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="470" y1="220" x2="548" y2="220" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="750" y="190" width="120" height="60" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="810" y="215" font-size="12" font-weight="700" fill="#1f2b38" text-anchor="middle">脏页</text>
+  <text x="810" y="235" font-size="11" fill="#5b6b7c" text-anchor="middle">慢慢刷回表空间</text>
+  <line x1="730" y1="220" x2="748" y2="220" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="640" y="272" font-size="11" fill="#5b6b7c" text-anchor="middle">WAL：先写日志，再写数据页</text>
+
+  <!-- 边界：日志与数据页之间的崩溃窗口 -->
+  <line x1="30" y1="300" x2="870" y2="300" stroke="#c8d3e0" stroke-width="1.4" stroke-dasharray="6 5"/>
+  <text x="30" y="324" font-size="12" fill="#5b6b7c">日志已落盘、数据页还在内存：此时断电，重启后按 redo 补回已提交的修改</text>
+  <text x="30" y="346" font-size="12" fill="#5b6b7c">两阶段提交让 redo 与 binlog 状态一致，避免主库有、从库没有（或反之）</text>
+
+  <!-- 参数 -->
+  <rect x="30" y="372" width="255" height="58" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="157" y="396" font-size="12" fill="#1f2b38" text-anchor="middle">innodb_flush_log_at_trx_commit=1</text>
+  <text x="157" y="416" font-size="11" fill="#5b6b7c" text-anchor="middle">每次提交刷 redo 到磁盘</text>
+
+  <rect x="315" y="372" width="220" height="58" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="425" y="396" font-size="12" fill="#1f2b38" text-anchor="middle">sync_binlog=1</text>
+  <text x="425" y="416" font-size="11" fill="#5b6b7c" text-anchor="middle">每次提交刷 binlog 到磁盘</text>
+
+  <rect x="565" y="372" width="305" height="58" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="717" y="396" font-size="12" fill="#1f2b38" text-anchor="middle">两者都为 1：金融级，每次提交至少两次磁盘同步</text>
+  <text x="717" y="416" font-size="11" fill="#5b6b7c" text-anchor="middle">放宽到 2 或 0 提速，但崩溃可能丢最近的事务</text>
+
+  <text x="450" y="466" font-size="12" fill="#5b6b7c" text-anchor="middle">长事务会拖住 undo 旧版本，导致 undo 膨胀、历史版本读取变慢</text>
+  <text x="450" y="492" font-size="12" fill="#5b6b7c" text-anchor="middle">binlog 格式推荐 ROW，可避免函数、随机值造成的主从不一致</text>
+</svg>
