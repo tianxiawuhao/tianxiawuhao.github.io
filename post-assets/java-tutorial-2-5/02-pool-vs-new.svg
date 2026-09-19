@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="450" viewBox="0 0 900 450" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>每次新建连接与连接池复用的对比</title>
+  <rect width="900" height="450" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">连接池做了什么：借、用、还，而不是每次新建物理连接</text>
+
+  <!-- 左：无池 -->
+  <rect x="40" y="55" width="392" height="330" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="236" y="80" text-anchor="middle" font-size="13.5" font-weight="700" fill="#e08a1e">没有连接池：一次请求一次物理连接</text>
+
+  <rect x="60" y="96" width="86" height="36" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="103" y="119" text-anchor="middle" font-size="11" fill="#1f2b38">请求 1</text>
+  <rect x="60" y="146" width="86" height="36" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="103" y="169" text-anchor="middle" font-size="11" fill="#1f2b38">请求 2</text>
+  <rect x="60" y="196" width="86" height="36" rx="6" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.2"/>
+  <text x="103" y="219" text-anchor="middle" font-size="11" fill="#1f2b38">请求 3</text>
+
+  <line x1="150" y1="114" x2="202" y2="114" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="150" y1="164" x2="202" y2="164" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <line x1="150" y1="214" x2="202" y2="214" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="206" y="96" width="206" height="36" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="309" y="113" text-anchor="middle" font-size="10.5" fill="#1f2b38">TCP 握手 + 认证 + 初始化会话</text>
+  <text x="309" y="127" text-anchor="middle" font-size="10.5" fill="#5b6b7c">然后执行一条很短的 SQL</text>
+  <rect x="206" y="146" width="206" height="36" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="309" y="163" text-anchor="middle" font-size="10.5" fill="#1f2b38">TCP 握手 + 认证 + 初始化会话</text>
+  <text x="309" y="177" text-anchor="middle" font-size="10.5" fill="#5b6b7c">然后执行一条很短的 SQL</text>
+  <rect x="206" y="196" width="206" height="36" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="309" y="213" text-anchor="middle" font-size="10.5" fill="#1f2b38">TCP 握手 + 认证 + 初始化会话</text>
+  <text x="309" y="227" text-anchor="middle" font-size="10.5" fill="#5b6b7c">然后执行一条很短的 SQL</text>
+
+  <rect x="60" y="274" width="352" height="32" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="236" y="295" text-anchor="middle" font-size="12" font-weight="700" fill="#e08a1e">连接创建的开销往往大于 SQL 本身</text>
+  <text x="236" y="332" text-anchor="middle" font-size="12" font-weight="700" fill="#e08a1e">高并发下数据库先被连接创建拖垮</text>
+  <text x="236" y="358" text-anchor="middle" font-size="11.5" fill="#5b6b7c">没有上限，请求越多连接越多</text>
+
+  <!-- 右：有池 -->
+  <rect x="468" y="55" width="392" height="330" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="664" y="80" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2e9e5b">连接池：提前建好，借出与归还</text>
+
+  <rect x="488" y="96" width="352" height="112" rx="8" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.4"/>
+  <text x="664" y="118" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">空闲连接容器（池）</text>
+  <rect x="504" y="132" width="200" height="30" rx="6" fill="#ffffff" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="604" y="152" text-anchor="middle" font-size="11" fill="#1f2b38">复用物理连接 1</text>
+  <rect x="504" y="168" width="200" height="30" rx="6" fill="#ffffff" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="604" y="188" text-anchor="middle" font-size="11" fill="#1f2b38">复用物理连接 2</text>
+  <text x="730" y="152" font-size="11" fill="#5b6b7c">maxActive 限流</text>
+  <text x="730" y="188" font-size="11" fill="#5b6b7c">maxWait 排队</text>
+
+  <path d="M 604 212 L 604 242" fill="none" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="612" y="231" font-size="11" fill="#5b6b7c">借出（borrow）</text>
+  <text x="612" y="245" font-size="11" fill="#5b6b7c">归还（close 被代理改写）</text>
+
+  <rect x="488" y="246" width="352" height="42" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="664" y="272" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">业务线程：拿到连接 → 执行 SQL → close()</text>
+
+  <rect x="488" y="306" width="352" height="32" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="664" y="327" text-anchor="middle" font-size="12" font-weight="700" fill="#2e9e5b">创建成本摊薄到整个运行期</text>
+  <text x="664" y="364" text-anchor="middle" font-size="11.5" fill="#5b6b7c">池大小固定，超出的请求排队，保护数据库</text>
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+</svg>

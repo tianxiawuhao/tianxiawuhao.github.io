@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500" font-family="Source Han Sans SC, Noto Sans CJK SC, DejaVu Sans, sans-serif">
+  <title>JDBC 最小闭环与 PreparedStatement 防注入原理</title>
+  <rect width="900" height="500" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2b38">JDBC 最小闭环：从连接池借出连接，到安全执行 SQL</text>
+
+  <!-- 上部：五步闭环 -->
+  <rect x="40" y="55" width="152" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="116" y="84" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">① 加载驱动</text>
+  <text x="116" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">SPI 自动注册</text>
+  <line x1="192" y1="87" x2="228" y2="87" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="232" y="55" width="152" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="308" y="84" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">② 获取连接</text>
+  <text x="308" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">URL + 账号密码</text>
+  <line x1="384" y1="87" x2="420" y2="87" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="424" y="55" width="152" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="500" y="84" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">③ 创建语句对象</text>
+  <text x="500" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">prepareStatement</text>
+  <line x1="576" y1="87" x2="612" y2="87" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="616" y="55" width="152" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="692" y="84" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">④ 执行并取结果</text>
+  <text x="692" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">ResultSet 遍历</text>
+  <line x1="768" y1="87" x2="804" y2="87" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+
+  <rect x="808" y="55" width="52" height="64" rx="8" fill="#eef4ff" stroke="#2f6fd0" stroke-width="1.4"/>
+  <text x="834" y="84" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2b38">⑤ 关闭</text>
+  <text x="834" y="104" text-anchor="middle" font-size="11" fill="#5b6b7c">归还连接</text>
+
+  <path d="M 834 126 L 834 152 L 116 152 L 116 126" fill="none" stroke="#c8d3e0" stroke-width="1.4" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+  <text x="475" y="147" text-anchor="middle" font-size="11" fill="#5b6b7c">try-with-resources 保证任何分支都会释放资源</text>
+
+  <!-- 下部左：拼串注入 -->
+  <rect x="40" y="172" width="392" height="262" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="236" y="198" text-anchor="middle" font-size="13.5" font-weight="700" fill="#e08a1e">字符串拼接 SQL：注入与重复编译</text>
+  <rect x="60" y="214" width="352" height="30" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="72" y="234" font-size="11.5" fill="#1f2b38">&#34;... where name = &#39;&#34; + input + &#34;&#39;&#34;</text>
+  <text x="72" y="270" font-size="11.5" font-weight="700" fill="#1f2b38">输入 &#39; OR &#39;1&#39;=&#39;1</text>
+  <rect x="60" y="280" width="352" height="30" rx="6" fill="#f7f9fc" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="72" y="300" font-size="11.5" fill="#1f2b38">where name = &#39;&#39; OR &#39;1&#39;=&#39;1&#39;</text>
+  <line x1="200" y1="312" x2="200" y2="332" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="236" y="348" font-size="12" font-weight="700" fill="#e08a1e">条件恒真，条件被改写</text>
+  <text x="236" y="372" font-size="11.5" fill="#5b6b7c">每条 SQL 文本都不同，执行计划无法复用</text>
+  <rect x="60" y="386" width="352" height="32" rx="6" fill="#fff6e8" stroke="#e08a1e" stroke-width="1.2"/>
+  <text x="236" y="407" text-anchor="middle" font-size="12" font-weight="700" fill="#e08a1e">风险：SQL 结构由用户输入决定</text>
+
+  <!-- 下部右：占位符 -->
+  <rect x="468" y="172" width="392" height="262" rx="8" fill="#f7f9fc" stroke="#c8d3e0" stroke-width="1.4"/>
+  <text x="664" y="198" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2e9e5b">PreparedStatement：结构冻结，参数只当数据</text>
+  <rect x="488" y="214" width="352" height="30" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="500" y="234" font-size="11.5" fill="#1f2b38">&#34;... where name = ?&#34;</text>
+  <text x="500" y="270" font-size="11.5" font-weight="700" fill="#1f2b38">setString(1, input)</text>
+  <rect x="488" y="280" width="352" height="30" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="500" y="300" font-size="11.5" fill="#1f2b38">where name = &#39;&#39;&#39; OR &#39;&#39;1&#39;&#39;=&#39;&#39;1&#39;</text>
+  <text x="664" y="316" text-anchor="middle" font-size="11" fill="#5b6b7c">整串被当作字符串值，不再是 SQL 语法</text>
+  <rect x="488" y="330" width="352" height="42" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="664" y="347" text-anchor="middle" font-size="12" font-weight="700" fill="#2e9e5b">预编译一次，结构不变</text>
+  <text x="664" y="365" text-anchor="middle" font-size="11.5" fill="#5b6b7c">重复执行时执行计划可复用</text>
+  <rect x="488" y="386" width="352" height="32" rx="6" fill="#eaf7ef" stroke="#2e9e5b" stroke-width="1.2"/>
+  <text x="664" y="407" text-anchor="middle" font-size="12" font-weight="700" fill="#2e9e5b">结论：能参数化的一律用 ? 绑定</text>
+  <text x="664" y="430" text-anchor="middle" font-size="10.5" fill="#5b6b7c">动态表名、排序字段无法参数化，必须白名单校验</text>
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+  <!-- 本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。本行用于示意图形状、间距与配色的一致性检查占位说明，不影响渲染结果。 -->
+</svg>

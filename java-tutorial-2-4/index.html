@@ -114,7 +114,7 @@
               <h1>MySQL 高阶</h1>
               <span class="meta">
                 Posted on
-                2026-09-19，5 min read</span>
+                2026-09-19，4 min read</span>
             </div>
           
         
@@ -128,115 +128,83 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:rgba(127,127,127,.10);border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.75;color:var(--ink,#333);white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>前面的章节已经能让数据库"把结果查对"了；但真实项目里，数据库往往不是败在 SQL 语法上，而是败在"慢"和"怕丢"上：上线三个月后接口突然变慢、表涨到几千万行翻页要好几秒、机器断电后数据到底有没有落盘。本章先用慢查询日志和执行计划<strong>定位</strong>问题，再用 InnoDB 的三大日志<strong>解释</strong>为什么它既快又不容易丢数据，最后给出几类常见慢查询的<strong>改写套路</strong>。适合已会写基本 SQL、准备把数据库用进生产环境的读者。</p>
+<p>很多教程讲 MySQL 停在"会写 CRUD"，但线上事故往往不是语法错误，而是慢查询拖垮连接池、机器掉电后主从数据对不上。本章先讲清 InnoDB 与三种日志"为什么快、为什么不容易丢"，再落到慢查询定位与执行计划分析，最后给出索引改写套路和分库分表的分寸。适合已能写基本 SQL、准备把数据库用进生产的读者。</p>
 
-<h2>一、慢查询日志：先找出慢在哪条 SQL</h2>
+<h2>一、存储引擎：默认为什么是 InnoDB</h2>
 
-<p>优化的第一步永远是测量，而不是凭感觉改 SQL。MySQL 自带的<strong>慢查询日志</strong>（slow query log）会把执行时间超过 <code>long_query_time</code> 的语句记录下来。</p>
-
-<p>注意两点：<code>long_query_time</code> 的单位是秒（可带小数，如 <code>0.5</code>）；它是<strong>全局动态变量</strong>，<code>SET GLOBAL</code> 对已存在的连接不生效，当前连接需再执行一次 <code>SET SESSION</code> 或重连。最小可用配置如下：</p>
-
-<pre><code class="language-sql">-- 查看当前配置
-SHOW VARIABLES LIKE 'slow_query_log%';
-SHOW VARIABLES LIKE 'long_query_time';
-
--- 打开慢查询日志并指定文件（MySQL 8.0 也支持 SET GLOBAL slow_query_log = ON）
-SET GLOBAL slow_query_log = ON;
-SET GLOBAL slow_query_log_file = '/var/log/mysql/mysql-slow.log';
-
--- 只记录超过 0.5 秒的语句；设成 0 会把所有语句都写进去，磁盘很快被写满
-SET GLOBAL long_query_time = 0.5;
-
--- 额外记录"没走索引"的语句，排查隐式全表扫描时很有用
-SET GLOBAL log_queries_not_using_indexes = ON;</code></pre>
-
-<p>日志很长，别用肉眼读：轻量场景用官方自带的 <code>mysqldumpslow</code>，更常见的是 Percona Toolkit 的 <code>pt-query-digest</code>。分析时盯三个指标：<strong>Calls</strong>（执行次数，多且慢的优先）、<strong>Rows examine</strong>（扫描行数，越大 IO 越重）、以及它与 <code>Rows sent</code> 的比值（差距悬殊说明索引命中率低）。</p>
-
-<h2>二、EXPLAIN：判断索引到底有没有用上</h2>
-
-<p>定位到可疑 SQL 后，在它前面加 <code>EXPLAIN</code> 就能看到执行计划。字段虽多，日常只需看几个：</p>
+<p>MySQL 是插件式的：同一个服务器可以挂载不同存储引擎，建表时用 <code>ENGINE=</code> 指定，<code>SHOW ENGINES;</code> 可以查看支持列表。老教材常提 MyISAM，今天真正要掂量的是两者的取舍。</p>
 
 <ul>
-<li><code>type</code>：访问类型，效率大致是 <code>system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>。<code>ALL</code> 是全表扫描，出现就要警惕；<code>index</code> 虽走了索引，但等价于扫整棵索引树，也不理想。</li>
-<li><code>possible_keys</code> 与 <code>key</code>：前者是候选索引，后者是真正选中的。<code>possible_keys</code> 有值而 <code>key</code> 为 <code>NULL</code>，说明有索引却没被采用，多与列类型、函数包裹或数据分布有关。</li>
-<li><code>key_len</code>：实际用到的索引字节数。对组合索引 <code>(a, b, c)</code> 可反推用上了几列；它只统计 <code>WHERE</code> 用到的部分，排序与分组不计入。</li>
-<li><code>rows</code>：优化器<strong>估算</strong>的扫描行数（不是精确值，统计信息过期时会失真），可配合 <code>EXPLAIN ANALYZE</code>（MySQL 8.0.18 起）看真实执行数据。</li>
-<li><code>Extra</code>：信息量最大的一列。<code>Using filesort</code>（排序没走索引）与 <code>Using temporary</code>（用了临时表）同时出现通常要重点优化；<code>Using index</code> 表示覆盖索引、无需回表；<code>Using index condition</code> 表示索引条件下推（ICP）生效。</li>
+<li><strong>InnoDB</strong>：支持事务（ACID）、行级锁、MVCC、外键和崩溃恢复；索引即数据，主键索引的叶子节点直接存整行，因此叫<strong>聚簇索引</strong>；辅助索引的叶子只存主键值，查非索引列就要"回表"。</li>
+<li><strong>MyISAM</strong>：不支持事务，也没有行锁（只有表锁）；索引与数据分开存放，辅助索引直接指向数据地址；崩溃后表可能损坏，需要 <code>REPAIR TABLE</code> 修复。它只在只读、少并发的场景里略微省资源，MySQL 8.0 连系统表都已换成 InnoDB。</li>
 </ul>
 
-<pre><code class="language-sql">-- 在语句前加 EXPLAIN 即可，不会真正返回数据
-EXPLAIN SELECT id, title FROM film WHERE release_year = 2006 ORDER BY title;
+<p>所以今天"选引擎"基本等价于"要不要事务和并发写"：要，就用 InnoDB。聚簇索引带来一个直接结论——主键要<strong>短且递增</strong>（例如自增 <code>BIGINT</code>）。随机主键会让插入落在索引中间，引发页分裂和额外的 IO；业务上唯一的字段（手机号、订单号）加唯一索引即可，不必硬做主键。</p>
 
--- id 列越大越先执行；id 相同则自上而下执行；id 为 NULL 表示这是结果集（如 UNION 结果）
--- 重点关注：type、key、rows、Extra 四列</code></pre>
+<h2>二、redo、undo 与 binlog：一次提交到底写了什么</h2>
 
-<h2>三、InnoDB 的三大日志：为什么它又快又不丢</h2>
+<p>很多人背过 WAL，却说不清三种日志各管什么。按所在层次划分：redo log 与 undo log 属于 InnoDB 引擎层，binlog 属于 MySQL Server 层。</p>
 
-<p>InnoDB 把数据页缓存进<strong>缓冲池</strong>（buffer pool），读写先在内存完成。可每次提交都把脏页刷回磁盘，随机 IO 慢到无法接受；只改内存，断电又会全丢。InnoDB 的答案是"先顺序写日志，再慢慢刷数据页"，即<strong>预写日志</strong>（WAL）——这正是 redo log 的职责。</p>
+<ul>
+<li><strong>redo log（重做日志）</strong>：记录"某个数据页被改成了什么样"，属于物理逻辑日志，以<strong>循环写</strong>的方式写在固定大小的文件组里。事务修改先写 redo 并落盘，脏页可以慢慢刷回表空间——这就是 WAL（先写日志，再写数据）。它解决的是<strong>崩溃恢复</strong>：断电重启后，把已提交但还没刷进表空间的数据补回来。</li>
+<li><strong>undo log（回滚日志）</strong>：记录数据的旧版本，支撑两件事——事务回滚，以及 MVCC 的快照读。快照读沿版本链找到对当前事务可见的版本，所以普通 <code>SELECT</code> 不用加锁。长事务会一直拖住旧版本，导致 undo 膨胀、历史版本读变慢。</li>
+<li><strong>binlog（归档日志）</strong>：Server 层的逻辑日志，记录执行过什么语句或行发生了哪些变化，用于主从复制和按时间点恢复。格式有 STATEMENT、ROW、MIXED，生产环境推荐 ROW，能避免函数、随机值带来的主从不一致。</li>
+</ul>
 
-<p><strong>redo log</strong> 记录的是数据页的物理修改。事务提交时只保证 redo 落到磁盘，脏页由后台线程择机刷盘；数据库重启后，把 redo 里已提交但还没刷盘的改动重放一遍，数据就回来了。它是固定大小文件组成的环形结构，容量约为 <code>innodb_log_file_size × innodb_log_files_in_group</code>；写满后会被迫同步刷脏页，表现为性能抖动。刷盘时机由 <code>innodb_flush_log_at_trx_commit</code> 控制：<code>1</code>（默认）每次提交都刷盘；<code>0</code> 靠后台线程每秒刷，崩溃可能丢约 1 秒；<code>2</code> 只写入操作系统缓存，机器掉电才会丢。</p>
+<p>一次提交并不是"写完一个文件就结束"，而是<strong>两阶段提交</strong>：先把 redo 写成 prepare 状态，再写 binlog，最后把 redo 改成 commit。这样崩溃恢复时能对照两本账，不会出现"主库有、从库没有"或反过来的情况。</p>
 
-<p><strong>undo log</strong> 记录修改前的旧值，承担三件事：事务回滚时恢复数据、为 MVCC 提供历史版本（让一致性读不必加锁）、崩溃恢复时回滚未提交事务。它存放在 undo 表空间，长事务会让 undo 无法及时清理，是典型隐患。</p>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-4/01-two-phase-commit.svg" alt="一次提交的日志写入示意图：redo 与 undo 属 InnoDB 引擎层、binlog 属 Server 层，提交按 redo prepare、写 binlog、redo commit 两阶段进行，脏页再慢慢刷回表空间"><figcaption>图 1：三层日志的分工与两阶段提交顺序</figcaption></figure>
 
-<p><strong>binlog</strong> 是 Server 层的归档日志，记录逻辑变更（<code>STATEMENT</code> 记 SQL、<code>ROW</code> 记行变更、<code>MIXED</code> 自动选择），用于主从复制与时间点恢复；<code>sync_binlog = 1</code> 才能保证每次提交都落盘。</p>
+<p>持久性最终由两个参数把关：<code>innodb_flush_log_at_trx_commit=1</code> 表示每次提交都把 redo 刷到磁盘；<code>sync_binlog=1</code> 表示每次提交都把 binlog 刷到磁盘。两者都为 1 是金融级配置，代价是每次提交至少两次磁盘同步，吞吐明显下降；放宽到 2 或 0 可以提速，但崩溃时可能丢掉最近若干个事务。</p>
 
-<p>存储引擎层有 redo、Server 层有 binlog，两份必须一致，否则主从会分叉，于是有了<strong>两阶段提交</strong>（2PC）：写 redo 并标记 <code>prepare</code> → 写 binlog 并刷盘 → 写 redo 的 <code>commit</code> 标记。若在第二步前崩溃，重启时事务处于 <code>prepare</code> 且 binlog 无对应记录则回滚，binlog 已完整写入则提交。</p>
+<pre><code class="language-sql">-- 查看日志与刷盘相关参数
+SHOW VARIABLES LIKE 'innodb_log_file_size';
+SHOW VARIABLES LIKE 'innodb_flush_log_at_trx_commit';
+SHOW VARIABLES LIKE 'sync_binlog';
+SHOW VARIABLES LIKE 'binlog_format';
 
-<h2>四、四类常见慢查询的改写套路</h2>
+-- 排查长事务：它会让 undo 越堆越大
+SELECT trx_id, trx_state, trx_started, trx_rows_modified
+FROM information_schema.innodb_trx
+ORDER BY trx_started;</code></pre>
 
-<h3>1. 深分页：别让 OFFSET 越翻越慢</h3>
+<h2>三、慢查询日志与 EXPLAIN：先定位，再动手</h2>
 
-<p><code>LIMIT 100000, 10</code> 会先取出并丢弃前 10 万行，翻得越深越慢，而且 <code>ORDER BY</code> 一旦用不上索引还会叠加文件排序。推荐<strong>游标分页</strong>（记住上一页最后一行，用主键过滤）：</p>
+<p>优化的第一步是测量，不是凭感觉改 SQL。慢查询日志会把执行时间超过 <code>long_query_time</code>（单位是秒，可以写小数）的语句记下来，它默认是关闭的。</p>
 
-<pre><code class="language-sql">-- 慢：每翻一页都要丢弃前面所有行
-SELECT id, title FROM film ORDER BY id LIMIT 100000, 10;
+<p>这里有两个容易踩的坑。其一，<code>long_query_time</code> 是全局动态变量，<code>SET GLOBAL</code> 只对之后建立的连接生效，当前连接要么重连，要么再补一句 <code>SET SESSION long_query_time = 0.5;</code>。其二，<code>log_queries_not_using_indexes</code> 只负责"额外记录没走索引的语句"，它<strong>不能</strong>代替 <code>slow_query_log = ON</code> 去开启慢日志；把它误当开关，是排查时最常见的空转。</p>
 
--- 快：记住上一页最后一个 id，主键索引可以直接定位到起点
-SELECT id, title FROM film WHERE id &gt; 100000 ORDER BY id LIMIT 10;
+<pre><code class="language-sql">SET GLOBAL slow_query_log = ON;
+SET GLOBAL slow_query_log_file = '/var/log/mysql/mysql-slow.log';
+SET GLOBAL long_query_time = 0.5;   -- 设成 0 会记录所有语句，磁盘很快写满
+SET GLOBAL log_queries_not_using_indexes = ON;
 
--- 若必须指定页码，可先用覆盖索引只取出主键，再回表关联
-SELECT f.id, f.title
-FROM film f
-JOIN (SELECT id FROM film ORDER BY id LIMIT 100000, 10) AS t ON f.id = t.id;</code></pre>
+-- 日志很长，交给工具按总耗时聚合，不要肉眼翻
+-- mysqldumpslow -s t -t 10 /var/log/mysql/mysql-slow.log
+-- pt-query-digest /var/log/mysql/mysql-slow.log</code></pre>
 
-<p>游标分页的前提是排序键<strong>唯一且稳定</strong>（通常是主键）；排序列有重复值时要加主键做二级排序（<code>ORDER BY create_time, id</code>），否则会漏行或重复。</p>
+<p>拿到可疑 SQL 后，在它前面加 <code>EXPLAIN</code> 查看执行计划。字段虽多，日常只需盯四列：<code>type</code> 是访问类型，效率大致为 <code>const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; ALL</code>，出现 <code>ALL</code>（全表扫描）或 <code>index</code>（扫整棵索引树）就要警惕；<code>key</code> 是真正用上的索引，如果 <code>possible_keys</code> 有值而 <code>key</code> 为 NULL，说明索引没被采纳，多半与列类型、函数包裹或数据分布有关；<code>rows</code> 是优化器<strong>估算</strong>的扫描行数，统计信息过期时会严重失真，MySQL 8.0.18 起可用 <code>EXPLAIN ANALYZE</code> 看真实值；<code>Extra</code> 信息量最大，<code>Using filesort</code> 表示排序没走索引，<code>Using temporary</code> 表示用了临时表，<code>Using index</code> 表示覆盖索引无需回表，<code>Using index condition</code> 表示索引条件下推（ICP）生效。</p>
 
-<h3>2. 大表批量更新：拆小、限流、别长事务</h3>
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-4/02-slow-query-flow.svg" alt="慢查询优化流程图：慢查询日志开启后按总耗时聚合，再用 EXPLAIN 看 type、key、rows、Extra 四列，最后改写 SQL 与索引；下方列出函数包索引列、前导模糊、深分页等常见改写套路"><figcaption>图 2：先定位再动手——慢查询链路、EXPLAIN 四列与常见改写套路</figcaption></figure>
 
-<p>对千万级表执行不带条件的 <code>UPDATE</code>，会长时间持有大量行锁、阻塞其他业务，还让 undo 与 redo 持续膨胀。正确做法是按主键分批推进：</p>
+<h2>四、常见改写套路与分库分表的分寸</h2>
 
-<pre><code class="language-sql">-- 每次只改 1000 行，提交后由业务侧（或脚本）循环调用，直到影响行数为 0
-UPDATE t_order
-SET status = 2
-WHERE status = 1
-ORDER BY id
-LIMIT 1000;</code></pre>
+<p>执行计划暴露问题之后，多数慢查询都落在下面几类：</p>
 
-<p>外部循环中每批之间留点间隔（如 <code>SELECT SLEEP(0.05)</code>），给主从复制和其他事务喘息时间；分批语句必须带 <code>ORDER BY id</code>，否则可能反复更新同一批行。</p>
+<ul>
+<li><strong>函数包住索引列</strong>：<code>WHERE DATE(create_time) = '2024-01-01'</code> 会让索引失效，改成范围条件 <code>create_time &gt;= '2024-01-01' AND create_time &lt; '2024-01-02'</code>。</li>
+<li><strong>前导模糊匹配</strong>：<code>LIKE '%abc'</code> 用不上 B+ 树的有序性，只能全扫；<code>LIKE 'abc%'</code> 才可以走索引。</li>
+<li><strong>组合索引的最左前缀</strong>：索引 <code>(a, b, c)</code> 能服务 <code>a</code>、<code>a+b</code>、<code>a+b+c</code>，跳过 <code>a</code> 直接用 <code>b</code> 用不上。把等值条件放前面、范围条件放最后，能多用到一列。</li>
+<li><strong>深分页</strong>：<code>LIMIT 1000000, 20</code> 要先扫掉前一百万行。改用"记住上次位置"的游标写法 <code>WHERE id &gt; ? ORDER BY id LIMIT 20</code>，或先只查主键再回表关联。</li>
+<li><strong>子查询改连接</strong>：不少 <code>IN (子查询)</code> 可以改写成 <code>JOIN</code>，但要先确认关联键是不是一对多，否则结果会被放大，必要时用 <code>DISTINCT</code> 或 <code>EXISTS</code>。</li>
+<li><strong>计数别混用</strong>：<code>COUNT(*)</code> 统计所有行，<code>COUNT(col)</code> 跳过该列为 NULL 的行。想一次算出多个条件下的行数，用 <code>SUM(col = 值)</code> 或 <code>COUNT(IF(条件, 1, NULL))</code>，而不是把条件塞进 <code>COUNT()</code> 里硬凑。</li>
+</ul>
 
-<h3>3. 子查询改 JOIN：先确认是不是一对多</h3>
-
-<p>很多子查询可改写成 <code>JOIN</code> 以获得更好的执行计划，但改写前必须确认关联关系：若是一对多（一个订单对应多条明细），<code>JOIN</code> 会把主表行复制多份，必须用 <code>DISTINCT</code> 或 <code>EXISTS</code> 去重，漏了就是"结果集悄悄变多"的事故。</p>
-
-<h3>4. COUNT 与 GROUP BY 的取舍</h3>
-
-<p><code>COUNT(*)</code> 统计行数，<code>COUNT(col)</code> 只统计该列非 <code>NULL</code> 的行数，两者在有 <code>NULL</code> 时结果不同，别混用。统计多个年份的数量时，与其查两次再拼结果，不如一次 <code>GROUP BY</code> 让索引帮忙：</p>
-
-<pre><code class="language-sql">-- 推荐：一次扫描，按年份分组返回
-SELECT release_year, COUNT(*) AS cnt
-FROM film
-WHERE release_year IN (2006, 2007)
-GROUP BY release_year;
-
--- 不推荐：两次独立查询，还要在应用层对齐年份
-SELECT COUNT(*) FROM film WHERE release_year = 2006;
-SELECT COUNT(*) FROM film WHERE release_year = 2007;</code></pre>
-
-<p>另外，<code>GROUP BY</code> 尽量只用同一张表的列、并让分组列有索引，执行计划里就不会出现 <code>Using temporary</code> 和 <code>Using filesort</code>，大表上差距明显。</p>
+<p>当索引、SQL、缓存、读写分离都做过仍然撑不住，才轮到分库分表。垂直拆分按业务把宽表、大库切小；水平拆分按分片键（如用户 ID 取模或按时间范围）把行分散到多个库表。代价很实在：跨分片 JOIN 和聚合要在应用层拼装，全局唯一 ID 得另想办法（号段模式、雪花算法），跨分片分页和事务都变复杂，扩容还要迁移数据。因此分片键一旦定下就很难改，务必选"查询必带、分布均匀"的列。</p>
 
 <h2>小结</h2>
 
-<p>本章的主线是"先量后调，再懂原理"：用慢查询日志锁定可疑 SQL，用 <code>EXPLAIN</code> 确认 <code>type</code>、<code>key</code>、<code>rows</code>、<code>Extra</code> 四列，避免凭直觉改 SQL；理解 redo log（崩溃恢复）、undo log（回滚与 MVCC）、binlog（复制与恢复）以及两阶段提交，才能在调参数时知道自己在拿什么换什么；深分页、批量更新、子查询改写这几类套路则可以当成检查清单直接套用。优化的收益永远集中在少数几条语句上，找到它们比盲目加索引重要得多。</p>
+<p>本章的两个关键词是<strong>层次</strong>和<strong>证据</strong>：存储引擎决定能力边界，InnoDB 用 redo 保证崩溃不丢、用 undo 支撑回滚与 MVCC、用 binlog 负责复制与恢复，两阶段提交让两本账对得上；性能问题则靠慢查询日志定位、靠 EXPLAIN 取证据，再对症改写 SQL 与索引组合。先把单机单表做到位，分库分表永远是最后一张牌。</p>
           </article>
   <!-- Footer -->
   <footer>

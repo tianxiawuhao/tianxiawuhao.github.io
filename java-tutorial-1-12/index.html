@@ -140,6 +140,8 @@
 <p>几个常用方法要分清。<code>sleep(ms)</code> 让当前线程休眠，<strong>不释放</strong>已持有的锁；<code>wait()</code> 会<strong>释放</strong>锁并进入等待，它和 <code>notify()</code> 一样属于 <code>Object</code> 而非 <code>Thread</code>，必须在同步块内调用，并且应放在 <code>while</code> 循环里判断条件，以抵御虚假唤醒。<code>join()</code> 让当前线程等待目标线程结束。<code>interrupt()</code> 是协作式中断：它只设置中断标志，<code>sleep/wait/join</code> 收到后抛出 <code>InterruptedException</code>，捕获后不要默默吞掉，应恢复中断标志或结束任务。</p>
 <p>至于源笔记推荐的 <code>stop()</code>：它早已废弃，因为它会强行终止线程并释放锁，被保护的数据可能停在“改了一半”的中间状态。正确做法是用 <code>volatile</code> 标志位或 <code>interrupt()</code> 让线程自己退出。</p>
 
+<figure class="tutorial-figure"><img src="/post-assets/java-tutorial-1-12/01-thread-state.svg" alt="线程六种状态转换图：NEW、RUNNABLE、BLOCKED、WAITING、TIMED_WAITING、TERMINATED"><figcaption>图 1：Thread.State 的六种状态与转换关系</figcaption></figure>
+
 <h2>三、synchronized：把临界区串成串行</h2>
 <p>先看问题的根源。<code>tickets--</code> 看着是一步，实际是“读值、减一、写回”三步，两个线程完全可能读到同一个值，同一张票就被卖了两次。解决办法是让操作共享数据的代码在任何时刻只被一个线程执行，这就是同步。</p>
 <pre><code class="language-java">class TicketWindow implements Runnable {
