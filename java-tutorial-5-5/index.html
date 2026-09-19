@@ -128,22 +128,22 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们看了创建型模式，解决的是「对象怎么造出来」。这一章换一个角度：对象已经存在、类也已经写好，但它们的<strong>结构</strong>拧不到一起——旧接口和新系统对不上、继承层次越写越深、客户端要面对十几个子系统类。结构型模式正是处理这类问题的七种套路：适配器、桥接、组合、装饰、外观、享元、代理。本章不堆砌定义，而是按「为什么需要 → 怎么做 → 示例 → 常见坑」的顺序，把最常用的几种讲透，并给出可以直接编译运行的 Java 示例。适合已经会写接口与继承、但面对既有代码改造时不知道从哪下手的读者。</p>
+<p>上一章介绍了创建型模式，解决的是“对象怎么造出来”。这一章换一个角度：对象已经存在、类也已经写好，但它们的<strong>结构</strong>拧不到一起——旧接口和新系统对不上、继承层次越写越深、客户端要面对十几个子系统类。结构型模式正是处理这类问题的七种套路：适配器、桥接、组合、装饰、外观、享元、代理。本章不堆砌定义，而是按“为什么需要 → 怎么做 → 示例 → 常见坑”的顺序，把最常用的几种讲透，并给出可以直接编译运行的 Java 示例。适合已经会写接口与继承、但面对既有代码改造时不知从哪下手的读者。</p>
 
 <h2>结构型模式总览：先分清它们各自对付什么</h2>
-<p>结构型模式关心的是「类与对象怎么组装」。按意图大致可以分成三组：</p>
+<p>结构型模式关心的是“类与对象怎么组装”。按意图大致可以分成三组：</p>
 <ul>
 <li><strong>接口转换与解耦</strong>：适配器（Adapter）把不兼容的接口转成客户端期望的接口；桥接（Bridge）把抽象与实现拆成两个可以独立变化的维度；外观（Facade）为一组子系统提供一个统一入口。</li>
 <li><strong>结构复用</strong>：装饰器（Decorator）在不改原类的前提下动态叠加职责；代理（Proxy）在访问真实对象前后插入控制逻辑；享元（Flyweight）共享细粒度对象以节省内存。</li>
-<li><strong>层次表达</strong>：组合（Composite）用树形结构统一对待「单个对象」与「对象容器」。</li>
+<li><strong>层次表达</strong>：组合（Composite）用树形结构统一对待“单个对象”与“对象容器”。</li>
 </ul>
-<p>它们和创建型、行为型的分界线很清楚：创建型管「生」，行为型管「交互与职责分配」，结构型管「拼装关系」。判断该用哪个，先问自己一句话：我要解决的是接口对不上、维度太多、访问要受控，还是整体与部分要一视同仁。</p>
+<p>它们和创建型、行为型的分界线很清楚：创建型管“生”，行为型管“交互与职责分配”，结构型管“拼装关系”。判断该用哪一个，可以先问一句：要解决的是接口对不上、维度太多、访问要受控，还是整体与部分要一视同仁。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-5/01-structural-map.svg" alt="结构型模式分三组：接口转换与解耦、结构复用、层次表达"><figcaption>图 1：结构型模式按意图分成三组，各自对付不同问题</figcaption></figure>
 
 <h2>适配器与桥接：接入旧代码，拆开两个变化维度</h2>
-<p>适配器解决的是「东西是好的，就是插不进去」。JDK 里最经典的例子是把老的 <code>Enumeration</code> 适配成 <code>Iterator</code>（<code>Collections.list()</code> 与 <code>Collections.enumeration()</code> 就是这对转换），日常更多见于对接第三方 SDK 或遗留系统。</p>
-<p>适配器有两种写法：<strong>类适配器</strong>用继承被适配者并实现目标接口；<strong>对象适配器</strong>用组合持有一个被适配者实例。Java 单继承，类适配器只能适配一个类且要求目标类型是抽象类，扩展余地小，所以实践中推荐对象适配器。<em>源笔记里「适配器至多只能适配一个适配者类，目标类必须是抽象类」的说法只在类适配器语境下成立，对象适配器可以同时持有多个被适配者，目标也通常是接口，这里需要纠正。</em></p>
+<p>适配器解决的是“东西是好的，就是插不进去”。JDK 里最经典的例子是把老的 <code>Enumeration</code> 适配成 <code>Iterator</code>（<code>Collections.list()</code> 与 <code>Collections.enumeration()</code> 就是这对转换），日常更多见于对接第三方 SDK 或遗留系统。</p>
+<p>适配器有两种写法：<strong>类适配器</strong>用继承被适配者并实现目标接口；<strong>对象适配器</strong>用组合持有一个被适配者实例。Java 只支持单继承，类适配器因此只能适配一个类，而且要求目标类型是抽象类，扩展余地小，实践中推荐对象适配器。常见的说法“适配器至多只能适配一个适配者类、目标类必须是抽象类”，只在类适配器的语境下成立；对象适配器改用组合，可以同时持有多个被适配者，目标也通常是接口。</p>
 <pre><code class="language-java">// 目标接口：新系统只认这个
 public interface Target {
     void request();
@@ -176,10 +176,10 @@ public class AdapterDemo {
         target.request(); // 输出：Adaptee.specificRequest
     }
 }</code></pre>
-<p>桥接则是另一种苦恼：一个类有两个独立变化的维度（例如图形既按形状分、又按颜色分），用继承组合会得到 <code>m × n</code> 个子类。桥接把其中一个维度抽成接口，让抽象层<strong>持有</strong>它，于是子类数量从乘积变成相加，还能在运行时替换实现。JDBC 就是典型：<code>java.sql</code> 的抽象 API 与各厂商驱动实现各自演进，靠 DriverManager 这座「桥」连接；SLF4J 与 Logback/Log4j 的关系同理。</p>
-<p>和策略模式的区别常被问起：结构上它们都是「上下文持有接口」，但策略的目的是封装可互换的算法，桥接的目的是分离抽象与实现这两个维度的变化。结构相似不等于意图相同。</p>
+<p>桥接则是另一种苦恼：一个类有两个独立变化的维度（例如图形既按形状分、又按颜色分），用继承组合会得到 <code>m × n</code> 个子类。桥接把其中一个维度抽成接口，让抽象层<strong>持有</strong>它，于是子类数量从相乘变成相加，还能在运行时替换实现。JDBC 就是典型：<code>java.sql</code> 的抽象 API 与各厂商驱动实现各自演进，靠 DriverManager 这座“桥”连接；SLF4J 与 Logback/Log4j 的关系同理。</p>
+<p>和策略模式的区别常被问起：结构上它们都是“上下文持有接口”，但策略的目的是封装可互换的算法，桥接的目的是分离抽象与实现这两个维度的变化。结构相似不等于意图相同。</p>
 
-<h2>装饰器与代理：同样是「包一层」，目的却相反</h2>
+<h2>装饰器与代理：同样是“包一层”，目的却相反</h2>
 <p>装饰器和代理的类图几乎一样：装饰者与被装饰者、代理与真实对象都实现同一个接口，都在方法前后插入自定义逻辑。区别只有一句话——<strong>装饰器为了增强功能，代理为了控制访问</strong>。</p>
 <ul>
 <li>装饰器由客户端把原始对象<strong>传进</strong>构造器，可以层层嵌套、在运行时递归组装，典型如 <code>java.io</code> 的 <code>BufferedReader(new FileReader(...))</code>。</li>
@@ -212,7 +212,7 @@ class SugarDecorator extends CoffeeDecorator {
     @Override public double cost() { return delegate.cost() + 1.0; }
     @Override public String name() { return delegate.name() + " + 糖"; }
 }</code></pre>
-<p>Java 还提供了更省事的代理实现：JDK 动态代理（面向接口）和 CGLIB（面向类）。Spring AOP 默认就是「有接口用 JDK 动态代理，无接口用 CGLIB」。</p>
+<p>Java 还提供了更省事的代理实现：JDK 动态代理（面向接口）和 CGLIB（面向类）。Spring AOP 默认就是“有接口用 JDK 动态代理，无接口用 CGLIB”。</p>
 <pre><code class="language-java">import java.lang.reflect.Proxy;
 
 interface OrderService {
@@ -240,7 +240,7 @@ public class ProxyDemo {
 }</code></pre>
 
 <h2>外观、组合与享元：简化、统一与共享</h2>
-<p><strong>外观</strong>是给复杂子系统请一位「前台」。客户端原本要按顺序调用下单、扣库存、发通知三个服务，引入 <code>OrderFacade#placeOrder()</code> 后只需一次调用，依赖从「多对多」变成「客户端对门面」。它的代价是门面容易变成上帝类；源笔记说它「不符合开闭原则」，更准确的说法是：新增子系统时通常需要改动门面，但这属于可接受的集中式修改，并不必然违反开闭原则，关键是别把业务逻辑写进门面。</p>
+<p><strong>外观</strong>是给复杂子系统请一位“前台”。客户端原本要按顺序调用下单、扣库存、发通知三个服务，引入 <code>OrderFacade#placeOrder()</code> 后只需一次调用，依赖从“多对多”变成“客户端对门面”。它的代价是门面容易变成上帝类。有人据此认为外观违反开闭原则，更准确的说法是：新增子系统时通常需要改动门面，但这属于可接受的集中式修改，并不必然违反开闭原则，关键是别把业务逻辑写进门面。</p>
 <p><strong>组合</strong>让客户端用同一套代码处理文件和文件夹、单个员工和整个部门。要点是叶子和容器实现同一接口，容器内部持有同类型集合，递归自然形成。</p>
 <pre><code class="language-java">import java.util.ArrayList;
 import java.util.List;
@@ -266,16 +266,11 @@ class DirNode implements Node {
         return total;
     }
 }</code></pre>
-<p><strong>享元</strong>通过共享内部状态、把可变的外部状态交给调用方传入，来支撑海量细粒度对象：文本编辑器中每个字符复用同一个「字符样式」对象，<code>Integer.valueOf(-128~127)</code> 的缓存、字符串常量池都属于这一思路。需要提醒的是，数据库连接池的目标是复用昂贵的连接、并带有借还与生命周期管理，把它当成享元的教科书例子并不贴切，称之为对象池更准确。</p>
+<p><strong>享元</strong>通过共享内部状态、把可变的外部状态交给调用方传入，来支撑海量细粒度对象。文本编辑器中，每个字符复用同一个“字符样式”对象；<code>Integer.valueOf(-128~127)</code> 的缓存与字符串常量池都属于这一思路。需要提醒的是，数据库连接池的目标是复用昂贵的连接，并带有借还与生命周期管理，把它当成享元的教科书例子并不贴切，称之为对象池更准确。</p>
 
 <h2>常见坑与小结</h2>
 <p>第一，<strong>别为了用模式而用模式</strong>。适配器是救火队员，只在接口无法统一时登场；如果项目还在设计阶段，直接重构接口比套适配器更干净。第二，<strong>装饰器和代理不要混用职责</strong>：既要增强功能又要控制访问时，先想清楚哪一层负责什么，否则嵌套链一深，出问题极难定位。第三，<strong>组合模式要防止无限递归</strong>：容器允许嵌套自身时，务必保证不会形成环。第四，<strong>享元的共享对象必须不可变</strong>，否则一处修改会污染所有引用者。</p>
-<p>回到主线：结构型模式提供的是一套「拼装词汇」。遇到接口不匹配想到适配器，遇到多维变化想到桥接，遇到访问控制想到代理，遇到功能叠加想到装饰器，遇到子系统太复杂想到外观，遇到树形结构想到组合，遇到对象数量爆炸想到享元。真正要记住的不是类图，而是每个模式背后的那份「变化」——把变化点隔离出来，让其余代码保持稳定，这才是设计模式的价值所在。下一章我们进入行为型模式，看看对象之间如何分配职责与通信。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-5-4/"><span class="pn-label">← 上一篇</span><span class="pn-title">设计模式：创建型</span></a>
-      <a class="next-post" href="/java-tutorial-5-6/"><span class="pn-label">下一篇 →</span><span class="pn-title">设计模式：行为型</span></a>
-      </nav>
+<p>回到主线：结构型模式提供的是一套“拼装词汇”。遇到接口不匹配想到适配器，遇到多维变化想到桥接，遇到访问控制想到代理，遇到功能叠加想到装饰器；遇到子系统太复杂想到外观，遇到树形结构想到组合，遇到对象数量爆炸想到享元。真正要记住的不是类图，而是每个模式背后的那份“变化”——把变化点隔离出来，让其余代码保持稳定，这才是设计模式的价值所在。下一章进入行为型模式，看看对象之间如何分配职责与通信。</p>
           </article>
   <!-- Footer -->
   <footer>

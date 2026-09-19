@@ -128,17 +128,17 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>只会写「能编译、能跑通」的代码还不够。业务一改，谁也不敢动那段没人验证过的老方法；改完只能靠手工点页面回归，点漏一步就是上线事故。本章讲的是把「正确性」从人的记忆里搬进代码：用 JUnit 5 写单元测试，用 Mockito 隔离数据库和网络，用 JaCoCo 看覆盖情况，再用 Checkstyle、SpotBugs、Sonar 这类静态检查守住代码规范。内容适合已经会写 Java 类、会用 Maven 构建项目、想让代码「改得动、敢重构」的读者；如果你还没写过任何测试，从第一节顺读即可。</p>
+<p>只会写“能编译、能跑通”的代码还不够。业务一改，谁也不敢动那段没人验证过的老方法；改完只能靠手工点页面回归，点漏一步就是上线事故。本章讲的是把“正确性”从人的记忆里搬进代码。具体做法是：用 JUnit 5 写单元测试，用 Mockito 隔离数据库和网络，用 JaCoCo 看覆盖情况，再用 Checkstyle、SpotBugs、Sonar 这类静态检查守住代码规范。内容适合已经会写 Java 类、会用 Maven 构建项目、想让代码“改得动、敢重构”的读者；如果还没写过任何测试，从第一节顺读即可。</p>
 
-<h2>为什么需要单元测试：从「能跑」到「敢改」</h2>
+<h2>为什么需要单元测试：从“能跑”到“敢改”</h2>
 
-<p>手工验证的成本是线性的：每加一个功能，回归一次要点过的路径就多一条；而单元测试把验证固化成可重复执行的代码，改完敲一次 <code>mvn test</code>，几分钟内就知道有没有踩坏旧逻辑。这就是回归安全网——它的价值不在于「证明现在是对的」，而在于「以后改错时能立刻知道」。</p>
+<p>手工验证的成本是线性的：每加一个功能，回归一次要点过的路径就多一条。单元测试则把验证固化成可重复执行的代码，改完敲一次 <code>mvn test</code>，几分钟内就知道有没有踩坏旧逻辑。这就是回归安全网——它的价值不在于“证明现在是对的”，而在于“以后改错时能立刻知道”。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-7/01-test-pyramid.svg" alt="测试金字塔：单元、集成与端到端测试的比例"><figcaption>图 1：测试金字塔——大量单元测试打底，端到端只留极少量</figcaption></figure>
 
-<p>测试要分层。业内常说的测试金字塔是：大量快速、无外部依赖的单元测试打底，少量集成测试（真连数据库、消息队列）验证组件拼装，最上层是极少量端到端测试。反过来的「冰淇淋筒」结构跑得慢、失败难定位，最终会被团队抛弃。单元测试的判定标准很实在：一个测试只测一个类的一个行为，不碰网络、数据库、文件系统、当前时间和随机数；凡是碰这些的依赖，都用依赖注入交进来，测试时换成假对象。</p>
+<p>测试要分层。业内常说的测试金字塔是：大量快速、无外部依赖的单元测试打底，少量集成测试（真连数据库、消息队列）验证组件拼装，最上层是极少量端到端测试。反过来的“冰淇淋筒”结构跑得慢、失败难定位，最终会被团队抛弃。单元测试的判定标准很实在：单个测试只覆盖一个类的一项行为，不碰网络、数据库、文件系统、当前时间和随机数。凡是碰这些的依赖，都用依赖注入交进来，测试时换成假对象。</p>
 
-<p>代码质量也不只是「有没有测试」。命名是否表意、一个方法是否只做一件事、圈复杂度是否失控、是否遵守团队规范（Google Java Style、阿里巴巴 Java 开发手册都是常见参照），这些决定了半年后别人能不能读懂你的代码。测试与规范是两件事，缺了哪一件，项目都会朝同一个方向烂下去。</p>
+<p>代码质量也不只是“有没有测试”。命名是否表意、一个方法是否只做一件事、圈复杂度是否失控、是否遵守团队规范，这些决定了半年后别人能不能读懂你的代码。Google Java Style 与阿里巴巴 Java 开发手册都是常见参照。测试与规范是两件事，缺了哪一件，项目都会朝同一个方向烂下去。</p>
 
 <p>还有一处容易忽略的细节：测试依赖的作用域。Maven 里把 JUnit、Mockito 标成 <code>&lt;scope&gt;test&lt;/scope&gt;</code>，它们只参与测试的编译与运行，不会被打进最终的 jar 或 war；线上包里出现测试框架，通常是忘了写这个 scope。</p>
 
@@ -185,13 +185,13 @@ class PasswordValidatorTest {
 }
 </code></pre>
 
-<p>例子里有三个关键点。第一，<strong>注解的包名</strong>。JUnit 5 的 <code>@Test</code> 位于 <code>org.junit.jupiter.api</code>，而 JUnit 4 的 <code>@Test</code> 位于 <code>org.junit</code>；两者同名不同包，如果测试类静态导入了 Jupiter 的断言、方法上却贴着 JUnit 4 的 <code>@Test</code>，构建会显示「运行 0 个测试、失败 0 个」——不是通过，是根本没跑。第二，<strong>断言参数顺序</strong>是 <code>assertEquals(期望值, 实际值)</code>，写反了失败信息会把两个值说颠倒，排查时多绕一圈；JUnit 5 还允许用 lambda 拼消息，例如 <code>assertEquals(8, length, () -&gt; "实际长度 " + length)</code>，只有断言失败时才求值。第三，<strong>生命周期</strong>：<code>@BeforeEach</code> 在每个测试前重建被测对象，避免用例之间互相污染；<code>@BeforeAll</code>/<code>@AfterAll</code> 必须是静态方法，用于昂贵的共享资源。</p>
+<p>例子里有三个关键点。第一，<strong>注解的包名</strong>。JUnit 5 的 <code>@Test</code> 位于 <code>org.junit.jupiter.api</code>，而 JUnit 4 的 <code>@Test</code> 位于 <code>org.junit</code>；两者同名不同包。如果测试类静态导入了 Jupiter 的断言，方法上却贴着 JUnit 4 的 <code>@Test</code>，构建会显示“运行 0 个测试、失败 0 个”——这不是通过，而是根本没跑。第二，<strong>断言参数顺序</strong>是 <code>assertEquals(期望值, 实际值)</code>，写反了失败信息会把两个值说颠倒，排查时多绕一圈。JUnit 5 还允许用 lambda 拼消息，例如 <code>assertEquals(8, length, () -&gt; "实际长度 " + length)</code>，只有断言失败时才求值。第三，<strong>生命周期</strong>：<code>@BeforeEach</code> 在每个测试前重建被测对象，避免用例之间互相污染；<code>@BeforeAll</code>/<code>@AfterAll</code> 必须是静态方法，用于昂贵的共享资源。</p>
 
 <p>重复的用例交给参数化测试压缩：<code>@ParameterizedTest</code> 配 <code>@ValueSource</code>、<code>@CsvSource</code> 或 <code>@MethodSource</code>，一组数据一行，失败信息会自动带上第几组入参。逻辑相关的用例还可以用 <code>@Nested</code> 内部类分组，让报告读起来像一份规格说明。至于断言风格，AssertJ 的链式写法（<code>assertThat(result).isValid().hasMessage("...")</code>）可读性更好，团队里二选一即可，不要混着用。</p>
 
 <h2>用 Mockito 隔离外部依赖</h2>
 
-<p>真实项目里，被测类往往依赖数据库仓储、远程接口或消息发送器。这些依赖慢、不稳定，也不该在单元测试里被真正调用。<strong>Stub</strong> 负责给一个写死的返回值，<strong>Mock</strong> 在 Stub 之上还能记录「有没有被调用、调用了几次、参数是什么」，而 Mockito 两件事都能做。</p>
+<p>真实项目里，被测类往往依赖数据库仓储、远程接口或消息发送器。这些依赖慢、不稳定，也不该在单元测试里被真正调用。<strong>Stub</strong> 负责给一个写死的返回值，<strong>Mock</strong> 在 Stub 之上还能记录“有没有被调用、调用了几次、参数是什么”，而 Mockito 两件事都能做。</p>
 
 <pre><code class="language-java">import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -228,13 +228,13 @@ class UserServiceTest {
 }
 </code></pre>
 
-<p><code>@ExtendWith(MockitoExtension.class)</code> 让 Mockito 接管 <code>@Mock</code>、<code>@InjectMocks</code> 的创建与注入，替代了老写法 <code>MockitoAnnotations.initMocks(this)</code>（Mockito 3 起已废弃）。<code>@InjectMocks</code> 会按构造器、setter、字段的顺序尝试注入，但注入失败是静默的，被测对象里可能仍是 <code>null</code>；测试一旦报空指针，先确认注入是否真的生效，必要时改成显式的构造器注入。</p>
+<p><code>@ExtendWith(MockitoExtension.class)</code> 让 Mockito 接管 <code>@Mock</code>、<code>@InjectMocks</code> 的创建与注入，替代了老写法 <code>MockitoAnnotations.initMocks(this)</code>（Mockito 3 起已废弃）。<code>@InjectMocks</code> 会按构造器、setter、字段的顺序尝试注入，但注入失败是静默的，被测对象里可能仍是 <code>null</code>。测试一旦报空指针，先确认注入是否真的生效，必要时改成显式的构造器注入。</p>
 
-<p>几个高频坑值得提前知道。<strong>参数匹配器必须成套使用</strong>：只要某个参数用了 <code>anyLong()</code>、<code>any()</code>，同一次方法调用的所有参数都得用匹配器，混着写具体值会抛 <code>InvalidUseOfMatchersException</code>。<strong>严格桩</strong>是 Mockito 2 之后 MockitoExtension 的默认行为：打好的桩如果没被用到，测试直接失败并抛 <code>UnnecessaryStubbingException</code>，这是防止「桩写错了却看不出来」的保护，删掉多余桩即可，不要图省事全局关掉。<strong>不要 mock 值对象</strong>：<code>String</code>、<code>List</code>、record、简单 DTO 直接 new 就好，mock 它们只会让断言变得别扭。<strong>verify 要有节制</strong>：过度验证调用次数与顺序会让测试和实现绑死，重构时测试先红；只有「这个副作用必须发生」（发了短信、写了审计日志）时才 verify。另外，Mockito 5 起默认使用内联 mock maker，可以直接 mock final 类，更早的版本需要额外引入 <code>mockito-inline</code>。</p>
+<p>几个高频坑值得提前知道。<strong>参数匹配器必须成套使用</strong>：只要某个参数用了 <code>anyLong()</code>、<code>any()</code>，同一次方法调用的所有参数都得用匹配器；混着写具体值会抛 <code>InvalidUseOfMatchersException</code>。<strong>严格桩</strong>是 Mockito 2 之后 MockitoExtension 的默认行为：打好的桩如果没被用到，测试直接失败并抛 <code>UnnecessaryStubbingException</code>。这是防止“桩写错了却看不出来”的保护，删掉多余桩即可，不要图省事全局关掉。<strong>不要 mock 值对象</strong>：<code>String</code>、<code>List</code>、record、简单 DTO 直接 new 就好，mock 它们只会让断言变得别扭。<strong>verify 要有节制</strong>：过度验证调用次数与顺序会让测试和实现绑死，重构时测试先红；只有“这个副作用必须发生”（发了短信、写了审计日志）时才 verify。另外，Mockito 5 起默认使用内联 mock maker，可以直接 mock final 类，更早的版本需要额外引入 <code>mockito-inline</code>。</p>
 
 <h2>覆盖率与静态检查：把标准固化进构建</h2>
 
-<p>测试写完了，怎么知道漏了哪些分支？先让构建工具把 JUnit 5 和 JaCoCo 接上。注意 <code>maven-surefire-plugin</code> 必须升级到 2.22.0 以上才能识别 JUnit 5，否则依旧「一个测试都不跑」。</p>
+<p>测试写完了，怎么知道漏了哪些分支？先让构建工具把 JUnit 5 和 JaCoCo 接上。注意 <code>maven-surefire-plugin</code> 必须升级到 2.22.0 以上才能识别 JUnit 5，否则依旧“一个测试都不跑”。</p>
 
 <pre><code class="language-xml">&lt;dependencies&gt;
   &lt;dependency&gt;
@@ -277,20 +277,21 @@ class UserServiceTest {
 &lt;/build&gt;
 </code></pre>
 
-<p>执行 <code>mvn test</code> 后，覆盖率报告生成在 <code>target/site/jacoco/index.html</code>。看报告时优先盯<strong>分支覆盖</strong>而不是行覆盖：一个 <code>if</code> 只走了 true 分支，行覆盖可能已经是 100%，分支覆盖却只有 50%，而缺陷常常就藏在没走的那条路上。JaCoCo 版本要和 JDK 对齐，否则会报不支持的 class 文件版本——Java 17 需要 0.8.7 以上，Java 21 需要 0.8.11 以上。覆盖率阈值可以做门禁（JaCoCo 的 <code>check</code> 目标、Sonar 的质量门），但别把它当 KPI：一旦按覆盖率考核，团队就会用 <code>assertNotNull</code> 凑数，指标涨了，缺陷一个没少。务实做法是给核心模块定一个不高的基线（例如分支覆盖 60%），只许涨不许跌。</p>
+<p>执行 <code>mvn test</code> 后，覆盖率报告生成在 <code>target/site/jacoco/index.html</code>。看报告时优先盯<strong>分支覆盖</strong>而不是行覆盖：一个 <code>if</code> 只走了 true 分支，行覆盖可能已经是 100%，分支覆盖却只有 50%，而缺陷常常就藏在没走的那条路上。JaCoCo 版本要和 JDK 对齐，否则会报不支持的 class 文件版本——Java 17 需要 0.8.7 以上，Java 21 需要 0.8.11 以上。</p>
 
-<p>静态检查负责测试覆盖不到的另一半——那些「跑起来没问题、迟早出事」的代码。常见组合是：<strong>Checkstyle</strong> 管格式与命名（可直接套用 Google Java Style 或阿里巴巴 Java 开发手册的规则集），<strong>SpotBugs</strong> 直接扫字节码，能发现空指针隐患、<code>equals</code>/<code>hashCode</code> 不配对、资源未关闭等问题，<strong>PMD</strong> 偏向重复代码与复杂度过高，<strong>SonarQube</strong> 则把上述结果连同覆盖率聚合成一个可跟踪的看板。接入时有个务实建议：先只把 error 级别的规则设为构建失败，warning 先收集不拦人；否则存量项目第一次接入会爆出几千条告警，团队的第一反应是关掉插件，而不是修代码。</p>
+<p>覆盖率阈值可以做门禁（JaCoCo 的 <code>check</code> 目标、Sonar 的质量门），但不要把它当 KPI。一旦按覆盖率考核，团队就会用 <code>assertNotNull</code> 凑数，指标涨了，缺陷一个没少。务实做法是给核心模块定一个不高的基线（例如分支覆盖 60%），只许涨不许跌。</p>
+
+<p>静态检查负责测试覆盖不到的另一半——那些“跑起来没问题、迟早出事”的代码。常见组合是：<strong>Checkstyle</strong> 管格式与命名（可直接套用 Google Java Style 或阿里巴巴 Java 开发手册的规则集）；<strong>SpotBugs</strong> 直接扫字节码，能发现空指针隐患、<code>equals</code>/<code>hashCode</code> 不配对、资源未关闭等问题；<strong>PMD</strong> 偏向重复代码与复杂度过高；<strong>SonarQube</strong> 则把上述结果连同覆盖率聚合成一个可跟踪的看板。</p>
+
+<p>接入时有个务实建议：先只把 error 级别的规则设为构建失败，warning 先收集不拦人。否则存量项目第一次接入会爆出几千条告警，团队的第一反应是关掉插件，而不是修代码。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-5-7/02-test-quality-pipeline.svg" alt="从 JUnit 5 到静态检查的质量流水线"><figcaption>图 2：从写用例到守规范的流水线，最终由 CI 门禁只拦 error 级规则</figcaption></figure>
 
 <h2>小结</h2>
 
-<p>把本章串起来：单元测试是回归安全网，判定标准是快、独立、只测一个行为；JUnit 5 用 Jupiter 注解与 <code>Assertions</code> 组织用例，务必注意包名别和 JUnit 4 混用；Mockito 用 <code>@Mock</code> 加 <code>@InjectMocks</code> 隔开数据库与网络，Stub 给返回值、Mock 验交互，参数匹配器要成套、桩不要贪多；JaCoCo 看分支覆盖而非行覆盖，Checkstyle、SpotBugs、PMD、Sonar 把规范固化进构建流水线。另外提醒一句，源文档里不少写法已经过时：<code>extends TestCase</code>、<code>junit.framework.*</code>、<code>junit.textui.TestRunner</code> 属于 JUnit 3 时代；Spring 的 <code>@RunWith(SpringJUnit4ClassRunner.class)</code> 与 <code>@SpringApplicationConfiguration</code> 是 Spring Boot 1.x 的用法，Boot 2.x 起改用 <code>@SpringBootTest</code>，在 JUnit 5 下注册扩展要用 <code>@ExtendWith</code> 而不是 <code>@RunWith</code>。新项目按本章的 JUnit 5 加 Mockito 组合起步即可。下一步，把这些命令挂进 CI，让每次提交都自动跑一遍。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-5-6/"><span class="pn-label">← 上一篇</span><span class="pn-title">设计模式：行为型</span></a>
-      <a class="next-post" href="/java-tutorial-5-8/"><span class="pn-label">下一篇 →</span><span class="pn-title">Excel/PDF 导入导出</span></a>
-      </nav>
+<p>把本章串起来：单元测试是回归安全网，判定标准是快、独立、只测一个行为；JUnit 5 用 Jupiter 注解与 <code>Assertions</code> 组织用例，务必注意包名别和 JUnit 4 混用；Mockito 用 <code>@Mock</code> 加 <code>@InjectMocks</code> 隔开数据库与网络，Stub 给返回值、Mock 验交互，参数匹配器要成套、桩不要贪多；JaCoCo 看分支覆盖而非行覆盖；Checkstyle、SpotBugs、PMD、Sonar 把规范固化进构建流水线。</p>
+
+<p>另外提醒一句，以下几类写法在老项目中很常见，但已经过时：<code>extends TestCase</code>、<code>junit.framework.*</code>、<code>junit.textui.TestRunner</code> 属于 JUnit 3 时代；Spring 的 <code>@RunWith(SpringJUnit4ClassRunner.class)</code> 与 <code>@SpringApplicationConfiguration</code> 是 Spring Boot 1.x 的用法，Boot 2.x 起改用 <code>@SpringBootTest</code>，在 JUnit 5 下注册扩展要用 <code>@ExtendWith</code> 而不是 <code>@RunWith</code>。新项目按本章的 JUnit 5 加 Mockito 组合起步即可。下一步，把这些命令挂进 CI，让每次提交都自动跑一遍。</p>
           </article>
   <!-- Footer -->
   <footer>
