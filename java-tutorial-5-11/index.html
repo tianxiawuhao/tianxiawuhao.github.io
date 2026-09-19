@@ -254,9 +254,13 @@ public class WxAccessTokenService {
             throw new IllegalStateException("access_token 正在刷新，请稍后重试");
         }
         try {
-            String url = TOKEN_URL + "?grant_type=client_credential"
-                    + "&amp;appid=" + appId + "&amp;secret=" + appSecret;
-            TokenResponse resp = restTemplate.getForObject(url, TokenResponse.class);
+            // 凭证也走构建器编码，别手工拼 query（secret 里出现特殊字符时手工拼必然出错）
+            URI uri = UriComponentsBuilder.fromHttpUrl(TOKEN_URL)
+                    .queryParam("grant_type", "client_credential")
+                    .queryParam("appid", appId)
+                    .queryParam("secret", appSecret)
+                    .build().encode().toUri();
+            TokenResponse resp = restTemplate.getForObject(uri, TokenResponse.class);
             if (resp == null || resp.getAccess_token() == null) {
                 throw new WxApiException(resp == null ? -1 : resp.getErrcode(),
                                          resp == null ? "空响应" : resp.getErrmsg());
@@ -266,12 +270,16 @@ public class WxAccessTokenService {
             redis.opsForValue().set(CACHE_KEY, resp.getAccess_token(), Duration.ofSeconds(ttl));
             return resp.getAccess_token();
         } finally {
+            // 更稳妥的做法是给锁写入当前实例的唯一标识，只释放自己抢到的锁：
+            // 锁的 TTL 先到期而刷新尚未结束时，delete 会误删别的实例刚拿到的锁
             redis.delete(CACHE_KEY + ":lock");
         }
     }
 }</code></pre>
 
-<p>注意 <code>40001</code>（凭证失效）和 <code>42001</code>（凭证过期）都说明缓存脏了。正确的处理不是立刻重取后盲目重试，而是先删缓存、再取一次、失败即向上抛，避免把刷新风暴放大。</p>
+<p>注意 <code>40001</code>（凭证失效）和 <code>42001</code>（凭证过期）都说明缓存脏了。正确的处理不是立刻重取后盲目重试，而是先删缓存、再取一次、失败即向上抛，避免把刷新风暴放大。另外，<code>access_token</code> 的并发风险只靠一段本地代码兜不住：多实例部署时锁必须落在 Redis 这类共享存储上（单机 <code>synchronized</code> 无效），锁的 TTL 要略大于一次刷新的最长耗时，刷新失败要把异常透出去而不是返回空 token——否则缓存里会留下“看起来有效、其实为空”的脏值。</p>
+
+<p>这里还要加一条运维侧的护栏：把 access_token 的剩余有效期做成监控指标，低于 900 秒就告警，同时给获取接口设失败重试上限（例如 3 次、指数退避）。微信官方在 2021 年前后为 <code>cgi-bin/token</code> 之外的部分接口提供了“稳定版 access_token”，用 <code>POST /cgi-bin/stable_token</code> 拿，无并发冲突、可重复获取同一值；具体可用范围以官方文档和你账号的开通情况为准，接入前先确认。它能让“多实例互相踢 token”这个问题消掉一半。</p>
 
 <p>“消息推送”在微信生态里有两个完全不同的方向，别混为一谈。<strong>第一层是微信推给你</strong>：公众号后台配置服务器地址与 Token 后，用户消息会以 XML 形式回调到你的接口。你要用 <code>sha1(sort(token, timestamp, nonce))</code> 验签，并在 5 秒内回复，否则微信会重试三次，所以必须用 MsgId 做幂等。小程序侧则多用订阅消息，用户授权一次只能推一条。<strong>第二层是你推给自己的前端</strong>：站内实时提醒通常用 Spring WebSocket，实现上有几个源文档里没处理好的细节：</p>
 
@@ -334,9 +342,93 @@ public class PushHandler extends TextWebSocketHandler {
 
 <p>补充两点工程习惯：握手拦截器里要用 <code>HttpSessionHandshakeInterceptor</code> 把登录用户写进 <code>attributes</code>，否则无法定向推送；集群部署时 WebSocket 连接分散在多个实例上，需要引入 Redis 发布订阅或消息队列做跨节点广播。</p>
 
-<h2>四、微信支付：V2 与 V3 的差别只有两点</h2>
+<h2>四、微信支付：从 V2 到 APIv3</h2>
 
-<p>支付部分的接口形式取决于你接的是哪一代。<strong>V2</strong> 用 XML 报文，签名靠商户 API 密钥做 MD5 或 HMAC-SHA256。<strong>V3</strong> 用 JSON 报文，签名靠商户私钥做 RSA-SHA256，回调数据则用 APIv3 密钥做 AES-256-GCM 解密。无论哪一代，业务链路的骨架都一样。服务端先下单（小程序支付 / JSAPI）拿到 <code>prepay_id</code>，再用它做一次签名返回给前端唤起支付面板，支付结果由微信异步回调通知。</p>
+<p>支付部分的接口形式取决于你接的是哪一代。<strong>V2</strong> 用 XML 报文，签名靠商户 API 密钥（API Key）做 MD5 或 HMAC-SHA256。<strong>APIv3</strong> 用 JSON 报文，请求签名靠商户私钥做 SHA256-RSA（<code>SHA256withRSA</code>），回调数据用 APIv3 密钥做 AES-256-GCM 解密，应答同样要验签。<strong>新项目一律接 APIv3</strong>；只有存量系统还在按 V2 跑，官方也提供了 V2 迁移到 V3 的文档路径。无论哪一代，业务链路的骨架都一样：服务端先下单（小程序支付 / JSAPI）拿到 <code>prepay_id</code>，再用它做一次签名返回给前端唤起支付面板，支付结果由微信异步回调通知。</p>
+
+<p>V2 时代常见到的是一个叫 <code>PaymentKit</code> 的封装工具类，它内部调用微信支付 V2 SDK 的 <code>WXPayUtil</code>（XML 与签名工具）完成报文组装与校验。这套 API 只能处理 XML + MD5/HMAC-SHA256，<strong>无法用于 APIv3</strong>：它不认识平台证书，也不会拼 V3 的签名串。因此旧代码的现代化路径是——<strong>先按官方迁移文档切到 APIv3，再让 <code>PaymentKit</code>/<code>WXPayUtil</code> 整体退役，不要在新接口里继续复用它们</strong>。迁移成本最低的过渡方式是换用官方 <code>wechatpay-java</code> SDK（或 <code>wechatpay-apache-httpclient</code>）：把证书序列号、商户私钥、APIv3 密钥交给它，请求签名与应答解密自动完成。</p>
+
+<p>V2 与 APIv3 在“服务端凭什么证明自己是商户”这件事上完全不同，下面这张表是迁移时的对照清单：</p>
+
+<table>
+  <thead>
+    <tr><th>维度</th><th>V2（旧）</th><th>APIv3（现行）</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>报文格式</td><td>XML</td><td>JSON</td></tr>
+    <tr><td>请求签名</td><td>商户 API 密钥 + MD5 / HMAC-SHA256</td><td>商户私钥 + SHA256-RSA，签名串为「方法\nURL\n时间戳\n随机串\n报文主体\n」，每行都以 <code>\n</code> 结尾</td></tr>
+    <tr><td>身份标识</td><td>无（靠签名本身）</td><td>请求头 <code>Wechatpay-Serial</code> 携带你所用证书的序列号，供微信定位公钥；回调侧用 <code>Wechatpay-Signature</code>、<code>Wechatpay-Timestamp</code>、<code>Wechatpay-Nonce</code>、<code>Wechatpay-Serial</code> 四件套验签</td></tr>
+    <tr><td>敏感数据</td><td>字段基本明文</td><td>回调 <code>resource</code> 用 APIv3 密钥 AES-256-GCM 解密；密文里带 <code>nonce</code> 与 <code>associated_data</code>，两者都要参与解密</td></tr>
+    <tr><td>信任来源</td><td>对称密钥，双方各存一份</td><td>平台证书（微信支付公钥），按序列号本地缓存并定期轮换</td></tr>
+  </tbody>
+</table>
+
+<p>业务链路的四步骨架不变：下单取 <code>prepay_id</code>、签名后交前端唤起、异步回调入账、主动查单兜底。变的只是签名、验签与解密这一层由 SDK 承担。使用官方 <code>wechatpay-java</code> 时，下单大致是这样：</p>
+
+<pre><code class="language-java">// 商户配置：商户号、证书序列号、商户私钥（PKCS#8）、APIv3 密钥
+RSAAutoCertificateConfig config = new RSAAutoCertificateConfig.Builder()
+        .merchantId(mchId)
+        .privateKey(privateKeyFromKeystore())   // 私钥只从密钥管理服务/挂载卷读取，不进仓库
+        .merchantSerialNumber(mchSerialNo)
+        .apiV3Key(apiV3Key)                     // 同时用于解密回调 resource
+        .build();
+
+// 自动更新平台证书；也可改用 PublicKeyConfig 固定微信支付公钥（微信支付公钥模式）
+WxPayService wxPayService = new WxPayServiceImpl();
+wxPayService.setConfig(config);
+
+public PrepayWithRequestPaymentResponse prepay(String openid, long totalFen, String outTradeNo)
+        throws WxPayException {
+    PrepayRequest request = new PrepayRequest();
+    request.setAppid(appId);
+    request.setMchid(mchId);
+    request.setDescription("订单 " + outTradeNo);
+    request.setOutTradeNo(outTradeNo);
+    request.setNotifyUrl(notifyUrl);            // 必须是 HTTPS 且公网可达
+    Amount amount = new Amount();
+    amount.setTotal(totalFen);                  // 单位是分，不是元
+    amount.setCurrency("CNY");
+    request.setAmount(amount);
+    Payer payer = new Payer();
+    payer.setOpenid(openid);
+    request.setPayer(payer);
+
+    // 返回 prepay_id 以及供前端 wx.requestPayment 使用的签名参数
+    return wxPayService.prepayWithRequestPayment(request);
+}</code></pre>
+
+<p>回调侧要把“验签—解密—幂等—对账”四件事按顺序做完，任何一步跳过都等于把资金安全交给运气：</p>
+
+<pre><code class="language-java">@PostMapping("/wx/pay/notify")
+public Map&lt;String, String&gt; notify(@RequestBody String body,
+                                 @RequestHeader("Wechatpay-Signature") String signature,
+                                 @RequestHeader("Wechatpay-Timestamp") String timestamp,
+                                 @RequestHeader("Wechatpay-Nonce") String nonce,
+                                 @RequestHeader("Wechatpay-Serial") String serial) throws Exception {
+    // 1. 验签：V3 的签名串是「timestamp\nnonce\nbody\n」，缺少结尾换行是最常见的失败原因。
+    //    用 serial（Wechatpay-Serial）在本地缓存的平台证书里找到对应公钥；查不到先刷新证书再决定是否拒绝。
+    //    平台证书有有效期、会轮换，所以要定期刷新（官方 SDK 的自动更新配置已包含这一步）。
+    if (!verifier.verify(timestamp, nonce, body, signature, serial)) {
+        // 验签失败不返回 SUCCESS，让微信重推；同时告警，可能是伪造请求
+        return Map.of("code", "FAIL", "message", "验签失败");
+    }
+
+    // 2. 解密：resource 是 AES-256-GCM 密文，必须用 APIv3 密钥 + nonce + associated_data 解
+    Notification notification = decrypt(body);               // 官方 SDK 可直接解析成 Notification
+    Transaction transaction = notification.getResource().getDecryptTransaction();
+    String outTradeNo = transaction.getOutTradeNo();
+
+    // 3. 幂等：以 out_trade_no 为唯一键，数据库唯一索引 + 状态机双重保证，重复通知直接返回成功
+    if (!orderService.markPaidOnce(outTradeNo)) {
+        return Map.of("code", "SUCCESS", "message", "成功");   // 已处理过，仍要应答成功
+    }
+
+    // 4. 对账：金额单位是分，必须与本地订单逐一比对，不一致按异常订单告警而不是入账
+    orderService.checkAmount(outTradeNo, transaction.getAmount().getTotal());
+    return Map.of("code", "SUCCESS", "message", "成功");
+}</code></pre>
+
+<p>旧代码里常见的那几个坑，在 APIv3 下的正确姿势是：<strong>签名串结尾的换行</strong>必须保留；<code>Wechatpay-Serial</code> 与私钥不匹配会稳定报 401；<strong>平台证书必须缓存并按序列号索引</strong>（序列号每次请求都可能不同，实时全量下载会把回调接口拖垮）；回调应答要返回 HTTP 200 且 body 为 <code>{"code":"SUCCESS"}</code>（V2 时代则回 XML 的 <code>SUCCESS</code>），否则微信会持续重推。商户私钥、APIv3 密钥一律从密钥管理服务或挂载卷读取，绝不进代码仓库。<em>存疑：SDK 类名与各接口的必填字段随版本迭代较快，且平台证书与微信支付公钥两种模式并存，请以商户平台 APIv3 文档与你所用 SDK 版本的说明为准。</em></p>
 
 <p>回调处理必须按固定顺序做四件事。<strong>验签</strong>，否则任何人都能伪造到账通知；<strong>解密</strong>，V3 的 resource 是密文，不能直接读明文金额；<strong>幂等</strong>，以 <code>out_trade_no</code> 为唯一键，重复通知只处理一次；<strong>校验金额</strong>，回调金额必须与本地订单金额相等，单位是分。最后按平台要求应答成功标识，V2 回 <code>SUCCESS</code> 的 XML，V3 回 <code>{"code":"SUCCESS"}</code>，否则微信会持续重推。签名时最容易翻车的是签名串的拼接顺序、结尾换行、时间戳单位与证书序列号，建议直接使用官方 SDK 的签名工具类，而不是手写字符串拼接。<em>存疑：各接口的必填字段随版本迭代较快，请以商户平台 APIv3 文档为准。</em></p>
 

@@ -156,6 +156,28 @@ KEEP_DAYS="${2:-7}"   # 第二个参数没传时默认为 7
 
 echo "环境=${ENV_NAME} 日志目录=${LOG_DIR} 保留=${KEEP_DAYS} 天 日期=${TODAY}"</code></pre>
 
+<p>再补两点现代 bash 的写法。第一，遍历一组路径时用<strong>数组</strong>，而不是把多个值拼进一个字符串：<code>arr=(a b c)</code> 定义、<code>arr+=(d)</code> 追加、<code>"${arr[@]}"</code> 展开——这里的双引号不能省，省了等于把每个元素按空格重新断词，等于白用数组；取长度写 <code>${#arr[@]}</code>，下标从 0 开始；关联数组要 bash 4.0 以上（Rocky 9 与 Ubuntu 22.04 自带的都是 bash 5.1，够用）。第二，shebang 用 <code>#!/usr/bin/env bash</code> 比写死 <code>#!/bin/bash</code> 更能适应不同发行版；把 <code>set -euo pipefail</code> 升级成 <code>set -Eeuo pipefail</code>，再配一条 <code>trap ... ERR</code>，函数内部出错时也能打印出错位置，脚本"失败得响亮"且留下现场。</p>
+
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "[ERR] ${BASH_SOURCE[0]}:${LINENO} 执行失败" &gt;&amp;2' ERR
+
+# 数组：批量处理日志，元素里的空格不会被拆开
+logs=()
+for f in /var/log/myapp/*.log; do
+  [ -e "$f" ] || continue          # 通配符没匹配到时会留下字面量，必须判存在
+  logs+=("$f")
+done
+echo "共 ${#logs[@]} 个日志文件"
+
+for f in "${logs[@]}"; do           # 必须加引号，否则含空格的文件名会被拆成多个参数
+  gzip -f "$f"
+done
+
+# 关联数组（bash 4+）：按服务名计数
+declare -A counter=([nginx]=3 [mysql]=0)
+printf 'nginx=%s mysql=%s\n' "${counter[nginx]}" "${counter[mysql]}"</code></pre>
+
 <h2>二、流程控制与函数</h2>
 
 <p>判断条件用 <code>if</code>，字符串和文件比较靠 <code>[ ]</code>（或 bash 增强版 <code>[[ ]]</code>）。多分支用 <code>case</code> 比一长串 <code>elif</code> 清楚；遍历用 <code>for</code>，逐行读取文件用 <code>while read</code>。这里有个容易忽略的点：<code>[ ]</code> 是命令，所以方括号内侧必须有空格，<code>[ -d "$dir" ]</code> 才对。</p>
@@ -201,6 +223,10 @@ esac</code></pre>
 
 <p>用户级 crontab 每行六个字段：<code>分 时 日 月 周 命令</code>。分钟 0–59，小时 0–23，日 1–31，月 1–12，星期 0–7（0 和 7 都表示周日）。五个时间字段支持四种写法：<code>*</code> 任意值、<code>1,15</code> 列表、<code>8-11</code> 范围、<code>*/10</code> 步长（每 10 分钟）。另外，星期和日两个字段是“或”的关系：写了“4 号”又写了“周一”，则 4 号和每周一都会执行，这是新手最常误判的一条规则。</p>
 
+<p>步长（<code>*/n</code>）的语义要核准：它不是"从现在起每隔 n 个单位"，而是"从该字段的最小值开始、按 n 递增"。所以分钟位 <code>*/2</code> 就是 0、2、4…58 分，正好是"每 2 分钟"；小时位 <code>*/2</code> 是 0、2、4…22 点，间隔均匀但起点固定在 0 点。真正容易踩的是<strong>日位</strong>：<code>*/2</code> 展开成 1、3、5…31 号，遇到只有 30 天的月份会在月初出现"隔一天"的错位，跨月并不是均匀的"每隔一天"。还有一个细节：当 n 不能整除字段宽度时最后一跳会变短，例如分钟位 <code>*/7</code> 得到 0、7、…、56，56 分到下一小时的 0 分只隔 4 分钟。要"每 2 分钟"就用分钟位 <code>*/2</code>，别指望日位。</p>
+
+<p>邮件投递由 <code>MAILTO</code> 控制，它是可以写在 crontab 顶部（或任务行之前）的环境变量：<code>MAILTO=""</code> 表示任务输出直接丢弃、不投递；<code>MAILTO="ops@example.com"</code> 表示把任务的标准输出与报错当邮件发出去。后者有两个常被忽略的前提：宿主机要装好并运行 MTA（Rocky 9 最小化安装默认不带 postfix/sendmail，Ubuntu 22.04 也常常只有占位），否则邮件连队列都进不去；而且只有"有输出"时才会发信，写了 <code>&gt;/dev/null 2&gt;&amp;1</code> 的任务永远不会有邮件。生产上更推荐 <code>MAILTO=""</code> 关掉邮件，把输出重定向进日志文件交给 logrotate（或 systemd timer 的 <code>OnFailure=</code>）来告警。注意 <code>MAILTO</code> 只影响输出投递，不影响任务是否执行；任务所用 shell 由 <code>SHELL</code> 决定，默认是 <code>/bin/sh</code>——Ubuntu 22.04 的 <code>/bin/sh</code> 是 dash，<code>[[ ]]</code>、数组、<code>source</code> 都不认，所以任务行最好只调用 <code>#!/usr/bin/env bash</code> 的脚本，或显式写 <code>SHELL=/bin/bash</code>。部分实现（如 RHEL/Rocky 上的 cronie）还支持 <code>CRON_TZ=Asia/Shanghai</code> 指定时区，免得服务器仍是 UTC 时按错误时间跑。</p>
+
 <pre><code class="language-bash"># 分 时 日 月 周   要执行的命令
 */5 * * * *  /opt/myapp/bin/health-check.sh &gt;&gt; /var/log/myapp/health.log 2&gt;&amp;1
 0 3 * * *    /opt/myapp/bin/clean-logs.sh prod 7 &gt;/dev/null 2&gt;&amp;1
@@ -214,6 +240,8 @@ esac</code></pre>
 <h2>四、实战：每天凌晨清理日志</h2>
 
 <p>日志清理是定时任务最典型的用途。核心命令是 <code>find</code>：<code>-type f</code> 只要普通文件，<code>-name "*.log"</code> 限定后缀，<code>-mtime +7</code> 表示修改时间在 7 天以前。先加 <code>-print</code> 预览删除清单，确认无误再让它删除；线上脚本建议保留 <code>-print</code>，把删掉的文件名记进日志，事后可追溯。</p>
+
+<p><code>-mtime</code> 的 <code>+</code>/<code>-</code> 一定要记准，写反了就是灾难。<code>-mtime n</code> 的规则是"把文件年龄向下取整成整天数，再与 n 比较"：<code>-mtime +7</code> 是<strong>第 8 天及更早</strong>（年龄大于 7×24 小时），正是"删掉 7 天前的旧日志"；<code>-mtime 7</code> 只匹配年龄落在 7～8 天那一档；而 <code>-mtime -5</code> 是<strong>年龄小于 5 天</strong>，也就是刚刚写入的<strong>最新</strong>文件——如果照抄成 <code>find "$LOG_DIR" -name "*.log" -mtime -5 -delete</code>，删掉的正是你还要用的当前日志，这是这类脚本最惨的一种写法。另外两点：<code>-mtime</code> 以 24 小时取整，边界不精确，要卡到分钟用 <code>-mmin +$((KEEP_DAYS*1440))</code>；<code>-delete</code> 会隐含 <code>-depth</code>，删除失败会直接报错退出，线上仍建议保留 <code>-print</code> 先预览。</p>
 
 <pre><code class="language-bash">#!/bin/bash
 set -euo pipefail
@@ -235,10 +263,60 @@ echo "$(date '+%F %T') 清理完成，${LOG_DIR} 保留最近 ${KEEP_DAYS} 天"<
 
 <p>脚本写好后先用 <code>bash -n</code> 做语法检查，再手动跑一遍确认输出，最后才交给 crontab。任务行可以写成 <code>0 3 * * * /opt/myapp/bin/clean-logs.sh /var/log/myapp 7</code>，凌晨三点执行，与业务高峰错开。</p>
 
-<h2>五、常见坑与排查思路</h2>
+<h2>五、systemd timer：cron 的现代替代</h2>
+
+<p>现代发行版都自带 systemd（Rocky 9 是 systemd 252，Ubuntu 22.04 是 249），同一件事有更"原生"的做法：systemd timer。它不是要淘汰 cron，而是把定时任务纳入 systemd 的统一管理，换来几项 cron 给不了的能力：输出自动进 journald（<code>journalctl -u</code> 直接查，不用自己接日志）、<code>Persistent=true</code> 会在关机期间错过的任务于开机后补跑一次（anacron 的现代替代）、可以声明 <code>After=</code>/<code>Requires=</code> 依赖、用 <code>MemoryMax=</code>/<code>CPUQuota=</code> 限制资源，失败时还能用 <code>OnFailure=</code> 拉起告警单元。</p>
+
+<p>timer 由两个单元文件组成：<code>.service</code> 说明"做什么"，<code>.timer</code> 说明"什么时候做"。下面把第四节的日志清理改造成 timer，触发效果与 <code>0 3 * * *</code> 等价。</p>
+
+<pre><code class="language-ini"># /etc/systemd/system/clean-logs.service
+[Unit]
+Description=清理应用日志
+
+[Service]
+Type=oneshot
+User=appuser
+ExecStart=/opt/myapp/bin/clean-logs.sh /var/log/myapp 7</code></pre>
+
+<pre><code class="language-ini"># /etc/systemd/system/clean-logs.timer
+[Unit]
+Description=每天 03:00 清理应用日志
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true          # 关机期间错过的任务，开机后补跑一次
+RandomizedDelaySec=5m    # 抖动，避免多台机器同一秒同时开跑
+Unit=clean-logs.service
+
+[Install]
+WantedBy=timers.target</code></pre>
+
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl enable --now clean-logs.timer   # 启动且开机自启
+systemctl list-timers --all                    # 看下次触发时间与上次结果
+journalctl -u clean-logs.service --since today # 运行日志
+systemd-analyze calendar '*-*-* 03:00:00'      # 先验证 OnCalendar 表达式再上线</code></pre>
+
+<p>怎么选：习惯 cron 五个字段、任务轻量且只在一台机器上，继续用 cron 完全没问题；需要补跑、要留结构化日志、要与其它 systemd 单元编排依赖，或本机本来就用 systemd 管服务，就写 timer。两者都以本机时区为准，服务器上先 <code>timedatectl</code> 确认时区，能省掉一大批"为什么凌晨三点变成了上午十一点"的排查。</p>
+
+<table>
+  <thead>
+    <tr><th>需求</th><th>cron / crontab</th><th>systemd timer</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>时间表达</td><td>五个字段加 <code>*/n</code></td><td><code>OnCalendar=</code> 日历表达式</td></tr>
+    <tr><td>错过补跑</td><td>要靠 anacron</td><td><code>Persistent=true</code></td></tr>
+    <tr><td>运行日志</td><td>自己重定向加 logrotate</td><td>journald，<code>journalctl -u</code></td></tr>
+    <tr><td>失败告警</td><td>依赖 <code>MAILTO</code> 与 MTA</td><td><code>OnFailure=</code> 拉起告警单元</td></tr>
+    <tr><td>资源限制</td><td>无</td><td><code>MemoryMax=</code> 等 cgroup 选项</td></tr>
+  </tbody>
+</table>
+
+<h2>六、常见坑与排查思路</h2>
 
 <ul>
-  <li><strong>手动能跑、cron 不跑</strong>：九成是环境变量。cron 不加载 <code>/etc/profile</code>、<code>~/.bashrc</code>，PATH 只有系统默认值。解法是在脚本里用绝对路径；需要 Java 环境时，显式 <code>source /etc/profile</code>，或直接在脚本里写死 <code>export JAVA_HOME=/usr/local/jdk</code>。</li>
+  <li><strong>手动能跑、cron 不跑</strong>：九成是环境变量。crond 启动任务时给的是一份极简环境：不加载 <code>/etc/profile</code>，也不加载 <code>~/.bashrc</code>，<code>PATH</code> 通常只有 <code>/usr/bin:/bin</code>。这也解释了为什么在 crontab 里写 <code>source ~/.bashrc</code> 往往毫无作用——多数发行版的 <code>~/.bashrc</code> 开头就是"非交互式 shell 直接 return"的判断（<code>case $- in *i*) ;; *) return;; esac</code>），而 cron 起的正是非交互式 shell，source 进去等于什么都没做。可靠的做法有三层：任务行与脚本里一律用绝对路径；需要 Java 环境就在脚本里写死 <code>export JAVA_HOME=/usr/local/jdk</code> 并把 <code>$JAVA_HOME/bin</code> 加进 <code>PATH</code>；确实要读 profile，就在脚本开头显式 <code>source /etc/profile</code> 并紧跟一句 <code>echo "$PATH"</code> 验证。更省事的办法是在 crontab 顶部直接声明 <code>SHELL=/bin/bash</code> 与 <code>PATH=/usr/local/bin:/usr/bin:/bin</code>，一次生效、所有任务共用。</li>
+  <li><strong>任务行里直接写 bash 语法</strong>：cron 执行任务的默认 shell 由 <code>SHELL</code> 决定，不写就是 <code>/bin/sh</code>，而 Ubuntu 22.04 的 <code>/bin/sh</code> 指向 dash，<code>[[ ]]</code>、数组、<code>source</code> 这些 bash 扩展在这里都不存在。把逻辑放进带 <code>#!/usr/bin/env bash</code> 的脚本、任务行只调用脚本，是唯一不会踩这个坑的写法。</li>
   <li><strong>命令里有 <code>%</code></strong>：crontab 把未转义的 <code>%</code> 当换行符，<code>date '+%F'</code> 会写坏任务。要写成 <code>date '+\%F'</code>，或者把逻辑放进脚本、任务行只调用脚本。</li>
   <li><strong>输出不收口</strong>：不重定向就会收到一堆 cron 邮件。习惯写法是 <code>&gt;/dev/null 2&gt;&amp;1</code>，需要留痕时改成 <code>&gt;&gt; /var/log/xxx.log 2&gt;&amp;1</code>。</li>
   <li><strong>任务不生效</strong>：确认 crond 在运行（<code>systemctl status crond</code>）。再确认 crontab 文件名与用户一致（如 <code>/var/spool/cron/root</code> 要有结尾换行），同时确认 <code>/etc/cron.deny</code> 没有把自己挡在外面。日志在 <code>/var/log/cron</code>，用 <code>tail -f /var/log/cron</code> 边等边看最直接。</li>

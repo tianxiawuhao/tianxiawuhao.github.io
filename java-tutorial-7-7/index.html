@@ -138,6 +138,8 @@
 
 <p>还有一处版本差异必须分清：早期的 <code>docker-compose</code>（V1，Python 写的独立可执行文件）已停止维护，现在的 <strong>Compose V2 是 docker CLI 的插件</strong>，命令是 <code>docker compose</code>——中间是<strong>空格</strong>，不是连字符。两者配置文件基本兼容，但如果你照着老教程敲 <code>docker-compose</code> 提示找不到命令，原因就在这里。文件名推荐 <code>compose.yaml</code>，旧的 <code>docker-compose.yml</code> 仍被识别。</p>
 
+<p>还有一处老教程最常见的残留：文件第一行的 <code>version: "3.8"</code>。它属于 Compose V1 时代的 schema 版本声明，<strong>自 Compose V2 起已废弃</strong>——留着不会报错，但 <code>docker compose config</code>/<code>up</code> 会打印 "the attribute version is obsolete" 之类的警告并忽略它。新文件按 Compose Specification 写即可：顶层只要有 <code>services</code>，不需要 <code>version</code>；要固定项目名用顶层 <code>name: myapp</code>（等价于命令行的 <code>-p myapp</code>）；要复用片段则用 <code>x-</code> 前缀的自定义字段配 YAML 锚点。Compose V1（Python 写的 <code>docker-compose</code> 独立可执行文件，最后一版是 1.29.x）自 2023 年年中起停止维护，只会在老机器上见到。顺带说一句，V2 的定位越来越偏"单机与开发"：<code>--profile</code> 能按场景隔离服务组，<code>docker compose watch</code>（2.22+）在源码变更时自动同步或重建，这些都不需要任何集群。</p>
+
 <h2>二、一份 compose.yaml 是怎么写的</h2>
 
 <p>Compose 文件是声明式的：你描述“最终要什么状态”，而不是“依次执行哪些命令”。下面这份配置是 Java 后端 + MySQL + Redis + Nginx 的最小可用编排，建议先整体读一遍，再逐段看说明。</p>
@@ -221,7 +223,9 @@ server {
 
 <p>另外两个容易混的字段是 <code>build</code> 与 <code>image</code>。<code>build: .</code> 表示用当前目录的 Dockerfile 现场构建；再写一个 <code>image</code>，相当于给构建结果命名，<code>docker compose push</code> 才知道该推到哪个地址。只写 <code>image</code> 则直接拉取现成镜像。</p>
 
-<p>配置项多的服务不必把变量全塞进 <code>environment</code>，可以用 <code>env_file: [app.env]</code> 从文件读取，让 YAML 保持清爽。</p>
+<p>配置项多的服务不必把变量全塞进 <code>environment</code>，可以用 <code>env_file: [app.env]</code> 从文件读取，让 YAML 保持清爽。两者的分工与优先级要记牢：<code>env_file</code> 指向的是<strong>宿主机上的文件</strong>，其中的键值对会被注入容器进程的环境；<code>environment</code> 是直接写在 YAML 里的键值对，<strong>同一个变量两处都定义时以 <code>environment</code> 为准</strong>（它覆盖 <code>env_file</code>），所以常见做法是"默认值放 <code>env_file</code>、需要显式覆盖的放 <code>environment</code>"。还要区分第三层：供 Compose <strong>插值</strong>使用的同目录 <code>.env</code>（给 <code>${VAR}</code> 取值）和 <code>env_file</code> 不是一回事——前者影响 YAML 文本，后者影响容器内部环境。改完用 <code>docker compose config</code> 看插值后的最终配置，用 <code>docker compose exec app env | grep SPRING</code> 确认容器里真正生效的值。</p>
+
+<p>另外两个 V1 遗留字段值得单独提一句。<code>links</code> 已经废弃：它早期靠把"容器名 → IP"写进 <code>/etc/hosts</code> 实现互访，而同一网络里服务名本来就是 DNS 名，所以 <code>links</code> 在 V2 中会被忽略并告警，直接用服务名即可；确实需要额外主机名时改用<strong>网络别名</strong>，即在服务的 <code>networks</code> 下写 <code>backend:</code>，再跟一行 <code>aliases: [db, mysql-primary]</code>。同理 <code>container_name</code> 也尽量别写：它让容器名无法随项目名隔离，还会挡住扩副本（<code>--scale</code>），需要固定前缀交给顶层 <code>name:</code> 或 <code>-p</code> 更合适。</p>
 
 <h2>三、日常命令：从 up 到 down</h2>
 
@@ -273,6 +277,8 @@ docker compose pull &amp;&amp; docker compose up -d</code></pre>
 <h2>五、什么时候该上 Kubernetes</h2>
 
 <p>Compose 的边界很清晰：它的世界是单机。而 Kubernetes 提供的是另一层能力。它把若干节点组成集群，用 Pod/Deployment 管理副本数与滚动升级，用 Service 做稳定的服务发现与负载均衡，用探针在实例不健康时自动剔除重建。Kubernetes 之所以成为容器编排的事实标准，正是因为它把“编排”从“定义一组容器的关系”提升到了“定义整个集群期望状态”的层次；Compose+Swarm 的组合则止步于更轻量的场景。</p>
+
+<p>版本上也要对齐现状：今天说的 Kubernetes 是 <strong>1.28 及以上</strong>的版本线（1.24 起 dockershim 已被移除，运行时统一走 CRI，即 containerd 或 CRI-O；1.27 起内置的云厂商 in-tree provider 也退场），所以"K8s 节点上必须先装 Docker"这类老说法早已不成立——镜像仍是同一份 OCI 镜像，照样用 <code>docker build</code> 构建、<code>docker compose push</code> 推送。从 Compose 迁移时也不必推翻重写：<code>kompose convert</code> 能把现有 compose.yaml 转成 Deployment/Service/ConfigMap 清单作为起点，再由人工补上探针、资源 requests/limits、Ingress 与 HPA 这些 Compose 里根本不存在的概念。</p>
 
 <p>落地建议：个人项目、测试环境、单机部署的小型服务，用 Compose 就够了，一份 YAML 交给运维即可。当出现“要部署到三台以上机器”“发布时不能停服”“流量涨了要自动扩容”这类需求时，才值得引入 Kubernetes 的复杂度。不要为了用而用。</p>
 
