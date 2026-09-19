@@ -128,14 +128,14 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>上一章我们把 Spring Boot 应用跑了起来，也写通了第一个接口。但真实项目的 Web 层远不止「能返回 JSON」：客户端传来的参数要校验，出错时要给出可读的错误结构，未登录的请求要挡在 Controller 之前，上传的文件要安全落盘，上线后还要能从外部看到应用的健康状况。本章围绕这五件事，讲清 Spring Boot 下 Spring MVC 的 Web 层骨架，适合已会写 <code>@RestController</code> 的读者。</p>
+<p>上一章跑通了第一个 Spring Boot 接口。但真实项目的 Web 层远不止“能返回 JSON”这一件事。客户端传来的参数要校验，出错时要给出可读的错误结构，未登录的请求要挡在 Controller 之前；上传的文件要安全落盘，上线后还要能从外部看到应用的健康状况。本章围绕这五件事，讲清 Spring Boot 下 Spring MVC 的 Web 层骨架，适合已会写 <code>@RestController</code> 的读者。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-10/01-request-pipeline.svg" alt="Spring MVC 请求管线与统一错误契约示意图"><figcaption>图 1：请求经过 Filter、DispatcherServlet、拦截器、Controller，异常由 @RestControllerAdvice 统一收口</figcaption></figure>
 
 
 <h2>一、请求参数校验：非法数据进不了业务代码</h2>
 
-<p>原始做法是在方法体里逐字段判断，字段一多就是一屏防御式代码。Spring 的方案是把约束声明在模型上，由框架在参数绑定阶段完成校验。常用注解有 <code>@NotNull</code>、<code>@NotBlank</code>、<code>@Size(min,max)</code>、<code>@Min/@Max</code>、<code>@Email</code>、<code>@Pattern</code>，它们来自 Bean Validation 规范（JSR-380）。注意版本差异：Spring Boot 2.x 用 <code>javax.validation.constraints</code> 包，3.x 改用 <code>jakarta.validation.constraints</code>，且都需引入 <code>spring-boot-starter-validation</code>。老教程常只写注解不说包名，拷到 3.x 项目会编译不过。</p>
+<p>原始做法是在方法体里逐字段判断，字段一多就是一屏防御式代码。Spring 的方案是把约束声明在模型上，由框架在参数绑定阶段完成校验。常用注解有 <code>@NotNull</code>、<code>@NotBlank</code>、<code>@Size(min,max)</code>、<code>@Min/@Max</code>、<code>@Email</code>、<code>@Pattern</code>，它们来自 Bean Validation 规范（JSR-380）。注意版本差异：Spring Boot 2.x 用 <code>javax.validation.constraints</code> 包，3.x 改用 <code>jakarta.validation.constraints</code>，两者都需引入 <code>spring-boot-starter-validation</code>。老教程常只写注解不说包名，拷到 3.x 项目会编译不过。</p>
 
 <pre><code class="language-java">public record UserCreateRequest(
         @NotBlank(message = "用户名不能为空")
@@ -161,11 +161,11 @@ public class UserController {
     }
 }</code></pre>
 
-<p>关键点是 <code>@Valid</code>：没有它，所有约束注解都只是注释。若参数来自查询串或表单而不是请求体，应在类上加 <code>@Validated</code>，方法参数上的约束才会生效。校验失败时框架抛出 <code>MethodArgumentNotValidException</code>，可追加 <code>BindingResult</code> 自行处理，更推荐交给全局异常处理器。</p>
+<p>关键点是 <code>@Valid</code>：没有它，所有约束注解都只是注释。若参数来自查询串或表单而不是请求体，应在类上加 <code>@Validated</code>，方法参数上的约束才会生效。校验失败时框架抛出 <code>MethodArgumentNotValidException</code>，也可追加 <code>BindingResult</code> 自行处理，但更推荐交给全局异常处理器。</p>
 
 <h2>二、全局异常处理：一份稳定的错误响应契约</h2>
 
-<p>若每个 Controller 各自 catch 异常，前端拿到的错误格式就会五花八门。<code>@RestControllerAdvice</code> 相当于 <code>@ControllerAdvice</code> 加 <code>@ResponseBody</code>，把异常处理集中到一处并对所有 Controller 生效。</p>
+<p>若每个 Controller 各自 catch 异常，前端拿到的错误格式就会五花八门。<code>@RestControllerAdvice</code> 相当于 <code>@ControllerAdvice</code> 加 <code>@ResponseBody</code>，把异常处理集中到一处，并对所有 Controller 生效。</p>
 
 <pre><code class="language-java">@RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -192,11 +192,11 @@ public class GlobalExceptionHandler {
     }
 }</code></pre>
 
-<p>两个坑。其一，异常处理器有优先级：匹配类型越具体的方法越优先，所以兜底方法不会抢走校验异常，但兜底范围越宽越容易掩盖真实问题。其二，不要把异常消息与堆栈原样返回，那会泄露类名、SQL 与文件路径。另外，上传超限、404 往往发生在进入 Controller 之前，<code>@ExceptionHandler</code> 不保证捕获，超限需单独处理 <code>MaxUploadSizeExceededException</code>。</p>
+<p>这里有两个坑。其一，异常处理器有优先级：匹配类型越具体的方法越优先，所以兜底方法不会抢走校验异常，但兜底范围越宽，越容易掩盖真实问题。其二，不要把异常消息与堆栈原样返回，那会泄露类名、SQL 与文件路径。另外，上传超限与 404 往往发生在进入 Controller 之前，<code>@ExceptionHandler</code> 不保证捕获，超限需单独处理 <code>MaxUploadSizeExceededException</code>。</p>
 
 <h2>三、拦截器：把登录校验从 Controller 里抽出来</h2>
 
-<p>很多人把 Struts2 的 <code>Interceptor</code> 与 Spring MVC 拦截器混为一谈，两者名字相同却毫无继承关系：Struts2 的拦截器是 Action 调用链上的组件，只能拦截 Action；Spring MVC 用的是 <code>org.springframework.web.servlet.HandlerInterceptor</code>，在 <code>DispatcherServlet</code> 找到处理器之后、执行之前生效，且是 Spring 容器组件，可直接依赖注入。它比 Servlet <code>Filter</code> 更靠内层。</p>
+<p>Struts2 的 <code>Interceptor</code> 与 Spring MVC 拦截器常被混为一谈，两者名字相同，却毫无继承关系。Struts2 的拦截器挂在 Action 调用链上，只能拦截 Action；Spring MVC 用的是 <code>org.springframework.web.servlet.HandlerInterceptor</code>，在 <code>DispatcherServlet</code> 找到处理器之后、执行之前生效，且本身是 Spring 容器组件，可直接依赖注入。它比 Servlet <code>Filter</code> 更靠内层。</p>
 
 <pre><code class="language-java">public class LoginInterceptor implements HandlerInterceptor {
     @Override
@@ -220,7 +220,7 @@ public class WebConfig implements WebMvcConfigurer {
     }
 }</code></pre>
 
-<p>三个方法要分清：<code>preHandle</code> 返回 <code>false</code> 即中断后续流程；<code>postHandle</code> 在 Controller 执行完、视图渲染前调用，纯 JSON 接口几乎用不到；<code>afterCompletion</code> 在请求结束后调用，适合清理 <code>ThreadLocal</code>，且只有 <code>preHandle</code> 返回过 <code>true</code> 才执行。「Spring Boot 2.x 默认拦截所有静态资源」的说法并不成立：默认映射由 <code>WebMvcAutoConfiguration</code> 提供，被拦住的是你声明的 <code>/**</code>，排除相关路径即可。若静态资源 404，先确认是否误用了 <code>@EnableWebMvc</code>。</p>
+<p>三个方法要分清：<code>preHandle</code> 返回 <code>false</code> 即中断后续流程；<code>postHandle</code> 在 Controller 执行完、视图渲染前调用，纯 JSON 接口几乎用不到；<code>afterCompletion</code> 在请求结束后调用，适合清理 <code>ThreadLocal</code>，且只有 <code>preHandle</code> 返回过 <code>true</code> 才会执行。“Spring Boot 2.x 默认拦截所有静态资源”的说法并不成立：默认映射由 <code>WebMvcAutoConfiguration</code> 提供，被拦住的是你声明的 <code>/**</code>，排除相关路径即可。若静态资源 404，先确认是否误用了 <code>@EnableWebMvc</code>。</p>
 
 <h2>四、文件上传：MultipartFile 的正确用法</h2>
 
@@ -260,7 +260,7 @@ public class UploadController {
 
 <h2>五、Actuator：上线后的第一双眼睛</h2>
 
-<p>应用上线后至少要回答三个问题：进程还活着吗？依赖的数据库通不通？当前配置是什么？引入 <code>spring-boot-starter-actuator</code> 即可通过 HTTP 端点获取。</p>
+<p>应用上线后至少要回答三个问题：进程还活着吗？依赖的数据库通不通？当前配置是什么？引入 <code>spring-boot-starter-actuator</code> 即可通过 HTTP 端点获取答案。</p>
 
 <pre><code class="language-yaml">management:
   endpoints:
@@ -275,16 +275,21 @@ info:
     name: java-tutorial-demo
     version: 1.0.0</code></pre>
 
-<p>访问 <code>/actuator/health</code> 返回 <code>{"status":"UP"}</code>，它由多个 <code>HealthIndicator</code> 聚合而成（数据源、磁盘空间等）；<code>info</code> 端点默认返回空对象，需开启 <code>management.info.env.enabled=true</code> 才展示 <code>info.*</code> 配置。安全提醒：<code>env</code> 与 <code>configprops</code> 可能暴露数据库密码，<code>heapdump</code> 能拿到内存快照，<code>shutdown</code> 可远程关闭应用，因此只 expose 必要端点，并用 Spring Security 或内网端口 <code>management.server.port</code> 保护。默认只暴露 <code>health</code> 不等于安全，为排障写了 <code>include: "*"</code> 又忘了收回，风险就完全敞开。</p>
+<p>访问 <code>/actuator/health</code> 返回 <code>{"status":"UP"}</code>，它由多个 <code>HealthIndicator</code> 聚合而成（数据源、磁盘空间等）。<code>info</code> 端点默认返回空对象，需开启 <code>management.info.env.enabled=true</code> 才会展示 <code>info.*</code> 配置。安全提醒：<code>env</code> 与 <code>configprops</code> 可能暴露数据库密码，<code>heapdump</code> 能拿到内存快照，<code>shutdown</code> 可远程关闭应用，因此只应暴露必要端点，并用 Spring Security 或内网端口 <code>management.server.port</code> 加以保护。默认只暴露 <code>health</code> 不等于安全：为排障写了 <code>include: "*"</code> 又忘了收回，风险就完全敞开。</p>
 
 <h2>小结</h2>
 
-<p>本章串起 Web 层的五块能力：用 Bean Validation 把校验前置到参数绑定阶段，用 <code>@RestControllerAdvice</code> 统一错误契约，用 <code>HandlerInterceptor</code> 承载登录与权限这类横切逻辑，用 <code>MultipartFile</code> 配合白名单与重命名安全接收文件，用 Actuator 装上可观测入口。共同思路是把与业务无关的关注点移出 Controller。建议为校验失败、上传超限、拦截器放行各写一个 MockMvc 测试，这些边界靠肉眼审查很难发现。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-4-9/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spring Boot 核心</span></a>
-      <a class="next-post" href="/java-tutorial-4-11/"><span class="pn-label">下一篇 →</span><span class="pn-title">Spring Cloud 微服务</span></a>
-      </nav>
+<p>本章串起 Web 层的五块能力：</p>
+
+<ul>
+<li>用 Bean Validation 把校验前置到参数绑定阶段；</li>
+<li>用 <code>@RestControllerAdvice</code> 统一错误契约；</li>
+<li>用 <code>HandlerInterceptor</code> 承载登录与权限这类横切逻辑；</li>
+<li>用 <code>MultipartFile</code> 配合白名单与重命名安全接收文件；</li>
+<li>用 Actuator 装上可观测入口。</li>
+</ul>
+
+<p>共同思路是把与业务无关的关注点移出 Controller。建议为校验失败、上传超限、拦截器放行各写一个 MockMvc 测试，这些边界靠肉眼审查很难发现。</p>
           </article>
   <!-- Footer -->
   <footer>

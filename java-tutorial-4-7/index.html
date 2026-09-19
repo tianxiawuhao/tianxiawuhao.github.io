@@ -178,7 +178,7 @@
 
 <h2>三、CRUD 与 Mapper 动态代理</h2>
 
-<p>原始写法是 <code>UserDaoImpl</code> 持有 <code>SqlSession</code>，调用 <code>selectOne("UserDaoMapper.queryUserById", id)</code> 这类 API，statement 字符串硬编码在 Java 里。动态代理让「只写接口 + 映射文件」成为可能。</p>
+<p>原始写法是 <code>UserDaoImpl</code> 持有 <code>SqlSession</code>，再调用 <code>selectOne("UserDaoMapper.queryUserById", id)</code> 这类 API，statement 字符串硬编码在 Java 里。动态代理让「只写接口 + 映射文件」成为可能。</p>
 
 <p>它有四条约定：<code>namespace</code> 等于接口全限定名；statement 的 <code>id</code> 等于方法名；<code>resultType</code> 与返回的元素类型一致；参数类型与接口方法一致（<code>parameterType</code> 通常可省略）。</p>
 
@@ -194,7 +194,7 @@
 
 <p><code>#{}</code> 与 <code>${}</code> 的区别是重点。<code>#{}</code> 生成 JDBC 的 <code>?</code> 占位符并预编译，参数不会被当成 SQL 语法，能防注入，应作为默认选择；<code>${}</code> 是纯字符串替换，只适合拼表名、列名、排序字段，接用户输入等于开注入口子。</p>
 
-<p>参数个数决定写法：单参数时 <code>#{}</code> 里的名字可以随便写；多参数会被放进 Map，默认键是 <code>arg0/arg1</code> 和 <code>param1/param2</code>，必须用 <code>@Param("userName")</code> 显式命名，否则报 <code>Parameter 'userName' not found</code>。稳妥做法是都给参数加 <code>@Param</code>。</p>
+<p>参数个数决定写法。单参数时 <code>#{}</code> 里的名字可以随便写；多参数会被放进 Map，默认键是 <code>arg0/arg1</code> 和 <code>param1/param2</code>，必须用 <code>@Param("userName")</code> 显式命名，否则报 <code>Parameter 'userName' not found</code>。稳妥做法是都给参数加 <code>@Param</code>。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-7/02-placeholder.svg" alt="对比图：#{} 生成 JDBC 的 ? 占位符并预编译，参数不参与 SQL 语法解析，能防注入；${} 是纯字符串替换，会拼进 SQL 文本，只适合表名、列名与排序字段；底部说明多参数需用 @Param 显式命名"><figcaption>图 2：#{} 与 ${} 的取舍——默认只该用能预编译的那个</figcaption></figure>
 
@@ -202,7 +202,7 @@
 
 <p>字段名与属性名不一致是高频故障：库中是 <code>user_name</code>，POJO 是 <code>userName</code>，属性就会一直是 <code>null</code>。解法有三：全局开启驼峰映射，一次配置全局受益；在 SQL 里写 <code>user_name as userName</code> 起别名；或用 <code>resultMap</code> 自定义映射。</p>
 
-<p>第三种写法用 <code>&lt;id&gt;</code> 指定主键，用 <code>&lt;result column="user_name" property="userName"/&gt;</code> 指定不一致的列，再配合 <code>autoMapping="true"</code> 让其余同名列自动匹配。它最重，但也是唯一能表达一对多、多对一关联的写法。</p>
+<p>第三种写法用 <code>&lt;id&gt;</code> 指定主键，再用 <code>&lt;result column="user_name" property="userName"/&gt;</code> 指定不一致的列。配合 <code>autoMapping="true"</code>，其余同名列会自动匹配。它最重，但也是唯一能表达一对多、多对一关联的写法。</p>
 
 <pre><code class="language-xml">&lt;resultMap id="userMap" type="cn.itcast.mybatis.pojo.User" autoMapping="true"&gt;
   &lt;id column="id" property="id" /&gt;
@@ -234,7 +234,7 @@
 
 <h2>小结</h2>
 
-<p>MyBatis 的价值不在「替你写 SQL」，而在划清 SQL 与 Java 的边界：全局配置管数据源与映射登记，映射文件管 SQL 与结果封装，Mapper 接口靠动态代理免去实现类，<code>#{}</code> 保证参数安全，动态标签让条件拼接可读可维护。掌握两份配置文件、四条动态代理约定、<code>#{}</code> 与 <code>${}</code> 的取舍、resultMap 与动态标签的组合，就足以应付绝大多数单表 CRUD 与条件查询。下一章把 MyBatis 交给 Spring 管理，去掉手工创建 <code>SqlSessionFactory</code> 的样板代码。</p>
+<p>MyBatis 的价值不在「替你写 SQL」，而在划清 SQL 与 Java 的边界。全局配置管数据源与映射登记，映射文件管 SQL 与结果封装，Mapper 接口靠动态代理免去实现类，<code>#{}</code> 保证参数安全，动态标签让条件拼接可读可维护。掌握两份配置文件、四条动态代理约定、<code>#{}</code> 与 <code>${}</code> 的取舍、resultMap 与动态标签的组合，就足以应付绝大多数单表 CRUD 与条件查询。下一章把 MyBatis 交给 Spring 管理，去掉手工创建 <code>SqlSessionFactory</code> 的样板代码。</p>
           </article>
   <!-- Footer -->
   <footer>

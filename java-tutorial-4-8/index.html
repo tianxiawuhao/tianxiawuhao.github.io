@@ -141,7 +141,7 @@
 
 <h2>二、一级缓存：SqlSession 内的本地缓存</h2>
 
-<p>一级缓存默认开启，不需要任何配置。它并不放在 <code>SqlSession</code> 对象本身。原因在于 <code>DefaultSqlSession</code> 只持有全局的 <code>Configuration</code> 和一个 <code>Executor</code>，真正持有 <code>PerpetualCache</code> 的是 <code>BaseExecutor</code>（<code>SimpleExecutor</code>、<code>ReuseExecutor</code>、<code>BatchExecutor</code> 的父类），由它在构造时创建。</p>
+<p>一级缓存默认开启，不需要任何配置。它并不放在 <code>SqlSession</code> 对象本身。原因在于 <code>DefaultSqlSession</code> 只持有全局的 <code>Configuration</code> 和一个 <code>Executor</code>。真正持有 <code>PerpetualCache</code> 的是 <code>BaseExecutor</code>，由它在构造时创建。<code>BaseExecutor</code> 是 <code>SimpleExecutor</code>、<code>ReuseExecutor</code>、<code>BatchExecutor</code> 的父类。</p>
 
 <p>是否命中由 <code>CacheKey</code> 决定：statementId、SQL 文本、参数值、<code>RowBounds</code> 分页信息、环境 id 等共同参与计算，任何一项不同都不算同一次查询。命中就直接返回内存里的结果，不再发 SQL。</p>
 
@@ -203,7 +203,7 @@ session2.close();</code></pre>
 
 <p>每条语句也能单独控制缓存行为，默认约定是：<code>&lt;select&gt;</code> 的 <code>useCache="true"</code>、<code>flushCache="false"</code>；<code>&lt;insert&gt;</code>、<code>&lt;update&gt;</code>、<code>&lt;delete&gt;</code> 的 <code>flushCache="true"</code>，所以增删改天然会刷新缓存。自定义缓存类必须实现 <code>org.apache.ibatis.cache.Cache</code> 接口，并提供接收 <code>String id</code> 的构造器。</p>
 
-<p>这里要特别纠正源文档的一处错误写法：不要写成 <code>&lt;cache type="org.apache.ibatis.cache.impl.PerpetualCache" size="1024" .../&gt;</code>。一旦指定 <code>type</code>，MyBatis 就完全改用指定的实现、不再叠加默认装饰器；而 <code>PerpetualCache</code> 根本没有 <code>size</code>、<code>eviction</code>、<code>flushInterval</code>、<code>readOnly</code> 这些 setter，启动时会直接抛异常。要配置这些属性，就用不带 <code>type</code> 的默认 <code>&lt;cache/&gt;</code>。</p>
+<p>这里要特别纠正源文档的一处错误写法：不要写成 <code>&lt;cache type="org.apache.ibatis.cache.impl.PerpetualCache" size="1024" .../&gt;</code>。一旦指定 <code>type</code>，MyBatis 就完全改用指定的实现，不再叠加默认装饰器。而 <code>PerpetualCache</code> 根本没有 <code>size</code>、<code>eviction</code>、<code>flushInterval</code>、<code>readOnly</code> 这些 setter，启动时会直接抛异常。要配置这些属性，就用不带 <code>type</code> 的默认 <code>&lt;cache/&gt;</code>。</p>
 
 <p>什么时候才值得开二级缓存？查询为主、按单表划分 namespace 的业务比较合适，比如历史订单查询。如果多个 namespace 操作同一张表，一个刷新了缓存另一个没刷新，照样会脏读。用 <code>cache-ref</code> 共享虽能缓解，但任何一方的增删改都会刷新整块缓存，收益有限。对一致性要求高的系统，更稳妥的做法是接 Redis 这类独立缓存服务。</p>
 
@@ -211,9 +211,9 @@ session2.close();</code></pre>
 
 <p>手写分页有三件麻烦事：不同数据库的 <code>limit</code> 语法不一样；还得额外写一条 <code>count</code> 语句；分页参数会渗透进 Service 代码。PageHelper 以 MyBatis 插件（<code>Interceptor</code>）的形式拦截 <code>Executor.query</code>，自动改写 SQL、自动生成 count 查询，业务代码只需要声明「第几页、每页几条」。</p>
 
-<p>配置时最容易踩版本坑。PageHelper 4.x 的拦截器类是 <code>com.github.pagehelper.PageHelper</code>，还要配 <code>dialect</code> 属性指定数据库类型；5.x 起改为 <code>com.github.pagehelper.PageInterceptor</code>，方言自动识别，<code>dialect</code> 属性已废弃。源文档给出的是 4.x 的旧写法，新项目应写成 <code>&lt;plugin interceptor="com.github.pagehelper.PageInterceptor"/&gt;</code>，放在 <code>mybatis-config.xml</code> 的 <code>&lt;plugins&gt;</code> 节点内。</p>
+<p>配置时最容易踩版本坑。PageHelper 4.x 的拦截器类是 <code>com.github.pagehelper.PageHelper</code>，还要配 <code>dialect</code> 属性指定数据库类型；5.x 起改为 <code>com.github.pagehelper.PageInterceptor</code>，方言自动识别，<code>dialect</code> 属性已废弃。源文档给出的是 4.x 的旧写法，新项目应改用 <code>PageInterceptor</code>。配置写进 <code>mybatis-config.xml</code> 的 <code>&lt;plugins&gt;</code> 节点即可：<code>&lt;plugin interceptor="com.github.pagehelper.PageInterceptor"/&gt;</code>。</p>
 
-<p>顺带说一句，这个配置文件的 DTD 地址正确写法是 <code>http://mybatis.org/dtd/mybatis-3-config.dtd</code>；源文档里的 <code>mybatis3 config.dtd</code> 少了一个连字符，会让解析失败。</p>
+<p>顺带说一句，这个配置文件的 DTD 地址正确写法是 <code>http://mybatis.org/dtd/mybatis-3-config.dtd</code>。源文档里的 <code>mybatis3 config.dtd</code> 少了一个连字符，会让解析失败。</p>
 
 <p>使用上只有三条纪律：<code>PageHelper.startPage(pageNum, pageSize)</code> 必须紧挨着目标查询，它<strong>只对之后的第一条查询生效</strong>；结果用 <code>PageInfo</code> 包装，才能拿到总记录数、总页数等信息；两者之间不要再插入别的查询，否则分页参数会被那条查询悄悄吃掉。</p>
 
@@ -221,7 +221,9 @@ session2.close();</code></pre>
 
 <h2>五、与 Spring 整合：SSM 骨架</h2>
 
-<p>SSM 就是 Spring + Spring MVC + MyBatis 的组合：Spring MVC 负责 web 层，Spring 负责 Service 与事务，MyBatis 只管 SQL 映射，中间由 <code>mybatis-spring</code> 桥接。工程上通常按用途拆成 <code>applicationContext-dao.xml</code>、<code>applicationContext-service.xml</code> 和 springmvc.xml，其中 Spring MVC 必须扫描独立的子容器，否则很容易把 Service 重复扫进 web 容器导致事务失效。</p>
+<p>SSM 就是 Spring + Spring MVC + MyBatis 的组合。三者分工明确：Spring MVC 负责 web 层，Spring 负责 Service 与事务，MyBatis 只管 SQL 映射，中间由 <code>mybatis-spring</code> 桥接。</p>
+
+<p>工程上通常按用途拆成 <code>applicationContext-dao.xml</code>、<code>applicationContext-service.xml</code> 和 springmvc.xml。其中 Spring MVC 必须扫描独立的子容器，否则很容易把 Service 重复扫进 web 容器，导致事务失效。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-8/02-ssm-layers.svg" alt="SSM 分层职责与 dao 层配置三件套示意图"><figcaption>图 2：Spring MVC、Spring、MyBatis 的分层职责，以及 dataSource → SqlSessionFactoryBean → MapperScannerConfigurer 三件套</figcaption></figure>
 

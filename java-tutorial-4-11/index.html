@@ -128,11 +128,11 @@
       <div class="row">
         <div class="col-lg-8 col-md-10 mx-auto post-content-container">
           <style>.tutorial-figure{margin:18px 0;text-align:center}pre>code.language-text{display:block;background:transparent;border:none;border-left:3px solid rgba(227,213,184,.38);border-radius:0;padding:2px 0 2px 12px;font-size:13px;line-height:1.75;color:#e3d5b8;white-space:pre-wrap}.tutorial-figure img{max-width:100%;border-radius:12px}.tutorial-figure svg{max-width:100%;height:auto}.tutorial-figure figcaption{margin-top:8px;font-size:13px;color:var(--ink2)}.katex-display{overflow-x:auto;overflow-y:hidden;padding:2px 0}.katex-display>.katex{max-width:none}.tut-tip{border-left:3px solid #9d3b26;background:rgba(157,59,38,.06);padding:8px 14px;border-radius:8px;margin:14px 0}</style>
-<p>单体应用拆成微服务之后，最先撞上的不是业务问题，而是"怎么找到对方"。订单服务要调用库存服务，库存服务有三台机器，IP 和端口随时可能变；改一个数据库连接串，要挨个服务改配置、重新打包、重启。本章围绕注册中心、配置中心、声明式调用、客户端负载均衡和容错限流这五件事，把 Spring Cloud 微服务的最小可用拼图讲清楚。适合已经能写 Spring Boot 项目、准备做服务拆分的读者。</p>
+<p>单体应用拆成微服务之后，最先撞上的不是业务问题，而是“怎么找到对方”。订单服务要调用库存服务，库存服务有三台机器，IP 和端口随时可能变；改一个数据库连接串，要挨个服务改配置、重新打包、重启。本章围绕注册中心、配置中心、声明式调用、客户端负载均衡和容错限流这五件事，把 Spring Cloud 微服务的最小可用拼图讲清楚。适合已经能写 Spring Boot 项目、准备做服务拆分的读者。</p>
 
 <h2>一、为什么需要注册中心与配置中心</h2>
 
-<p>没有注册中心时，调用方只能把被调方地址写死在配置里，靠 Nginx 或 F5 转发。服务一多就有两个痛点：地址散落在几十份配置里，扩容一台机器要通知所有调用方；某台实例已经挂了，调用方仍然把请求发过去，只能靠超时自己发现。注册中心解决这两件事——服务启动时上报自己的地址并周期性发送心跳，调用方拉取可用实例列表并在本地缓存，实例下线或心跳超时后被剔除。配置中心则解决另一半：把配置从代码仓库搬出来集中存放、分环境管理、改完动态生效，服务重启次数大幅下降。简单说，注册中心管"人在哪"，配置中心管"怎么干活"。</p>
+<p>没有注册中心时，调用方只能把被调方地址写死在配置里，靠 Nginx 或 F5 转发。服务一多就有两个问题：地址散落在几十份配置里，扩容一台机器要通知所有调用方；某台实例已经挂了，调用方仍然把请求发过去，只能靠超时自己发现。注册中心解决这两件事——服务启动时上报自己的地址并周期性发送心跳，调用方拉取可用实例列表并在本地缓存，实例下线或心跳超时后被剔除。配置中心则解决另一半：把配置从代码仓库搬出来集中存放、分环境管理、改完动态生效，服务重启次数大幅下降。简单说，注册中心管“人在哪”，配置中心管“怎么干活”。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-4-11/01-registry-config.svg" alt="Spring Cloud 注册中心与配置中心分工示意图"><figcaption>图 1：注册中心解决服务注册与发现，配置中心解决配置集中管理与热更新</figcaption></figure>
 
@@ -178,11 +178,11 @@ eureka:
     ip-address: 127.0.0.1
     instance-id: ${spring.application.name}:${server.port}</code></pre>
 
-<p>注意配置项用 kebab-case（<code>register-with-eureka</code>）。老资料常见驼峰写法，Spring Boot 的宽松绑定仍能识别，但官方推荐小写加连字符。客户端默认每 30 秒心跳续约，服务端 90 秒收不到心跳即认为失效，每 60 秒执行一次剔除；当 15 分钟内心跳失败比例低于 85% 时进入<strong>自我保护模式</strong>，暂停剔除实例，防止网络抖动清空整个注册表。代价是调用方可能拿到已下线的实例，所以客户端必须配好重试或熔断。生产环境应至少部署两个 Eureka Server 并互相注册。</p>
+<p>注意配置项用 kebab-case（<code>register-with-eureka</code>）。老资料常见驼峰写法，Spring Boot 的宽松绑定仍能识别，但官方推荐小写加连字符。客户端默认每 30 秒心跳续约，服务端 90 秒收不到心跳即认为实例失效，并每 60 秒执行一次剔除。当 15 分钟内心跳失败比例低于 85% 时，服务端进入<strong>自我保护模式</strong>，暂停剔除实例，防止网络抖动清空整个注册表。代价是调用方可能拿到已下线的实例，所以客户端必须配好重试或熔断。生产环境应至少部署两个 Eureka Server 并互相注册。</p>
 
 <h2>三、Nacos：注册中心兼配置中心</h2>
 
-<p>Nacos 把注册中心与配置中心合二为一，同时兼容 Dubbo 和 Spring Cloud 生态，是当前国内项目更常见的选择，支持 AP/CP 两种一致性模式与集群部署（集群一致性由 Raft 协议保证）。接入只需一个配置类 starter，且文件名必须是 <code>bootstrap.yml</code>：</p>
+<p>Nacos 把注册中心与配置中心合二为一，同时兼容 Dubbo 和 Spring Cloud 生态，是当前国内项目更常见的选择。它支持 AP/CP 两种一致性模式与集群部署，集群一致性由 Raft 协议保证。接入只需引入一个 starter，配置文件必须是 <code>bootstrap.yml</code>：</p>
 
 <pre><code class="language-yaml">spring:
   application:
@@ -201,7 +201,7 @@ eureka:
 
 <div class="math-block">\[ \text{DataId} = \text{prefix} - \{profile\} . \{file\text{-}extension\} \]</div>
 
-<p>prefix 默认取 <code>spring.application.name</code>，可用 <code>spring.cloud.nacos.config.prefix</code> 覆盖；profile 取 <code>spring.profiles.active</code>（注意是 <code>profiles</code>，复数）；extension 由 <code>file-extension</code> 指定，常用 properties 与 yaml/yml。profile 为空时中间的连字符一并消失，Data ID 退化成 <code>prefix.file-extension</code>，例如 <code>nacos-config.yml</code>；指定 profile 后变成 <code>nacos-config-dev.yml</code>。写错一个字符，客户端就会因拉不到配置而启动失败。读取并支持热更新，只需类上同时加 <code>@RefreshScope</code>：</p>
+<p>prefix 默认取 <code>spring.application.name</code>，可用 <code>spring.cloud.nacos.config.prefix</code> 覆盖；profile 取 <code>spring.profiles.active</code>（注意是 <code>profiles</code>，复数）；extension 由 <code>file-extension</code> 指定，常用 properties 与 yaml/yml。profile 为空时中间的连字符一并消失，Data ID 退化成 <code>prefix.file-extension</code>，例如 <code>nacos-config.yml</code>；指定 profile 后则变成 <code>nacos-config-dev.yml</code>。写错一个字符，客户端就会因拉不到配置而启动失败。要让读到的配置支持热更新，类上还需加 <code>@RefreshScope</code>：</p>
 
 <pre><code class="language-java">@SpringBootApplication
 @EnableDiscoveryClient
@@ -240,7 +240,7 @@ ResponseEntity&lt;CmsPage&gt; entity = restTemplate.getForEntity(
         "http://XC-SERVICE-MANAGE-CMS/cms/page/get/5a754adf6abb500ad05688d9",
         CmsPage.class);</code></pre>
 
-<p>Feign 更进一步，把远程调用封装成接口，底层依然整合 Ribbon 做负载均衡、整合 Hystrix 做容错。使用三步：加 <code>spring-cloud-starter-openfeign</code> 依赖、定义接口、启动类加 <code>@EnableFeignClients</code>。原理是动态代理：启动时 Spring 扫描所有 <code>@FeignClient</code> 接口并生成代理对象；调用方法时，代理根据方法上的 <code>@GetMapping</code> 等注解拼出请求地址，从注册中心选取实例后发起 HTTP 请求并解析响应。接口上可用 <code>fallback</code> 指定降级实现，请求失败时返回兜底值：</p>
+<p>Feign 更进一步，把远程调用封装成接口，底层依然整合 Ribbon 做负载均衡、整合 Hystrix 做容错。使用分三步：加 <code>spring-cloud-starter-openfeign</code> 依赖、定义接口、启动类加 <code>@EnableFeignClients</code>。原理是动态代理：启动时 Spring 扫描所有 <code>@FeignClient</code> 接口并生成代理对象；调用方法时，代理根据方法上的 <code>@GetMapping</code> 等注解拼出请求地址，从注册中心选取实例后发起 HTTP 请求并解析响应。接口上可用 <code>fallback</code> 指定降级实现，请求失败时返回兜底值：</p>
 
 <pre><code class="language-java">@FeignClient(name = "nacos-provide", fallback = RemoteHystrix.class)
 public interface RemoteClient {
@@ -255,18 +255,23 @@ public interface RemoteClient {
 
 <h2>五、容错与限流：别让一个服务拖垮全站</h2>
 
-<p>服务之间互相依赖，一个下游接口变慢，上游线程就会堆积，最终整条链路雪崩。Hystrix 用舱壁模式为每个依赖服务分配独立线程池，某个依赖出问题只影响它自己；失败率达到阈值时断路器打开，直接走上面那套 <code>fallback</code> 降级逻辑而不再发起真实调用。Hystrix 已停止新功能开发，新项目一般直接选 Sentinel，思路一致：熔断、降级、线程隔离、实时监控。</p>
+<p>服务之间互相依赖，一个下游接口变慢，上游线程就会堆积，最终整条链路雪崩。Hystrix 用舱壁模式为每个依赖服务分配独立线程池，某个依赖出问题只影响它自己；失败率达到阈值时断路器打开，直接走上面那套 <code>fallback</code> 降级逻辑，而不再发起真实调用。Hystrix 已停止新功能开发，新项目一般直接选 Sentinel，思路一致：熔断、降级、线程隔离、实时监控。</p>
 
-<p>限流放在网关层更划算：Spring Cloud Gateway 或 Zuul 统一承接外部流量，可按路由维度按 QPS 限流，把超量请求快速拒绝，避免压力穿透到后端；Zuul 的过滤器机制还能顺带做鉴权和日志。无论选哪套，都要记住一条原则——<strong>调用方永远不能假设被调方一定活着</strong>，超时时间、重试次数与降级返回值必须显式配置，默认值通常不适合线上。</p>
+<p>限流放在网关层更划算：Spring Cloud Gateway 或 Zuul 统一承接外部流量，可按路由维度做 QPS 限流，把超量请求快速拒绝，避免压力穿透到后端；Zuul 的过滤器机制还能顺带做鉴权和日志。无论选哪套，都要记住一条原则——<strong>调用方永远不能假设被调方一定活着</strong>，超时时间、重试次数与降级返回值必须显式配置，默认值通常不适合线上。</p>
 
 <h2>小结</h2>
 
-<p>本章串起 Spring Cloud 微服务的五块拼图：注册中心（Eureka / Nacos）解决"服务在哪"，配置中心（Nacos Config + <code>bootstrap.yml</code> + <code>@RefreshScope</code>）解决配置集中管理与热更新，Feign 用动态代理把远程调用写成接口，Ribbon / Spring Cloud LoadBalancer 在调用方本地做负载均衡，Hystrix / Sentinel 用熔断降级与限流防止故障蔓延。落地时记住三条：服务名与 Data ID 必须与配置严格一致；配置项统一用 kebab-case；生产环境至少把注册中心与网关做成高可用，并为每一次跨服务调用设置超时和降级。</p>
-          
-          <nav class="post-pn">
-      <a class="prev-post" href="/java-tutorial-4-10/"><span class="pn-label">← 上一篇</span><span class="pn-title">Spring Boot Web 开发</span></a>
-      <a class="next-post" href="/java-tutorial-4-12/"><span class="pn-label">下一篇 →</span><span class="pn-title">Dubbo 与 RPC</span></a>
-      </nav>
+<p>本章串起 Spring Cloud 微服务的五块拼图：</p>
+
+<ul>
+<li>注册中心（Eureka / Nacos）解决“服务在哪”；</li>
+<li>配置中心（Nacos Config + <code>bootstrap.yml</code> + <code>@RefreshScope</code>）解决配置集中管理与热更新；</li>
+<li>Feign 用动态代理把远程调用写成接口；</li>
+<li>Ribbon / Spring Cloud LoadBalancer 在调用方本地做负载均衡；</li>
+<li>Hystrix / Sentinel 用熔断降级与限流防止故障蔓延。</li>
+</ul>
+
+<p>落地时记住三条：服务名与 Data ID 必须与配置严格一致；配置项统一用 kebab-case；生产环境至少把注册中心与网关做成高可用，并为每一次跨服务调用设置超时和降级。</p>
           </article>
   <!-- Footer -->
   <footer>

@@ -132,7 +132,7 @@
 
 <h2>一、一个请求的完整旅程：DispatcherServlet 到底做了什么</h2>
 
-<p>Spring MVC 也是 Servlet 技术栈上的一层封装，它只注册了一个 Servlet，也就是前端控制器 <code>DispatcherServlet</code>。所有请求先到它手里，再由它去「找方法、调方法、渲染视图」。注册方式很简单：在 <code>web.xml</code> 里声明它并配上 <code>url-pattern</code>，<code>load-on-startup</code> 设为 1 可以让它在容器启动时就初始化，而不是等第一个请求来了才初始化。</p>
+<p>Spring MVC 也是 Servlet 技术栈上的一层封装。它只注册了一个 Servlet，也就是前端控制器 <code>DispatcherServlet</code>。所有请求先到它手里，再由它去「找方法、调方法、渲染视图」。注册方式很简单：在 <code>web.xml</code> 里声明它并配上 <code>url-pattern</code>，<code>load-on-startup</code> 设为 1 可以让它在容器启动时就初始化，而不是等第一个请求来了才初始化。</p>
 
 <p>它默认读取的配置文件是 <code>/WEB-INF/{servlet-name}-servlet.xml</code>，所以当 <code>servlet-name</code> 取 <code>springmvc</code> 时，配置文件就必须叫 <code>springmvc-servlet.xml</code>；当然也可以用 <code>contextConfigLocation</code> 这个初始化参数显式指定别的路径。</p>
 
@@ -153,7 +153,7 @@
 
 <h2>二、参数绑定：请求数据怎么落到方法形参上</h2>
 
-<p>Spring MVC 最省心的地方是参数绑定：方法形参的顺序无所谓，只要名字和类型对得上，前端传来的数据就会被自动填进去。常见有五种场景。</p>
+<p>Spring MVC 最省心的地方是参数绑定：方法形参的顺序无所谓。只要名字和类型对得上，前端传来的数据就会被自动填进去。常见有五种场景。</p>
 
 <p><strong>普通参数</strong>用 <code>@RequestParam</code> 显式声明：<code>required</code> 默认为 <code>true</code>，请求里缺这个参数会直接抛异常（表现为 400）；一旦设置了 <code>defaultValue</code>，<code>required</code> 就自动失效变成 <code>false</code>，缺参数时用默认值兜底。<strong>路径占位符</strong>用 <code>@PathVariable</code>，<code>@RequestMapping("/user/{id}")</code> 里的名字必须和注解中的名字一致，而方法形参名可以随便取。<strong>POJO</strong> 不需要任何注解，Spring MVC 会把参数名和实体属性的 setter 自动匹配，还支持 <code>user.dept.id</code> 这种级联写法。<strong>Servlet 内置对象</strong>（<code>HttpServletRequest</code>、<code>HttpServletResponse</code>、<code>HttpSession</code>）只要出现在形参列表里就能拿到。最后是 <strong>JSON</strong>：<code>@RequestBody</code> 负责把请求体里的 JSON 反序列化成对象，<code>@ResponseBody</code> 负责把返回值写回响应体。</p>
 
@@ -249,7 +249,7 @@ public class UserController {
     &lt;/mvc:interceptor&gt;
 &lt;/mvc:interceptors&gt;</code></pre>
 
-<p>顺便纠正一个常见的以讹传讹。有人写「拦截器不依赖 Servlet 容器，过滤器才依赖」，那其实是 Struts2 拦截器的情况。在 Spring MVC 里，<code>HandlerInterceptor</code> 的方法签名直接要求 <code>HttpServletRequest</code>/<code>HttpServletResponse</code>，它本身就是 Servlet 体系的一部分。真正稳妥的区分是：<strong>Filter 由 Servlet 容器管理，作用于 URL 而不认识你写的方法；Interceptor 由 Spring 容器管理，作用在 Handler 上，因此能拿到 Handler 方法信息、能读写 Spring 的 model</strong>。需要改请求体、改编码、做全局跨域时用 Filter；需要登录校验、权限、按方法埋点时用 Interceptor。</p>
+<p>顺便纠正一个常见的以讹传讹。有人写「拦截器不依赖 Servlet 容器，过滤器才依赖」，那其实是 Struts2 拦截器的情况。在 Spring MVC 里，<code>HandlerInterceptor</code> 的方法签名直接要求 <code>HttpServletRequest</code>/<code>HttpServletResponse</code>，它本身就是 Servlet 体系的一部分。真正稳妥的区分是：<strong>Filter 由 Servlet 容器管理，作用于 URL 而不认识你写的方法。Interceptor 由 Spring 容器管理，作用在 Handler 上，因此能拿到 Handler 方法信息、能读写 Spring 的 model</strong>。需要改请求体、改编码、做全局跨域时用 Filter；需要登录校验、权限、按方法埋点时用 Interceptor。</p>
 
 <h2>四、异常处理：让所有错误有统一的出口</h2>
 
@@ -280,13 +280,13 @@ public class GlobalExceptionHandler {
     }
 }</code></pre>
 
-<p>注意两个细节：一是 <code>@ResponseBody</code> 与返回 <code>ModelAndView</code> 是两条路，全局处理器里通常混用，别在同一个方法上同时用；二是<strong>异常被拦截器或 Controller 里的 <code>try/catch</code> 吞掉之后，异常处理器就再也看不到它了</strong>——要么别吞，要么在 catch 里重新抛出，否则日志里一片安静，线上排查会极其痛苦。在纯 XML 项目中，还可以用 <code>SimpleMappingExceptionResolver</code> 把异常类型映射到错误页面，效果类似，适合老项目改造。</p>
+<p>注意两个细节：一是 <code>@ResponseBody</code> 与返回 <code>ModelAndView</code> 是两条路，全局处理器里通常混用，别在同一个方法上同时用。二是<strong>异常被拦截器或 Controller 里的 <code>try/catch</code> 吞掉之后，异常处理器就再也看不到它了</strong>——要么别吞，要么在 catch 里重新抛出，否则日志里一片安静，线上排查会极其痛苦。在纯 XML 项目中，还可以用 <code>SimpleMappingExceptionResolver</code> 把异常类型映射到错误页面，效果类似，适合老项目改造。</p>
 
 <h2>五、常见坑与小结</h2>
 
 <p>最后集中列几个高频问题。<strong>静态资源 404</strong>：<code>DispatcherServlet</code> 的 <code>url-pattern</code> 写成 <code>/</code> 时会接管所有请求（不含 JSP），图片、CSS 也会被当成 Handler 去找，此时需要加 <code>&lt;mvc:default-servlet-handler/&gt;</code> 或 <code>&lt;mvc:resources/&gt;</code> 把它们交还给默认 Servlet。写成 <code>*.do</code> 则不会有这个问题，但 URL 会带后缀。<strong>拦截器不生效</strong>：先确认路径是 <code>/**</code>、确认拦截器类被 Spring 扫描到，再确认请求确实匹配了 <code>@RequestMapping</code>。<strong>参数收不到</strong>：<code>@RequestParam</code> 名称写错会直接 400，<code>@RequestBody</code> 忘记设置 <code>Content-Type: application/json</code> 会 415，两条报错含义完全不同，按状态码定位很快。<strong>响应已提交</strong>：在 <code>postHandle</code> 里再往响应写数据已经晚了，因为视图即将渲染，这类逻辑应放到 <code>preHandle</code>。</p>
 
-<p>小结一下：Spring MVC 的请求链路是「DispatcherServlet → HandlerMapping（返回 Handler + 拦截器链）→ 拦截器 preHandle → HandlerAdapter 调用 Handler（参数绑定在此发生）→ ViewResolver 渲染 → 拦截器逆序收尾」；异常则在链路任何一环抛出后，统一由 <code>@ExceptionHandler</code> / <code>@ControllerAdvice</code> 接住。抓住这条主线，注解、配置、拦截器、异常处理器各自的位置就都清楚了。</p>
+<p>小结一下：Spring MVC 的请求链路是一条分工明确的链。<code>DispatcherServlet</code> 负责调度，<code>HandlerMapping</code> 返回 Handler 与拦截器链，<code>HandlerAdapter</code> 负责真正调用 Handler。参数绑定就发生在调用这一步，<code>ViewResolver</code> 把逻辑视图名渲染成响应，拦截器最后逆序收尾。异常无论在链路哪一环抛出，都统一由 <code>@ExceptionHandler</code> / <code>@ControllerAdvice</code> 接住。抓住这条主线，注解、配置、拦截器、异常处理器各自的位置就都清楚了。</p>
           </article>
   <!-- Footer -->
   <footer>
