@@ -143,8 +143,10 @@
 
 <p>早期资料常见 <code>wget jenkins-2.83-1.1.noarch.rpm</code> 这种装法。该版本发布于 2017 年，早已停止维护，大量现代插件不再兼容，照此安装会在插件安装页卡住。现在应当使用 LTS 版本，并通过官方仓库安装，方便升级：</p>
 
-<pre><code class="language-bash"># 1. 安装 JDK 17（Jenkins 2.4xx 之后要求 Java 11 或 17）
+<pre><code class="language-bash"># 1. 安装 JDK 17（Jenkins LTS 自 2.4xx 中期起最低要求 Java 17，已不再支持 Java 11；21 亦可）
 sudo apt-get update &amp;&amp; sudo apt-get install -y openjdk-17-jdk
+# 历史示例：旧笔记搭配的是 JDK 8（jdk1.8 / java-1.8.0-openjdk）与 jenkins-2.83 的 RPM，
+# 该组合只适用于 Jenkins 2.3xx 及更早版本，此处仅作演进对照，不要照抄
 
 # 2. 添加 Jenkins LTS 官方仓库并安装
 curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
@@ -160,7 +162,7 @@ sudo systemctl enable --now jenkins
 # 4. 取出初始管理员密码，然后浏览器访问 http://192.168.184.135:8080
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword</code></pre>
 
-<p>端口和运行用户的配置文件随安装包类型不同：Debian/Ubuntu 系是 <code>/etc/default/jenkins</code>，RPM 系是 <code>/etc/sysconfig/jenkins</code>。较新的 RPM 包由 systemd 单元接管。改端口更稳的做法是新增 <code>/etc/systemd/system/jenkins.service.d/override.conf</code>；在里面写 <code>Environment="JENKINS_PORT=8888"</code>，再执行 <code>systemctl daemon-reload</code>。首次进入界面后按提示安装推荐插件、建管理员账号。用 Maven 构建还要在“全局工具配置”里登记 JDK、Git 和 Maven 的安装路径，并为它们命名，流水线脚本通过名称引用。</p>
+<p>端口和运行用户的配置文件随安装包类型不同：Debian/Ubuntu 系是 <code>/etc/default/jenkins</code>，RPM 系是 <code>/etc/sysconfig/jenkins</code>。较新的 RPM 包由 systemd 单元接管。改端口更稳的做法是新增 <code>/etc/systemd/system/jenkins.service.d/override.conf</code>；在里面写 <code>Environment="JENKINS_PORT=8888"</code>，再执行 <code>systemctl daemon-reload</code>。首次进入界面后按提示安装推荐插件、建管理员账号。用 Maven 构建还要在“全局工具配置”里登记 JDK、Git 和 Maven 的安装路径，并为它们命名，流水线脚本通过名称引用。这里登记的 Maven 用 3.9.x：早期教程里常见的 3.5.4 属于早已停止维护的旧分支，在 JDK 17/21 上与部分插件组合会直接构建失败；相应地，pom 里的编译目标版本应改用 <code>&lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;</code>，取代只声明语法版本的 <code>source</code>/<code>target</code> 旧写法。</p>
 
 <p>接下来是最关键的观念转变。传统做法是在网页表单里新建自由风格任务：源码管理选 Git，Build 填 <code>clean package docker:build -DpushImage</code>。这种任务能用，但配置全散在网页表单里，改动无法 review、无法回滚，也无法复制到第二台机器。现在应当使用 Jenkinsfile，把流水线写成 Groovy 脚本并提交进仓库，这种做法叫“流水线即代码”：</p>
 

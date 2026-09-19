@@ -161,7 +161,18 @@
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-2-5/01-jdbc-flow.svg" alt="JDBC 最小闭环流程图：加载驱动、获取连接、创建语句对象、执行并取结果、归还连接五步构成闭环，下半部分对比字符串拼接 SQL 被输入改写成恒真条件，以及 PreparedStatement 用问号占位符把参数当纯数据处理"><figcaption>图 1：JDBC 的五步闭环，以及 PreparedStatement 为什么能堵住注入</figcaption></figure>
 
-<p>这里的 URL 参数值得单独说一句：<code>serverTimezone</code> 是 MySQL 8 驱动的要求，缺少它经常报时区错误；<code>useSSL=false</code> 在本地开发也常加，但生产环境应当显式配置加密，而不是关掉 SSL。</p>
+<p>这段代码里的驱动与 URL 参数，几乎每一条在 8.x 时代都换过写法。<strong>驱动类名</strong>：Connector/J 5.1.x 写 <code>com.mysql.jdbc.Driver</code>，8.x 换成 <code>com.mysql.cj.jdbc.Driver</code>（8.0.x 里旧类名多数还保留但会打印弃用告警，不要依赖它）。JDBC 4.0（Java 6）起驱动通过 SPI（<code>META-INF/services/java.sql.Driver</code>）自动注册，<code>Class.forName("com.mysql.cj.jdbc.Driver")</code> 通常可以省，只有自定义类加载器或老容器才需要显式加载。URL 参数同样换了名字，旧笔记里的写法与现行写法的对照如下：</p>
+
+<table>
+<thead><tr><th>用途</th><th>旧写法（Connector/J 5.1.x 时代）</th><th>现行写法（8.x，MySQL 8.0/8.4）与常见坑</th></tr></thead>
+<tbody>
+<tr><td>加密连接</td><td><code>useSSL=false</code>、<code>requireSSL=true</code>、<code>verifyServerCertificate=false</code></td><td><code>sslMode=DISABLED|PREFERRED|REQUIRED|VERIFY_CA|VERIFY_IDENTITY</code>：8.0.13 起三个旧参数合并为 <code>sslMode</code>（默认 <code>PREFERRED</code>），旧名仍被接受但已弃用。生产上写 <code>DISABLED</code> 等于明文传密码，至少用 <code>REQUIRED</code>，要校验证书则用 <code>VERIFY_CA</code> 或 <code>VERIFY_IDENTITY</code>。</td></tr>
+<tr><td>时区</td><td><code>serverTimezone=Asia/Shanghai</code></td><td><code>connectionTimeZone=Asia/Shanghai</code>：8.0.23 起改用新名，旧名仍可用但已弃用。它只影响驱动端的时区换算；要让服务端会话时区一起变，还需加 <code>forceConnectionTimeZoneToSession=true</code>。写错时区，取出的 TIMESTAMP 会整体偏移几小时。</td></tr>
+<tr><td>字符集</td><td><code>useUnicode=true&amp;characterEncoding=utf8</code></td><td><code>characterEncoding=UTF-8</code>：8.x 默认即 UTF-8，通常可省。注意 <code>utf8</code> 在服务端实为 <code>utf8mb3</code>，存 emoji 会报 <code>Incorrect string value</code>；库、表、列与连接字符集要一起改成 <code>utf8mb4</code>。</td></tr>
+<tr><td>认证</td><td>无（旧版常用 <code>mysql_native_password</code>）</td><td>MySQL 8 默认认证插件是 <code>caching_sha2_password</code>：在 <code>sslMode=DISABLED</code> 下首次握手要向服务端索取 RSA 公钥，驱动默认拒绝并报 <code>Public Key Retrieval is not allowed</code>。本地开发可临时加 <code>allowPublicKeyRetrieval=true</code>，生产更推荐启用 SSL；8.4 起 <code>mysql_native_password</code> 默认关闭，不要指望退回旧插件。</td></tr>
+<tr><td>批量写入</td><td><code>rewriteBatchedStatements=true</code>（一直有效）</td><td>仍然推荐。不开这个参数时 <code>addBatch()</code> 只是循环发送单条 SQL，打开后驱动才会合并成多值 INSERT，批量插入的提速非常明显。</td></tr>
+</tbody>
+</table>
 
 <h2>二、事务：把多条 SQL 绑成一个原子操作</h2>
 
@@ -224,17 +235,20 @@
 
 <p>自己实现一个连接池有两个关键点：用容器（如 <code>LinkedList</code>）保存空闲连接；由于业务代码习惯调用 <code>conn.close()</code>，需要返回一个代理对象，用动态代理把 <code>close()</code> 改写成“归还连接”，而不是真的关闭物理连接。理解了这一点，就明白为什么用第三方池时 <code>close()</code> 依然可以放心调用。</p>
 
-<p>生产上基本不再手写，主流选择是 Druid 与 HikariCP。Druid 由阿里开源，参数丰富、自带监控页面，国内项目见得多；HikariCP 以轻量和低延迟著称，是 Spring Boot 2.x 之后的默认连接池。以 Druid 为例，用配置文件加载：</p>
+<p>生产上基本不再手写，主流选择是 Druid 与 HikariCP。Druid 由阿里开源，当前主线是 1.2.x，参数丰富（<code>initialSize</code>、<code>minIdle</code>、<code>maxActive</code>、<code>maxWait</code>、<code>testWhileIdle</code>、<code>filters</code> 等）、自带监控页面，国内项目见得多；HikariCP 以轻量和低延迟著称，从 Spring Boot 2.x 起就是默认连接池（3.x 仍然如此），其中 4.x 支持 Java 8，5.x 及以后要求 Java 11 起，Java 17 项目直接用 5.x/6.x 系列即可。以 Druid 为例，用配置文件加载：</p>
 
 <pre><code class="language-java">// druid.properties
 // driverClassName=com.mysql.cj.jdbc.Driver
-// url=jdbc:mysql://localhost:3306/day06_db?serverTimezone=Asia/Shanghai
+//     （5.1.x 时代写 com.mysql.jdbc.Driver；8.x 驱动经 SPI 自动注册，这一项也可由 URL 推断）
+// url=jdbc:mysql://localhost:3306/day06_db?connectionTimeZone=Asia/Shanghai&amp;characterEncoding=UTF-8
+//     （旧写法 serverTimezone=Asia/Shanghai&amp;useUnicode=true&amp;characterEncoding=utf8，参数名已弃用）
 // username=root
 // password=root
 // initialSize=5       初始连接数
 // minIdle=5           最小空闲连接
 // maxActive=20        最大活跃连接
 // maxWait=3000        获取连接的最长等待毫秒数
+// filters=stat        内置监控统计，配合 /druid/index.html 查看
 
 public class DruidUtils {
     private static final DataSource DATA_SOURCE;
@@ -255,7 +269,7 @@ public class DruidUtils {
     }
 }</code></pre>
 
-<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>。HikariCP 官方给出的经验值是把 <code>maximumPoolSize</code> 取成与 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好。另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的“死连接”，报出 <code>Communications link failure</code> 这类错误。</p>
+<p>换成 HikariCP 时，核心参数名不同：<code>jdbcUrl</code>、<code>username</code>、<code>password</code>、<code>maximumPoolSize</code>、<code>minimumIdle</code>、<code>connectionTimeout</code>、<code>idleTimeout</code>、<code>maxLifetime</code>，与 Druid 的对应关系是 <code>url</code> ↔ <code>jdbcUrl</code>、<code>maxActive</code> ↔ <code>maximumPoolSize</code>、<code>minIdle</code> ↔ <code>minimumIdle</code>、<code>maxWait</code> ↔ <code>connectionTimeout</code>（默认 30 秒）；配置方式从 Properties 换成 <code>HikariConfig</code>，或直接 new 一个 <code>HikariDataSource</code>，驱动类名同样可以省（5.x/6.x 对应 8.x 的 <code>com.mysql.cj.jdbc.Driver</code>，由 SPI 注册）。HikariCP 官方给出的经验值是把 <code>maximumPoolSize</code> 取成与 CPU 核数相关的小值（常见起点 10 左右），池子并不是越大越好：连接数超过数据库的处理能力后，多出来的连接只会带来线程上下文切换与锁竞争。另外 <code>maxLifetime</code> 应比数据库侧的 <code>wait_timeout</code> 略小，否则会借到已被服务端断开的“死连接”，报出 <code>Communications link failure</code> 这类错误（具体配合策略见第四节）。</p>
 
 <h2>四、常见坑与落地建议</h2>
 
@@ -266,6 +280,8 @@ public class DruidUtils {
 <p>第三，<strong>在事务里做长耗时操作</strong>。事务持有行锁期间若去做远程调用或大批量计算，会显著放大锁等待。原则是让事务尽量短：先做参数校验和远程调用，再开事务写库。</p>
 
 <p>第四，<strong>批处理写法</strong>。循环逐条 <code>executeUpdate()</code> 意味着 N 次网络往返，改成 <code>addBatch()</code> 累积、<code>executeBatch()</code> 一次提交，并配合 <code>setAutoCommit(false)</code> 与 <code>rewriteBatchedStatements=true</code>（MySQL）可成倍提速。注意批处理量大时要分段提交，避免一次性撑爆内存。</p>
+
+<p>第五，<strong>池参数与数据库超时不对齐</strong>。<code>maxLifetime</code>（HikariCP 默认 30 分钟）要明显小于服务端的 <code>wait_timeout</code>：MySQL 8.0/8.4 默认是 <code>28800</code> 秒（8 小时），一般够用，但云数据库常把它调到 100～300 秒，这时必须同步调小 <code>maxLifetime</code>（例如取 <code>wait_timeout</code> 的 50%～80%），否则连接在池里“看起来还活着”，一借出去就报 <code>Communications link failure</code>。Druid 侧对应的是 <code>testWhileIdle</code> 加 <code>validationQuery=SELECT 1</code>，再配 <code>timeBetweenEvictionRunsMillis</code> 定期探活；HikariCP 侧可以打开 <code>keepaliveTime</code>，再用 <code>leakDetectionThreshold</code>（例如 10000 毫秒）把忘记归还连接的代码位置打印出来。</p>
 
 <h2>小结</h2>
 

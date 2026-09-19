@@ -154,7 +154,7 @@ public class RefCountTest {
 
 <p>主流 JVM 采用的是<strong>可达性分析</strong>：从一组称为 <strong>GC Roots</strong> 的根对象出发遍历引用链，走不到的对象判为可回收。可作为 GC Roots 的包括虚拟机栈（栈帧局部变量表）中引用的对象、方法区中类静态属性引用的对象、方法区中常量引用的对象、本地方法栈中 JNI 引用的对象，此外还有被同步锁持有的对象等。</p>
 
-<p>此外还要说清 Java 的四种引用强度：<strong>强引用</strong>（<code>Object o = new Object()</code>）只要存在就绝不回收；<strong>软引用</strong>（<code>SoftReference</code>）在将要发生内存溢出前才被列入回收范围；<strong>弱引用</strong>（<code>WeakReference</code>）只能活到下一次 GC；<strong>虚引用</strong>（<code>PhantomReference</code>）无法取得对象实例，只用于回收时收到通知。可达性分析基于的正是强引用。对象即使被判不可达，也不是立刻死亡：还会经历一次筛选，若 <code>finalize()</code> 中重新与引用链建立关联，就能逃过本次回收。</p>
+<p>此外还要说清 Java 的四种引用强度：<strong>强引用</strong>（<code>Object o = new Object()</code>）只要存在就绝不回收；<strong>软引用</strong>（<code>SoftReference</code>）在将要发生内存溢出前才被列入回收范围；<strong>弱引用</strong>（<code>WeakReference</code>）只能活到下一次 GC；<strong>虚引用</strong>（<code>PhantomReference</code>）无法取得对象实例，只用于回收时收到通知。可达性分析基于的正是强引用。对象即使被判不可达，也不是立刻死亡：还会经历一次筛选，若 <code>finalize()</code> 中重新与引用链建立关联，就能逃过本次回收。需要补充的是，<code>finalize()</code> 自 JDK 9 起被标记为废弃、JDK 18 起进一步标记为“将被移除”，不要依赖它做资源清理，应改用 try-with-resources 或 <code>java.lang.ref.Cleaner</code>。</p>
 
 <h2>二、三种基础算法与分代收集</h2>
 
@@ -166,7 +166,7 @@ public class RefCountTest {
 <li><strong>标记-整理</strong>：标记后把存活对象向一端移动，再清理边界外的空间。解决了碎片问题，但移动对象并更新引用同样昂贵。</li>
 </ul>
 
-<p>没有哪种算法通吃，于是有了<strong>分代收集</strong>。它的依据是一条经验规律：绝大多数对象朝生夕灭，熬过越多次 GC 的对象越难死。堆因此被划成新生代与老年代，分别施策。HotSpot 中新生代默认按 <code>Eden : Survivor0 : Survivor1 = 8 : 1 : 1</code> 划分，新对象优先在 Eden 分配。Minor GC 时，Eden 与 From Survivor 中的存活对象被<strong>复制</strong>到 To Survivor，然后清空前两者并交换两个 Survivor 的角色。对象每熬过一次 GC 年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）或 Survivor 空间不足时晋升老年代。老年代存活率高，适合标记-整理或标记-清除，空间不足时触发 Full GC。大对象（如 <code>new byte[4 * 1024 * 1024]</code>）通常直接进入老年代，避免在 Eden 与 Survivor 间反复复制。</p>
+<p>没有哪种算法通吃，于是有了<strong>分代收集</strong>。它的依据是一条经验规律：绝大多数对象朝生夕灭，熬过越多次 GC 的对象越难死。堆因此被划成新生代与老年代，分别施策。HotSpot 中新生代默认按 <code>Eden : Survivor0 : Survivor1 = 8 : 1 : 1</code> 划分，新对象优先在 Eden 分配。Minor GC 时，Eden 与 From Survivor 中的存活对象被<strong>复制</strong>到 To Survivor，然后清空前两者并交换两个 Survivor 的角色。对象每熬过一次 GC 年龄加一，达到 <code>-XX:MaxTenuringThreshold</code>（默认 15）或 Survivor 空间不足时晋升老年代（G1 下该值只是上限，实际晋升年龄由 G1 按停顿目标自适应决定）。老年代存活率高，适合标记-整理或标记-清除，空间不足时触发 Full GC。大对象（如 <code>new byte[4 * 1024 * 1024]</code>）通常直接进入老年代，避免在 Eden 与 Survivor 间反复复制。</p>
 
 <figure class="tutorial-figure"><img src="/post-assets/java-tutorial-6-2/01-generational-heap-gc.svg" alt="分代堆结构示意图：新生代按 Eden 比 S0 比 S1 等于 8 比 1 比 1 划分，熬过阈值的对象晋升老年代；下方对比 Minor GC 与 Full GC 的触发条件与停顿差异"><figcaption>图 1：分代堆结构——新生代 8:1:1 与对象晋升路径</figcaption></figure>
 
@@ -176,36 +176,48 @@ public class RefCountTest {
 
 <ul>
 <li><strong>Serial / Serial Old</strong>：单线程收集，收集时必须暂停所有用户线程，也就是 <strong>STW（Stop-The-World）</strong>。简单高效，适合客户端或小堆场景。</li>
-<li><strong>ParNew</strong>：Serial 的多线程版本，仍作用于新生代，常与 CMS 搭配。</li>
-<li><strong>Parallel Scavenge / Parallel Old</strong>：新生代复制、老年代标记-整理的多线程组合，目标不是最短停顿而是<strong>可控吞吐量</strong>，可用 <code>-XX:MaxGCPauseMillis</code> 与 <code>-XX:GCTimeRatio</code> 调节。它同样会 STW，只是并行缩短了停顿，并非“不暂停用户线程”。</li>
-<li><strong>CMS</strong>：以最短停顿为目标的并发收集器，作用于老年代，采用标记-清除算法，流程为初始标记（STW）→ 并发标记 → 并发预清理 → 重新标记（STW）→ 并发清除 → 并发重置。缺点是产生内存碎片、无法处理浮动垃圾，且并发阶段会与应用争抢 CPU，JDK 9 起已废弃、JDK 14 移除。</li>
-<li><strong>G1</strong>：把堆划分为大小相等的 <strong>Region</strong>，新生代与老年代只是 Region 的逻辑集合，不再要求连续。它维护每个 Region 的回收价值（垃圾占比与回收耗时）列表，在 <code>-XX:MaxGCPauseMillis</code> 的停顿目标下优先回收收益最高的 Region，从而建立<strong>可预测的停顿模型</strong>。跨 Region 引用靠每个 Region 的 <strong>Remembered Set</strong> 记录，避免全堆扫描；超过 Region 容量一半的巨型对象放入 <strong>Humongous</strong> 区，连续 H 区不足时可能被迫 Full GC。G1 的回收模式有 Young GC（Eden 耗尽触发）、Mixed GC（老年代占用达到 <code>-XX:InitiatingHeapOccupancyPercent</code>，默认 45% 时触发，回收全部年轻代加部分老年代）和 Full GC。注意 Mixed GC 不等于 Full GC，它只回收<strong>部分</strong>老年代 Region。G1 在 JDK 7 引入，<strong>JDK 9 起成为默认收集器</strong>。</li>
-<li><strong>ZGC / Shenandoah</strong>：面向超大堆与极低延迟，借助染色指针与读屏障把停顿压到毫秒级且与堆大小基本无关，ZGC 的目标停顿在 10ms 以内，适合堆上百 GB 的在线服务。实现细节超出本章范围，这里不再展开。</li>
+<li><strong>ParNew</strong>：Serial 的多线程版本，仍作用于新生代，常与 CMS 搭配；CMS 在 JDK 14 被移除后 ParNew 也一并退出，如今只在 JDK 8～13 的历史配置里能见到。</li>
+<li><strong>Parallel Scavenge / Parallel Old</strong>：新生代复制、老年代标记-整理的多线程组合，目标不是最短停顿而是<strong>可控吞吐量</strong>，可用 <code>-XX:MaxGCPauseMillis</code> 与 <code>-XX:GCTimeRatio</code> 调节。它同样会 STW，只是并行缩短了停顿，并非“不暂停用户线程”。还要记住<strong>默认收集器的换代</strong>：<strong>JDK 8 的 Server 模式默认就是 Parallel Scavenge + Parallel Old</strong>，而<strong>JDK 9 起默认改为 G1</strong>（JEP 248）。旧笔记里“默认串行、要加 <code>-XX:+UseParallelGC</code> 才并行”的说法从 JDK 9 起不再成立，只有明确追求吞吐量时才需要显式选回 Parallel。</li>
+<li><strong>CMS</strong>：以最短停顿为目标的并发收集器，作用于老年代，采用标记-清除算法，流程为初始标记（STW）→ 并发标记 → 并发预清理 → 重新标记（STW）→ 并发清除 → 并发重置。缺点是产生内存碎片、无法处理浮动垃圾，且并发阶段会与应用争抢 CPU。生命周期必须记牢：<strong>JDK 9 起废弃（JEP 291）、JDK 14 正式移除（JEP 363）</strong>——在 JDK 14 及以后的 JVM 上写 <code>-XX:+UseConcMarkSweepGC</code> 会直接以 <code>Unrecognized VM option</code> 启动失败，而不会悄悄退化成别的收集器。JDK 8 上它仍可用，但已是历史选择，新项目应直接选 G1 或 ZGC。</li>
+<li><strong>G1</strong>：把堆划分为大小相等的 <strong>Region</strong>，新生代与老年代只是 Region 的逻辑集合，不再要求连续。它维护每个 Region 的回收价值（垃圾占比与回收耗时）列表，在 <code>-XX:MaxGCPauseMillis</code> 的停顿目标下优先回收收益最高的 Region，从而建立<strong>可预测的停顿模型</strong>。跨 Region 引用靠每个 Region 的 <strong>Remembered Set</strong> 记录，避免全堆扫描；超过 Region 容量一半的巨型对象放入 <strong>Humongous</strong> 区，连续 H 区不足时可能被迫 Full GC。G1 的回收模式有 Young GC（Eden 耗尽触发）、Mixed GC（老年代占用达到 <code>-XX:InitiatingHeapOccupancyPercent</code>，默认 45% 时触发，回收全部年轻代加部分老年代）和 Full GC。注意 Mixed GC 不等于 Full GC，它只回收<strong>部分</strong>老年代 Region。G1 在 JDK 7 引入，<strong>JDK 9 起成为默认收集器</strong>（JEP 248），因此在 JDK 9+ 的启动命令里 <code>-XX:+UseG1GC</code> 只是显式声明，不写也同样是 G1。</li>
+<li><strong>ZGC / Shenandoah</strong>：面向超大堆与极低延迟，借助染色指针与读屏障把停顿压到毫秒级且与堆大小基本无关，ZGC 的目标停顿在 10ms 以内，适合堆上百 GB 的在线服务。版本演进同样要记：ZGC 在 JDK 11 引入（实验性，需 <code>-XX:+UnlockExperimentalVMOptions -XX:+UseZGC</code>），JDK 15 转正（JEP 377），JDK 17/21 上直接写 <code>-XX:+UseZGC</code> 即可；JDK 21 起提供<strong>分代 ZGC</strong>（JEP 439，用 <code>-XX:+ZGenerational</code> 开启），JDK 23 起分代模式成为默认（JEP 474）。Shenandoah 自 JDK 12 引入（实验性）、JDK 15 转正（JEP 379），但并非所有发行版都包含，Oracle JDK 中就没有。实现细节超出本章范围，这里不再展开。</li>
 </ul>
 
 <h2>四、打开 GC 日志：从看懂到会调</h2>
 
 <p>调优的第一步永远是先观测。启动时打开日志，再压测复现，然后才谈参数。</p>
 
-<pre><code class="language-bash"># JDK 8：打印 GC 详情、时间戳与日期
+<pre><code class="language-bash"># JDK 8 及以前的旧写法（已过时，仅作对照）：-XX:+PrintGCDetails 打印详情，
+# -XX:+PrintGCDateStamps 加日期戳，-Xloggc 指定日志文件
 java -XX:+UseG1GC -Xms2g -Xmx2g \
      -XX:MaxGCPauseMillis=200 \
      -XX:+PrintGCDetails -XX:+PrintGCDateStamps \
      -Xloggc:/var/log/app/gc.log -jar app.jar
 
-# JDK 9+：统一日志框架，-Xlog:gc* 等价于旧参数
+# JDK 9+ 的现行写法：JEP 158 统一日志框架后 GC 日志并入 -Xlog
+# 旧参数对应关系：-XX:+PrintGC → -Xlog:gc；-XX:+PrintGCDetails → -Xlog:gc*；
+# -Xloggc:<file> → -Xlog:gc:file=<file>（-Xloggc 与 -XX:+PrintGCDetails 在 JDK 9 起弃用）
+# 日期戳改由 :time,uptime,level,tags 装饰器提供，并可加 filecount/filesize 做日志轮转
+# JDK 9 起默认收集器就是 G1，-XX:+UseG1GC 可写可不写
 java -XX:+UseG1GC -Xms2g -Xmx2g \
-     -Xlog:gc*,gc+heap=info:file=/var/log/app/gc.log:time,uptime,level,tags \
+     -XX:MaxGCPauseMillis=200 \
+     -Xlog:gc*,gc+heap=info:file=/var/log/app/gc.log:time,uptime,level,tags:filecount=5,filesize=50M \
      -jar app.jar</code></pre>
 
-<p>日志读起来并不难，抓住三段信息即可。第一段是<strong>回收类型</strong>：<code>GC</code> 表示 Minor/Young GC，<code>Full GC</code> 表示全堆回收。第二段是<strong>前后容量</strong>：<code>4416K-&gt;512K(4928K)</code> 依次表示该区域回收前占用、回收后占用与总容量。第三段是<strong>耗时</strong>，如 <code>0.0046102 secs</code>，也可以用 <code>[Times: user=... sys=... real=...]</code> 对照用户态、内核态与墙钟时间。下面是一段串行收集器的真实输出：</p>
+<p>日志读起来并不难，抓住三段信息即可。第一段是<strong>回收类型</strong>：<code>GC</code> 表示 Minor/Young GC，<code>Full GC</code> 表示全堆回收。第二段是<strong>前后容量</strong>：<code>4416K-&gt;512K(4928K)</code> 依次表示该区域回收前占用、回收后占用与总容量。第三段是<strong>耗时</strong>，如 <code>0.0046102 secs</code>，也可以用 <code>[Times: user=... sys=... real=...]</code> 对照用户态、内核态与墙钟时间。下面是一段串行收集器在 JDK 8 上的真实输出（旧格式，保留作对照）：</p>
 
 <pre><code class="language-text">[GC (Allocation Failure) [DefNew: 4416K-&gt;512K(4928K), 0.0046102 secs]
  4416K-&gt;1973K(15872K), 0.0046533 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]
 [Full GC (Allocation Failure) [Tenured: 10944K-&gt;3107K(10944K), 0.0085637 secs]
  15871K-&gt;3107K(15872K), [Metaspace: 3496K-&gt;3496K(1056768K)], 0.0085974 secs]</code></pre>
 
-<p>在此基础上做取舍：追求吞吐量选 Parallel，追求更低平均停顿选 G1，追求极致低延迟且堆巨大再看 ZGC。常用的观察手段包括：用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 实时查看各代占用与 GC 次数，用 <code>jmap -histo:live &lt;pid&gt;</code> 查看对象分布，以及把日志交给 GCeasy 之类工具可视化。参数方面，<code>-Xms</code> 与 <code>-Xmx</code> 设成相等可避免堆反复伸缩；<code>-Xmn</code> 或 <code>-XX:NewRatio</code> 控制新生代比例；<code>-XX:SurvivorRatio</code> 调整 Eden 与 Survivor 的比例；<code>-XX:+HeapDumpOnOutOfMemoryError</code> 保证 OOM 现场可查。注意 <code>-XX:MaxGCPauseMillis</code> 只是<strong>期望值</strong>，JVM 会尽力而为但不保证达到；把堆设得过小反而会让 GC 更频繁。</p>
+<p>换成 JDK 9+ 的统一日志后，字段名不再是 <code>DefNew</code>、<code>Tenured</code>，而是直接给出停顿类型与前后的堆占用，G1 下形如：</p>
+
+<pre><code class="language-text">[2024-05-01T10:00:00.123+0800][2.345s][info][gc] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 128M-&gt;24M(1024M) 12.345ms
+[2024-05-01T10:00:05.678+0800][7.890s][info][gc] GC(1) Pause Young (Concurrent Start) (G1 Humongous Allocation) 512M-&gt;96M(1024M) 18.234ms
+[2024-05-01T10:00:09.012+0800][11.234s][info][gc] GC(2) Pause Remark 640M-&gt;640M(1024M) 1.234ms</code></pre>
+
+<p>在此基础上做取舍：追求吞吐量选 Parallel，追求更低平均停顿选 G1，追求极致低延迟且堆巨大再看 ZGC。常用的观察手段包括：用 <code>jstat -gcutil &lt;pid&gt; 1000</code> 实时查看各代占用与 GC 次数，用 <code>jmap -histo:live &lt;pid&gt;</code> 查看对象分布，以及把日志交给 GCeasy 之类工具可视化。参数方面，<code>-Xms</code> 与 <code>-Xmx</code> 设成相等可避免堆反复伸缩；<code>-Xmn</code> 或 <code>-XX:NewRatio</code> 控制新生代比例；<code>-XX:SurvivorRatio</code> 调整 Eden 与 Survivor 的比例；<code>-XX:+HeapDumpOnOutOfMemoryError</code> 配合 <code>-XX:HeapDumpPath</code> 保证 OOM 现场可查；G1 下新生代由 <code>-XX:G1NewSizePercent</code>（默认 5%）与 <code>-XX:G1MaxNewSizePercent</code>（默认 60%）自适应控制，<code>-Xmn</code> 与 <code>-XX:NewRatio</code> 主要面向 Parallel、Serial 这类分代固定的收集器，在 G1 下不保证按字面生效，需实测确认。还要注意 <code>-XX:MaxGCPauseMillis</code> 只是<strong>期望值</strong>，JVM 会尽力而为但不保证达到；把堆设得过小反而会让 GC 更频繁。</p>
 
 <h3>三类常见坑</h3>
 
@@ -215,10 +227,10 @@ java -XX:+UseG1GC -Xms2g -Xmx2g \
 
 <p><strong>坑三，永久代与元空间的版本差异。</strong>两者的版本差异可以对照着记：</p>
 <ul>
-<li>JDK 7 及以前，方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC；</li>
-<li><strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束，且类卸载条件严格：该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用。</li>
+<li>JDK 7 及以前，方法区由永久代实现，受 <code>-XX:MaxPermSize</code> 约束，Perm 满会触发 Full GC。这个参数<strong>从 JDK 8 起就已失效</strong>（JEP 122 移除永久代）：JDK 8 上写它只会在启动时打印 “Ignoring option MaxPermSize; support was removed in 8.0” 之类的告警后被忽略，JDK 9 及以后则直接以 <code>Unrecognized VM option 'MaxPermSize'</code> 拒绝启动，所以旧启动脚本在升级 JDK 前必须先清掉它；</li>
+<li><strong>JDK 8 起永久代已被元空间取代</strong>，元空间使用本地内存，由 <code>-XX:MaxMetaspaceSize</code> 约束（该参数默认不设上限，只受本机可用内存限制，生产环境建议显式给出上限），且类卸载条件严格：该类所有实例已回收、加载它的 ClassLoader 已回收、对应的 <code>Class</code> 对象无引用。</li>
 </ul>
-<p>所以所以看到旧文章里“永久代被写满导致 Full GC”的说法时，要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
+<p>所以看到旧文章里“永久代被写满导致 Full GC”的说法时，要先确认 JDK 版本，在 JDK 8+ 上应排查元空间泄漏（典型是动态生成类、热部署或反射滥用）。</p>
 
 <h2>五、小结</h2>
 

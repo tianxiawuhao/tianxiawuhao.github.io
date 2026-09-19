@@ -301,6 +301,15 @@ UPDATE account SET money = money + 1 WHERE id = 2;   -- 等待 B 释放 id = 2
 </ul>
 排查时可执行 <code>SHOW ENGINE INNODB STATUS</code> 查看最近一次死锁详情，MySQL 8.0 还能查 <code>performance_schema.data_lock_waits</code>。</div>
 
+<div class="tut-tip"><strong>版本边界：从旧笔记搬过来时最容易踩的默认值变化。</strong>本章基线是 MySQL 8.0/8.4 + InnoDB，以下几处默认值在新旧版本之间并不一致，读旧资料时要留神。
+<ul>
+<li><strong>驱动类名</strong>：<code>com.mysql.jdbc.Driver</code> 属于 Connector/J 5.1.x，8.x 改为 <code>com.mysql.cj.jdbc.Driver</code>（8.0.x 里旧类名多数还保留，但会打印弃用告警）。JDBC 4.0 起驱动经 SPI 自动注册，<code>Class.forName</code> 通常可以省——上面用 <code>DataSource</code> 取连接的写法正是如此。</li>
+<li><strong>字符集</strong>：8.0 之前服务端默认字符集是 <code>latin1</code>，8.0 起默认 <code>utf8mb4</code>；旧笔记里的 <code>utf8</code> 实为 <code>utf8mb3</code>（最多 3 字节），存不下 emoji，8.0.x 的文档已改用 <code>utf8mb3</code> 这个名字，并建议新建对象一律写 <code>utf8mb4</code>。</li>
+<li><strong>行格式</strong>：<code>innodb_default_row_format</code> 在 5.7.9 之前默认 <code>COMPACT</code>，5.7.9 起（8.0/8.4 相同）默认 <code>DYNAMIC</code>。DYNAMIC 把长 VARCHAR、BLOB 溢出到页外，索引键前缀上限也从 767 字节放宽到 3072 字节；8.0 又移除了 <code>innodb_large_prefix</code>，让大前缀始终生效。因此在 <code>utf8mb4</code> 下单列索引最多可达 768 字符，而从旧库复制过来的表行格式可能仍是 COMPACT，用 <code>SHOW TABLE STATUS</code> 看 <code>Row_format</code> 即可确认。</li>
+<li><strong>redo log 容量</strong>：8.0.30 之前靠 <code>innodb_log_file_size</code>（5.7 与 8.0.29 及以前默认 48MB）配合 <code>innodb_log_files_in_group</code>（默认 2）配置；8.0.30 起统一为 <code>innodb_redo_log_capacity</code>（默认 100MB），旧参数虽仍可读但已被取代，8.4 沿用新参数。把 redo 调得过小会让写入更容易触发强制刷盘。</li>
+<li><strong>隔离级别变量</strong>：<code>@@tx_isolation</code> 在 5.7.20 起被 <code>@@transaction_isolation</code> 取代，8.0 已移除旧名，所以上面的示例统一用新名；查询报“未知系统变量”时先怀疑这里。</li>
+</ul></div>
+
 <h2>小结</h2>
 
 <p>索引与执行计划解决“读得快不快”：B+ 树让查找从全表扫描降到几次磁盘读，聚簇索引的叶子存整行，二级索引查非索引列要回表，覆盖索引则免掉第二次查找；<code>EXPLAIN</code> 的 <code>type</code>、<code>key</code>、<code>rows</code>、<code>Extra</code> 是判断索引是否生效的依据。事务与隔离级别解决“并发读得对不对”：ACID 保证一组操作全成或全败，四种隔离级别则是正确性与并发性能之间的取舍，MySQL 默认可重复读，Oracle 默认读已提交。锁与死锁是隔离的实现代价：InnoDB 的行锁加在索引上，走不到索引就退化成近似锁表，间隙锁挡住幻读的同时也让死锁更容易发生。实务上的顺序也很清晰——先用 <code>EXPLAIN</code> 把慢查询推进到 <code>ref</code>/<code>range</code> 并争取覆盖索引，再把事务写短、按固定顺序、基于主键更新，最后为死锁准备一次重试。</p>
