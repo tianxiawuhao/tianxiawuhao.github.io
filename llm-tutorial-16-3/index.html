@@ -186,53 +186,10 @@ $$</p>
 </code></pre>
 </p>
 <p>接下来编写反向去噪过程的代码，也就是从 $x_t$ 预测 $x_{t-1}$。</p>
-<p>模型
-MSE</p>
+
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-16.png" alt="图 16.16 以噪声为预测目标" loading="lazy"><figcaption>图 16.16 以噪声为预测目标</figcaption></figure>
 <p>给定了时间步和添加噪声的图像，模型可以预测出这幅图片中的噪声有多少，那么我们从 $x_t$ 中将预测出的噪声减掉，就可以去噪了！</p>
-<p><pre translate="no"><code class="language-python">def denoise(self, model, x, t):
-    # x是图片，模型会认为x是添加了t步噪声的图片
-    # t是时间步
-    T = self.num_timesteps
-    assert (t &gt;= 1).all() and (t &lt;= T).all()
 
-    t_idx = t - 1 # alphas[0] is for t=1
-    alpha = self.alphas[t_idx] # α_t
-    alpha_bar = self.alpha_bars[t_idx] # ᾱ_t
-    alpha_bar_prev = self.alpha_bars[t_idx-1] # ᾱ_{t-1}
-
-    N = alpha.size(0)
-    alpha = alpha.view(N, 1, 1, 1)
-    alpha_bar = alpha_bar.view(N, 1, 1, 1)
-    alpha_bar_prev = alpha_bar_prev.view(N, 1, 1, 1)
-
-    model.eval()
-    with torch.no_grad():
-        eps = model(x, t) # 根据时间步和图像x_t预测噪声
-    model.train()
-    # 公式中的z
-    noise = torch.randn_like(x, device=self.device)
-    # 如果时间步为1的话，我们就不再添加σz噪声
-    noise[t == 1] = 0 # no noise at t=1
-    # 均值 μ_θ(x_t, t) = 1/√(α_t) (x_t - (1-α_t)/√(1-ᾱ_t) ε_θ(x_t, t))
-    mu = (x - ((1-alpha) / torch.sqrt(1-alpha_bar)) * eps) \
-        / torch.sqrt(alpha)
-    # 标准差 σ_t = √((1-α_t)(1-ᾱ_{t-1})/(1-ᾱ_t))
-    std = torch.sqrt((1-alpha) * (1-alpha_bar_prev) \
-        / (1-alpha_bar))
-    # 返回 x_{t-1}
-    return mu + noise * std
-</code></pre>
-</p>
-<p><pre><code class="language-text">1 x_T ~ N(0, I)          ▷ 从高斯分布中采样一张纯噪声图片
-2 for t = T, ..., 1 do
-3   z ~ N(0, I) if t &gt; 1, else z = 0
-4   x_{t-1} = 1/√(α_t) (x_t - (1-α_t)/√(1-ᾱ_t) ε_θ(x_t, t)) + σ_t z
-                  ▷ 在DDPM 论文中 σ_t = √((1-α_t)(1-ᾱ_{t-1})/(1-ᾱ_t))
-5 end for
-6 return x_0
-</code></pre>
-</p>
 <figure class="tutorial-figure"><img src="/post-images/tutorial-figs/fig-16-17.png" alt="图 16.17 采样算法（去噪算法，反向扩散算法）" loading="lazy"><figcaption>图 16.17 采样算法（去噪算法，反向扩散算法）</figcaption></figure>
 <h3 id="sec-2">16.3.2 U-Net 神经网络</h3>
 <p>U-Net 最初是为医学图像的语义分割而开发的模型。语义分割是为图像中的每个像素分配特定的类别标签的任务，如图所示。</p>
